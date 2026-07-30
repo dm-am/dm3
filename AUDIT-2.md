@@ -1,0 +1,12358 @@
+# Сквозной аудит DM3, второй проход
+
+Проведен 2026-07-30 на состоянии ветки `dev` после закрытия первого аудита
+(261 находка из 306, тег `pre-squash-2026-07-30` хранит цепочку из 156 коммитов).
+
+**Метод.** Восемнадцать независимых срезов, каждый анализировал свой предмет, не читая
+первый аудит — чтобы не якориться на его формулировках и не получать зачет за уже
+закрытое. Затем каждую находку уровня КРИТИЧНО и ВЫСОКАЯ ломал отдельный агент с
+установкой «по умолчанию опровергнуто»: находка выживала только если ее пытались
+сломать и не смогли. Проверено 112 находок — 68 подтверждено, 21 понижено в severity,
+21 частично неверно, 2 опровергнуто. То есть **38% критичных и высоких были завышены
+или неточны до проверки** — это цена непроверенного аудита, и она измерена, а не оценена.
+
+**Чего этот документ не гарантирует.** Средние и низкие находки через опровержение НЕ
+проходили. По доле ошибок в проверенной части в них следует ожидать сопоставимый или
+больший шум. Каждую из них нужно проверять перед тем, как брать в работу.
+
+**Фронтенд не дописан.** Отсутствующие экраны и непостроенные сценарии дефектами не
+считались; срезы фронтенда оценивают то, что есть.
+
+**Рубрика оценки.** A — правильно, идиоматично, закрыто тестом, изменение делается в одном
+месте. B — правильно, но повторение или неявность создают риск. C — работает с видимым
+долгом: дублирование, частичные инварианты, пробелы в тестах. D — есть дефекты, доходящие
+до пользователя, или решения, которые придется переделывать. F — сломано или архитектурно
+неверно.
+
+Оценка в таблице — та, что выставил срез, читавший код. Пересчитывать ее формулой по
+числу находок я пробовал и отказался: рубрика говорит о характере дефекта, а не о
+количестве, и арифметика делала три среза хуже после опровержения, которое только
+понижало severity. Колонка «Что сняло опровержение» показывает, где из-под оценки
+вынули основание — там ее стоит читать на ступень выше.
+
+---
+
+## Оценки по срезам
+
+| Срез | Оценка | Крит | Выс | Ср | Низ | Что сняло опровержение |
+|------|--------|------|-----|----|-----|------------------------|
+| Архитектура бэкенда и границы модулей | C | 0 | 1 | 12 | 5 | понижено высоких: 1 |
+| Предметная модель и продуктовая логика | D | 1 | 4 | 13 | 6 | понижено высоких: 1 |
+| Реляционное хранилище и EF Core | C | 0 | 4 | 11 | 7 | понижено высоких: 2 |
+| Полиглотное хранение (PG / Mongo / MinIO) | D | 1 | 2 | 12 | 6 | снято критичных: 1, понижено высоких: 2 |
+| Дизайн HTTP API | C | 0 | 4 | 16 | 6 | понижено высоких: 4 |
+| Безопасность | D | 2 | 3 | 10 | 5 | снято критичных: 1, понижено высоких: 2 |
+| Композиционный корень, конфигурация, hosted-сервисы, наблюдаемость | D | 2 | 3 | 15 | 6 | снято критичных: 1, понижено высоких: 3 |
+| Асинхронный обмен сообщениями и realtime | D | 1 | 7 | 8 | 3 | — |
+| Стратегия и качество тестов | C | 0 | 2 | 14 | 3 | понижено высоких: 1 |
+| Архитектура фронтенда (FSD) | C | 0 | 2 | 13 | 6 | понижено высоких: 2 |
+| Качество фронтенда: дизайн-система, a11y, производительность | C | 0 | 6 | 14 | 7 | понижено высоких: 1 |
+| Пользовательские сценарии | D | 0 | 7 | 13 | 5 | снято критичных: 1, понижено высоких: 3 |
+| Копирайт и язык интерфейса | D | 0 | 3 | 13 | 8 | понижено высоких: 2 |
+| Документация | C | 0 | 2 | 14 | 7 | понижено высоких: 4 |
+| Сборка, CI/CD, деплой, эксплуатация | D | 3 | 5 | 14 | 4 | понижено высоких: 3 |
+| Процесс разработки: человек и Claude | C | 0 | 3 | 7 | 3 | понижено высоких: 1 |
+| Гигиена кода и техдолг | D | 1 | 3 | 12 | 8 | понижено высоких: 1 |
+| Комментарии: правда, польза, объем | C | 0 | 2 | 13 | 8 | понижено высоких: 3 |
+| **Итого** | | **11** | **63** | **224** | **103** | **2** |
+
+Всего находок после опровержения: **401**.
+
+---
+
+## Индекс: критичное и высокое
+
+Только эти строки прошли опровержение. Колонка «Вердикт» — результат попытки сломать находку.
+
+| Severity | id | Находка | Срез | Вердикт |
+|----------|----|---------|------|---------|
+| КРИТИЧНО | channel-leak-per-publish | каждая публикация открывает AMQP-канал, который никто не закрывает | Асинхронный обмен сообщениями и realtime | подтверждено |
+| КРИТИЧНО | character-retirement-500 | вывод персонажа из игры отвечает 500 для всех | Предметная модель и продуктовая логика | частично неверно |
+| КРИТИЧНО | devops-api-port-bypasses-perimeter | API preview-стенда опубликован в интернет в обход basic auth | Сборка, CI/CD, деплой, эксплуатация | подтверждено |
+| КРИТИЧНО | devops-dependency-scan-cannot-run | гейт уязвимостей падает не по делу, и вместе с ним умирает вся публикация образов | Сборка, CI/CD, деплой, эксплуатация | подтверждено |
+| КРИТИЧНО | devops-minio-backups-never-run | бэкап объектного хранилища не выполняется под cron, проверка его не покрывает, а восстановление задокументировано нерабочими командами | Сборка, CI/CD, деплой, эксплуатация | подтверждено |
+| КРИТИЧНО | forwarded-headers-never-trusted | в единственном разворачиваемом стеке лимитер и аудит видят адрес nginx, а не клиента | Композиционный корень, конфигурация, hosted-сервисы, наблюдаемость | подтверждено |
+| КРИТИЧНО | intention-403-serializes-target | ответ 403 отдает целевой объект целиком | Безопасность | подтверждено |
+| КРИТИЧНО | rabbit-producer-channel-leak | каждая публикация события утекает AMQP-канал, после ~4096 отправка умирает до перезапуска | Композиционный корень, конфигурация, hosted-сервисы, наблюдаемость | подтверждено |
+| КРИТИЧНО | razor-templates-dead-body-is-json | механизм шаблонов писем мертв, телом каждого письма аккаунта уходит JSON | Гигиена кода и техдолг | подтверждено |
+| КРИТИЧНО | upload-target-not-owned | `targetId` не проверяется на владение, а чтение портретов падает на двух записях | Полиглотное хранение (PG / Mongo / MinIO) | подтверждено |
+| КРИТИЧНО | upload-target-not-owned | targetId загрузки никем не проверяется | Безопасность | подтверждено |
+| ВЫСОКАЯ | 403-reason-discarded | причина отказа, которую сервер называет в 68 местах, заменяется одной общей фразой | Пользовательские сценарии | подтверждено |
+| ВЫСОКАЯ | accent-fill-invisible-label | заливка `$accent-*` с текстом `$text-on-*` дает контраст 1.00-1.15 | Качество фронтенда: дизайн-система, a11y, производительность | подтверждено |
+| ВЫСОКАЯ | agent-model-pins-contradict-a-direct-order | три агента запинены на sonnet вопреки прямому указанию | Процесс разработки: человек и Claude | подтверждено |
+| ВЫСОКАЯ | api-design-sort-contract | раздел Sorting описывает несуществующий формат, противоречащий соседнему разделу того же документа | Документация | подтверждено |
+| ВЫСОКАЯ | api-english-error-titles | 255 английских сообщений домена выходят в русский интерфейс | Копирайт и язык интерфейса | подтверждено |
+| ВЫСОКАЯ | api-idempotency-key-blocked-by-cors | заголовок идемпотентности не в CORS-разрешении, загрузка файлов не проходит preflight в cross-origin конфигурации | Дизайн HTTP API | подтверждено |
+| ВЫСОКАЯ | api-rate-limit-partition-blind | партиционирование по аккаунту не работает никогда: лимитер стоит до аутентификации | Дизайн HTTP API | подтверждено |
+| ВЫСОКАЯ | api-secret-in-path | одноразовый токен восстановления доступа едет в пути URL, вопреки собственному правилу проекта | Дизайн HTTP API | подтверждено |
+| ВЫСОКАЯ | api-user-schema-three-fidelities | одна схема User отдается в трех разных полнотах, и различить их по ответу нельзя | Дизайн HTTP API | подтверждено |
+| ВЫСОКАЯ | attribute-schema-hard-delete | жесткое удаление документа Mongo, на который ссылается строка Postgres | Полиглотное хранение (PG / Mongo / MinIO) | подтверждено |
+| ВЫСОКАЯ | award-tier-5-uneditable | устаревший док про Tier прикрывает нередактируемую строку каталога | Комментарии: правда, польза, объем | подтверждено |
+| ВЫСОКАЯ | ban-not-checked-on-edit-and-reviews | обычный бан обходится правкой и отзывами | Предметная модель и продуктовая логика | подтверждено |
+| ВЫСОКАЯ | button-variant-contrast | белая подпись основной и опасной кнопки не проходит AA | Качество фронтенда: дизайн-система, a11y, производительность | подтверждено |
+| ВЫСОКАЯ | captive-dbcontext-in-connection-singleton | один DmDbContext на все подключения SignalR, разделяемый и никогда не освобождаемый | Композиционный корень, конфигурация, hosted-сервисы, наблюдаемость | подтверждено, severity завышен |
+| ВЫСОКАЯ | character-attributes-uniqueness-missing | дубль атрибута делает персонажа нередактируемым навсегда | Реляционное хранилище и EF Core | подтверждено |
+| ВЫСОКАЯ | chat-room-two-authorization-models | чат игровой комнаты отвечает 404 всем, потому что API-слой и домен авторизуют его по разным моделям | Архитектура бэкенда и границы модулей | подтверждено |
+| ВЫСОКАЯ | comment-delete-fake-success | комментарий и сообщение помечаются удаленными независимо от ответа сервера | Пользовательские сценарии | подтверждено |
+| ВЫСОКАЯ | comments-fk-hand-edit-unguarded | регенерация миграции ломает комментарии, и заявленного стража не существует | Реляционное хранилище и EF Core | подтверждено |
+| ВЫСОКАЯ | create-game-tags-discarded | выбранные теги игры молча выбрасываются | Пользовательские сценарии | подтверждено |
+| ВЫСОКАЯ | deactivated-user-frees-its-email | деактивация освобождает почту и логин на словах, но не в схеме | Реляционное хранилище и EF Core | подтверждено |
+| ВЫСОКАЯ | detail-stores-race | gameDetails и blogDetails коммитят ответы без проверки актуальности | Архитектура фронтенда (FSD) | подтверждено |
+| ВЫСОКАЯ | devops-forwarded-headers-never-trusted | за nginx все запросы приходят с одного адреса | Сборка, CI/CD, деплой, эксплуатация | подтверждено |
+| ВЫСОКАЯ | devops-imgproxy-unreachable-in-deployment | в развернутой топологии не отдаются аватары и превью | Сборка, CI/CD, деплой, эксплуатация | подтверждено |
+| ВЫСОКАЯ | devops-installer-cannot-finish | документированная установка на сервер обрывается на последнем шаге | Сборка, CI/CD, деплой, эксплуатация | подтверждено |
+| ВЫСОКАЯ | devops-nothing-consumes-published-images | доставка описана как pull, выполнена как build, включена нигде | Сборка, CI/CD, деплой, эксплуатация | подтверждено |
+| ВЫСОКАЯ | devops-secure-cookie-over-plain-http | на развернутом стенде нельзя войти | Сборка, CI/CD, деплой, эксплуатация | подтверждено |
+| ВЫСОКАЯ | draft-visibility-ignored-for-games | публичный черновик игры в списке есть, по ссылке 403 | Предметная модель и продуктовая логика | подтверждено |
+| ВЫСОКАЯ | e2e-green-by-skip | 14 мест, где падение превращается в пропуск, и одно из них прячет живую поломку | Стратегия и качество тестов | частично неверно |
+| ВЫСОКАЯ | e2e-login-as-nonexistent-account | спека логина входит под аккаунтом, которого нет в сидере | Стратегия и качество тестов | подтверждено |
+| ВЫСОКАЯ | false-comma-separated-authors | четыре контроллера документируют формат параметра, которого биндинг не понимает | Комментарии: правда, польза, объем | подтверждено |
+| ВЫСОКАЯ | form-label-dangling-for | 21 из 30 меток формы указывают на несуществующий id | Качество фронтенда: дизайн-система, a11y, производительность | подтверждено |
+| ВЫСОКАЯ | game-activated-emits-wrong-event-type | уведомление об активации игры помечено как "новая игра" | Гигиена кода и техдолг | подтверждено |
+| ВЫСОКАЯ | game-application-review-unreachable | заявку в игру нельзя ни принять, ни отклонить, если в игре нет NPC | Пользовательские сценарии | подтверждено, severity завышен |
+| ВЫСОКАЯ | git-guard-blocks-two-of-ten | хук против потери работы пропускает восемь эквивалентных команд | Процесс разработки: человек и Claude | подтверждено |
+| ВЫСОКАЯ | health-detail-public | `/_health/detail` с текстами исключений и `/metrics` открыты в интернет вместе с портом API | Композиционный корень, конфигурация, hosted-сервисы, наблюдаемость | подтверждено |
+| ВЫСОКАЯ | icon-buttons-unnamed | восемь иконочных кнопок без доступного имени, и расхождение двух чатов | Качество фронтенда: дизайн-система, a11y, производительность | подтверждено |
+| ВЫСОКАЯ | ilike-as-equality | `ILIKE` вместо равенства: подстановочные знаки в почте и логине и мимо индекса | Реляционное хранилище и EF Core | подтверждено |
+| ВЫСОКАЯ | ledger-stale-where-compaction-hurts | реестр требований показывает "не сделано" для сделанного | Процесс разработки: человек и Claude | подтверждено |
+| ВЫСОКАЯ | login-403-silent-success | вход и регистрация докладывают об успехе на любом ответе, кроме 400 | Пользовательские сценарии | подтверждено |
+| ВЫСОКАЯ | mentor-cannot-read-curated-game | ментор не может открыть игру, которую проверяет | Предметная модель и продуктовая логика | подтверждено |
+| ВЫСОКАЯ | messenger-send-loses-text | сбой отправки личного сообщения уничтожает набранный текст и черновик | Пользовательские сценарии | подтверждено |
+| ВЫСОКАЯ | minio-root-credentials | приложение и imgproxy ходят в объектное хранилище рутом | Полиглотное хранение (PG / Mongo / MinIO) | подтверждено |
+| ВЫСОКАЯ | moderation-notifications-unreachable | пять генераторов не могут сработать никогда | Асинхронный обмен сообщениями и realtime | подтверждено |
+| ВЫСОКАЯ | monitoring-alerting-not-wired | документ обещает уведомления по алертам, которых некому отправлять | Документация | подтверждено |
+| ВЫСОКАЯ | mouse-only-controls | два интерактивных элемента доступны только мышью | Качество фронтенда: дизайн-система, a11y, производительность | частично неверно |
+| ВЫСОКАЯ | new-message-event-never-bound | счетчик непрочитанных в мессенджере не обновляется в реальном времени | Асинхронный обмен сообщениями и realtime | подтверждено |
+| ВЫСОКАЯ | no-dlx-for-notifications | отравленное событие уведомления исчезает без следа | Асинхронный обмен сообщениями и realtime | подтверждено |
+| ВЫСОКАЯ | non-persistent-publishing | рестарт брокера уносит очередь писем и dead-letter очередь | Асинхронный обмен сообщениями и realtime | подтверждено |
+| ВЫСОКАЯ | notification-labels-three-copies | подписи событий существуют в трех копиях и уже разошлись | Копирайт и язык интерфейса | подтверждено |
+| ВЫСОКАЯ | notification-metadata-english-keys | письма и боты печатают английские имена полей | Копирайт и язык интерфейса | подтверждено |
+| ВЫСОКАЯ | notification-processor-not-idempotent | повтор обработки дублирует уведомления, письма и пуши | Асинхронный обмен сообщениями и realtime | подтверждено |
+| ВЫСОКАЯ | notification-tables-out-of-sync | три таблицы, которые обязаны совпадать, расходятся на 20 записей | Гигиена кода и техдолг | частично неверно |
+| ВЫСОКАЯ | preview-api-port-published | basic auth обходится через порт 5000 | Безопасность | подтверждено |
+| ВЫСОКАЯ | private-addressee-snapshot-never-written | правило адресата не работает никогда | Безопасность | подтверждено |
+| ВЫСОКАЯ | proxy-headers-not-configured-with-nginx | за прокси все клиенты сливаются в один адрес | Безопасность | подтверждено |
+| ВЫСОКАЯ | publication-comments-skip-blacklist | четвертая копия GetDiscussion потеряла фильтр черного списка | Гигиена кода и техдолг | подтверждено |
+| ВЫСОКАЯ | room-access-policy-not-enforced | ReadOnly-доступ к комнате разрешает писать | Предметная модель и продуктовая логика | подтверждено |
+| ВЫСОКАЯ | session-truth-split | при истечении сессии store остается авторизованным | Архитектура фронтенда (FSD) | подтверждено |
+| ВЫСОКАЯ | signout-reports-success-on-failure | «Выйти» и «Выйти со всех устройств» гасят локальную сессию независимо от сервера | Пользовательские сценарии | подтверждено |
+| ВЫСОКАЯ | smtp-connection-per-letter | на каждое письмо открывается новая SMTP-сессия, которая не закрывается | Асинхронный обмен сообщениями и realtime | подтверждено |
+| ВЫСОКАЯ | smtp-session-per-message | на каждое письмо открывается SMTP-сессия, которую никто не закрывает | Композиционный корень, конфигурация, hosted-сервисы, наблюдаемость | подтверждено |
+| ВЫСОКАЯ | tabs-arrow-navigation-dead-end | стрелкой вправо нельзя дойти дальше второго таба | Качество фронтенда: дизайн-система, a11y, производительность | подтверждено |
+| ВЫСОКАЯ | unescaped-metadata-in-outgoing-messages | метаданные подставляются в HTML письма и Telegram без экранирования | Асинхронный обмен сообщениями и realtime | подтверждено |
+| — | notification-metadata-anonymous-type | `Notification.Metadata` хранит анонимный тип, который драйвер отказывается сериализовать | Полиглотное хранение (PG / Mongo / MinIO) | ОПРОВЕРГНУТО |
+| — | private-tag-unquoted-not-parsed | приватный текст в формате редактора виден всем | Безопасность | ОПРОВЕРГНУТО |
+
+---
+
+## Срезы
+
+
+# Архитектура бэкенда и границы модулей — C
+
+Оценка среза до опровержения: C. Направление зависимостей на уровне сборок настоящее и частично закрыто тестами, но над доменом лежит видимый долг: правила предметной области дублируются в hosted services, воркере и сидере, архитектурные тесты покрывают только самый узкий срез, и раскол авторизации между API-сервисом и доменом уже сломал одну фичу для всех пользователей.
+
+Макро-граница держится, и держится по-настоящему: `DM.Domain.Core.csproj` не имеет ни одного
+`ProjectReference` и ни одного `PackageReference`, ни один из восьми модулей `DM.Domain.*` не
+ссылается на другой модуль, а поиск `using Microsoft.EntityFrameworkCore|Npgsql|Serilog|Microsoft.AspNetCore|MongoDB`
+по всем девяти доменным проектам дает ноль совпадений. Композиция на Autofac устроена
+осмысленно: времена жизни, отличные от дефолта скана, объявлены в той сборке, которая владеет
+типами (`AccountModule`, `ModerationModule`), а две самые злые ловушки контейнера — затирание
+MS.DI-регистраций блокирующим сканом и десятикратная регистрация маппера — закрыты тестами,
+которые проверяют именно то, что написано в их названии (`DbContextScopeResolutionShould`,
+`MapperRegistrationShould`). Это уровень B по чертежу.
+
+Оценку тянет вниз то, что живет над доменом. Внутри HTTP-хоста работают 14 hosted services;
+9 из 10 в папке `HostedServices/` держат `DmDbContext` или `DmMongoClient` напрямую и пишут
+правила предметной области инлайном (`PopularityScoreService` считает популярность игр и блогов
+сырыми EF-запросами). В воркере уведомлений 41 генератор, из них 39 держат `DmDbContext` и
+ноль вызывают доменный сервис — то есть весь набор правил "кого уведомлять о чем" вынесен
+из `Domain.*` в воркер, ровно против того, что запрещает PATTERNS.md. Настройки уведомлений
+не имеют доменного слоя вообще: контракт репозитория объявлен в `DM.Web.API`, реализация над
+Mongo — там же, а API-сервис делает read-modify-write persistence-сущности. Раскол
+ответственности между API-сервисом и доменным сервисом уже сломал одну фичу: чат игровой
+комнаты авторизуется в `ChatRoomApiService` по `RoomIntention`, а доменный сервис ниже
+авторизует по участию в чате, участники для комнатных чатов не создаются никогда, и все
+чтения и записи отвечают 404 каждому пользователю, включая мастера.
+
+Архитектурные тесты — три правила плюс проверка загрузчика. Они хорошо написаны (читают IL,
+а не текст; отдельным тестом проверяют, что цели правил вообще нашлись — это редкость), но
+покрывают самый узкий срез: контроллер не зависит от доменных абстракций и от `IMapper`,
+API-сервис не зависит от `DmDbContext`. Ни одного правила на направление зависимостей домена,
+на чистоту ядра, на запрет правил в воркере; и `LoadFilteredDirectory` смотрит в выходной
+каталог хоста, где нет ни `DM.Workers.*`, ни `DM.Tools.Seeder` — три исполняемых проекта из
+пяти невидимы для любого правила. Отсюда C: работает, границы на уровне сборок настоящие, но
+долг видимый — дублирование правил, частичные инварианты и дефекты, которые дошли до
+пользователя.
+
+## Что сделано хорошо
+
+- `src/DM.Domain.Core/DM.Domain.Core.csproj:12` — комментарий `<!-- NO ProjectReference - this
+  is the architecture center! -->` не декоративный: в файле нет ни `ProjectReference`, ни
+  `PackageReference`. Ядро физически не может утащить инфраструктуру.
+- Направление зависимостей проверяемо: `grep -rn "using Microsoft.EntityFrameworkCore\|using
+  Npgsql\|using Serilog\|using Microsoft.AspNetCore\|using MongoDB"` по девяти проектам
+  `DM.Domain.*` — 0 совпадений. Ни один доменный модуль не ссылается на другой доменный
+  модуль (проверено по всем девяти `.csproj`: единственный `ProjectReference` — `DM.Domain.Core`).
+- `test/DM.Web.API.Tests/Features/General/DbContextScopeResolutionShould.cs:37-47`
+  воспроизводит production-порядок (`AddDbContextPool` через `Populate`, затем
+  `PersistenceModule`) и четырьмя фактами проверяет ровно то, что обещает: один контекст на
+  scope, тот же контекст внутри репозитория (через рефлексию по полям, строки 105-110), разные
+  контексты в разных scope, `ContextId.Lease > 0` как доказательство, что пул реально
+  задействован. Утверждение PATTERNS.md:512 "это проверяется тестом" — правда.
+- `test/DM.Web.API.Tests/Features/General/MapperRegistrationShould.cs:28-55` проверяет, что
+  `RegisterMapper` для двух сборок дает ровно один `IConfigurationProvider` и при этом не
+  теряет профили второй сборки. Это именно тот баг, который описан в
+  `ModuleRegistrationExtensions.cs:135-137`, и он закрыт.
+- `src/DM.Infrastructure.Core/Extensions/ModuleRegistrationExtensions.cs:104-109` —
+  `PreserveExistingDefaults()` на блокирующем скане, с объяснением, почему это обязательно
+  (модули Autofac применяются после `Populate`, иначе пулинг DbContext и типизированные
+  HttpClient-фабрики молча заменяются на `InstancePerDependency`). Причина реальна, тест выше
+  ее фиксирует.
+- `src/DM.Domain.Account/AccountModule.cs:10-17` и `src/DM.Domain.Moderation/ModerationModule.cs:10-14`
+  — требование "этот тип живет один на scope" переехало из хоста в сборку-владельца. Обоснование
+  (хост называл internal-типы строкой пространства имен, компилятор такое не проверяет)
+  проверяемо и верно: типы действительно internal.
+- `src/DM.Domain.Account/AccountConfigurationExtensions.cs:34-40` — опции биндятся модулем,
+  который их читает, с `Validate` + `ValidateOnStart` на ключе шифрования. Аргумент "IOptions
+  незабинденного типа не бросает, а выдает default" верен и объясняет, почему это не может
+  жить в хосте.
+- Разделение Controller/ApiService в API-слое доведено до конца механически: 75 контроллеров,
+  75 интерфейсов `I*ApiService`, 75 реализаций. Правило "контроллер не зависит ни от одной
+  абстракции `DM.Domain.*`" проверено тестом и проходит: `dotnet test
+  test/DM.Architecture.Tests` — `Passed: 4, Failed: 0`.
+- `test/DM.Web.API.IntegrationTests/DatabaseFixture.cs:27-43` поднимает Postgres, Mongo и
+  RabbitMQ через Testcontainers и загружает реальный `Startup`, поэтому целиком отсутствующая
+  DI-регистрация не может пройти CI незамеченной для эндпоинтов, у которых есть
+  интеграционный тест (45 файлов).
+- `Directory.Build.props:5-12` — отсутствие `WarningsNotAsErrors` объяснено и обоснование
+  проверяемо: `TreatWarningsAsErrors` включен глобально, а `NoWarn` ограничен двумя
+  NU-кодами уязвимостей с указанием, где именно стоит единственный гейт.
+
+## Находки
+
+### [ВЫСОКАЯ] chat-room-two-authorization-models — чат игровой комнаты отвечает 404 всем, потому что API-слой и домен авторизуют его по разным моделям
+
+> **Опровержение: подтверждено.**
+
+`ChatRoomApiService` авторизует доступ к сообщениям сам, через `RoomIntention`, и для этого
+залезает напрямую в доменный репозиторий:
+
+`src/DM.Web.API/Features/Game/ChatRooms/ChatRoomApiService.cs:140-147,168-179`
+```csharp
+public async Task<CursorEnvelope<Message>> GetMessagesAsync(Guid chatRoomId, string? cursor, int limit)
+{
+    var room = await GetChatRoomForUpdateAsync(chatRoomId);
+    _intentionManager.ThrowIfForbidden(RoomIntention.ViewMessages, room);
+
+    return await _messagingService.GetMessagesWithCursorAsync(
+        room.ChatId!.Value, cursor, null, null, limit);
+}
+...
+private async Task<RoomToUpdate> GetChatRoomForUpdateAsync(Guid chatRoomId)
+{
+    var userId = _identityProvider.Current.User.UserId;
+    var room = await _roomRepository.GetForUpdate(chatRoomId, userId);
+```
+
+Ниже доменный слой авторизует тот же ресурс по участию в чате:
+
+- `src/DM.Domain.Messaging/Features/Messages/MessageService.cs:158-165` — `GetWithCursorAsync`
+  начинается с `await _chatService.GetAsync(chatId)` с комментарием "Validate chat access".
+- `src/DM.Domain.Messaging/Features/Chats/ChatService.cs:96-103` — при `null` из репозитория
+  бросает `HttpException(NotFound)`.
+- `src/DM.Infrastructure.Persistence/Repositories/Messaging/ChatRepository.cs:65-70`:
+  ```csharp
+  public Task<DtoChat?> Get(Guid chatId, Guid userId) => _dbContext.Chats
+      .Where(c => c.ChatId == chatId)
+      // Global chats are accessible to everyone, others require participation
+      .Where(c => c.Type == ChatType.Global || c.UserLinks.Any(l => !l.IsRemoved && l.UserId == userId))
+  ```
+- `src/DM.Infrastructure.Persistence/Repositories/Messaging/ChatRepository.cs:189-210`
+  (`CreateGameRoomChat`) не создает ни одной записи `UserLinks`. Поиск по всему решению:
+  `CreateChatLinkEntity` строится только в `ChatFactory.CreateDirect`,
+  `ChatFactory.CreateGroup` и `ChatService.cs:191` (добавление участников группового чата) —
+  ни один из трех путей не относится к `ChatType.GameRoom`.
+
+Последствие: `GET /v1/chat-rooms/{id}/messages`, `POST /v1/chat-rooms/{id}/messages` и
+`DELETE /v1/chat-rooms/{id}/messages/unread` отвечают 404 любому аутентифицированному
+пользователю, включая мастера игры и автора комнаты: проверка `RoomIntention.ViewMessages`
+проходит, а следующий за ней `ChatRepository.Get` не находит чат, потому что участников у
+комнатного чата не бывает. Фронтенд-страница `src/DM.Web.Client/src/pages/game/GameChatRoom.vue`
+существует и упирается в это. Дефект переживает CI: единственный тест
+`test/DM.Web.API.IntegrationTests/Controllers/Game/ChatRoomControllerShould.cs` — 8 фактов, и
+все восемь проверяют только поведение без аутентификации (401/404 на случайный GUID); ни один
+не логинится и не читает сообщение. Название файла обещает покрытие контроллера, а покрыты
+атрибуты авторизации.
+
+Исправление: одна модель авторизации на ресурс. Перенести проверку `RoomIntention` в
+`Domain.Messaging` — `ChatRepository.Get` для `ChatType.GameRoom` должен разрешать доступ по
+доступу к комнате (`RoomAccess`/роль в игре), а не по `UserLinks`, — и убрать
+`IRoomRepository` и `IIntentionManager` из `ChatRoomApiService`. Добавить интеграционный
+тест, который аутентифицируется мастером, постит сообщение в комнатный чат и читает его
+обратно.
+
+### [СРЕДНЯЯ] notification-settings-has-no-domain-layer — настройки уведомлений живут в HTTP-хосте: контракт, репозиторий над Mongo и правила
+
+> **Опровержение: частично неверно.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> The layering facts are all correct: the contract is in src/DM.Web.API/Notifications/INotificationSettingsRepository.cs:11 over a persistence entity, UserSettingsRepository.cs:13 derives MongoCollectionRepository<UserSettings> inside the HTTP host, Upsert (:33-40) is a whole-document ReplaceOneAsync, and NotificationApiService.cs:91-113 is read-modify-write on DbUserSettings. Every stated consequence is wrong or unreachable. (1) Ran it: PATCH /v1/users/me/notifications/settings with {"discord":{"enabled":true}} returns 200 {} — not "enabled: false" — because MapBotConnection (:126-139) returns null when neither the channel id nor prefs exist. And the no-op is only reachable for a channel that is not connected: BotLinkService.VerifyAndLink (:82-85) sets DiscordId and InitializeChannelPreferences together, Disconnect (:98-101) clears both, so prefs != null whenever the channel is connected — the skipped `if` is the intended rule ("cannot configure an unconnected channel"), merely enforced silently instead of with 409/422, which is what the finding itself proposes. Nothing in src/DM.Web.Client consumes the endpoint (only notificationApi.ts), so no user sees a toggle refuse to save — the screen is not built. (2) The lost update is real but narrow and one-directional: the theme/paging writer (UserRepository.cs:373-390) uses $set, and UserSettingsRepository is the only whole-document writer of UserSettings in src, so only a Theme/Paging change landing inside the few-ms window between GetByUserId and Upsert is lost — not "loses one of the two entirely". Verified my probe left theme=Light and paging 20/20/30/20/20 intact. (3) EmailPreferences is genuinely written nowhere (grep: 2 hits total, entity + NotificationEmailSender.cs:149), but the API contract is explicitly bot-channels-only (NotificationDtos: UpdateNotificationSettingsRequest has Discord/Telegram and nothing else) — that is an unbuilt feature, not a defect. What is left is architecture debt of exactly the same kind the same report files at СРЕДНЯЯ (hosted-services-bypass-the-domain, notification-rules-live-in-the-worker); ВЫСОКАЯ here is inflation held up by consequences that do not survive being run.
+
+Контракт репозитория объявлен в `DM.Web.API`, а не в `Domain.Core`/`Domain.*`:
+`src/DM.Web.API/Notifications/INotificationSettingsRepository.cs:11`. Реализация — там же, и
+она наследует базовый класс персистентности и оперирует persistence-сущностью:
+
+`src/DM.Web.API/Notifications/UserSettingsRepository.cs:13-16`
+```csharp
+internal class UserSettingsRepository : MongoCollectionRepository<UserSettings>, INotificationSettingsRepository
+{
+    public UserSettingsRepository(DmMongoClient client) : base(client)
+```
+
+где `UserSettings` — это `DM.Infrastructure.Persistence.Entities.Account.Settings.UserSettings`.
+API-сервис делает над этой сущностью полный read-modify-write, и правила ("менять настройки
+канала можно только если объект настроек канала уже существует") написаны прямо там:
+
+`src/DM.Web.API/Features/Personal/Notifications/NotificationApiService.cs:91-113`
+```csharp
+var settings = await _settingsRepository.GetByUserId(userId);
+if (settings == null)
+{
+    settings = DbUserSettings.CreateDefault(userId);
+}
+
+if (request.Discord != null && settings.DiscordPreferences != null)
+{
+    ...
+}
+if (request.Telegram != null && settings.TelegramPreferences != null)
+...
+await _settingsRepository.Upsert(settings);
+```
+
+`DbUserSettings.CreateDefault` (`src/DM.Infrastructure.Persistence/Entities/Account/Settings/UserSettings.cs:65-77`)
+не заполняет ни `DiscordPreferences`, ни `TelegramPreferences`, ни `EmailPreferences`.
+Единственное место, которое их создает, — `BotLinkRepository.cs:152-166`, при подключении бота.
+
+Последствие, вход и состояние конкретные: пользователь без документа настроек (или с
+документом, но без подключенного бота) отправляет `PUT` настроек уведомлений с
+`discord.enabled = true`. Оба `if` не срабатывают, `Upsert` пишет пустой документ по умолчанию,
+ответ 200 с `enabled: false`. Пользователь видит, что переключатель не сохраняется, и никакой
+ошибки. Второе последствие того же корня: `Upsert` — это `ReplaceOneAsync` целого документа
+(`UserSettingsRepository.cs:35-39`), а тот же документ несет `Theme` и `Paging`, поэтому
+одновременное сохранение темы и настроек уведомлений теряет одно из двух целиком. Третье:
+`EmailPreferences` читает воркер (`src/DM.Workers.NotificationDispatcher/Implementation/Email/NotificationEmailSender.cs:149`),
+но записать их не может ни один путь во всем репозитории — email-канал не настраивается вовсе.
+
+Исправление: завести `Domain.Personal/Features/Notifications/INotificationSettingsService` +
+`INotificationSettingsRepository` в домене, реализацию репозитория — в
+`Infrastructure.Persistence/Repositories/Personal`, DTO настроек — доменный, а не
+persistence-сущность. Обновление делать частичным (`Update.Set` по конкретным полям), а не
+заменой документа. Создание отсутствующего объекта настроек канала — правило домена, и оно
+должно либо создавать его, либо возвращать 409/422, а не молчаливый 200.
+
+### [СРЕДНЯЯ] arch-tests-cover-the-narrowest-slice — три правила из десятка проверяемых утверждений PATTERNS, и воркеры с сидером вне зоны видимости
+
+`test/DM.Architecture.Tests` содержит один файл и четыре факта:
+`LoadTheHostAndTheDomainAssemblies`, `KeepControllersOffTheDomainAbstractions`,
+`KeepControllersOffTheMapper`, `KeepApiServicesOffTheDbContext`
+(`ServiceLayerBoundaryShould.cs:67,77,93,103`). Все четыре реально биндятся к типам — это
+проверено отдельным тестом (строки 70-74) и это правильно сделано.
+
+Чего в них нет, при том что PATTERNS.md это формулирует как правила:
+
+- "Domain не знает про EF Core" (PATTERNS.md:59). Держится только на отсутствии
+  `PackageReference` в девяти `.csproj`. Добавление `<PackageReference Include="Microsoft.EntityFrameworkCore" />`
+  в `DM.Domain.Game.csproj` компилируется и оставляет все четыре теста зелеными.
+- "Infrastructure.* не может определять бизнес-интерфейсы" (PATTERNS.md:522-525) — не
+  проверяется, и нарушено в `DM.Web.API` (см. находку выше).
+- "Domain.Core не содержит бизнес-логики" (PATTERNS.md:537) — не проверяется, и нарушено.
+- "Раз worker обрабатывает событие, правила можно писать в нем — нет" (PATTERNS.md:550-552) —
+  не проверяется и проверено быть не может: загрузчик
+  (`ServiceLayerBoundaryShould.cs:27-30`) читает `DM.*.dll` из `AppContext.BaseDirectory`,
+  а в выходном каталоге проекта лежат ровно 15 сборок `DM.*` — `DM.Workers.Mail`,
+  `DM.Workers.NotificationDispatcher` и `DM.Tools.Seeder` отсутствуют, потому что
+  `DM.Web.API` на них не ссылается (проверено: `ls DM.*.dll` в
+  `test/DM.Architecture.Tests/bin/Debug/net8.0`).
+- `KeepApiServicesOffTheDbContext` ловит только `DmDbContext`. API-сервис, который держит
+  доменный репозиторий и сам делает `ThrowIfForbidden`, правилом разрешен — и таких шесть
+  (см. следующую находку).
+
+Последствие: два из трех самых крупных нарушений слоев в кодовой базе (правила уведомлений в
+воркере, авторизация в API-сервисе) находятся вне досягаемости набора, который в собственном
+XML-комментарии назван "Executable copy of the Controller -> ApiService -> Service boundary
+from PATTERNS.md". Комментарий честен про механизм ("Every DM assembly the host drags into the
+output directory"), но не говорит, что это исключает три исполняемых проекта из пяти, и
+разработчик читает набор как гарантию, которой нет.
+
+Исправление: добавить `ProjectReference` на `DM.Workers.*` и `DM.Tools.Seeder` в
+`DM.Architecture.Tests.csproj` (только для того, чтобы сборки попали в выходной каталог), и
+дописать правила: `Types().That().ResideInAssembly("DM.Domain.*").Should().NotDependOnAny(
+"Microsoft.EntityFrameworkCore.*", "Npgsql.*", "MongoDB.*", "Microsoft.AspNetCore.*", "Serilog.*")`;
+запрет на `DmDbContext` в любом типе `DM.Web.API` и `DM.Workers.*`, кроме именованного списка
+bootstrap-типов; запрет на `IIntentionManager` в `*ApiService`.
+
+### [СРЕДНЯЯ] notification-rules-live-in-the-worker — 41 генератор уведомлений, 39 держат DmDbContext, ноль вызывают доменный сервис
+
+`find src/DM.Workers.NotificationDispatcher/Implementation/Notifiers -name "*Generator.cs"` —
+41 файл. `grep -rl DmDbContext` по этой папке — 39. `grep -rln "Service "` — 0.
+
+`src/DM.Workers.NotificationDispatcher/Implementation/Notifiers/Blog/NewPublicationNotificationGenerator.cs:19,36-49`
+```csharp
+private readonly DmDbContext _dbContext;
+...
+var publicationData = await _dbContext.Publications
+    .Where(p => p.PublicationId == entityId)
+    .Select(p => new { p.PublicationId, p.Title, p.AuthorId, AuthorUsername = p.Author.Username,
+                       p.BlogId, BlogTitle = p.Blog.Title, p.IsPublished })
+```
+
+Отправители тоже являются репозиториями:
+`src/DM.Workers.NotificationDispatcher/Implementation/Bot/NotificationBotSender.cs:23` —
+`internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, INotificationBotSender`,
+и он же держит `DmDbContext` (строки 131-134). Правило "кому в какой канал уходит уведомление"
+написано там же: `ShouldSendToChannel` (строки 166-174). Всего наследников
+`MongoCollectionRepository<UserSettings>` вне `Infrastructure.Persistence` три:
+`DM.Web.API/Notifications/UserSettingsRepository.cs:13`,
+`NotificationBotSender.cs:23`, `NotificationEmailSender.cs:22` — три класса в двух хостах
+работают с одной коллекцией, каждый со своим представлением о ней.
+
+Последствие: правило предметной области "кого уведомлять о новой публикации/новом посте/
+закрытии игры" существует в 41 экземпляре в воркере и нигде в `Domain.*`. Ни одно из них не
+знает про личный черный список: `grep -rn "Blacklist" src/DM.Workers.NotificationDispatcher/Implementation`
+— ноль совпадений, при том что в домене есть `IUserBlacklistChecker` и
+`MessageService.CreateAsync` (`src/DM.Domain.Messaging/Features/Messages/MessageService.cs:81-86`)
+его применяет. То есть пользователь, заблокировавший другого, получает уведомления о его
+активности. Изменение любого правила рассылки требует найти и повторить правку в 39 файлах,
+и ничто не проверит, что она полная.
+
+Исправление: генератор должен отвечать на один вопрос — "какие идентификаторы получателей
+для этого события", — а отвечать на него должен доменный сервис или репозиторий подписок в
+`Domain.*`. Начать с самого дешевого шага: вынести из генераторов запросы к `_dbContext` в
+методы существующих доменных репозиториев (`ISubscriptionRepository` уже используется в том
+же файле, строка 20), тогда список получателей станет одной точкой, куда добавляется фильтр
+черного списка.
+
+### [СРЕДНЯЯ] hosted-services-bypass-the-domain — 9 из 10 фоновых задач HTTP-хоста работают со стором напрямую, три разных подхода в одной папке
+
+`src/DM.Web.API/Shared/Configuration/HostedServiceExtensions.cs:27-49` регистрирует 14 hosted
+services. В `src/DM.Web.API/HostedServices/` десять файлов, 1519 строк. Из них восемь держат
+`DmDbContext` (`PendencyReminderService:86`, `PendingRegistrationCleanupService:82`,
+`PeriodDigestService:112`, `PopularityScoreService:68`, `TokenCleanupService:68`,
+`UploadOrphanCleanupService:87`, `UsernameChangeCleanupService:86,132`, `WarmupService:96`),
+`SessionCleanupService:68` держит `DmMongoClient`, и только
+`GameInactivityService.cs:70` делегирует доменной абстракции:
+```csharp
+var processor = scope.ServiceProvider.GetRequiredService<IGameInactivityProcessor>();
+```
+`PeriodDigestService.cs:112-115` — третий вариант: `DmDbContext` плюс `ITopicRepository` плюс
+`IUnreadCountersRepository` плюс `IInvokedEventProducer` в одном методе.
+
+Правило предметной области написано инлайном. `PopularityScoreService.cs:99-127,143`:
+активный игрок — автор активного не-NPC персонажа, заходивший в течение
+`ActivityPolicy.ActivePeriod`; активный читатель — подписчик с той же отсечкой; счет — сумма.
+
+Последствие: `IGameInactivityProcessor` доказывает, что правильный паттерн доступен и стоит
+одну строку; остальные девять его не используют, и определение популярности, срок жизни
+токена, порог напоминания о задолженности по посту нельзя ни вызвать из другого места, ни
+покрыть unit-тестом домена — они доступны только через запуск хоста. Архитектурный тест их не
+видит: имена не заканчиваются на `ApiService`.
+
+Исправление: для каждой задачи ввести доменную абстракцию по образцу
+`IGameInactivityProcessor`, оставив в hosted service только таймер, scope, логирование и
+обработку отмены. Затем распространить правило `KeepApiServicesOffTheDbContext` на все типы
+`DM.Web.API`, кроме `Startup` и явного списка bootstrap-инициализаторов.
+
+### [СРЕДНЯЯ] popularity-rule-duplicated-and-diverging — правило популярности написано дважды, константа разошлась, а лог утверждает неправду про первый расчет
+
+Тот же расчет существует в двух местах:
+`src/DM.Web.API/HostedServices/PopularityScoreService.cs:72,99-127` и
+`src/DM.Tools.Seeder/Seeding/DataSeeder.Leaderboards.cs:301-360`. Тексты запросов совпадают
+дословно, кроме порога:
+
+- `PopularityScoreService.cs:72`: `var activeThreshold = now - ActivityPolicy.ActivePeriod;`
+- `DataSeeder.Leaderboards.cs:301`: `var activeThreshold = now - TimeSpan.FromDays(30);`
+
+`src/DM.Domain.Core/Configuration/ActivityPolicy.cs:8-13` содержит обещание, которое это
+нарушает: "Held here so that changing the definition is one edit rather than four across two
+assemblies — a partial change produces screens that quietly disagree with each other". Сидер
+ссылается на `DM.Domain.Core` (`DM.Tools.Seeder.csproj`), то есть мог бы взять константу и не
+берет. Утверждение комментария сегодня уже ложно: правка `ActivePeriod` не изменит сидер.
+
+Второе: `PopularityScoreService.cs:41,45` пишет в лог и в комментарий "Initial calculation
+done by WarmupService". `src/DM.Web.API/HostedServices/WarmupService.cs` прочитан целиком —
+он валидирует конфигурацию, компилирует маппинги и прогревает три запроса; популярность он не
+считает. При этом цикл (`PopularityScoreService.cs:46-51`) начинается с
+`await timer.WaitForNextTickAsync(...)`, то есть первый расчет — через час после старта.
+
+Последствие: на свежей базе, накатанной ресетом без запуска сидера, `PopularityScore` равен
+нулю у всех игр и блогов первый час работы хоста. Виджет популярных блогов пуст, потому что
+`src/DM.Infrastructure.Persistence/Repositories/Blog/BlogRepository.cs:412` фильтрует
+`.Where(b => b.PopularityScore > 0)`, а сортировка игр по популярности
+(`GameRepository.cs:620-631`) вырождается в сортировку по заголовку. Разработчик, который
+пойдет искать причину, прочитает лог и решит, что первый расчет уже был.
+
+Исправление: перенести расчет в `Domain.Game`/`Domain.Blog` (или один сервис в
+`Domain.Core`-контракте) и вызывать его из трех мест — hosted service, сидер и разовый прогон
+на старте. Убрать `TimeSpan.FromDays(30)` из сидера. Либо реализовать обещанный первый расчет
+на старте, либо убрать из лога и комментария утверждение, что он есть.
+
+### [СРЕДНЯЯ] api-services-reach-past-the-domain — шесть API-сервисов держат доменные репозитории, два авторизуют сами
+
+PATTERNS.md:41 определяет границу однозначно: "Доменный сервис владеет правилами: авторизация,
+инварианты, работа с репозиториями... правило предметной области в API-сервисе — дефект".
+Нарушений шесть, все проверены по конструкторам:
+
+- `Features/Account/Authentication/AuthenticationApiService.cs:30` — `ILoginRecordRepository`
+- `Features/Community/Polls/PollApiService.cs:18` — `IUserReadRepository`
+- `Features/Community/Users/CommunityUserApiService.cs:24` — `ILoginRecordRepository`
+- `Features/Game/ChatRooms/ChatRoomApiService.cs:27,31` — `IRoomRepository` + `IIntentionManager`
+- `Features/General/Upload/UploadApiService.cs:30,32` — `IUploadRepository` + `IIntentionManager`
+- `Features/Moderation/Profiles/ModeratedProfileApiService.cs:28` — `ILoginRecordRepository`
+
+Авторизация в API-слое: `ChatRoomApiService.cs:143,153,163` (три `ThrowIfForbidden`) и
+`UploadApiService.cs:86,93` (два).
+
+Последствие: правило доступа существует только на одном из путей к ресурсу. Для чата комнаты
+это уже вылилось в неработающую фичу (первая находка). Для загрузок: `UploadIntention.ListAll`
+и `ListUser` проверяются в `UploadApiService`, поэтому любой второй потребитель
+`IUploadRepository` — а он публичный и лежит в `Domain.Core/Uploads/IUploadRepository.cs` —
+получит те же данные без проверки; кандидат уже есть,
+`src/DM.Web.API/HostedServices/UploadOrphanCleanupService.cs:87` ходит в тот же стор напрямую.
+Тест `KeepApiServicesOffTheDbContext` эти шесть случаев пропускает по построению: он смотрит
+только на `DmDbContext`, а комментарий к правилу для контроллеров
+(`ServiceLayerBoundaryShould.cs:39-43`) прямо говорит, почему обращение к `I*Repository` и
+`IIntentionManager` — то же самое нарушение. Для контроллеров это учли, для API-сервисов нет.
+
+Исправление: перенести пять чтений в соответствующие доменные сервисы (журнал входов —
+`Domain.Account`, загрузки — владелец `IUploadRepository`), перенести `ThrowIfForbidden` туда
+же и расширить правило: `Classes().That().Are(ApiServices).Should().NotDependOnAny(
+DomainAbstractions except I*ApiService)` — или, точнее, запретить `IIntentionManager` и
+`I*Repository` отдельным правилом с тем же `Because`, что уже написан для контроллеров.
+
+### [СРЕДНЯЯ] patterns-contradicts-itself-on-cross-module-calls — чертеж утверждает две противоположные вещи о вызовах между модулями
+
+PATTERNS.md:17 разрешает: "Интерфейсы cross-module фич (`IUserLookupService`,
+`INotepadRepository`)" — в `Domain.Core`.
+PATTERNS.md:518-520 запрещает: "Модули могут вызывать сервисы друг друга — Нет...
+Коммуникация — только через Domain Events."
+
+Код следует первому и игнорирует второй, массово. `IUserLookupService` объявлен в
+`src/DM.Domain.Core/Users/IUserLookupService.cs`, реализован сервисом другого модуля
+(`src/DM.Domain.Personal/Features/Profiles/IUserService.cs:14` — `public interface IUserService
+: IUserLookupService`) и внедряется в 22 файлах шести других доменных модулей: Blog (4),
+Community (2), Forum (1), Game (7), Moderation (4), Personal (2), плюс три API-сервиса.
+То есть синхронный вызов сервиса чужого модуля — норма, а не исключение.
+
+Последствие: документ, объявленный SSOT по структуре (PATTERNS.md:5), не может разрешить спор
+на ревью. Разработчик, которому нужен доступ к данным чужого модуля, найдет в одном файле два
+взаимоисключающих ответа и выберет по вкусу; следующий выберет иначе. Это уже произошло:
+`IContentBlacklistService` (см. ниже) — попытка сделать это через ядро, доведенная до
+мертвого кода, а не до потребителя.
+
+Исправление: оставить одно правило. Фактическая архитектура — "синхронное чтение чужого
+модуля разрешено только через интерфейс в `Domain.Core`, запись и побочные эффекты — только
+через Domain Events". Переписать раздел "Модули могут вызывать сервисы друг друга" в этой
+формулировке и указать, что запрет относится к записи.
+
+### [СРЕДНЯЯ] domain-core-is-not-the-kernel-the-doc-describes — в ядре есть реализации и правило предметной области, и у него нет тестового проекта
+
+PATTERNS.md:395 ("Реализаций и бизнес-логики здесь нет") и PATTERNS.md:537 ("Domain.Core — это
+Shared Kernel: интерфейсы, DTO, enums, exceptions. Никакой бизнес-логики") — абсолютные
+утверждения. В `src/DM.Domain.Core` при этом:
+
+- `Content/ModBlockSanitizer.cs:45` — правило предметной области: `SanitizeForAuthor`
+  разворачивает `[mod]` для авторов ниже `UserRole.Moderator`. Это ровно "кто что может".
+- `Identity/PublicIdService.cs` (95 строк) — реализация кодирования публичных
+  идентификаторов, зарегистрированная как сервис (`CoreModule.cs:69-71`).
+- `Parsing/UserAgentParser.cs` (95 строк) — реализация.
+- `Identity/PasswordHashing.cs`, `Extensions/QueryableExtensions.cs`,
+  `Extensions/ReadableGuidHelper.cs`, `UnreadCounters/UnreadCountersExtensions.cs`,
+  `Dto/OptionalExtensions.cs` — код, а не контракты.
+
+Структура тоже не та, что в блюпринте (PATTERNS.md:390-395: "`{Concern}/` — интерфейсы, DTO и
+enums одной cross-module области... Одна папка — одна область контракта"): `Dto/`, `Enums/`,
+`Exceptions/`, `Extensions/`, `Abstractions/` — это корзины по виду типа, а не области
+контракта; в `Enums/` лежит 60 файлов.
+
+При этом тестового проекта у ядра нет: `test/` содержит 16 проектов, `DM.Domain.Core.Tests`
+среди них нет, хотя `DM.Domain.Core.csproj:9` объявляет ему `InternalsVisibleTo`. Из типов
+ядра тестируется один — `PublicIdService`, и делает это
+`test/DM.Infrastructure.Core.Tests/PublicIdServiceShould.cs`, то есть тест лежит не в зеркале
+своего проекта (PATTERNS.md:531-533).
+
+Последствие: 130 файлов, от которых зависят все девять модулей и три хоста, не имеют своего
+тестового проекта; правило `[mod]`-санитайзера, которое применяется на путях записи
+сообщений и комментариев, не покрыто ни одним тестом в зеркале своего проекта. И правило
+"никакой логики в ядре" нельзя применить как критерий на ревью — оно уже нарушено в четырех
+местах, так что следующий спор решится ссылкой на прецедент.
+
+Исправление: выбрать одно. Либо переписать формулировку в PATTERNS ("в ядре допустимы чистые
+политики и хелперы без внешних зависимостей; сервисы с состоянием и I/O — нет") и завести
+`test/DM.Domain.Core.Tests` с тестами на `ModBlockSanitizer`, `ReadableGuidHelper`,
+`Optional`, перенеся туда `PublicIdServiceShould`. Либо вынести `PublicIdService` и
+`UserAgentParser` в `Infrastructure.Core` (интерфейсы оставить в ядре), а `ModBlockSanitizer`
+— в модуль, который владеет правилами разметки.
+
+### [СРЕДНЯЯ] module-composition-is-a-hand-kept-list — состав доменных модулей перечислен вручную в трех хостах, и пропуск ничего не ломает при сборке
+
+`src/DM.Web.API/Startup.cs:309-322` перечисляет восемь доменных сборок через типы-маркеры:
+```csharp
+var accountAssembly = typeof(DM.Domain.Account.Authorization.AccountIntention).Assembly;
+...
+var domainAssemblies = new[] { accountAssembly, personalAssembly, communityAssembly,
+    moderationAssembly, messagingAssembly, forumAssembly, blogAssembly, gameAssembly };
+```
+`src/DM.Workers.NotificationDispatcher/Startup.cs:86,90,99` перечисляет три из восьми,
+`src/DM.Tools.Seeder/Program.cs:95` — одну.
+
+Ирония в том, что автор архитектурного теста эту опасность назвал:
+`ServiceLayerBoundaryShould.cs:23-24` — "A marker-type list would silently stop covering a
+Domain project added later" — и поэтому в тесте использовал сканирование каталога. В
+композиционном корне список остался.
+
+Последствие: девятый модуль `DM.Domain.X`, добавленный со всеми `ProjectReference`, собирается
+и запускается; его сервисы просто не зарегистрированы. Первый запрос к его эндпоинту падает
+`Autofac.Core.Registration.ComponentNotRegisteredException` -> 500. Компилятор молчит.
+Интеграционные тесты поймают это только для тех эндпоинтов, у которых тест есть. Тот же
+пропуск в воркере проявляется как необработанное исключение в консьюмере, а не как отказ
+старта. Родственная проблема с тем же корнем: `RegisterDefaultTypes` вызывает
+`AsImplementedInterfaces()` для каждого класса сканируемой сборки, поэтому DTO тоже
+регистрируются по своим интерфейсам — `ILikable` реализуют шесть DTO из пяти сборок
+(`Publication`, `Comment`, `Topic`, `GameComment`, `PostReview`, `Message`), и разрешение
+`ILikable` вернет один из них по порядку регистрации.
+
+Исправление: один список в одном месте, вычисляемый, а не перечисляемый. Сканировать
+`AppDomain`/каталог по маске `DM.Domain.*.dll` (как это делает архитектурный тест) либо
+завести в каждом доменном проекте `Module`-класс и находить их через
+`RegisterAssemblyModules`. Плюс тест, который строит контейнер `Startup` и разрешает все 75
+`I*ApiService` — он поймает и пропущенный модуль, и неоднозначную регистрацию.
+
+### [СРЕДНЯЯ] dead-kernel-abstraction-with-ambiguous-registration — IContentBlacklistService не имеет ни одного потребителя и две реализации, которые выбираются порядком регистрации
+
+`src/DM.Domain.Core/Blacklists/IContentBlacklistService.cs:16` — четыре метода. Поиск по всему
+решению (`src` + `test`) дает три файла: объявление и две реализации
+(`DM.Domain.Blog/Features/Blacklists/BlogBlacklistService.cs:136-153` и
+`DM.Domain.Game/Features/Blacklists/GameBlacklistService.cs:148-161`), обе через явную
+реализацию интерфейса, то есть восемь методов-переходников написаны специально под этот
+контракт. Потребителей ноль.
+
+Обе реализации попадают в контейнер через `AsImplementedInterfaces()` в
+`RegisterDefaultTypes`, причем с `PreserveExistingDefaults()` дефолтом становится первая
+зарегистрированная — а порядок задан литералом массива в `Startup.cs:318-322`, где Blog идет
+перед Game.
+
+Последствие: первый же код, который внедрит `IContentBlacklistService`, получит
+`BlogBlacklistService` и будет молча работать с черными списками блогов независимо от того,
+что он передал в `entityId`; для игры это означает "черный список не применен" без ошибки.
+Перестановка двух элементов в массиве в `Startup.cs` меняет поведение и не ломает ни один тест.
+
+Исправление: либо удалить интерфейс и восемь методов-переходников, либо ввести потребителя и
+сделать разрешение явным (`IIndex<ModuleKind, IContentBlacklistService>` или keyed-регистрация
+в модулях владельцев), чтобы выбор реализации не зависел от порядка литерала.
+
+### [СРЕДНЯЯ] worker-retry-treats-domain-4xx-as-transient — политика повторов ловит любое исключение, включая доменный HttpException
+
+`src/DM.Workers.NotificationDispatcher/NotificationConsumerRetryMiddleware.cs:18-20`
+```csharp
+_retryPolicy = Policy.Handle<Exception>().WaitAndRetryAsync(5,
+    attempt => TimeSpan.FromSeconds(1 << attempt), ...);
+```
+Домен бросает `HttpException` со статусом: `grep -rc "throw new HttpException"` по восьми
+`DM.Domain.*` дает 269 мест. Ни один `catch (HttpException)` в решении не существует
+(проверено поиском по `src`). `NotificationProcessor.cs:68` вызывает
+`_notificationService.CreateAsync` — доменный сервис `Domain.Personal`.
+
+PATTERNS.md:475-486 честно называет эту плату: "воркеры, которые ловят эти исключения, живут
+без HTTP-запроса, и «429» там не значит ничего". Обоснование ("единственный потребитель
+домена, который отвечает кому-то снаружи, — HTTP-хост") верно ровно до этого места: воркер
+потребителем домена является и различить постоянную ошибку от временной обязан.
+
+Последствие: событие про сущность, удаленную между публикацией и обработкой, дает
+`HttpException(NotFound)`. Middleware повторяет его 5 раз с задержками 2+4+8+16+32 = 62
+секунды, занимая консьюмер, и все уведомления за ним ждут. Пять таких сообщений в очереди —
+пять минут задержки для всех остальных.
+
+Исправление: `Policy.Handle<Exception>(e => e is not HttpException http ||
+(int)http.StatusCode >= 500)` — постоянные ошибки не повторять, а логировать и подтверждать.
+Это не требует второй таксономии ошибок: статус уже несется в исключении, его достаточно
+прочитать.
+
+### [СРЕДНЯЯ] langversion-preview-defeats-a-pinned-setting — два проекта переопределяют намеренно закрепленную версию языка
+
+`Directory.Build.props:18-23` закрепляет `<LangVersion>12.0</LangVersion>` с объяснением:
+"Pinned, not «preview». The accepted language used to be whatever SDK happened to be
+installed: CI pins 8.0.x and the images use sdk:8.0, so a developer on a newer SDK could write
+a feature that compiles locally and fails in CI with an error that names no cause."
+
+Два проекта возвращают `preview`:
+`src/DM.Domain.Game/DM.Domain.Game.csproj:7` и
+`src/DM.Infrastructure.Messaging/DM.Infrastructure.Messaging.csproj:7` — оба
+`<LangVersion>preview</LangVersion>`.
+
+Обстановка, которая делает это живой проблемой, проверена: `.github/workflows/dotnet.yml:34`
+и `:210` — `dotnet-version: 8.0.x`; `docker/app.Dockerfile:1` — `FROM
+mcr.microsoft.com/dotnet/sdk:8.0`; `global.json` — `"version": "8.0.100"` с
+`"rollForward": "latestMajor"`, а локально установлен SDK 9.0.308 (`dotnet --version`).
+
+Последствие: код, использующий возможность C# 13, компилируется локально в `DM.Domain.Game`
+(крупнейшем доменном модуле, 19 фич) и падает в CI с ошибкой уровня "feature is not available
+in C# 12" — то есть ровно тем сценарием, который props-файл описывает как причину закрепления.
+Те же два проекта дублируют `GenerateDocumentationFile` и `TreatWarningsAsErrors`, которые уже
+заданы глобально, что и маскирует лишнюю строку как безобидное повторение.
+
+Исправление: удалить `<LangVersion>preview</LangVersion>` из обоих `.csproj` вместе с двумя
+дублирующими свойствами. Если preview нужен точечно — включать его с комментарием, какая
+именно возможность требуется, и поднимать пин в `Directory.Build.props` глобально, а не в
+одном проекте.
+
+### [НИЗКАЯ] dangling-internals-visible-to — InternalsVisibleTo выданы сборкам, которых нет, и продублированы
+
+`Directory.Build.props:31-33` выдает каждому проекту `InternalsVisibleTo
+$(AssemblyName).DependencyInjection`. Проектов с суффиксом `.DependencyInjection` в решении
+ноль (`find . -name "*.DependencyInjection.csproj"` — пусто), то есть 17 сборок открывают
+internals имени, которое не существует.
+
+`Directory.Build.props:34-36` выдает `$(AssemblyName).Tests` всем, после чего девять
+доменных `.csproj` объявляют то же самое поштучно. Результат виден в сгенерированном файле:
+`src/DM.Domain.Account/obj/Debug/net8.0/DM.Domain.Account.AssemblyInfo.cs:14` и `:23` — два
+идентичных `[assembly: InternalsVisibleTo("DM.Domain.Account.Tests")]`.
+
+Двум целям тестовых проектов не соответствует ничего: `DM.Domain.Core.csproj:9` —
+`DM.Domain.Core.Tests` (не существует), `DM.Domain.Personal.csproj:9` —
+`DM.Domain.Personal.Tests.Notifications` (не существует).
+
+Последствие: конфигурация описывает раскладку решения, которой нет, и читается как
+свидетельство, что у `Domain.Core` есть тесты. Практический риск минимален (сборка с таким
+именем должна попасть в процесс), вред — в дезинформации.
+
+Исправление: удалить блок `.DependencyInjection` из `Directory.Build.props`, удалить девять
+поштучных `InternalsVisibleTo ...Tests` (глобальное правило их покрывает), удалить две
+ссылки на несуществующие тестовые проекты или создать `DM.Domain.Core.Tests`.
+
+### [НИЗКАЯ] dead-type-forwarders-with-a-false-comment — файл переадресации типов не нужен никому, а комментарий утверждает обратное
+
+`src/DM.Infrastructure.Core/TypeForwarders.cs:1-2`
+```csharp
+// Type forwarders for types migrated to DM.Domain.Core
+// These ensure backward compatibility for code still using old namespaces
+```
+Четыре `TypeForwardedTo`. Поиск по `src` и `test` на `DM.Infrastructure.Core.Dto` и
+`DM.Infrastructure.Core.Abstractions` — ноль совпадений. Переадресация типов имеет смысл
+только для сборок, скомпилированных против старой версии; здесь все потребители лежат в том же
+решении и перекомпилируются.
+
+Последствие: файл не может ничего сломать, но его комментарий утверждает существование
+внешнего потребителя, из-за чего его никто не удалит, и он же наводит на мысль, что
+`Infrastructure.Core` публикуется как пакет.
+
+Исправление: удалить файл.
+
+### [НИЗКАЯ] arch-test-comment-miscounts — комментарий говорит "пять контроллеров", их шесть
+
+`ServiceLayerBoundaryShould.cs:36-38`: "five compliant controllers import
+DM.Domain.*.Features.* for query DTOs while injecting nothing but an ApiService, and a
+namespace rule would flag them."
+
+`grep -rl "using DM.Domain\.[A-Za-z]*\.Features" --include="*Controller.cs"` дает шесть:
+`Blog/Comments/BlogCommentController.cs`, `Blog/PublicationComments/PublicationCommentController.cs`,
+`Community/WebsiteTestimonials/WebsiteTestimonialController.cs`,
+`Forum/Comments/TopicCommentController.cs`, `Game/Comments/GameCommentController.cs`,
+`Game/Posts/PostController.cs`. Условие "injecting nothing but an ApiService" выполняется у
+всех шести (проверено по полям `private readonly` — только `I*ApiService`).
+
+Существеннее, чем цифра: тот же комментарий обосновывает выбор правила, а `Because` этого
+правила (строка 84) называет вредом "couples the wire format to the domain signature" — и
+именно это происходит в 25 действиях контроллеров, где доменный query-DTO биндится из
+query-string напрямую (`[FromQuery] GamesQuery q`, `BlogsQuery`, `TopicsQuery`, `UsersQuery`,
+`UploadsQuery`, `PagingQuery`, ...). Правило смотрит только на интерфейсы, поэтому вторая
+половина его собственного обоснования не проверяется: переименование свойства в
+`GamesQuery` — ломающее изменение публичного API без сигнала компилятора и без теста.
+
+Исправление: поправить число. И либо признать в комментарии, что связность формата запроса с
+доменным DTO принята сознательно (тогда убрать это из `Because`), либо добавить правило
+"тип параметра действия контроллера не объявлен в `DM.Domain.*`" и завести Request-DTO в
+API-слое для 25 действий.
+
+### [НИЗКАЯ] blueprint-deviations-in-api-and-infrastructure-layout — три отступления от собственного чертежа
+
+- PATTERNS.md:78-84 требует `Features/{Module}/{Feature}/`. `Features/Search/` держит две фичи
+  плоско: `ForumSearchController.cs`, `ForumSearchApiService.cs`, `MessageSearchController.cs`,
+  `MessageSearchApiService.cs` в одной папке.
+- `Features/Messaging/MessagingApiService.cs` (228 строк) лежит на уровне модуля и
+  обслуживает четыре папки фич (`Chats`, `GlobalChat`, `GlobalChatEvents`, `Messages`) —
+  один API-сервис на модуль вместо одного на фичу. Он же тянет persistence-константу:
+  `MessagingApiService.cs:22` — `using DbChat = DM.Infrastructure.Persistence.Entities.Messaging.Chat;`
+  и `:215,219,223,228` — `DbChat.GlobalChatId`. Идентификатор глобального чата — доменное
+  понятие, а читается с EF-сущности.
+- PATTERNS.md:418-426 задает для `Infrastructure.{Name}` папки `{Concern}/`, `Shared/{Concern}/`
+  и `{Name}Module.cs`. В корне `DM.Infrastructure.Core` лежат `CursorService.cs`,
+  `DateTimeProvider.cs`, `GuidFactory.cs`, `RandomNumberGenerator.cs`, `TypeForwarders.cs` —
+  вне какой-либо `{Concern}/`.
+
+Последствие: чертеж перестает быть тем, по чему проверяют новую фичу; каждое отступление
+становится прецедентом. `GlobalChatId` на EF-сущности — единственное место с практическим
+следствием: константа недоступна доменным сервисам, которые не ссылаются на персистентность.
+
+Исправление: `Features/Search/{Forum,Message}/`; разрезать `MessagingApiService` по папкам
+фич либо оговорить исключение в PATTERNS; перенести `GlobalChatId` в `Domain.Core`
+(`Enums/ChatType.cs` рядом или `Identity`-константы) и оставить EF-сущности ссылку на него;
+разложить пять корневых файлов `Infrastructure.Core` по `{Concern}/`.
+
+### [НИЗКАЯ] patterns-names-concrete-types — SSOT по структуре ссылается на конкретные имена и пути
+
+PATTERNS.md называет текущие имена и пути: `ErrorHandlingMiddleware` (строка 486), `DmDbContext`
+и `IMapper` (строка 41), `IBbParserProvider` (строка 525), `shared/ui/Layout/Dialog.vue`
+(строка 152), `.eslintrc.cjs` и `npm run lint:ci` (строки 139-143), `BBCodeEditor` (строка 592).
+
+Все шесть на сегодня существуют — проверено: `src/DM.Web.API/Middleware/ErrorHandlingMiddleware.cs`,
+`src/DM.Web.Client/src/shared/ui/Layout/Dialog.vue`, `src/DM.Web.Client/.eslintrc.cjs`.
+
+Последствие: не дефект сейчас, а обязательство. Переименование `ErrorHandlingMiddleware` или
+переход на flat-config ESLint (`eslint.config.js`) делают SSOT ложным, и ничто об этом не
+сообщит. Для документа, который задает структуру, часть этих упоминаний неизбежна (они и есть
+блюпринт); неоправданны те, что называют файл или npm-скрипт.
+
+Исправление: заменить упоминания файлов и скриптов на описание роли ("линтер границ слоев,
+идущий в CI-гейте"), оставив имена типов там, где имя типа и есть правило.
+
+## Чего я не смог определить
+
+- Отвечает ли `GET /v1/chat-rooms/{id}/messages` действительно 404 в работающей системе.
+  Цепочка вызовов прочитана целиком и участники комнатного чата не создаются ни на одном пути,
+  но подтвердить это можно только запуском: подняться на `docker compose`, засеять базу,
+  залогиниться мастером игры и вызвать эндпоинт. Тот же прогон закрывает вопрос, был ли
+  комнатный чат когда-нибудь работоспособен.
+- Сколько типов реально регистрирует `RegisterDefaultTypes` на восьми доменных сборках и
+  сколько интерфейсов при этом получают больше одной реализации. Я подтвердил проблему на двух
+  примерах (`IContentBlacklistService` — 2 реализации, `ILikable` — 6), но полный список
+  требует рефлексии по собранным сборкам, а мне разрешено записать только отчет. Тест,
+  который строит контейнер `Startup` и печатает все `IComponentRegistration` с более чем одной
+  реализацией, дал бы список за один прогон.
+- Реальная стоимость повторов в `NotificationConsumerRetryMiddleware`: 62 секунды на сообщение
+  верны для одного консьюмера, но насколько это блокирует очередь, зависит от prefetch и числа
+  консьюмеров Jamq, которые задаются конфигурацией. Измеряется прогоном: положить в очередь
+  событие про удаленную сущность и посмотреть задержку следующих.
+- Что считать правильным для `HttpException` в домене. PATTERNS.md:475-486 объявляет триггер
+  пересмотра ("когда у домена появляется второй транспорт"), и я считаю, что триггер уже
+  наступил: воркер уведомлений — второй потребитель домена, и он не может отличить постоянную
+  ошибку от временной. Но признавать триггер сработавшим — решение владельца, а не аудита.
+- Считать ли отступления от блюпринта в `Features/Search` и `Features/Messaging` дефектом или
+  поводом изменить блюпринт. Оба варианта дешевы, выбор — за владельцем.
+
+
+# Предметная модель и продуктовая логика — D
+
+Оценка среза до опровержения: D. Ядро бана сделано образцово и покрыто тестами, но вокруг него роль в игре выводится четырьмя расходящимися способами, премодерация решается в SQL и в резолвере с разными ответами, а вывод персонажа из игры отвечает 500 всем пользователям — это дефекты, доходящие до пользователя, и решения, которые придется переделывать.
+
+Слой представляет продуктовые понятия платформы: роли в игре, два вида бана, премодерация,
+подписки, приглашения, жизненный цикл персонажа, доступы к комнатам. Ядро — 26 классов
+`*IntentionResolver`, которые принимают решения по интенциям, плюс набор enum'ов в
+`DM.Domain.Core/Enums` и производные предикаты (`GameRoleExtensions`, `AccessRestrictions`).
+Архитектурно выбор верный: интенция как единица авторизации, `IntentionManager`,
+закрывающийся по умолчанию, DTO-модели без EF в домене.
+
+Вердикт: модель бана сделана образцово — один предикат, одна точка свертки, шесть тестов,
+и комментарии в `AccessRestrictions.cs` / `AuthenticatedUser.cs` описывают ровно то, что
+делает код. Все остальное вокруг нее держится хуже. Роль в игре выводится **четырьмя**
+разными способами, которые расходятся; предикат "своя игра" определен через исключение
+(`is not Reader`), а не перечислением; "новичок" имеет семь литеральных определений и два
+источника данных; премодерация решается в SQL-фильтре и в резолвере с разными ответами, из-за
+чего ментор получает 403 на игре, которую обязан проверить; `RoomAccessPolicy` пишется,
+валидируется, тестируется и **не читается ни одной авторизацией**. Три понятия
+(`BanType.Auto` + баллы предупреждений → автобан, `RubricAccessType.Private`,
+`GameRole.Applicant`) смоделированы в enum'ах и не реализованы нигде.
+
+Оценка D, а не C, из-за одной находки, которая ломает продукт для всех пользователей:
+маппинг `CharacterDetails → UpdateCharacter` глушит три флага отставки, конвертер интенций
+на этом бросает исключение, и все три кнопки вывода персонажа из игры ("Отметить погибшим",
+"Изгнать из игры", "Покинуть игру") отвечают 500. Не F: архитектура интенций здорова,
+`IntentionManager` fail-closed, а ядро бана и метрика `GameDrops` показывают, что здесь умеют
+делать правильно — просто не везде сделали.
+
+## Что сделано хорошо
+
+- **Бан: один предикат, одна точка свертки.** `AccessRestriction.IsInForceAt`
+  (`src/DM.Domain.Core/Identity/AccessRestriction.cs:31`) — `StartedUtc <= moment && moment < EndedUtc`;
+  `AuthenticatedUser.EffectiveAccessPolicyAt` (`.../Identity/AuthenticatedUser.cs:52`) складывает
+  действующие ограничения в `AccessPolicy`; `AuthenticationService.ApplyActiveBans`
+  (`src/DM.Domain.Account/Features/Authentication/AuthenticationService.cs:359`) вызывается во всех
+  трех путях аутентификации (строки 100, 236 и в token-пути). Утверждение комментария
+  "без этой свертки ни один бан ничего не ограничивает" проверяемо верно: ни один код не пишет
+  `User.AccessPolicy` (единственные записи — `UserFactory.cs:32` и сид, оба `NotSpecified`).
+- **`AccessRestrictions.MaySpeak` — единственное место, где бан превращается в решение**
+  (`src/DM.Domain.Core/Authorization/AccessRestrictions.cs:30`), и `AccessRestrictionsShould`
+  (`test/DM.Infrastructure.Core.Tests/Authorization/AccessRestrictionsShould.cs`) закрепляет пять
+  клаузул, включая "оба флага → берем строгий".
+- **`GameIntentionResolverShould` реально пинит семантику "своей игры", а не только счастливый путь**:
+  23 факта/теории, среди них `NotTreatASubscriptionAsOwningTheGameUnderTheOrdinaryBan` (строка 224),
+  `NotLetAnApplicantCommentUntilTheCharacterIsAccepted` (242),
+  `LetTheApplicantCommentOnceTheCharacterIsAccepted` (261),
+  `ForbidCommentingOwnGameUnderAFullBan` (298). Это ровно те три способа обойти бан, которые
+  напрашиваются.
+- **`CharacterIntentionResolverShould` не врет про свой объем.** Докстринг говорит "thirteen
+  guarded arms" — в резолвере ровно 13 arm'ов
+  (`src/DM.Domain.Game/Authorization/CharacterIntentionResolver.cs:23-40`), считал. Есть
+  `ForbidAStrangerEvenAsAdministrator` (строка 76): роль на сайте не открывает чужого персонажа.
+- **`IntentionManager` закрывается по умолчанию, а не открывается**: нет резолвера — `LogError`
+  и `false` (`src/DM.Infrastructure.Core/Authorization/IntentionManager.cs:38, 57`).
+- **Инвариант "предупреждение о неактивности снимается активностью" поддержан в write-path, а не в
+  чтении**: `PostRepository.Create` сбрасывает `InactivityWarningUtc` тем же `ExecuteUpdate`, что
+  двигает `LastPostCreatedUtc` (`src/DM.Infrastructure.Persistence/Repositories/Game/PostRepository.cs:479-482`),
+  а `GameRepository.Update` — при реактивации (строки 1031-1032). Проверял гипотезу
+  "игра, однажды предупрежденная, больше никогда не заморозится" — она не воспроизводится
+  именно из-за этих двух сбросов.
+- **Метрика `GameDrops` считает ровно то, что описано.** Комментарий в
+  `AchievementMetric.cs:46` ("Exile and death are not drops") и запрос
+  `UserRepository.cs:741-748` (`Status == Retired && IsPlayerLeft && !IsNpc && !IsRemoved &&
+  !Game.IsRemoved`) совпадают дословно.
+- **`PlayerParticipation` реализован по своей же документации, причем в двух местах согласованно**:
+  фильтр `GameRepository.cs:525-531` и обогащение `EnrichWithFilteredPlayerCharactersAsync`
+  (строки 115-123) оба исключают `Declined` и NPC — как обещает
+  `src/DM.Domain.Core/Enums/PlayerParticipation.cs:20`.
+- **Полиморфные ссылки защищены CHECK-констрейнтами там, где это критично**:
+  `CK_Uploads_TypedTarget` и `CK_RoomAccesses_TypedTarget`
+  (`src/DM.Infrastructure.Persistence/DmDbContext.cs:2173, 2203`) — дискриминатор и колонки
+  не могут разойтись.
+- **`AttributeSchemaIntention.Use` избегает ловушки `Guid.Empty`**: сравнение
+  `target.Author?.UserId == user.UserId` — это `Guid?` против `Guid`, поэтому системная схема
+  без автора не открывается гостю (`AttributeSchemaIntentionResolver.cs:19`). Ср. с находкой
+  `character-npc-guid-empty` ниже, где та же ситуация решена хуже.
+
+## Находки
+
+### [КРИТИЧНО] character-retirement-500 — вывод персонажа из игры отвечает 500 для всех
+
+> **Опровержение: частично неверно.**
+>
+> The quoted Ignore()s are real (CharacterMappingProfile.cs:108-110), the converter has no Retired-when-exiled arm and throws a plain Exception (CharacterIntentionConverter.cs:25), and that does map to 500 — I reproduced it: PATCH /v1/characters/{id} as the owner with status=UnderReview (an arm that cannot exist) returned HTTP 500. But the described consequence is wrong. The client body never reaches the domain: CharacterDetails.Privacy is a non-nullable reference member (CharacterDetails.cs:20) and gameApi.updateCharacterStatus deliberately omits privacy (gameApi.ts:525-536), so the exact client request returns 400 {"Privacy":["The Privacy field is required."]} — verified live for both {status:Retired,isDead:true} and status-only bodies. Second wall the author missed: UpdateAsync gates everything on CharacterIntention.Edit, and for a game lead that arm is `target.IsNpc || AccessPolicy.HasFlag(EditAllowed)` (CharacterIntentionResolver.cs:24-25), so the master gets 403, not 500 — verified live twice (master retire on 3b798d9c and master accept on ca0d2281, both 403). So all three buttons answer 400, the master's two would still answer 403 after the prescribed fix, and Accept/Decline are equally dead (same 400/403), which the finding does not mention. The product-level claim stands — no HTTP path can retire a character (GameService.LeaveAsync is wired to no controller), and the converter is covered only by mocks in tests — so КРИТИЧНО impact is right while the diagnosis and the fix are not.
+
+`CharacterMappingProfile` глушит три флага отставки на входе:
+
+```csharp
+// src/DM.Web.API/Features/Game/Characters/CharacterMappingProfile.cs:100,108-110
+CreateMap<CharacterDetails, DtoUpdateCharacter>()
+    ...
+    .ForMember(c => c.IsDead, opt => opt.Ignore())
+    .ForMember(c => c.IsPlayerLeft, opt => opt.Ignore())
+    .ForMember(c => c.IsPlayerExiled, opt => opt.Ignore());
+```
+
+Клиент их отправляет: `CharacterEdit.vue:235,242,251` вызывает
+`applyStatus("Retired", { isDead: true })` / `{ isPlayerExiled: true }` /
+`{ isPlayerLeft: true }`, а `gameApi.updateCharacterStatus`
+(`src/DM.Web.Client/src/entities/game/api/gameApi.ts:525-536`) кладет их прямо в тело PATCH
+`characters/{id}`. До домена они не доходят: `UpdateCharacter.IsDead` остается `null`.
+
+Дальше `CharacterService.UpdateAsync:183-186`:
+
+```csharp
+var dead = updateCharacter.IsDead ?? characterToUpdate.IsDead;      // false
+var left = updateCharacter.IsPlayerLeft ?? characterToUpdate.IsPlayerLeft; // false
+var (intention, eventType) = _intentionConverter.Convert(
+    characterToUpdate.Status, updateCharacter.Status.Value, dead, left);
+```
+
+`CharacterIntentionConverter` для `statusTo == Retired` имеет только два arm'а —
+`when isDead` и `when isPlayerLeft` — и падает в
+`_ => throw new CharacterIntentionConverterException(statusTo)`
+(`src/DM.Domain.Game/Features/Characters/CharacterIntentionConverter.cs:23-25`).
+`CharacterIntentionConverterException` — обычный `Exception`, поэтому
+`ExceptionProblemDetailsFactoryExtensions.CreateFrom(Exception, …)` отдает 500 с
+correlation-токеном.
+
+Отдельно: для изгнания arm'а в конвертере нет вообще (`isPlayerExiled` в `Convert` даже не
+передается), а единственная реализация изгнания —
+`GameUserRepository.ExilePlayer` (`src/DM.Infrastructure.Persistence/Repositories/Game/GameUserRepository.cs:53`)
+— не вызывается ниоткуда: в `GameService` из `_userRepository` используются только
+`GetAssistants`, `IsAssistantByUsername`, `RemoveAssistant*`, `IsReader`, `RemoveReader`,
+`MarkCharactersAsLeft`. То есть `CharacterIntention.Exile` (enum, arm резолвера, тест
+`AllowKillAndExileOnlyOnAnActiveCharacter`, `EventType.StatusCharacterExiled`, две строки
+в уведомлениях, колонка в БД) недостижим ни одним запросом.
+
+Тестов на переход статуса нет: в `CharacterServiceShould` восемь фактов, все про create /
+authorize / hidden attributes; `ICharacterIntentionConverter` там замокан (строка 63), а сам
+конвертер не покрыт нигде (`grep -rn "IntentionConverter" test/` дает только моки).
+
+Последствие: мастер жмет "Отметить погибшим" или "Изгнать из игры", игрок жмет "Покинуть
+игру" — 500, статус не меняется, персонаж навсегда `Active`. Ломается для каждого
+пользователя и для каждой игры: вывести персонажа из игры невозможно вообще, кроме
+удаления (`DELETE /v1/characters/{id}`), которое теряет его посты из ростера. Заодно
+мертво `Resurrect`/`Return` — попасть в состояние, из которого они возможны, нельзя.
+
+Исправление: убрать три `Ignore()` в `CharacterMappingProfile:108-110` (флаги — законный
+вход PATCH, а не серверные поля); добавить в `CharacterIntentionConverter` arm
+`Retired when isPlayerExiled => (Exile, StatusCharacterExiled)` и передавать
+`isPlayerExiled` из `UpdateAsync`; вместо `throw` на неизвестном переходе вернуть
+`HttpException(BadRequest)` — статус, которого не бывает, это ошибка клиента, а не сервера.
+Покрыть конвертер таблицей переходов (7 легальных, остальное 400) и добавить
+интеграционный тест на PATCH со `status=Retired`.
+
+### [ВЫСОКАЯ] mentor-cannot-read-curated-game — ментор не может открыть игру, которую проверяет
+
+> **Опровержение: подтверждено.**
+
+`GameIntentionResolver.Read` не знает роли `Mentor`:
+
+```csharp
+// src/DM.Domain.Game/Authorization/GameIntentionResolver.cs:44-48
+GameIntention.Read => userIsSeniorModerator ||
+                      roles.HasEditAccess() ||          // только Master/Assistant
+                      target.HasPendingInvitation(user.UserId) ||
+                      (!HiddenStates.Contains(target.Status) && !isHiddenByPremoderation),
+```
+
+`HasEditAccess` — это `Master || Assistant` (`GameRoleExtensions.cs:17`), `UserRole.Mentor == 2 <
+SeniorModerator == 4`. Игра новичка создается как `AwaitingApproval`
+(`GameCreationValidator.cs:43-48`), то есть `isHiddenByPremoderation == true`. Значит для
+ментора все четыре дизъюнкта ложны → `GetAsync` (`GameService.cs:356`
+`ThrowIfForbidden(GameIntention.Read, game)`) бросает 403.
+
+При этом SQL-фильтр видимости ментора пускает:
+`GameAccessibilityFilters.GameAvailable` включает `game.MentorId == userId`
+(`src/DM.Infrastructure.Persistence/RelationalStorage/GameAccessibilityFilters.cs:28`), а рабочий
+список премодерации вообще обходит `GameAvailable` — при заданных `PremoderationStatuses`
+применяется только `premoderationStatuses.Contains(g.PremoderationStatus)`
+(`GameRepository.cs:385-391`).
+
+Автор на это натыкался и залатал ровно одну точку:
+
+```
+// GameService.cs:661-670 (комментарий к ChangePremoderationAsync)
+// ... resolve the id and fetch via the repository (which admits the assigned mentor)
+// rather than the Read-gated GetDetailsAsync ... otherwise the very game this
+// endpoint exists to moderate would be hidden from the mentor.
+```
+
+Комментарий верен и признает проблему, но обходит ее только для смены статуса
+премодерации. Соседний модуль решил это правильно: у блогов есть отдельная интенция
+`BlogIntention.ViewPremoderationPending`, которая включает `isMentor`
+(`src/DM.Domain.Blog/Authorization/BlogIntentionResolver.cs:95-101`) и используется и в списке,
+и в чтении (`BlogService.cs:143, 797`). У игр аналога нет.
+
+Дополнительно резолвер внутренне противоречив: ментор **может** редактировать
+(`EditSettings`, строка 58) и возвращать игру на правки (`SetStatusDraft`, строка 67) то,
+что не может прочитать.
+
+Последствие: ментор открывает свой рабочий список премодерации, видит игру, кликает —
+403. Единственный способ ее проверить — POST на смену статуса премодерации вслепую.
+Продуктовая функция "наставник вычитывает игру новичка перед публикацией" не работает.
+
+Исправление: добавить `GameRole.Mentor` в arm `Read` (или, симметрично блогам, ввести
+`GameIntention.ViewPremoderationPending` и вызвать ее из `GetAsync`/`GetDetailsAsync`), после
+чего убрать обход в `ChangePremoderationAsync`. Тест: ментор читает Draft+AwaitingApproval
+игру, посторонний — нет.
+
+### [ВЫСОКАЯ] draft-visibility-ignored-for-games — публичный черновик игры в списке есть, по ссылке 403
+
+> **Опровержение: подтверждено.**
+
+`DraftVisibility.Public` («Preview visible to everyone»,
+`src/DM.Domain.Core/Enums/DraftVisibility.cs:16`) читается:
+
+- SQL-фильтром игр: `GameAvailable` пускает `Status != Draft || DraftVisibility == Public`
+  (`GameAccessibilityFilters.cs:37-39`), и точно так же `RoomAvailable` (строки 57-59);
+- резолвером блогов: `BlogIntention.ViewDraft` и `CreateComment`
+  (`BlogIntentionResolver.cs:46, 110`);
+
+и **не** читается резолвером игр: `HiddenStates = { ModuleStatus.Draft }` скрывает Draft
+безусловно (`GameIntentionResolver.cs:31-34, 47`), поле `DraftVisibility` в этом файле не
+упоминается ни разу (`grep -c DraftVisibility GameIntentionResolver.cs` → 0), хотя
+`GameDto.DraftVisibility` существует (`GameModels.cs:224`) и пишется при создании
+(`GameService.cs:145`).
+
+Последствие: мастер ставит черновику публичную видимость, чтобы показать заготовку. Игра
+появляется в `GET /v1/games` (фильтр ее пускает) и ее комнаты доступны, а
+`GET /v1/games/{id}` отдает 403. Пользователь видит карточку и не может по ней перейти.
+Обратная асимметрия тоже есть: senior moderator читает скрытую игру по ссылке, но не
+находит ее в списке.
+
+Исправление: добавить в arm `Read` условие
+`(target.Status != ModuleStatus.Draft || target.DraftVisibility == DraftVisibility.Public)`
+вместо `!HiddenStates.Contains(...)`, и включить `userIsSeniorModerator` в
+`GameAvailable` — либо, лучше, выразить видимость один раз и переиспользовать выражение
+в обеих формах (SQL и in-memory), как это уже сделано для `GameAvailable`/`RoomAvailable`.
+
+### [ВЫСОКАЯ] room-access-policy-not-enforced — ReadOnly-доступ к комнате разрешает писать
+
+> **Опровержение: подтверждено.**
+
+`RoomAccessPolicy` (NoAccess/ReadOnly/Full) хранится в БД
+(`src/DM.Infrastructure.Persistence/Entities/Game/Links/RoomAccess.cs:41`), валидируется
+(`CreateRoomAccessValidator.cs:17` — не `NoAccess`; строка 29 — читателю только `ReadOnly`),
+покрыта 12 ассертами в трех тест-классах. И не читается авторизацией ни разу:
+
+```csharp
+// src/DM.Domain.Game/Authorization/RoomIntentionResolver.cs:24-29
+case RoomIntention.CreatePost when characterId.HasValue:
+    var access = room.Accesses.FirstOrDefault(a => a.Character?.Id == characterId.Value);
+    return access != null &&
+           (access.Character.Author.UserId == user.UserId || ...);
+```
+
+Проверяется только факт существования строки доступа. `Policy` в этот резолвер физически не
+доходит: доменная модель `RoomAccess` (`GameModels.cs:471-507`) ее вообще не содержит — в ней
+Id, RoomId, TargetType, Character, User, GrantedUtc, GrantedBy. В API-DTO поле есть, но
+явно погашено: `.ForMember(d => d.Policy, opt => opt.Ignore())`
+(`src/DM.Web.API/Features/Game/Rooms/RoomMappingProfile.cs:60`) — то есть `policy` в ответе
+всегда `null`. Там же всегда пусты `GrantedUtc`/`GrantedBy`: они `Ignore()` и в
+Db→Domain маппинге (`GameMappingProfile.cs:90-91`).
+
+Вторая половина той же поломки — в сервисе:
+
+```csharp
+// src/DM.Domain.Game/Features/RoomAccesses/RoomAccessService.cs:133
+if (oldAccess.User != null && updateRoomAccess.Policy == RoomAccessPolicy.Full)
+    throw new HttpBadRequestException(... ["Policy"] = ValidationError.Invalid);
+```
+
+Задумано «читателю нельзя Full» (зеркало валидатора создания). Но `RoomAccess.User`
+заполняется и для персонажей: `l.CharacterId.HasValue ? l.Character!.Author : l.ReaderUser`
+(`GameMappingProfile.cs:88-89`). Значит для доступа игрового персонажа `User != null` и
+`Full` отклоняется всегда. Правильный дискриминатор — `TargetType`, он лежит в том же DTO.
+
+Тесты этого не ловят, потому что фикстура не заполняет `User`:
+`RoomAccessServiceShould.cs:126,146` создают `new RoomAccess { Id, RoomId, Character = new Character() }`
+и передают `Policy = ReadOnly` — ни одна ветка guard'а не активируется. Тест называется
+`UpdateRoomAccessAndPublishEvent` и проверяет, что вызван `Update` и отправлен эвент; про
+`Policy` он не утверждает ничего.
+
+Последствие: (1) мастер выдает персонажу доступ «только чтение» в комнату — игрок все
+равно пишет туда посты; политика доступа к приватным комнатам не работает; (2) PATCH
+доступа персонажа с `policy=Full` всегда 400 `Invalid`, то есть повысить доступ
+персонажа через API нельзя; (3) клиент никогда не видит, какая политика выставлена
+(`policy: null`) и кем/когда доступ выдан.
+
+Исправление: либо протянуть `Policy` в доменный `RoomAccess` и проверять
+`access.Policy == RoomAccessPolicy.Full` в arm'ах `CreatePost`/`SendMessage`, либо удалить
+enum и колонку, если политика не нужна (тогда `RoomAccessType.Open/Private` остается
+единственным механизмом). Guard в `RoomAccessService:133` заменить на
+`oldAccess.TargetType == RoomAccessTargetType.Reader`. Тест: доступ персонажа с ReadOnly
+не дает `CreatePost`; PATCH `Full` для персонажа проходит, для читателя — 400.
+
+### [ВЫСОКАЯ] ban-not-checked-on-edit-and-reviews — обычный бан обходится правкой и отзывами
+
+> **Опровержение: подтверждено.**
+
+`MaySpeak` вызывается в шести местах: `BoardIntentionResolver.cs:28`,
+`TopicIntentionResolver.cs:15`, `GameIntentionResolver.cs:95`,
+`BlogIntentionResolver.cs:111`, `PublicationCommentService.cs:80`,
+`ChatIntentionResolver.cs:19`. Все шесть — про **создание**. Публичный текст можно выпустить
+еще как минимум шестью способами, ни один из которых бана не спрашивает:
+
+- **Правка комментария.** `CommentIntentionResolver.Edit` — только автор или Moderator+
+  (`src/DM.Infrastructure.Core/Authorization/CommentIntentionResolver.cs:13`), ни окна
+  времени, ни `MaySpeak`. Резолвер общий для всех четырех поверхностей комментариев
+  (`TopicCommentService.cs:122`, `GameCommentService.cs:123`, `BlogCommentService.cs:114`,
+  `PublicationCommentService.cs:128`), и ни один из сервисов бан на правке не проверяет
+  (см. `TopicCommentService.UpdateAsync:116-144` — валидатор, интенция, санитайзер `[mod]`,
+  сохранение).
+- **Правка темы форума.** `TopicIntention.Edit` (`TopicIntentionResolver.cs:16`) — автор
+  незакрытой темы, без `MaySpeak`.
+- **Отзыв на игру.** `GameReviewIntention.Create => user.IsAuthenticated`
+  (`GameReviewIntentionResolver.cs:20`); в сервисе проверяются новичковость, наличие поста
+  в игре и дубликат (`GameReviewService.cs:58-82`) — бана нет. Текст отзыва рендерится на
+  поверхности Comment (там же строка 92).
+- **Отзыв на пост.** `PostReviewIntention.Create => user.IsAuthenticated`
+  (`PostReviewIntentionResolver.cs:20`).
+- **Рекомендация пользователя.** `UserEndorsementIntention.Create => user.IsAuthenticated`
+  (`UserEndorsementIntentionResolver.cs:20`) — публичный текст на чужом профиле.
+- **Вступление в событие глобального чата.** `GlobalChatEventIntention.Join`
+  (`GlobalChatEventIntentionResolver.cs:41`). Здесь это хотя бы задокументировано в тесте
+  `LetABannedUserPutTheirNameOnAPublicEventRoster`
+  (`test/DM.Domain.Messaging.Tests/.../GlobalChatEventIntentionResolverShould.cs:278-292`)
+  как «behaviour as found, not a rule that was chosen» — единственное место, где расхождение
+  зафиксировано честно.
+
+При этом `AccessRestrictions.cs:9-13` определяет обычный бан как «silences public speech: the
+global chat, forum topics and their discussion, and the discussion of other people's games
+and blogs». Отзыв на чужую игру — это ровно discussion of other people's games.
+
+Последствие: пользователь получает DemocraticBan. Он не может написать новый комментарий,
+но может переписать любой свой старый комментарий на форуме или в чужой игре в новый текст,
+и может опубликовать отзыв на чужую игру, отзыв на чужой пост и рекомендацию на чужой
+профиль. Бан обходится за один запрос и не требует ничего, кроме уже существующего
+комментария. Для модератора это выглядит как неработающий бан.
+
+Исправление: добавить `user.MaySpeak(...)` в `CommentIntention.Edit` (владелец поверхности
+в контекст резолвера не входит, поэтому либо расширить `Comment` полем
+«принадлежит своей области», либо проверять в четырех сервисах, как это уже сделано в
+`PublicationCommentService`), в `TopicIntention.Edit`, и в трех `*Intention.Create` для
+отзывов/рекомендаций (там `inOwnSpace` заведомо `false` — это текст о чужом). По
+`GlobalChatEventIntention.Join` — решение владельца, см. раздел «Чего я не смог определить».
+
+### [СРЕДНЯЯ] silent-authorization-drop — запрещенное изменение возвращает 200 OK и ничего не делает
+
+> **Опровержение: частично неверно.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> The character half is confirmed live: as the character owner (longest@test.local) PATCH /v1/characters/0997d758-... with status=Active returned 200 OK with "status":"UnderReview" in the body — self-acceptance silently dropped, no error (CharacterService.cs:186-203). The game half is refuted: GameDetails→UpdateGame maps PremoderationStatus with opt.Ignore() (src/DM.Web.API/Features/Game/Games/GameMappingProfile.cs:168), so updateGame.PremoderationStatus is always null from HTTP and the `else { updateGame.PremoderationStatus = null; }` branch at GameService.cs:531-551 is dead code. The consequence "мастер пытается вернуть игру в премодерацию через общий PATCH — 200 OK" cannot happen, and "один переход, два пути, разные правила" collapses: POST /v1/games/{id}/premoderation is the only path. The report also missed the sibling silent drop two lines above (updateGame.Status = null, GameService.cs:525-529), which is the reachable one. Severity is inflated: nothing is lost or escalated — the forbidden action is correctly denied and only the status code lies.
+
+Два места решают авторизацию через `IsAllowed` и при отказе молча выбрасывают часть запроса.
+
+`CharacterService.UpdateAsync:186-203`:
+
+```csharp
+if (_intentionManager.IsAllowed(intention, characterToUpdate))
+{
+    invokedEvents.Add(eventType);
+    status = updateCharacter.Status;
+    ...
+}
+// else — ничего; status остается null, дальше обычный Update и 200 OK
+```
+
+`GameService.UpdateAsync:533-551`:
+
+```csharp
+if (_intentionManager.IsAllowed(GameIntention.SetStatusModeration, game)) { ... }
+else { updateGame.PremoderationStatus = null; }
+```
+
+Второй случай к тому же недостижимо строг: целевой arm требует
+`target.PremoderationStatus == AwaitingApproval` (`GameIntentionResolver.cs:64`), а переход
+`AwaitingEdits → AwaitingApproval` («SendToPremoderation», описан в
+`GameStatusTransition.cs:47-52`) стартует из `AwaitingEdits`. То есть через PATCH этот
+переход всегда молча игнорируется, а через выделенный `ChangePremoderationAsync` (безцелевая
+интенция, `GameService.cs:669`) работает. Один продуктовый переход, два пути, разные правила.
+
+Последствие: игрок PATCH'ит своего персонажа со `status=Active` (самопринятие) — получает
+200 OK и в ответе персонажа со старым статусом, без объяснения. Мастер пытается вернуть
+игру в премодерацию через общий PATCH — 200 OK, ничего не изменилось. Отладка со стороны
+клиента невозможна: успех и отказ выглядят одинаково.
+
+Исправление: заменить `IsAllowed`+молчание на `ThrowIfForbidden` (403) в обоих местах —
+частичное применение запрошенного изменения хуже отказа. Arm `SetStatusModeration` с целью
+привести в соответствие с обоими легальными переходами
+(`AwaitingApproval → Approved` и `AwaitingEdits → AwaitingApproval`), либо убрать целевой
+arm и оставить один путь через `ChangePremoderationAsync`.
+
+### [СРЕДНЯЯ] game-role-derived-four-ways — роль в игре выводится четырьмя способами
+
+Четыре независимые реализации одного понятия:
+
+1. `GameRoleExtensions.GetRoles(Game, Guid)` — `GameRoleExtensions.cs:37-68`, единственная,
+   которую использует авторизация;
+2. `GameRoleResolver.GetRole(Game, Guid)` — `GameRoleResolver.cs:60-89`, то же по другому
+   (возвращает высшую роль, а не набор);
+3. `GameRoleResolver.GetRoleAsync(Guid, Guid, ct)` — строки 26-58, читает подписку из
+   `ISubscriptionRepository` вместо флага `IsViewerSubscriber`;
+4. `GameInvitationRepository.GetUsers` — `GameInvitationRepository.cs:30-155`, строит роль
+   пятью SQL-запросами.
+
+`IGameRoleResolver` и его реализация не используются в продакшене вообще:
+`grep -rn "GetRoleAsync\|IGameRoleResolver" src test` дает интерфейс, реализацию и один
+комментарий в архитектурном тесте — ни одного вызова, ни одного теста. Классы при этом
+живые и расходятся с (1): `GetRoleAsync` не знает `PendingAssistant`, а `GetRole` и
+`GetRoles` по-разному отвечают на «а если у пользователя две роли».
+
+`GameInvitationRepository.GetUsers` расходится в другом: читатели дедуплицируются против
+уже добавленных (строки 151-153), а игроки — нет. Игрок с двумя активными персонажами
+попадает в список дважды.
+
+Последствие: `GET /v1/games/{id}/users` возвращает игрока с двумя персонажами дважды
+(дублирующиеся строки в разделе участников). Изменение правила «кто такой Player» надо
+внести в четыре места, и три из них компилируются и без него. Мертвый `GameRoleResolver`
+— готовая ловушка: он выглядит как SSOT (имя, интерфейс, XML-док) и при первом же
+использовании даст другой ответ.
+
+Исправление: удалить `IGameRoleResolver`/`GameRoleResolver` (или, наоборот, сделать его
+единственным и переписать `GetRoles` через него); в `GetUsers` дедуплицировать игроков так
+же, как читателей, либо сгруппировать персонажи в одну запись участника.
+
+### [СРЕДНЯЯ] game-role-api-vocabulary-mismatch — ментор в API отдается как "unknown", три фильтра мертвы
+
+`GameRoleExtensions.ToApiString` (`GameRoleExtensions.cs:132-140`) знает четыре роли из семи:
+
+```csharp
+GameRole.Master => "master", GameRole.Assistant => "assistant",
+GameRole.Player => "player", GameRole.Reader => "reader",
+_ => "unknown"
+```
+
+`Mentor`, `Applicant` и `None` попадают в `"unknown"`. При этом `GetUsers` возвращает
+`Role = GameRole.Mentor` (`GameInvitationRepository.cs:75`), и `MapToDto` прогоняет ее через
+`ToApiString` (`GameUserApiService.cs:132`). Фильтр по роли в том же файле ждет строки,
+которых функция не производит:
+
+```csharp
+// GameUserApiService.cs:55-59
+"mentor"       => mappedUsers.Where(u => u.Role == "mentor"),
+"applicant"    => mappedUsers.Where(u => u.Role == "applicant"),
+"formerplayer" => mappedUsers.Where(u => u.Role == "formerPlayer"),
+```
+
+`"formerPlayer"` вообще нет в `GameRole`. Клиентский тип объявляет союз
+`"master" | "mentor" | "assistant" | "player" | "reader"`
+(`src/DM.Web.Client/src/entities/game/model/types.ts:299`), в котором нет `"unknown"`.
+Аналогичный `BlogRoleExtensions.ToApiString` ментора знает
+(`src/DM.Domain.Blog/Features/Blogs/BlogRoleExtensions.cs:17`) — то есть это именно пропуск
+в игровой версии, а не соглашение.
+
+Последствие: в списке участников игры ментор показан с ролью, которую фронт не умеет
+отображать; `GET /v1/games/{id}/users?role=mentor` возвращает пустой список при наличии
+ментора; `?role=applicant` и `?role=formerplayer` возвращают пусто всегда.
+
+Исправление: добавить arm `GameRole.Mentor => "mentor"` (и `Applicant => "applicant"`, когда
+роль начнет вычисляться); удалить ветку `"formerplayer"` или ввести соответствующее понятие
+в модель; заменить фильтрацию по строкам на фильтрацию по `GameRole` до маппинга.
+
+### [СРЕДНЯЯ] is-own-game-defined-by-exclusion — предикат «своя игра» задан отрицанием
+
+```csharp
+// src/DM.Domain.Game/Features/Games/GameRoleExtensions.cs:100-103
+public static bool IsOwnGame(this IEnumerable<GameRole> roles)
+{
+    return roles.Any(r => r is not GameRole.Reader);
+}
+```
+
+Комментарий (строки 87-98) перечисляет, что имелось в виду: Master, Assistant, Player с
+принятым персонажем, Mentor. Код же говорит «все, что не Reader». Сегодня совпадает, потому
+что `GetRoles` умеет добавить только эти пять значений. Но в `GameRole` семь членов, и
+`Applicant = 2` уже есть в enum (`src/DM.Domain.Core/Enums/GameRole.cs:22`) — его просто
+никто не выставляет: `GameRoleResolver.cs:52-54` и `GameRoleExtensions.cs:65-66` оба несут
+комментарий «Applicant role detection would require pending character data». То есть
+`GameRole.Applicant` — недостижимое значение enum'а, а `IsOwnGame` устроен так, что в день,
+когда его начнут вычислять, заявитель автоматически получит исключение из-под обычного
+бана. Ровно то, что тест `NotLetAnApplicantCommentUntilTheCharacterIsAccepted`
+(`GameIntentionResolverShould.cs:242`) сейчас запрещает — и тест продолжит проходить, потому
+что он собирает роли из DTO, а не из будущего резолвера.
+
+Последствие: добавление любой новой роли в `GameRole` по умолчанию расширяет исключение
+из бана, молча. Инвариант «Reader и Applicant не считаются своей областью» существует
+только в комментарии.
+
+Исправление: перечислить положительно —
+`roles.Any(r => r is GameRole.Master or GameRole.Assistant or GameRole.Mentor or GameRole.Player)`.
+И решить судьбу `GameRole.Applicant`: либо вычислять (тогда `GetRoles` нужны данные о
+заявках), либо убрать из enum.
+
+### [СРЕДНЯЯ] newbie-seven-definitions — «новичок» определен семь раз и из двух источников
+
+Один продуктовый предикат «меньше 100 игровых постов» реализован:
+
+| Место | Форма |
+|---|---|
+| `src/DM.Domain.Core/Dto/GeneralUser.cs:221` | `QuantityRating < 100` |
+| `src/DM.Infrastructure.Persistence/DmDbContext.cs:2058` | computed column `"QuantityRating" < 100` |
+| `.../Repositories/Personal/UserRepository.cs:488` | `const int NewbieThreshold = 100` |
+| `.../Repositories/Blog/BlogMappingProfile.cs:66` | `a.User.QuantityRating < 100` |
+| `.../Repositories/Game/GameMappingProfile.cs:215` | `a.User.QuantityRating < 100` |
+| `src/DM.Web.API/.../UserMappingProfile.cs:18` | `const int NewbieThreshold = 100` |
+| `src/DM.Web.API/.../PersonalProfileMappingProfile.cs:15` | `const int NewbieThreshold = 100` |
+
+и отдельно — конфигурируемо, через `IProbationConfiguration.NewbiePostThreshold`
+(default 100, `src/DM.Domain.Moderation/Configuration/ProbationConfiguration.cs:14`) в
+четырех сервисах: `GameCreationValidator.cs:43`, `GameReviewService.cs:209`,
+`PostReviewService.cs:255`, `UserEndorsementService.cs:208`. Плюс три пользовательских
+строки с зашитой сотней («You need at least 100 game posts…» в двух сервисах и в докстринге
+`PostReviewController.cs:88`).
+
+Источников данных два и они разные: колонка `QuantityRating` (инкремент в
+`PostRepository.cs:472`, декремент в `DecrementAuthorQuantityRating`) против
+`COUNT(Posts WHERE AuthorId = …)` — три одинаковых копии
+`GetUserPostCountAsync` (`UserEndorsementRepository.cs:229`, `GameReviewRepository.cs:174`,
+`PostReviewRepository.cs:203`), причем `Posts` под глобальным фильтром `!IsRemoved`
+(`DmDbContext.cs:2209-2217`), а `QuantityRating` — денормализованный счетчик.
+
+Система про это знает и вместо исправления логирует:
+
+```csharp
+// src/DM.Web.API/HostedServices/WarmupService.cs:78-82
+if (probationConfig.NewbiePostThreshold != 100)
+    ... "ProbationConfiguration.NewbiePostThreshold is {Threshold} but DB computed column
+         uses hardcoded 100. Run migration to sync."
+```
+
+Последствие: владелец меняет `NewbiePostThreshold` в конфиге на 50 — премодерация игр,
+отзывы и рекомендации начинают работать по 50, а бейдж «новичок» в профиле, фильтр
+пользователей и метка `IsNewbie` у ассистентов остаются на 100. Пользователь видит «новичок»
+и одновременно может писать отзывы. Второе, независимое от конфига: удаление постов
+рассинхронизирует `QuantityRating` и `COUNT(Posts)`, поэтому бейдж и право на отзыв могут
+расходиться уже сегодня.
+
+Исправление: одно определение — метод расширения над `IUser`, принимающий порог из
+`IProbationConfiguration`, и один источник (`QuantityRating`, коль скоро на нем стоит
+computed column и рейтинг). Три `GetUserPostCountAsync` заменить на чтение
+`QuantityRating`. Пороговое число в пользовательских строках — из конфига. Computed column
+пересобрать вместе с порогом (в этом проекте — правкой `InitialCreate`, БД накатывается
+ресетом).
+
+### [СРЕДНЯЯ] retirement-flags-unconstrained — три булевых флага уточняют один статус, и ничто их не разводит
+
+`CharacterStatus.Retired` уточняется `IsDead`/`IsPlayerLeft`/`IsPlayerExiled`
+(`src/DM.Domain.Core/Enums/CharacterStatus.cs:22-26`: «Check IsDead, IsPlayerLeft,
+IsPlayerExiled flags for details»). Взаимоисключение не обеспечивает ничто:
+
+- в БД CHECK-констрейнтов на `Characters` нет (в схеме их всего два, оба про типизированные
+  цели: `DmDbContext.cs:2173, 2203`);
+- репозиторий пишет каждый флаг независимо (`CharacterRepository.cs:201-208`);
+- сервис при разрешенной смене статуса переносит все три из запроса
+  (`CharacterService.cs:192-194`);
+- `CharacterToUpdate` — модель, на которой резолвер принимает решения, — вообще не содержит
+  `IsPlayerExiled` (`GameModels.cs:1410-1479`), поэтому `Return` («вернуться после
+  добровольного ухода») различает «ушел» и «изгнан» только по `IsPlayerLeft`.
+
+Флаги «не значат ничего вне Retired» — тоже только в комментарии
+(`UpdateCharacter.cs:19-23`: «only when Status = Retired»); ничто не мешает выставить их
+на `Active`.
+
+Последствие: после исправления `character-retirement-500` один запрос сможет создать
+персонажа, который одновременно мертв, ушел и изгнан. Метрика `GameDrops`
+(`UserRepository.cs:741-748`) посчитает его дропом, хотя его убили; бейдж в
+`CharacterCard.vue:27-28` покажет первое совпавшее; `Resurrect` и `Return` оба станут
+доступны, то есть игрок сможет вернуть персонажа, которого мастер убил.
+
+Исправление: заменить три булевых поля одним `RetirementReason` (Dead/Left/Exiled/None) —
+это ровно то, чем они являются, — либо, минимально, добавить CHECK
+`(Status <> 3 AND NOT IsDead AND NOT IsPlayerLeft AND NOT IsPlayerExiled) OR
+ (Status = 3 AND (IsDead::int + IsPlayerLeft::int + IsPlayerExiled::int) = 1)`
+в `InitialCreate` и нормализовать флаги в сервисе по выведенной интенции, а не по входу.
+`IsPlayerExiled` протянуть в `CharacterToUpdate`.
+
+### [СРЕДНЯЯ] lifted-bans-disappear — снятый бан исчезает из истории, а IsLifted всегда false
+
+`Ban : IAdministrated : IRemovable`
+(`src/DM.Infrastructure.Persistence/Entities/Contracts/IAdministrated.cs:11`), поэтому на
+`_dbContext.Bans` действует глобальный фильтр `!IsRemoved`
+(`DmDbContext.cs:2209-2217`). `BanService.LiftBan` снимает бан через
+`_banRepository.Remove`, который ставит `IsRemoved = true` и пишет аудит
+`LiftedByUserId`/`LiftedUtc`/`LiftReason` (`BanRepository.cs:83-95`) с комментарием
+«Lifting a ban used to leave no trace at all … so nobody could tell who had lifted what».
+
+След записан, но нечитаем:
+
+- доменная модель `Ban` (`src/DM.Domain.Moderation/Features/Warnings/Ban.cs:11-62`) не
+  содержит ни `LiftedByUserId`, ни `LiftedUtc`, ни `LiftReason`;
+- API-DTO их объявляет и гасит: `.ForMember(d => d.LiftedUtc, s => s.Ignore())`,
+  `.ForMember(d => d.LiftedBy, s => s.Ignore())`
+  (`src/DM.Web.API/Features/Moderation/Warnings/WarningMappingProfile.cs:37-38`);
+- `Ban.IsLifted` мапится из `IsRemoved`
+  (`WarningMappingProfile.cs:36`) и документирован как «distinguishes lifted from expired in
+  history» (`BanDtos.cs:79-81`), но ни один запрос не может вернуть строку с
+  `IsRemoved == true`: `GetUserBans` фильтрует `!b.IsRemoved` явно
+  (`BanRepository.cs:32`), `GetBanHistory` — глобальным фильтром (строки 118-123).
+
+Последствие: senior moderator снимает бан — бан пропадает и из `UserBanStatus.History`
+пользователя, и из административной истории `GET /v1/bans/history`. Кто снял, когда и
+почему — не показывается нигде. `IsLifted` всегда `false`. Счетчик
+`BansReceivedCount` (ачивка «резиновая уточка», `GeneralUser.cs:131`) при снятии бана
+уменьшается, потому что считается по тому же отфильтрованному набору.
+
+Исправление: снятие бана — это не удаление. Убрать `IRemovable` с `Ban` и завести явный
+`LiftedUtc != null` как признак снятого (у него уже есть колонка), либо для истории читать
+`IgnoreQueryFilters()`. Протянуть `LiftedBy`/`LiftedUtc`/`LiftReason` в доменную модель и
+снять `Ignore()` в маппинге.
+
+### [СРЕДНЯЯ] ban-active-predicate-duplicated — «забанен прямо сейчас» посчитано по-другому
+
+`AccessRestriction.IsInForceAt` несет явное требование:
+
+```
+// src/DM.Domain.Core/Identity/AccessRestriction.cs:27-30
+/// This is the single definition of "banned right now". Any query that lists
+/// active bans must express the same predicate, or the moderation screens and
+/// the enforcement disagree about the same user.
+```
+
+Четыре запроса в `BanRepository` требование выполняют — `!IsRemoved && StartedUtc <= now &&
+EndedUtc > now` (строки 43, 100, 108) и берут `now` из `IDateTimeProvider`. А пятое место
+нет:
+
+```csharp
+// src/DM.Web.API/.../WarningMappingProfile.cs:35 и 53
+.ForMember(d => d.IsActive, s => s.MapFrom(b => !b.IsRemoved && b.EndedUtc > DateTimeOffset.UtcNow))
+```
+
+`StartedUtc <= now` потеряно, а часы взяты из статики вместо инжектированного провайдера.
+Заодно `MapBanType` (строки 56-70) в третий раз выводит «постоянность» бана по магическому
+порогу `now.AddYears(50)` — тому же, что в `BanService.LiftBan:206`, — при том что создается
+постоянный бан на `AddYears(100)` (`BanService.cs:156`). Комментарий в `MapBanType:63` пишет
+«100+ years into the future», код проверяет 50.
+
+Последствие: бан, у которого `StartedUtc` в будущем (валидатор запрещает только прошлое в
+`ExpiresUtc`, `CreateBanValidator.cs:25-27`, но `StartedUtc` всегда `now` — так что путь
+достижим только через сид или прямой INSERT), в модерационных экранах показывается
+активным, а enforcement его не применяет. Практически важнее второе: «постоянность» —
+производное понятие без представления в модели, и бан с `ExpiresUtc = now + 51 год`
+становится снимаемым только администратором, о чем выдавший его модератор не узнает.
+Комментарий про «100+ years» вводит в заблуждение при чтении кода.
+
+Исправление: `IsActive` считать через `AccessRestriction.IsInForceAt` (или вынести предикат
+в доменный метод `Ban.IsInForceAt(moment)`) и брать время из провайдера — маппинг это
+позволяет через `IValueResolver`. «Постоянность» выразить полем/флагом, а не порогом лет;
+если оставлять порог — одна константа на все три места. Комментарий в `MapBanType` привести
+к коду.
+
+### [СРЕДНЯЯ] access-policy-flags-two-jobs — один [Flags] enum обслуживает две разные роли
+
+`AccessPolicy` (`src/DM.Domain.Core/Enums/AccessPolicy.cs`) используется одновременно как:
+
+- **область конкретного бана** — взаимоисключающий выбор из двух («Тип бана», 4.2.4.2):
+  `Ban.AccessRestrictionPolicy`, `CreateBanRequest.AccessPolicy`;
+- **эффективная политика пользователя** — объединение всех действующих банов:
+  `EffectiveAccessPolicyAt` складывает через `|`
+  (`AuthenticatedUser.cs:52-55`), и `MaySpeak` корректно обрабатывает оба флага сразу.
+
+Для второй роли `[Flags]` правилен, для первой — нет: тип допускает 2^n значений, из
+которых осмысленны два, и лишнее приводится молча:
+
+```csharp
+// src/DM.Domain.Moderation/Features/Warnings/BanService.cs:162-164
+var accessPolicy = createBan.AccessRestrictionPolicy == AccessPolicy.DemocraticBan
+    ? AccessPolicy.DemocraticBan
+    : AccessPolicy.FullBan;
+```
+
+Бит `1 << 1` (значение 2) в enum'е не определен вообще — `DemocraticBan = 1 << 0`,
+`FullBan = 1 << 2`. Значения 0, 2, 3, 5, 6, 7 все становятся `FullBan` без 400.
+
+Последствие: модератор отправляет `accessPolicy: 0` (или клиент забывает поле, или
+сериализатор шлет `"DemocraticBan, FullBan"`) — выдается самый строгий бан, включая отказ
+в аутентификации, без предупреждения. Fail-safe направление выбрано верно, но модератор
+не узнает, что получил не то, что просил.
+
+Исправление: развести типы — `BanScope { Democratic, Full }` для входа и записи бана,
+`AccessPolicy [Flags]` оставить для эффективной политики. На входе — валидация
+(`IsInEnum`) с 400 вместо тихого приведения. Заполнить или зарезервировать бит 1
+комментарием, чтобы значение 2 не выглядело валидным.
+
+### [СРЕДНЯЯ] modeled-never-implemented — четыре понятия существуют только в enum'ах
+
+- **`BanType` и автобан по баллам.** `BanType` (`BanDtos.cs:11-32`) — API-only: в сущности
+  `Ban` типа нет, `BanApiService.CreateBan` (строки 79-89) поле `request.Type` не копирует
+  никуда, а на выход `Type` восстанавливается эвристикой `MapBanType`. `BanType.Auto`
+  («Automatic ban triggered by warning points») не может возникнуть никогда: баллы
+  предупреждений клампятся в 0..6 (`WarningService.cs:97`) и не сравниваются ни с каким
+  порогом — `_banRepository` в `WarningService` используется только для чтения активного
+  бана в списке нарушителей. Тот же несуществующий механизм упомянут в
+  `UserRole.cs:38-42` («used for automated actions like auto-bans») и
+  `SystemUser.cs:6-7`.
+- **Фильтр по типу бана не фильтрует.** `GET /v1/bans?type=Permanent`:
+  `GetAllActiveBans(BanType? type = null)` параметр `type` не использует
+  (`BanApiService.cs:62-66`), а контроллер документирует его как «Optional ban type filter»
+  (`BanController.cs:89-99`).
+- **`GET /v1/warnings` возвращает пустой список.** `WarningService.GetAllWarnings` без
+  `username` — `// For now, return empty - would need to implement GetAll in repository`
+  и `return []` (`WarningService.cs:72-73`), с ролевым гейтом Moderator+ и 200 OK.
+- **`RubricAccessType` не проверяется.** Enum (Open/Private) хранится в
+  `Rubric.AccessType` (`Entities/Blog/Rubric.cs:42`), сид создает рубрику «Для избранных» с
+  `RubricAccessType.Private` (`DataSeeder.Blogs.cs:201`), и на этом все:
+  `grep -rn RubricAccessType src` дает enum, сущность и сид — ни резолвера, ни фильтра, ни
+  поля в API-DTO `Rubric` (`src/DM.Web.API/Features/Blog/Blogs/Blog.cs:73-84`).
+
+Последствие: модератор открывает список предупреждений — пусто, делает вывод, что
+нарушений нет. Модератор фильтрует активные баны по типу — получает все. Модератор
+выбирает «Permanent» при выдаче — тип не сохраняется и потом восстанавливается из даты.
+Публикации в приватной рубрике блога видны всем.
+
+Исправление: по каждому пункту — либо реализовать, либо убрать из контракта. Конкретно:
+`BanType` либо персистить колонкой, либо перестать принимать на входе; `type` в
+`GetAllActiveBans` реализовать или удалить параметр; `GetAllWarnings` без `username`
+отвечать 501/400, а не пустым 200, пока метод репозитория не написан; `RubricAccessType`
+либо проверять в `PublicationIntentionResolver`, либо удалить enum, колонку и приватную
+рубрику из сида.
+
+### [СРЕДНЯЯ] fail-open-catches — модерационные проверки при ошибке отвечают «нарушений нет»
+
+```csharp
+// src/DM.Domain.Moderation/Features/Warnings/BanService.cs:216-226
+public async Task<bool> IsUserBanned(string username, ...) {
+    try { ... return await _banRepository.IsUserBanned(user.UserId, ct); }
+    catch { return false; }
+}
+```
+
+То же в `WarningService.GetUserWarnings` (`catch { return []; }`, строки 47-56) и
+`GetUserWarningPoints` (`catch { return 0; }`, строки 120-128). `catch` без фильтра ловит
+не только «пользователь не найден», но и таймаут БД, отмену и ошибку маппинга.
+
+Последствие: при недоступной БД или переименованном пользователе публичный профиль
+показывает «не забанен, 0 баллов, предупреждений нет» — то есть чистую репутацию вместо
+ошибки. Отличить «нет нарушений» от «не смогли проверить» нельзя ни клиенту, ни в логах
+(логирования в этих catch нет).
+
+Исправление: ловить конкретное исключение отсутствия пользователя
+(`HttpException` с 404 / `InvalidOperationException` от lookup), остальное пропускать
+наверх. Как минимум — `_logger.LogWarning(ex, …)` в каждом catch.
+
+### [СРЕДНЯЯ] own-space-predicate-triplicated — «своя область» определена трижды
+
+- игры: `IsOwnGame` — «любая роль, кроме Reader» (`GameRoleExtensions.cs:100`), включает Player;
+- блоги, резолвер: `isOwner || isAssistant || isMentor` (`BlogIntentionResolver.cs:111`);
+- блоги, сервис: тот же предикат дословно еще раз
+  (`PublicationCommentService.cs:77-79`), с комментарием «The rule itself is not
+  duplicated — AccessRestrictions.MaySpeak owns it».
+
+Комментарий верен лишь наполовину: `MaySpeak` владеет отображением «бан → решение», но
+аргумент `inOwnSpace` вычисляется в трех местах независимо. Две блоговые копии совпадают
+сегодня и разойдутся при первом изменении правила (например, если подписчика решат
+считать своим — в `BlogIntention.CreateComment` `isSubscriber` уже фигурирует, но в другом
+дизъюнкте).
+
+Последствие: изменение продуктового правила «что такое своя область» требует правки в трех
+местах; расхождение блоговых копий проявится как «в блоге можно комментировать, а под
+публикацией в том же блоге нельзя» (или наоборот) для забаненного пользователя.
+
+Исправление: один метод, симметричный `IsOwnGame` — `BlogRoleExtensions.IsOwnBlog(...)`,
+вызываемый из обоих блоговых мест. Для игр — перечислить роли положительно (см.
+`is-own-game-defined-by-exclusion`).
+
+### [СРЕДНЯЯ] auto-subscribe-wrong-user — автоподписка при выходе персонажа оформляется на действующего, а не на игрока
+
+```csharp
+// src/DM.Domain.Game/Features/Characters/CharacterService.cs:232-241
+// Auto-subscribe as Reader when player loses all active characters
+var hasOtherActive = await _repository.HasOtherActiveCharacters(
+    characterToUpdate.GameId, characterToUpdate.UserId, updateCharacter.CharacterId);
+if (!hasOtherActive) { await _subscriptionService.SubscribeAsync(characterToUpdate.GameId); }
+```
+
+`GameSubscriptionService.SubscribeAsync` подписывает `_identityProvider.Current.User.UserId`
+(`GameSubscriptionService.cs:40`), а не `characterToUpdate.UserId`. Проверка «остались ли
+другие активные персонажи» при этом сделана именно для автора персонажа.
+
+Последствие: когда мастер убивает или изгоняет последнего персонажа игрока, читателем
+становится мастер, а игрок теряет игру из своего списка. У мастера появляется лишняя
+подписка на собственную игру, что переворачивает `IsViewerSubscriber` и добавляет ему роль
+`Reader` (безвредно, пока Master доминирует, но `GameIntention.Subscribe => !roles.HasAnyRole()`
+и `Unsubscribe => roles.Contains(Reader)` начинают отвечать иначе). Сейчас эта ветка
+недостижима из-за `character-retirement-500` — исправление той находки ее откроет.
+
+Исправление: перегрузка `SubscribeAsync(Guid gameId, Guid userId, ct)` и передача
+`characterToUpdate.UserId`; либо перенести автоподписку в путь, где действующий и есть автор.
+
+### [НИЗКАЯ] subscription-settings-comment-wrong — док утверждает совпадение битов, которого нет
+
+```
+// src/DM.Domain.Core/Enums/SubscriptionSettings.cs:8-10
+/// The same bit positions carry different semantics depending on the
+/// subscription's SubscriptionTargetType:
+```
+
+Это неверно: наборы битов не пересекаются. Per-entity флаги занимают биты 0-5
+(`NewPosts`…`CharacterUpdates`), каналы — 7-8, per-author-category — 9-11
+(`AuthorGameEvents = 1 << 9` и далее). Одна и та же позиция ни в одном случае не означает
+двух вещей. Рядом висит указание, которое в этом проекте не может быть выполнено:
+«Any subscription rows that still carry bit 6 must be migrated to the new flags» (строки
+65-69) — миграция здесь одна, `InitialCreate`, боевой базы нет, строк с битом 6 не
+существует. При этом бит 6 никем не отбрасывается: `SubscriptionSettings` приходит с клиента
+и пишется как есть (`CreateSubscription.Settings`, `UpdateSubscription.Settings`), валидации
+на допустимые биты нет.
+
+Последствие: читающий док получает ложное представление, что биты переиспользуются по
+типу цели, и следующий флаг для User-цели может быть посажен на бит 0 — вот тогда
+расхождение станет реальным. Инструкция про миграцию бита 6 будет вечно висеть
+невыполненной.
+
+Исправление: переписать первый абзац как «наборы флагов не пересекаются: биты 0-5 —
+per-entity, 7-8 — каналы, 9-11 — per-author; бит 6 зарезервирован и не должен
+переиспользоваться». Заметку о миграции удалить (боевой базы нет) и добавить нормализацию
+входящих `Settings` маской допустимых битов.
+
+### [НИЗКАЯ] democratic-ban-described-as-read-only — два дока противоречат определению
+
+`AccessRestrictions.cs:9-13` определяет обычный бан точно: молчание в публичных
+обсуждениях, при этом «posts in game rooms, blog publications and direct messages are not
+affected at all». Два других места описывают его иначе:
+
+- `src/DM.Domain.Moderation/Features/Warnings/IBanService.cs:77` —
+  «`DemocraticBan` (read-only)»;
+- `src/DM.Web.API/Features/Moderation/Bans/BanDtos.cs:118` —
+  «`DemocraticBan` keeps read access».
+
+Ни то, ни другое не верно: забаненный пишет посты в комнатах, публикации в своем блоге и
+личные сообщения. Второй текст — публичный XML-док, попадающий в Swagger, то есть его
+читает модератор при выдаче бана.
+
+Последствие: модератор, прочитав в Swagger «keeps read access», выбирает `DemocraticBan`
+в расчете, что пользователь ничего не сможет написать, и получает бан, который не
+затрагивает игровые посты и ЛС. Или наоборот — выбирает `FullBan`, чтобы разрешить чтение
+форума, и выключает пользователю вход на сайт.
+
+Исправление: заменить оба описания на формулировку из `AccessRestrictions.cs` (одна фраза:
+«запрет публичной речи — глобальный чат, форум, обсуждения чужих игр и блогов; свои
+области, посты в комнатах и ЛС не затронуты»), либо сослаться на `AccessRestrictions`
+через `<see cref>` и не пересказывать.
+
+### [НИЗКАЯ] system-role-outranks-admin — робот старше администратора во всех сравнениях
+
+`UserRole` объявлен иерархическим, и `System = 6` стоит выше `Admin = 5`
+(`src/DM.Domain.Core/Enums/UserRole.cs:42`). Все гейты — сравнения `>=`
+(`user.Role >= UserRole.SeniorModerator` и т. п.), поэтому системный пользователь проходит
+любой из них, а `BanService` запрещает банить того, чья роль не ниже своей
+(`BanService.cs:125`) — то есть администратор не может забанить робота, а робот может всех.
+`IsAuthenticated => Role != UserRole.Guest` (`GeneralUser.cs:216`) считает робота
+аутентифицированным.
+
+Невозможность входа держится не на проверке, а на пустых строках в колонках учетных
+данных: сид пишет `Salt = ""`, `PasswordHash = ""`, `PasswordHashVersion = 0` с
+комментарием «Cannot log in: no salt, no hash» (`DmDbContext.cs:1955-1974`).
+В `AuthenticationService.Login` (строки 98-118) нет ни одной проверки `Role == System` —
+робот проходит теми же ветками, что обычный пользователь, до
+`ComparePasswords(password, "", "")`.
+
+Последствие: System — не «выше администратора», а другой род актора, и порядок enum'а
+это скрывает. Любой будущий путь, который построит identity для системного пользователя
+(рассылки, боты, обработчики), получит права выше администратора без единой явной
+строчки. Отдельно: инвариант «не может войти» существует только в комментарии и в
+содержимом двух строковых колонок.
+
+Исправление: вынести System из шкалы (например, `System = 100` с явным комментарием, что
+это не уровень привилегий, а отдельный вид актора) или ввести отдельный флаг
+`IsSystemActor` и проверять его в гейтах. В `AuthenticationService` добавить явный отказ
+`Role == UserRole.System` до сравнения пароля, чтобы инвариант перестал зависеть от
+пустого хеша.
+
+### [НИЗКАЯ] split-clock-in-inactivity — правило неактивности берет время из двух источников
+
+`GameInactivityProcessor` получает `IDateTimeProvider` и штампует им предупреждения
+(`GameInactivityProcessor.cs:76, 97, 120`), а пороги для отбора игр считаются от
+`DateTimeOffset.UtcNow` прямо в репозитории — четыре раза
+(`InactivityRepository.cs:24, 41, 58, 74`). Так же поступает `CreateBanValidator.cs:26`.
+
+Последствие: тест на «через 31 день без постов игра предупреждается» невозможно написать
+через подмену часов — отбор игр не подчиняется провайдеру. При заметном расхождении
+времени процесса и БД пороги и штампы будут из разных моментов.
+
+Исправление: передавать `now` в методы репозитория параметром (процессор уже держит
+`now` в локальной переменной) либо инжектировать `IDateTimeProvider` в
+`InactivityRepository`.
+
+### [НИЗКАЯ] character-npc-guid-empty — у NPC автор совпадает с гостем
+
+`CharacterToUpdate.AuthorId` — не-nullable `Guid` (`GameModels.cs:1425`) с алиасом
+`UserId => AuthorId` (строка 1430), а в сущности `Character.AuthorId` nullable и у NPC
+равен `null` (`CharacterService.cs:99`: `AuthorId = isNpc ? null : currentUserId`). После
+проекции NPC получает `AuthorId == Guid.Empty`. Гость имеет `UserId == Guid.Empty`,
+поэтому в `CharacterIntentionResolver` `characterOwned = target.UserId == user.UserId`
+дает `true` для гостя на любом NPC, и arm `Edit when characterOwned => gameActive`
+(`CharacterIntentionResolver.cs:23`) вернет `true`.
+
+Сегодня недостижимо: единственный вызов идет из `UpdateAsync`, а endpoint помечен
+`[AuthenticationRequired]` (`CharacterController.cs:124`). Ср. с
+`AttributeSchemaIntentionResolver.cs:19`, где та же ситуация решена правильно —
+сравнением `Guid?` с `Guid`.
+
+Последствие: латентная дыра, которая откроется, если резолвер вызовут вне
+аутентифицированного пути (например, для вычисления доступных действий на публичной
+странице). Тест `Character(isNpc: true)` в
+`CharacterIntentionResolverShould.cs:34` намеренно ставит `AuthorId = Guid.Empty`, то есть
+фикстура воспроизводит ровно это состояние, но проверяет только права мастера.
+
+Исправление: сделать `CharacterToUpdate.AuthorId` типом `Guid?` и сравнивать как
+`target.UserId == user.UserId && user.IsAuthenticated`, либо добавить
+`user.IsAuthenticated` в вычисление `characterOwned`.
+
+### [НИЗКАЯ] room-access-user-deref-asymmetric — одна и та же проверка написана двумя способами
+
+В одном overload'е `RoomIntentionResolver` читатель проверяется как
+`a.User.UserId == user.UserId` (строка 41), в другом — как `a.User?.UserId == user.UserId`
+(строка 59). Оба защищены предшествующим `a.TargetType == RoomAccessTargetType.Reader`, и
+для читательских строк `User` заполняется из `ReaderUser`
+(`GameMappingProfile.cs:88-89`), так что NRE сегодня не воспроизводится. Асимметрия
+означает, что автор не был уверен в инварианте.
+
+Последствие: если появится путь, где `Accesses` заполняется без `User` (например,
+облегченная проекция для чат-комнат), первый вариант упадет NRE → 500, второй вернет
+`false`. Разное поведение на одинаковом вопросе.
+
+Исправление: привести к одной форме (`a.User?.UserId`) и, если инвариант «у Reader-строки
+всегда есть User» реален, выразить его в проекции, а не в предположении.
+
+## Чего я не смог определить
+
+- **Может ли системный пользователь вызвать 500 на входе.** `ComparePasswords(password, "", "")`
+  вызывает `Convert.FromBase64String("")` → пустой массив соли, затем
+  `Argon2id.GetBytes` с солью нулевой длины (`HashProvider.cs:33-42`). Argon2 требует соль
+  не короче 8 байт; бросит ли Konscious.Security.Cryptography исключение или посчитает хеш —
+  из кода не видно. Если бросит, `POST /v1/account/login` с известным адресом
+  `system@dm.local` и любым паролем дает 500 без аутентификации. Решается одним тестом
+  на `SecurityManager.ComparePasswords("x", "", "")`: ожидаем `false`, а не исключение.
+  Независимо от результата явный отказ по `Role == UserRole.System` нужен (см. находку
+  `system-role-outranks-admin`).
+- **Считается ли ростер участников события глобального чата публичной речью.** Это решение
+  владельца, и оно уже честно зафиксировано в тесте
+  `LetABannedUserPutTheirNameOnAPublicEventRoster` («Whether the roster counts as public
+  speech is the decision to make»). Если да — в `GlobalChatEventIntention.Join` нужен
+  `MaySpeak`; если нет — комментарий стоит перенести из теста в резолвер, чтобы правило
+  читалось там, где применяется.
+- **Должен ли обычный бан затрагивать посты в комнатах типа `RoomType.Chat`.**
+  `AccessRestrictions` рисует границу по «посту в комнате», то есть по способу хранения.
+  Но чат-комната, где писать может любой обладатель Reader-доступа
+  (`RoomIntentionResolver.cs:36-42`), по смыслу ближе к обсуждению, чем к игровому посту, и
+  доступ в нее можно получить подпиской на чужую игру. Формулировка правила («что именно
+  свободно от обычного бана: комната или игровой пост») — решение владельца; сейчас чат-комната
+  в чужой игре полностью вне бана.
+- **Нужна ли роль `GameRole.Applicant` как продуктовое понятие.** Технически ее вычисление
+  требует данных о заявках в `Game` DTO (об этом два комментария в коде). Но если заявитель
+  никогда не должен получать никаких прав, кроме чтения, роль не нужна и ее лучше удалить —
+  вместе с фильтром `?role=applicant`. Это выбор модели, а не баг.
+- **Совпадают ли `QuantityRating` и `COUNT(Posts)` на текущих данных.** Проверяется одним
+  запросом к базе после сида
+  (`SELECT u."UserId" FROM "Users" u WHERE u."QuantityRating" <> (SELECT count(*) FROM "Posts" p WHERE p."AuthorId" = u."UserId" AND NOT p."IsRemoved")`).
+  Пустой результат означает, что расхождение из находки `newbie-seven-definitions` пока
+  теоретическое; непустой — что бейдж «новичок» и право на отзыв уже расходятся.
+
+
+# Реляционное хранилище и EF Core — C
+
+Оценка среза до опровержения: C. Ядро чтения сделано грамотно и местами закрыто настоящими тестами (миграция накатывается в Testcontainers, keyset-пагинация и выдача TopicNumber проверены на конкурентности), но инвариант уникальности систематически живет как check-then-insert в коде и не доезжает до схемы, а починен бывает у читателей, из которых один-два всегда забыты.
+
+Слой состоит из одного `DmDbContext` (2622 строки, из них ~1500 — декларативный seed), одной миграции `InitialCreate` (3632 строки, 62 таблицы, 142 FK, 170 индексов, 22 из них уникальных), 86 файлов репозиториев и двух вспомогательных механизмов: `ExpressionIndexInitializer` для индексов по выражению и `UpdateBuilder` для частичных апдейтов. Ядро чтения сделано грамотно: списки игр, блогов, тем и профилей обогащаются батчами `GROUP BY` по набору идентификаторов, а не подзапросом на строку; курсорная пагинация сообщений построена на реальном keyset-предикате и на индексе, который его действительно обслуживает; полнотекстовый поиск живет на generated `tsvector` + GIN, причем шаблон вырезания `[private]` вынесен в одну константу, общую для индекса и для сниппета. Интеграционные тесты поднимают Postgres в Testcontainers и накатывают именно миграцию, а не модель, плюс есть `HasPendingModelChanges()` как страж соглашения про одну миграцию и тест на конкурентную выдачу `TopicNumber` с восьмью параллельными вставками. Это выше среднего по индустрии.
+
+Оценка C, а не B, из-за одного повторяющегося системного дефекта: инвариант уникальности почти всегда живет как check-then-insert в коде и почти никогда не доезжает до схемы, причем починен он бывает у читателей, а не у писателя. `Subscriptions` не имеет уникального индекса по `(SubscriberId, TargetType, TargetId)` — и три из четырех чтений подписчиков заклеены `Distinct()`, а четвертое, то самое, которое рассылает письма, забыли; отписка при этом удаляет одну строку из двух. `CharacterAttributes` не имеет уникального индекса по `(CharacterId, AttributeId)`, а путь чтения — `ToDictionaryAsync` по этому ключу, то есть дубль превращает персонажа в нередактируемый навсегда. `Games.PublicId` и `Blogs.PublicId` не уникальны и вообще не проиндексированы, хотя ровно для `Chats.PublicId` в контексте написан абзац о том, почему без уникальности запрос молча вернет не ту строку. Плюс `Likes` и `GameTags` в том же положении.
+
+Второй повод для C — доверие к комментариям, которое они не всегда заслуживают. Комментарий в `DmDbContext` утверждает, что индексы `IX_Users_*_Lower` создаются raw SQL в миграции: в миграции их нет, они создаются hosted-сервисом на старте, и это не мелочь, потому что регистрация сравнивает почту через `ILIKE`, а не через `lower(...) = lower(...)`, и этим индексом не пользуется. Комментарий в миграции про отсутствующий `FK_Comments_Topics_EntityId` утверждает, что случай закрыт тем же интеграционным тестом, что и токены: тест смотрит только на `Tokens`, а регенерация миграции (документированный способ менять схему) вернет FK и сломает комментарии к играм, блогам и публикациям без единого падающего теста. Ни одна из находок не теряет данные, схема в целом связная и типы колонок выбраны верно — поэтому не D.
+
+## Что сделано хорошо
+
+- Тесты гоняют миграцию, а не модель: `DatabaseFixture.InitializeAsync` вызывает `MigrateAsync()` (test/DM.Web.API.IntegrationTests/DatabaseFixture.cs:79), поэтому ручные правки в миграции и seed из модели проверяются на каждом прогоне. `MigrationShould.MatchTheModelItBuildsTheSchemaFrom` (test/.../General/MigrationShould.cs:22-33) через `HasPendingModelChanges()` превращает соглашение "одна миграция, регенерируется" в проверяемый инвариант.
+- Выдача `TopicNumber`: блокировка строки борда `SELECT ... FOR UPDATE` внутри `CreateExecutionStrategy()` с очисткой `ChangeTracker` на повторе (TopicRepository.cs:341-400), `MAX+1` считается с `IgnoreQueryFilters()` — удаленная тема номер не отдает (строки 366-375), и есть уникальный индекс `(BoardId, TopicNumber)`. Тест на восемь параллельных создателей проверяет именно номера 1..8 и отдельно проверяет имя нарушенного constraint (TopicNumberAllocationShould.cs:35-71). Так должно выглядеть все остальное.
+- Keyset-пагинация сообщений: предикат `CreatedUtc <= ts AND (CreatedUtc < ts OR MessageId < id)` с явным комментарием, почему ведущая избыточная граница нужна как диапазон индекса (MessageRepository.cs:36-57), под нее заведен составной индекс `Messages(ChatId, CreatedUtc, MessageId)` (DmDbContext.cs:290-291), и есть тест, который проходит чат из семи сообщений с одинаковым timestamp без пропусков и повторов (MessagePaginationShould.cs:37-49).
+- Полнотекстовый поиск: `tsvector` как generated stored column с GIN (DmDbContext.cs:243-286), запрос через `EF.Property<NpgsqlTsVector>(...).Matches(WebSearchToTsQuery(...))` (MessageSearchRepository.cs:79-81) — то есть индекс действительно используется, а не имитируется `ILIKE`. Шаблон вырезания приватных блоков объявлен один раз (`SearchSnippet.PrivateBlockPattern`) и переиспользован и в generated-колонке, и в сниппете (MessageSearchRepository.cs:160).
+- Частичные индексы под лидерборды честно совпадают с предикатами: индексы `Posts(CreatedUtc) WHERE IsRemoved = false`, то же для `PostReviews` и `Publications` (DmDbContext.cs:183-202), а все восемь запросов в `CommunityStatsRepository.GetLeaderboards` фильтруют ровно `!IsRemoved && CreatedUtc >= start && CreatedUtc < end` (CommunityStatsRepository.cs:120-121, 136-137, 151-152, 186-187, 231-232). Проверено сопоставлением каждого запроса с каждым индексом, а не на слово.
+- Обогащение списков батчами вместо N+1: `EnrichGamesAsync` (GameRepository.cs:174-351) собирает `gameIds` и делает по одному `GROUP BY`/`IN` на таблицу, включая сводку подписчиков одним оператором с оконной функцией вместо загрузки идентификаторов; `FillSubscriberSummary` в блогах устроен так же и отдельно объясняет, почему счет активных подписчиков оставлен своим `GROUP BY` (BlogRepository.cs:884-918). Интерфейсы репозиториев тоже сформированы вопросами домена, а не таблицами: `GetTotalPostCounts(IEnumerable<Guid>)`, `GetRoomsAndPostPendencies(...)`, `GetAvailableRoomIds(...)` (IGameRepository.cs:29-50) — форма, которая не дает вызывающему сорваться в цикл.
+- CHECK-констрейнты для типизированных таргетов: `CK_Uploads_TypedTarget` и `CK_RoomAccesses_TypedTarget` (DmDbContext.cs:2172-2176, 2202-2205) сохраняют инвариант "ровно одна колонка не NULL и она согласована с дискриминатором", и перед ним стоит прикладная проверка `RequireTarget` (UploadApiService.cs:262-263) — то есть пользователь получает 400, а база остается последней линией.
+- Обход правил Npgsql сделан осознанно: `Page<T>` принимает только `IOrderedQueryable` (QueryableExtensions.cs:18-26), поэтому OFFSET без ORDER BY невозможен по типам; `IDateTimeProvider.Now` всегда `UtcNow` (DateTimeProvider.cs:10), поэтому `timestamptz` не ловит ненулевые смещения; три места с ручной транзакцией все три обернуты в `CreateExecutionStrategy()` (ActivationRepository.cs:68-70, PostRepository.cs:451-464, TopicRepository.cs:341-354), что обязательно при включенном `EnableRetryOnFailure` (Startup.cs:117-128).
+
+## Находки
+
+### [ВЫСОКАЯ] character-attributes-uniqueness-missing — дубль атрибута делает персонажа нередактируемым навсегда
+
+> **Опровержение: подтверждено.**
+
+По `CharacterAttributes` в схеме один индекс — `CharacterId`, уникального по `(CharacterId, AttributeId)` нет. Путь чтения перед апдейтом строит словарь ровно по этому ключу:
+
+```csharp
+public async Task<IDictionary<Guid, Guid>> GetAttributeIds(Guid characterId)
+{
+    return await _dbContext.CharacterAttributes
+        .Where(a => a.CharacterId == characterId)
+        .ToDictionaryAsync(a => a.AttributeId, a => a.CharacterAttributeId);
+}
+```
+(CharacterRepository.cs:101-106, вызов — :224.)
+
+Запись — check-then-insert по этому же словарю (CharacterRepository.cs:225-243). Дубль возникает двумя путями: два параллельных PUT на одного персонажа (оба не нашли атрибут, оба вставили) и создание персонажа с повторяющимся `Attributes[].Id` в теле запроса, если у игры нет обязательной схемы — тогда весь блок валидации `WhenAsync(... GameRequiresAttributes ...)` (CreateCharacterValidator.cs:28) пропускается, а `Create` вставляет все, что пришло, без дедупликации (CharacterRepository.cs:138-147).
+
+Последствие: после появления двух строк с одинаковым `(CharacterId, AttributeId)` любая последующая правка этого персонажа падает на `ToDictionaryAsync` с `ArgumentException` "An item with the same key has already been added" — то есть 500 на каждый PUT, навсегда, до ручного `DELETE` в базе. Лист персонажа при этом читается нормально, так что игрок видит персонажа, но не может его изменить и не понимает почему.
+
+Исправление: уникальный индекс `CharacterAttributes(CharacterId, AttributeId)`; в валидаторах создания и обновления правило на различность `Attributes[].Id` (сейчас в `CreateCharacterValidator.cs:41` тоже стоит `ToDictionary` по пользовательскому вводу — на дубле он бросает `ArgumentException` вместо 400); в `Update` перейти с `FindAsync` в цикле на однократную загрузку строк (см. `character-attributes-n-plus-1`).
+
+### [ВЫСОКАЯ] ilike-as-equality — `ILIKE` вместо равенства: подстановочные знаки в почте и логине и мимо индекса
+
+> **Опровержение: подтверждено.**
+
+`EF.Functions.ILike` используется в 27 местах, и примерно в половине из них — не как поиск подстроки, а как сравнение на равенство, с неэкранированным пользовательским вводом в роли шаблона:
+
+- `ChatRepository.FindUser`: `.Where(u => EF.Functions.ILike(u.Username, username) && !u.IsRemoved)` (ChatRepository.cs:89);
+- `RegistrationRepository`: `ILike(u.Email, email)` (:26), `ILike(p.Email, email)` (:42, :105), `ILike(p.Email, pending.Email)` (:67);
+- `EmailLookupRepository` (:24, :39), `EmailChangeRepository.IsEmailFree` (:38), `ActivationRepository.FindUserByEmail` (:100), `UserRepository.GetUserDetailsByEmail` (:236).
+
+В `ILIKE` символы `%` и `_` — метасимволы. `_` в логине разрешен явно (docs/conventions/USERNAME_POLICY.md, строка 8: перечислены `_`, `-`, `.`), в локальной части адреса он тоже легален. Экранировать умеют — но только в поиске игр: `query.Search.Replace("%", "\\%").Replace("_", "\\_")` (GameRepository.cs:398). В сравнениях на равенство не экранирует никто.
+
+Последствие, в порядке серьезности. `ChatService.GetOrCreateDirectAsync(username)` резолвит собеседника через `FindUser` (ChatService.cs:130): для логина `an_na` шаблон совпадет и с реальным `an_na`, и с `annna`, и вернется та строка, которую первой отдаст план (`FirstOrDefaultAsync` без порядка). Пользователь открывает личный чат "с тем, кого искал" и отправляет туда личное сообщение постороннему — утечка приватного текста третьему лицу. Дальше: `IsEmailFree` для адреса `a_b@x.com` ответит "занят", если существует `axb@x.com`, то есть смена почты будет отвергаться без объяснимой причины. И третье: `ILIKE` не может использовать b-tree по `lower("Email")`, поэтому все эти запросы — seq scan по `Users`, тогда как логин (`u.Email.ToLower() == email.ToLower()`, AuthenticationRepository.cs:40) индекс использует.
+
+Почему не КРИТИЧНО: для утечки нужна пара логинов, совпадающих по LIKE-семантике, — состояние достижимое, но не гарантированное.
+
+Исправление: во всех сравнениях на равенство заменить `EF.Functions.ILike(col, value)` на `col.ToLower() == value.ToLower()` — форма, которая и семантически верна, и попадает в `IX_Users_Email_Lower`/`IX_Users_Username_Lower`. `ILike` оставить только там, где шаблон строится осознанно и экранируется. Первым делом — `ChatRepository.FindUser`.
+
+### [ВЫСОКАЯ] deactivated-user-frees-its-email — деактивация освобождает почту и логин на словах, но не в схеме
+
+> **Опровержение: подтверждено.**
+
+Деактивация ставит `Users.IsRemoved = true` (DeactivationRepository.cs:38-43), а `Users` попадает под глобальный фильтр мягкого удаления (DmDbContext.cs:2209-2218). Проверки занятости при регистрации выполняются без `IgnoreQueryFilters()`:
+
+```csharp
+var existsInUsers = await _dbContext.Users
+    .AnyAsync(u => EF.Functions.ILike(u.Email, email), cancellationToken);
+```
+(RegistrationRepository.cs:25-27; `UsernameFree` — :36-38.)
+
+При этом уникальность в базе фильтра не знает: `IX_Users_Email_Lower` и `IX_Users_Username_Lower` — уникальные индексы по всей таблице (ExpressionIndexInitializer.cs:50-59).
+
+Последствие: пользователь деактивировал аккаунт. Кто угодно (в том числе он сам) начинает регистрацию с той же почтой — `EmailFreeForNewRegistration` отвечает "свободна", `PendingRegistrations` принимает строку (у нее свой уникальный индекс по `Email`, конфликта нет), письмо с подтверждением уходит. На переходе по ссылке `CompleteActivation` вставляет `Users` и ловит нарушение уникального индекса; `catch { rollback; throw; }` (ActivationRepository.cs:85-91) отдает исключение наружу — 500 на последнем шаге регистрации, после того как человек уже подтвердил адрес. То же с логином, причем логин по политике должен быть зарезервирован навсегда (для переименований это обеспечено уникальным `UsernameHistories.OldUsername` — DmDbContext.cs:2068-2070), а текущий логин деактивированного аккаунта из-под этой гарантии выпадает.
+
+Исправление: проверки занятости почты и логина выполнять с `IgnoreQueryFilters()` (или через отдельный запрос без фильтра) и возвращать 400 "адрес занят" до отправки письма; заодно решить продуктово, освобождает ли деактивация логин — если да, то заносить его в `UsernameHistories` при деактивации, если нет, то текст ошибки должен это объяснять.
+
+### [ВЫСОКАЯ] comments-fk-hand-edit-unguarded — регенерация миграции ломает комментарии, и заявленного стража не существует
+
+> **Опровержение: подтверждено.**
+
+Модель объявляет реальную связь по полиморфной колонке:
+
+```csharp
+modelBuilder.Entity<Topic>()
+    .HasMany(t => t.Comments)
+    .WithOne(c => c.Topic)
+    .HasForeignKey(c => c.EntityId)
+```
+(DmDbContext.cs:2047-2051.) Комментарий над ней (:2040-2045) требует удалять сгенерированный `AddForeignKey` руками. В миграции на его месте стоит:
+
+```
+// FK_Comments_Topics_EntityId is deliberately absent, for the same reason as the
+// two token constraints above: ... Guarded by the same integration test.
+```
+(InitialCreate.cs:2817-2820.)
+
+Утверждение про стража ложное. `InvitationTokenPersistenceShould` проверяет только `Tokens`: запрос к `pg_constraint` ограничен `conrelid = '"Tokens"'::regclass` (InvitationTokenPersistenceShould.cs:53-68), а вставки делаются только в `Token`. Комментариев к играм, блогам и публикациям не создает ни один интеграционный тест — в `CommentControllerShould` все пять обращений идут в `/v1/topics/{id}/comments` (:26-107). `MigrationShould` тоже не поможет: `HasPendingModelChanges()` сравнивает модель со снапшотом, а не тело миграции с моделью, так что после `migrations remove` + `add` он останется зеленым с вернувшимся FK.
+
+Последствие: любой, кто выполнит документированную процедуру изменения схемы, получит базу, в которой POST комментария к игре, блогу или публикации падает с нарушением внешнего ключа (500), а комментарии к темам работают. Дефект доедет до всех пользователей трех из четырех видов комментариев, и обнаружится он вручную.
+
+Исправление: либо снять связь с модели (сделать `Topic.Comments` `[NotMapped]`, как уже сделано для `Blog.Comments`, `Game.Comments`, `Publication.Comments`, а форумные комментарии читать явным join — он уже так и написан в `BoardRepository.FillCommentSummary`), и тогда ручная правка миграции не нужна вообще; либо, если связь оставляют, дописать в `InvitationTokenPersistenceShould` проверку `Comments` на отсутствие FK по `EntityId` и вставку комментария с `EntityId`, которого нет в `Topics`, — сделать утверждение комментария правдой.
+
+### [СРЕДНЯЯ] subscriptions-uniqueness-missing — подписка не уникальна в схеме, письма дублируются, отписка не отписывает
+
+> **Опровержение: частично неверно.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Mechanism confirmed: Subscriptions has only IX_Subscriptions_SubscriberId and IX_Subscriptions_TargetType_TargetId (InitialCreate.cs:2322,2327), SubscribeAsync is check-then-insert (SubscriptionService.cs:66-83, GameSubscriptionService.cs:44-60), GetByTargetWithSettingsAsync has no Distinct (SubscriptionRepository.cs:66-73), DeleteAsync(userId,...) removes exactly one row (:132-141), NotificationEmailSender loops per element (:133). But the consequences are wrong in three ways. (1) "два одинаковых уведомления": UsersInterested is one Mongo document and the read filter is Filter.AnyEq (NotificationRepository.cs:87), so a duplicated id inside the array yields ONE in-app notification, not two. (2) "кнопка уже показана в состоянии не подписан ... отписаться не в состоянии" is backwards: with one row left ViewerSubscribed = g.Any(...) (GameRepository.cs:253, BlogRepository.cs:897) and FindAsync both still report subscribed, so the button stays "unsubscribe" and the second click deletes the second row — nothing is permanent and no DBA is needed. (3) "14 генераторов" overstates blast radius: 9 of the 14 accumulate into a HashSet and dedupe (e.g. GameActivatedNotificationGenerator.cs:54,61 UnionWith); only the 5 that assign subscriberIds straight through (NewPublication, ChangedPublication, NewForumTopic..., NewCommentInSubscribedTopic, ChangedTopic) double-send. Net effect of a genuine POST race: one extra email/bot message per event until the user clicks unsubscribe twice. Worth the unique index, not ВЫСОКАЯ.
+
+Инвариант "одна подписка на пару (подписчик, цель)" есть только в коде: `SubscriptionService.SubscribeAsync` делает `FindAsync` и, если не нашел, `CreateAsync` (SubscriptionService.cs:66-83). В схеме по `Subscriptions` только два неуникальных индекса — `SubscriberId` и `(TargetType, TargetId)` (перечень индексов миграции; DmDbContext.cs:297-298). Что дубль возможен, в коде знают прямо:
+
+```csharp
+// Distinct subscribers, not subscription rows. Subscriptions has
+// no unique constraint on (SubscriberId, TargetType, TargetId) and
+// subscribing is check-then-insert, so a double-clicked button
+// leaves two rows for one reader.
+Count = g.Select(s => s.SubscriberId).Distinct().Count(),
+```
+(GameRepository.cs:247-252, тот же `Distinct()` в BlogRepository.cs:895 и в `GetTargetSubscriberIdsAsync` — SubscriptionRepository.cs:145-150.)
+
+Заклеены три читателя из четырех. Четвертый — `GetByTargetWithSettingsAsync` (SubscriptionRepository.cs:66-73) — `Distinct()` не делает, и именно он кормит рассылку: 14 генераторов уведомлений берут подписчиков через него (`NewPublicationNotificationGenerator.cs:56-64` и далее), а `NotificationEmailSender` шлет письмо в цикле `foreach (var userId in userIds)` (NotificationEmailSender.cs:133).
+
+Отписка добивает: `DeleteAsync(userId, targetType, targetId)` берет `FirstOrDefaultAsync` и удаляет одну строку (SubscriptionRepository.cs:132-140), а именно ее вызывают `GameSubscriptionService.UnsubscribeAsync` (:67) и `BlogSubscriptionService.UnsubscribeAsync` (:67).
+
+Последствие: два параллельных POST на подписку (двойной клик, повтор запроса после таймаута) создают две строки. Дальше на каждую новую публикацию блога читатель получает два одинаковых письма и два одинаковых уведомления, а кнопка "отписаться" срабатывает как бы успешно (200), но подписка остается — со второго раза он отписаться не может, потому что кнопка уже показана в состоянии "не подписан" (`IsViewerSubscriber` считается через `Any`). Пользователь остается со спамом, который сам снять не в состоянии.
+
+Исправление: уникальный индекс `Subscriptions(SubscriberId, TargetType, TargetId)` в `OnModelCreating`, регенерация `InitialCreate`; в `SubscribeAsync` перехватить `DbUpdateException` с кодом 23505 как "уже подписан" (тот же прием, который уже применен в `TryGrantAsync` для достижений — DmDbContext.cs:413-418); `DeleteAsync(userId, ...)` перевести на `ExecuteDeleteAsync()` по всем совпадающим строкам, чтобы существующие дубли расчистились.
+
+### [СРЕДНЯЯ] game-blog-publicid-not-unique-not-indexed — читаемый идентификатор игры и блога без уникальности и без индекса
+
+> **Опровержение: частично неверно.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Index absence is exact (migration has only IX_Games_{DeletedByUserId,MasterId,MentorId} and IX_Blogs_{AuthorId,DeletedByUserId,MentorId}) and EXPLAIN on the live dev DB confirms Seq Scan on "Games" Filter: ("PublicId" = 'aaaaa'). The correctness half has no path: every PublicId write is Encode(SerialNumber) or the temp placeholder (grep of all `PublicId =` in src), SerialNumber is GENERATED BY DEFAULT AS IDENTITY with no application writer setting it, and the live DB has zero duplicate SerialNumbers and zero duplicate PublicIds. The one explicit-serial writer, DatabaseFixture.cs:250, also hand-writes PublicId as "gamea".."gamef", and Encode never yields those at small serials (Encode(1)="aaaaa"; "gamea" decodes to 1684958), so not even the test DB can collide. So "вернет не ту игру" is unreachable today; it only becomes real with the future DM2 import. What remains is a missing index on a hot lookup over a thousands-row table plus a defensive unique constraint — worth doing, not ВЫСОКАЯ.
+
+Для чатов инвариант оформлен и объяснен:
+
+```csharp
+// The readable chat id is resolved by equality in GET /chats/{id}. Without
+// uniqueness a collision between an encoded serial and the reserved name of
+// the global chat would not fail - it would silently return whichever row
+// the plan happened to reach first.
+modelBuilder.Entity<Chat>().HasIndex(c => c.PublicId).IsUnique();
+```
+(DmDbContext.cs:310-314.)
+
+Для игр и блогов — ничего. В перечне 170 индексов по `Games` есть только `DeletedByUserId`, `MasterId`, `MentorId`, по `Blogs` — `AuthorId`, `DeletedByUserId`, `MentorId`. А резолвится страница ровно равенством по `PublicId`: `GameRepository.FindGameIdByPublicId` (:859), `GetGameByPublicId` (:868), `GetGameDetailsByPublicId` (:896), `BlogRepository` (:270).
+
+Последствие двойное. Производительность: каждый заход на страницу игры или блога по человекочитаемому адресу (основной путь из всех ссылок сайта) — последовательное сканирование `Games`/`Blogs` с четырьмя EXISTS-подзапросами `GameAvailable` поверх; на тысячах игр это уже заметно, и растет линейно. Корректность: `PublicId` присваивается вторым UPDATE после вставки (см. следующую находку), а `SerialNumber` объявлен `IdentityByDefaultColumn`, то есть явную вставку значения база разрешает и последовательность при этом не двигает — тестовая фикстура так и делает (`SerialNumber = i + 1` для шести игр, DatabaseFixture.cs:250). Как только два ряда получат один серийник, `Encode` даст им один `PublicId`, и `FirstOrDefaultAsync` начнет отдавать ту игру, которую первой вернет план, — то есть ровно тот сценарий, который для чатов признали недопустимым.
+
+Исправление: уникальные индексы `Games(PublicId)` и `Blogs(PublicId)`; в фикстуре не задавать `SerialNumber` вручную (полагаться на identity, как это делает `DM.Tools.Seeder`), иначе последовательность и данные расходятся с первого прогона.
+
+### [СРЕДНЯЯ] publicid-two-phase-write — читаемый адрес пишется вторым SaveChanges без транзакции
+
+Одинаковый код в трех местах:
+
+```csharp
+// Temporary unique placeholder for PublicId (will be updated after SerialNumber is generated)
+dbGame.PublicId = $"t{game.GameId:N}"[..10];
+... await _dbContext.SaveChangesAsync(ct);
+// Generate PublicId from SerialNumber (which was auto-generated on insert)
+dbGame.PublicId = _publicIdService.Encode(dbGame.SerialNumber);
+await _dbContext.SaveChangesAsync(ct);
+```
+(GameRepository.cs:1000-1010; BlogRepository.cs:556-565; ChatRepository.cs:127-129, :203.)
+
+Транзакции нет ни в одном из трех.
+
+Последствие: если процесс умрет или второй `SaveChanges` не пройдет (таймаут команды 30 секунд задан в Startup.cs:126), игра останется навсегда с адресом вида `t3f2a1b9c4` — ссылка есть, она работает, но она не тот идентификатор, который система умеет генерировать, и ничего ее не починит. В окне между двумя записями список игр отдаст карточку с placeholder-ссылкой. Для чатов вместо placeholder остается NULL, то есть чат просто не резолвится по читаемому адресу.
+
+Исправление: обернуть обе записи в одну транзакцию через `CreateExecutionStrategy()` (образец — `PostRepository.Create`, :451-464) либо получить `nextval` последовательности до вставки и записать `PublicId` сразу, одним INSERT.
+
+### [СРЕДНЯЯ] room-number-never-allocated — колонка для URL комнаты не заполняется ни одним путем записи
+
+`Room.RoomNumber` документирован как "Sequential room number within the game (for URL, stable)" (Entities/Game/Posts/Room.cs:31-33). Ни один путь записи его не присваивает: в `GameRepository.Create` первая комната собирается без него (:979-991), в `RoomRepository.Create` — тоже (:107-121). Значение всех созданных приложением комнат — 0. Единственный читатель, `RoomRepository.GetByGameAndNumber(gameId, roomNumber, userId)` (:51-58), не вызывается ниоткуда, кроме объявления в интерфейсе (IRoomRepository.cs:28). Уникального индекса `(GameId, RoomNumber)` нет.
+
+Последствие сейчас — нулевое, потому что читатель мертв; последствие в момент, когда его подключат к маршруту, — все комнаты игры имеют номер 0, адрес комнаты резолвится в произвольную из них, и заметно это станет только на проде. Номера 1, 2, 3 существуют лишь у комнат из `DM.Tools.Seeder` (DataSeeder.Games.cs:498, 514, 531), то есть в dev-базе поведение выглядит правильным, а в реальной — нет.
+
+Исправление: выбрать одно из двух и сделать до конца. Либо выдавать номер так же, как `TopicNumber` (блокировка игры, `MAX+1` с `IgnoreQueryFilters`, уникальный индекс `(GameId, RoomNumber)`), либо удалить колонку, `GetByGameAndNumber` и метод интерфейса и оставить адресацию комнат по идентификатору.
+
+### [СРЕДНЯЯ] soft-delete-audit-columns-unwritten — `ISoftDeletable` обещает автора удаления, большинство путей его не пишет
+
+Контракт `ISoftDeletable` требует `DeletedByUserId` и `DeletedUtc` (Entities/Contracts/ISoftDeletable.cs), FK под них специально настраивается для десяти сущностей: `Comment`, `Topic`, `Message`, `Post`, `Character` (DmDbContext.cs:226-230) и `GameReview`, `PostReview`, `UserEndorsement`, `WebsiteTestimonial`, `UserAward` (:329-333). Колонки есть у 25 таблиц из 62.
+
+Пишут их только блоги, рубрики, публикации, награды, аплоады, блокноты и два из четырех репозиториев комментариев. Остальные ставят один флаг:
+
+- `GameRepository.Delete`: `game.IsRemoved = true;` (:1122-1128);
+- `TopicRepository.Delete`: `topic.IsRemoved = true;` (:465-472);
+- `PostRepository.Delete`: `post.IsRemoved = true;` (:522-527);
+- `CharacterRepository`: `character.IsRemoved = true;` (:283);
+- `TopicCommentRepository.Delete` (:232-236) и `GameCommentRepository.Delete` (:226-230) — в отличие от `BlogCommentService` (:161-162) и `PublicationCommentService` (:175-176), которые пишут оба поля в ту же таблицу `Comments`.
+- `LikeRepository.Delete` — `ExecuteUpdateAsync(SetProperty(IsRemoved, true))` без полей аудита (Shared/Likes/LikeRepository.cs:27-33).
+
+Последствие: модерация не может ответить на вопрос "кто и когда удалил эту тему/этот пост/этого персонажа", хотя место для ответа в схеме есть и FK на него настроен. Для одной и той же таблицы `Comments` ответ есть у комментариев блога и отсутствует у форумных — то есть данные аудита неоднородны внутри одной таблицы, и любой отчет по ним врет. Ровно этот грех сформулирован как недопустимый в самом проекте: "Declaring a contract the code does not honor is worse than not declaring it — a reader trusts the fields and finds them empty" (Entities/Shared/UnreadCounter.cs:12-17).
+
+Исправление: одна точка мягкого удаления. Либо перехват в `SaveChangesAsync` (для `EntityState.Modified` с изменившимся `IsRemoved` заполнять оба поля из `IIdentityProvider` и `IDateTimeProvider`), либо обязательный параметр `deletedByUserId` во всех методах `Delete` — тогда компилятор не даст забыть. Второй вариант честнее к тому, что часть удалений идет от системных воркеров.
+
+### [СРЕДНЯЯ] seed-board-counter-inconsistent — свежая база показывает у борда неверное число тем
+
+Seed борда "Общий" ставит `TopicsCount = 1` (DmDbContext.cs:1091), а тем в этот же борд засеяно две: `TopicId ...0001` и `TopicId ...0100`, обе с `BoardId ...0001` (DmDbContext.cs:1991-1993 и 2004-2006). Поля `LastTopicId`, `LastTopicTitle`, `LastTopicAuthorId`, `LastTopicCreatedUtc` в seed не заданы вовсе, хотя `RefreshBoardTopicSummary` их поддерживает (TopicRepository.cs:476+).
+
+Значение читается как есть: `BoardService` отдает `TopicsCount = b.TopicsCount` в API (:71) и использует его же как число непрочитанных для тех, кто борд ни разу не открывал (`board.UnreadTopicsCount = board.TopicsCount`, :56 и :107).
+
+Последствие: на любой только что накатанной базе список форума показывает у борда "Общий" одну тему и одну непрочитанную вместо двух, и пустую колонку последней активности при двух существующих темах. Самолечение произойдет только когда кто-то создаст или удалит тему в этом борде. Тесты этого не видят: `BoardTopicSummaryShould` каждый раз создает свой борд (`CreateBoard()` в каждом тесте) и seed-борд не проверяет ни разу.
+
+Исправление: в seed поставить `TopicsCount = 2` и заполнить блок `LastTopic*` данными второй темы; в `BoardTopicSummaryShould` добавить проверку, что засеянный борд согласован со своими темами — иначе то же разъедется при следующей правке seed.
+
+### [СРЕДНЯЯ] character-attributes-n-plus-1 — по запросу на каждый атрибут при сохранении персонажа
+
+```csharp
+var existingAttributeIds = await GetAttributeIds(updateCharacter.CharacterId);
+foreach (var attr in updateCharacter.Attributes)
+{
+    if (existingAttributeIds.TryGetValue(attr.Id, out var existingId))
+    {
+        var existingAttr = await _dbContext.CharacterAttributes.FindAsync(existingId);
+```
+(CharacterRepository.cs:224-231.)
+
+`GetAttributeIds` — проекция в словарь скаляров (:101-106), сущности она не трекает, поэтому `FindAsync` в identity map ничего не находит и каждый раз идет в базу.
+
+Последствие: лист персонажа по схеме игры содержит шесть типов атрибутов и произвольное число полей; при сохранении персонажа с 40 атрибутами это 1 + 40 round-trip до Postgres вместо двух. На локальной базе незаметно, на проде с сетевой задержкой 1-2 мс — лишние 50-80 мс на каждое сохранение персонажа, и растет линейно от размера схемы.
+
+Исправление: загрузить сущности одним запросом (`.Where(a => a.CharacterId == id).ToListAsync()`), сложить в словарь по `AttributeId` и править значения в памяти; `GetAttributeIds` после этого либо не нужен, либо возвращает сущности.
+
+### [СРЕДНЯЯ] user-list-runs-profile-enrichment — 20+ агрегатов на каждую страницу списка пользователей
+
+`PopulatePostReviewCounts` (UserRepository.cs:668-900) выполняет последовательно более двадцати `GROUP BY`: отзывы отданные и полученные, рекомендации в обе стороны, темы, комментарии, сообщения глобального чата, баны, дропы, публикации, лайки четырьмя отдельными join (:769-799), игры мастером/ассистентом/игроком, блоги владельцем/ассистентом, сводка подписчиков, история логинов. Вызывается она не только для профиля, но и для страницы списка: `GetUsersAsync` завершается `await PopulatePostReviewCounts(users)` (:140).
+
+Каждый запрос индексирован (`Comments(AuthorId)`, `Topics(AuthorId)`, `Messages(UserId)`, `Publications(AuthorId)`, `Likes(EntityType, EntityId)` — все есть), так что это не N+1, а именно фиксированные 20+ round-trip на страницу, плюс сортировки `GamesHosting`/`BlogsHosting`/`Popularity`/`GamesPlaying`, которые добавляют коррелированный подзапрос с `Count()` на каждую строку таблицы `Users` до применения OFFSET (:98-128).
+
+Последствие: `GET /v1/users` с размером страницы 50 стоит около двадцати двух обращений к базе, из которых списку нужна малая часть (полученные лайки, баны и дропы на карточке в списке не показываются). При сортировке по числу ведомых игр к этому добавляется полный проход по `Users` с двумя подзапросами на строку — время растет с числом зарегистрированных, а не с размером страницы.
+
+Исправление: разделить обогащение на два набора — минимальный для списка и полный для профиля — и передавать нужный флагом; сортировки по производным величинам либо считать из денормализованных счетчиков, либо ограничить теми полями, что лежат в `Users`.
+
+### [СРЕДНЯЯ] likes-uniqueness-missing — двойной лайк накручивает счетчик и достижение
+
+Проверка "уже лайкал" делается в памяти по загруженной навигации, потом вставка:
+
+```csharp
+if (entity.Likes.Any(l => l.UserId == currentUser.UserId))
+    throw new HttpException(HttpStatusCode.Conflict, ...);
+var like = _likeFactory.Create(entity.Id, entity.LikeEntityType, currentUser.UserId);
+await _likeRepository.Add(like);
+```
+(Shared/Likes/LikeOperations.cs:35-47.)
+
+В схеме по `Likes` три неуникальных индекса (`DeletedByUserId`, `(EntityType, EntityId)`, `UserId`), уникального по `(EntityType, EntityId, UserId)` нет.
+
+Последствие: два параллельных запроса лайка (двойной клик, повтор после таймаута) дают две живые строки. Счетчик лайков темы или публикации показывает от одного человека два; тот же дубль попадает в метрику достижения `LikesReceived`, которая считает строки `Likes` join по автору контента (UserRepository.cs:769-799), то есть чужой двойной клик приближает автора к награде. Отмена лайка чинит счетчик (там `ExecuteUpdate` по всем совпадающим строкам, LikeRepository.cs:29-32), но до нее число неверно.
+
+Исправление: частичный уникальный индекс `Likes(EntityType, EntityId, UserId) WHERE "IsRemoved" = false` (форма уже применена для `UserEndorsement` и `GameReview`) и трактовка 23505 как 409.
+
+### [СРЕДНЯЯ] gametags-uniqueness-missing — дубль тега ломает фильтр обязательных тегов
+
+По `GameTags` два неуникальных индекса (`GameId`, `TagId`). Обновление тегов игры — удалить все и вставить заново, без блокировки и без дедупликации входа:
+
+```csharp
+var existingTags = await _dbContext.GameTags.Where(t => t.GameId == updateGame.GameId).ToListAsync(ct);
+_dbContext.GameTags.RemoveRange(existingTags);
+var newTags = updateGame.TagIds.Select(tagId => new DbTag { ... });
+_dbContext.GameTags.AddRange(newTags);
+```
+(GameRepository.cs:1095-1111.)
+
+Фильтр обязательных тегов считает строки, а не различные теги:
+
+```csharp
+games = games.Where(g => g.GameTags.Count(t => required.Contains(t.Tag.ShortId)) >= required.Count);
+```
+(GameRepository.cs:439-441.)
+
+Последствие: если у игры окажется два ряда с одним `TagId` (повтор в теле PUT или два параллельных PUT), то запрос "игры, у которых есть И D&D, И детектив" вернет игру, у которой есть только D&D дважды. Пользователь получает в выдаче игру, не удовлетворяющую его фильтру, и объяснить это по интерфейсу нельзя.
+
+Исправление: уникальный индекс `GameTags(GameId, TagId)` плюс `Distinct()` по `TagIds` перед вставкой. Учесть, что при удалении и вставке одной и той же пары в одном `SaveChanges` EF может отправить INSERT раньше DELETE — безопаснее выполнить удаление отдельным `ExecuteDeleteAsync` до добавления. Независимо от индекса заменить `Count(...) >= required.Count` на проверку по различным тегам.
+
+### [СРЕДНЯЯ] dead-update-builder — 383 строки инфраструктуры записи без единого потребителя
+
+`IUpdateBuilder`, `UpdateBuilder` (176 строк), `UpdateBuilderFactory`, `UpdateBuilderExtensions`, `UpdateBuilderException` — 383 строки, зарегистрированные в контейнере как singleton (PersistenceModule.cs:122-125). Grep по всему `src` и `test` (кроме самой папки `RelationalStorage`) дает два попадания: регистрация в модуле и юнит-тест `UpdateBuilderFactoryShould`. Ни один репозиторий его не резолвит.
+
+Последствие: код выглядит живым (есть DI-регистрация и зеленые тесты) и будет переиспользован. При этом `AttachTo` молча отбрасывает уже отслеживаемый экземпляр с тем же ключом — `dbContext.Entry(attachedEntry).State = EntityState.Detached` (UpdateBuilder.cs:72-76) — то есть если в том же scope сущность уже была загружена и изменена, эти изменения потеряются без ошибки. Первый, кто применит этот механизм рядом с обычной загрузкой сущности, получит невоспроизводимую потерю правки.
+
+Исправление: удалить весь механизм вместе с регистрацией и тестом. Если он нужен как задел под Mongo-апдейты, оставить только Mongo-часть и убрать `AttachTo` с его молчаливым detach.
+
+### [НИЗКАЯ] expression-index-comment-lies — комментарий отправляет за индексами в миграцию, где их нет
+
+```csharp
+// Username and email are looked up case-insensitively everywhere
+// (lower(column) = lower(value)), so the indexes that serve those
+// lookups are expression indexes on lower(...). EF cannot express an
+// index over an expression, so they are created by raw SQL in the
+// migration — see the IX_Users_*_Lower statements there.
+```
+(DmDbContext.cs:2089-2096.)
+
+В миграции нет ни строки `lower`, ни `IX_Users_Email_Lower` (grep по `InitialCreate.cs` пуст). Индексы создает hosted-сервис на старте (ExpressionIndexInitializer.cs:50-59) — что, кстати, лучшее решение и подробно обосновано в его собственном комментарии. Вторая неточность в этой же паре: `ExpressionIndexInitializer` пишет "Login and registration compare lower(column) to lower(value)" — логин действительно так и сравнивает (AuthenticationRepository.cs:40), а регистрация сравнивает через `ILIKE` (RegistrationRepository.cs:26) и этим индексом не пользуется.
+
+Последствие: читатель, который пойдет искать индексы в миграции, их не найдет и решит, что их нет; а утверждение про регистрацию скрывает реальный seq scan на пути, который считается защищенным индексом.
+
+Исправление: в комментарии `DmDbContext` заменить ссылку на миграцию ссылкой на `ExpressionIndexInitializer`; в комментарии инициализатора либо убрать регистрацию из перечня, либо (лучше) починить регистрацию по находке `ilike-as-equality`, и тогда утверждение станет верным.
+
+### [НИЗКАЯ] split-query-offset-comment-overstates — заявлено, что лечится только keyset, хотя лекарство рядом
+
+Комментарий про рваную страницу при `AsSplitQuery` + OFFSET честно описывает проблему и осознанно ее принимает, но заканчивается неверным утверждением:
+
+```
+// ... the only real cure is keyset pagination, which changes the
+// API contract. Revisit if game creation ever becomes high-volume.
+```
+(GameRepository.cs:64-73.)
+
+Лекарство есть и контракт не меняет: материализовать страницу идентификаторов одним запросом и вторым запросом забрать коллекции по `Where(g => ids.Contains(g.GameId))`. Тогда подзапросы коллекций не переигрывают OFFSET и рвать страницу нечему. Этот прием в том же файле уже используется — `EnrichGamesAsync` собирает `gameIds` и добирает данные батчами (:180-187).
+
+Последствие: комментарий закрывает вопрос ссылкой на несуществующую дороговизну, поэтому дефект (карточка игры с тегами другой игры при конкурентном создании) останется дольше, чем нужно.
+
+Исправление: либо перевести чтение на две фазы (id, затем коллекции), либо переписать комментарий, назвав настоящую цену.
+
+### [НИЗКАЯ] token-include-loads-full-user — в память тянутся хеши паролей, а картинка приглашенного теряется
+
+```csharp
+var tokens = await _dbContext.Tokens
+    .AsNoTracking()
+    .Include(t => t.User)
+    ...
+game.PendingAssistant = assistantToken != null ? _mapper.Map<GeneralUser>(assistantToken.User) : null;
+```
+(GameRepository.cs:278-298.)
+
+Здесь же, тридцатью строками выше, для игроков этого сознательно не делают: "selecting the Author navigation pulled whole User rows — Salt and PasswordHash included — into memory ... and left Picture empty besides, because AvatarUpload is not loaded and lazy loading is off" (:195-198).
+
+Последствие ровно то, что описано в этом комментарии, только для приглашенного ассистента: в память приложения на каждую страницу списка игр попадают полные строки `Users` с `Salt` и `PasswordHash`, а `PendingAssistant.Picture` всегда пустой, потому что маппинг берет ее из `u.AvatarUpload` (GeneralUserMappingProfile.cs:26), а `AvatarUpload` не загружен.
+
+Исправление: заменить `Include(t => t.User)` на проекцию нужных полей с `AvatarProjections.From(t.User.AvatarUpload)` — то же, что уже сделано для `playerData` (:203-219).
+
+### [НИЗКАЯ] include-ignored-by-projection — два `Include`, которые EF выбрасывает
+
+```csharp
+var baseQuery = GetQuery(filter)
+    .Include(u => u.AvatarUpload)
+    .Include(u => u.UsernameHistories);
+```
+(UserRepository.cs:57-59) — за этим следует `ProjectTo<GeneralUser>` (:137). При проекции EF отбрасывает `Include` и логирует предупреждение; аватар в результат попадает через выражение маппинга, а история логинов дозагружается отдельным запросом (:898).
+
+Последствие: предупреждение в логах на каждый запрос списка пользователей и ложное впечатление у читателя, что коллекции загружаются здесь.
+
+Исправление: удалить оба `Include`.
+
+### [НИЗКАЯ] direct-utcnow-in-repositories — 18 обращений к системным часам мимо `IDateTimeProvider`
+
+`DateTimeOffset.UtcNow` встречается в 18 местах `DM.Infrastructure.Persistence`, в 12 файлах; два из них — `BlogRepository` и `UserRepository` — при этом инжектят `IDateTimeProvider` и используют оба источника времени (например `BlogRepository.cs:616` против `_dateTimeProvider` в том же классе). `CommunityStatsRepository.GetLiveStats` берет `DateTimeOffset.UtcNow` напрямую (:26) при том, что порог онлайна и граница суток — как раз то, что тест захотел бы зафиксировать.
+
+Последствие: поведение, зависящее от времени (окно онлайна, граница суток, дата удаления), нельзя закрепить тестом, и внутри одного класса два разных представления о том, что такое "сейчас".
+
+Исправление: заменить прямые обращения на инжектированный `IDateTimeProvider`; при желании закрепить архитектурным тестом (в `DM.Architecture.Tests` уже есть проверки границ слоев).
+
+### [НИЗКАЯ] last-comment-denormalization — денормализованный указатель, у которого единственный читатель это он сам
+
+`Topic.LastCommentId` поддерживается только путем комментариев (`TopicCommentRepository.cs:162` при создании, `:242` при удалении), а читается ровно для того, чтобы вычислить `IsLastComment` (:206-211), то есть решить, надо ли его же обновлять. Наружу форум отдает активность через `t.LastComment.CreatedUtc` (TopicMappingProfile.cs:30-32), и поскольку `Comment` под глобальным фильтром, указатель на мягко удаленный комментарий превращается в NULL и тема падает в конец сортировки по активности. Рядом та же величина для борда уже считается на чтении (`BoardRepository.FillCommentSummary`), причем в комментарии к тесту это названо исправлением ("They used to be columns that only the demo seeder ever wrote", BoardTopicSummaryShould.cs:126-133) — то есть половина перехода на счет по чтению сделана, половина нет.
+
+Второй, мелкий дефект в этой же паре: выбор последнего комментария борда идет по совпадению времени `lastUtcs.Contains(x.Comment.CreatedUtc)` и завершается `OrderByDescending(...).First()` без тай-брейкера (BoardRepository.cs:82, :105-107). При двух комментариях с одинаковой отметкой времени (обычное дело для импорта из DM2) в колонке "последнее сообщение" будет то, которое выберет план, и оно может меняться между рендерами.
+
+Последствие: тема, у которой удалили последний комментарий не через `TopicCommentService`, проваливается в сортировке по активности; последний комментарий борда при равных временах мигает.
+
+Исправление: считать активность темы на чтении (`MAX(CreatedUtc)` батчем, как для борда) и удалить колонку; в выборе последнего комментария добавить детерминированный тай-брейкер по `CommentId`.
+
+### [НИЗКАЯ] likes-index-order-justification-overstated — порядок колонок выбран верно, обоснование сильнее правды
+
+```csharp
+// Every aggregate reads them either as "likes of this entity" or as "likes of this
+// kind" followed by a join on EntityId, so EntityType leads: with the reverse order
+// the join-shaped reads (profile counters, community statistics) would not take the
+// index at all.
+```
+(DmDbContext.cs:301-306.)
+
+Порядок `(EntityType, EntityId)` для этих запросов действительно лучше: он дает готовый отсортированный по `EntityId` поток при равенстве по типу. Но утверждение "не взял бы индекс вообще" неверно: индекс `(EntityId, EntityType)` планировщик может использовать в nested loop, где внешняя сторона задает `EntityId` — именно так выглядят join из `UserRepository.cs:769-799`. Реальная разница — в форме соединения и в стоимости, а не в "индекс не используется".
+
+Последствие: только в доверии к тексту — тот, кто в будущем захочет поменять порядок, получит от комментария неверный аргумент вместо верного.
+
+Исправление: переписать вторую половину фразы: `(EntityType, ...)` первым ради равенства по типу, дающего диапазон и порядок по `EntityId` для merge join.
+
+## Чего я не смог определить
+
+- Незакрытый тег `[private]`. Регулярное выражение generated-колонки требует закрывающий тег (`\[private(=[^\]]*)?\][\s\S]*?\[/private\]`, DmDbContext.cs:256-257 и `SearchSnippet.PrivateBlockPattern`), поэтому пост с `[private]текст` без закрытия будет проиндексирован целиком и попадет в сниппет поиска. Опасно это или нет, зависит от того, как незакрытый тег обрабатывает внешняя библиотека `BBCodeParser` при отображении: если она автоматически закрывает тег в конце ввода, приватный текст скрыт на экране и виден в поиске — утечка; если считает его обычным текстом, поведение согласовано и находки нет. Решающий эксперимент: создать пост с `[private=X]секрет` без закрывающего тега и запросить `GET /v1/search/messages?text=секрет` от лица не-адресата.
+- Реальные планы запросов. Я сопоставлял индексы с предикатами по тексту (и по этому пути нашел совпадения для лидербордов и курсора сообщений), но `EXPLAIN` не запускал: это требует поднятого Postgres, а сборка проекта создавала бы артефакты в репозитории, что запрещено заданием. Утверждения про seq scan по `Games.PublicId` и по `Users` при `ILIKE` опираются на отсутствие индекса и на несовместимость `ILIKE` с b-tree, а не на измерение. Закрывается прогоном `EXPLAIN (ANALYZE)` для `GET /v1/games/{publicId}` и для проверки занятости почты на базе с сотней тысяч пользователей.
+- Стоимость 20+ агрегатов на список пользователей в абсолютных числах. Round-trip я посчитал по коду, время — нет; нужен замер на данных, сопоставимых по объему с DM2 (память проекта говорит, что перенос базы предстоит).
+- Продуктовое решение по деактивации: освобождает ли она логин и почту навсегда или резервирует. От ответа зависит, чинить ли `deactivated-user-frees-its-email` проверками с `IgnoreQueryFilters` или переносом логина в `UsernameHistories` при деактивации. Это решение владельца, не разработчика.
+
+
+# Полиглотное хранение (PG / Mongo / MinIO) — D
+
+Оценка среза до опровержения: D. Инфраструктура хранилищ сделана сильно (утверждение индексов из приложения, сборщик осиротевших объектов с честным тестом, исполняемое правило маркера хранилища), но два дефекта доходят до пользователя прямо сейчас — вся ветка in-app уведомлений не может записаться в Mongo, и любой аутентифицированный пользователь двумя запросами переводит список постов комнаты в 500, — а межхранилищные записи не атомарны и ничем не ремонтируются.
+
+Вердикт: разделение хранилищ выбрано осмысленно и в двух местах из трех сделано аккуратно, но
+границы между ними не удерживаются кодом. Postgres несет реляционные данные и почти все
+инварианты; Mongo несет девять коллекций, из которых пять (Dice, AttributeSchemata, Polls,
+UserSessions, UserSettings) действительно документные, а UnreadCounters — реляционная таблица
+в документной базе; MinIO вообще не имеет ни репозитория, ни абстракции, ни упоминания в
+документе, который объявлен SSOT по организации хранилищ. Инфраструктурная часть — сильная:
+`MongoIndexInitializer` и `ExpressionIndexInitializer` объявляют наборы индексов в приложении,
+переутверждают их при каждом старте и снабжены комментарием, называющим конкретный запрос под
+каждый индекс; я сверил набор — 16 индексов в классе и 16 в `docker/mongo-init.js`, имена
+совпадают один в один. Сборщик осиротевших объектов покрыт тестом, который проверяет обе
+половины контракта и явно фиксирует ловушку с глобальным query filter.
+
+Оценка D, а не C, из-за двух дефектов, которые доходят до пользователя прямо сейчас.
+Первый: `Notification.Metadata` объявлен как `object` и получает анонимный тип из сборки
+диспетчера, а `ObjectSerializer` драйвера 2.28 по умолчанию отказывается сериализовать типы вне
+своего allow-list — я проверил, что и сообщение об ошибке, и предикат присутствуют в
+поставляемой сборке, и что предикат отклоняет типы из не-фреймворковых сборок. Вся ветка
+in-app уведомлений при этом не работает, и тесты этого не видят, потому что они утверждают
+только код 200 на пустой коллекции. Второй: `POST /v1/uploads` не проверяет, принадлежит ли
+вызывающему сущность из `targetId`, а чтение портретов персонажей собирает словарь по
+`TargetCharacterId` — двух живых записей на одного персонажа достаточно, чтобы список постов
+комнаты отдавал 500 всем и навсегда.
+
+Третья причина оценки — не дефект, а решение, которое придется переделывать: между
+хранилищами нет ни транзакции, ни сверки, и `DATA_STORAGE.md` это честно называет ценой, но
+код ровно это и делает — сначала коммит в Postgres, потом запись в Mongo, без компенсации и
+без ремонта. Документ сам предсказал состояние, в котором записана половина, а код в четырех
+местах его создает.
+
+## Что сделано хорошо
+
+- `MongoIndexInitializer` — авторитет набора индексов в приложении, а не в init-скрипте.
+  Комментарий класса (`MongoIndexInitializer.cs:22-39`) правильно объясняет, почему
+  `docker/mongo-init.js` не может быть источником истины (Mongo выполняет
+  `/docker-entrypoint-initdb.d` один раз на пустом томе) и почему повторное утверждение
+  бесплатно (`createIndexes` идемпотентен). Проверил фактически: `grep -c "createIndex("
+  docker/mongo-init.js` = 16, и список имен `IX_*` в скрипте и в классе совпадает полностью.
+- Каждый индекс подписан конкретным запросом, который он обслуживает, а не назначением
+  вообще: `MongoIndexInitializer.cs:63`, `:70-71`, `:96-100`, `:118-120`, `:135-137`. Это
+  единственная форма комментария к индексу, которая не гниет молча — по ней видно, когда
+  запрос ушел.
+- Нетривиальная деталь, которая легко ломается, сделана верно: ключ
+  `Sessions.Id` (`MongoIndexInitializer.cs:101-102`) разрешается через class map и попадает в
+  базу как `Sessions._id`, потому что `Session.Id` подхватывается NamedIdMemberConvention.
+  Скрипт (`docker/mongo-init.js:79`) пишет `"Sessions._id"` буквально. Если бы трансляции не
+  было, получились бы два разных индекса под одним именем и `IndexOptionsConflict` — комментарий
+  на `:99-100` объясняет именно это.
+- `AttributeConstraints.cs:8-12` — `[BsonKnownTypes]` на базовом классе полиморфных
+  ограничений. Без него первое же чтение схемы в процессе, который ни разу не сериализовал
+  подтип, падало бы на `Unknown discriminator value`. Это самый частый способ сломать
+  полиморфный документ, и он закрыт.
+- `AttributeSchema` и `DiceRoll` — обоснованное использование Mongo по критериям самого
+  документа: у ограничений разный набор полей в зависимости от типа
+  (`AttributeSchemaRepository.cs:204-219`), у броска вложенный массив результатов
+  (`DiceRoll.cs:72`), и ни то ни другое не нуждается в собственной таблице.
+- `EntityStorageMarkerShould.cs:47-63` — правило DATA_STORAGE о маркере хранилища
+  исполняемое, а не декларативное, и третье состояние (вложенное значение без маркера)
+  оформлено списком, а не эвристикой (`:27-45`). Список — решение, и это правильно.
+- `ExpressionIndexShould.cs:24-38` проверяет не модель EF, а каталог Postgres
+  (`pg_indexes.indexdef`), и требует в определении и `lower`, и `UNIQUE`. Тест утверждает
+  именно то, что обещает имя.
+- `InvitationTokenPersistenceShould.cs:44-71` — заявление DATA_STORAGE.md о том, что
+  интеграционный тест падает, если полиморфный внешний ключ вернулся в миграцию, проверено и
+  держится: тест создает отдельную базу, накатывает `MigrateAsync`, читает `pg_constraint` и
+  требует отсутствия `FK_Tokens_Blogs_EntityId` / `FK_Tokens_Games_EntityId` при наличии
+  `FK_Tokens_Users_UserId`.
+- `UploadOrphanCleanupShould.cs` фиксирует обе половины контракта сборщика — запись за
+  пределами grace period собирается, свежая и живая не собираются — и в докблоке (`:22-28`)
+  назван конкретный механизм отказа: без `IgnoreQueryFilters` предикат сворачивается в
+  `NOT IsRemoved AND IsRemoved`. Сам код (`UploadOrphanCleanupService.cs:93-98`) несет тот же
+  комментарий на месте.
+- `UploadApiService.DirectUploadCore` располагает шаги в единственно правильном порядке:
+  проверка target до PUT (`:255-263`), затем PUT, затем строка БД, и на отказ строки —
+  компенсирующее удаление объекта (`:300-309`). Комментарий на `:257-261` объясняет, почему
+  проверка переехала выше PUT, и объяснение верное.
+- `UserSettings.CreateDefault` (`UserSettings.cs:65-77`) — единственный ответ на вопрос, как
+  выглядит свежий документ настроек, с описанным в remarks (`:53-64`) отказом, который он
+  предотвращает; и `AuthenticationRepository.cs:88-104` защищает чтение от документа без
+  `Paging`. Это ровно тот класс проблемы, который создает schemaless-хранилище, и он закрыт с
+  двух сторон.
+- `MongoClient` зарегистрирован `SingleInstance` с объяснением, почему именно
+  (`PersistenceModule.cs:117-120`): клиент владеет пулом и монитором кластера.
+
+## Находки
+
+### [КРИТИЧНО] upload-target-not-owned — `targetId` не проверяется на владение, а чтение портретов падает на двух записях
+
+> **Опровержение: подтверждено.**
+
+`RequireTarget` (`UploadApiService.cs:319-336`) проверяет только то, что `targetId` не null:
+
+```csharp
+var effectiveTarget = targetId ?? (type == UploadType.UserAvatar ? userId : (Guid?)null);
+RequireTarget(type, effectiveTarget);
+```
+
+Никакой проверки, что вызывающий владеет персонажем, постом или профилем, нет ни в
+`UploadApiService`, ни в `UploadRepository.AddAsync` (`:92-128`), ни в контроллере
+(`UploadController.cs:126-137`, из атрибутов только `[AuthenticationRequired]`). Внешний ключ
+на `TargetCharacterId` (`DmDbContext.cs:2148-2152`) требует лишь существования персонажа.
+
+Читающая сторона предполагает, что живая запись ровно одна
+(`PostRepository.cs:407-417`):
+
+```csharp
+var pictures = await _dbContext.Uploads
+    .Where(u => u.TargetCharacterId != null
+        && characterIds.Contains(u.TargetCharacterId.Value)
+        && u.Type == UploadType.CharacterAvatar
+        && !u.IsRemoved)
+    .Select(...)
+    .ToDictionaryAsync(x => x.CharacterId, x => x.Picture);
+```
+
+Второй живой записи на того же персонажа достаточно, чтобы `ToDictionaryAsync` бросил
+`ArgumentException` о дублирующемся ключе. При этом ничего никогда не помечает предыдущий
+`CharacterAvatar` удаленным: `CollectObsoleteAsync` вызывается только из `UserService.cs:211`
+и `:272`, оба раза с идентификатором пользователя; у персонажа нет даже колонки, которая
+связывала бы его с загрузкой (`Character.cs:110` — навигация удалена, а комментарий
+`Upload.cs:126` ссылается на несуществующий `Character.AvatarUploadId`).
+
+Последствие: любой аутентифицированный пользователь двумя запросами
+`POST /v1/uploads?type=CharacterAvatar&targetId={id чужого персонажа}` навсегда переводит
+`GET` списка постов комнаты в 500 для всех, кто ее видит, — `EnrichWithCharacterPictures`
+вызывается на всех трех путях чтения постов (`PostRepository.cs:70`, `:83`, `:340`).
+Восстановление возможно только правкой строк в БД. Тот же дефект сработает без всякого
+злоумышленника в день, когда UI начнет загружать портреты персонажей: сегодня фронт зовет
+`directUpload` только с `"UserAvatar"` (`useAvatarUpload.ts:73`), но второй портрет одного
+персонажа через API сломает комнату сразу. Дополнительно: одна запись с чужим `targetId`
+подменяет портрет чужого персонажа, попадает в модераторский список загрузок и участвует в
+выборе HEAD внутри `CollectObsoleteAsync`, который фильтрует по target без учета владельца
+(`UploadGarbageCollector.cs:43-49`).
+
+Исправление: (1) проверять право на target до PUT — для `CharacterAvatar` право редактировать
+персонажа, для `PostAttachment` право писать в комнату поста, для `UserAvatar` совпадение с
+вызывающим (сейчас `targetId` для аватара вообще принимается от клиента, хотя используется
+только собственный id); (2) при создании `CharacterAvatar` помечать предыдущие загрузки того
+же персонажа `IsRemoved` — тем же способом, что `LinkAvatarUpload` делает для пользователя
+(`UserRepository.cs:433-447`); (3) в `EnrichWithCharacterPictures` не полагаться на
+единственность: брать `GroupBy(...).Select(g => g.OrderByDescending(u => u.CreatedUtc).First())`,
+чтобы чтение не падало даже при дубликатах.
+
+### [ВЫСОКАЯ] attribute-schema-hard-delete — жесткое удаление документа Mongo, на который ссылается строка Postgres
+
+> **Опровержение: подтверждено.**
+
+`AttributeSchemaRepository.Delete` (`:188-189`) — физическое удаление:
+
+```csharp
+public async Task Delete(Guid schemaId) =>
+    await Collection.DeleteOneAsync(Filter.Eq(s => s.Id, schemaId));
+```
+
+Авторизация на удаление — только авторство схемы
+(`AttributeSchemaIntentionResolver.cs:15`: `Delete => target.Author?.UserId == user.UserId`), и
+`AttributeSchemaService.DeleteAsync` (`:104-108`) не проверяет использование вообще.
+`IsUsedByUserGame` существует (`AttributeSchemaRepository.cs:191-197`), но применяется только в
+авторизации чтения (`AttributeSchemaService.cs:78`) и к тому же сужен до игр самого
+вызывающего.
+
+Между хранилищами внешнего ключа нет, а `Games.AttributeSchemaId` (Postgres) на схему
+ссылается, и чтение игры разрешает ссылку синхронно (`GameService.cs:406-408` и `:431-433`):
+`game.AttributeSchema = await _schemaService.GetAsync(game.AttributeSchemaId.Value)`, а
+`GetAsync` бросает `HttpException(NotFound, "Schema not found")` (`AttributeSchemaService.cs:61-69`).
+
+Последствие: автор публичной схемы удаляет ее — и каждая чужая игра, созданная на этой схеме
+(создание разрешает публичные схемы, `GameService.cs:126-129`), перестает открываться: `GET`
+игры отдает 404 всем, включая мастера. Отредактировать игру, чтобы сменить схему, нельзя —
+страница игры не загружается. Продуктового пути восстановления нет, только ручная правка
+данных, которую конвенции проекта запрещают.
+
+Исправление: (1) запретить удаление схемы, на которую ссылается хотя бы одна неудаленная игра
+(проверка `_dbContext.Games.AnyAsync(g => g.AttributeSchemaId == schemaId && !g.IsRemoved)`,
+без сужения до вызывающего) — 409 вместо тихого разрушения; (2) сделать удаление мягким
+(`IsRemoved`, поле уже объявлено, см. находку attribute-schema-isremoved-dead) и фильтровать
+его в `GetSchemata`, оставив `GetSchema` разрешающим удаленную схему для уже существующих игр;
+(3) на чтении игры не превращать отсутствие схемы в 404 всей игры.
+
+### [ВЫСОКАЯ] minio-root-credentials — приложение и imgproxy ходят в объектное хранилище рутом
+
+> **Опровержение: подтверждено.**
+
+`docker/docker-compose.yml:47-48`:
+
+```
+DM_CdnConfiguration__AccessKey: minio
+DM_CdnConfiguration__SecretKey: ${MINIO_ROOT_PASSWORD}
+```
+
+и `MINIO_ROOT_USER: 'minio'` в самом сервисе (`:225-226`); imgproxy получает те же
+`AWS_ACCESS_KEY_ID: 'minio'` / `AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}` (`:260-261`).
+Контраст внутри того же файла разительный: для Mongo `mongo-init.js:16-31` специально создает
+пользователя с `readWrite` на одной базе и отказывается стартовать без него, а комментарий
+объясняет, что рут нужен только для bootstrap и health-check. Для Postgres приложение ходит
+`User ID=postgres` (`:24`), то есть суперпользователем.
+
+Последствие: любая утечка конфигурации приложения (SSRF к метаданным, чтение переменных
+окружения через дефект в другом месте, доступ к контейнеру) дает не чтение и запись объектов,
+а полное администрирование хранилища: удаление бакета, смена политики, создание сервисных
+аккаунтов. Радиус поражения — все загруженные файлы, включая те, восстановить которые
+неоткуда.
+
+Исправление: сервисный аккаунт MinIO с политикой на один бакет — `s3:GetObject`,
+`s3:PutObject`, `s3:DeleteObject`, `s3:ListBucket` на `arn:aws:s3:::dm-uploads/*`, и отдельный
+read-only аккаунт для imgproxy (ему запись не нужна вообще). Рут оставить только для создания
+этих аккаунтов, как уже сделано для Mongo.
+
+### [СРЕДНЯЯ] cross-store-write-unrepaired — вторая запись в другое хранилище не атомарна и ничем не ремонтируется
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Mechanism and every line reference check out (TopicService.cs:90-97 and :388-389; UnreadCountersRepository.cs:59-65 UpdateMany without IsUpsert, :186-194 early return), so a lost Mongo write is indeed unrepairable. But the harm is a missing unread badge, not data loss, and it needs a Mongo blip inside a millisecond window after the PG commit. I counted the seeded state: only 2 of 32 topics and 7 of 199 rooms have any UnreadCounters document (the seeder writes topics without them, DataSeeder.Games.cs:890 is the sole counter writer), i.e. the exact end state the finding calls catastrophic is already the norm for 94% of topics and has gone unnoticed. Resilience gap, СРЕДНЯЯ.
+
+Создание темы: сначала коммит в Postgres, потом счетчик в Mongo
+(`TopicService.cs:90-97`):
+
+```csharp
+var topic = await _repository.Create(createEntity, author.UserId, board.Id, ct);
+await Task.WhenAll(
+    _invokedEventProducer.SendAsync(EventType.NewTopic, topic.Id),
+    _unreadCountersRepository.CreateAsync(topic.Id, board.Id, UnreadEntryType.Message));
+```
+
+Тот же порядок в `RoomService.cs:82` (создание комнаты), `GameService.cs:851-853`,
+`ChatService.cs:66`, и в удалении — `TopicService.cs:388-389`, `RoomService.cs:172-173`,
+`ChatService.cs:238`. Компенсации нет ни в одном случае, сверки нет нигде.
+
+Восстановиться само это не может, потому что все операции над счетчиком написаны без upsert:
+`IncrementAsync` — `UpdateManyAsync` без `IsUpsert` (`UnreadCountersRepository.cs:59-65`), то
+есть при отсутствии документа не делает ничего; `FlushAsync` при отсутствии документа выходит
+рано и осознанно (`:186-194`, комментарий объясняет, почему изобретать `ParentId` нельзя).
+
+Последствие: если запись в Mongo не удалась (Mongo недоступен секунду, таймаут выбора
+сервера — `ServerSelectionTimeout` 5 с, `PersistenceModule.cs:107`), тема существует в
+Postgres без документа-счетчика. Дальше `SelectByEntitiesAsync` возвращает для нее 0
+(`:172` — отсутствующий ключ становится нулем), новые комментарии счетчик не увеличивают, и
+пометка "прочитано" молча ничего не делает. Тема навсегда без индикатора непрочитанного, для
+всех пользователей, без единого сообщения в логе. Обратное направление (удаление) оставляет
+живые счетчики для удаленной сущности.
+
+Это ровно то состояние, про которое `DATA_STORAGE.md:14` пишет: "одна фича живет в одном
+хранилище целиком. Как только часть данных фичи уезжает в другое хранилище, появляются
+состояния, в которых половина записана, а вторая нет". Код нарушает собственный SSOT в
+четырех модулях.
+
+Исправление: минимум — сделать записи счетчика самовосстанавливающимися: `IncrementAsync` и
+`FlushAsync` через upsert, чтобы отсутствующий документ создавался при первом обращении, и
+тогда потеря второй записи перестает быть невосполнимой. Радикально и правильнее —
+перенести `UnreadCounters` в Postgres (см. unread-counter-key-not-unique): у этих данных нет
+ни одного признака из таблицы "Когда использовать MongoDB", кроме частой записи, зато есть
+внешний ключ на сущность, которую они считают.
+
+### [СРЕДНЯЯ] public-bucket-for-every-upload-type — приватные вложения читаются анонимно, удаленные читаются после удаления
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Mechanism verified live: the running bucket policy is exactly `s3:GetObject` for Principal `*` on `arn:aws:s3:::dm-uploads/*`, anonymous GET of any object returns 200, and a soft-deleted upload's object is still served during the grace period; nginx.conf:102-111 is quoted correctly. But the named harm — post attachments in a closed room readable by anyone — has no producer: `PostAttachment` occurs only in the enum, the type switches and the seeder's target mapping, zero rows exist, and whether attachments must be private is an unmade owner decision the report itself lists as undetermined. The only live case (avatars) is public by design, and StorageBucketInitializer.cs sets the policy solely on the bucket-creation branch.
+
+Политика бакета — анонимный GET на все содержимое
+(`StorageBucketInitializer.cs:59-73`):
+
+```
+"Effect": "Allow", "Principal": "*", "Action": "s3:GetObject",
+"Resource": "arn:aws:s3:::{BucketName}/*"
+```
+
+Обоснование в комментарии (`:56-58`) говорит про аватары: "Anonymous GET for CDN-style avatar
+serving (no presigned URLs for public content)". Но политика покрывает весь бакет, а типов
+загрузок три (`UploadType.cs`: `UserAvatar`, `CharacterAvatar`, `PostAttachment`), и папки под
+них разные (`UploadApiService.cs:417-423`: `avatars`, `characters`, `posts`). Presigned-путь в
+решении отсутствует полностью — `grep -rn "Presign"` по `src` и `test` дает только
+комментарии "No presigned URLs" (`IUploadApiService.cs:13`, `uploadApi.ts:11`). nginx отдает
+бакет наружу и снимает авторизацию (`docker/nginx/nginx.conf:102-111`): `auth_basic off;`,
+`proxy_set_header Authorization "";`.
+
+Последствие: вложение к посту в закрытой комнате (доступ к комнате контролируется
+`RoomAccess` в Postgres) отдается по стабильному URL любому, у кого этот URL есть, без всякой
+проверки; ссылка живет вечно и не зависит от того, остался ли у читателя доступ к игре. То же
+для файла, который пользователь удалил: `DeleteUpload` (`UploadApiService.cs:124-141`) делает
+только soft-delete, объект из MinIO уносит фоновый сборщик через 24 часа
+(`UploadOrphanCleanupService.cs:37`), а если удаление из S3 стабильно падает — не уносит
+никогда (`:140-144` оставляет строку на следующий тик). Пользователь видит "удалено", файл
+продолжает отдаваться по прежнему адресу.
+
+Исправление: развести политику по типу. `avatars/` и `characters/` — публичный префикс, как
+сейчас (аватар персонажа видим вместе с персонажем, это допустимо). `posts/` — закрыть в
+политике и отдавать только через подписанный URL с TTL, а imgproxy подписывать по
+`SourceUrlPrefix` с ключом (ключ уже есть: `IMGPROXY_KEY`/`IMGPROXY_SALT`,
+`docker-compose.yml:255-256`). Это решение владельца по продукту, но текущее состояние — не
+решение, а следствие того, что политика написана под один тип из трех.
+
+### [СРЕДНЯЯ] data-storage-doc-knows-two-stores — SSOT по хранилищам не знает про третье хранилище
+
+`docs/conventions/DATA_STORAGE.md:3` объявляет: "единственный источник истины по организации
+хранилищ данных DM3", `:7` называется "Два хранилища", `:9-12` перечисляет Postgres и MongoDB.
+Объектного хранилища в документе нет ни разу — ни слова про MinIO, S3, загрузки, порядок
+записи или удаления. Между тем правил там ровно столько же, сколько у двух других хранилищ, и
+они не выводятся из кода без чтения пяти файлов: строка пишется после объекта, а удаляется
+раньше (`UploadGarbageCollector.cs:71-74`); grace period 24 часа отсчитывается от `DeletedUtc`
+(`UploadOrphanCleanupService.cs:37`, `UploadRepository.cs:84-87`); сборщик обходит строки, а не
+бакет, поэтому объект без строки не найдет никто (`UploadApiService.cs:302-305`); ключ
+объекта неизменяем, замена файла — новый ключ (`UploadApiService.cs:351-352`).
+
+Второе: таблица `:41-44` перечисляет два маркера хранилища, `[Table]` и
+`[MongoCollectionName]`, и `:46-49` называет отсутствие маркера третьим состоянием — "нигде
+самостоятельно". Для сущности, живущей в объектном хранилище, места в этой классификации нет,
+и `Upload` помечен `[Table("Uploads")]`, что верно для строки, но ничего не говорит про
+объект, которым строка владеет.
+
+Третье: правило `:14` "одна фича живет в одном хранилище целиком" нарушено минимум дважды
+(непрочитанное: сущность в Postgres, счетчик в Mongo; аккаунт: учетные данные в Postgres,
+сессии, настройки, попытки входа и журнал безопасности в Mongo), и документ не признает это
+исключением и не описывает, что делать с последствиями.
+
+Последствие: читатель, следующий документу, не узнает ни про третье хранилище, ни про порядок
+операций с ним, и первая же новая фича с файлами будет написана в другом порядке — например с
+удалением объекта до строки, после чего страница будет рендерить битую картинку вместо
+отсутствующей.
+
+Исправление: добавить раздел про объектное хранилище с тремя правилами (что там лежит и что
+там лежать не может; порядок записи и удаления относительно строки БД; кто владелец объекта и
+что его собирает) и указать, что "фича в одном хранилище" для загрузок неприменима — у
+загрузки два хранилища по определению, поэтому и нужен явный порядок. Правило `:14` либо
+починить в коде, либо переписать в документе как "две записи допустимы только там, где вторая
+самовосстанавливается".
+
+### [СРЕДНЯЯ] no-abstraction-for-the-object-store — у третьего хранилища нет ни репозитория, ни единой точки
+
+У Postgres есть `DmDbContext` и папка `Repositories/`; у Mongo — `DmMongoClient` и
+`MongoCollectionRepository<T>`. У объектного хранилища нет ничего: `IAmazonS3` внедряется
+напрямую в пять мест — `UploadApiService.cs:35`, `UploadGarbageCollector.cs:19`,
+`UploadOrphanCleanupService.cs:88`, `StorageBucketInitializer.cs:23`, `DataSeeder`
+(`DataSeeder.Uploads.cs:117`). Прямое следствие — операция "удалить ключ, стерпеть 404"
+реализована трижды с тремя разными политиками:
+
+- `UploadApiService.cs:361-378` — `catch { }`, без лога, без различения 404;
+- `UploadGarbageCollector.cs:78-96` — 404 отдельно, прочее в `LogWarning`, дальше по списку;
+- `UploadOrphanCleanupService.cs:118-138` — 404 отдельно, прочее в `LogWarning` и строка
+  остается на следующий тик.
+
+Последствие: правило про удаление объекта нельзя изменить в одном месте. Добавление второго
+объекта на загрузку (превью, оригинал), смена бакета, переход на batch-delete или введение
+версионирования требуют трех согласованных правок, и любая забытая тихо расходится с
+остальными — как уже разошлись политики обработки ошибок.
+
+Исправление: `IObjectStorage` в `DM.Domain.Core` с методами `PutAsync(key, bytes,
+contentType)`, `DeleteAsync(key)` (идемпотентный, 404 внутри), `BuildPublicUrl(key)`, и
+единственная реализация в `DM.Infrastructure.Core/Storage`. Убирает и `BucketName` из четырех
+мест, и три копии обработки 404.
+
+### [СРЕДНЯЯ] bucket-orphans-unreconciled — объект без строки не найдет никто, и комментарий это отрицает
+
+Сборщик отбирает кандидатов по строкам таблицы
+(`UploadOrphanCleanupService.cs:92-101`: `db.Uploads.IgnoreQueryFilters().Where(u =>
+u.IsRemoved && u.DeletedUtc != null && u.DeletedUtc < cutoff)`). Со стороны бакета не ходит
+ничто: `ListObjects` в решении не вызывается нигде.
+
+Два комментария в одном файле утверждают противоположное. `UploadApiService.cs:302-305`
+говорит правду:
+
+```
+// The object is in the bucket and the only row that would ever have named it
+// does not exist: the orphan sweeper walks rows, so nothing else will ever find this key.
+```
+
+`UploadApiService.cs:375` — ложь: "Best-effort rollback — remaining orphans are swept by the
+background GC". Сборщик их не подберет ровно по причине, названной 70 строками выше.
+
+Последствие: объект утекает навсегда в двух случаях — компенсирующее удаление не удалось
+(строка 375 обещает, что подберут; не подберут), и процесс умер между PUT (`:271`) и
+`AddAsync` (`:298`) без шанса выполнить `catch`. В деве это происходит и штатно: повторный
+`seed` без `reset` пишет новые объекты с новыми ключами (`DataSeeder.Uploads.cs:84-88`,
+`uploadId` каждый раз новый), а прежние остаются без строк. Полный `reset` спасает, потому что
+`docker compose down -v` сносит и `miniodata` (`scripts/dm.sh:82-84`), но частичный не спасает.
+
+Исправление: убрать ложное обещание в строке 375 и добавить сверку со стороны бакета — раз в
+сутки `ListObjectsV2` по префиксам и удаление ключей, которых нет в `Uploads` и которые старше
+grace period. Без нее рост хранилища монотонный и неизмеримый.
+
+### [СРЕДНЯЯ] collect-obsolete-keeps-newest-for-any-target — правило "самый свежий выживает" верно только для аватаров
+
+`UploadGarbageCollector.CollectObsoleteAsync` (`:37-56`):
+
+```csharp
+var uploads = await _db.Uploads
+    .Where(u => !u.IsRemoved &&
+        (u.TargetUserId == entityId || u.TargetCharacterId == entityId || u.TargetPostId == entityId))
+    .OrderByDescending(u => u.CreatedUtc).ToListAsync();
+...
+var obsolete = uploads.Skip(1).ToList();
+```
+
+Комментарий (`:41-43`) прямо заявляет намерение работать со всеми тремя типовыми колонками:
+"The filter covers all typed target columns". Но правило "HEAD — текущий, остальные
+устаревшие" верно только для аватара, у которого он один. У поста вложений может быть много —
+это, собственно, единственный смысл типа `PostAttachment`.
+
+Второе: удаление из S3 здесь немедленное (`:76-96`), без grace period, при том что строка
+получает `DeletedUtc` (`:68`) и попадет в сборщик, чей контракт описан как "grace period
+allows short-term recovery: the user clicked delete, changed their mind — restore works within
+the first 24h" (`UploadOrphanCleanupService.cs:29-30`). Для строк, прошедших через
+`CollectObsoleteAsync`, это обещание уже неверно: объекта нет, а строка еще сутки числится
+восстановимой.
+
+Последствие: первый же вызов `CollectObsoleteAsync` с идентификатором поста удалит все
+вложения поста, кроме последнего. Сейчас метод зовется только с идентификатором пользователя
+(`UserService.cs:211`, `:272`), то есть это заряженная мина, а не текущий отказ. Второе
+следствие действует уже сегодня: строка в grace period может указывать на несуществующий
+объект, и любая поверхность, которая покажет удаленную загрузку (модераторский список
+`GET /v1/uploads?scope=all` показывает только живые, но `GetUpload` по id — любую), отрендерит
+битую ссылку.
+
+Исправление: параметризовать метод типом (`CollectObsoleteAsync(entityId, UploadType)`) и
+применять правило "остается один" только к аватарным типам, а для вложений не применять
+вообще. Удаление из S3 из этого метода убрать целиком — пусть его делает единственный сборщик
+после grace period, тогда контракт grace period станет правдой во всех путях.
+
+### [СРЕДНЯЯ] mongo-collections-without-retention — у двух коллекций нет ни удаления, ни TTL
+
+`RealtimeNotifications`: в `NotificationRepository` нет ни одного метода удаления — только
+`Count`, `CountUnread`, `GetNotifications`, `Create`, `MarkAsRead` x2
+(`NotificationRepository.cs:24-79`). TTL-индекса у нее в `MongoIndexInitializer.cs:116-129`
+тоже нет. То есть каждое уведомление, когда-либо созданное для кого-либо, хранится вечно.
+
+`UnreadCounters`: `DeleteAsync` только ставит флаг (`UnreadCountersRepository.cs:87-93`:
+`Update.Set(c => c.IsRemoved, true)`), и надгробия не собирает никто — ни TTL, ни фоновая
+задача. Каждая когда-либо удаленная тема, комната и переписка оставляет по документу на
+каждого пользователя, который в нее заходил.
+
+Контраст показывает, что это пробел, а не политика: `LoginAttempts` получила TTL 24 часа с
+объяснением, почему счетчик обязан истекать (`MongoIndexInitializer.cs:175-180`), а
+`SecurityAuditLog` — TTL 180 дней с рассуждением про персональные данные (`:192-199`). Оба
+рассуждения дословно применимы к уведомлениям: `Notification.UsersInterested` — список
+идентификаторов пользователей, а метаданные содержат названия игр и имена.
+
+Последствие: `Count(userId)` для страницы уведомлений (`NotificationService.cs:38-42` считает
+total на каждый запрос) обходит индекс по всей истории пользователя, и стоимость растет
+линейно и безвозвратно; объем `RealtimeNotifications` растет монотонно. Ни то ни другое не
+сломается завтра, но откатить решение будет дороже, чем принять его сейчас.
+
+Исправление: TTL-индекс на `RealtimeNotifications.CreatedUtc` со сроком, который назовет
+владелец (полгода — очевидная симметрия с журналом безопасности), и либо TTL на
+`UnreadCounters` по полю времени удаления, либо физическое удаление в `DeleteAsync` вместо
+флага — надгробие нужно только `FlushAsync`, чтобы удаленная сущность не вернулась
+(`:180-185`), и эту роль оно играет минуты, а живет вечно.
+
+### [СРЕДНЯЯ] unread-counter-key-not-unique — код считает тройку ключом, а база про это не знает
+
+`FlushAsync` (`UnreadCountersRepository.cs:196-210`) и `FlushAllAsync` (`:225-239`) пишут через
+`ReplaceOne` с `IsUpsert = true` по тройке `(UserId, EntityId, EntryType)`, то есть трактуют ее
+как ключ. Уникального индекса на эту тройку нет: в `MongoIndexInitializer.cs:61-88` для
+коллекции объявлены четыре индекса, все неуникальные. Что авторы умеют объявить уникальность,
+видно рядом — `IX_UserSettings_UserId` создан с `unique: true` и с объяснением, почему
+(`:111-112`).
+
+Последствие: два одновременных upsert по одной тройке (два таба, двойной клик по "прочитано",
+повтор запроса на мобильной сети) создают два документа — Mongo без уникального индекса это
+разрешает. Прямого искажения чисел не будет, потому что чтение группирует по `EntityId` и
+берет `Min(Counter)` (`:164-170`), но инвариант, на который опирается запись, не существует, и
+следующий читатель, который напишет `FirstOrDefault` вместо агрегата, получит недетерминированный
+ответ. `GetLastReadTimeAsync` (`:252-263`) уже написан именно так — `FirstOrDefaultAsync` без
+сортировки.
+
+Исправление: объявить `(UserId, EntityId, EntryType)` уникальным в `MongoIndexInitializer` и
+зеркально в `mongo-init.js`. Побочный эффект — существующие дубликаты сорвут создание индекса,
+поэтому вводить вместе с одноразовой чисткой (или после `reset`, что сейчас допустимо).
+Стратегически — см. cross-store-write-unrepaired: у этих данных есть внешний ключ и нет
+документной формы, их место в Postgres, где уникальность и каскад бесплатны.
+
+### [СРЕДНЯЯ] create-many-all-or-nothing — один конфликтующий индекс срывает утверждение всей коллекции
+
+`Assert` (`MongoIndexInitializer.cs:227-245`) передает все индексы коллекции одним
+`CreateManyAsync`, то есть одной командой `createIndexes`. Сервер выполняет ее целиком или не
+выполняет: при `IndexOptionsConflict` по одному спецификатору не создаются и остальные.
+Ошибка проглатывается и уходит в лог (`:239-244`), и это осознанно — комментарий объясняет,
+что падать из-за индекса хуже.
+
+Отдельно: TTL входит в дескриптор индекса, и `MongoIndexInitializer.cs:203-214` это признает
+("cannot be bound to configuration without dropping and recreating the index"). Но из этого
+следует вывод, которого в комментарии нет: изменение `SecurityAuditRetentionDays` или
+`LoginAttemptRetentionHours` в коде не применится никогда — `createIndexes` с тем же именем и
+другим `expireAfterSeconds` отвечает конфликтом, и вместе с ним срывается утверждение второго
+индекса той же коллекции.
+
+Последствие: правка константы retention выглядит как изменение поведения, но не меняет ничего,
+кроме одной строки `LogError` при старте, которую никто не читает. На проде это значит, что
+срок хранения персональных данных в журнале безопасности не управляем из кода вопреки виду.
+
+Исправление: утверждать индексы по одному (`CreateOneAsync` в цикле), чтобы конфликт стоил
+один индекс, а не коллекцию; для TTL — при конфликте пробовать `collMod` с новым
+`expireAfterSeconds` (Mongo 5+ это умеет) и логировать результат явно.
+
+### [СРЕДНЯЯ] user-settings-two-owners — один документ, четыре обращения, две несовместимые стратегии записи
+
+Коллекция `UserSettings` обслуживается из двух сборок:
+
+- `AuthenticationRepository.FindUserSettings` (`:74-105`) — чтение;
+- `UserRepository` (`:25` наследует `MongoCollectionRepository<UserSettings>`) — чтение и
+  точечные `$set` по полям (`:339-380`);
+- `BotLinkRepository` (`:18`) — тот же документ, настройки каналов;
+- `DM.Web.API/Notifications/UserSettingsRepository.cs:33-40` — `ReplaceOneAsync` целым
+  документом, `IsUpsert = true`.
+
+Последний живет в проекте `DM.Web.API`, а не в слое персистентности, и зарегистрирован
+`services.AddSingleton` (`Startup.cs:170-172`), тогда как все остальные Mongo-репозитории —
+`InstancePerLifetimeScope` (`PersistenceModule.cs:131-408`). Вызывающий читает документ,
+правит одно поле и пишет его целиком (`NotificationApiService.cs:91-113`).
+
+Последствие: обновление настроек уведомлений и обновление профиля конкурируют за один
+документ с разной гранулярностью. Между `GetByUserId` (`:91`) и `Upsert` (`:113`) любой
+точечный `$set` из `UserRepository` (например смена темы) будет затерт целиковой заменой —
+пользователь меняет тему в одном табе, сохраняет настройки уведомлений в другом и получает
+прежнюю тему. Плюс: у документа стоит `[BsonIgnoreExtraElements]`
+(`UserSettings.cs:13`), поэтому любое поле, которое окажется в хранилище но не в этом классе,
+целиковая замена уничтожит без следа.
+
+Исправление: перенести репозиторий в `DM.Infrastructure.Persistence` рядом с остальными
+владельцами документа, привести время жизни к `InstancePerLifetimeScope` и заменить
+`ReplaceOneAsync` на точечные `$set` по изменяемым полям — как уже сделано в
+`UserRepository.cs:373-380`. Целиковая замена документа, у которого несколько независимых
+писателей, не имеет корректной семантики.
+
+### [СРЕДНЯЯ] arch-test-guards-only-postgres — правило про слой данных названо через один тип и потому проверяет одно хранилище из трех
+
+`ServiceLayerBoundaryShould.KeepApiServicesOffTheDbContext` (`:103-112`) запрещает ApiService
+зависеть от `DM.Infrastructure.Persistence.DmDbContext` (`:59-61`) с обоснованием: "data access
+belongs to a repository behind a domain service; an API service that queries the context
+bypasses the authorization and invariants the domain layer exists to enforce". Обоснование
+дословно применимо к Mongo и к S3, а правило названо через один конкретный тип.
+
+Последствие: то, что правило должно было ловить, в коде есть. `UploadApiService` (класс
+оканчивается на `ApiService`, то есть попадает в выборку `:55-57`) держит `IAmazonS3` напрямую
+(`UploadApiService.cs:35`) и сам выполняет PUT и DELETE (`:338-378`). Mongo-репозиторий живет
+внутри `DM.Web.API` (`Notifications/UserSettingsRepository.cs:13`). Тест зеленый, граница
+пробита в двух местах — тест утверждает слабее, чем обещает его собственное обоснование.
+
+Исправление: расширить выборку до `DmMongoClient`, `MongoCollectionRepository`, `IAmazonS3` и
+`MongoDB.Driver.IMongoCollection'1` (по образцу `DbContext`, через `HaveFullName`), после чего
+починить два найденных нарушения. Тест `LoadTheHostAndTheDomainAssemblies` (`:67-75`) уже
+проверяет, что выборки непусты, — новые провайдеры добавить туда же, иначе опечатка в имени
+типа сделает правило снова зеленым и снова пустым.
+
+### [СРЕДНЯЯ] attribute-schema-isremoved-dead — контракт `IRemovable` объявлен, но не соблюдается ни на записи, ни на чтении
+
+`AttributeSchema` реализует `IRemovable` (`AttributeSchema.cs:13`, поле на `:41`). Значение
+пишется один раз — `IsRemoved = false` при создании (`AttributeSchemaRepository.cs:115`).
+В `true` его не ставит ничто: `Delete` физически удаляет документ (`:188-189`). Ни одно чтение
+по нему не фильтрует: `GetSchemata` (`:54-56`) фильтрует по `Type` и `UserId`, `GetSchema`
+(`:86-88`) — по `Id`. В Mongo глобального фильтра нет, и код это знает — в
+`UnreadCountersRepository.cs:182-185` про это написан отдельный комментарий.
+
+Ровно противоположное решение принято рядом и обосновано: `UnreadCounter.cs:12-17` объясняет,
+почему выбран `IRemovable`, а не `ISoftDeletable` — "Declaring a contract the code does not
+honor is worse than not declaring it — a reader trusts the fields and finds them empty".
+`AttributeSchema` нарушает именно это правило.
+
+Последствие: читатель видит `IRemovable`, считает удаление мягким и полагается на
+восстановимость схемы — которой нет (см. attribute-schema-hard-delete: удаление
+безвозвратно и уносит с собой доступ к чужим играм). Плюс `Poll` реализует тот же интерфейс и
+там он живой (`PollRepository.cs:104`, `:277-280`), так что различить два случая по объявлению
+нельзя.
+
+Исправление: либо сделать удаление схемы мягким и фильтровать `IsRemoved` в `GetSchemata`
+(что и требуется по attribute-schema-hard-delete), либо убрать `IRemovable` и поле, оставив
+удаление физическим и явным.
+
+### [НИЗКАЯ] stale-thumbnail-comments — пять мест обещают превью `_m`/`_s`, которых нет
+
+Код пишет один объект на загрузку, превью делает imgproxy на лету. Это верно описано в
+`AvatarProjections.cs:15-16`, `UploadOrphanCleanupService.cs:166-168`,
+`DataSeeder.Uploads.cs:69-71`, `Upload.cs:88-91`. И это же опровергается:
+
+- `UploadOrphanCleanupService.cs:22-23` — "deletes the original + thumbnails (_m.webp /
+  _s.webp) in S3" (в том же файле, на 145 строк выше правильного комментария);
+- `Upload.cs:80-82` — "thumbnail keys are derived by replacing the extension and adding a
+  suffix (_m/_s)" (в том же файле, на 8 строк выше правильного);
+- `DataSeeder.Uploads.cs:53-57` — "WebP thumbnails -> S3 PUT of all 3 objects" (на 12 строк
+  выше правильного);
+- `DataSeeder.Games.cs:620-621` — "EXIF strip + WebP _m/_s thumbnails, everything lands in
+  MinIO";
+- `UploadController.cs:113-116` — "WebP thumbnail generation (medium 400x400, small 100x100),
+  atomic batch S3 PUT" — это публичная документация API, попадает в OpenAPI.
+
+Последствие: тот, кто будет писать удаление или миграцию бакета, пойдет искать ключи `_m`/`_s`
+и напишет код, который их удаляет или ждет; клиент, читающий OpenAPI, будет рассчитывать на
+готовые размеры. Три из пяти неверных комментариев стоят в тех же файлах, что и верные, то
+есть противоречие видно, не выходя из файла.
+
+Исправление: удалить пять устаревших фрагментов. Формулировка для замены уже написана в
+`AvatarProjections.cs:15-16`.
+
+### [НИЗКАЯ] object-key-not-a-hash — "hash-based, immutable" на самом деле случайные 8 hex
+
+`UploadApiService.cs:411-432` подписан "Hash-based immutable object key", и
+`:351-352` повторяет "objectKey is hash-based (immutable)". В теле:
+
+```csharp
+var uniqueId = Guid.NewGuid().ToString("N")[..8];
+var keyName = $"{userId:N}_{uniqueId}{ext}";
+```
+
+Это не хеш содержимого, а 32 бита случайности. `Upload.cs:80` повторяет ту же неправду в
+модели.
+
+Последствие: во-первых, дедупликации нет — одна и та же картинка, загруженная дважды, дает два
+объекта, хотя формулировка "hash-based" заставляет думать обратное. Во-вторых, столкновение
+ключей внутри одной папки одного пользователя перезаписывает объект: при тысяче загрузок
+одного пользователя вероятность около 1e-4, то есть редкость, но последствие тихое — старая
+строка `Uploads` продолжает указывать на ключ, за которым теперь другая картинка.
+
+Исправление: либо назвать честно ("random suffix"), либо сделать ключ настоящим хешем
+содержимого (SHA-256 первых 16 hex от `processed.Bytes`) — тогда и "immutable", и
+"hash-based" станут правдой, а повторная загрузка того же файла перестанет занимать место.
+
+### [НИЗКАЯ] stale-cross-references — три комментария ссылаются на то, чего нет
+
+- `DmDbContext.cs:2088-2095` отправляет читателя за выражающими индексами в миграцию: "they
+  are created by raw SQL in the migration — see the IX_Users_*_Lower statements there".
+  В миграции их нет — `grep -n "Lower\|lower(" Migrations/20260729122733_InitialCreate.cs`
+  не дает ни одного совпадения. Индексы утверждает `ExpressionIndexInitializer.cs:53-58`, и
+  `DATA_STORAGE.md:167` это правильно описывает. Комментарий не просто устарел — он
+  подталкивает к правке миграции руками, которую документ прямо запрещает (`:159-161`).
+- `Upload.cs:123-126` — "consumers always come from the owner side via User.AvatarUploadId /
+  Character.AvatarUploadId". `Character.AvatarUploadId` не существует:
+  `grep -n "AvatarUploadId" Entities/Game/Characters/Character.cs` пусто, портрет ищется
+  сканированием `Uploads` (`PostRepository.cs:407-417`).
+- `Character.cs:110` — "Upload.EntityId is polymorphic without FK constraints". Колонки
+  `EntityId` в `Upload` нет с тех пор, как появились три типизированных колонки с настоящими
+  внешними ключами (`DmDbContext.cs:2143-2156`).
+
+Последствие: два из трех комментариев описывают устройство, обратное действительному, и именно
+в тех местах, где читатель будет разбираться, почему у персонажа нет ссылки на аватар (см.
+upload-target-not-owned — отсутствие этой ссылки и есть причина дефекта).
+
+Исправление: удалить три фрагмента; первый заменить ссылкой на `ExpressionIndexInitializer`.
+
+### [НИЗКАЯ] mongo-model-carries-relational-annotation — реляционные атрибуты и имена полей хранилища в документной модели
+
+- `UserSettings.cs:19-20` — `[Key]` над `UserId`. Драйвер Mongo `KeyAttribute` не понимает: у
+  класса нет члена с именем `Id`, поэтому Id-члена нет вовсе, а `_id` документа генерирует
+  сервер. `MongoIndexInitializer.cs:109-110` это знает и пишет прямо: "UserId is not the _id
+  of the document". Аннотация утверждает обратное и не действует.
+- `DiceRoll.cs:67` — `public string comment { get; set; }` со строчной буквы, потому что поле
+  в хранилище называется так. C#-модель деформирована именем элемента BSON, хотя для этого
+  есть `[BsonElement("comment")]`.
+
+Последствие: читатель `UserSettings` считает `UserId` первичным ключом документа и не
+понимает, зачем рядом уникальный индекс; читатель `DiceRoll` видит нарушение стиля без
+объяснения и либо переименует свойство (сломав чтение существующих документов), либо оставит
+как есть, не зная почему.
+
+Исправление: убрать `[Key]`; переименовать свойство в `Comment` с `[BsonElement("comment")]`.
+
+### [НИЗКАЯ] poll-entity-in-the-wrong-module-folder — размещение сущности не по собственному правилу документа
+
+`DATA_STORAGE.md:79-93` дает алгоритм: смотрим, где лежит интерфейс репозитория, и кладем
+сущность в папку того модуля. `IPollRepository` лежит в `DM.Domain.Community.Features.Polls`
+(`PollRepository.cs:8`), репозиторий — в `Repositories/Community/`, а сущность — в
+`Entities/Forum/Poll.cs`. По правилу ей место в `Entities/Community/`.
+
+Последствие: единственная проверка правил размещения — `EntityStorageMarkerShould`, и она
+проверяет маркер хранилища, а не папку. Ошибка расходится с документом молча, и следующий
+читатель повторит ее по образцу.
+
+Исправление: перенести `Poll.cs` (и вложенный `PollOption`) в `Entities/Community/`. Имя
+коллекции в Mongo от папки не зависит, миграции не затрагиваются.
+
+### [НИЗКАЯ] storage-lifecycle-bypasses-the-clock-abstraction — сроки хранения считаются от системных часов
+
+В проекте есть `IDateTimeProvider`, и `UnreadCountersRepository` (`:36`),
+`LoginAttemptRepository` (`:45`) и `UploadRepository` (через параметр, `:72`) им пользуются. Но
+именно там, где считается срок жизни данных, часы берутся напрямую:
+`UploadOrphanCleanupService.cs:91` (`DateTimeOffset.UtcNow - _gracePeriod` — граница grace
+period), `UploadGarbageCollector.cs:68` (`DeletedUtc`), `UserRepository.cs:478`
+(`DeletedUtc` в `UnlinkAvatarUpload`, при том что в соседнем `LinkAvatarUpload` на `:446`
+используется `_dateTimeProvider.Now`), `SecurityAuditRepository.cs:44` (`TimestampUtc`, от
+которого зависит TTL 180 дней), `PollRepository.cs:69` и `:110`.
+
+Последствие: поведение grace period и TTL нельзя проверить тестом, который двигает время —
+`UploadOrphanCleanupShould` вынужден создавать записи со сдвигом от реального `UtcNow`
+(`:92`, `:105`), то есть проверяет реализацию через ту же неуправляемую величину. Соседние
+строки одного метода при этом расходятся (`UserRepository.cs:446` против `:478`), что делает
+непонятным, какое правило действует.
+
+Исправление: провести `IDateTimeProvider` в шесть перечисленных мест; в первую очередь в
+`UploadOrphanCleanupService` и `UploadGarbageCollector`, где от часов зависит удаление файла.
+
+## Чего я не смог определить
+
+- Падает ли вставка уведомления на самом деле. Я подтвердил, что в поставляемой
+  `MongoDB.Bson 2.28.0` есть и проверка allow-list на сериализации, и то, что
+  `ObjectSerializer.DefaultAllowedTypes` отклоняет типы из не-фреймворковых сборок
+  (проверено вызовом предиката через рефлексию), но саму вставку не выполнял: для этого нужен
+  запущенный Mongo плюс процесс диспетчера. Решается за минуту — поднять
+  `docker compose up mongo`, запустить `DM.Workers.NotificationDispatcher` и опубликовать одно
+  событие; либо интеграционный тест, который зовет `INotificationRepository.Create` против
+  контейнера из `DatabaseFixture`.
+- Отдается ли бакет наружу в реальном развертывании. `CDN_PUBLIC_URL` задается из окружения
+  (`docker-compose.yml:44`), локация nginx `/dm-uploads/` в конфиге присутствует и авторизацию
+  снимает (`nginx.conf:102-111`), но какой хост стоит перед этим на проде и есть ли там
+  отдельный CDN — из репозитория не видно. От ответа зависит только величина, не наличие
+  проблемы: политика бакета публична независимо от того, кто перед ним.
+- Должны ли вложения к постам быть приватными. Это продуктовое решение владельца: сегодня
+  политика бакета отвечает "нет" за все три типа загрузок сразу, и отвечает молча. Пока
+  решение не принято, presigned-путь строить не на чем.
+- Достаточно ли 8 hex в ключе объекта. Нужна оценка ожидаемого числа загрузок на одного
+  пользователя; при сотнях — запас есть, при десятках тысяч — нет. Дешевле перейти на хеш
+  содержимого, чем измерять.
+- Сроки хранения `RealtimeNotifications` и надгробий `UnreadCounters` — решение владельца.
+  Технически это один TTL-индекс на каждую коллекцию, но цифру должен назвать продукт.
+- Реальные планы запросов Mongo. Индексы объявлены под конкретные предикаты и я сверил
+  предикаты с кодом репозиториев, но `explain` не запускал; в частности,
+  `SelectByParentsAsync` (`UnreadCountersRepository.cs:100-119`) делает два последовательных
+  `$group` после `$match`, и покрывается ли сортировка индексом, видно только на данных.
+
+### [ОПРОВЕРГНУТО] notification-metadata-anonymous-type — `Notification.Metadata` хранит анонимный тип, который драйвер отказывается сериализовать
+
+> **Опровержение: ОПРОВЕРГНУТО.**
+>
+> The premise is false: I loaded the shipped MongoDB.Bson 2.28.0 and invoked the registry object serializer's own predicate on a real anonymous type — `AllowedSerializationTypes` (== DefaultAllowedTypes, confirmed by ReferenceEquals) returns True for it, and Serialize produces `{ "entry": ..., "completionText": ... }` with no `_t`, while System.Random / JsonWriterSettings throw the very exception quoted. The author tested the predicate on PSObject / WriteHostCommand / ObjectId and never on an anonymous type. Live proof too: dm3.RealtimeNotifications holds 75 documents written through Notification.Metadata by four different generators (EventType 78/328/330/387, including a string+int+bool mix), and GET /v1/users/me/notifications returns those payloads to a subscriber. Notification.cs:39 and NotificationRepository.cs:53-65 are quoted correctly; the conclusion drawn from them is wrong.
+
+`Notification.Metadata` объявлен как `object`
+(`src/DM.Infrastructure.Persistence/Entities/Personal/Notifications/Notification.cs:39`), и
+значение в него приходит анонимным типом из сборки диспетчера — например
+`GameActivatedNotificationGenerator.cs:96-101`:
+
+```csharp
+Metadata = new
+{
+    GameId = gameData.GameId.EncodeToReadable(gameData.Title),
+    GameTitle = gameData.Title,
+    AuthorUsername = gameData.MasterUsername
+}
+```
+
+Дальше значение проходит `CreateNotification.Metadata` (`CreateNotification.cs:25`, тоже
+`object`), `NotificationFactory.cs:25`, и попадает в
+`NotificationRepository.Create` → `Collection.InsertManyAsync`
+(`NotificationRepository.cs:55-65`).
+
+Для члена, объявленного как `object`, драйвер берет `ObjectSerializer`, а он с версии 2.19
+отказывается сериализовать типы вне allow-list. Проверил на поставляемой сборке
+`MongoDB.Bson 2.28.0`: строка `" is not configured as a type that is allowed to be serialized
+for this instance of ObjectSerializer."` присутствует в бинарнике, а вызов предиката
+`ObjectSerializer.DefaultAllowedTypes` через рефлексию дает
+`Microsoft.PowerShell.Commands.WriteHostCommand => False`,
+`System.Management.Automation.PSObject => False`,
+`MongoDB.Bson.ObjectId => False` при `System.String => True`, `System.Uri => True` — то есть
+разрешен фиксированный список фреймворковых типов, а не префикс `System.`. Анонимный тип
+`<>f__AnonymousType0'3` из `DM.Workers.NotificationDispatcher` в этот список попасть не может.
+
+Своего `ObjectSerializer` нигде не регистрируется: единственная регистрация сериализатора в
+решении — `PersistenceModule.cs:91-98`, и это `GuidSerializer`.
+
+Последствие: `InsertManyAsync` бросает `BsonSerializationException` на любом уведомлении с
+непустым списком получателей. `NotificationProcessor.Process` (`:68`) падает до отправки в
+SignalR (`:71-74`), до почты (`:77-80`) и до ботов (`:83-86`) — то есть падает вся ветка
+уведомлений целиком, для каждого события и каждого пользователя, а не только запись в Mongo.
+Тесты этого не видят: `NotificationServiceShould` работает с моком репозитория, а
+`NotificationControllerShould.cs:27-36` проверяет только код 200 на пустой коллекции — он
+пройдет и при полностью нерабочем хранилище. Интеграционный стенд поднимает настоящий Mongo
+(`DatabaseFixture.cs:35-37`), но диспетчер — отдельный процесс и в хост тестов не входит,
+поэтому путь записи не выполняется ни разу.
+
+Исправление: либо зарегистрировать `ObjectSerializer` с расширенным предикатом
+(`new ObjectSerializer(t => ObjectSerializer.DefaultAllowedTypes(t) ||
+t.FullName!.StartsWith("DM.", StringComparison.Ordinal))`) рядом с `GuidSerializer` в
+`PersistenceModule`, либо — предпочтительно — убрать `object` из модели документа: заменить
+`Metadata` на `Dictionary<string, string>` (тип уже в allow-list, проверено выше) или на
+`BsonDocument` и переписать генераторы на именованный словарь. Второй вариант заодно снимает с
+документа единственное поле без формы. Обязательно вместе с интеграционным тестом, который
+пишет уведомление в настоящий Mongo и читает его назад, — иначе следующая такая регрессия
+опять пройдет мимо CI.
+
+
+# Дизайн HTTP API — C
+
+Оценка среза до опровержения: C. Контракт держится на двух настоящих механизмах (единый тип тела ошибки, проверяемый тестом по опубликованному документу, и двусторонний слепок схем) и проваливается везде, где механизма нет: документированный формат сортировки не принимает ни один эндпоинт, 70 из 278 ответов с телом идут без конверта, 47 коллекций без пагинации, 62 ответа 201 без объявленного Location.
+
+363 операции в 76 контроллерах, девять групповых OpenAPI-документов, один потребитель в том же
+репозитории. Вердикт: контракт держится на двух настоящих механизмах — единый тип тела ошибки,
+проверяемый тестом по опубликованному документу, и слепок схем, который читает тест фронтенда, — и
+проваливается везде, где механизма нет. Там, где правило записано и его никто не проверяет, оно
+нарушено: документированный формат сортировки `?sort=field:asc|desc` не принимает ни один из 14
+сортируемых эндпоинтов; 70 из 278 ответов с телом отдают DTO без конверта при том, что конверт назван
+стандартом; 62 ответа `201` не объявляют `Location` ни разу, а девять ставят его на родителя вместо
+созданного ресурса; 47 коллекций возвращаются целиком, без единого параметра пагинации.
+
+Часть расхождений сегодня латентна именно потому, что потребитель один и живет рядом: клиент посылает
+те значения `sortBy`, которые сервер понимает, не посылает игнорируемый `userId`, и в проде ходит
+через тот же origin. Это ровно тот компромисс, который API_DESIGN.md проговаривает в разделе о
+версионировании, и он честный. Но три вещи пробивают этот щит. Партиционирование rate-limit по
+аккаунту не работает никогда, потому что `UseRateLimiter()` стоит до аутентификации и `HttpContext.User`
+в этом проекте не заполняется вообще. Одноразовый токен восстановления пароля едет в пути URL на
+восьми эндпоинтах — при том что API_DESIGN.md отдельным абзацем объявляет это запрещенным и
+объясняет почему, а WebhookController применяет правило правильно. И `PATCH /v1/games/{id}/details`
+меняет статус игры в обход конечного автомата, который для этого существует, отвечая `200` на
+операцию, в которой отказано.
+
+Оценка C, а не B: долг не в стиле, а в том, что одинаковые вопросы решены по-разному в соседних
+файлах — два DTO пагинации с полем `number` в двух разных значениях, четыре имени для поисковой
+строки, четыре идиомы ограничения размера страницы, девять `PATCH`, принимающих в тело DTO ответа. Не
+D: контракт выпускается артефактом, форма ошибки едина и механически проверена (888 из 890 объявлений
+отказа), 77 из 78 `DELETE` отдают `204`, а единственное исключение записано в документе и совпадает с
+кодом ровно одним эндпоинтом. Инструменты есть, покрытие — доли процента.
+
+## Что сделано хорошо
+
+- **Форма ошибки одна и проверяется по опубликованному документу.** `ErrorHandlingMiddleware`
+  строит все тела через `ProblemDetailsFactory` (`src/DM.Web.API/Middleware/ErrorHandlingMiddleware.cs:69-85`),
+  а `OpenApiContractShould.DescribeEveryFailureResponseAsAProblemDocument`
+  (`test/DM.Web.API.IntegrationTests/Controllers/General/OpenApiContractShould.cs:162-211`) обходит
+  все девять документов и падает на любой схеме отказа, чье имя не кончается на `ProblemDetails`.
+  Проверено подсчетом по `artifacts/openapi/*.json`: 890 объявлений со статусом >= 400, из них 888 с
+  телом, и все 888 ссылаются на `ProblemDetails`/`ValidationProblemDetails`.
+- **Контракт выпускается артефактом, и рукопожатие двустороннее.** Интеграционный тест пишет девять
+  документов в `artifacts/openapi/` и коммитит слепок имя→свойства (`OpenApiContractShould.cs:86-148`,
+  335 схем в `artifacts/openapi-contract.json`); тест клиента читает этот файл и разбирает
+  TypeScript-интерфейсы компилятором, требуя, чтобы модель не объявляла полей, которых сервер не
+  отдает (`src/DM.Web.Client/src/shared/api/models/contract.spec.ts:225-237`). Тест сначала
+  перезаписывает файл и только потом падает — правильный порядок, диффом можно пользоваться.
+- **`DELETE` возвращает `204`, и единственное исключение записано.** Подсчет по опубликованным
+  документам: 77 объявлений `204` и одно `200` — `DELETE /v1/polls/{id}/vote`, ровно тот эндпоинт,
+  который назван исключением в `docs/conventions/API_DESIGN.md:115-116`.
+- **Политики rate-limit — данные, а не семь лямбд.** `RateLimitingExtensions.Policies`
+  (`src/DM.Web.API/Shared/RateLimiting/RateLimitingExtensions.cs:53-77`) — массив записей,
+  регистрируемый в цикле, с зеркальной no-op ветвью для выключенного состояния; имена вынесены в
+  константы (`RateLimitPolicies.cs`), так что опечатка в `[EnableRateLimiting]` ловится компилятором.
+  `OnRejected` строит тело тем же `ProblemDetailsFactory` и ставит `Retry-After` (строки 126-153).
+- **Секрет вебхука сделан по правилу, и правило записано рядом.** Заголовок, а не путь;
+  `CryptographicOperations.FixedTimeEquals`; незаданный секрет закрывает эндпоинт, а не открывает
+  (`src/DM.Web.API/Features/Personal/Webhooks/WebhookController.cs:93-116`). Комментарий на строках
+  24-27 формулирует то самое правило, которое нарушают восемь эндпоинтов аккаунта и тикетов.
+- **Правило "мутация не принимает CancellationToken" держит тест, а не договоренность.**
+  `MutatingActionsShould.NotAcceptACancellationToken`
+  (`test/DM.Web.API.Tests/Shared/MutatingActionsShould.cs:32-48`) рефлексией обходит все контроллеры;
+  прогон по дереву дает 0 нарушителей — все 10 вхождений `CancellationToken` в контроллерах на GET.
+- **`take` ограничен декларативно и отвечает `400`.** `PagingQuery.Take` — `[Range(1, 100)]`
+  (`src/DM.Domain.Core/Dto/PagingQuery.cs:24`), контроллеры помечены `[ApiController]`, так что
+  `?take=1000` дает `ValidationProblemDetails`, а не молча урезанную страницу.
+- **`author_edit` проверяется во время рендера, а не доверяется эндпоинту.**
+  `BbConverter.ResolveEffectiveAudience` (`src/DM.Web.API/Shared/BbRendering/BbConverter.cs:137-151`)
+  понижает запрошенный `author_edit` до `Display`, если зритель не автор, и трактует отсутствующий id
+  автора как "не автор". Комментарий на строках 67-71 объясняет, почему эндпоинту здесь верить
+  нельзя, — и он прав, а документ говорит обратное (см. `api-doc-audience-wrong-layer`).
+- **Пять эндпоинтов с `Cache-Control: public` действительно одинаковы для всех.** Проверено:
+  `AchievementApiService.GetCategories/GetTypes` и `GameApiService.GetTags` не имеют зависимости от
+  `IIdentityProvider` (в `AchievementApiService.cs` слово identity не встречается вовсе), а их DTO не
+  содержат `BbText`, то есть не зависят и от `X-Dm-Audience`. Комментарий
+  `AchievementController.cs:37-38` утверждает именно это, и утверждение верно.
+- **Правильный образец `PATCH` в дереве есть.** `PATCH /v1/blogs/{id}` принимает
+  `UpdateBlogRequest` — четыре поля (`commentsEnabled`, `description`, `draftVisibility`, `title`),
+  `BlogController.cs:123`. Это тот же продуктовый случай, что у игр, решенный правильно.
+
+## Находки
+
+### [ВЫСОКАЯ] api-secret-in-path — одноразовый токен восстановления доступа едет в пути URL, вопреки собственному правилу проекта
+
+> **Опровержение: подтверждено.**
+
+`docs/conventions/API_DESIGN.md:118-124`: "**Секрет никогда не едет в пути URL.** Путь пишется
+дословно в журнал доступа обратного прокси, в лог запроса и в трейс, поэтому секрет в пути раскрыт по
+построению, а его ротация — это чистка логов, а не смена переменной."
+
+Восемь эндпоинтов делают именно это:
+
+```
+POST /v1/account/password-reset/{token:guid}   RecoveryController.cs:121
+GET  /v1/account/password-reset/{token:guid}   RecoveryController.cs:93
+POST /v1/account/activation/{token:guid}       RegistrationController.cs:130
+GET  /v1/account/activation/{token:guid}       RegistrationController.cs:95
+POST /v1/account/email-change/{token:guid}     CredentialsController.cs:99
+GET  /v1/account/username-change/{token:guid}  CredentialsController.cs:168
+POST /v1/account/username-change/{token:guid}  CredentialsController.cs:193
+GET  /v1/tickets/track/{token}                 TicketIntakeController.cs:82
+```
+
+Последний даже документирует это как замысел: "No authentication — possession of the tracking token is
+the credential" (`TicketIntakeController.cs:74-75`). Оба канала утечки, названные в документе, у
+проекта включены: `docker/nginx/nginx.conf` не задает `access_log` в http-блоке, то есть работает
+дефолт nginx `combined`, который пишет строку запроса целиком (`access_log off` стоит только внутри
+`location /nginx-health`, строка 71); и `AddAspNetCoreInstrumentation()` с дефолтными опциями
+экспортируется по OTLP (`src/DM.Infrastructure.Core/Logging/LoggingConfiguration.cs:62-69`), записывая
+путь в атрибут спана.
+
+Последствие: у кого есть доступ к логам контейнера nginx или к бэкенду трейсов, тот в окне жизни
+токена может завершить сброс пароля чужого аккаунта (`POST /v1/account/password-reset/{token}` с
+новым паролем в теле) или прочитать переписку по чужому гостевому обращению. `PasswordResetCompletion`
+уже едет в теле — токену там же есть место. Эксплуатация требует доступа к логам, поэтому это не
+КРИТИЧНО, но это ровно тот класс раскрытия, который документ объявил недопустимым, и WebhookController
+показывает, что проект умеет делать правильно.
+
+Исправление: перенести токен в тело для `POST` и в заголовок (`X-Dm-Recovery-Token`) для `GET`-проверок
+статуса; письмо продолжает вести на страницу SPA с токеном в URL — это ссылка для человека, а не вызов
+API, и SPA пересылает его в теле/заголовке. Для `track` — заголовок `X-Dm-Ticket-Token`. Если решено
+оставить как есть, правило в документе должно быть переписано с явным исключением и обоснованием,
+иначе следующий эндпоинт скопирует соседа.
+
+### [ВЫСОКАЯ] api-rate-limit-partition-blind — партиционирование по аккаунту не работает никогда: лимитер стоит до аутентификации
+
+> **Опровержение: подтверждено.**
+
+`RateLimitingExtensions.PartitionKey` (`src/DM.Web.API/Shared/RateLimiting/RateLimitingExtensions.cs:179-186`):
+
+```csharp
+return partition == Partition.AccountThenAddress
+    ? context.User.Identity?.Name ?? address ?? "anon"
+    : address ?? "unknown";
+```
+
+Комментарий к `Partition.AccountThenAddress` (строки 36-40) обещает: "By account, falling back to the
+address for guests. Keeps one noisy account from consuming the budget of everyone behind a shared
+address." Обещание не выполняется по двум независимым причинам. Первая: в конвейере
+`.UseRateLimiter()` стоит перед `.UseAuthentication()` (`Startup.cs:269-271`), и это сделано осознанно
+— комментарий на строках 265-268 объясняет, что иначе `[EnableRateLimiting]` инертен. Вторая, более
+жесткая: в этом проекте `HttpContext.User` не заполняется вообще. `AuthenticationMiddleware` кладет
+личность в `IIdentitySetter`, а не в `HttpContext.User`
+(`src/DM.Web.API/Middleware/AuthenticationMiddleware.cs:32-44`); grep по `src/DM.Web.API` на
+`HttpContext.User`, `SignInAsync`, `ClaimsPrincipal` не дает ни одного вхождения.
+
+Последствие: три из шести политик (`uploads` 10/мин, `sliding` 30/мин, `default` 60/мин) считают по
+адресу, а не по аккаунту. Все пользователи за одним NAT — офис, вуз, мобильный CGNAT — делят один
+бюджет: тридцать поисковых запросов в минуту на всю подсеть, десять загрузок файлов в минуту на всю
+подсеть. Один активный пользователь выдает `429` соседям. Обратная сторона: атакующий, меняющий
+адреса, обходит "per-account" ограничение, которого нет. Плюс `PartitionKey` читает
+`context.Connection.RemoteIpAddress` напрямую, игнорируя `src/DM.Web.API/Shared/Http/ClientAddressExtensions.cs`
+— хелпер для той же задачи, который в проекте уже есть.
+
+Исправление: ключ аккаунта брать не из `HttpContext.User`, а из того же источника, что и остальной
+код — `IIdentityProvider.Current.User.UserId` через `context.RequestServices`; лимитер при этом
+остается после `UseRouting` и до аутентификации, поэтому личность придется извлекать в самом
+партиционере (расшифровка cookie сессии) либо перенести per-endpoint лимитер за
+`AuthenticationMiddleware` отдельным вызовом. Пока это не сделано — переименовать `AccountThenAddress`
+в `Address` и убрать комментарий, обещающий то, чего нет.
+
+### [ВЫСОКАЯ] api-idempotency-key-blocked-by-cors — заголовок идемпотентности не в CORS-разрешении, загрузка файлов не проходит preflight в cross-origin конфигурации
+
+> **Опровержение: подтверждено.**
+
+Клиент шлет `Idempotency-Key` на каждой загрузке файла — ключ генерируется, если не передан
+(`src/DM.Web.Client/src/shared/api/uploadApi.ts:35-39`, `client.ts:186-191`). Сервер его читает
+(`src/DM.Web.API/Features/General/Upload/UploadApiService.cs:158-167`). CORS-политика перечисляет
+разрешенные заголовки запроса дословно и `Idempotency-Key` в списке нет:
+
+```csharp
+.WithHeaders("Content-Type", "Authorization", "X-Requested-With",
+    "X-Dm-Correlation-Token", "Cache-Control", "X-Dm-Audience", "x-signalr-user-agent")
+```
+(`src/DM.Web.API/Startup.cs:259`)
+
+Последствие: браузер на cross-origin `POST` с кастомным заголовком обязан сделать preflight,
+`Access-Control-Request-Headers: idempotency-key` не попадает в `Access-Control-Allow-Headers`, и
+запрос не отправляется вовсе — загрузка аватара, портрета персонажа и вложения к посту падает до
+сервера. Конфигурация, в которой это происходит, лежит в репозитории: `.env.local` содержит
+`VITE_API_HOST=http://localhost:5000` при Vite на 5173, прокси в `vite.config.ts` нет. В проде
+сегодня спасает топология: `docker/nginx/nginx.conf:77` проксирует `/v1/` на API с того же origin, что
+и SPA, — preflight не возникает. Но API_DESIGN.md:13 объявляет прод-базой `https://api.dm.am`, то есть
+отдельный origin; в день, когда топология станет такой, как записано, загрузки перестанут работать у
+всех. Ни один тест этого не ловит: асертов на CORS-заголовки в `test/` нет, e2e-сценария загрузки
+файла нет.
+
+Исправление: добавить `Idempotency-Key` в `WithHeaders`. Заодно добавить
+`.WithExposedHeaders("Location", "Retry-After")` — сейчас их нет, и cross-origin потребитель не может
+прочитать `Location` ни у одного из 62 ответов `201`, а обработчик `429` в
+`client.ts:118` читает `retry-after`, которого браузер ему не отдаст. И покрыть preflight
+интеграционным тестом: `OPTIONS /v1/uploads` с `Access-Control-Request-Headers: idempotency-key`
+должен вернуть его в разрешении.
+
+### [ВЫСОКАЯ] api-user-schema-three-fidelities — одна схема User отдается в трех разных полнотах, и различить их по ответу нельзя
+
+> **Опровержение: подтверждено.**
+
+Схема `DM.Web.API.Features.Community.Users.User` в опубликованном контракте имеет 27 свойств, среди
+них `bansReceived`, `gameDrops`, `usernameHistory`, `subscribers`, `subscribersByCategory`,
+`gamesPlayingByStatus`, `commentsAuthored`, `likesReceived`. В базовой проекции 20 из них помечены
+`Ignore()` с пометкой "Set separately after mapping"
+(`src/DM.Infrastructure.Persistence/Shared/Users/GeneralUserMappingProfile.cs:29-48`), и досчитываются
+они только там, где вызывающий это делает — например `UserRepository.cs:955` для списка сообщества.
+
+Та же схема встроена в `Comment.author` и в `Comment.likes[]` (`src/DM.Web.API/Shared/Dto/Comment.cs:21,40`),
+то есть в каждый элемент любого списка комментариев на форуме, в блоге, в публикации и в игре.
+
+Последствие: `GET /v1/topics/{id}/comments` отдает для каждого автора и каждого лайкнувшего объект из
+27 полей, где `bansReceived` равен 0, `usernameHistory` пуст, `subscribers` пуст — не потому что их
+нет, а потому что их не считали. Потребитель, который покажет "нарушений: 0" на карточке автора
+комментария, покажет ложь про пользователя с банами. Отличить "не загружено" от "ноль" по ответу
+невозможно: дискриминатора нет, `null` и `0` смешаны. Побочно это и объем: страница из 20 комментариев
+по 10 лайков — 220 объектов по 27 полей там, где нужны имя, аватар и роль. Легкая форма в проекте
+есть — `UserRef` из 5 полей (`id`, `isNewbie`, `lastActivityUtc`, `role`, `username`), и
+`GameDetails.Subscribers` ее использует. Тест контракта клиента прямо отказался держать эту схему:
+"Deliberately absent: User. The client interface is one union of three server shapes ... There is no
+single schema to hold it to" (`contract.spec.ts:56-59`) — то есть сторона-потребитель уже знает, что
+модель непредставима.
+
+Исправление: `Comment.Author` и `Comment.Likes` перевести на `UserRef`; `likes` заменить на
+`likesCount` + `isLikedByMe` (как уже сделано в `DiscussionComment`). Оставить `User` только там, где
+все 27 полей действительно заполняются, и разделить схемы для остальных случаев, чтобы контракт
+описывал то, что едет по проводу.
+
+### [СРЕДНЯЯ] api-sort-contract-fiction — документированный формат сортировки не принимает ни один эндпоинт, а неизвестное значение молча игнорируется
+
+> **Опровержение: частично неверно.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> The flagship example is empirically false. src/DM.Domain.Game/Features/Games/GamesQueryValidator.cs:44-52 whitelists SortBy and SortOrder for /v1/games; live against :5000, ?sortBy=createdUtc returns 400 with errors.SortBy listing the eight allowed values and ?sortOrder=ascending returns 400 — the endpoint already does exactly what the finding demands as its fix, not a silent default. What survives: the composite ?sort=field:asc|desc of API_DESIGN.md:187 is accepted nowhere (recounted from artifacts/openapi: sortBy 13, sortOrder 14, sort 1 and that one is the UserSort enum on /v1/users), and unknown sortBy does silently fall back to the default order on the other 13 endpoints (BlogRepository.cs:197 switch with no reject arm). Two further claims are wrong: the same document at API_DESIGN.md:193-197 also documents ?sortBy=popularity, which the code accepts; and 'pagination over a silently different order yields gaps and duplicates' is false — every ApplySorting branch ends in a ThenBy tiebreaker, so a different-but-consistent order paginates cleanly.
+
+`docs/conventions/API_DESIGN.md:180-187` объявляет формат: `GET /v1/games?sort=lastPostUtc:desc`,
+"**Формат:** `?sort=field:asc|desc` (default: `desc`)". Подсчет query-параметров по всем девяти
+опубликованным документам: `sortBy` — 13 эндпоинтов, `sortOrder` — 14, `sort` — 1
+(`GET /v1/users`, и там он идет вместе с отдельным `sortOrder`, то есть не в формате `field:order`).
+Составной формат из документа не принимает никто.
+
+Обработка неизвестного значения — цепочка `if` без ветви отказа
+(`src/DM.Infrastructure.Persistence/Repositories/Game/GameRepository.cs:558-706`):
+
+```csharp
+var sortBy = query.SortBy?.ToLowerInvariant();
+var isAscending = string.Equals(query.SortOrder, "asc", StringComparison.OrdinalIgnoreCase);
+...
+if (sortBy == "recruitmentstarted") { ... }
+if (sortBy == "title") { ... }
+...
+// Default: activated (ActivatedUtc with fallback to CreatedUtc)
+return isAscending ? games.OrderBy(...) : games.OrderByDescending(...);
+```
+
+Последствие: потребитель, написанный по API_DESIGN.md, посылает
+`GET /v1/games?sort=createdUtc:desc&take=20`. Неизвестный параметр `sort` игнорируется биндингом,
+`sortBy` пуст — список приходит отсортированным по дате активации, `200 OK`, ни предупреждения, ни
+`400`. То же с `?sortBy=createdUtc` (имя поля из ответа, а не из недокументированного списка
+`created|activated|title|popularity|status|availableslots|closed|recruitmentstarted`) и с
+`?sortOrder=ascending`, где `!= "asc"` дает убывание. Пагинация поверх молча другого порядка выдает
+пропуски и дубли между страницами. Сегодня это латентно, потому что клиент один и посылает валидные
+значения; для любого второго потребителя это тихо неверный ответ.
+
+Исправление: одна из двух вещей, но обязательно одна. Либо привести код к документу (`sort=field:dir`,
+общий парсер), либо привести документ к коду (`sortBy`+`sortOrder`, перечень допустимых полей per
+endpoint). В любом варианте — неизвестное поле сортировки это `400` с полем `sortBy` в `errors`, а не
+дефолт; допустимые значения объявить enum-ом, чтобы они попали в OpenAPI.
+
+### [СРЕДНЯЯ] api-status-two-doors — статус игры меняется двумя эндпоинтами с разными правилами, и один из них отвечает 200 на отказ
+
+> **Опровержение: частично неверно.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> The headline is refuted: PATCH cannot close a Draft game. GameIntentionResolver.cs:81-83 gates SetStatusClosed on target.Status == Active || Closed and the switch ends in _ => false, so IsAllowed is false for a Draft game and GameService.cs:529 nulls the status — the legality guard lives in the resolver, so the PATCH path does not bypass the state machine's transition rules. Also refuted: 'a closed game with no close reason, which the state machine never produces' — GameStatusTransition.Close at GameService.cs:635-636 produces exactly Closed + ClosedReason.None. What survives is only the second consequence: the refusal is silent, so an editor (Edit passes at line 472, and UpdateGameValidator has no Status rule) who sends a status they may not set gets 200 with that part of the request dropped, on an endpoint declaring 403. Real contract lie, no data-integrity story.
+
+`POST /v1/games/{id}/status` — конечный автомат: `RequireStatus` отклоняет недопустимый переход,
+`ThrowIfForbidden` дает `403`, каждый переход выставляет парный `ClosedReason`
+(`src/DM.Domain.Game/Features/Games/GameService.cs:590-650`). Документация эндпоинта обещает
+"Illegal transitions are rejected with 400" (`GameController.cs:149`).
+
+`PATCH /v1/games/{id}/details` принимает в тело `GameDetails` — DTO ответа с 40 полями, включая
+`status` (`GameController.cs:261`). В маппинге `GameDetails → UpdateGame`
+(`src/DM.Web.API/Features/Game/Games/GameMappingProfile.cs:154-173`) игнорируются
+`PremoderationStatus`, `ClosedReason`, `ActivatedUtc`, `ClosedUtc`, `IsRemoved`, `Tags`,
+`DraftVisibility` — но `Status` не игнорируется. В `GameService.UpdateAsync`:
+
+```csharp
+if (updateGame.Status.HasValue && updateGame.Status != game.Status)
+{
+    var (intention, eventType) = _intentionConverter.Convert(updateGame.Status.Value);
+    if (_intentionManager.IsAllowed(intention, game))
+    {
+        ...
+        if (updateGame.Status == ModuleStatus.Closed)
+        {
+            updateGame.ClosedUtc = _dateTimeProvider.Now;
+            updateGame.IsRecruitmentOpen = false;
+        }
+    }
+    else
+    {
+        updateGame.Status = null;   // отказ без ошибки
+    }
+}
+```
+(`GameService.cs:502-531`)
+
+Последствие, два разных. Первое: `PATCH /v1/games/{id}/details` с телом `{"status":"Closed"}` на игре
+в статусе `Draft` закрывает игру, которая никогда не была активной, — `RequireStatus` здесь нет, а
+через `POST /v1/games/{id}/status` любой переход из `Draft` кроме `Start` дает `400`. `ClosedReason` при
+этом остается прежним (`None`), тогда как автомат всегда ставит `Frozen`/`Finished`/`None` осознанно;
+получается закрытая игра без причины закрытия, чего state machine не производит. Второе: если прав нет,
+`IsAllowed` возвращает false, статус обнуляется, и клиент получает `200 OK` вместо `403` — при том что
+`403` объявлен в `[ProducesResponseType]` эндпоинта. Ассистент, правящий описание и приложивший
+`status` из полученного ранее DTO, не узнает, что часть его запроса отброшена.
+
+Исправление: завести `UpdateGameDetailsRequest` по образцу `UpdateBlogRequest` — только редактируемые
+поля (`title`, `system`, `setting`, `info`, `privacySettings`, `recruitment`, `tags`), без `status`;
+статус менять только через `POST /v1/games/{id}/status`. В `UpdateAsync` заменить `IsAllowed` +
+обнуление на `ThrowIfForbidden`, чтобы отказ был отказом. То же проверить для
+`PATCH /v1/characters/{id}`, где `Status` тоже не игнорируется (`CharacterService.cs:181-205`) и
+альтернативного экшена нет вовсе.
+
+### [СРЕДНЯЯ] api-error-media-type-fiction — опубликованный контракт называет неверный media type для всех 890 ответов с ошибкой
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Every number recounted and exact: 890 declarations >=400, 888 with a body, text/plain 888 / application/json 888 / text/json 888, application/problem+json zero; the wire really does answer application/problem+json (live GET /v1/games?take=1000 -> 400). OpenApiContractShould.cs:214-231 does iterate media types without checking their names, so nothing catches it. But severity is inflated: no consumer is affected — the single client is hand-written against the committed snapshot and axios parses the +json suffix — and the harm is confined to a hypothetical generated client. This is a missing [Produces] on a build artifact, not a decision anyone has to undo.
+
+Middleware пишет тело ошибки с явным content type (`ErrorHandlingMiddleware.cs:94`):
+
+```csharp
+await httpContext.Response.WriteAsJsonAsync(error, error.GetType(), options: null, ProblemJsonContentType);
+```
+где `ProblemJsonContentType = "application/problem+json"` (строка 20). API_DESIGN.md:73 объявляет то
+же самое.
+
+Подсчет по `artifacts/openapi/*.json`: 890 объявлений со статусом >= 400. Media types, под которыми
+объявлено тело: `text/plain` — 888, `application/json` — 888, `text/json` — 888.
+`application/problem+json` — 0. Это дефолт Swashbuckle при отсутствии `[Produces]`, и он расходится с
+проводом на каждом ответе отказа.
+
+Последствие: клиент, сгенерированный из опубликованного контракта, для любой ошибки ищет
+десериализатор по `application/json` (или `text/plain`) и не находит соответствия для
+`application/problem+json`; строгие генераторы (openapi-generator, NSwag с matchStrict) в этом случае
+возвращают нетипизированный поток или бросают. Проверка `DescribeEveryFailureResponseAsAProblemDocument`
+это не ловит: она смотрит на `$ref` внутри `content`, перебирая media types, и не проверяет их имена
+(`OpenApiContractShould.cs:214-231`). Тот же дефект в мягкой форме на успешных ответах: `text/plain`
+объявлен там, где едет только JSON.
+
+Исправление: `[Produces("application/json")]` на контроллерах и глобальный
+`ProducesResponseTypeAttribute`-фильтр Swagger, переписывающий media type ответов >= 400 в
+`application/problem+json`; в `DescribeEveryFailureResponseAsAProblemDocument` добавить асерт, что
+ключ `content` у ответа отказа ровно один и равен `application/problem+json`.
+
+### [СРЕДНЯЯ] api-unbounded-collections — 47 коллекций возвращаются целиком, часть из них растет без предела, а одна молча урезана до 50
+
+> **Опровержение: частично неверно.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> The count is exact (47 ListEnvelope GETs with no paging parameter, 26 with one), but five of the nine endpoints named as growing are already bounded: /v1/bans returns only currently active bans and a paged sibling exists with a comment saying so (BanController.cs:93-120); /v1/moderation/warnings without a username returns an empty list outright (WarningService.cs:70-73, 'For now, return empty'); /v1/global-chat/events returns Live+Scheduled only (GlobalChatEventService.cs:89-90); /v1/account/sessions is the caller's own active sessions; /v1/moderation/username-changes is the Pending queue. Genuinely unbounded and confirmed: /v1/users/{username}/subscribers (UserSubscriberApiService.cs:30-36, each element a 28-field User) and /v1/moderation/tickets (TicketRepository.cs:29-48 applies only optional status/subtype filters). login-history is confirmed exactly as described — LoginRecordRepository.cs:135-142 caps at 50 with no parameter, no total and paging null.
+
+Подсчет по опубликованным документам: 47 `GET`, возвращающих `ListEnvelope<T>`, не объявляют ни одного
+параметра пагинации (`skip`, `take`, `number`, `size`, `limit`, `cursor`). Часть из них ограничена по
+природе (`/v1/games/tags`, `/v1/achievement-categories`, `/v1/boards`, `/v1/schemas`,
+`/v1/moderation/moderators`), но не все:
+
+```
+/v1/users/{username}/subscribers      # весь список подписчиков, каждый — User из 27 полей
+/v1/moderation/warnings               # все предупреждения за всю историю сайта
+/v1/bans                              # все баны
+/v1/moderation/tickets                # вся очередь обращений
+/v1/games/{id}/characters             # все персонажи долгой игры
+/v1/users/me/notepad, /v1/games/{gameId}/notepad
+/v1/moderation/username-changes, /v1/global-chat/events, /v1/account/sessions
+```
+
+Реализации подтверждают: `UserSubscriberApiService.GetSubscribersAsync`
+(`src/DM.Web.API/Features/Community/Users/UserSubscriberApiService.cs:30-36`) и
+`WarningApiService.GetAllWarnings` (`src/DM.Web.API/Features/Moderation/Warnings/WarningApiService.cs:42-46`)
+не принимают и не передают никакого ограничения. Отдельный случай —
+`GET /v1/users/{username}/login-history`: параметров нет, а репозиторий имеет дефолт
+`int limit = 50` (`src/DM.Infrastructure.Persistence/Repositories/Account/LoginRecordRepository.cs:135-142`),
+и `paging` в ответе `null`.
+
+Последствие: у популярного мастера с тысячами подписчиков `GET /v1/users/{username}/subscribers`
+отдает тысячи объектов по 27 полей одним ответом — время ответа и объем растут линейно от чужой
+популярности, и потребитель не может это ограничить, потому что параметра нет. `/v1/moderation/warnings`
+и `/v1/bans` деградируют монотонно со временем и упадут в таймаут в год, который никто не назначал.
+`login-history` хуже: администратор, разбирающий инцидент, видит 50 входов и по ответу не может понять,
+что их больше — ни `total`, ни `hasMore`, ни `take`.
+
+Исправление: `[FromQuery] PagingQuery` на растущие коллекции, `PagingInfo` в конверт (это уже 25
+эндпоинтов, механизм есть). Для `login-history` — вынести 50 в контракт как дефолт `take` и отдать
+`paging.total`, чтобы усечение было видно.
+
+### [СРЕДНЯЯ] api-envelope-split — 70 из 278 ответов с телом отдают DTO без конверта, а страхующий тест покрывает три эндпоинта
+
+API_DESIGN.md:82-83: "`Envelope<T>` — стандарт для всех одиночных ресурсов. Endpoint'ы, возвращающие
+DTO без конверта, — legacy; при доработке приводить к `Envelope<T>`." Подсчет по опубликованным
+документам: 367 объявлений 2xx, 278 с телом; 208 в конверте, 70 без. Среди них не только окраины:
+
+```
+GET/PATCH /v1/users/me/profile          -> PersonalProfile
+GET/PATCH /v1/users/me/preferences      -> Preferences
+GET/PATCH /v1/chats/{id}                -> Chat
+POST      /v1/uploads, GET /v1/uploads/{id} -> Upload
+POST      /v1/account/password           -> User
+GET       /v1/topics/{id}/discussion     -> DiscussionResponse
+PUT       /v1/moderation/tags/{tagId}    -> Tag
+```
+
+`ResponseEnvelopeShould` (`test/DM.Web.API.IntegrationTests/Controllers/General/ResponseEnvelopeShould.cs`)
+проверяет три URL для списков и одну пару create/patch для одиночного ресурса — четыре эндпоинта из
+363. Комментарий класса пишет "API_DESIGN.md declares the response shapes, and nothing held the code
+to them", подразумевая, что теперь держит; держит на 1%.
+
+Последствие: потребитель не может иметь одну функцию распаковки. `apiClient.get(...)` возвращает то
+`{resource: X}`, то `X`, и знание о том, какой эндпоинт какой, живет в вызывающем коде россыпью. Ровно
+эта неопределенность уже давала пустые экраны — обстоятельство, записанное в комментарии того же
+теста.
+
+Исправление: либо завернуть остаток (единый прогон, механическая правка клиента, оба слепка контракта
+пересобираются тестом), либо записать в документ список исключений, как это сделано для семантических
+шорткатов в разделе "Записанные исключения". Расширить `ResponseEnvelopeShould` до проверки по
+опубликованному документу: имя схемы каждого 2xx с телом должно начинаться с `Envelope`/`ListEnvelope`/
+`CursorEnvelope`, список исключений — константа в тесте.
+
+### [СРЕДНЯЯ] api-two-paging-shapes — два DTO пагинации, поле `number` в двух разных значениях, и `paging: null` у 46 списков
+
+В контракте две схемы:
+
+```
+DM.Web.API.Shared.Dto.Paging     ["current","number","pages","size","total"]
+DM.Web.API.Shared.Dto.PagingInfo ["current","number","pages","size","skip","take","total"]
+```
+
+В `Paging` поле `number` — это `pagingResult.EntityNumber`, номер сущности
+(`src/DM.Web.API/Shared/Dto/Paging.cs:16,38`). В `PagingInfo` `number` — это алиас номера страницы
+(`src/DM.Web.API/Shared/Dto/PagingInfo.cs:69`). Одно имя, два смысла, оба на проводе: `Paging` едет в
+`DiscussionResponse` (`src/DM.Web.API/Shared/Dto/DiscussionResponse.cs:33`), `PagingInfo` — в
+`ListEnvelope`. API_DESIGN.md:71 документирует только третью форму: `{ "skip": 0, "take": 20, "total": 150 }`,
+без `current`/`number`/`pages`/`size`.
+
+Плюс наполнение: 80 конструирований `new ListEnvelope<...>` в `src/DM.Web.API`, из них 34 передают
+второй аргумент. Остальные 46 отдают `paging: null` — например
+`AuthenticationController.cs:115`, `SecurityController.cs:56`, `BlogUserController.cs:59`,
+`GameReaderController.cs:53`.
+
+Последствие: общий компонент пагинации переиспользовать нельзя. Для обычного списка он читает
+`paging.skip/take/total`, для обсуждения — `paging.current/size` (`skip`/`take` там нет вообще), а на
+46 эндпоинтах `paging` равен null и обращение к `paging.total` падает или требует защиты на каждом
+вызове. Клиент, использующий `number` как номер страницы, на обсуждении получит номер сущности.
+
+Исправление: оставить одну схему — `PagingInfo` со `skip`/`take`/`total`, вычисляемые `current`/`pages`
+убрать (клиент считает сам) и удалить `Paging`, переведя `DiscussionResponse` на `PagingInfo`. Там, где
+пагинации нет по замыслу, `paging` не эмитить вовсе (`JsonIgnoreCondition.WhenWritingNull`), чтобы
+`null` не выглядел как забытое значение.
+
+### [СРЕДНЯЯ] api-location-header-lies — 62 ответа `201`, ни один не объявляет `Location`, девять ставят его на чужой ресурс
+
+API_DESIGN.md:135-140: "**Заголовок `Location` у 201** указывает на созданный ресурс и ни на что
+другое. Если у подресурса нет собственного адреса ... заголовок не ставится вовсе".
+
+В опубликованных документах 62 операции объявляют `201` и ни одна не объявляет заголовков ответа
+(`headers` отсутствует у всех 367 объявлений 2xx) — то есть заголовок ставится, но в контракте его нет.
+Куда он ведет:
+
+```csharp
+// лайк создан — Location ведет на комментарий
+CreatedAtRoute(nameof(GetTopicComment), new {id}, result)            TopicCommentController.cs:204
+CreatedAtRoute(nameof(GetTopic), new {id}, ...)                      TopicController.cs:283
+CreatedAtRoute(nameof(GetPublication), new {id}, result)             PublicationController.cs:175
+CreatedAtRoute(nameof(GetMessage), new { id }, ...)                  MessageController.cs:168
+CreatedAtRoute(nameof(GetBlogComment), new { id }, result)           BlogCommentController.cs:230
+CreatedAtRoute(nameof(GetGameComment), new {id}, result)             GameCommentController.cs:170
+// доступ/ожидание создано — Location ведет на комнату
+CreatedAtRoute(nameof(GetRoom), new {id}, result)                    RoomController.cs:160, 226
+// подписка создана, у нее есть адрес GET /v1/users/me/subscriptions/{id} —
+// Location ведет на query-эндпоинт проверки
+CreatedAtRoute(nameof(CheckSubscription), new { type = ..., targetId = ... }, result)
+                                                                     SubscriptionController.cs:125
+// рубрика создана — пустой Location
+return Created("", result);                                          BlogController.cs:237
+```
+
+Последствие: потребитель, следующий `Location` после лайка, получает целую тему или публикацию, а не
+созданный лайк, и перерисовывает страницу вместо инкремента счетчика. После
+`POST /v1/rooms/{id}/accesses` id созданного доступа из `Location` не извлекается вовсе — а
+`DELETE /v1/rooms/accesses/{id}` его требует, так что клиент обязан перезапросить комнату. У рубрики
+`Location` пустой, и клиент, разрешающий его относительно запроса, получает адрес коллекции. Ничего
+из этого не видно в контракте, потому что `Location` там не объявлен ни разу.
+
+Исправление: там, где создается подресурс без своего адреса (лайк, доступ, ожидание, рубрика), —
+не ставить `Location` и возвращать `200` с обновленным родителем, как уже сделано для
+`DELETE /v1/polls/{id}/vote` и записано исключением. Где адрес есть (подписка) — вести на него.
+Объявить `Location` в `[ProducesResponseType]`-метаданных (Swashbuckle умеет через
+`IOperationFilter`), чтобы контракт его описывал.
+
+### [СРЕДНЯЯ] api-response-cache-inert — кеширующий слой не может дать ни одного попадания, потому что единственный клиент шлет `no-cache` на каждом запросе
+
+Сервер включает `AddResponseCaching()`/`UseResponseCaching()` (`Startup.cs:116,254`) и объявляет семь
+политик: `ResponseCacheLocation.Any, Duration=300` на пяти каталогах,
+`ResponseCacheLocation.Client, Duration=60` на `GET /v1/boards` и `GET /v1/posts`. Клиент ставит в
+дефолтные заголовки:
+
+```ts
+const defaultHeaders: { [key: string]: string } = {
+  "Cache-Control": "no-cache",
+  ...
+};
+```
+(`src/DM.Web.Client/src/shared/api/client.ts:24-29`)
+
+Последствие: запрос с `Cache-Control: no-cache` запрещает серверному `ResponseCachingMiddleware`
+искать в кеше, и требует от браузера ревалидации перед переиспользованием. `ETag`/`Last-Modified` в
+API нет (grep по `src/DM.Web.API` на `ETag`, `LastModified`, `IfNoneMatch` — пусто), поэтому
+ревалидация это полный запрос. Итог: ни серверный кеш, ни клиентский не дают ни одного попадания для
+единственного потребителя, а риск от `public` на персонализированном ответе проект несет — он
+реальный, потому что `ResponseCachingMiddleware` ключуется методом и путем и `Vary` в проекте не
+ставится нигде (grep на `Vary` в `src/DM.Web.API` — пусто; правило API_DESIGN.md:244 требует явный
+`Vary`). Сегодня спасает то, что все пять `public`-эндпоинтов действительно обезличены; спасает
+проверка, которой нет ни в одном тесте.
+
+Побочно: `GET /v1/boards` с `private, max-age=60` и счетчиками непрочитанного (`unreadTopicsCount`,
+`unreadCommentsCount`) — если бы `no-cache` не отменял политику, после
+`DELETE /v1/boards/{id}/comments/unread` бэйдж непрочитанного не сбрасывался бы до минуты.
+
+Исправление: решить, нужен ли кеш. Если нужен — убрать `Cache-Control: no-cache` из дефолтных
+заголовков клиента (он там не решает никакой задачи: авторизация на cookie, а не на кеше), и добавить
+интеграционный тест, что ответ с `public` не зависит от личности — фиксированный набор эндпоинтов,
+два вызова с разными сессиями, побайтовое равенство. Если не нужен — снять `AddResponseCaching`,
+`UseResponseCaching` и все семь атрибутов, чтобы риск `public` не висел без выгоды.
+
+### [СРЕДНЯЯ] api-query-vocabulary-drift — один и тот же фильтр называется по-разному на соседних эндпоинтах
+
+Подсчет уникальных query-параметров по девяти документам: 81. Из них на одну задачу приходится по
+несколько имен:
+
+| Задача | Имена | Эндпоинты |
+|---|---|---|
+| Поисковая строка | `search` (13) \| `q` (2) \| `query` (1) \| `filter` (1) | `/v1/search/forum` берет `query`, `/v1/search/messages` берет `q` |
+| Границы даты | `createdFromUtc`/`createdToUtc` (8) \| `createdAfter`/`createdBefore` (1) | `/v1/posts` против остальных |
+| Фильтр статуса | `statuses` (1) \| `status` (5) | `/v1/games` против `/v1/blogs`, `/v1/polls`, `/v1/uploads`, `/v1/moderation/tickets` |
+| Премодерация | `premoderationStatuses` (мн., `/v1/games`) \| `premoderationStatus` (ед., `/v1/blogs`) | два зеркальных модуля |
+| Автор | `authors` (6) \| `authorUsernames` (2) \| `authorUsername` (1) | комментарии \| `/v1/games`,`/v1/posts` \| `/v1/reviews/posts` |
+| Пагинация | `skip`/`take` (25) \| `number`/`size` (1) \| `cursor`/`limit` (4) | `/v1/uploads` — единственный на страницах |
+
+Последствие: у API нет словаря, и потребитель не может угадать имя параметра по аналогии. Два
+поисковых эндпоинта в одной папке `Features/Search` принимают строку под разными именами: клиент,
+переносящий код с одного на другой, получает `400` (параметр `[Required]`) — это лучший случай; на
+фильтрах вроде `authors` против `authorUsernames` он получит `200` и полный список, потому что
+неизвестный параметр молча игнорируется. `/v1/uploads` с `number`/`size` требует отдельной ветки в
+общем компоненте пагинации.
+
+Исправление: зафиксировать словарь в API_DESIGN.md (`search`, `skip`/`take`, `...FromUtc`/`...ToUtc`,
+множественное число у множественных фильтров) и привести к нему код. Смена имени параметра —
+ломающее изменение, но потребитель один и живет в том же коммите, что и есть аргумент документа в
+пользу отсутствия версионирования; чем позже, тем дороже.
+
+### [СРЕДНЯЯ] api-response-dto-as-request-body — 9 из 44 `PATCH`/`PUT` принимают в тело DTO ответа
+
+Разбор `requestBody` по опубликованным документам:
+
+```
+PATCH /v1/blogs/comments/{id}          <- Shared.Dto.Comment
+PATCH /v1/publications/comments/{id}   <- Shared.Dto.Comment
+PATCH /v1/forum/comments/{id}          <- Shared.Dto.Comment
+PATCH /v1/games/comments/{id}          <- Shared.Dto.Comment
+PATCH /v1/characters/{id}              <- Features.Game.Characters.CharacterDetails
+PATCH /v1/games/{id}/details           <- Features.Game.Games.GameDetails
+PATCH /v1/posts/{id}                   <- Features.Game.Posts.Post
+PATCH /v1/rooms/{id}                   <- Features.Game.Rooms.Room
+PATCH /v1/rooms/accesses/{id}          <- Features.Game.Rooms.RoomAccess
+```
+
+Последствие двойное. Для потребителя: контракт требует, чтобы для правки текста комментария клиент
+собрал объект `Comment` с полями `author: User` (27 полей) и `likes: User[]`, ни одно из которых не
+влияет на результат; ни одно поле не помечено `required`, так что документ не сообщает, какое из шести
+на самом деле нужно. Для сервера: защита от лишних полей — построчные `Ignore()` в маппинге, и это уже
+давало баг, зафиксированный в комментарии рядом с исправлением:
+
+```csharp
+// Nullable on purpose: the destination is bool? and "no privacy block
+// in the request" has to stay absent. The `!= null &&` form returns a
+// plain false, which the update path then wrote — patching an NPC
+// without a privacy block demoted it to a player character.
+```
+(`src/DM.Web.API/Features/Game/Characters/CharacterMappingProfile.cs:101-105`)
+
+То есть `PATCH` персонажа без блока приватности когда-то разжаловал NPC в игрового персонажа.
+Исправление было точечным, а не структурным: следующее поле, добавленное в `CharacterDetails`, снова
+попадет в `UpdateCharacter` по имени, и заметит это только ревьюер.
+
+Исправление: для каждого из девяти завести `Update*Request` только с редактируемыми полями по образцу
+`UpdateBlogRequest`. Добавить архитектурный тест: тип, использованный в `[FromBody]`, не должен
+встречаться в `[ProducesResponseType]` ни одной операции — это ловится рефлексией по сборке, как уже
+сделано в `MutatingActionsShould`.
+
+### [СРЕДНЯЯ] api-discussion-orphaned — форма "обсуждение" реализована в четырех сервисах и выведена одним маршрутом
+
+`GetDiscussion` реализован в `BlogCommentApiService.cs:40`, `PublicationCommentApiService.cs:35`,
+`ForumCommentApiService.cs:37`, `GameCommentApiService.cs:40` и объявлен в четырех интерфейсах. В
+маршрутах он выведен один раз: `GET /v1/topics/{id}/discussion` (`TopicController.cs:200-204`). Три
+реализации не достижимы ни по одному URL.
+
+Последствие: `DiscussionComment` несет посчитанные сервером `canEdit`, `canDelete`, `canLike`,
+`isLikedByMe`, `likesCount` (`src/DM.Web.API/Shared/Dto/DiscussionComment.cs:39-59`), а `Comment` —
+нет. Значит на форуме клиент получает права от сервера, а в блоге, публикации и игре обязан вывести
+их сам: `isAuthor || isModerator` для правки, `isAuthenticated && !isAuthor` для лайка — правила из
+`BlogCommentApiService.cs:63-68` придется продублировать в TypeScript и держать синхронно. Правило
+разъедется молча: расхождение проявится как кнопка, которая есть, но дает `403`.
+
+Исправление: либо вывести `/discussion` на остальные три сущности и перевести клиента на него, либо
+удалить три недостижимые реализации и перенести флаги прав в `Comment`. Второе дешевле и убирает
+второй набор форм ответа заодно (см. `api-envelope-split`, `api-two-paging-shapes`).
+
+### [СРЕДНЯЯ] api-ignored-userid-filter — опубликованный и задокументированный фильтр `userId` не читается
+
+`UploadsQuery.UserId` объявлен с комментарием "Filter by user ID (admin only)"
+(`src/DM.Web.API/Shared/Dto/Upload.cs:75-76`) и попадает в контракт как query-параметр `userId` у
+`GET /v1/uploads`. `UploadApiService.GetUploads` разбирает три ветки — `all`, `username`, свои — и
+`query.UserId` не читает ни в одной (`src/DM.Web.API/Features/General/Upload/UploadApiService.cs:78-100`);
+`GetUploadsInternal` получает id либо от `username`, либо от текущей личности.
+
+Последствие: модератор, разбирающий загрузки по id пользователя, шлет
+`GET /v1/uploads?userId=<чужой-guid>` и получает `200` со своими собственными загрузками. Ни `400`,
+ни `403`, ни пустого списка — ответ выглядит правдоподобно и не тот, о котором спрашивали. Тот же
+эндпоинт при этом предлагает два разных способа сделать одно и то же (`userId` в query-DTO и `username`
+отдельным параметром контроллера), из которых работает один.
+
+Исправление: удалить `UploadsQuery.UserId` (фильтр по `username` уже есть и он гейтится
+`UploadIntention.ListUser`). Если id нужен — читать его в сервисе с тем же гейтом. Общая мера:
+прогнать список query-свойств всех `*Query` DTO против их использований — этот один нашелся, других я
+целиком не проверял (см. "Чего я не смог определить").
+
+### [СРЕДНЯЯ] api-doc-audience-wrong-layer — документ вменяет проверку авторства слою, который ее не делает
+
+API_DESIGN.md:293 про `X-Dm-Audience: author_edit`: "Сервер отдает HTML с `data-bb-*` round-trip
+атрибутами. **Endpoint-уровень обязан подтвердить авторство.**"
+
+Ни один эндпоинт этого не делает: grep по `src/DM.Web.API` на `BbAudienceHeader`, `AuthorEdit`,
+`author_edit` вне свагер-фильтра дает только комментарии в маппинг-профилях и код конвертера.
+Проверку выполняет `BbConverter.ResolveEffectiveAudience`
+(`src/DM.Web.API/Shared/BbRendering/BbConverter.cs:137-151`), и его комментарий прямо возражает
+документу:
+
+```
+// AuthorEdit emits unfiltered round-trip source (every [private] and
+// [mod] block). The audience arrives as a client-controlled header
+// applied to every response, so authorship is enforced here rather
+// than trusted from the endpoint
+```
+
+Код прав: заголовок один на весь ответ, а ответ может нести BBCode нескольких авторов, поэтому
+эндпоинт в принципе не может дать корректный ответ на вопрос "автор ли зритель". Документ при этом
+формулирует обязательство, которого никто не исполняет.
+
+Последствие: не утечка — конвертер закрывает дыру и failed-closed при отсутствии id автора. Но
+разработчик, который заведет новый эндпоинт с `BbText` по документу, поставит избыточную проверку на
+эндпоинте, а хуже — разработчик, читающий документ при разборе инцидента, будет искать защиту не в
+том месте. Правило, назначенное не тому слою, это правило, которое перестанет действовать при
+следующем рефакторинге конвертера, потому что никто не знает, что оно там.
+
+Исправление: переписать строку 293 — авторство подтверждает конвертер во время сериализации, из
+`RenderContextEnvelope`, а обязанность эндпоинта — заполнить в конверте id автора контента (это то,
+что делают маппинг-профили). Добавить тест: запрос с `X-Dm-Audience: author_edit` от не-автора на
+эндпоинт с `[mod]`-контентом не должен содержать `data-bb-` в ответе.
+
+### [СРЕДНЯЯ] api-guid-only-reviews-subroute — один подмаршрут игры отказывается от публичного идентификатора
+
+Из 33 опубликованных путей под `/v1/games` только `/v1/games/{id}/reviews` и
+`/v1/games/{id}/reviews/{reviewId}` объявлены с ограничением `{id:guid}`
+(`src/DM.Web.API/Features/Game/Reviews/GameReviewController.cs:15`). Все остальные —
+`{id}` c резолвом пятибуквенного публичного id (`GameController.cs:91-96`,
+`GameApiService.ResolveId`). Опубликованный контракт разницу показывает честно: у `/reviews`
+параметр `{"type":"string","format":"uuid"}`, у `/characters` — `{"type":"string"}` с описанием
+"Game public ID (5 letters) or GUID".
+
+Последствие: клиент, у которого из URL страницы есть только публичный id, делает
+`GET /v1/games/QWERT/characters` — `200`, и `GET /v1/games/QWERT/reviews` — `404` от маршрутизации,
+без тела и без объяснения. Чтобы прочитать отзывы, нужен лишний круг за GUID через
+`GET /v1/games/QWERT`. Плюс третий стиль имени параметра на том же ресурсе: `/v1/games/{gameId}/notepad`
+против `{id}` у всех остальных.
+
+Исправление: снять `:guid` с `GameReviewController` и резолвить id тем же `ResolveId`, что и соседи;
+`{gameId}` в notepad переименовать в `{id}`.
+
+### [СРЕДНЯЯ] api-doc-rate-limit-table-stale — таблица лимитов описывает четыре политики из шести, а самые дорогие чтения не покрыты ни одной
+
+API_DESIGN.md:224-231 перечисляет четыре строки: глобальный 100/мин, аутентификация 5/мин, username
+check 20/мин, email check 10/мин. Код регистрирует шесть политик плюс глобальную: к перечисленным
+добавлены `uploads` (10/мин), `sliding` (30/мин, скользящее окно, 6 сегментов) и `default` (60/мин)
+(`RateLimitingExtensions.cs:53-77`). Двух политик, которые применяются к 12 эндпоинтам, в документе
+нет.
+
+С другой стороны, `[EnableRateLimiting]` стоит на 20 местах, и самые дорогие чтения в их числе не
+значатся:
+
+```
+GET /v1/stats                        # online, тоталы с дельтой за сегодня, лучший пост недели
+GET /v1/leaderboards/{year}          # year=0 — агрегат по всему набору данных, без границ дат
+GET /v1/leaderboards/{year}/{month}
+```
+(`src/DM.Web.API/Features/Community/Statistics/StatisticsController.cs:46,65,81`)
+
+Все три анонимны, ни одной политики, ни одного атрибута кеширования. При этом они обезличены
+(`CommunityStatsApiService` не касается `IIdentityProvider`), то есть кешируются идеально.
+
+Последствие: анонимный вызывающий в рамках глобальных 100/мин на адрес может 100 раз в минуту
+запускать полную агрегацию лидербордов за все время; десять адресов дают тысячу. Одновременно
+каталог достижений, который не меняется неделями, несет `public, max-age=300`. Приоритеты
+инвертированы: политика кеша стоит там, где нагрузка мала, и отсутствует там, где она максимальна.
+Документ ни о том, ни о другом не сообщает.
+
+Исправление: `[EnableRateLimiting(RateLimitPolicies.Sliding)]` и
+`[ResponseCache(Duration = ..., Location = ResponseCacheLocation.Any)]` на `/v1/stats` и
+`/v1/leaderboards/*` (для закрытых периодов срок можно ставить сутками); таблицу в документе
+дополнить `uploads`, `sliding`, `default` с указанием, что считается по адресу, а не по аккаунту
+(см. `api-rate-limit-partition-blind`).
+
+### [СРЕДНЯЯ] api-security-log-limit-one-sided — ограничение размера страницы обрезано только сверху, и это четвертая идиома для одного правила
+
+```csharp
+public async Task<IActionResult> GetSecurityLogs([FromQuery] string? type = null, [FromQuery] int limit = 50)
+{
+    var effectiveLimit = limit > 100 ? 100 : limit;
+    var events = await _securityApiService.GetSecurityLogs(type, effectiveLimit);
+    return Ok(new ListEnvelope<SecurityEvent>(events));
+}
+```
+(`src/DM.Web.API/Features/Account/Security/SecurityController.cs:52-57`)
+
+XML-документация параметра обещает "default: 50, max: 100" (строка 46). Нижней границы нет, и
+значение уходит в `.Limit(limit)` драйвера Mongo
+(`src/DM.Infrastructure.Persistence/Repositories/Account/SecurityAuditRepository.cs:60-64`), где 0
+означает "без ограничения", а отрицательное — особый режим одной пачки.
+
+Последствие: `GET /v1/account/logs?limit=0` не соблюдает обещанный максимум 100 и отдает журнал
+безопасности целиком — у пользователя с многолетней историей входов это ответ произвольного размера
+на бесплатный запрос (`RateLimitPolicies.Auth` на этом эндпоинте нет: контроллер помечен только
+`[AuthenticationRequired]`). Данные свои, поэтому это не утечка, а расход и неверный контракт.
+
+В проекте это четвертый способ ограничить страницу: `[Range(1, 100)]` в `PagingQuery`,
+`Math.Clamp(limit, 1, MaxLimit)` в `CursorQuery.EffectiveLimit`, `Math.Clamp(limit, 1, 100)` прямо в
+`ChatRoomController.cs:142` (дублирует предыдущий) и тернарник здесь.
+
+Исправление: заменить на `[FromQuery][Range(1, 100)] int limit = 50` — `[ApiController]` тогда сам
+ответит `400`, как на остальных списках, и правило станет одним механизмом вместо четырех. Убрать
+избыточный `Math.Clamp` в `ChatRoomController`.
+
+### [НИЗКАЯ] api-error-shape-three-producers — тело ошибки строят три места, два из них в форме, которой нет ни у одного другого ответа
+
+API_DESIGN.md:91-93: "Ответ с ошибкой формирует только middleware, из брошенного `HttpException`.
+Собирать тело ошибки в контроллере нельзя: получится форма, которой нет ни у одного другого ответа."
+
+Три производителя:
+1. `ErrorHandlingMiddleware` — правильный, через `ProblemDetailsFactory` (`ErrorHandlingMiddleware.cs:69-94`).
+2. `CsrfProtectionMiddleware` собирает `ProblemDetails` руками, минуя фабрику
+   (`src/DM.Web.API/Middleware/CsrfProtectionMiddleware.cs:81-90`): в теле нет `traceId` и нет `type`.
+   Комментарий рядом (строки 78-80) хвалит переход на `ProblemDetails` с формы `{"error": "..."}` —
+   переход состоялся наполовину.
+3. `WebhookController` отдает именно ту запрещенную форму:
+   `return StatusCode(403, new { error = "Invalid webhook secret" })` (строка 115) и
+   `return BadRequest(new { error = $"Unknown webhook type: {type}" })` (строка 121). Это `ObjectResult`
+   с телом, поэтому `ClientErrorResultFilter` из `[ApiController]` его не переписывает — форма едет на
+   провод как есть, с `application/json`.
+
+Последствие: `403` от CSRF нельзя связать с записью в логе — токена корреляции в теле нет, а именно
+для этого он существует. Ответы вебхука читают Telegram и Discord, которым форма безразлична, так что
+прямого ущерба нет; ущерб в том, что правило "одна форма" ничем не проверяется, и следующий
+контроллер скопирует эту строку. `OpenApiContractShould` их не увидит: `WebhookController` помечен
+`[ApiExplorerSettings(IgnoreApi = true)]`, а middleware в контракт не попадает вовсе.
+
+Исправление: в `CsrfProtectionMiddleware` бросать `HttpException(HttpStatusCode.Forbidden, ...)` и
+дать `ErrorHandlingMiddleware` собрать ответ (порядок в конвейере это позволяет: CSRF стоит после
+error handling, `Startup.cs:256,263`). В `WebhookController` — `throw new HttpException(...)` вместо
+самодельных объектов.
+
+### [НИЗКАЯ] api-identity-comments-and-operationids-lie — три утверждения о механизмах, которых нет
+
+1. `operationId` PATCH-операции — `PutCharacter`: маршрут назван
+   `[HttpPatch("{id}", Name = nameof(PutCharacter))]` (`CharacterController.cs:123`), и это имя ушло в
+   контракт (`artifacts/openapi/Game.json`, `/v1/characters/{id}` → `patch.operationId: "PutCharacter"`).
+   Сгенерированный клиент выставит метод `putCharacter()`, посылающий `PATCH`.
+2. `CsrfProtectionMiddleware` в `<remarks>`: "While the API uses custom auth headers (not cookies),
+   this provides defense-in-depth" (`CsrfProtectionMiddleware.cs:18`). API использует именно cookie —
+   BFF (`API_DESIGN.md:16`, `Startup.cs:130-131`, `ApiCredentialsStorage.cs:13-20`). Это не косметика:
+   на ложной посылке держится ветвь fail-open на строках 66-69 ("If no origin/referer ... We allow
+   these since they can't carry auth cookies anyway") — обоснование неверно, и то, что дыра не
+   эксплуатируется, обеспечивает `SameSite=Lax` на cookie сессии
+   (`ApiCredentialsStorage.cs:61`), а не этот аргумент.
+3. `AuthenticationController.cs:20`: "Session cookies are HttpOnly and SameSite=Strict for security."
+   Установлено `SameSite = SameSiteMode.Lax` (`ApiCredentialsStorage.cs:61,84`), с собственным
+   комментарием, объясняющим почему именно Lax.
+
+Плюс со стороны клиента: `"X-Requested-With": "XMLHttpRequest", // CSRF protection - identifies AJAX
+requests` (`client.ts:27`) — сервер этот заголовок не проверяет нигде,
+`CsrfProtectionMiddleware` смотрит только `Origin`/`Referer`.
+
+Последствие: разработчик, разбирающий модель защиты по комментариям, получит неверную картину в трех
+местах из трех, а генерируемый клиент — метод с именем не того глагола. Ущерб — время и ложная
+уверенность.
+
+Исправление: переименовать `PutCharacter` в `PatchCharacter`; переписать `<remarks>` CSRF на
+"cookie-auth, поэтому это основной, а не дополнительный контроль, и он опирается на SameSite=Lax";
+исправить `SameSite=Strict` на `Lax` в документации контроллера; либо проверять `X-Requested-With` на
+сервере, либо снять комментарий на клиенте.
+
+### [НИЗКАЯ] api-envelope-metadata-dead — поле `metadata` есть в 42 схемах контракта, не заполняется ни разу и не имеет типа
+
+`Envelope<T>.Metadata` — `object?` (`src/DM.Web.API/Shared/Dto/Envelope.cs:26`). В `src/DM.Web.API`
+127 конструирований `new Envelope<...>`, ни одно не передает второй аргумент (grep на
+`new Envelope<...>(..., ...)` — пусто). В контракте поле присутствует у всех 42 схем `Envelope<T>` в
+виде `"metadata": { "description": "Additional metadata", "nullable": true }` — без `type`.
+
+Последствие: генератор клиента получает `metadata: any` (или `object`) на каждом одиночном ресурсе, а
+на проводе всегда `null`. Мертвая точка расширения в опубликованном контракте, которую потребитель не
+может ни использовать, ни проигнорировать со знанием дела.
+
+Исправление: убрать `Metadata` из `Envelope<T>` — вернуть, когда появится первый реальный случай, с
+типом. Пока это ничего не описывает.
+
+### [НИЗКАЯ] api-audience-header-on-every-operation — рендерящий заголовок объявлен у всех 363 операций
+
+`BbAudienceSwaggerFilter` — глобальный `IOperationFilter`, добавляющий параметр `X-Dm-Audience` без
+условий (`src/DM.Web.API/Shared/BbRendering/BbAudienceSwaggerFilter.cs:15-31`). Он попадает в
+`DELETE /v1/account/login`, `POST /v1/uploads`, `DELETE /v1/games/{id}` — операции, в ответах которых
+нет ни одного `BbText`.
+
+Последствие: контракт не сообщает, где заголовок что-то меняет, а где он шум; сгенерированный клиент
+получает лишний необязательный аргумент в каждом методе. Потребитель, читающий документ, не может
+отличить эндпоинт, у которого ответ зависит от заголовка (и который поэтому нельзя кешировать без
+`Vary`), от эндпоинта, у которого не зависит, — а это ровно тот вопрос, на который отвечает раздел
+"Кеширование ответов" в API_DESIGN.md.
+
+Исправление: в фильтре проверять, содержит ли схема ответа операции тип, производный от `BbText`
+(`context.ApiDescription.SupportedResponseTypes`), и добавлять параметр только тогда.
+
+### [НИЗКАЯ] api-optional-cannot-clear — трехзначная семантика `PATCH` не умеет выразить "очистить"
+
+`Optional<Guid>?` задумано как три состояния: `null` — поле не прислали, не менять;
+`Optional.WithValue(null)` — прислали null, очистить; значение — установить. Домен читает это именно
+так: `ShouldReorder = updateRoom.PreviousRoomId != null`,
+`NewPreviousRoomId = updateRoom.PreviousRoomId?.Value`
+(`src/DM.Domain.Game/Features/Rooms/RoomService.cs:146-147`).
+
+`Optional<TType>` — класс (`src/DM.Domain.Core/Dto/Optional.cs:6`), поэтому `HandleNull` у конвертера
+равен false по умолчанию, и System.Text.Json на JSON-`null` присваивает свойству `null`, не вызывая
+`OptionalConverter.Read` вовсе. Различить "поля нет" и "поле равно null" в теле невозможно.
+
+Последствие: `PATCH /v1/rooms/{id}` с `{"previousRoomId": null}` трактуется как "не менять порядок",
+а не "переставить в начало" — комнату нельзя сделать первой в цепочке через API. Заодно
+`OptionalConverter<TValue>.Read` начинается с `reader.GetString()`
+(`src/DM.Web.API/Shared/Binding/OptionalConverter.cs:35`), что для `Optional<int>` или
+`Optional<bool>` бросит `InvalidOperationException` на числовом/логическом токене и даст `500`. Таких
+типов сегодня нет — это ловушка для следующего, кто заведет.
+
+Исправление: `HandleNull => true` в конвертере и явная ветвь `TokenType == JsonTokenType.Null` →
+`Optional<TValue>.WithValue(null)`; убрать `GetString()` и читать значение
+`JsonSerializer.Deserialize<TValue>` для любого токена. Тест: `{"previousRoomId": null}` переставляет
+комнату в начало, отсутствие поля — не переставляет.
+
+### [НИЗКАЯ] api-doc-omits-followed-conventions — документ не описывает три соглашения, которым код следует, и называет класс теста
+
+Правила, которые код держит, а документ не упоминает:
+
+1. **`DELETE .../unread` как "отметить прочитанным"** — 12 эндпоинтов
+   (`/v1/blogs/{id}/comments/unread`, `/v1/boards/{id}/comments/unread`, `/v1/rooms/{id}/posts/unread`,
+   `/v1/global-chat/messages/unread`, `/v1/users/me/notifications/unread`,
+   `/v1/users/me/notifications/{id}/unread` и еще шесть). Соглашение хорошее — идемпотентное,
+   читаемое, — и нигде не записано, поэтому следующая отметка прочитанного будет
+   `POST .../mark-read`.
+2. **Максимум `take` = 100** — живет в XML-комментарии `PagingQuery`, не в разделе Pagination
+   документа, где перечислены только имена параметров.
+3. **Слепок контракта и его сверка клиентом** — API_DESIGN.md:26-32 говорит "В репозиторий они не
+   коммитятся", имея в виду девять групповых документов, и это верно; но про
+   `artifacts/openapi-contract.json`, который как раз закоммичен (исключение в `.gitignore:42`) и
+   который читает тест фронтенда, документ не говорит ничего. Механизм из двух половин описан на
+   половину.
+
+Отдельно: API_DESIGN.md:131 называет конкретный класс теста — "Правило держит тест
+`MutatingActionsShould`". По правилу проекта документы содержат соглашения, а не имена классов; это
+ровно тот снимок текущего состояния, который расходится молча при переименовании.
+
+Последствие: соглашение, которого нет в документе, не переживет следующего автора; имя класса в
+документе устареет при первом рефакторинге тестов и будет вводить в заблуждение.
+
+Исправление: добавить в документ строку про `DELETE <collection>/unread` как канонический способ
+отметки прочитанного, вписать максимум `take` в таблицу Pagination, описать слепок как часть
+контрактного механизма. Из строки 131 убрать имя класса, оставив правило и обоснование.
+
+## Чего я не смог определить
+
+- **Реально ли падает загрузка файлов в dev-конфигурации.** Механизм детерминирован из кода
+  (`WithHeaders` без `Idempotency-Key` + кастомный заголовок на cross-origin `POST`), но подтвердить
+  это можно только браузером: `OPTIONS /v1/uploads` с `Access-Control-Request-Headers: idempotency-key`
+  против запущенного API на :5000 из origin :5173. Решает вопрос одна команда curl или один
+  интеграционный тест.
+- **Полный перечень опубликованных, но игнорируемых query-параметров.** `userId` у `/v1/uploads`
+  найден точечно. Сплошную проверку — каждое свойство каждого `*Query` DTO против его использований в
+  сервисах и репозиториях — я не делал; она механизируема (рефлексия по свойствам + поиск обращений),
+  но требует прогона и разбора ложных срабатываний на маппингах by-name.
+- **Точная семантика `Limit(0)` и `Limit(-1)` драйвера Mongo в этой версии.** Отсутствие нижней
+  границы у `GET /v1/account/logs?limit=` установлено по коду; во что превращается 0 на сервере,
+  надо смотреть на живой базе. Дефект (одностороннее ограничение вопреки обещанному "max: 100")
+  не зависит от ответа.
+- **Стоимость `/v1/leaderboards/0` на реальных данных.** Что это самый дорогой публичный запрос,
+  следует из "агрегат по всему набору без границ дат"; нужен ли ему `sliding` или достаточно
+  кеширования, решается измерением на объеме, близком к DM2, а не чтением.
+- **Намеренность топологии прода.** API_DESIGN.md:13 объявляет базой `https://api.dm.am`,
+  `docker/nginx/nginx.conf:77` отдает API с того же origin, что и SPA. Какое из двух — план,
+  решает владелец; от этого зависит, латентна ли находка про CORS или срочна.
+- **Планируется ли второй потребитель.** Половина расхождений контракта (словарь параметров, формат
+  сортировки, форма конверта) сегодня безвредна только потому, что клиент один и правится тем же
+  коммитом. Триггер пересмотра в документе назван ("первый внешний потребитель"); срок — вопрос к
+  владельцу, и от него зависит, что из СРЕДНИХ находок надо закрывать сейчас.
+
+
+# Безопасность — D
+
+Оценка среза до опровержения: D. Каркас безопасности выстроен грамотно и в нужных местах, но три дефекта доходят до пользователя и обнуляют заявленные гарантии: 403 отдает целевой объект целиком, приватный BBCode-тег в формате редактора виден всем, а загрузка принимает чужой targetId.
+
+Слайс охватывает аутентификацию (BFF-кука `dm_session`, AES-256-GCM, Argon2id, MongoDB-сессии), точки принуждения авторизации (`AuthenticationRequiredAttribute`, `RequireRoleAttribute`, Intention-резолверы, query-фильтры доступности), секреты и конфигурацию развертывания, валидацию входа, кодирование вывода (BBCode-рендер), rate limiting, прокси-заголовки, CORS/Origin и журнал событий безопасности. Каркас сделан грамотно и в нужных местах: 216 из 364 endpoint'ов меняют состояние, и без атрибута аутентификации из них только восемь — вход, регистрация, активация, восстановление, вебхук с shared secret и публичная форма обращений; каждое из этих исключений объяснено и обосновано. Хеширование, шифрование, токены сброса, смена почты, тикеты — все это разобрано аккуратно, с осознанными решениями в комментариях, и большинство этих решений при проверке выдерживает.
+
+Оценка D, а не выше, из-за трех дефектов, которые доходят до пользователя и каждый из которых обнуляет заявленную гарантию. Первый: ответ 403 от Intention-слоя сериализует в тело весь целевой доменный объект, поэтому `GET /v1/blogs/owner/{login}` без аутентификации выдает приватный черновик блога целиком, а `GET /v1/publications/{id}` — неопубликованную публикацию вместе с текстом. Проверка, существующая ради запрета доступа, сама и выдает данные. Второй: тег `[private=Имя]` — единственная форма, которую производит редактор продукта и которую документирует его же справка, — серверным парсером за тег не считается, поэтому приватный текст уходит в HTML всем читателям комнаты, в письма и в embed. Проверено запуском рендерера: для чужого зрителя на выходе `public [private=Ivan]SECRET tail`. Матричные тесты этого не поймали, потому что все 17 тестов написаны на форме `[private="B"]`, которой в продукте не бывает. Третий: `POST /v1/uploads` принимает любой `targetId`, и `CharacterAvatar` с чужим id персонажа либо подменяет портрет, либо гарантированно роняет выдачу постов комнаты в 500 на дублирующем ключе.
+
+Отдельно стоит сказать, что расхождения тут почти всегда не "забыли проверить", а "проверка написана в одном месте и не совпадает с тем, что делает другое". Синтаксис приватного тега разошелся между клиентом, серверным рендерером и SQL-редакцией в поиске. Слой anti-abuse у rate limiting написан по account-партиции, которая при текущем порядке middleware не может сработать. Детектор подозрительного входа читает журнал после того, как в него записали текущий вход. Это не небрежность, это отсутствие сквозной проверки на живом пути — ровно то, что находится за пять минут, если один раз прогнать сценарий целиком.
+
+## Что сделано хорошо
+
+- Крипто-ключ не имеет дефолта и валит старт: `AesGcmSymmetricCryptoService.cs:30-43` бросает при отсутствии `KeyBase64` и при длине не 32 байта, `appsettings.json:38-40` содержит только `Algorithm`, а `docker/docker-compose.yml:34` требует переменную через `${...:?}`. Заявление SECURITY.md:34-39 подтверждается кодом.
+- Формат токена версионирован и поддерживает ротацию: `[version][nonce][tag][ciphertext]`, старые ключи принимаются на расшифровку (`AesGcmSymmetricCryptoService.cs:74-99`). Это редко делают заранее.
+- `author_edit` принуждается на сервере, а не доверяется endpoint'у: `BbConverter.cs:137-151` понижает запрошенный клиентом audience до `Display`, если `viewer.UserId != envelope.PostAuthorUserId`, и трактует отсутствие автора как "не автор". Документация (SECURITY.md:216) обещает меньше, чем делает код.
+- Пароль при смене проверяется в constant-time и токен сброса одноразовый: `UserPasswordChangeValidator.cs:39-45` (сравнение через `ISecurityManager`), `PasswordChangeRepository.UpdatePassword` помечает токен `IsRemoved` в той же операции, `TokenValid` требует тип, неудаленность и срок. Смена почты требует пароль и подтверждается токеном на новый адрес (`EmailChangeService.cs:53-99`).
+- Тикеты не являются oracle существования: `TicketService.cs:140-162` отдает 404 и на отсутствующий тикет, и на тикет вне области видимости роли, и то же правило продублировано в `AssignToMe` и `ResolveTicket` (строки 265-271, 300-306). Именно так и надо.
+- Пайплайн загрузки не доверяет клиенту: magic-byte detection вместо `Content-Type` (`ImageProcessingService.cs:68-92`), identify-only пас до полного декода, проверка площади до декода (`:124-132`), явное обнуление EXIF/IPTC/XMP, расширение объекта берется из провалидированного content-type, имя файла санитизируется (`UploadApiService.cs:380-392`). Комментарий на `IsImageType` (`:46-53`) честно описывает закрытую дыру и объясняет, почему исключений быть не должно.
+- Вебхук fail-closed и с fixed-time сравнением секрета: `WebhookController.cs:97-116`. Секрет в заголовке, а не в пути, с объяснением почему (`:24-27`).
+- Хаб SignalR построен на receive-only модели: нет клиентских методов, нет групп, регистрация в карте адресатов только после успешной аутентификации токена (`NotificationHub.cs:14-26`, `UserConnectionService.cs:21-31`), access_token в query-string убран с внятным обоснованием (`NotificationHub.cs:64-72`).
+- Записанное исключение про перечисление аккаунтов реализовано полностью: rate limiting на всех трех surface (`AvailabilityController.cs:56,86`, `RecoveryController.cs:29`) и логирование каждого раскрывающего ответа без самого идентификатора (`IdentifierProbeLog.cs:26-33`, вызовы в `AvailabilityController.cs:65,95` и `RecoveryController.cs:76`).
+- Роли на модерации проставлены плотно: у 13 контроллеров в `Features/Moderation` каждый write-endpoint несет `RequireRole` нужного уровня, включая разделение Moderator / SeniorModerator / Admin; публичные GET (`warnings`, `bans`) отдают урезанную проекцию (`PublicWarning` — только points, дата, активность; `WarningDtos.cs:100-116`).
+- Ленты и комнаты закрыты query-фильтром, а не пост-фильтрацией: `GameAccessibilityFilters.RoomAvailable` применяется в 13 запросах шести репозиториев (включая поиск по сообщениям, `MessageSearchRepository.cs:135`), лента рейтинговых постов ограничена открытыми комнатами одобренных недрафтовых игр (`PostRepository.cs:95-103`), а поиск по постам вырезает приватные блоки на стороне SQL (`PostRepository.cs:114-124`).
+- Порядок middleware выстроен осознанно и комментарии это объясняют верно: `UseForwardedHeaders` первым, security-заголовки до Swagger UI (иначе статические ассеты шли без заголовков), `UseRateLimiter` после `UseRouting` (иначе `[EnableRateLimiting]` инертен) — `Startup.cs:232-269`.
+- Необработанное исключение не отдает деталей: только постоянный заголовок и correlation-токен, текст уходит в лог (`ExceptionProblemDetailsFactoryExtensions.cs:43-53`).
+
+## Находки
+
+### [КРИТИЧНО] intention-403-serializes-target — ответ 403 отдает целевой объект целиком
+
+> **Опровержение: подтверждено.**
+
+`IntentionManagerException` вкладывает в сообщение JSON цели:
+
+```csharp
+result.Append($" on {JsonSerializer.Serialize(target)}");
+```
+(`src/DM.Domain.Core/Exceptions/IntentionManagerException.cs:33`)
+
+`ErrorHandlingMiddleware.cs:71-74` передает это сообщение в `problemDetailsFactory.CreateFrom(securityException, httpContext)`, а тот — в `factory.CreateProblemDetails(httpContext, status, httpException.Message)` (`ExceptionProblemDetailsFactoryExtensions.cs:15`), где третий позиционный параметр — `title`. То есть сериализованный доменный объект уходит в теле ответа 403.
+
+Достижимые пути:
+
+- `BlogService.cs:200-203` — `GetByOwnerUsernameAsync` грузит блог по имени владельца и только потом бросает `ThrowIfForbidden(BlogIntention.ViewDraft, blog)`. Endpoint `GET /v1/blogs/owner/{login}` (`BlogController.cs:82`) без аутентификации. Цель — `DM.Domain.Blog.Features.Blogs.Blog` (алиас `BlogDto`, `BlogRepository.cs:13`): `Title`, `Description` (сырой BBCode), `Author` (`GeneralUser`, у которого `Email` автомаппится и в `GeneralUserMappingProfile` не игнорируется), `SubscriberUsernames`, `BlacklistedUserIds`, `PendingInvitedUserIds`.
+- `BlogService.cs:336-339` — `GetPublication` бросает `ThrowIfForbidden(PublicationIntention.ViewDraft, publication)` после загрузки. В `Publication` лежит `Content` — весь текст неопубликованной публикации (`Publication.cs:51`).
+- `BlogService.cs:797` — то же для блога, скрытого премодерацией.
+
+Последствие: анонимный запрос `GET /v1/blogs/owner/<любое имя>` возвращает приватный черновик блога целиком в теле 403, включая описание и объект автора; `GET /v1/publications/{id}` на неопубликованный черновик возвращает его текст. Тот же JSON дополнительно уходит в лог на уровне Warning (`ErrorHandlingMiddleware.cs:72-73`), у которого, по собственной записи проекта, нет retention.
+
+Исправление: убрать `JsonSerializer.Serialize(target)` из сообщения — в текст пускать только тип цели и ее идентификатор, если он нужен для диагностики. Ответ клиенту для `IntentionManagerException` сделать постоянным ("Недостаточно прав"), как уже сделано для необработанных исключений. Проверить заодно, что для скрытых сущностей возвращается 404, а не 403 (иначе endpoint остается oracle существования приватного черновика).
+
+### [КРИТИЧНО] upload-target-not-owned — targetId загрузки никем не проверяется
+
+> **Опровержение: подтверждено.**
+
+`UploadApiService.DirectUploadCore` проверяет только то, что target не null:
+
+```csharp
+var effectiveTarget = targetId ?? (type == UploadType.UserAvatar ? userId : (Guid?)null);
+RequireTarget(type, effectiveTarget);
+```
+(`UploadApiService.cs:262-263`; `RequireTarget` — `:319-336`, только null-проверка)
+
+Владение целью не проверяется ни здесь, ни в `UploadRepository.AddAsync`/`AssignTypedTarget` (`UploadRepository.cs:92-151`). В БД есть FK `FK_Uploads_Characters_TargetCharacterId` и CHECK `CK_Uploads_TypedTarget` (`InitialCreate.cs:1071-1078`) — то есть id должен быть существующим персонажем, но чьим угодно. Индекс `IX_Uploads_TargetCharacterId` не уникальный (`InitialCreate.cs:2438-2442`).
+
+Читается это так:
+
+```csharp
+var pictures = await _dbContext.Uploads
+    .Where(u => u.TargetCharacterId != null
+        && characterIds.Contains(u.TargetCharacterId.Value)
+        && u.Type == UploadType.CharacterAvatar
+        && !u.IsRemoved)
+    .Select(...)
+    .ToDictionaryAsync(x => x.CharacterId, x => x.Picture);
+```
+(`PostRepository.cs:407-418`)
+
+Условия на владельца нет, а `ToDictionaryAsync` падает на дубликате ключа.
+
+Последствие: любой аутентифицированный пользователь берет `character.id` из выдачи постов (он там есть) и делает `POST /v1/uploads?type=CharacterAvatar&targetId=<чужой персонаж>`. Если у персонажа аватара не было — его портрет во всех постах подменен картинкой атакующего. Если был — каждая выдача постов этой комнаты падает с `ArgumentException` (дубликат ключа) и отвечает 500 всем участникам. Второй сценарий воспроизводится и без злого умысла: владелец персонажа, загрузивший аватар дважды, ломает ленту своей же комнаты — сброса предыдущей записи для `CharacterAvatar` в коде нет вовсе (единственная разлинковка — `LinkAvatarUpload`/`UnlinkAvatarUpload` для `UserAvatar`, `UserRepository.cs:433-484`).
+
+Исправление: в `DirectUploadCore` перед PUT проверять права на цель через `IIntentionManager` — для `CharacterAvatar` авторство персонажа (или ведущий игры), для `PostAttachment` авторство поста; для `UserAvatar` игнорировать присланный `targetId` и всегда брать `userId`. Отдельно: при успешной загрузке `CharacterAvatar` помечать предыдущие записи персонажа `IsRemoved`, а чтение в `EnrichWithCharacterPictures` сделать устойчивым к дубликатам (`ToDictionary` с выбором последнего по `CreatedUtc`).
+
+### [ВЫСОКАЯ] private-addressee-snapshot-never-written — правило адресата не работает никогда
+
+> **Опровержение: подтверждено.**
+
+`PrivateAddresseeSnapshotJson` объявлен и читается, но не пишется ничем:
+
+```
+GameModels.cs:976                 public string PrivateAddresseeSnapshotJson { get; set; } = "{}";
+Entities/Game/Posts/Post.cs:70    то же поле сущности
+GameMappingProfile.cs:123         MapFrom(p => p.PrivateAddresseeSnapshotJson)
+PostMappingProfile.cs:42          ParsePrivateAddresseeSnapshot(src.PrivateAddresseeSnapshotJson)
+```
+
+Полный список вхождений строки `PrivateAddresseeSnapshot` в `src` — семь, и среди них нет ни одного присваивания на save-пути поста. Значение остается `"{}"`, `ParsePrivateAddresseeSnapshot` возвращает пустой словарь (`PostMappingProfile.cs:135`), и ветка `PrivateAddresseeOwnerUserIdsByAttribute.TryGetValue(...)` в `PermissionFilteringVisitor.cs:120-124` никогда не срабатывает.
+
+Последствие: из пяти условий видимости `[private]`, перечисленных в BBCODE_RENDERING.md:69-77 и AUTHORIZATION.md:130-135, второе (addressee-forever) не действует. Игрок, которому реплика адресована, ее не видит; видят только автор, мастер с ассистентами и все подряд при включенном override. Фича приватной адресации сломана в обе стороны: в формате с кавычками адресат не получает текст, в формате без кавычек (см. выше) текст получают все.
+
+Исправление: на save-пути поста разрешать имена персонажей из каждого блока `[private=...]` в user id владельцев и писать снимок в `PrivateAddresseeSnapshotJson` тем же ключом (сырое значение атрибута), которым его читает визитор. Тест: пост с двумя блоками на разных персонажей, четыре зрителя, четыре разных результата.
+
+### [ВЫСОКАЯ] proxy-headers-not-configured-with-nginx — за прокси все клиенты сливаются в один адрес
+
+> **Опровержение: подтверждено.**
+
+`ReverseProxyExtensions` устроен правильно: пустой список доверенных сетей означает `ForwardedHeaders.None`, дефолтное доверие loopback вычищено (`ReverseProxyExtensions.cs:36-52`), и SECURITY.md:87-95 объясняет, почему так. Но развертывание, где прокси есть, доверенную сеть не задает: `appsettings.json:5-8` — `"TrustedNetworks": []`, и в `docker/docker-compose.yml` переменной `DM_ReverseProxyConfiguration__TrustedNetworks__0` нет вовсе (в блоке `x-workload-env`, строки 17-80, ее нет), при том что `docker-compose.preview.yml` ставит перед API nginx, который проставляет `X-Forwarded-For` (`docker/nginx/nginx.conf:84, 96, 109, 119`).
+
+Последствие для preview-развертывания: `Connection.RemoteIpAddress` для всех запросов равен адресу контейнера nginx. Глобальный лимитер (100 запросов в минуту на адрес, `RateLimitingExtensions.cs:28`) становится лимитом на весь сайт — несколько одновременных пользователей упираются в 429 на обычном просмотре. Политика `Auth` (5/мин) делается общей: пять попыток входа в минуту на всех, шестой человек получает 429. Журнал входов, security audit и детектор подозрительного входа записывают адрес прокси, то есть `Session.IpAddress` в "моих сессиях" и вся корреляция по адресу бессмысленны.
+
+Исправление: задать `TrustedNetworks` для развертываний, где прокси единственный вход (в compose — сеть docker-бриджа), и добавить в `docker/.env.example` соответствующую переменную. Пока это не сделано, стоит хотя бы поднять `GlobalPermitLimit`: 100 на адрес — это лимит для клиента, а не для прокси.
+
+### [ВЫСОКАЯ] preview-api-port-published — basic auth обходится через порт 5000
+
+> **Опровержение: подтверждено.**
+
+`docker-compose.preview.yml` добавляет nginx с basic auth ("DM Preview - Restricted Access", `docker/nginx/nginx.conf:58-59`) и переопределяет у `dmapi` только одну переменную (`docker-compose.preview.yml:36-38`). Публикация порта из базового compose при этом сохраняется: `ports: - '5000:5000'` (`docker/docker-compose.yml:479-480`).
+
+Последствие: preview-стенд, который оператор считает закрытым паролем, отдает весь API на `http://host:5000` без basic auth — все чтения, все записи, вход, регистрация. HTML закрыт, данные нет.
+
+Исправление: в preview-оверлее переопределить публикацию порта API на loopback (`127.0.0.1:5000:5000`) или снять ее полностью, оставив доступ только через nginx. Проверять это надо `docker compose config`, а не чтением файлов по отдельности.
+
+### [СРЕДНЯЯ] safe-image-never-applies — spoiler-гейт для картинок недостижим
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Mechanism confirmed and unbreakable: BbParserWrapper.Parse strips `[img]` to `__IMG_n__` (now :268-274) before `_inner.Parse`, and ToHtmlCore (:387-435) re-emits a fixed `class="bb-image"` template with no surface/audience awareness — SafeImage's `class="image"` template at BbParserProvider.cs:63-65 is unreachable, the XML claim at BbText.cs:59-65 is false, and no test covers it (BbParserWrapperShould only uses CurrentCommon). Severity is inflated, though: the only live consumer is GlobalChatMessage; `RenderAudience.EmbedSafe` is opt-in via the X-Dm-Audience header (BbAudienceHeader.cs:30) with no in-repo caller, so "то же для embed_safe" is latent, not broken. And the viewer-IP-leak consequence is not specific to this defect — plain `Image` auto-embeds on posts and comments by design. Real live impact is one missing spoiler gate on guest-readable global chat: worth fixing, not ВЫСОКАЯ.
+
+`BbParserProvider` собирает "безопасный" набор тегов, в котором `Image` заменен на `SafeImage`, оборачивающий картинку в spoiler (`BbParserProvider.cs:63-65, 124`), и этот набор используется для глобального чата и для audience `embed_safe` (`:149-159, 202-206`). Но `BbParserWrapper.Parse` вырезает `[img]...[/img]` регулярками в плейсхолдеры **до** передачи текста внутреннему парсеру (`BbParserWrapper.cs:180-220`), а восстанавливает уже готовым `<img>` (`:333-381`). Внутренний набор тегов на `[img]` не влияет.
+
+Проверено: `GetForSurface(BbSurface.GlobalChatMessage).Parse("[img]https://example.com/a.png[/img]").ToHtml()` дает обычный inline `<img src="https://example.com/a.png" class="bb-image" ...>`, без `spoiler-head` и без `nsfw`-обертки.
+
+XML-документация утверждает обратное: "Uses the public real-time surface whose parser wraps images in a spoiler-gated `SafeImage` so untrusted messages cannot auto-embed hotlinked/NSFW images" (`BbText.cs:59-65`). Комментарий заявляет X, X ложно.
+
+Последствие: в глобальном чате любое сообщение автоматически подгружает картинку с произвольного внешнего адреса всем зрителям, включая гостей: шок-контент отображается без гейта, а адрес зрителя утекает третьей стороне (частично прикрыто `referrerpolicy="no-referrer"`). То же для `embed_safe`, который по контракту должен быть NSFW-safe. `DefaultSafeTags.Without(Image)` (`:124`) — мертвая операция.
+
+Исправление: перенести решение о форме `<img>` в место восстановления плейсхолдера — `WrappedNodeTree` должен знать surface/audience и эмитить spoiler-обертку там, где набор тегов требует `SafeImage`. Тест: рендер `[img]` на четырех surface, три разных ожидаемых формы.
+
+### [СРЕДНЯЯ] ratelimit-account-partition-dead — партиция по аккаунту не может сработать
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Core claim holds: RateLimitingExtensions.cs:183-185 quoted correctly, `AddAuthentication()` at Startup.cs:132 registers no scheme, grep across src finds zero `HttpContext.User =` / `ClaimsIdentity` / `ClaimsPrincipal` constructions (identity lives in IIdentityProvider — AuthenticationMiddleware sets identitySetter.Current, never User), and UseRateLimiter() precedes UseAuthentication() at Startup.cs:267-270. So AccountThenAddress always falls back to address. But the numbers are wrong and the consequence double-counts: there are six policies, three are AccountThenAddress (not "две из четырех"), and the GlobalLimiter is `Partition.Address` by design (:99) — not AccountThenAddress as claimed. Since the intentional 100/min global cap is already per-address, shared-CGNAT users already share a budget; this defect only adds 10/30/60 sub-caps beneath it. Nothing is weakened either — per-address is stricter than the stated intent. Dead code whose comment (:36-40) claims a control it does not deliver: СРЕДНЯЯ.
+
+Две из четырех политик и глобальный лимитер объявлены как `AccountThenAddress`, ключ берется так:
+
+```csharp
+return partition == Partition.AccountThenAddress
+    ? context.User.Identity?.Name ?? address ?? "anon"
+    : address ?? "unknown";
+```
+(`RateLimitingExtensions.cs:183-185`)
+
+`HttpContext.User` в этом приложении не заполняется никогда: `services.AddAuthentication()` вызван без схемы (`Startup.cs:132`), присваиваний `HttpContext.User` в `src` нет ни одного (проверено grep'ом по `HttpContext.User =`, `context.User =`, `new ClaimsPrincipal(`), идентичность живет в собственном `IIdentityProvider`. Дополнительно и независимо: `UseRateLimiter()` стоит **до** `UseAuthentication()` и `AuthenticationMiddleware` (`Startup.cs:269-271`), так что даже при наличии схемы принципал на момент партиционирования еще не построен.
+
+Последствие: политики `Uploads` (10/мин), `Sliding` (30/мин) и `Default` (60/мин) фактически считаются по адресу. Из офиса, университета или под общим CGNAT все пользователи делят один бюджет: один активный человек выдает 429 всем остальным, а мотив, записанный в комментарии (`:36-40`, "keeps one noisy account from consuming the budget of everyone behind a shared address"), не достигается. Обратная сторона — аккаунт, меняющий адрес, получает свежий бюджет.
+
+Исправление: ключ брать из `IIdentityProvider`, а не из `context.User`, и для этого лимитер придется ставить после `AuthenticationMiddleware` (либо считать идентичность прямо в фабрике ключа, разобрав куку). Порядок middleware при этом надо перепроверить: за `UseRateLimiter` до аутентификации есть причина (защита самого пути аутентификации), поэтому корректнее две группы политик — до и после.
+
+### [СРЕДНЯЯ] suspicious-login-never-fires — детектор читает журнал после записи текущего входа
+
+`AuthenticationService.Authenticate(email, ...)` пишет `SecurityEventType.LoginSuccess` с адресом клиента до возврата (`AuthenticationService.cs:133-134`). Вызывающий `WebAuthenticationService.Authenticate` только после этого спрашивает детектор (`WebAuthenticationService.cs:65-77`), а детектор считает "известными" адреса из истории входов, включая тот, который только что записан:
+
+```csharp
+var loginHistory = await _auditService.GetLoginHistoryAsync(userId, 20);
+...
+if (!string.IsNullOrEmpty(ipAddress) && knownIps.Count > 0 && !knownIps.Contains(ipAddress))
+    return true;
+```
+(`SuspiciousLoginDetector.cs:25-44`)
+
+Запись сделана `InsertOneAsync` с await, то есть к моменту чтения она уже в коллекции.
+
+Последствие: `IsSuspiciousAsync` всегда возвращает false, письмо о входе с нового устройства не отправляется никогда, событие `SuspiciousLogin` в журнале не появляется. Заявленный в SECURITY.md:189 контроль ("Device info в сессиях") и вся ветка уведомления мертвы.
+
+Исправление: считать подозрительность до записи события — либо передавать детектору историю, снятую раньше, либо исключать из выборки запись текущего входа по id. Тест: два входа с разных адресов, второй должен быть подозрительным.
+
+### [СРЕДНЯЯ] audit-log-half-empty — пять из одиннадцати типов событий не пишет никто
+
+В `SecurityEventType` 11 значений (`SecurityEventType.cs`). Пишутся шесть: `LoginSuccess`, `LoginFailure`, `Logout`, `LogoutElsewhere`, `SessionTerminated`, `AccountLocked` — все шесть из `AuthenticationService` (строки 84, 116, 133, 264, 277, 313). Полный список вызовов `LogAsync` в `src` — эти шесть. Не пишет никто: `PasswordChange`, `EmailChange`, `PasswordResetRequest`, `PasswordResetComplete`, `SuspiciousLogin`. `PasswordChangeService` отправляет событие в другую шину (`_eventProducer.SendAsync(EventType.PasswordChanged, ...)`), в журнал безопасности — нет.
+
+При этом API предлагает фильтр по этим событиям: `"password" => GetPasswordEventsAsync(...)` фильтрует ровно по трем незаписываемым типам (`SecurityAuditRepository.cs:99-104`, `SecurityApiService.cs:34`), а UI-описания заведены на все 11 (`SecurityApiService.cs:56-70`).
+
+Последствие: `GET /v1/account/security/logs?type=password` всегда пуст. Пользователь, у которого угнали сессию и сменили пароль или почту, в журнале безопасности не увидит ничего — притом что именно эти два события и есть признак захвата. SECURITY.md:193 помечает "Security audit log" как реализованный.
+
+Исправление: вызвать `ISecurityAuditService.LogAsync` в `PasswordChangeService.Change` (оба флоу, с разными типами), в `EmailChangeService.Confirm` и в ветке подозрительного входа. Тест: после смены пароля запись с типом `PasswordChange` присутствует.
+
+### [СРЕДНЯЯ] hub-singleton-captures-scoped-dbcontext — аутентификация хаба через захваченный DbContext
+
+`UserConnectionService` зарегистрирован `SingleInstance()` (`Startup.cs:206-208`) и получает `IAuthenticationService` в конструктор (`UserConnectionService.cs:10`). Сканирующая регистрация раздает типы как `InstancePerDependency` (`ModuleRegistrationExtensions.cs:103`), поэтому singleton навсегда держит один экземпляр `AuthenticationService`, тот — `AuthenticationRepository`, а тот — `DmDbContext` (`AuthenticationRepository.cs:23-33`), взятый из корневого scope пула (`Startup.cs:117`).
+
+Последствие: два одновременных подключения к `/whatsup` выполняют `FindUser`/`FindUserSettings` на одном `DbContext` — классический `InvalidOperationException: A second operation was started on this context`; исключение из `OnConnectedAsync` роняет установку соединения, и пользователь остается без адресных realtime-событий (карта адресатов не заполняется). Дополнительно этот контекст живет весь процесс: change tracker не очищается, пул навсегда на одну аренду короче. Замечание в памяти проекта про "один DmDbContext на scope" здесь нарушено самой регистрацией.
+
+Исправление: инжектить в singleton `IServiceScopeFactory` и создавать scope на каждый `Add`, либо сделать `UserConnectionService` хранилищем без зависимостей, а аутентификацию токена выполнять в хабе (он scoped) и передавать сюда уже готовый `userId`.
+
+### [СРЕДНЯЯ] placeholder-substitution-into-markup — плейсхолдер из текста пользователя подставляется как HTML
+
+Плейсхолдеры `__IMG_n__`/`__LINK_n__`/`__MENTION_n__` восстанавливаются регулярками по уже отрендеренному HTML (`BbParserWrapper.cs:333, 384, 405`), без различения "плейсхолдер, который я сам поставил" и "тот же текст, написанный пользователем". Проверено:
+
+```
+IN : [quote="__IMG_0__"]text[/quote][img]https://e.com/a.png[/img]
+OUT: <div class="quote"><div class="quote-author"><img src="https://e.com/a.png" class="bb-image" ...></div>text</div>...
+```
+
+То есть сырой HTML-элемент оказывается внутри значения атрибута тега `quote`, отрендеренного для всех зрителей. Хуже в audience `author_edit`, где значение попадает в атрибут:
+
+```
+IN : [private="__IMG_0__"]s[/private][img]https://e.com/a.png onmouseover=alert(1) x=[/img]
+OUT: <div class="private-message" data-bb-tag="private" data-bb-addressees="<img src="https://e.com/a.png onmouseover=alert(1) x=" ...">s</div>
+```
+
+Пробелы в URL проходят `SanitizeUrl` (она возвращает исходную строку, а `HtmlAttributeEncode` пробел не трогает), поэтому браузер закрывает `data-bb-addressees` на втором `"` и разбирает остаток как атрибуты `<div>`, включая `onmouseover`. Спасает только серверный гейт `author_edit` (`BbConverter.cs:137-151`): audience выдается лишь автору, значит это self-XSS. Гарантия экранирования при этом сломана, и любое расширение `author_edit` на не-автора превращает это в stored XSS.
+
+Последствие: (1) любой пользователь, написав `__IMG_0__` в тексте поста, содержащего картинку, получает лишнюю копию этой картинки в произвольном месте разметки — включая место, где обычный текст не может стать элементом; (2) автор может внедрить event handler в свою же страницу редактирования. Плюс сама подстановка ломает содержимое чужих цитат.
+
+Исправление: строить плейсхолдер на маркере, который нельзя ввести в текст (управляющий символ плюс индекс), и вычищать этот символ из входной строки до извлечения тегов — тогда восстановление не может попасть в пользовательский текст. Отдельно: в `SanitizeUrl` отвергать URL с пробелами и управляющими символами.
+
+### [СРЕДНЯЯ] mentor-counts-as-own-space — код и SSOT расходятся в семантике бана
+
+AUTHORIZATION.md:162 говорит прямо: "Наставник курирует, но не участвует, и тоже не считается", и таблица прав блогов сводит "свое" к авторству и ассистентству. Код считает иначе:
+
+```csharp
+public static bool IsOwnGame(this IEnumerable<GameRole> roles)
+{
+    return roles.Any(r => r is not GameRole.Reader);
+}
+```
+(`GameRoleExtensions.cs:100-103`, а `GetRoles` возвращает `GameRole.Mentor` — `:50-53`)
+
+```csharp
+user.MaySpeak(inOwnSpace: isOwner || isAssistant || isMentor),
+```
+(`BlogIntentionResolver.cs:111`)
+
+При этом remark над `IsOwnGame` (`:89-95`) прямо перечисляет ментора как "свое" — то есть решение принято осознанно, но противоречит SSOT, а не отсутствует.
+
+Последствие: пользователь под демократическим баном, назначенный ментором игры или блога, продолжает писать в обсуждении курируемого модуля. По документу это запрещено. Кто из двух прав — решение владельца, но сейчас два источника истины расходятся, и любой, кто пишет третью проверку, скопирует не тот.
+
+Исправление: определиться и привести к одному месту. Если ментор не "свое" — убрать `GameRole.Mentor` из `IsOwnGame` и `isMentor` из `BlogIntentionResolver.cs:111`, поправить remark. Если "свое" — поправить AUTHORIZATION.md:162 и таблицу блогов. В любом случае предикат должен быть один и для игр, и для блогов, сейчас их два.
+
+### [СРЕДНЯЯ] login-reveals-account-state-without-password — вход отвечает о существовании аккаунта до проверки пароля
+
+SECURITY.md:155-157 фиксирует: "Вход не различает неверный пароль и отсутствующий аккаунт: ответы совпадают побайтово. Это не исключение, и ослаблять его нельзя". Для пары `WrongLogin`/`WrongPassword` это соблюдено — оба маппятся в одно сообщение (`AuthenticationApiService.cs:92-98`). Но три других ветки отвечают по-разному и до проверки пароля:
+
+```csharp
+case true when user!.IsRemoved:                                  -> 403 "Аккаунт удален."
+case true when user.AccessPolicy.HasFlag(AccessPolicy.FullBan):  -> 403 "Аккаунт заблокирован."
+if (await _repository.IsPendingRegistration(email))              -> 400 "Регистрация не завершена" + _pendingActivation
+```
+(`AuthenticationService.cs:65-113`, маппинг — `AuthenticationApiService.cs:99-110`)
+
+Ни одна из этих двух ветвей не вызывает `RecordFailedAttempt`, то есть перебор по этим состояниям не ограничен lockout'ом (только общей политикой 5/мин на адрес). Плюс timing: при отсутствующем пользователе Argon2id (19 MiB, t=2) не считается вовсе, а при существующем считается — разница десятки миллисекунд при нулевой задержке на первых двух попытках (`LoginAttemptTracker.CalculateDelay`, `< 3 => 0`).
+
+Последствие: атакующий отличает зарегистрированный адрес от незарегистрированного тремя способами, не зная пароля. Само перечисление уже принято как риск для трех других surface (SECURITY.md:131-157), но вход в этот список не входит и заявлен закрытым — заявление неверно.
+
+Исправление: либо свести `Removed`/`Banned`/`PendingRegistration` к тому же ответу, что `WrongPassword` (состояние аккаунта сообщать только после успешной проверки пароля), либо внести вход в записанный список исключений с обоснованием — и в любом случае считать эти ветки неудачными попытками. Для timing достаточно считать хеш от фиктивной соли при отсутствующем пользователе.
+
+### [СРЕДНЯЯ] lockout-reset-clears-every-address — истекший lockout одной пары сбрасывает счетчики всех
+
+Счетчик неудачных попыток ключуется парой (почта, адрес) — решение обосновано в `LoginAttemptOrigin.cs:6-14`, и обоснование корректное. Но снятие истекшего lockout сделано по почте:
+
+```csharp
+if (!isLocked)
+{
+    await _repository.ResetAttempts(origin.Email);
+}
+```
+(`LoginAttemptTracker.cs:50-54`; `ResetAttempts` — `DeleteManyAsync(Filter.Eq(x => x.Email, ...))`, `LoginAttemptRepository.cs:78-84`)
+
+Последствие: одна проверка входа с адреса, чей lockout истек, удаляет записи всех остальных адресов по этому аккаунту — вместе с их `LockoutStartUtc` и накопленной прогрессивной задержкой. Распределенный перебор с N адресов после первого истечения получает N свежих окон по 15 попыток без задержки, вместо того чтобы каждый адрес ждал своего срока. Кроме того `CleanupExpiredRecords` удаляет только записи с `LockoutStartUtc == null` (`LoginAttemptRepository.cs:87-93`), так что не-опрошенные заблокированные записи остаются в Mongo навсегда.
+
+Исправление: снимать истекший lockout по `origin.Key`, а не по почте (по почте — только успешный вход, как и написано в комментарии `:79-81`). В cleanup добавить условие на давность `LockoutStartUtc`.
+
+### [СРЕДНЯЯ] csp-unsafe-inline-forced-by-renderer — 'unsafe-inline' в script-src держится на косметике
+
+Обе политики (API — `SecurityHeadersMiddleware.cs:70`, документ — `src/DM.Web.Client/nginx.conf:32`) содержат `script-src 'self' 'unsafe-inline'`. Комментарий в nginx.conf:21-24 честно называет причины: anti-FOUC блок в `index.html` и `javascript:void(0)` в href'ах, которые эмитит BBCode-рендерер. Вторая причина подтверждается кодом: `Spoiler` и `Nsfw` эмитят `<a href="javascript:void(0)" ...>` (`BbParserProvider.cs:30, 50-52`), плюс `EmptySpoilerHeadRegex` подставляет такой же href (`BbParserWrapper.cs:155, 421-422`).
+
+Последствие: `'unsafe-inline'` в `script-src` снимает основную часть CSP как защиты второго рубежа от XSS — на сайте, где пользовательский HTML биндится через `v-html` на каждой странице. То есть слой, который должен ловить пропущенную ошибку экранирования (а такие в этом слайсе есть, см. placeholder-substitution-into-markup), выключен ради двух декоративных решений.
+
+Исправление: заменить `javascript:void(0)` на `href="#"` с `preventDefault` (или на `<button>`), anti-FOUC вынести в отдельный файл либо подписать hash'ом, и убрать `'unsafe-inline'` из `script-src` на обоих слоях. Это единственный способ, чтобы CSP начала что-то значить; `style-src 'unsafe-inline'` можно оставить.
+
+### [НИЗКАЯ] comments-that-lie — четыре комментария противоречат коду
+
+- `AuthenticationController.cs:20` — "Session cookies are HttpOnly and SameSite=Strict for security". Фактически `SameSite = SameSiteMode.Lax` (`ApiCredentialsStorage.cs:61`), и Lax тут выбран осознанно с объяснением в двух других местах.
+- `CsrfProtectionMiddleware.cs:18` — "While the API uses custom auth headers (not cookies)". API использует именно куку; на этом же ложном посыле построено решение пропускать запросы без Origin (`:63-70`) — вывод при этом остается верным (Lax не отдает куку на межсайтовый POST), но написан не по той причине.
+- `RecoveryController.cs:23` — "Responses are intentionally vague to prevent user enumeration". Три статуса различимы, и это записанное исключение (в том же файле, `:60-63`).
+- `docker/docker-compose.yml:19-21` — "Development unlocks the dev-only seed and role endpoints". В API нет ни одного endpoint'а под `IsDevelopment()`, кроме Swagger (`Startup.cs:245`); ролевой endpoint закрыт `RequireRole(Admin)` (`ProfileController.cs:97-98`), сидер — отдельный инструмент.
+
+Последствие: следующий читатель принимает решение по неверной посылке. Комментарий про `SameSite=Strict` особенно вредный: он выглядит как гарантия, которой нет, и приглашает "починить" Lax.
+
+Исправление: привести четыре текста в соответствие с кодом.
+
+### [НИЗКАЯ] code-noparse-do-not-suppress-img-link — картинки и ссылки рендерятся внутри code/noparse
+
+Из-за того же приоритета извлечения (`BbParserWrapper.Parse` до внутреннего парсера) `CodeTag`, который должен отдавать содержимое как есть, к `[img]`/`[link]` не применяется. Проверено:
+
+```
+IN : [code][img]https://example.com/a.png[/img][/code]
+OUT: <pre class="code"><img src="https://example.com/a.png" ...></pre>
+
+IN : [noparse][img]https://example.com/a.png[/img][/noparse]
+OUT: <img src="https://example.com/a.png" ...>
+```
+
+(`[noparse][b]bold[/b][/noparse]` при этом работает правильно.)
+
+Последствие: показать пример BBCode-разметки с картинкой или ссылкой невозможно — она отрендерится; модератор, цитирующий чужую разметку в `[code]`, повторно встраивает картинку с внешнего адреса.
+
+Исправление: то же, что для safe-image — извлечение должно учитывать, что участок находится внутри code/noparse.
+
+### [НИЗКАЯ] ssrf-blocklist-prefix-based — блок-лист хостов обходится и защищает не то, что заявлено
+
+`BlockedHostPatterns` сравнивается префиксом строки (`BbParserWrapper.cs:56-71, 107-111`). Проверено: `http://127.1`, `http://2130706433`, `http://0177.0.0.1` блокируются (их нормализует `new Uri`), а `http://[::ffff:127.0.0.1]/x.png` проходит и рендерится в `<img src=...>`. Кроме того SECURITY.md:78 и AUTHENTICATION.md:124 называют это защитой от SSRF, тогда как сервер по этим адресам не ходит вовсе — запрос делает браузер зрителя. Реальная угроза здесь не SSRF, а обращение к сервисам на localhost зрителя.
+
+Последствие: невелико (адресат — loopback самого зрителя), но метка риска в двух документах неверна, и следующий человек может решить, что серверный fetch по пользовательскому URL уже прикрыт.
+
+Исправление: сравнивать разобранный `IPAddress` (`IPAddress.TryParse` + проверка на loopback/private/link-local, включая IPv4-mapped), а формулировку в документах заменить на то, что происходит фактически. Если когда-нибудь появится серверный link-preview, ему потребуется отдельная проверка после DNS-резолва.
+
+### [НИЗКАЯ] post-attachments-public-bucket — вложения закрытых комнат отдаются анонимно
+
+Бакет создается с политикой анонимного `s3:GetObject` на весь префикс (`StorageBucketInitializer.cs:59-73`), и nginx отдает его без basic auth (`docker/nginx/nginx.conf:102-103`). Для аватаров это ровно то, что нужно, и так и написано. Но через тот же путь и с той же политикой лежат `PostAttachment` — вложения постов, которые могут находиться в приватной комнате закрытой игры. Ключ объекта — `posts/{userId:N}_{8 hex}.ext` (`UploadApiService.cs:415-432`), то есть защита сводится к неугадываемости 32 бит при известном userId. Листинга нет (`ListBucket` в политику не входит) — это правильно.
+
+Последствие: вложение из приватной комнаты доступно любому, кто получил URL (пересланная ссылка, история браузера, лог прокси). Риск небольшой, но нигде не записан: UPLOADS.md обсуждает только аватары.
+
+Исправление: либо записать это как принятый риск в UPLOADS.md, либо развести аватары и вложения по разным префиксам и отдавать вложения через подписанный URL с коротким сроком.
+
+### [НИЗКАЯ] dead-permission-bucket-cache — описанный в документах кеш рендера не подключен
+
+`RenderedBbCache` и `PermissionBucket` не используются ничем, кроме своих тестов: полный список вхождений — `Parsing/RenderedBbCache.cs`, `Parsing/PermissionBucket.cs` и `test/DM.Infrastructure.Core.Tests/RenderedBbCacheShould.cs` (плюс `PermissionBucketShould.cs`). `BbConverter.Write` вызывает `wrapper.RenderHtml` напрямую (`BbConverter.cs:91-93`). При этом BBCODE_RENDERING.md:132-136 описывает кеширование по `(sourceHash, audience, permissionBucket)` как действующий механизм.
+
+Последствие: сейчас положительное — нет кеша, нет и риска отдать чужой бакет. Но 255 строк непроверенного на живом пути кода, который документация объявляет работающим, — это заряженное ружье: подключать его будет тот, кто прочитает документ и решит, что механизм уже проверен.
+
+Исправление: либо подключить (с тестом "два зрителя разных бакетов получают разный HTML на одной строке"), либо удалить и убрать раздел из документа.
+
+## Чего я не смог определить
+
+- Достижимость `intention-403-serializes-target` на боевых данных: я проверил путь по коду (загрузка цели -> `ThrowIfForbidden` -> `Message` -> `title` в ProblemDetails), но не выполнил HTTP-запрос. Закрывает вопрос один `curl` к `/v1/blogs/owner/<владелец приватного черновика>` на поднятом стенде с чтением тела 403.
+- Попадает ли `Author.Email` в сериализованный объект фактически: `GeneralUser.Email` существует и в `GeneralUserMappingProfile` не игнорируется, но `BlogDto` собирается `ProjectTo` по профилю, который я целиком не разбирал. Ответ дает тот же запрос из предыдущего пункта.
+- Реальная стоимость timing-oracle на входе: разница между "пользователь не найден" (без Argon2) и "неверный пароль" (19 MiB, t=2) должна быть заметна, но величину надо измерить под нагрузкой — по 200 замеров на каждую ветку.
+- Поведение `EnrichWithCharacterPictures` при дубликате: `ToDictionaryAsync` по контракту бросает на повторном ключе, но подтвердить, что это именно 500, а не что-то перехваченное выше, можно только двумя загрузками аватара на одного персонажа на живом стенде.
+- Что считать правильным в `mentor-counts-as-own-space` — решение владельца, а не аудита: код и AUTHORIZATION.md расходятся осознанно с двух сторон.
+- Достаточность `GlobalPermitLimit = 100` после починки forwarded-headers: это вопрос измерения (сколько запросов делает обычная сессия на страницу), а не чтения кода.
+
+### [ОПРОВЕРГНУТО] private-tag-unquoted-not-parsed — приватный текст в формате редактора виден всем
+
+> **Опровержение: ОПРОВЕРГНУТО.**
+>
+> Already fixed in HEAD. BbParserWrapper.cs:189-207 `NormalisePrivateTags` rewrites `[private=Ivan]` → `[private="Ivan"]` and lowercases both tags case-insensitively, and Parse calls it at :232 before any extraction — so it covers every surface and every stored string. Test coverage exists too: PermissionFilteringVisitorShould.cs:148-169 is a 4-row theory over `[private=B]`, `[private="B"]`, `[PRIVATE="B"]`, `[Private=B]` asserting NotContain("secret"); `dotnet test --filter PermissionFilteringVisitorShould` → 29/29 pass. Landed in 4b4336da (2026-07-30 11:40, ancestor of HEAD). The report was written pre-fix: its cites into this file are shifted ~54 lines (extraction "180-220" is now 234-302, restore "333-381" is now 387-435) — exactly the size of the inserted block — while everything before line 155 matches byte-for-byte. Also stale: "все 17 тестов" is now 29.
+
+Серверный парсер распознает значение тега только в кавычках. Проверено запуском `BbParserWrapper.RenderHtml` через `GetForSurface(BbSurface.GamePost)` с контекстом зрителя, который не автор, не ведущий, без override'ов:
+
+```
+IN : public [private=Ivan]SECRET[/private] tail
+OUT: public [private=Ivan]SECRET tail          <- текст отдан, закрывающий тег съеден
+
+IN : public [private="Ivan"]SECRET[/private] tail
+OUT: public  tail                              <- вырезано корректно
+```
+
+То же на `plain_text` (письма) и на `embed_safe`: `[private=Ivan]SECRET` проходит насквозь. Регистр тоже значим: `[PRIVATE="Ivan"]` не распознается и утекает.
+
+Формат без кавычек — единственный, который производит продукт:
+- `bbcode.ts:1029` и `:1104` — `` return `[private=${unescapeHtml(character)}]${content}[/private]` ``;
+- `BBCodeEditor.vue:616` — `wrapSelection(`[private=${character}]`, "[/private]")`;
+- справка редактора `BBCodeEditor.vue:1319` учит пользователя писать `[private=Имя]`.
+
+Расхождение видно и внутри бэкенда: SQL-редакция в поиске вырезает именно форму без кавычек — `\[private(=[^\]]*)?\][\s\S]*?\[/private\]` (`PostRepository.cs:120`). Поиск считает такой блок приватным, рендерер — нет.
+
+Почему это не поймали тесты: все 17 тестов `PermissionFilteringVisitorShould.cs` используют `[private="B"]` (строки 95, 112, 129, 144, 155, 165, 175, 183, 197, 231), а фронтовые тесты `bbcode.spec.ts:420-434, 826, 877` — форму без кавычек. Две половины контракта проверены на разных синтаксисах, и границу между ними не проверяет ничто.
+
+Последствие: любой игрок, написавший приватную реплику через интерфейс продукта, отдает ее всем читателям комнаты, включая гостей на публичных играх, и она же уходит в почтовые нотификации. Инвариант BBCODE_RENDERING.md:9 ("фильтруется до сериализации JSON") на реальном формате не выполняется вообще.
+
+Исправление: нормализовать значение атрибута на save-пути (или расширить набор тегов так, чтобы значение без кавычек парсилось), обязательно с сохранением совместимости обеих форм на чтении. В матричные тесты добавить оба синтаксиса и один тест, который берет строку ровно из того же генератора, что использует клиент (`htmlToBbcode`), и прогоняет ее через серверный рендерер.
+
+
+# Композиционный корень, конфигурация, hosted-сервисы, наблюдаемость — D
+
+Оценка среза до опровержения: D. Замысел слоя на уровне B — парные с модулями расширения конфигурации с ValidateOnStart, осознанный порядок middleware, PreserveExistingDefaults на скане, ограниченные метки Loki — но три дефекта времен жизни и связки с деплоем доходят до каждого пользователя и требуют переделки, а композиционный корень не покрыт ни одним тестом.
+
+Вердикт: замысел этого слоя на уровне B, реализация времен жизни и связка с деплоем — на уровне D,
+и решают именно они. Четыре хоста (`DM.Web.API`, `DM.Workers.Mail`, `DM.Workers.NotificationDispatcher`,
+`DM.Tools.Seeder`) собираются по одному шаблону: `Host.CreateDefaultBuilder` + `AutofacServiceProviderFactory`
++ `WithDmConfiguration()` + `UseDefault<Startup>()`. Привязка опций вынесена в парные с модулями
+расширения (`AddDmCoreConfiguration`, `AddDmMessageQueuing`, `AddDmAccountConfiguration`,
+`AddDmMailConfiguration`), у критичных значений стоит `ValidateOnStart`, порядок middleware выстроен
+осознанно, и почти каждое неочевидное решение снабжено комментарием, объясняющим, какой сбой оно
+предотвращает. Я проверил эти объяснения — большинство держится. `PreserveExistingDefaults` на скане
+сборок действительно нужен (модули Autofac применяются после `Populate`, и без него скан перекрыл бы
+`AddDbContextPool` и типизированные `HttpClient`); `UseRateLimiter` действительно обязан идти после
+`UseRouting`, иначе метаданные endpoint-а пусты и работает только глобальный лимитер; пустой список
+известных прокси действительно заставляет `ForwardedHeadersMiddleware` верить всем, поэтому
+`ForwardedHeaders.None` — правильная реакция на "прокси не настроен".
+
+Ломается слой на трех вещах, каждая из которых доходит до пользователя. Первая: producer-ы RabbitMQ
+строятся в конструкторе типов, зарегистрированных сканом как `InstancePerDependency`, и не
+освобождаются никогда — каждая публикация события утекает один AMQP-канал, а пул конечен
+(16 × 256 = 4096), после чего в API умирает вся отправка сообщений до перезапуска. Вторая:
+`ReverseProxyConfiguration:TrustedNetworks` пуст во всех файлах репозитория, а единственный
+разворачиваемый стек (`setup-server.sh` → `docker-compose.yml` + `docker-compose.preview.yml`) ставит
+перед API nginx — значит `RemoteIpAddress` у каждого запроса это адрес nginx, глобальный лимитер в
+100 запросов в минуту делится на весь сайт, а журнал входов и аудит безопасности пишут адрес прокси.
+Третья: `UserConnectionService` зарегистрирован `SingleInstance()` и принимает `IAuthenticationService`,
+который тянет `IAuthenticationRepository` и через него `DmDbContext` — pooled-контекст, разрешенный
+в корневом scope и разделяемый всеми одновременными подключениями SignalR.
+
+Наблюдаемость собрана лучше, чем работает: Serilog с двумя ограниченными метками Loki, `ActivityEnricher`
+с TraceId/SpanId, корреляционный токен в `LogContext`, OTLP в Jaeger, Prometheus-эндпоинт на каждом
+хосте, восемь алертов с корректными именами метрик OTel, три provisioned-дашборда. Но алерты некуда
+доставлять (нет ни секции `alerting:`, ни alertmanager), у консьюмеров нет ни одной бизнес-метрики
+(дашборд "Consumers" рисует HTTP-трафик health-чеков), а `/_health/detail` с текстами исключений и
+`/metrics` открыты наружу вместе с портом API. Оценка D, а не F, потому что структура правильная и
+исправления точечные: три критичные находки — это три места, не переписывание слоя.
+
+## Что сделано хорошо
+
+- `ModuleRegistrationExtensions.cs:109` — `PreserveExistingDefaults()` на blanket-скане. Утверждение
+  комментария проверяемо и верно: `AutofacServiceProviderFactory` вызывает `builder.Populate(services)`
+  до `ConfigureContainer`, поэтому без этого вызова `InstancePerDependency`-регистрация из скана стала
+  бы default для `DmDbContext` и `ICompromisedPasswordChecker`, отменив пулинг контекста и
+  `HttpClientFactory`. `ModuleRegistrationExtensions.cs:100` исключает из скана `IHostedService` — тоже
+  необходимо, иначе фоновые сервисы получили бы вторую регистрацию помимо `AddHostedService`.
+- `ModuleRegistrationExtensions.cs:138-143` — маркер `MapperRegisteredKey`. `RegisterMapper` вызывается
+  для 9 сборок (Startup.cs:187 и 328 в цикле по 8 доменным сборкам), и без маркера
+  `IConfigurationProvider` регистрировался бы 9 раз. `AllowNullCollections = true` (строка 154) —
+  не косметика: от него зависит семантика PATCH, "поле не пришло" против "поле пришло пустым".
+- `Startup.cs:235-269` — порядок middleware. `UseForwardedHeaders` первым (иначе лимитер и аудит
+  видят не тот адрес), `SecurityHeadersMiddleware` до `UseSwaggerUI` (иначе статика Swagger уходит
+  без заголовков), `UseRateLimiter` после `UseRouting` (иначе `[EnableRateLimiting]` инертен). Все три
+  комментария называют реальную причину, и порядок в коде ей соответствует.
+- `ReverseProxyExtensions.cs:36-52` — `ForwardedHeaders.None` при пустом списке сетей плюс
+  `KnownNetworks.Clear()`/`KnownProxies.Clear()`. Это правильное и неочевидное решение: фреймворк по
+  умолчанию доверяет loopback, а пустой известный список в ASP.NET Core означает "не проверять пира".
+  `ParseNetwork` (строка 58) валит старт с внятным текстом на невалидном CIDR.
+- `AccountConfigurationExtensions.cs:52-63` — `IsUsableEncryptionKey` проверяет не "непусто", а
+  ровно 32 декодированных байта. `docker-compose.yml:34` объявляет переменную через `${...:?}`, так
+  что compose останавливается еще до сборки. Это единственное место, где заявленное "нет дефолта в
+  репозитории — старт валится" действительно работает от начала до конца.
+- `MessageQueuingConfigurationExtensions.cs:34-37` и `:65-68` — валидация `Endpoint` как абсолютного
+  URI и, в health-чеке, `Uri.TryCreate` вместо `new Uri` именно для того, чтобы не опередить
+  `ValidateOnStart` голым `UriFormatException`. Рассуждение верное (см. находку
+  `api-healthcheck-uri-unguarded` — в API его как раз не применили).
+- `HealthCheckExtensions.cs:36-45` — RabbitMQ не в теге `ready` у API и в теге `ready` у воркеров.
+  Аргумент правильный: API отдает ответ без брокера, воркер без брокера не делает ничего.
+- `LoggingConfiguration.cs:37-55` — уровень Information на сервере с override на `Microsoft`/`System`
+  до Warning, ровно две метки Loki (`app`, `env`), `propertiesAsLabels: []`. Обоснование про
+  кардинальность потоков верно. `SetDbStatementForText = isDevelopment` (строка 66) — текст SQL с
+  параметрами не уезжает в трейсы на сервере.
+- Дисциплина логирования: я прогнал grep по всем `Log*` вызовам с упоминанием password/token/email/secret —
+  ни одного случая логирования сырого адреса, пароля или токена. `MailSendingProcessor.cs:51` пишет
+  `message.Address.Obfuscate()`, `AuthenticationService` пишет только `UserId`/`SessionId`,
+  `HibpPasswordChecker` не логирует ни пароль, ни его хеш.
+- `CorrelationTokenProvider.cs:32` — сеттер токена делает `LogContext.PushProperty("CorrelationToken", value)`,
+  а логгер собран с `Enrich.FromLogContext()`. То есть токен, который пользователь получает в теле
+  500-ответа (`ExceptionProblemDetailsFactoryExtensions.cs:53`), действительно присутствует в каждой
+  строке лога запроса и ищется в Loki. Поддержка по токену работает — внутри API.
+- `RealtimeNotificationConsumer.cs:37` и `:51-63` — `await Task.Yield()` перед обращением к брокеру и
+  перехват сбоя подписки вместо падения хоста. Это ровно то, чего не хватает обоим воркерам.
+- `RateLimitingExtensions.cs:53-77` — политики объявлены данными, а не семью почти одинаковыми
+  лямбдами, и в выключенном режиме регистрируются как no-op, чтобы `[EnableRateLimiting("...")]`
+  разрешался по имени. `OnRejected` строит тело через тот же `ProblemDetailsFactory` и передает
+  `contentType` перегрузкой `WriteAsJsonAsync` — иначе он затирался бы на `application/json`.
+- `MongoIndexInitializer` и `ExpressionIndexInitializer` — оба переутверждают индексы на каждом старте,
+  ничего не удаляют и проглатывают ошибку с `LogError` (`MongoIndexInitializer.cs:239-243`,
+  `ExpressionIndexInitializer.cs:71-76`), то есть недоступное хранилище не блокирует старт хоста.
+  Довод про то, почему expression-индексы не в миграции, корректен.
+- `UploadMetrics.cs` — единственный доменный набор метрик в проекте, но сделан целиком: счетчики
+  успеха и отказа с атрибутом `reason`, гистограммы длительности и размеров, и они действительно
+  пишутся на всех ветках `UploadApiService.cs:186-217`, включая четыре разных причины отказа. Метр
+  зарегистрирован в `LoggingConfiguration.cs:76`.
+- `docker/prometheus/alerts.yml:15,28` и `docker/grafana/dashboards/*.json` используют
+  `http_server_request_duration_seconds_*` и `process_runtime_dotnet_*` — реальные имена, которые
+  отдает OTel-инструментация с Prometheus-экспортером. Правило `ConsumerScrapeTargetMissing` на
+  `absent()` (строка 50) закрывает настоящую слепую зону `up == 0`.
+- `ChannelPoolExhaustedException`-риск ниже описан как находка, но сама передача фабрики соединений
+  сделана правильно: `MessageQueuingModule.cs:15-27` регистрирует `ConnectionFactory` из
+  `RabbitMqConfiguration` как `IAsyncConnectionFactory`, и Jamq (я разобрал IL
+  `JamqClientConfigurationExtensions.ChannelPoolProvider`) при непустом `GetService<IAsyncConnectionFactory>()`
+  пропускает свои дефолты `amqp://localhost:5672`/guest и оставляет endpoint и учетные данные хоста,
+  доставляя при этом `DispatchConsumersAsync = true`. Конфигурация брокера не игнорируется.
+
+## Находки
+
+### [КРИТИЧНО] rabbit-producer-channel-leak — каждая публикация события утекает AMQP-канал, после ~4096 отправка умирает до перезапуска
+
+> **Опровержение: подтверждено.**
+
+`InvokedEventProducer` и `MailSender` строят producer в инициализаторе поля/конструкторе:
+
+```csharp
+// src/DM.Infrastructure.Messaging/GeneralBus/InvokedEventProducer.cs:20
+private readonly IProducer<string, InvokedEvent> producer = producerBuilder.BuildRabbit<InvokedEvent>(
+    new RabbitProducerParameters(InvokedEventsTransport.ExchangeName));
+```
+
+```csharp
+// src/DM.Infrastructure.Mail/MailSender.cs:24
+producer = producerBuilder.BuildRabbit<EmailLetter>(new RabbitProducerParameters("dm.mail.sending"));
+```
+
+Оба типа зарегистрированы только blanket-сканом (`MessageQueuingModule.cs:29`, `MailModule.cs:17` →
+`RegisterDefaultTypes()` → `.InstancePerDependency()`), то есть новый экземпляр на каждое разрешение.
+Ни один из них не реализует `IDisposable`, и объект, который вернул `BuildRabbit`, контейнеру
+неизвестен — освободить его некому.
+
+Я разобрал IL пакета `Jamq.Client.Rabbit` 0.10.0, чтобы не гадать:
+`ProducerBuilderExtensions.BuildRabbit` — это `newobj RabbitProducer<TMessage>` без какого-либо кеша;
+`RabbitProducer<T> : IProducer<,>, IDisposable`; его конструктор создает
+`Lazy<IChannelAdapter>(..., LazyThreadSafetyMode.ExecutionAndPublication)`, то есть канал берется из
+пула при первом `Send`; `Dispose()` вызывает `CloseCurrentChannel()`, который снимает подписку
+`OnDisrupted` и делает `Dispose()` адаптеру канала — только это и возвращает емкость в пул
+(`ConnectionAdapter.FreeChannel` подписан на `ModelShutdown`). `IChannelPool` имеет единственный метод
+`Get()`, никакого `Return`. Дефолты `RabbitConnectionParameters` я получил исполнением:
+`ChannelsLimit=256`, `PoolSize=16` — а DM вызывает беспараметрический
+`config.UseRabbit()` (`Startup.cs:142`, оба воркера), то есть эти дефолты и действуют.
+
+Потребителей у утечки много: `IEventProducer`/`IInvokedEventProducer` объявлены зависимостью в 32
+файлах `src/`, плюс `IMailSender`. Каждый HTTP-запрос, чей scope разрешает такой сервис и публикует
+хотя бы одно событие, оставляет один открытый канал навсегда.
+
+Последствие: после примерно 4096 опубликованных событий (16 × 256) `ChannelPool.Get()` бросает
+`ChannelPoolExhaustedException`, и с этого момента в API падает каждая публикация: не идет
+индексация поиска, не создаются уведомления, не уходят письма регистрации и сброса пароля. До этого
+момента RabbitMQ держит тысячи открытых каналов (память брокера) и процесс — тысячи живых
+`RabbitProducer`, укорененных через обработчик `OnDisrupted` на адаптере канала, то есть недостижимых
+для GC. Симптом для владельца: "уведомления и письма перестали работать, помог перезапуск" —
+воспроизводимо каждые несколько дней аптайма и необъяснимо по логам.
+
+Исправление: producer должен жить столько же, сколько пул каналов. Зарегистрировать
+`InvokedEventProducer` и `MailSender` явно как `SingleInstance()` в `MessageQueuingModule`/`MailModule`
+(`RabbitProducer.Send` потокобезопасен относительно канала через `Lazy` + `Restore`), либо, если
+нужен per-scope, реализовать `IDisposable` на обоих типах с `producer.Dispose()` — тогда Autofac
+освободит их на закрытии scope. Первый вариант правильнее: один канал на процесс на exchange.
+Заодно передать `UseRabbit(new RabbitConnectionParameters { PoolSize = ..., ChannelsLimit = ... })`,
+чтобы предел был назначенным, а не подразумеваемым.
+
+### [КРИТИЧНО] forwarded-headers-never-trusted — в единственном разворачиваемом стеке лимитер и аудит видят адрес nginx, а не клиента
+
+> **Опровержение: подтверждено.**
+
+`appsettings.json:5-8` — единственное место в репозитории, где задан этот раздел:
+
+```json
+"ReverseProxyConfiguration": { "TrustedNetworks": [], "ProxyCount": 1 },
+```
+
+Ни `docker/docker-compose.yml` (секция `x-workload-env`), ни `docker-compose.preview.yml`, ни
+`docker/.env.example`, ни `setup-server.sh` не задают `DM_ReverseProxyConfiguration__TrustedNetworks__0`
+(проверено grep-ом по всему дереву). Следовательно `ReverseProxyExtensions.cs:36` выставляет
+`ForwardedHeaders.None`, и `UseForwardedHeaders()` в `Startup.cs:235` не обрабатывает ничего.
+
+При этом `docker/dm3.service:14` и `setup-server.sh:46` разворачивают именно overlay с nginx:
+
+```
+ExecStart=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.preview.yml up -d
+```
+
+а `docker/nginx/nginx.conf:77-86` проксирует `/v1/` в `http://api`. То есть `RemoteIpAddress` каждого
+запроса — адрес контейнера nginx, один для всех.
+
+`RateLimitingExtensions.cs:181` берет ключ партиции ровно оттуда:
+
+```csharp
+var address = context.Connection.RemoteIpAddress?.ToString();
+```
+
+Последствие: глобальный лимитер `GlobalPermitLimit = 100` запросов в минуту
+(`RateLimitingExtensions.cs:28`) становится общим бюджетом всего сайта. SPA делает десятки вызовов на
+отрисовку страницы, то есть нескольких одновременных читателей достаточно, чтобы все получали 429.
+Политика `Auth` (5 в минуту, строка 57) превращается в "пять попыток входа в минуту на всех": один
+человек, трижды опечатавшийся в пароле, лишает остальных возможности войти. Дополнительно журнал
+входов, аудит безопасности и детектор подозрительных входов записывают для всех один и тот же адрес —
+ровно то, от чего, по комментарию `Startup.cs:87-90`, эта конструкция существует.
+
+Исправление: добавить в `x-workload-env` (или в overlay preview, где nginx и появляется)
+`DM_ReverseProxyConfiguration__TrustedNetworks__0` с CIDR docker-сети `dm-full-app` и
+`DM_ReverseProxyConfiguration__ProxyCount=1`. Так как значение по умолчанию небезопасно молча,
+добавить в интеграционный тест проверку, что при непустом `TrustedNetworks` `X-Forwarded-For`
+доходит до `Connection.RemoteIpAddress`, а при пустом — нет.
+
+### [ВЫСОКАЯ] captive-dbcontext-in-connection-singleton — один DmDbContext на все подключения SignalR, разделяемый и никогда не освобождаемый
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: КРИТИЧНО -> ВЫСОКАЯ.
+>
+> Registration graph verified end to end: Startup.cs:206-208 registers UserConnectionService SingleInstance after the line-186 scan and without PreserveExistingDefaults, so it wins as IUserConnectionService; UserConnectionService.cs:10 takes IAuthenticationService; AuthenticationService.cs:39 takes IAuthenticationRepository; PersistenceModule.cs:267-269 is InstancePerLifetimeScope; AuthenticationRepository.cs:27-34 takes DmDbContext, which Populate maps from AddDbContextPool's Scoped to InstancePerLifetimeScope. Autofac activates a root-shared component in the root scope and resolves its dependencies there, so the whole chain plus one pooled lease is process-wide, and MS.DI ValidateScopes does not run under AutofacServiceProviderFactory. The path is live: App.vue connects to the hub on authentication and NotificationHub.cs:48 calls Add → Authenticate(authToken). Two nits: the snippet of AuthenticationRepository.cs:157 omits the `if (user != null)` guard at line 158, and there is no test anywhere touching UserConnectionService (grep over test/ is empty), which matches the report. Downgraded because nothing here is data loss, a security hole, or broken for every user — a lone connecting user works; the harm is InvalidOperationException on concurrent connects plus an unbounded change tracker and one permanently leased pooled context.
+
+```csharp
+// src/DM.Web.API/Startup.cs:206
+builder.RegisterType<UserConnectionService>()
+    .AsImplementedInterfaces()
+    .SingleInstance();
+```
+
+```csharp
+// src/DM.Web.API/Realtime/UserConnectionService.cs:10
+internal class UserConnectionService(IAuthenticationService authenticationService) : IUserConnectionService
+```
+
+Цепочка: `IAuthenticationService` → `AuthenticationService` зарегистрирован сканом как
+`InstancePerDependency`, принимает `IAuthenticationRepository`
+(`PersistenceModule.cs:267-269`, `InstancePerLifetimeScope`), который принимает `DmDbContext`
+(`AuthenticationRepository.cs:27-33`). `DmDbContext` пришел из MS.DI как Scoped
+(`Startup.cs:117` `AddDbContextPool`), а `Populate` отображает Scoped в `InstancePerLifetimeScope`.
+Singleton разрешается в корневом scope, поэтому вся цепочка тоже разрешается в корневом scope:
+один `AuthenticationService`, один `AuthenticationRepository`, один арендованный из пула
+`DmDbContext` на весь процесс. Autofac это не запрещает и не диагностирует, а проверка scope-ов
+MS.DI (`ValidateScopes`) при Autofac-провайдере не применяется.
+
+Путь исполнения — каждое аутентифицированное подключение вебсокета:
+`NotificationHub.OnConnectedAsync` (`NotificationHub.cs:48`) → `_connectionService.Add(token, ...)` →
+`authenticationService.Authenticate(authToken)` (`AuthenticationService.cs:142`), где идет EF-запрос
+`_repository.FindUser(userId)` и, при устаревшей активности, запись:
+
+```csharp
+// src/DM.Infrastructure.Persistence/Repositories/Account/AuthenticationRepository.cs:157
+var user = await _dbContext.Users.FindAsync(userId);
+user.LastActivityUtc = lastActivityUtc;
+await _dbContext.SaveChangesAsync();
+```
+
+Последствие. Два пользователя, подключающихся одновременно (обычное дело после деплоя, когда все
+клиенты переподключаются разом), выполняют два запроса на одном экземпляре `DbContext` →
+`InvalidOperationException: A second operation was started on this context instance...`. Исключение
+уходит из `OnConnectedAsync`, SignalR закрывает соединение с ошибкой, и эти пользователи не
+регистрируются в карте — то есть перестают получать адресные realtime-уведомления, оставаясь при этом
+подключенными. Второй эффект: `FindAsync` кладет отслеживаемую сущность `User` в change tracker
+контекста, который живет весь процесс — по одной записи на каждого подключавшегося пользователя,
+без границы; и `SaveChangesAsync` каждый раз пишет накопленные изменения всех предыдущих. Третий:
+арендованный из пула контекст не возвращается никогда, что прямо противоречит соображению,
+записанному в `Startup.cs:224-226` про миграционный scope.
+
+Исправление: не держать `IAuthenticationService` в singleton-е. Внедрить `ILifetimeScope`
+(или `IServiceScopeFactory`) и открывать scope на каждый вызов `Add`:
+`await using var scope = _scopeFactory.CreateAsyncScope(); var auth = scope.ServiceProvider.GetRequiredService<IAuthenticationService>();`
+Альтернатива — аутентифицировать в самом хабе (экземпляр хаба создается на вызов и получает scoped
+провайдер) и передавать в `UserConnectionService` уже готовый `userId`; тогда singleton хранит только
+две `ConcurrentDictionary` и не имеет зависимостей вовсе.
+
+### [ВЫСОКАЯ] health-detail-public — `/_health/detail` с текстами исключений и `/metrics` открыты в интернет вместе с портом API
+
+> **Опровержение: подтверждено.**
+
+`Startup.cs:280-297` монтирует три health-эндпоинта, все три с
+`HealthChecks.UI.Client.UIResponseWriter.WriteHealthCheckUIResponse`. В пакете
+`AspNetCore.HealthChecks.UI.Client` 8.0.1 есть вторая, безопасная реализация — я проверил
+экспортируемые имена в `HealthChecks.UI.Client.dll`: рядом лежит
+`WriteHealthCheckUIResponseNoExceptionDetails`. Используется первая, то есть в JSON попадает текст
+исключения каждой упавшей проверки.
+
+`Startup.cs:277` монтирует `MapPrometheusScrapingEndpoint("/metrics")` без авторизации.
+
+`docker/docker-compose.yml:480` публикует API на всех интерфейсах, в отличие от всех остальных
+сервисов проекта:
+
+```yaml
+  dmapi:
+    ports:
+      - '5000:5000'
+```
+
+(сравните: `dm-mail-worker` — `'127.0.0.1:5003:5000'`, prometheus — `'127.0.0.1:9090:9090'`).
+`docker/guides/MONITORING.md` в блоке про доступ сам объясняет механику: опубликованный докером порт
+идет через цепочки nat/DOCKER и FORWARD, минуя INPUT, поэтому правила `iptables -I INPUT` из
+`setup-server.sh:22-24` его не закрывают.
+
+Последствие: любой из интернета получает на `http://<server>:5000/_health/detail` строки исключений
+Npgsql (в них хост, порт, база и имя пользователя), MongoDB и RabbitMQ, а на `/metrics` — полный
+перечень шаблонов маршрутов, объемы трафика и внутренние показатели рантайма. Тот же порт полностью
+обходит basic-auth nginx, на котором держится закрытость preview-стенда: `/v1/...` доступен напрямую
+без пароля.
+
+Исправление: привязать публикацию API к `127.0.0.1` в базовом compose (в preview-стеке наружу
+смотрит nginx, ему достаточно внутренней сети), а `/metrics` и `/_health/detail` либо не монтировать
+вне Development, либо закрыть тем же способом, что и остальные служебные интерфейсы. На всех трех
+health-эндпоинтах перейти на `WriteHealthCheckUIResponseNoExceptionDetails`.
+
+### [ВЫСОКАЯ] smtp-session-per-message — на каждое письмо открывается SMTP-сессия, которую никто не закрывает
+
+> **Опровержение: подтверждено.**
+
+```csharp
+// src/DM.Workers.Mail/MailSendingProcessor.cs:37-45
+_client = new Lazy<IMailTransport>(() =>
+{
+    var smtpClient = new SmtpClient();
+    smtpClient.Connect(_configuration.ServerHost, _configuration.ServerPort, SecureSocketOptions.StartTlsWhenAvailable);
+    smtpClient.Authenticate(_configuration.Username, _configuration.Password);
+    smtpClient.NoOp();
+    return smtpClient;
+});
+```
+
+`MailSendingProcessor` не реализует `IDisposable`. Процессор разрешается из контейнера на каждое
+сообщение: в IL `Jamq.Client.Rabbit` терминальный шаг конвейера
+(`RabbitConsumer<TMessage,TProcessor>.<.ctor>b__10_0`) делает
+`ctx.ServiceProvider` → `GetRequiredService<TProcessor>()` → `Process(...)`, а в сборке присутствует
+`CreateAsyncScope` — то есть на доставку открывается scope, процессор берется из него и scope
+закрывается. Autofac при закрытии scope освобождает отслеживаемые `IDisposable`; `SmtpClient`,
+созданный внутри `Lazy` в непубличном поле недиспозабельного объекта, ему неизвестен.
+
+Последствие: каждое отправленное письмо оставляет открытый TCP-сокет с аутентифицированной SMTP-сессией
+без `QUIT`. Сокет закроется только когда финализатор доберется до него, то есть непредсказуемо и не
+скоро. Реальные релеи ограничивают число одновременных соединений с одного адреса (обычно 10-20):
+после серии регистраций или рассылки уведомлений релей начинает отказывать, Polly в
+`ConsumerRetryMiddleware` пять раз повторяет, письмо уходит в `dm.mail.unsent-dlq` и до адресата не
+доходит. Пользователь не получает письмо активации или сброса пароля и не может завести/восстановить
+аккаунт.
+
+Исправление: реализовать `IAsyncDisposable`/`IDisposable` на `MailSendingProcessor` с
+`if (_client.IsValueCreated) { await _client.Value.DisconnectAsync(true); _client.Value.Dispose(); }` —
+тогда scope сообщения закроет сессию. Лучше — вынести транспорт в отдельный singleton с
+последовательным доступом (у консьюмера `ProcessingOrder.Sequential`, конкуренции нет) и
+переподключением при разрыве: одно соединение на воркер вместо одного на письмо.
+
+### [СРЕДНЯЯ] worker-consumer-blocks-startup — оба воркера подписываются синхронно внутри StartAsync без страховки и уходят в crash loop
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Code is as quoted: MailConsumer.cs:41-63 has no await before ConfigureDLX()/Subscribe and no try/catch, ConfigureDLX at line 80 opens a raw connection outside the Polly policy, and NotificationDispatcherConsumer.cs:41-55 has the same shape; RealtimeNotificationConsumer.cs:37,46-64 does have Task.Yield() and a catch, so the asymmetry is real. The 62-second figure is right (WaitAndRetry(5, 1<<attempt) = 2+4+8+16+32) and BackgroundService.StartAsync does surface a synchronously-faulted ExecuteAsync to Host.StartAsync. Downgraded because the described consequence overstates it: both workers run under restart: unless-stopped, so docker restarts them with backoff and they come up by themselves once the broker is reachable — nothing stays broken and no manual action is needed. A worker whose only job is consuming a queue exiting when the queue is unreachable is also the outcome the report itself calls correct, so what is left is a startup-ergonomics wart, not a ВЫСОКАЯ defect.
+
+```csharp
+// src/DM.Workers.Mail/MailConsumer.cs:41-63
+protected override Task ExecuteAsync(CancellationToken stoppingToken)
+{
+    ConfigureDLX();                                   // открывает соединение с брокером синхронно
+    ...
+    _consumeRetryPolicy.Execute(consumer.Subscribe);  // Polly WaitAndRetry(5), синхронный
+    return Task.CompletedTask;
+}
+```
+
+```csharp
+// src/DM.Workers.Mail/MailConsumer.cs:80
+using var configuringConnection = _rabbitConnectionFactory.CreateConnection();
+```
+
+`NotificationDispatcherConsumer.cs:41-55` устроен так же: `ResolveHandledEventTypes()` (создает scope,
+разрешает всех генераторов), `BuildRabbit`, `_consumeRetryPolicy.Execute(consumer.Subscribe)`, и
+только потом `return Task.CompletedTask`. Ни в одном из двух нет ни `await Task.Yield()`, ни try/catch.
+`BackgroundService.StartAsync` вызывает `ExecuteAsync` и, поскольку тело до первого await
+отсутствует вовсе, выполняет его целиком синхронно как часть старта хоста.
+
+Последствие: если брокер недоступен или еще не принимает соединения, `CreateConnection()` бросает
+`BrokerUnreachableException` (Polly его даже не оборачивает — политика накрывает только `Subscribe`),
+исключение уходит из `StartAsync`, хост не поднимается. Под `restart: unless-stopped` это crash loop:
+контейнер не отдает `/_health`, docker-healthcheck красный, воркер не работает. В варианте, когда
+падает `Subscribe`, старт хоста сначала блокируется на 2+4+8+16+32 = 62 секунды синхронных `Thread.Sleep`
+и лишь затем умирает. `depends_on: condition: service_healthy` закрывает только холодный старт: после
+рестарта брокера сам docker воркеры не перезапускает, а `rabbitmq-diagnostics check_running` отвечает
+healthy раньше, чем vhost готов принимать. Ровно этот сценарий и разобран в комментарии
+`RealtimeNotificationConsumer.cs:35-36,52-58` — API его учел, воркеры нет.
+
+Исправление: перенести оба тела в асинхронный контекст (`await Task.Yield();` первой строкой),
+накрыть `ConfigureDLX` и `Subscribe` одной асинхронной политикой (`WaitAndRetryForeverAsync` с
+ограничением задержки — воркер без брокера бесполезен, но должен ждать, а не умирать), и решить явно,
+что делать при исчерпании: для воркера правильно остановить хост с внятным сообщением, но после того
+как `/_health` успел ответить unhealthy, а не до старта.
+
+### [СРЕДНЯЯ] no-consumer-metrics — падение доставки писем и уведомлений невидимо для всех дашбордов и алертов
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Every fact checks out. LoggingConfiguration.cs:69 has AddJamqClientInstrumentation only under WithTracing and line 76 adds only UploadMetrics.MeterName under WithMetrics; grep for Meter.Create* across src/ returns five hits, all in UploadMetrics.cs. I dumped dm-consumers.json: exactly the five exprs listed (up, two rate(http_server_request_duration_seconds_count) panels titled '… Request Rate', GC heap, GC collections), and WebBuilderExtensions.cs:22-30 plus a MapControllers with no controllers in DM.Workers.Mail means that HTTP traffic is health checks and scrapes. prometheus.yml has five jobs and no rabbitmq exporter, and alerts.yml has 8 rules none of which touch delivery. Worth adding: Jamq.Client.OpenTelemetry 0.10.0 ships only JamqClientTracingBuilderExtensions, so there is no metrics extension to have forgotten. Downgraded because this is an observability gap, not broken behaviour — traces do reach Jaeger through the Jamq instrumentation, ConsumerRetryMiddleware logs to Loki, and dm.mail.unsent-dlq retains poison messages for inspection. The genuinely wrong artefact is the two panels labelled 'Request Rate' that plot health-check traffic.
+
+`LoggingConfiguration.cs:60-77`: `AddJamqClientInstrumentation()` добавлен только в `WithTracing`
+(строка 69). В `WithMetrics` из прикладного зарегистрирован единственный метр —
+`UploadMetrics.MeterName` (строка 76). Ни одного счетчика обработанных сообщений, отказов, повторов
+или глубины DLQ в коде нет: grep по `Meter`/`Counter` в `src/` дает только `UploadMetrics`.
+
+`docker/grafana/dashboards/dm-consumers.json` — я выписал все `expr`: `up{job=~...}`,
+`rate(http_server_request_duration_seconds_count{job=...})` дважды,
+`process_runtime_dotnet_gc_heap_size_bytes`, `rate(process_runtime_dotnet_gc_collections_count_total)`.
+Панели названы "Email Consumer — Request Rate" и "Notification Consumer — Request Rate", но HTTP у
+воркеров обслуживает только `/_health` и `/metrics`: `UseDmWorkerEndpoints`
+(`WebBuilderExtensions.cs:22-30`) плюс `MapControllers` без контроллеров. То есть дашборд
+консьюмеров рисует трафик собственных health-чеков. `docker/prometheus.yml` не содержит
+rabbitmq-exporter, так что глубина очередей и `dm.mail.unsent-dlq` тоже нигде не видны.
+
+Последствие: воркер, который валит каждое сообщение (poison-письмо, отказ SMTP-аутентификации,
+исчерпанный пул каналов из первой находки), остается зеленым во всех восьми алертах и всех трех
+дашбордах: `up = 1`, HTTP-rate обычный, GC обычный. Единственный след — строка Warning из
+`ConsumerRetryMiddleware.cs:20` в Loki, на которую ничего не настроено. Владелец узнает о том, что
+письма не уходят, от пользователей.
+
+Исправление: завести метр `DM.Messaging` рядом с `UploadMetrics` — счетчики `consumed`, `failed`,
+`retried` с атрибутами `queue` и `result`, гистограмма времени обработки — и писать их в
+`ConsumerRetryMiddleware`/`NotificationConsumerRetryMiddleware`, через которые проходит каждое
+сообщение обоих воркеров. Добавить в `docker/prometheus.yml` rabbitmq-exporter и алерты на
+`rabbitmq_queue_messages{queue="dm.mail.unsent-dlq"} > 0` и на рост `failed`. Заменить панели
+"Request Rate" в `dm-consumers.json` на новые метрики.
+
+### [СРЕДНЯЯ] htpasswd-committed — файл basic-auth preview-стенда лежит в git, хотя .gitignore его перечисляет
+
+> **Опровержение: частично неверно.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> The facts are right: git ls-files lists docker/nginx/.htpasswd, .gitignore:21 names it, the file is 46 bytes `preview:$apr1$jxWKSGD4$…`, and the GitHub API confirms dm-am/dm3 has private:false, so the hash is publicly readable. But the headline consequence is wrong: setup-server.sh:33 (the report says :34) runs `htpasswd -nb preview "$DM_PREVIEW_PASSWORD"` over that exact path before compose up, and the script exits at line 27-31 if DM_PREVIEW_PASSWORD is unset — so on a server installed the documented way the committed hash is not the live gate. What survives is the second, operational half of the finding, which is correct: INSTALL_DIR is a git working copy, so a tracked file is permanently dirty and `git pull` either fails or restores the public hash. Plus a public credential that should be rotated. Downgraded also because the API bypasses this gate entirely on port 5000 (see health-detail-public), so the basic-auth barrier is already not what is protecting the stand.
+
+```
+$ git ls-files docker/nginx/.htpasswd
+docker/nginx/.htpasswd
+$ grep -n htpasswd .gitignore
+21:docker/nginx/.htpasswd
+```
+
+Файл 46 байт, пользователь `preview`, формат хеша `$apr1$` (Apache MD5, 1000 итераций). Внесен
+коммитом 21287add. `.gitignore` не распространяется на уже отслеженные файлы, поэтому запись в строке
+21 создает ложное впечатление, что файла в истории нет.
+
+Последствие. Первое: единственный барьер перед preview-стендом (`nginx.conf:58-59`,
+`auth_basic_user_file /etc/nginx/.htpasswd`) — это MD5-хеш из публичного репозитория
+(`setup-server.sh` тянет его через `raw.githubusercontent.com/dm-am/dm3/dev/...`), подбираемый
+локально за минуты. Второе, операционное: `setup-server.sh:34` перезаписывает этот же файл на
+сервере, а `INSTALL_DIR` — рабочая копия git; значит на сервере отслеживаемый файл всегда локально
+изменен, и `git pull` для обновления развертывания упадет с "local changes would be overwritten"
+либо, при `-f`, вернет пароль из репозитория.
+
+Исправление: `git rm --cached docker/nginx/.htpasswd` (сам файл на сервере оставить), добавить
+`docker/nginx/.htpasswd.example` с пояснением, и генерировать хеш в `setup-server.sh` через
+`htpasswd -nbB` (bcrypt) вместо дефолтного apr1. Обязательно сменить сам пароль preview: тот, что
+соответствует закоммиченному хешу, следует считать раскрытым.
+
+### [СРЕДНЯЯ] alerts-have-no-delivery — восемь правил вычисляются и никуда не отправляются
+
+`docker/prometheus.yml` подключает `rule_files: [/etc/prometheus/alerts.yml]` (строки 5-6) и не
+содержит секции `alerting:`. Сервиса alertmanager нет ни в `docker-compose.yml`, ни в
+`docker-compose.preview.yml`; grep по `alertmanager` во всем `docker/`, `scripts/` и `.github/` дает
+одно упоминание — в комментарии `docker/loki/loki.yaml:48`.
+
+`docs/guides/MONITORING.md` в разделе "Настройка уведомлений" предлагает Grafana → Alerting →
+Notification channels → "Привязать к правилам" и приводит пример `docker/prometheus/alertmanager.yml`.
+Ни то, ни другое не применимо: правила в `alerts.yml` — это правила Prometheus, Grafana не может
+привязать к ним свои каналы уведомлений, а файла alertmanager.yml не существует.
+
+Последствие: `ApiDown`, `PostgresDown`, `HighErrorRate` и остальные переходят в состояние firing
+внутри Prometheus и там остаются. Владелец узнает о падении API, только если сам откроет
+`http://localhost:9090/alerts` через SSH-туннель. Инструкция в документации не приводит к работающей
+доставке, поэтому "алерты настроим потом" будет отложено бесконечно.
+
+Исправление: либо добавить сервис alertmanager с конфигом и секцию `alerting:` в `prometheus.yml`,
+либо перенести правила в Grafana unified alerting (тогда инструкция из MONITORING.md станет верной) и
+удалить `rule_files`. Оставлять два несогласованных механизма нельзя: сейчас работает ноль.
+
+### [СРЕДНЯЯ] nine-hand-rolled-timer-loops — девять почти одинаковых циклов таймера с расходящейся структурой
+
+В `AddDmHostedServices` (`HostedServiceExtensions.cs:27-49`) регистрируются 14 hosted-сервисов, из них
+9 — периодические задания на `PeriodicTimer`: `TokenCleanupService`, `SessionCleanupService`,
+`PendingRegistrationCleanupService`, `PeriodDigestService`, `UsernameChangeCleanupService`,
+`PendencyReminderService`, `GameInactivityService`, `PopularityScoreService`,
+`UploadOrphanCleanupService`. Суммарно 1519 строк. Каждый повторяет одно и то же: `PeriodicTimer`,
+`while (!stoppingToken.IsCancellationRequested)`, `try`/`catch (OperationCanceledException)`/`catch (Exception)`,
+`CreateScope()`, `GetRequiredService<DmDbContext>()`, лог старта с интервалом.
+
+Структура при этом разошлась. Первый проход вне try/catch: `TokenCleanupService.cs:37`,
+`SessionCleanupService.cs:37`, `PendingRegistrationCleanupService.cs:51`,
+`UploadOrphanCleanupService.cs:57`, `GameInactivityService.cs:39-40`,
+`PendencyReminderService.cs:53-56`. Внутри — только `PeriodDigestService.cs:86`. Нет вовсе —
+`PopularityScoreService`. Стартовая задержка есть у двух (1 минута и 5 минут) и отсутствует у семи.
+
+Последствие: `await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken)` в
+`PendencyReminderService.cs:53` и `Task.Delay(1 минута)` в `GameInactivityService.cs:39` находятся вне
+try/catch, поэтому остановка хоста в первые минуты после старта (обычное дело при откате деплоя)
+бросает `OperationCanceledException` из `ExecuteAsync`, и `BackgroundService` пишет critical
+"BackgroundService failed" плюс дергает `StopApplication` — ложная критическая запись при каждом
+быстром рестарте. Содержательнее другое: девять копий цикла означают, что исправление в обработке
+отмены или в диагностике надо внести девять раз, и восемь раз оно уже разошлось.
+
+Исправление: базовый `PeriodicHostedService` с `TimeSpan Interval`, `TimeSpan StartupDelay`,
+`bool RunOnStart` и абстрактным `Task RunOnce(IServiceProvider scope, CancellationToken)`; цикл,
+перехват отмены и создание scope — в одном месте, у наследников остается только тело задания.
+Девять сервисов сократятся до девяти методов.
+
+### [СРЕДНЯЯ] unvalidated-config-sections — половина разделов привязана без проверки, и неверное значение всплывает на первом запросе
+
+`CoreConfigurationExtensions.cs:49-56` привязывает четыре раздела через `services.Configure<>` без
+`Validate`/`ValidateOnStart`: `CdnConfiguration`, `ImageProxyConfiguration`, `MirrorConfiguration`,
+`BotConfiguration`. То же у `MailConfigurationExtensions.cs:25` (`EmailConfiguration` — здесь это
+осознанно и обосновано) и у `AccountConfigurationExtensions.cs:42-47`
+(`AuthenticationConfiguration`, `TokenConfiguration`, `PasswordPolicyConfiguration`).
+
+Самый острый случай — imgproxy:
+
+```csharp
+// src/DM.Infrastructure.Core/Storage/ImgproxyUrlBuilder.cs:21-26
+_keyBytes = string.IsNullOrEmpty(_config.Key) ? Array.Empty<byte>() : Convert.FromHexString(_config.Key);
+_saltBytes = string.IsNullOrEmpty(_config.Salt) ? Array.Empty<byte>() : Convert.FromHexString(_config.Salt);
+```
+
+```csharp
+// src/DM.Infrastructure.Core/Storage/ImgproxyUrlBuilder.cs:55-58
+if (_keyBytes.Length == 0 || _saltBytes.Length == 0) { return "insecure"; }
+```
+
+`docker-compose.yml:57-58` передает `IMGPROXY_KEY`/`IMGPROXY_SALT` без `:?`-страховки, то есть пустое
+значение проходит.
+
+Последствие, два разных сбоя. Если значение задано, но не hex (например, кто-то сгенерировал ключ
+через `openssl rand -base64 32` — а именно так соседняя инструкция велит генерировать крипто-ключ),
+`Convert.FromHexString` бросает `FormatException` при первом разрешении `ImgproxyUrlBuilder`, то есть
+500 на первой странице с аватарами, а не отказ старта. Если задан только один из двух (ключ есть,
+соль пустая), приложение молча строит `/insecure/...`, а контейнер imgproxy с непустым
+`IMGPROXY_KEY` требует подпись — все миниатюры отдают 403, и ни один лог не назовет причину.
+
+Исправление: добавить `AddOptions<ImageProxyConfiguration>().Validate(...)` с двумя условиями —
+`Key` и `Salt` либо оба пусты, либо оба валидный hex одинаковой природы — и `ValidateOnStart`.
+Аналогично для `CdnConfiguration` (непустые `BucketName`, `Url`, `AccessKey`, `SecretKey`) — без них
+любая загрузка падает, то есть работающего дефолта у них нет.
+
+### [СРЕДНЯЯ] validateonstart-defeated-by-checked-in-defaults — заявленное "отсутствие секрета валит старт" не работает ни для базы, ни для MinIO
+
+`CoreConfigurationExtensions.cs:32-37` проверяет `ConnectionStrings:Rdb` и `ConnectionStrings:Mongo`
+на непустоту с `ValidateOnStart`. Но `src/DM.Web.API/appsettings.json:10-11` (и
+`src/DM.Workers.NotificationDispatcher/appsettings.json`, и `src/DM.Tools.Seeder/appsettings.json`)
+поставляет оба значения, включая пароль:
+
+```json
+"Rdb": "User ID=postgres;Password=admin;Host=localhost;Port=5432;Database=dm3;..."
+```
+
+и `CdnConfiguration` с `"AccessKey": "minio", "SecretKey": "miniokey"`. `docs/references/CONFIGURATION.md:30-32`
+утверждает обратное: "Настоящие учетные данные приходят переменными DM_*, и у них нет дефолта в
+репозитории: отсутствие валит старт, а не подставляет значение".
+
+Последствие: развертывание, в котором забыли `DM_ConnectionStrings__Rdb` (или в котором переменная
+переименована), стартует успешно, проходит валидацию, отвечает 200 на `/_health` (у него
+`Predicate = _ => false`) и падает на первом же запросе к данным с ошибкой подключения к localhost.
+Проверка, которая существует ровно для того, чтобы этого не было, не срабатывает, потому что дефолт
+из репозитория ее удовлетворяет. Утверждение в документации при этом верно только для
+`CryptoConfiguration`.
+
+Исправление: убрать из отслеживаемых `appsettings.json` учетные данные — оставить строку подключения
+без пароля или вынести локальные значения в `appsettings.Development.json`, который не попадает в
+образ. Тогда `ValidateOnStart` начнет ловить то, для чего написан. Формулировку в CONFIGURATION.md
+привести в соответствие: сейчас она описывает не то, что делает код.
+
+### [СРЕДНЯЯ] core-config-forces-unneeded-stores — почтовый воркер обязан объявить Postgres и Mongo, которых не касается
+
+`DM.Workers.Mail/Startup.cs:44` вызывает `AddDmCoreConfiguration`, а тот требует непустых
+`ConnectionStrings:Rdb` и `ConnectionStrings:Mongo` с `ValidateOnStart`. При этом почтовый воркер не
+регистрирует ни `PersistenceModule`, ни `DbContext`, ни `DmMongoClient` — он читает очередь и говорит
+по SMTP. Его собственный `src/DM.Workers.Mail/appsettings.json` содержит из `ConnectionStrings`
+только `Logs`.
+
+Последствие: `dotnet run --project src/DM.Workers.Mail` на чистой машине не стартует —
+"ConnectionStrings:Rdb and ConnectionStrings:Mongo are required" — для хранилищ, к которым воркер
+никогда не обращается. В docker это скрыто тем, что `x-workload-env` раздает переменные всем
+контейнерам одинаково. Любой следующий хост (например, отдельный индексатор поиска) столкнется с тем
+же и будет вынужден прописать фиктивную строку подключения, что обесценит проверку и для тех, кому
+она нужна.
+
+Исправление: разделить на `AddDmCoreConfiguration` (привязка без валидации хранилищ) и явные
+`RequireRelationalStorage()` / `RequireDocumentStorage()`, которые хост вызывает, если регистрирует
+соответствующий модуль. Тогда требование стоит рядом с зависимостью, а не в общем для всех вызове.
+
+### [СРЕДНЯЯ] error-handling-ignores-hasstarted — исключение после начала ответа рвет соединение вторым, незалогированным исключением
+
+```csharp
+// src/DM.Web.API/Middleware/ErrorHandlingMiddleware.cs:88-94
+httpContext.Response.StatusCode = error is ProblemDetails { Status: not null } problemDetails
+    ? problemDetails.Status.Value
+    : StatusCodes.Status500InternalServerError;
+await httpContext.Response.WriteAsJsonAsync(error, error.GetType(), options: null, ProblemJsonContentType);
+```
+
+Проверки `httpContext.Response.HasStarted` нет ни перед присваиванием статуса, ни перед записью тела.
+
+Последствие: если исключение возникло после того, как заголовки уже ушли в сеть — а это происходит,
+когда сериализация большого ответа переполнила буфер Kestrel и часть тела отправлена (типично для
+листингов с ленивой проекцией, где `IQueryable` материализуется в процессе записи), — сеттер
+`StatusCode` бросает `InvalidOperationException: StatusCode cannot be set, response has already started`.
+Это исключение уходит из middleware наружу, `LogCritical` из ветки `default` не выполняется, исходная
+причина в лог не попадает, а клиент получает обрыв соединения посреди JSON. Для пользователя это
+"страница иногда не загружается", для владельца — отсутствие какой-либо записи о причине.
+
+Исправление: в начале `catch` добавить
+`if (httpContext.Response.HasStarted) { logger.LogCritical(e, "Unhandled error after response started for {User}", user); httpContext.Abort(); return; }`.
+Исходное исключение при этом фиксируется, а соединение обрывается явно, а не вторичным сбоем.
+
+### [СРЕДНЯЯ] no-composition-root-test — контейнер не проверяется ничем, и захват scoped-зависимости singleton-ом обнаружить нечему
+
+Весь `DM.Architecture.Tests` — это один файл `ServiceLayerBoundaryShould.cs` с четырьмя тестами про
+границу Controller → ApiService → Domain. Ни один тест не собирает контейнер, не разрешает
+зарегистрированные сервисы и не проверяет времена жизни. `HealthCheckShould.cs:19-27` — единственный
+тест health-эндпоинтов:
+
+```csharp
+[Fact]
+public async Task HealthCheck_ReturnsHealthy()
+{
+    var response = await Client.GetAsync("/_health");
+    response.StatusCode.Should().Be(HttpStatusCode.OK);
+}
+```
+
+`/_health` смонтирован с `Predicate = _ => false` (`Startup.cs:281`), то есть не выполняет ни одной
+проверки и возвращает 200 всегда. Тест по имени обещает "returns healthy", а утверждает то, что
+эндпоинт вернет при любом состоянии зависимостей. `/_ready` и `/_health/detail` не покрыты вовсе.
+Плюс `CustomWebApplicationFactory.cs:213-222` заменяет `AddDbContextPool` на `AddDbContext`, так что
+пулинг контекста — режим, в котором работает production, — интеграционными тестами не проверяется.
+
+Последствие: находка `captive-dbcontext-in-connection-singleton` — ровно тот дефект, который ловится
+одним тестом на композиционный корень, и она дожила до продакшена. Следующая такая же тоже доживет.
+
+Исправление: добавить тест, который строит контейнер API (`Startup.ConfigureServices` +
+`ConfigureContainer` на тестовой конфигурации) и для каждой `SingleInstance`-регистрации проверяет,
+что в графе ее конструкторных зависимостей нет ни одного `InstancePerLifetimeScope`. Отдельный тест —
+разрешить все `IHostedService` и все контроллеры, чтобы отсутствующая привязка опций падала в CI, а
+не на первом запросе. И тест `/_ready`, который поднимает фикстуру, гасит контейнер Postgres и
+ожидает 503.
+
+### [СРЕДНЯЯ] pendency-reminder-publishes-before-commit — сбой SaveChanges приводит к повторной рассылке напоминаний
+
+```csharp
+// src/DM.Web.API/HostedServices/PendencyReminderService.cs:112-118
+foreach (var pendency in stalePendencies)
+{
+    pendency.LastReminderUtc = now;
+    await producer.SendAsync(EventType.RoomPendencyReminder, pendency.PendencyId);
+}
+
+await dbContext.SaveChangesAsync(cancellationToken);
+```
+
+События уходят в брокер до фиксации `LastReminderUtc`.
+
+Последствие: если `SaveChangesAsync` падает (обрыв соединения с базой, таймаут — вероятность растет с
+числом просроченных pendency), напоминания уже отправлены, а отметка о них не сохранена. Обработчик
+внешнего catch логирует ошибку и не бросает, цикл живет дальше, и через 12 часов те же напоминания
+уходят повторно — и так пока запись не пройдет. Мастер получает дубликаты уведомлений и писем о том
+же самом ожидающем посте.
+
+Исправление: сначала `SaveChangesAsync`, потом публикация. Дубликат при падении между двумя шагами
+все равно возможен, но тогда он один и в сторону "напоминание не пришло", а не "приходит каждые 12
+часов". Тот же порядок уже применен в `PeriodDigestService.cs:189,234` — фиксация, затем побочные
+эффекты.
+
+### [СРЕДНЯЯ] unbound-options-in-secondary-hosts — два хоста регистрируют доменные сборки, не привязав их опции, вопреки заявленному инварианту
+
+`AccountConfigurationExtensions.cs:12-16` утверждает: "a host that registers the account types must not
+be able to leave their options unbound... IOptions of an unbound type does not throw — it hands out a
+default instance". Инвариант держится только на дисциплине вызова, и два хоста из четырех его нарушают.
+
+`DM.Workers.NotificationDispatcher/Startup.cs:86-102` регистрирует сборки Personal, Community и Account
+(`RegisterDefaultTypes` + `RegisterMapper` + `AccountModule`), но в `ConfigureServices` (строки 52-58)
+не привязывает ни `MessagingConfiguration`, ни `ProbationConfiguration` и не регистрирует
+`IProbationConfiguration` — в отличие от API (`Startup.cs:77,94-95`). При этом
+`ProbationConfiguration` живет в `DM.Domain.Moderation`, чью сборку воркер не сканирует, то есть
+`IProbationConfiguration` в этом контейнере не разрешается вовсе. Потребители есть:
+`UserEndorsementService.cs:39` в зарегистрированной Community-сборке.
+
+`DM.Tools.Seeder/Program.cs:95` делает `RegisterDefaultTypes(typeof(ISecurityManager).Assembly)` —
+всю сборку Account — и не вызывает `AddDmAccountConfiguration` вообще: ни `CryptoConfiguration`, ни
+`PasswordPolicyConfiguration`, ни `TokenConfiguration`, ни `AuthenticationConfiguration`.
+
+Последствие: сегодня оба нарушения латентны — сидер использует только `ISecurityManager`, которому
+конфигурация не нужна (`SecurityManager.cs:13-19` принимает `ISaltFactory` и `IHashProvider`), а
+воркер не вызывает `UserEndorsementService`. Первый же вызов, задевший `ISymmetricCryptoService` из
+сидера, получит пустой `KeyBase64` в рантайме, а не отказ старта; первый путь уведомлений, задевший
+одобрения, получит `DependencyResolutionException` на живом сообщении. Ничто в сборке или тестах на
+это не укажет: как раз тот сбой, от которого парные расширения объявлены страховкой.
+
+Исправление: вызвать `AddDmAccountConfiguration` в сидере и добавить в воркер привязку
+`ProbationConfiguration` + регистрацию `IProbationConfiguration` (либо, чище, перенести эту
+регистрацию в `AddDmAccountConfiguration`/`ModerationModule`, чтобы хост не мог ее забыть). Инвариант
+подкрепить тестом из находки `no-composition-root-test`: разрешить все корни каждого хоста.
+
+### [СРЕДНЯЯ] no-serilog-flush — последние строки лога теряются на каждом останове, а у миграционного контейнера теряется весь прогон
+
+Ни один `Program.Main` не вызывает `Log.CloseAndFlush()` (grep по `src/` — единственное упоминание
+`Log.Logger` это присваивание в `LoggingConfiguration.cs:36`), и `UseSerilog()` вызван в
+беспараметрической форме, которая берет статический `Log.Logger` и не берет его во владение
+(`dispose: false`). Sink Loki работает пакетами по таймеру.
+
+Отдельно:
+
+```csharp
+// src/DM.Web.API/Startup.cs:227-229
+using var migrationScope = appBuilder.ApplicationServices.CreateScope();
+migrationScope.ServiceProvider.GetRequiredService<DmDbContext>().Database.Migrate();
+Environment.Exit(0);
+```
+
+`Environment.Exit` не выполняет `IHost.StopAsync`, не освобождает контейнер и не сбрасывает буфер
+Serilog.
+
+Последствие: при каждом останове API теряется последний пакет событий — то есть именно те строки,
+которые объясняют, почему процесс остановился. У контейнера `migration` (`docker-compose.yml:391-408`)
+теряется весь вывод успешного прогона: в Loki о применении миграции не остается ничего, а консольный
+sink живет столько же, сколько контейнер с `restart: "no"`. Разбор "почему после деплоя схема другая"
+делать не по чему.
+
+Исправление: обернуть тело `Main` в `try/finally { Log.CloseAndFlush(); }` во всех четырех хостах, а
+в миграционном режиме заменить `Environment.Exit(0)` на `IHostApplicationLifetime.StopApplication()`
+плюс код возврата из `Main` — тогда штатный останов сбросит логи. Либо, минимально, вызвать
+`Log.CloseAndFlush()` непосредственно перед `Environment.Exit(0)`.
+
+### [СРЕДНЯЯ] probation-threshold-duplicated — инвариант между конфигурацией и вычисляемой колонкой держится на предупреждении в логе
+
+```csharp
+// src/DM.Web.API/HostedServices/WarmupService.cs:78-83
+if (probationConfig.NewbiePostThreshold != 100)
+{
+    _logger.LogWarning(
+        "[Warmup] ProbationConfiguration.NewbiePostThreshold is {Threshold} but DB computed column uses hardcoded 100. Run migration to sync.",
+        probationConfig.NewbiePostThreshold);
+}
+```
+
+Значение существует в двух местах: в конфигурации (изменяемой переменной окружения) и литералом
+внутри вычисляемой колонки схемы. Согласованность не проверяется ни валидацией опций, ни тестом —
+только этой записью Warning, и то из сервиса, который весь свой блок оборачивает в
+`catch { LogWarning("[Warmup] Failed (non-critical)") }` (`WarmupService.cs:65-68`).
+
+Последствие: администратор, поставивший `DM_ProbationConfiguration__NewbiePostThreshold=50`, получает
+систему, где прикладные проверки считают новичком пользователя до 50 постов, а вычисляемая колонка
+базы — до 100. Права на создание игры и на отзывы разойдутся с тем, что показывает интерфейс, а
+единственный признак — одна строка Warning в момент старта, на которую нет алерта. Совет в тексте
+("Run migration to sync") к тому же неисполним по правилам проекта: миграция одна, менять надо
+`InitialCreate` и накатывать ресетом.
+
+Исправление: сделать порог одним источником истины. Либо убрать его из конфигурации и оставить
+константой рядом с определением колонки, либо вынести из колонки в вычисление на стороне приложения.
+Если оба места остаются, превратить предупреждение в `Validate(...).ValidateOnStart()` — расхождение
+должно валить старт, а не шептать в лог, и текст сообщения привести в соответствие с правилом одной
+миграции.
+
+### [СРЕДНЯЯ] two-sources-of-truth-for-environment — имя окружения читается из переменной среды напрямую, минуя IHostEnvironment
+
+```csharp
+// src/DM.Infrastructure.Core/Logging/LoggingConfiguration.cs:29-30
+var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+var isDevelopment = environmentName == "Development";
+```
+
+Хост определяет окружение иначе: `Host.CreateDefaultBuilder(args)` добавляет в host-конфигурацию
+`DOTNET_`-переменные и командную строку, `ConfigureWebHostDefaults` — `ASPNETCORE_`-переменные.
+`Startup` при этом пользуется внедренным `IWebHostEnvironment` (`Startup.cs:53,245`).
+
+Последствие: `dotnet run --environment Development` (или `--environment Staging`) задает окружение
+через провайдер командной строки, а не переменную среды. `IWebHostEnvironment.IsDevelopment()`
+вернет true — Swagger смонтируется, HSTS не выставится, — а `LoggingConfiguration` в том же процессе
+решит, что это Production: минимальный уровень Information вместо Debug, тексты SQL в трейсах
+выключены, метка `env=Production` в Loki. Разработчик, запустивший так, не увидит отладочных строк и
+будет искать сломанное логирование. Обратный случай хуже: сервер, где окружение задано командой
+запуска, отдаст в Loki метку с неверным окружением и включит `SetDbStatementForText`, если строка
+окажется `Development`.
+
+Исправление: передавать окружение в `AddDmLogging` параметром из `IWebHostEnvironment`/
+`IHostEnvironment` (в `Startup.ConfigureServices` он уже есть как `_environment`), а не читать
+переменную среды внутри. Один источник истины на процесс.
+
+### [НИЗКАЯ] monitoring-doc-numbers-wrong — четыре порога, число правил, gRPC-хост и все примеры PromQL не соответствуют коду
+
+`docs/guides/MONITORING.md` в разделе Alerting: "7 правил" — в `docker/prometheus/alerts.yml` их 8
+(`ApiDown`, `HighErrorRate`, `HighLatency`, `ConsumerDown`, `ConsumerScrapeTargetMissing`,
+`PostgresDown`, `HighMemoryUsage`, `DiskSpaceLow`); `ConsumerScrapeTargetMissing` упомянуто в разделе
+про метрики и пропущено в таблице. Пороги в таблице: "HighErrorRate > 1%" против `> 0.05` в
+`alerts.yml:18`; "ConsumerDown > 5 мин" против `for: 2m` (строка 41); "HighMemoryUsage > 85%" против
+`> 0.9` (строка 73); "DiskSpaceLow < 10%" против `> 0.85`, то есть меньше 15% (строка 82).
+
+Раздел "Инструментация" перечисляет gRPC — в `LoggingConfiguration.cs:62-70` его нет. Абзац "Хост,
+отдающий gRPC, слушает cleartext HTTP/2 и не отвечает HTTP/1.1-клиенту, поэтому health и метрики у
+него на отдельном порту" описывает топологию, которой в репозитории не существует: `UseDefault<T>`
+(`WebBuilderExtensions.cs:35-38`) дает каждому хосту один порт 5000, и `/metrics` с `/_health` живут
+на нем же.
+
+Все три примера PromQL используют `http_requests_total` и `http_request_duration_seconds_bucket` —
+таких серий нет; инструментация отдает `http_server_request_duration_seconds_*`, что правильно
+использовано и в `alerts.yml`, и в дашбордах. Инструкция по Jaeger велит выбрать Service `dm-api` —
+имя ресурса задается `applicationName` и равно `DM.API` (`Startup.cs:78`). Троубл-шутинг советует
+проверить `OTEL_EXPORTER_OTLP_ENDPOINT` — код читает `ConnectionStrings:TracingEndpoint`
+(`LoggingConfiguration.cs:70`). Врезка "Доступ только с самой машины... порты воркеров публикуются на
+127.0.0.1" верна для всего, кроме API, который опубликован как `5000:5000`.
+
+Последствие: владелец, который откроет документ, чтобы понять, при каком проценте ошибок его
+разбудят, получит неверное число; тот, кто скопирует примеры PromQL, получит пустые графики и решит,
+что метрики не собираются; тот, кто пойдет искать трейс по сервису `dm-api`, его не найдет. Правильные
+данные лежат рядом в `alerts.yml` и в дашбордах, но документ учит не сверяться с ними.
+
+Исправление: убрать из документа продублированные значения порогов и оставить ссылку на `alerts.yml`
+как на источник истины (тот же прием уже применен в разделе scrape targets); удалить абзац про gRPC;
+заменить примеры PromQL на выражения из `dm-api-overview.json`; исправить имя сервиса и имя
+переменной; добавить исключение про порт API — или, лучше, устранить само исключение (см. находку
+`health-detail-public`).
+
+### [НИЗКАЯ] popularity-log-lies — строка лога сообщает о начальном расчете, которого никто не делает
+
+```csharp
+// src/DM.Web.API/HostedServices/PopularityScoreService.cs:41
+_logger.LogInformation("[Popularity Score] Service started. Will run every {Interval} hour(s). Initial calculation done by WarmupService.", ...);
+```
+
+и комментарий строкой 45: "Only periodic updates - initial calculation is done by WarmupService".
+`WarmupService` (140 строк) прогревает подключения к Postgres и Mongo, компилирует маппинги и
+сверяет `NewbiePostThreshold` — grep по `Popularity` в `src/DM.Web.API/HostedServices/` и
+`src/DM.Tools.Seeder/` показывает совпадения только внутри самого `PopularityScoreService`.
+
+Последствие: после каждого рестарта и на свежей базе после ресета `PopularityScore` у всех игр и
+блогов остается прежним (на свежей — нулевым) в течение часа, потому что первый проход по коду
+делается только по тику таймера. Сортировка и подборки "популярные" час показывают неверный порядок.
+Тот, кто станет это разбирать, прочитает в логе, что начальный расчет выполнен, и пойдет искать
+причину не там.
+
+Исправление: либо запустить первый проход до входа в цикл (как в остальных восьми сервисах), либо
+убрать из строки лога и комментария упоминание `WarmupService`. Первое предпочтительнее: расчет
+дешевый и одноразовый.
+
+### [НИЗКАЯ] replacement-chars-in-startup — в комментариях композиционного корня закоммичен U+FFFD
+
+```
+$ grep -c $'\xef\xbf\xbd' src/DM.Web.API/Startup.cs
+3
+```
+
+Строки 279, 286 и 293: `// Liveness � Docker health check`, `// Readiness � all "ready" dependencies`,
+`// Detail � all checks`. Байты `EF BF BD` — символ замены Unicode, то есть на месте тире когда-то
+было что-то, что декодировали не той кодовой страницей и записали обратно. По всему первому коду это
+единственный файл (остальные совпадения — в `node_modules`). Родственная порча:
+`NotificationDispatcherConsumer.cs:43,53` содержат `[??]` там, где у аналогичного
+`RealtimeNotificationConsumer.cs:33,66` стоят эмодзи.
+
+Последствие: чтения не ломает, но это след того, что какой-то инструмент в цепочке правок читает
+файлы не как UTF-8. Следующий раз он может испортить не комментарий, а русскую строку интерфейса или
+сида — и там это уже увидит пользователь.
+
+Исправление: восстановить три тире и два эмодзи; добавить в CI шаг `grep -rlP '\x{FFFD}' src/ docs/`
+с ненулевым кодом возврата, чтобы порча кодировки не проходила ревью незамеченной.
+
+### [НИЗКАЯ] metric-unit-in-name — имя гистограммы длительности противоречит соглашению, на которое ссылается ее собственный комментарий
+
+```csharp
+// src/DM.Infrastructure.Core/Tracing/UploadMetrics.cs:9-10
+/// Names follow OpenTelemetry semantic conventions: snake_case, units
+/// in the name, dot-separated namespace.
+```
+
+```csharp
+// src/DM.Infrastructure.Core/Tracing/UploadMetrics.cs:37-38
+public static readonly Histogram<double> DurationMs =
+    Meter.CreateHistogram<double>("dm.uploads.duration_ms", "ms", "End-to-end upload latency");
+```
+
+Соглашение OTel требует обратного: единица измерения задается полем `unit`, а не именем, и для
+длительностей это секунды. Здесь единица указана дважды — в имени и в поле.
+
+Последствие: Prometheus-экспортер добавляет к имени суффикс единицы, поэтому наружу метрика выходит
+как `dm_uploads_duration_ms_milliseconds_bucket`. Тот, кто станет писать по ней панель, сначала
+поищет `dm_uploads_duration_seconds` (как подсказывает соглашение и как выглядят остальные метрики на
+том же эндпоинте), не найдет и решит, что инструментация не подключена. То же с
+`dm.uploads.input_size_bytes` при `unit = "By"`.
+
+Исправление: переименовать в `dm.uploads.duration` с `unit = "s"` и записывать
+`stopwatch.Elapsed.TotalSeconds` (`UploadApiService.cs:188`), `dm.uploads.input_size` и
+`dm.uploads.output_size` с `unit = "By"`. Комментарий поправить: единицы не в имени.
+
+### [НИЗКАЯ] reloadonchange-without-monitor — перезагрузка секретов включена, но читать обновление нечем
+
+```csharp
+// src/DM.Infrastructure.Core/Configuration/WebHostBuilderExtensions.cs:27,30
+.AddJsonFile("secrets/appsettings.json", optional: true, reloadOnChange: true)
+.AddJsonFile($"secrets/appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true)
+```
+
+Два из шести источников объявлены с `reloadOnChange: true`, остальные с `false`. При этом все
+потребители читают `IOptions<T>` — снимок, зафиксированный при первом разрешении: grep по
+`IOptionsMonitor`/`IOptionsSnapshot` в `src/` не дает ни одного использования.
+
+Последствие: `reloadOnChange: true` создает файловый watcher и обещает то, чего нет — изменение файла
+секретов ни на что не влияет до перезапуска процесса, а `ValidateOnStart` новое значение не проверит
+в любом случае. Оператор, который поправит `secrets/appsettings.json` и станет ждать, когда
+применится, будет ждать бесконечно.
+
+Исправление: выставить `reloadOnChange: false` на всех шести источниках — так поведение будет
+соответствовать модели чтения. Если горячая перезагрузка нужна, она требует `IOptionsMonitor<T>` у
+конкретных потребителей и повторной валидации, и это отдельное решение, а не флаг у источника.
+
+### [НИЗКАЯ] correlation-token-does-not-cross-the-queue — документированный сквозной поиск по токену не может работать
+
+`CorrelationTokenProvider.cs:32` кладет токен в `LogContext`, и внутри API он есть в каждой строке.
+Но через брокер он не передается: `InvokedEvent` (`src/DM.Infrastructure.Messaging/GeneralBus/InvokedEvent.cs`)
+несет только `Type` и `EntityId`, а `EmailLetter` — адрес, тему и тело. В воркерах
+`CorrelationMiddleware` не выполняется никогда, поэтому `ICorrelationTokenProvider.Current` отдает
+свежий случайный Guid из ленивой фабрики — свой на каждый scope сообщения. Именно он попадает в
+`MimeMessage.MessageId` (`MailSendingProcessor.cs:59`).
+
+`docs/guides/MONITORING.md` в разделе LogQL приводит запрос `{app=~"DM.+"} |= "1b2c3d4e"` с подписью
+"Все, что писалось про конкретный корреляционный токен".
+
+Последствие: запрос по всем приложениям вернет только строки API. Разбирая обращение "письмо не
+пришло, вот мой токен", владелец не найдет по нему ни одной записи почтового воркера и не поймет,
+дошел ли `EmailLetter` до очереди. Трассировка при этом сквозная — `AddJamqClientInstrumentation`
+пробрасывает контекст трейса в заголовках сообщения, — то есть связь есть, но через TraceId, а не
+через токен, который выдан пользователю.
+
+Исправление: положить корреляционный токен в сообщения (поле в `InvokedEvent`/`EmailLetter` или
+заголовок сообщения через producer-middleware) и выставлять его в consumer-middleware воркера через
+`ICorrelationTokenSetter`. Пока этого нет — поправить подпись к запросу в MONITORING.md: искать надо
+по TraceId, и объяснить, как перейти от токена к TraceId (обе величины есть в строке лога API).
+
+## Чего я не смог определить
+
+- Точный момент исчерпания пула каналов из `rabbit-producer-channel-leak`. Структура утечки
+  доказана по IL (`RabbitProducer` диспозабелен, `IChannelPool` не имеет возврата, дефолты
+  `PoolSize=16`/`ChannelsLimit=256` получены исполнением), но реальная частота публикаций мне
+  неизвестна. Закрывается измерением: поднять стек, посмотреть `rabbitmqctl list_connections` и
+  `list_channels` до и после сотни действий, создающих события, — число каналов должно вырасти на
+  соответствующую величину и не упасть.
+- Воспроизводимость `captive-dbcontext-in-connection-singleton` под конкуренцией. Захват
+  доказывается графом регистраций, но "второй операции на контексте" нужны одновременные подключения.
+  Закрывается тестом: 20 параллельных `HubConnection.StartAsync` с валидными cookie против тестового
+  хоста; ожидаемый результат — `InvalidOperationException` в логах и часть соединений вне карты.
+- Поведение MailKit при пустых `EmailConfiguration:Username`/`Password` (так в
+  `src/DM.Workers.Mail/appsettings.json` и в `x-workload-env`). `Authenticate("", "")` на сервере,
+  не объявляющем AUTH, в MailKit бросает `NotSupportedException`; работает ли это с mailhog и что
+  будет с настоящим релеем — проверяется только запуском.
+- Разошлись ли `docker/mongo-init.js` и `MongoIndexInitializer` по составу индексов. Контракт "этот
+  класс — источник истины, скрипт зеркалит" описан, но сверку 20+ индексов я не делал; это слайс
+  персистентности. Закрывается тестом, который сравнивает набор имен индексов из скрипта с набором,
+  объявленным в инициализаторе.
+- Нужен ли проекту горизонтальный масштаб API. Сейчас он невозможен по построению: карта подключений
+  SignalR лежит в памяти процесса (`UserConnectionService`), а очередь realtime объявлена
+  `Exclusive = true` (`RealtimeNotificationConsumer.cs:43`), то есть второй экземпляр не сможет ее
+  занять и его клиенты не получат адресных уведомлений. Для одноконтейнерного развертывания
+  (`container_name` у всех сервисов) это верно и дешево. Решение владельца: если масштаб не
+  планируется — записать ограничение рядом с обоими местами; если планируется — нужен backplane и
+  неисключительная очередь на экземпляр.
+
+
+# Асинхронный обмен сообщениями и realtime — D
+
+Оценка среза до опровержения: D. Топология и адресация спроектированы верно, но слой несет утечку AMQP-каналов, ломающую всю запись после ~2000 публикаций, неидемпотентный обработчик уведомлений, потерю сообщений без DLX и non-persistent публикацию, две функции, которые не могут сработать вообще — это дефекты, доходящие до пользователя, и правки в DI, контракте события и топологии придется переделывать.
+
+Слой состоит из одного продюсера событий (`InvokedEventProducer`, exchange `dm.events`, topic, ключ выводится из атрибута `EventRoutingKeyAttribute` на 121 члене `EventType`), трех консьюмеров (`MailConsumer`, `NotificationDispatcherConsumer`, `RealtimeNotificationConsumer`), 39 генераторов уведомлений, покрывающих 50 типов событий, и SignalR-хаба `/whatsup` на 3 источника пушей (realtime-консьюмер, `RealtimeAvatarBroadcaster`, глобальный чат). Верхний уровень спроектирован грамотно: привязки очереди выводятся из генераторов, а не переписываются руками; API-очередь объявлена `Exclusive`, то есть каждый инстанс получает свою копию каждого уведомления, и SignalR-бэкплейн не нужен; публикация везде, кроме одного места, идет после того, как запись стала durable; SYSTEM.md прямо пишет, что outbox'а нет и событие не может быть единственным носителем факта.
+
+Ниже уровня дизайна картина другая. Главное: `RabbitProducer` создает по одному AMQP-каналу на экземпляр и закрывает его только в `Dispose()`, а `InvokedEventProducer` и `MailSender` строят продюсера в собственном конструкторе и зарегистрированы `InstancePerDependency` — значит канал течет на каждую публикующую операцию и не закрывается никогда. На единственном singleton-соединении это упирается в `channel_max` (по умолчанию 2047) и после ~2000 публикаций каждый пишущий эндпоинт отвечает 500 до перезапуска процесса. Дальше по списку: обработчик уведомлений не идемпотентен, а Polly-ретрай повторяет весь `Process` целиком уже после вставки в Mongo; dead-letter exchange есть только у почты, у уведомлений и realtime отравленное сообщение исчезает без следа; публикация идет non-persistent (delivery mode 1, `BasicProperties` не трогается вообще), так что рестарт брокера уносит и очередь писем, и ту самую DLQ, которая объявлена терминальной "чтобы человек посмотрел"; `EventType.NewMessage` публикуется на каждое сообщение, но ни один генератор его не берет, поэтому счетчик непрочитанного в мессенджере в реальном времени не двигается вообще; пять генераторов (бан, предупреждение, тикет, блокировка аккаунта, открытый набор) не могут сработать никогда, потому что никто не публикует их события.
+
+Оценка D: это не "могло бы быть красивее", это дефекты, доходящие до пользователя (потерянные письма активации, дублирующиеся уведомления, неработающий бейдж, ненотифицированный бан) плюс утечка, которая ломает запись целиком. Архитектурно слой не сломан — F не заслуживает: топология выводится из кода, тесты на `MessageService` и `NotificationService` проверяют именно то, что заявляют, документация честна про гарантии. Но лечение требует правок в регистрации DI, в контракте события и в топологии, то есть части решений придется переделать.
+
+## Что сделано хорошо
+
+- Привязки очереди уведомлений выводятся из самих генераторов (`NotificationDispatcherConsumer.cs:65-72`), а не из рукописного списка, и это удержано тестом (`test/DM.Infrastructure.Messaging.Tests/NotificationRoutingShould.cs:28-59`). Комментарий утверждает, что рукописное зеркало однажды заморило 14 генераторов; проверка выводимого списка сегодня дает 50 типов на 39 генераторов — расхождение действительно невозможно.
+- `Exclusive = true` на API-очереди (`RealtimeNotificationConsumer.cs:39-44`) — не декоративный флаг: Jamq при этом добавляет к имени случайный суффикс (`Ensure.Consume`), то есть каждый инстанс API получает собственную эфемерную очередь, привязанную к `dm.notifications.sent` по `#`, и получает полную копию потока. Это ровно то, что нужно для нескольких инстансов с SignalR без Redis-бэкплейна.
+- Отказ брокера не валит API: `RealtimeNotificationConsumer.cs:31-64` уходит с горячего пути стартапа через `Task.Yield()` и глотает ошибку подписки с явным объяснением, что `BackgroundServiceExceptionBehavior.StopHost` — дефолт и иначе получился бы crash-loop. Утверждение верное.
+- Публикация после durable-записи соблюдается: `GameInactivityProcessor.cs:104-105,148-149` пишет через репозиторий и только потом публикует, `MessageService.cs:129-138` — тоже. Ни одна публикация не находится внутри транзакции: `IEventProducer` инжектится в 30 файлов, из них в Persistence только `LikeOperations.cs:46`, а три `BeginTransactionAsync` (`ActivationRepository.cs:72`, `TopicRepository.cs:354`, `PostRepository.cs:464`) продюсера не видят.
+- Глобальный чат — правильная модель realtime: пуш не несет текста, он только триггерит `pollForNewer()`, дедуплицирующий по id, а опрос раз в 30 с остается работающим fallback'ом и догоняет пропущенное на обоих переходах состояния сокета (`GlobalChatPage.vue:471-495`). Порядок доставки при этом не имеет значения — транспорт его и не гарантирует.
+- Хаб не имеет ни одного клиентского метода и ни одной группы (`NotificationHub.cs:27-62`), адресация идет через карту аутентифицированных соединений, а query-string-фallback для токена удален с объяснением, что сессионный кредентиал в URL попадает в лог реверс-прокси. Проверено: клиент подключается только через cookie (`client.ts:267-275`), `accessTokenFactory` нет.
+- `NotificationService.CreateAsync` не хранит уведомление без адресатов, но возвращает сущность ради id (`NotificationService.cs:60-71`), и обе половины инварианта закрыты тестами `NotStoreNotificationsNobodyCanRead` и `NotTouchTheRepositoryWhenNoNotificationHasRecipients`. `MessageServiceShould` действительно проверяет публикацию двух событий для глобального чата и отсутствие второго для остальных типов (`MessageServiceShould.cs:161,179-180,198`).
+- Webhook-эндпоинт ботов закрыт правильно: fail-closed при незаданном секрете, сравнение постоянного времени, секрет в заголовке а не в пути, rate limiting (`WebhookController.cs:74-116`).
+- `AddDmMessageQueuing` / `AddDmBrokerHealthCheck` (`MessageQueuingConfigurationExtensions.cs:26-77`) валидируют endpoint на старте и ставят воркерам health-check, который реально открывает соединение с брокером. Утверждение комментария, что пустой `AddHealthChecks()` отвечает Healthy безусловно, верно.
+- Debug-логи с метаданными уведомлений и списками получателей (`RealtimeNotificationProcessor.cs:52`) в продакшене не пишутся: минимальный уровень Information вне Development (`LoggingConfiguration.cs:36`). Трейсинг шины включен (`AddJamqClientInstrumentation`, там же:69).
+
+## Находки
+
+### [КРИТИЧНО] channel-leak-per-publish — каждая публикация открывает AMQP-канал, который никто не закрывает
+
+> **Опровержение: подтверждено.**
+
+`InvokedEventProducer` строит продюсера в конструкторе:
+
+```csharp
+internal class InvokedEventProducer(IProducerBuilder producerBuilder) : IEventProducer, IInvokedEventProducer
+{
+    private readonly IProducer<string, InvokedEvent> producer = producerBuilder.BuildRabbit<InvokedEvent>(
+        new RabbitProducerParameters(InvokedEventsTransport.ExchangeName));
+```
+(`src/DM.Infrastructure.Messaging/GeneralBus/InvokedEventProducer.cs:18-21`)
+
+Класс попадает под сканирующую регистрацию `builder.RegisterDefaultTypes()` из `MessageQueuingModule.cs:29`, а она ставит `InstancePerDependency()` (`src/DM.Infrastructure.Core/Extensions/ModuleRegistrationExtensions.cs:103`). Домены зарегистрированы тем же сканом (`Startup.cs:324-328`), то есть на каждый resolve `MessageService`/`PostService`/`LikeOperations` создается новый `InvokedEventProducer`, а с ним новый `RabbitProducer`.
+
+В Jamq 0.10.0 `RabbitProducer` держит `Lazy<IChannelAdapter> channelAccessor`, инициализируемый на первом `Send` через `channelProvider.Get()`, а `ChannelProvider.Get()` — это `new RobustChannelAdapter(connectionProvider.Value.CreateModel())`: пула нет, каждый вызов создает новый канал. `RobustChannelAdapter` закрывает канал только в `Dispose()`, финализатора нет. Продюсер создается через `new` внутри чужого конструктора, поэтому Autofac его не отслеживает и не диспозит, а сам `InvokedEventProducer` не `IDisposable`. Соединение при этом одно на процесс (`MessageQueuingModule.cs:15-27`, `.SingleInstance()`).
+
+Те же грабли у `MailSender.cs:24` (продюсер в конструкторе, `MailModule` регистрирует тем же сканом) и у `NotificationProcessor.cs:41-42` — там продюсер строится в конструкторе процессора, а Jamq создает scope и резолвит процессор на каждое сообщение, то есть воркер уведомлений течет по каналу на событие.
+
+Последствие: канал на публикующий запрос, накопление на единственном соединении. При дефолтном `channel_max = 2047` (образ `rabbitmq:3-management` без своего конфига, `docker-compose.yml:171-194`) примерно после двух тысяч публикаций `CreateModel()` перестает выдавать канал, и каждый пишущий эндпоинт, который публикует событие — отправка сообщения, лайк, создание топика, смена статуса игры — отвечает 500 до перезапуска API. Воркер уведомлений доходит до потолка быстрее, чем API, и после этого перестает пушить realtime. До потолка стоимость тоже не нулевая: `Ensure.Produce` объявляет exchange на каждом новом канале, то есть лишний round-trip к брокеру на каждый публикующий запрос, плюс серверное состояние канала.
+
+Исправление: сделать продюсера единственным на процесс. Минимальная правка — зарегистрировать `InvokedEventProducer` и `MailSender` явно `.SingleInstance()` (они stateless, `IProducer` потокобезопасен в рамках канала, но безопаснее сразу проверить это на Jamq) и вынести `BuildRabbit` из конструктора процессора уведомлений в singleton-обертку. В любом варианте объект, который держит канал, должен доживать до конца процесса и диспозиться на shutdown; сейчас не выполнено ни то, ни другое.
+
+### [ВЫСОКАЯ] notification-processor-not-idempotent — повтор обработки дублирует уведомления, письма и пуши
+
+> **Опровержение: подтверждено.**
+
+`NotificationProcessor.Process` (`src/DM.Workers.NotificationDispatcher/Implementation/NotificationProcessor.cs:46-89`) идет так: собрать `CreateNotification`, вставить в Mongo (`_notificationService.CreateAsync`, строка 68), отправить realtime (71-74), отправить письма (77-80), отправить ботам (83-86). Весь этот метод обернут `NotificationConsumerRetryMiddleware`, который на любое исключение повторяет его целиком до 5 раз (`NotificationConsumerRetryMiddleware.cs:18-20`).
+
+Дублирование достижимо без всякого рестарта. В `NotificationEmailSender.SendIfEnabled` запросы к Mongo и Postgres стоят вне per-user `try` (`Email/NotificationEmailSender.cs:121-131`, `try` открывается только на строке 135), и то же в `Bot/NotificationBotSender.cs:124-134`. Любой транзиентный сбой этих двух запросов выбрасывает исключение уже после того, как документы уведомлений вставлены, — Polly повторяет `Process`, `CreateAsync` вставляет вторую копию, realtime-пуш уходит второй раз, письма отправляются второй раз.
+
+Дедуплицировать нечем: `InvokedEvent` несет только `Type` и `EntityId` (`InvokedEvent.cs:9-20`), никакого id события или ключа идемпотентности; `NotificationFactory.cs:21` выдает свежий `Guid` на каждую генерацию; в Mongo на `RealtimeNotifications` нет ни одного unique-индекса (`MongoIndexInitializer.cs:116-129`).
+
+Отдельно есть системный путь редоставки: бэкофф ретрая по формуле `1 << attempt` при 5 попытках дает 2+4+8+16+32 = 62 с внутри одного сообщения, а окно слива при остановке консьюмера — `MaxProcessingAnticipation`, по умолчанию 30 с; Jamq по истечении просто закрывает соединение, неподтвержденное сообщение брокер редоставляет. То есть деплой в момент бэкоффа гарантированно приводит к повторной обработке.
+
+Последствие: транзиентный сбой Mongo или Postgres в момент обработки события "новый комментарий в подписанной теме" — и подписчики получают два одинаковых уведомления в списке, два письма и два сообщения в Telegram. При деплое во время бэкоффа то же самое, но по всей пачке событий, висевших в очереди.
+
+Исправление: перенести `Find`/`ToDictionaryAsync` в senders внутрь `try` (тогда обработка перестает падать по причине, из-за которой ее нельзя безопасно повторить), и добавить ключ идемпотентности: положить в `InvokedEvent` id события (Guid, генерируемый продюсером), сложить `NotificationId` детерминированно из `(eventId, recipientSetHash)` или завести unique-индекс на `(EventType, EntityId, UsersInterested)` и глотать duplicate key. Без ключа в сообщении дедупликация невозможна в принципе.
+
+### [ВЫСОКАЯ] no-dlx-for-notifications — отравленное событие уведомления исчезает без следа
+
+> **Опровержение: подтверждено.**
+
+Из трех консьюмеров dead-letter exchange настроен только у почтового:
+
+```csharp
+DeadLetterExchange = DeadLetterExchangeName,
+```
+(`src/DM.Workers.Mail/MailConsumer.cs:57`, с комментарием 52-56: без этого "the retries run out, the exception escapes, and the message is gone with no trace")
+
+`NotificationDispatcherConsumer.cs:45-49` и `RealtimeNotificationConsumer.cs:39-44` этого параметра не задают. Поведение подтверждается исходником Jamq: необработанное исключение приводит к `BasicNack(deliveryTag, false, false)`, то есть requeue=false — при отсутствии DLX сообщение отбрасывается. `ProcessResult.Failure` и `RetryNeeded` в проекте не используются нигде (единственные возвраты — `ProcessResult.Success` в трех процессорах), так что весь контроль отдан исключениям.
+
+Последствие: генератор падает на данных (например, `Character.AuthorId!.Value` в `GameStatusChangedNotificationGenerator.cs:96` разыменовывает nullable для активного персонажа без автора) — пять ретраев, 62 с ожидания, и событие пропадает. Пользователь не получает уведомление о принятой заявке, в логах остается пять Warning'ов от middleware и ничего, по чему можно восстановить факт. Тот же комментарий, который объясняет, почему это недопустимо для письма, не применен к уведомлениям.
+
+Исправление: задать `DeadLetterExchange` для `dm.notifications` и объявить терминальную очередь, как это сделано в `MailConsumer.ConfigureDLX`. Для API-очереди realtime DLX не нужен (пуш по определению одноразовый) — но это стоит написать в коде явно, иначе отсутствие параметра читается как забывчивость.
+
+### [ВЫСОКАЯ] non-persistent-publishing — рестарт брокера уносит очередь писем и dead-letter очередь
+
+> **Опровержение: подтверждено.**
+
+Кодек Jamq пишет в сообщение только тело: `context.NativeProperties.Body = JsonSerializer.SerializeToUtf8Bytes(...)`, `BasicProperties` не трогается вообще (`DefaultCodecMiddleware`), то есть delivery mode остается 1 — non-persistent. `PublishingTimeout` по умолчанию null, значит publisher confirms не включаются и `Send` возвращается, не дожидаясь подтверждения брокера. Очереди при этом объявлены durable (`Ensure.Consume`: `durable: true`), и DLQ тоже (`MailConsumer.cs:84`).
+
+Комментарий `MailConsumer.cs:69-75` объясняет, что DLQ сделана терминальной специально, "A poison message has to stop somewhere a human can look at it". Утверждение верно только до первого рестарта брокера: non-persistent сообщения в durable-очереди при перезапуске узла теряются. Усугубляет то, что у сервиса `rabbitmq` в compose нет тома вовсе (`docker-compose.yml:171-194`) — единственный сервис с состоянием без named volume, при том что у pg, mongo, loki, minio они есть (`docker-compose.yml:7-12`).
+
+Последствие: перезапуск контейнера брокера (обновление образа, обслуживание хоста, OOM при лимите 512 МБ) молча удаляет все, что стояло в `dm.mail.sending`. Пользователь, зарегистрировавшийся минутой раньше, не получает письмо активации, и восстановить его нечем — письмо не выводится из состояния БД, оно и было единственным носителем факта, что прямо противоречит правилу из SYSTEM.md:75. Одновременно опустошается DLQ, то есть исчезает единственный артефакт для разбора отравленных писем.
+
+Исправление: включить persistent-публикацию. В Jamq для этого нужен продюсерский middleware, ставящий `BasicProperties.Persistent = true` (`WithMiddleware` на `producerBuilderDefaults`), и `PublishingTimeout` для писем, чтобы `Send` не рапортовал успех до подтверждения брокера. Плюс named volume для rabbitmq.
+
+### [ВЫСОКАЯ] new-message-event-never-bound — счетчик непрочитанных в мессенджере не обновляется в реальном времени
+
+> **Опровержение: подтверждено.**
+
+`MessageService.CreateAsync` публикует `EventType.NewMessage` на каждое сообщение (`MessageService.cs:132`). Среди 39 генераторов нет ни одного с `EventType.NewMessage`: в `Notifiers/Messaging` их два — `MessageLikedNotificationGenerator` (`LikedMessage`) и `NewGlobalChatMessageNotificationGenerator` (`NewGlobalChatMessage`). Раз ни один генератор не отвечает `CanResolve(NewMessage)`, ключ `messaging.message.created` не входит в выводимый список привязок, и topic exchange отбрасывает событие.
+
+При этом клиент на него рассчитывает:
+
+```js
+case EventType.NewMessage:
+  // Refresh unread count when new message arrives. Note: the backend
+  // does not emit NewMessage for global chat sends (no notification
+  // generator wires it to recipients) - this only fires for direct
+  // messages that do reach the notification pipeline.
+  messagingStore.fetchUnreadCount();
+```
+(`src/DM.Web.Client/src/app/App.vue:215-220`)
+
+Комментарий неверен в обе стороны: событие публикуется и для глобального чата тоже (строка 132 выполняется до проверки типа чата), а до клиента не доходит ни в одном случае. Fallback'а нет: `setInterval` во всем клиенте есть только у глобального чата, статистики, ротации отзывов и автосейва редактора — у мессенджера и у бейджа уведомлений опроса нет (`messagingStore.fetchUnreadCount` вызывается только на монтировании App.vue и по пушу).
+
+Последствие: пользователю приходит личное сообщение, он сидит на сайте с открытой вкладкой — бейдж непрочитанного не меняется до перезагрузки страницы. Для продукта, где ЛС это основная асинхронная коммуникация, это тихо неработающая функция, а не отсутствующий экран.
+
+Исправление: либо генератор на `NewMessage`, адресующий уведомление участникам чата кроме автора (тогда бейдж поедет через штатный realtime-путь и попадет в список уведомлений), либо, если ЛС не должны попадать в список уведомлений, отдельный broadcast-путь по образцу глобального чата с адресацией по `RecipientIds`. Заодно поправить комментарий в App.vue.
+
+### [ВЫСОКАЯ] moderation-notifications-unreachable — пять генераторов не могут сработать никогда
+
+> **Опровержение: подтверждено.**
+
+Событий `WarningIssued`, `BanIssued`, `TicketCreated`, `AccountLocked`, `GameRecruitmentOpened` не публикует никто: поиск `EventType.<имя>` вне воркера и вне `NotificationCategoryMapper` не дает ни одной точки отправки. В `DM.Domain.Moderation` `IEventProducer` не инжектится ни в один сервис — `BanService` (`Features/Warnings/BanService.cs:16-40`), `WarningService`, `TicketService` продюсера не видят.
+
+Приемная сторона при этом полностью готова: `BanIssuedNotificationGenerator`, `WarningIssuedNotificationGenerator`, `TicketCreatedNotificationGenerator`, `AccountLockedNotificationGenerator`, `GameRecruitmentOpenedNotificationGenerator`; темы писем "Вынесено предупреждение", "Выдан бан", "Бан снят" (`Email/NotificationEmailSender.cs:88-90`); тексты для ботов (`Bot/NotificationBotSender.cs:90-92`); категории в `NotificationCategoryMapper`. Тест `NotificationRoutingShould.AnswerAtLeastOneEvent` проходит — он проверяет, что генератор отвечает на событие, но не что событие кто-то отправляет.
+
+Последствие: модератор выдает бан или предупреждение — пользователь не получает ни уведомления в списке, ни письма, ни сообщения в бот. Функция выглядит реализованной по всем внешним признакам, включая настройки категории "Модерация" в профиле, и не работает.
+
+Исправление: публиковать события из `BanService`, `WarningService`, `TicketService`, из пути блокировки аккаунта в `AuthenticationService` и из перехода игры в набор. Чтобы это не повторилось, нужен тест-обратная сторона `NotificationRoutingShould`: для каждого типа, на который есть генератор, в решении должна существовать точка публикации (рефлексией это не выразить, но можно проверять по списку, который сам выводится из генераторов, с явным allowlist исключений).
+
+### [ВЫСОКАЯ] smtp-connection-per-letter — на каждое письмо открывается новая SMTP-сессия, которая не закрывается
+
+> **Опровержение: подтверждено.**
+
+`MailSendingProcessor` создает клиента в конструкторе:
+
+```csharp
+_client = new Lazy<IMailTransport>(() =>
+{
+    var smtpClient = new SmtpClient();
+    smtpClient.Connect(...);
+    smtpClient.Authenticate(...);
+    smtpClient.NoOp();
+    return smtpClient;
+});
+```
+(`src/DM.Workers.Mail/MailSendingProcessor.cs:37-45`)
+
+Jamq создает DI-scope и резолвит процессор на каждое сообщение (`RabbitConsumer`: `await using (var scope = serviceProvider.CreateAsyncScope())`, процессор берется из этого scope), а класс зарегистрирован сканом как `InstancePerDependency`. Значит на каждое письмо: новый `SmtpClient`, `Connect`, `Authenticate`, `NoOp`, `SendAsync` — и ни `Disconnect`, ни `Dispose`. Процессор не `IDisposable`, поэтому scope при закрытии ничего не диспозит, а сам `SmtpClient` создан кодом, а не контейнером.
+
+Последствие: сессии закрываются только финализацией сокета сборщиком мусора, недетерминированно и без `QUIT`. На реальном SMTP-провайдере это два разных лимита сразу: одновременные соединения с одного клиента и частота AUTH. Пачка писем от одного события (рассылка подписчикам, дайджест) упирается в отказ провайдера, письма получают пять ретраев по 62 с на каждое — а поскольку у почтового консьюмера `ProcessingOrder.Sequential` (prefetch 1), очередь писем встает целиком на это время, после чего письмо уходит в DLQ.
+
+Исправление: держать одно соединение на процесс (singleton-обертка с реконнектом по ошибке) либо честно открывать и закрывать соединение на письмо через `using` c `Disconnect(true)`. Второй вариант проще и достаточен при текущих объемах; первый требует обработки разрыва, иначе получится следующая находка — закешированный мертвый клиент.
+
+### [ВЫСОКАЯ] unescaped-metadata-in-outgoing-messages — метаданные подставляются в HTML письма и Telegram без экранирования
+
+> **Опровержение: подтверждено.**
+
+Значения метаданных вставляются в HTML как есть:
+
+```csharp
+sb.AppendLine($"<dd style=\"margin-left: 0; color: #333;\">{value}</dd>");
+```
+(`Email/NotificationEmailSender.cs:228`, `value` — результат `FormatPropertyValue`, для строк это `element.GetString()` без экранирования, строки 275-283)
+
+То же в боте, где режим разметки объявлен явно:
+
+```csharp
+new { chat_id = chatId, text = message, parse_mode = "HTML" }
+```
+(`Bot/NotificationBotSender.cs:229-234`, текст собирается в `BuildMessage`, строка 276: `sb.AppendLine($"<b>{name}:</b> {value}")`)
+
+В метаданных лежат подконтрольные пользователю строки: `GameTitle`, `TopicTitle`, `BlogTitle`, `CharacterName`, `Username` (см. любой генератор, например `GameStatusChangedNotificationGenerator.cs:88-95`).
+
+Последствие: два разных отказа от одной причины. В письме — HTML-инъекция: игра, названная `<a href="https://evil.example">Смените пароль</a>`, приходит подписчикам письмом от dm.am со рабочей ссылкой на чужой сайт, то есть готовый фишинг с легитимного отправителя. В Telegram — потеря доставки: заголовок с символом `<` (например, "Уровень < 5") дает невалидный HTML, Telegram отвечает 400, `SendTelegramMessage` пишет Warning и выходит — пользователь не получает уведомление вообще, и заметить это можно только по логам.
+
+Исправление: экранировать значения перед подстановкой (`HtmlEncoder.Default.Encode` для письма; для Telegram достаточно заменить `& < >` или перейти на `parse_mode` отсутствующий/`MarkdownV2` с экранированием). Заодно устранить дублирование: `EventTypeSubjects` (54 записи) и `EventTypeMessages` (53 записи) вместе с двумя копиями `FormatPropertyName`/`FormatPropertyValue` расходятся уже сейчас — в письме есть `IsReminder`, в боте нет.
+
+### [СРЕДНЯЯ] reminder-published-before-save — напоминания о постах публикуются до того, как отметка о них станет durable
+
+```csharp
+foreach (var pendency in stalePendencies)
+{
+    pendency.LastReminderUtc = now;
+    await producer.SendAsync(EventType.RoomPendencyReminder, pendency.PendencyId);
+}
+
+await dbContext.SaveChangesAsync(cancellationToken);
+```
+(`src/DM.Web.API/HostedServices/PendencyReminderService.cs:112-118`)
+
+`LastReminderUtc` меняется только в трекере EF, `SaveChangesAsync` идет после всей пачки. Это единственное место в решении, где публикация опережает durable-запись; `GameInactivityProcessor` в такой же ситуации пишет через репозиторий и только потом публикует.
+
+Последствие: `SaveChangesAsync` падает (обрыв соединения с Postgres, таймаут) после того, как события уже ушли — мастера получают напоминания письмом и в бот, а в БД отметки нет. Через 12 часов те же напоминания уходят снова, и так до первого удачного сохранения. Тот же эффект при остановке процесса между циклом и `SaveChanges`.
+
+Исправление: сохранять отметку и только потом публиковать — либо пачкой (`SaveChangesAsync` до цикла публикаций), либо по одной записи, если важна атомарность на pendency.
+
+### [СРЕДНЯЯ] double-notify-on-status-change — подписчик игры получает два уведомления об одном событии
+
+На `StatusGameActive` отвечают два генератора. `GameStatusChangedNotificationGenerator` берет читателей игры с настройкой `StatusChanges` и объединяет их с командой и игроками (`GameStatusChangedNotificationGenerator.cs:70-80`). `GameActivatedNotificationGenerator` делает тот же запрос `GetByTargetWithSettingsAsync(SubscriptionTargetType.Game, gameId, SubscriptionSettings.StatusChanges)` (`GameActivatedNotificationGenerator.cs:74-78`) и исключает из результата только мастера и ассистентов:
+
+```csharp
+// Exclude game team members (they get notified via GameStatusChangedNotificationGenerator)
+usersInterested.Remove(gameData.MasterId);
+```
+(там же, 80-85)
+
+Комментарий показывает, что дублирования избегали осознанно, но исключили не тот набор: пересечение двух генераторов — это именно читатели, подписанные на саму игру, и они остаются в обоих. Ровно та же пара у блогов: `BlogStatusChangedNotificationGenerator.cs:66-75` и `BlogActivatedNotificationGenerator.cs:72-83`.
+
+Последствие: пользователь, подписанный на игру с включенными статусными изменениями, при старте игры получает два уведомления (`StatusGameActive` и `NewGameFromSubscribedAuthor`), два письма и два сообщения в бот. Это не редкий сценарий: подписка на игру с `StatusChanges` — дефолтный способ следить за игрой.
+
+Исправление: убрать читателей игры/блога из `*ActivatedNotificationGenerator` (он должен адресовать только подписчиков автора и ассистентов) либо, наоборот, отдать все статусные события одному генератору, а генератору "от автора, на которого я подписан" оставить только `NewGame`/`NewBlog`.
+
+### [СРЕДНЯЯ] silent-drop-is-invisible — событие без привязки исчезает, и это ничем не измеряется
+
+Из 61 типа событий, публикуемых кодом, 38 не обрабатываются ни одним генератором (посчитано по всем вызовам `SendAsync` в `src` вне воркера против набора из 39 генераторов). Большая часть намеренна — `DeletedTopic`, `ChangedRoom` и подобным потребителя нет. Проблема не в самом факте, а в том, что отличить намеренный дроп от поломки нечем:
+
+- exchange `dm.events` типа topic, публикация идет с `mandatory: true` (`RabbitProducer`: `channel.BasicPublish(exchange, key, true, props, body)`), но обработчика `BasicReturn` нет ни в Jamq, ни в проекте, и alternate-exchange не задан — возвращенное сообщение просто теряется;
+- в Prometheus нет ни одной цели для брокера (`docker/prometheus.yml:8-30` — dm-api, два воркера, postgres, node), плагин метрик rabbitmq не публикуется и не скрейпится;
+- дашборд `DM Consumers` (`docker/grafana/dashboards/dm-consumers.json`) состоит из `up`, GC heap, GC collections и двух панелей "Request Rate" по `http_server_request_duration_seconds_count` воркеров — то есть измеряет трафик health-проб самих процессов. Про сообщения там нет ничего: ни глубины очереди, ни счетчика обработанных, ни размера DLQ, ни задержки;
+- алерты (`docker/prometheus/alerts.yml:37-59`) покрывают только "процесс не отвечает" и "цель скрейпа исчезла".
+
+Последствие: ровно та поломка, которую описывает комментарий `NotificationDispatcherConsumer.cs:57-62` (14 генераторов, до которых не доходили события), сегодня диагностируется так же — по жалобе пользователя. Отравленное сообщение без DLX, событие с опечаткой в routing key, остановившийся консьюмер с растущей очередью — ни одно из этих состояний не видно ни на дашборде, ни в алертах.
+
+Исправление: включить `rabbitmq_prometheus` и скрейпить его, добавить алерты на глубину `dm.notifications`/`dm.mail.sending`, на непустую `dm.mail.unsent-dlq` и на отсутствие консьюмеров у очереди. На дашборде заменить панели request rate воркеров на метрики очередей.
+
+### [СРЕДНЯЯ] connection-map-race — гонка connect/disconnect теряет соединение из карты пользователей
+
+```csharp
+var connectionIds = _connections.GetOrAdd(userId, _ => new HashSet<string>());
+lock (connectionIds)
+{
+    connectionIds.Add(connectionId);
+}
+```
+(`src/DM.Web.API/Realtime/UserConnectionService.cs:34-38`)
+
+```csharp
+lock (connectionIds)
+{
+    connectionIds.Remove(connectionId);
+    if (connectionIds.Count == 0)
+    {
+        _connections.TryRemove(userId, out _);
+    }
+}
+```
+(там же, 49-56)
+
+`Add` берет множество из словаря и лочит его отдельным шагом. Между этими шагами `Remove` последнего соединения того же пользователя успевает удалить множество из `_connections`. Дальше `Add` кладет connectionId в объект, на который словарь больше не ссылается.
+
+Последствие: соединение зарегистрировано в `_connectionOwners`, но `GetConnectedUsers()` его не возвращает, поэтому `RealtimeNotificationProcessor` (строки 44-49) не находит получателя — все персональные пуши для этого пользователя проваливаются, пока он не переподключится. Окно узкое, но достижимо на обычном обновлении страницы с единственной вкладкой: сервер замечает разрыв старого сокета с задержкой и может обработать его уже после того, как новый сокет начал регистрироваться.
+
+Исправление: цикл-повтор вокруг `GetOrAdd`+`Add` с проверкой, что множество все еще то, что лежит в словаре, либо `ConcurrentDictionary<Guid, ConcurrentDictionary<string, byte>>` и `AddOrUpdate` вместо ручного лока. Класс уже прошел ревью на локи (комментарий 64-69 про снапшот под тем же локом верен) — не хватает только этой пары.
+
+### [СРЕДНЯЯ] two-contracts-one-notification — одно уведомление приезжает клиенту в двух разных форматах
+
+`eventType`. MVC сериализует enum строкой: `config.JsonSerializerOptions.Converters.Insert(0, new JsonStringEnumConverter())` (`src/DM.Web.API/Shared/Configuration/JsonConfiguration.cs:31`). Хаб зарегистрирован как `services.AddSignalR()` без настройки протокола (`Startup.cs:167`), то есть своим `JsonHubProtocol` без этого конвертера — числом. Один и тот же `EventType` в `GET /v1/users/me/notifications` приходит как `"NewMessage"`, а в пуше как `11`.
+
+`payload`. В realtime-пути метаданные проходят через Rabbit с `JsonSerializerDefaults.Web` (кодек Jamq) и приезжают в API уже camelCase. В REST-пути они читаются из Mongo, где имена элементов — это имена свойств анонимного объекта генератора, то есть PascalCase: конвенция camelCase для драйвера нигде не регистрируется (в решении есть только `BsonSerializer.RegisterSerializer(new GuidSerializer(...))`, `PersistenceModule.cs:93`), а `PropertyNamingPolicy` на выходе к ключам словаря не применяется, `DictionaryKeyPolicy` не задан. То есть `GameTitle` в REST против `gameTitle` в пуше.
+
+Клиент держит три рукописные копии перечисления событий, и одна уже разошлась: `NewPoll = 51` (`src/DM.Web.Client/src/shared/api/models/notifications/signalr.ts:19`) против `NewPoll = 31` в бэкенде, где 51 занят `DeletedPublicationComment`. Вторая копия — `NotificationType` в `models/notifications/index.ts` (20 членов, значения совпадают, имена расходятся: `NewForumTopic` против `NewTopic`), причем типы payload там объявлены в camelCase, то есть под realtime-форму, а поле типизировано как числовой enum, то есть под пуш, — при том что этот тип используется REST-клиентом.
+
+Последствие: экран списка уведомлений еще не построен, поэтому сегодня это латентно. Но первый же его вариант, написанный по объявленным типам, будет сравнивать строку с числом и читать `payload.gameTitle` там, где приходит `GameTitle`. Плюс уже сейчас: любой обработчик `NewPoll` в клиенте отреагирует на удаление комментария к публикации и никогда — на новый опрос.
+
+Исправление: договориться об одном формате (проще всего добавить `JsonStringEnumConverter` в `AddSignalR().AddJsonProtocol(...)` или наоборот убрать его из MVC для этого поля) и генерировать перечисление событий для клиента из бэкенда, а не поддерживать три копии руками. До генерации — тест, сверяющий значения (файл с enum'ом читается тривиально).
+
+### [СРЕДНЯЯ] reconnect-gives-up — после четырех неудачных попыток realtime не восстанавливается до перезагрузки страницы
+
+```js
+return new HubConnectionBuilder()
+  .withAutomaticReconnect()
+```
+(`src/DM.Web.Client/src/shared/api/client.ts:269-270`)
+
+Без аргументов это дефолтная политика: попытки через 0, 2, 10, 30 с, дальше `onclose` и никаких повторов. `useSignalR` в `onclose` только сбрасывает флаг (`useSignalR.ts:49-51`), инициировать новое подключение никто не пытается: `App.vue` вызывает `connectSignalR()` из `onMounted` и из `watch` по `isAuthenticated` (`App.vue:251-282`).
+
+Последствие: перезапуск API дольше ~42 с (обычный деплой с прогревом) — и у всех открытых вкладок realtime мертв до перезагрузки страницы. Глобальный чат это переживает: у него есть 30-секундный опрос как fallback и догон на переходах состояния сокета (`GlobalChatPage.vue:471-495`). Бейдж уведомлений и бейдж мессенджера fallback'а не имеют — они замирают на значении, полученном при загрузке страницы.
+
+Исправление: передать в `withAutomaticReconnect` бесконечную политику с ограниченным бэкоффом (`{ nextRetryDelayInMilliseconds: ctx => Math.min(30000, 1000 * 2 ** ctx.previousRetryCount) }`) и на `onreconnected` дернуть `fetchUnreadCount` обоих store (сейчас догон делает только страница чата).
+
+### [СРЕДНЯЯ] notifications-grow-forever — у потока уведомлений нет ни срока хранения, ни ограничения
+
+`MongoIndexInitializer` заводит для `RealtimeNotifications` два индекса и ни одного TTL (`MongoIndexInitializer.cs:116-129`), при том что для двух других коллекций срок хранения задан осознанно и с обоснованием: `IX_LoginAttempts_Expiry` (24 ч) и `IX_SecurityAuditLog_Expiry` (180 дней, "unbounded after that is a liability"). Удаления уведомлений в `NotificationRepository` нет вообще: только `Count`, `CountUnread`, `GetNotifications`, `Create`, `MarkAsRead`.
+
+Последствие: документ на каждый лайк, комментарий, приглашение и смену статуса, навсегда. Список уведомлений при этом на каждой странице делает `CountDocuments` по всем документам пользователя (`NotificationService.cs:42`, `NotificationRepository.cs:24`) — стоимость растет вместе с историей, и оценки, при каких объемах это станет заметно, никто не делал.
+
+Исправление: TTL-индекс по `CreatedUtc` (тот же прием, что для аудита) со сроком, который назовет владелец, либо явное решение, что уведомления хранятся вечно, записанное в DATA_STORAGE.md как правило.
+
+### [СРЕДНЯЯ] tests-assert-nothing — три из четырех тестов слоя не проверяют поведение
+
+`test/DM.Infrastructure.Messaging.Tests` содержит четыре файла. Реальную проверку делает один — `NotificationRoutingShould`. Остальные:
+
+```csharp
+[Fact]
+public void ExistAsInternalClass()
+{
+    var type = typeof(InvokedEventProducer);
+    Assert.NotNull(type);
+    Assert.Equal("InvokedEventProducer", type.Name);
+}
+```
+(`InvokedEventProducerShould.cs:13-21` — тест утверждает, что у типа то имя, которым он назван)
+
+`InvokedEventShould.cs` — четыре теста на то, что автосвойства сохраняют присвоенное значение (строки 70-122). `InvokedEventExceptionShould` — на то, что конструктор исключения передает message.
+
+Непокрытым при этом остается все, где живет риск: ни одного теста на `NotificationProcessor` (порядок операций, поведение при исключении в sender'ах), `MailSendingProcessor`, `RealtimeNotificationProcessor` (адресация персональных событий против broadcast'а глобального чата), `UserConnectionService` (регистрация только аутентифицированных, гонки, снапшот), `NotificationHub` (гость подключается, но не попадает в карту), объявление DLX, retry middleware. В `DM.Web.API.IntegrationTests` тестов хаба нет, в e2e — тоже (`e2e/tests/personal/notifications.spec.ts` проверяет только REST `unread`).
+
+Последствие: инвариант "анонимное соединение не может стать адресатом персонального события", который подробно описан в комментариях `NotificationHub.cs:14-26` и `IUserConnectionService.cs:10-14`, не удерживается ничем, кроме этих комментариев. Любая правка в `UserConnectionService.Add` (например, ранний return для гостя) ломает его молча.
+
+Исправление: три теста на `UserConnectionService` (гость не регистрируется, `Remove` по connectionId без токена, снапшот не бросает при параллельной мутации), один на `RealtimeNotificationProcessor` (broadcast только для `NewGlobalChatMessage`, иначе только соединения из карты), один на `NotificationProcessor` (при исключении в email-sender'е повторная обработка не создает вторых документов — он же и зафиксирует исправление идемпотентности). Тесты на автосвойства удалить, они дают ложное покрытие.
+
+### [НИЗКАЯ] docs-and-comments-that-lie — адрес хаба и схема шины в документации не соответствуют коду
+
+- `NotificationController.cs:15`: "Real-time notifications are delivered via SignalR hub at /notifications". Хаб смонтирован на `/whatsup` (`Startup.cs:276`), клиент подключается к `whatsup` (`useSignalR.ts:47`), и в API_DESIGN.md:263 указано правильно. Ошибочный адрес попадает в Swagger как описание контроллера.
+- `docs/architecture/SYSTEM.md:166-171`: схема показывает, что из exchange `dm.events` кормятся "dm.notif" и "dm.mail". Очереди с именем `dm.notif` не существует (`dm.notifications`), а почта к `dm.events` не привязана вовсе: `MailSender` публикует в отдельный exchange `dm.mail.sending` (`MailSender.cs:24`), и почтовый консьюмер слушает его же (`MailConsumer.cs:47`). То есть схема описывает топологию, которой нет.
+
+Последствие: разработчик, ищущий, почему письмо не пришло после события, идет искать привязку почтовой очереди к `dm.events` и не находит; правки в Swagger-описании ведут клиента на несуществующий путь.
+
+Исправление: поправить обе строки. Схема в SYSTEM.md остается уместной (это конвенция потока, а не инвентарь), но имена в ней должны быть настоящими.
+
+### [НИЗКАЯ] deprecated-interface-is-the-only-one-used — помеченный к удалению интерфейс остается единственным API для двух hosted-сервисов
+
+`IInvokedEventProducer` помечен "DEPRECATED: Use IEventProducer ... This interface will be removed after migration is complete" (`GeneralBus/IInvokedEventProducer.cs:9-13`). Ровно два места в решении резолвят именно его: `PendencyReminderService.cs:87` и `PeriodDigestService.cs:115,135`. Все домены уже перешли на `IEventProducer`. Рядом лежит `DM.Domain.Core/Events/DomainEvent.cs` — класс, дублирующий `InvokedEvent` и не используемый нигде (единственное вхождение `DomainEvent` в `src` и `test` — его собственное объявление).
+
+Последствие: миграция выглядит незавершенной там, где осталось поменять два `GetRequiredService`; `DomainEvent` читается как часть контракта шины, которой он не является.
+
+Исправление: заменить два резолва на `IEventProducer`, удалить `IInvokedEventProducer` и `DomainEvent`.
+
+### [НИЗКАЯ] webhook-error-shape — ответы вебхука используют форму ошибки, от которой проект отказался
+
+`WebhookController.cs:115` и `:121` возвращают `new { error = "..." }`. В `CsrfProtectionMiddleware.cs:78-89` зафиксировано обратное решение с обоснованием: "Та же форма, что у остальных ошибок API: RFC 7807 ProblemDetails. Собственная форма {"error": "..."} была пятой в наборе и не читалась ни одним клиентом".
+
+Последствие: клиент вебхука (Telegram, Discord, будущий бот) получает тело ошибки, отличающееся от всего остального API; при добавлении общего разбора ошибок этот эндпоинт придется обрабатывать отдельно.
+
+Исправление: `Problem(statusCode: 403, title: "Invalid webhook secret")` и то же для неизвестного типа.
+
+## Чего я не смог определить
+
+- Реальный порог `channel_max` в развернутом брокере. Дефолт образа `rabbitmq:3-management` без своего конфига — 2047 на соединение, и compose конфиг не монтирует; но если на сервере есть свой `rabbitmq.conf`, число другое, а при `channel_max = 0` утечка выражается не отказом, а неограниченным ростом. Решается одной командой на живом стенде: `rabbitmqctl status` и `list_connections channels` под нагрузкой — счетчик каналов на соединении API должен показать, растет он линейно с публикациями или стоит на месте.
+- Валидность `MessageId = _correlationTokenProvider.Current.ToString()` (`MailSendingProcessor.cs:59`) для MimeKit. Голый GUID без `@domain` не является корректным msg-id по RFC 5322; принимает ли его сеттер `MimeMessage.MessageId` молча или бросает `ArgumentException`, я по коду не установил, а от этого зависит, является ли это косметикой или полным отказом отправки. Проверяется одним юнит-тестом на `new MimeMessage { MessageId = Guid.NewGuid().ToString() }`.
+- Точный CLR-тип, в который драйвер Mongo десериализует `object Metadata` при чтении (`NotificationRepository.cs:45`), и, как следствие, точная форма `payload` в REST-ответе. Имена элементов в BSON заведомо PascalCase (конвенция не регистрируется), но словарь это или `BsonDocument` — влияет на то, будет ли ответ просто в другом регистре или сломанным. Решается одним интеграционным вызовом `GET /v1/users/me/notifications` на стенде с уже созданным уведомлением.
+- Потолок пропускной способности realtime-пути. У API-очереди `ProcessingOrder.Sequential`, то есть prefetch 1 и пуши строго по одному на инстанс; при рассылке на сотни получателей это последовательные вызовы `hubContext.Clients.Clients(...)`. Достаточно ли этого при ожидаемой активности — вопрос измерения (нагрузочный прогон с фан-аутом на 500 подписчиков), а не чтения кода.
+- Нужна ли вообще редоставка событий уведомлений. Идемпотентность (находка выше) можно закрыть двумя способами: ключом дедупликации либо решением, что уведомление одноразово и при сбое теряется (`ProcessResult.Failure` без ретраев). Второй вариант дешевле и для лайка вполне разумен, для приглашения в игру — нет. Это решение владельца, и от него зависит объем правки.
+
+
+# Стратегия и качество тестов — C
+
+Оценка среза до опровержения: C. Нижние два этажа пирамиды сделаны всерьез (1825 .NET-тестов без пропусков, настоящие Postgres/Mongo/Rabbit, сверка миграции с моделью, снапшот OpenAPI-контракта, сшитый с фронтендом), но верхний тир не заслуживает доверия: e2e логинится под несуществующим аккаунтом, 14 мест превращают падение в пропуск, 11 тестов не содержат ни одного утверждения; плюс видимый долг — 9 из 19 ветвей GameIntention, 4366 строк воркеров и 319 строк realtime без тестов, 58 дублирующих проверок маппинга, отсутствие порога покрытия на backend.
+
+Пирамида выстроена правильной формы и на нижних двух этажах сделана всерьез: 1678 `[Fact]` плюс
+147 `[Theory]` плюс 472 `[InlineData]` в 15 проектах, ни одного пропущенного теста, интеграционный
+слой поднимает настоящие Postgres, MongoDB и RabbitMQ через Testcontainers и накатывает реальную
+миграцию, а не строит схему из модели
+(`test/DM.Web.API.IntegrationTests/DatabaseFixture.cs:70-81`).
+Есть несколько тестов, которых обычно не бывает вообще: сверка модели с единственной миграцией через
+`HasPendingModelChanges`, проверка выражения индекса запросом в `pg_indexes`, правило ArchUnit,
+которое сначала утверждает, что загрузчик вообще что-то нашел, и снапшот OpenAPI-контракта, который
+пишет .NET-сторона и читает vitest-сторона. Часовой механизм замокан в 53 файлах, самомоков нет
+нигде, `MockRepository.Verify()` из базового класса убран с честным объяснением, почему он ничего не
+проверял.
+
+Верхний этаж пирамиды при этом сломан, и сломан так, что "зелено" ничего не означает. Спека
+`e2e/tests/auth/login.spec.ts` логинится как `alice@example.com` — аккаунт, которого нет ни в сидере,
+ни где-либо еще в репозитории, — и два из трех ее тестов утверждают успешный вход; при этом фикстура
+рядом в `e2e/fixtures/auth.ts:20-24` описывает ровно этот баг как уже исправленный. Три теста
+приглашений в блог обращаются к `invitations/assistant` и `invitations/reader`, тогда как маршруты
+называются `assistants` и `readers`, получают 404 и сами себя пропускают с сообщением "Blog
+invitations API not yet implemented" — API существует. Одиннадцать e2e-тестов не содержат ни одного
+`expect(`: они ходят по страницам, наводят курсор, спят 300 мс и заканчиваются комментарием "may or
+may not be visible". Итого около 6% тира не может провалиться никогда, а часть остального превращает
+падение в пропуск.
+
+Оценка C: работает, но с видимым долгом — дублирование (58 файлов с `AssertConfigurationIsValid` на
+собственных подвыборках профилей), частичные инварианты (конверт ответа охраняется списком из трех
+URL при 75 объявлениях `ListEnvelope`), дыры в покрытии (9 из 19 `GameIntention` не проверяет ни один
+тест ни на одном уровне; 4366 строк двух воркеров и 319 строк realtime не покрыты вообще) — плюс
+e2e-тир, которому нельзя верить. Не D только потому, что .NET-части измеримо хороши и большинство
+находок ниже — про доверие к метрике, а не про дефекты, доезжающие до пользователя.
+
+## Что сделано хорошо
+
+- Единственная миграция превращена из соглашения в инвариант:
+  `dbContext.Database.HasPendingModelChanges().Should().BeFalse()`
+  (`test/DM.Web.API.IntegrationTests/Controllers/General/MigrationShould.cs:31`). Это ровно тот
+  тест, которого требует правило "схема правится внутри InitialCreate".
+- Выражающие индексы проверяются в самой базе, а не в коде, который их создает:
+  `SELECT indexdef FROM pg_indexes WHERE indexname = {indexName}` плюс утверждение, что определение
+  содержит `lower` и `UNIQUE`
+  (`test/DM.Web.API.IntegrationTests/Controllers/General/ExpressionIndexShould.cs:32-38`).
+- Архитектурные правила не могут пройти вхолостую: отдельный тест утверждает, что провайдеры вообще
+  разрешились в объекты, прежде чем правила на них опираются
+  (`test/DM.Architecture.Tests/ServiceLayerBoundaryShould.cs`, тест `LoadTheHostAndTheDomainAssemblies`;
+  `DbContext.GetObjects(Solution).Should().ContainSingle()`). Правило про домменные абстракции
+  сматчено по сборке, а не по неймспейсу, с объяснением, почему namespace дал бы ложные
+  срабатывания.
+- Контракт API вынесен наружу процесса и сшит между двумя тулчейнами: интеграционный тест
+  сводит published schemas к "имя схемы -> имена свойств" и коммитит результат
+  (`test/DM.Web.API.IntegrationTests/Controllers/General/OpenApiContractShould.cs:85-148`), а
+  vitest-тест читает этот файл и держит рукописные TS-интерфейсы
+  (`src/DM.Web.Client/src/shared/api/models/contract.spec.ts:225-237`). Отсутствие снапшота
+  специально не пропускается, а падает (`contract.spec.ts:195-202`).
+- Инвариант "любой ответ >= 400 описан как ProblemDetails" проверяется обходом всего OpenAPI-документа,
+  а не списком эндпоинтов
+  (`OpenApiContractShould.cs:161-211`), с проверкой `checked_.Should().BeGreaterThan(0)`, чтобы пустой
+  обход не читался как успех.
+- Настоящий путь аутентификации покрыт через HTTP целиком, а не только заголовочной подменой:
+  логин -> cookie -> запрос к `/v1/users/me/profile` -> logout -> 401, и отдельно "logout elsewhere"
+  оставляет текущую сессию живой, а вторую убивает
+  (`test/DM.Web.API.IntegrationTests/Controllers/LoginControllerShould.cs:116-183`). Локаут после
+  порога попыток тоже проверен на живом трекере (`LoginControllerShould.cs:189-212`).
+- Поиск по форуму тестируется на настоящем tsvector и настоящей русской морфологии: "странников"
+  находится по запросу "странник", заголовок ранжируется выше тела, невидимая доска не отдается
+  гостю и отдается администратору, каждый тест чистит за собой в `finally`
+  (`test/DM.Web.API.IntegrationTests/Controllers/General/ForumSearchShould.cs:40-145`).
+- Отрицательное пространство зафиксировано: удаленные seed-эндпоинты проверяются на 404, а
+  самоназначение роли — на 405 с объяснением, почему именно 405, а не 404
+  (`test/DM.Web.API.IntegrationTests/Controllers/Moderation/RemovedSeedEndpointsShould.cs:20-56`).
+- Собранный целиком маппер проверяется отдельно от подвыборок, и remark честно говорит, что
+  пер-профильные тесты подвыборок не покрывают карту, чьи два профиля лежат в разных модулях
+  (`test/DM.Web.API.IntegrationTests/MappingConfigurationShould.cs:15-44`).
+- `coverlet.collector` подключен централизованно в `test/Directory.Build.props:7-15` с описанием
+  точного режима отказа: без пакета ключ `--collect` принимается, прогон успешен, файла покрытия
+  нет. Это ровно та ловушка, на которую наступают в CI.
+- Пороги покрытия фронтенда описаны как ratchet с прямым запретом их понижать
+  (`src/DM.Web.Client/vite.config.ts:38-52`), и числа (lines 16, functions 26, branches 66,
+  statements 16) честно объяснены знаменателем, а не выданы за качество.
+- Нет ни одного самомока и ни одного `CallBase`: проверено сопоставлением `Mock<X>` с файлом
+  `XShould.cs` по всему дереву — совпадений ноль. Из 340 вызовов `Verify(` только 17 используют
+  голый `It.IsAny` на весь список аргументов, и половина из них — `Times.Never`, где `IsAny` и есть
+  правильный матчер.
+- Ноль пропущенных .NET-тестов: единственные вхождения `Skip =` — это свойства запросов
+  (`GameCommentsQuery { Skip = 0 }`), а не атрибуты xunit.
+- Все 33 проекта присутствуют в `DM.sln` (сверено списком), у всех 15 тестовых есть
+  `Microsoft.NET.Test.Sdk` и `xunit.runner.visualstudio`, так что `dotnet test` по решению не
+  пропускает ни одной сборки молча.
+
+## Находки
+
+### [ВЫСОКАЯ] e2e-login-as-nonexistent-account — спека логина входит под аккаунтом, которого нет в сидере
+
+> **Опровержение: подтверждено.**
+
+`src/DM.Web.Client/e2e/tests/auth/login.spec.ts:9,24,42` использует пару
+`alice@example.com` / `Xk9#mQz2$vL7nW`. Поиск по всему репозиторию (`--include=*.cs --include=*.ts
+--include=*.json --include=*.sql --include=*.md`, без node_modules) дает только эти три строки и
+`e2e/tests/auth/password-reset.spec.ts:27`. Сидер знает `admin@test.local`, `user@test.local` и еще
+около двадцати `*@test.local` (`src/DM.Tools.Seeder/Seeding/DataSeeder.Users.cs:71-99`); `alice`
+там нет вообще. Тесты 1 и 3 после отправки формы ждут `[data-testid="user-menu"]` с таймаутом 10 с:
+
+```ts
+await page.fill("#email", "alice@example.com");
+await page.fill("#password", "Xk9#mQz2$vL7nW");
+await page.click('button[type="submit"]');
+await expect(page.locator('[data-testid="user-menu"]')).toBeVisible({ timeout: 10000 });
+```
+
+Рядом, в фикстуре, этот же класс поломки описан как уже исправленный:
+`e2e/fixtures/auth.ts:20-24` — "a user named Alice with an empty password ... Login therefore always
+failed; every authenticated test skipped itself ... and the suite reported green while 37 tests had
+not run". Правку довели до фикстуры и не довели до спеки самого логина.
+
+Последствие: на засеянном стенде (то есть в CI, где шаг `docker compose run --rm -T --build seeder
+all` есть) два теста самого критичного пользовательского пути обязаны падать. Работа `e2e` стоит в
+`needs` у `publish` и `publish-frontend` (`.github/workflows/dotnet.yml:228,289`), значит одно из
+двух: либо конвейер красный на каждом пуше в dev и образы не публикуются, либо красный e2e кем-то
+терпится, и тогда вся защита этого тира — фикция. `retries: 2` не спасает: аккаунта нет ни в одной из
+попыток.
+
+Исправление: перевести спеку на `primaryUser` из `e2e/fixtures/auth.ts` (там уже есть переменные
+окружения `E2E_TEST_EMAIL`/`E2E_TEST_PASSWORD`), а хардкод пары в спеках запретить — единственный
+источник учеток уже существует и им пользуются остальные 29 файлов. Тот же адрес убрать из
+`password-reset.spec.ts:27`.
+
+### [ВЫСОКАЯ] e2e-green-by-skip — 14 мест, где падение превращается в пропуск, и одно из них прячет живую поломку
+
+> **Опровержение: частично неверно.**
+>
+> Thesis confirmed by execution, headline mechanism misdiagnosed. Category 1 is wrong: `POST /v1/blogs/{guid}/invitations/assistant` returns **405**, not 404 (measured via curl against localhost:5000; plural `assistants` returns 401, a truly bogus path returns 404 — the route DFA reaches the `{invitationId:guid}` DELETE node and the HTTP-method policy rejects POST before the guid constraint is evaluated). So the `if (createResponse.status() === 404) test.skip(...)` guard at blog-invitations.spec.ts:87-90,127-130,166-169 is dead code that never fires. The tests do skip, but via the describe-level `test.skip(!ownerContext || !invitedContext || !testBlogId)` at :67-70, which Playwright evaluates at collection time before beforeAll runs, making the condition unconditionally true — the author's own category 5 is the actual cause of the effect he attributed to category 1. `npx playwright test e2e/tests/blogs/blog-invitations.spec.ts` reports **4 skipped**, not 3: the fourth test ("should require authentication", :189) also never runs and the report misses it. The route names really are wrong (BlogInvitationController.cs:64,86 are `assistants`/`readers`) and the "not yet implemented" message really is a lie, so the substance holds. Categories 2 and 4 are confirmed and stronger than stated: `POST /v1/blogs` answers `{resource:{...}}` while blog-api.spec.ts:139 reads `.id`, so testBlogId is undefined *today* — measured 3 publications/rubrics tests skipped plus 2 hard failures from the same envelope mismatch; notepad.spec.ts measured exactly `3 skipped` locally with 6 workers, as predicted. Count is off by one: 15 runtime-conditional test.skip calls across 4 files (blog-api 3, blog-invitations 4, notepad 3, subscriptions 5), not 14. Severity ВЫСОКАЯ stands — the tier is a hard publish gate that answers "skipped" to the events it exists to catch.
+
+Категории (все посчитаны grep по `e2e/`):
+
+1. Ошибка API -> пропуск с ложным объяснением.
+   `e2e/tests/blogs/blog-invitations.spec.ts:75` постит в
+   `/v1/blogs/{id}/invitations/assistant`, `:116,155` — в `.../invitations/reader`. Маршруты
+   контроллера — `[HttpPost("assistants")]` и `[HttpPost("readers")]`
+   (`src/DM.Web.API/Features/Blog/Invitations/BlogInvitationController.cs:64,86`). Ответ 404
+   обрабатывается так:
+
+```ts
+if (createResponse.status() === 404) {
+  test.skip(true, "Blog invitations API not yet implemented");
+  return;
+}
+```
+
+   (`blog-invitations.spec.ts:87-90`, то же на `:127-130` и `:166-169`). API реализован; сообщение
+   врет; три теста приглашений не выполнялись ни разу.
+
+2. Провал `beforeAll` глотается, зависимые тесты пропускаются.
+   `e2e/tests/blogs/blog-api.spec.ts:139-141` — `if (createResponse.ok()) { testBlogId = ... }` без
+   единого утверждения, дальше `:151-154`, `:198-201`, `:242-245` — `if (!testBlogId) { test.skip(); }`.
+   Сломанный `POST /v1/blogs` уводит три теста публикаций и рубрик в "skipped", прогон зеленый.
+
+3. Отказ зависимости -> пропуск.
+   `e2e/tests/personal/subscriptions.spec.ts:40-49` и `:70-80`: `if (!gamesResponse.ok())
+   { test.skip(true, "Cannot get games"); }`. 500 на `/v1/games` — это то, ради чего e2e и существует,
+   а он рапортует "пропущено".
+
+4. Цепочка через состояние модуля.
+   `e2e/tests/personal/notepad.spec.ts:51,65,83` — `test.skip(!createdEntryId, ...)`, где
+   `createdEntryId` заполняется предыдущим тестом (`:47`). При `fullyParallel: true`
+   (`playwright.config.ts:27`) и `workers: undefined` вне CI тесты одного файла раздаются разным
+   воркерам, у каждого свой экземпляр модуля, так что локально get/update/delete пропускаются
+   всегда; зелеными они бывают только при `workers: 1`, то есть только в CI. То же в
+   `subscriptions.spec.ts:106`.
+
+5. Пропуск всей группы при неудачной подготовке: `blog-invitations.spec.ts:67-70` —
+   `test.skip(!ownerContext || !invitedContext || !testBlogId, "Skipping - setup failed")`.
+
+Последствие: тир, который стоит гейтом перед публикацией образов, отвечает "пропущено" на ровно те
+события, которые он обязан ловить, — 404, 500, неудавшийся setup. Отчет показывает skipped, job
+зеленый, и никто не смотрит HTML-артефакт.
+
+Исправление: запретить `test.skip` с рантайм-условием в этом дереве (правило eslint или обзор), а
+подготовку данных перенести в фикстуру, которая падает: `expect(createResponse.status()).toBe(201)`
+в `beforeAll` вместо `if (ok())`. Для "фичи еще нет" использовать статический `test.fixme` с
+указанием причины — он виден в отчете как незакрытый долг, а не как успешный прогон. URL приглашений
+исправить на `assistants`/`readers`.
+
+### [СРЕДНЯЯ] game-intention-authorization-untested — 9 из 19 ветвей самого крупного резолвера прав не проверяет ни один тест
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Every number is exact and the core gap is real, but this is a coverage hole, not a defect, and one of the two named failure scenarios cannot happen. Recounted: GameIntention.cs has 19 members; ripgrep over test/*.cs yields 10 distinct members referenced (Create, Read, Edit, Delete, SetStatusModeration, ReadComments, CreateComment, Subscribe, CreateCharacter, InvitePlayer) and the 9-member uncovered list matches the report exactly. 8 HttpStatusCode.Forbidden vs 123 Unauthorized in DM.Web.API.IntegrationTests — exact. CharacterIntention 11/11 — exact. The escalation gap is genuine: GameRoleExtensions.cs:19 defines HasEditAccess() as Master||Assistant, GameIntentionResolver.cs:110,115 make InviteAssistant/RemoveUser Master-only, and nothing exercises those branches — GameInvitationServiceShould.cs:49 mocks IIntentionManager and only Verify()s that ThrowIfForbidden was called, while GameStatusTransitionShould.cs:63-64,103-105 mocks both the intention manager and IGameIntentionConverter, so the status-authorization branches are bypassed there too. Two errors: (1) "все живые ветви кроме EditSettings" is wrong — GameIntention.Unsubscribe is equally dead, appearing only at GameIntention.cs:66 and GameIntentionResolver.cs:51 with no ThrowIfForbidden call site anywhere (GameUserApiService.cs:112 goes straight to _subscriptionService.UnsubscribeAsync), so 2 of 9 are untested *dead* branches; (2) the status-transition scenario is unreachable — all four branches at GameIntentionResolver.cs:71-83 return the identical predicate roles.HasEditAccess(), so "перепутать местами условия переходов" is a semantic no-op, and the main status-change path at GameService.cs:504-505 calls IsAllowed (silently dropping the change), not ThrowIfForbidden, so the described "мастер потеряет право" presentation is wrong. Nothing is broken for any user today and the rules as written are correct; the severity rests entirely on hypothetical future mutation, which is СРЕДНЯЯ by the rubric.
+
+Замер по всем 24 перечислениям intention (для каждого члена — grep `<Enum>.<Member>` по `test/`):
+покрытие высокое почти везде (`ModerationIntention` 16/16, `CharacterIntention` 11/11,
+`GlobalChatEventIntention` 9/9), кроме `GameIntention` — 10/19. Без единой ссылки в тестах:
+`InviteAssistant`, `InviteReader`, `CancelInvitation`, `RemoveUser`, `EditSettings`,
+`SetStatusActive`, `SetStatusClosed`, `SetStatusDraft`, `Unsubscribe`. В `src/` каждый из них
+встречается 1-5 раз, то есть это живые ветви, а не мертвый код (кроме `EditSettings`, см. ниже).
+
+Существенная часть — различие прав внутри одной группы
+(`src/DM.Domain.Game/Authorization/GameIntentionResolver.cs:104-116`):
+
+```csharp
+GameIntention.InvitePlayer when user.IsAuthenticated => roles.HasEditAccess(),
+GameIntention.InviteReader when user.IsAuthenticated => roles.HasEditAccess(),
+// InviteAssistant: only master (Owner) can invite assistants
+GameIntention.InviteAssistant when user.IsAuthenticated => roles.Contains(GameRole.Master),
+GameIntention.CancelInvitation when user.IsAuthenticated => roles.HasEditAccess(),
+// RemoveUser: only master can remove assistants
+GameIntention.RemoveUser when user.IsAuthenticated => roles.Contains(GameRole.Master),
+```
+
+Плюс переходы статуса `:70-83`, где право зависит от текущего `target.Status` (`Draft -> Active`,
+`Active -> Draft`, `Closed -> Active`, `Active|Closed -> Closed`) — четыре ветви с условиями и ноль
+тестов. На HTTP-уровне это тоже не закрыто: во всем интеграционном наборе 8 утверждений
+`HttpStatusCode.Forbidden` против 123 `Unauthorized`.
+
+Последствие: если кто-то "упростит" пять веток приглашений до общего `roles.HasEditAccess()`, ни один
+тест не упадет, а ассистент игры получит право приглашать других ассистентов и удалять их — то есть
+эскалацию внутри игры. Если перепутать местами условия переходов статуса, мастер потеряет или получит
+право публиковать и закрывать игру, и это выяснится от пользователя.
+
+Отдельно: `GameIntention.EditSettings` встречается в `src/` дважды — объявление
+(`GameIntention.cs:101`) и ветка резолвера (`GameIntentionResolver.cs:56`) — и ни одного вызова. То
+есть комментарий "mentors may edit too" описывает правило, которого никто не спрашивает.
+
+Исправление: доразметить `GameIntentionResolverShould` таблично — `[Theory]` по парам
+(роль актора, intention, ожидание) для пяти веток приглашений/удаления и по парам
+(текущий статус, intention) для переходов. Это тот же прием, которым уже покрыт
+`CharacterIntentionResolver` (11/11). Ветку `EditSettings` либо подключить к вызывающему коду, либо
+удалить.
+
+### [СРЕДНЯЯ] notification-routing-test-cannot-fail — тест, гарантированный компилятором, а не поведением
+
+`test/DM.Infrastructure.Messaging.Tests/NotificationRoutingShould.cs:42-59`:
+
+```csharp
+var declaresEvent = type.GetProperty("EventType", BindingFlags.Instance | BindingFlags.NonPublic |
+    BindingFlags.Public | BindingFlags.FlattenHierarchy) is not null;
+var overridesCanResolve = type.GetMethod("CanResolve",
+    BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly) is not null;
+return !declaresEvent && !overridesCanResolve;
+```
+
+`BaseNotificationGenerator` объявляет `protected abstract EventType EventType { get; }`
+(`src/DM.Workers.NotificationDispatcher/Implementation/Notifiers/BaseNotificationGenerator.cs:13`),
+а `GetProperty` для экземплярного члена ищет по всей иерархии, так что `declaresEvent` истинно для
+любого наследника — и наследник обязан переопределить абстрактное свойство, иначе не скомпилируется.
+Кто реализует `INotificationGenerator` напрямую, обязан объявить `CanResolve`
+(`INotificationGenerator.cs`, метод в интерфейсе), то есть `overridesCanResolve` истинно.
+Множество `silent` пусто при любом состоянии кода.
+
+Последствие: тест с именем `AnswerAtLeastOneEvent` и объяснением про 14 генераторов, чьи события ни
+с чем не связывались, не поймает ни одну реальную версию этой поломки: генератор, у которого
+`EventType` после копипасты указывает на чужое событие, или переопределенный `CanResolve`, всегда
+возвращающий `false`, пройдут. Второй тест того же файла (`ExposeGeneratorsToDeriveTheBindingFrom`,
+`> 20` типов) полезен и действительно ловит потерю обнаружения.
+
+Исправление: инстанцировать генераторы (у всех конструктор от `DmDbContext`, достаточно мока или
+контекста на InMemory) и утверждать два свойства: множество событий, на которые отвечает хотя бы один
+генератор, непусто для каждого генератора; и объединение этих множеств не содержит двух генераторов,
+отвечающих на одно событие непреднамеренно. Проверять `CanResolve` вызовом, а не наличием метода.
+
+### [СРЕДНЯЯ] webhook-secret-comparison-untested — тест на неверный секрет не может дойти до сравнения
+
+`test/DM.Web.API.IntegrationTests/Controllers/General/WebhookSecretShould.cs:48-64` — тест
+`RejectAWrongSecret` посылает заголовок `X-Telegram-Bot-Api-Secret-Token: not-the-secret` и
+утверждает `BeOneOf(NotFound, Forbidden)`. Фикстура не конфигурирует ни одного бот-секрета, а
+контроллер при пустом ожидаемом секрете выходит раньше сравнения:
+
+```csharp
+if (string.IsNullOrEmpty(expectedSecret)) { ...; return NotFound(); }
+var provided = Encoding.UTF8.GetBytes(secret);
+if (!CryptographicOperations.FixedTimeEquals(provided, expected)) return StatusCode(403, ...);
+```
+
+(`src/DM.Web.API/Features/Personal/Webhooks/WebhookController.cs:101-116`). Значит ветка 403 и сам
+`FixedTimeEquals` не исполняются ни одним тестом, а `RejectACallWithNoSecretHeader` (`:37-46`)
+проверяет не отсутствие заголовка, а отсутствие конфигурации — с тем же заголовком результат был бы
+тот же.
+
+Смежная дыра в другом гейте: этот контроллер помечен `[ApiExplorerSettings(IgnoreApi = true)]`
+(`WebhookController.cs:42`) — единственный такой в проекте, — поэтому обход OpenAPI-документа в
+`DescribeEveryFailureResponseAsAProblemDocument` его не видит. И именно здесь лежат два ответа не в
+форме ProblemDetails: `StatusCode(403, new { error = ... })` и `BadRequest(new { error = ... })`
+(`:115,121`). Инвариант нарушен ровно в слепой зоне своего же охранника.
+
+Последствие: если сравнение секрета заменить на `provided.Length == expected.Length` или потерять
+`!` перед `FixedTimeEquals`, вебхук, привязывающий внешний chat id к аккаунту DM, откроется анонимно,
+и ни один тест не упадет.
+
+Исправление: задать в `CustomWebApplicationFactory` пару
+`BotConfiguration:TelegramWebhookSecret` / `DiscordWebhookSecret` и получить три различимых случая:
+верный секрет -> 200, неверный -> 403, отсутствующий заголовок -> 403. Тест "нет конфигурации -> 404"
+оставить, подняв отдельную фабрику или переопределив опции в рамках теста. Проверку "любой отказ —
+ProblemDetails" распространить на скрытые от Swagger маршруты (перебрать `ApiDescriptionGroup`
+или сами атрибуты по рефлексии, а не документ).
+
+### [СРЕДНЯЯ] contract-snapshot-crlf — снапшот-тест падает на Windows после чистого клона и переписывает файл, диффа которого не видно
+
+`OpenApiContractShould.MatchTheCommittedContractSnapshot` сравнивает сериализацию с содержимым
+`artifacts/openapi-contract.json`, добавляя `+ Environment.NewLine`
+(`OpenApiContractShould.cs:124-147`). `Utf8JsonWriter` с `WriteIndented` в .NET 8 переносит строки
+платформенным разделителем, так что на Windows весь документ получается в CRLF, а `.gitattributes`
+объявляет `*.json text eol=lf`. Замер текущего состояния рабочей копии:
+
+```
+git ls-files --eol artifacts/openapi-contract.json
+i/lf    w/crlf  attr/text eol=lf      artifacts/openapi-contract.json
+```
+
+блоб в индексе — 57217 байт и 2194 перевода строки LF, файл в рабочем дереве — 59411 байт и 2194
+CRLF; разница ровно 2194 байта, то есть файл был перезаписан тестом с CRLF, и `git status`
+показывает чистое дерево, потому что clean-фильтр нормализует переводы строк обратно.
+
+Последствие: на свежем клоне под Windows тест падает один раз, переписывает закоммиченный файл и
+советует "review the diff and commit it" — а `git diff` пуст, потому что содержимое после
+нормализации совпадает. Разработчик получает красный тест без наблюдаемой причины; после первого
+падения тест начинает проходить, и рабочая копия остается расходящейся с индексом по переводам
+строк. В Linux CI обе стороны LF, поэтому гейт этого не видит никогда.
+
+Исправление: нормализовать обе стороны сравнения — сериализовать и читать через
+`.Replace("\r\n", "\n")` и завершать строкой `"\n"`, а не `Environment.NewLine`.
+
+### [СРЕДНЯЯ] envelope-invariant-guarded-by-allowlist — инвариант конверта проверяется на трех URL из семидесяти пяти
+
+`ResponseEnvelopeShould` (`test/DM.Web.API.IntegrationTests/Controllers/General/ResponseEnvelopeShould.cs:22-35`)
+перечисляет `/v1/users/me/notifications`, `/v1/users/me/subscriptions`, `/v1/users/me/notepad` и
+отдельно проверяет одиночный конверт на notepad (`:37-72`). В `src/DM.Web.API` — 364 атрибута
+`[Http*]`, 75 объявлений `ProducesResponseType(typeof(ListEnvelope<...>))` и 130 —
+`Envelope<...>`. Класс поломки, ради которого тест написан (объявлено `ListEnvelope`, на проводе
+голый массив), снапшот контракта не ловит: он фиксирует объявленные схемы, а не то, что реально
+пишется в ответ. То есть проверяется только то, что уже починили.
+
+Живой пример расхождения с `docs/conventions/API_DESIGN.md:61,82` ("Одиночный ресурс — `Envelope<T>`
+с полем `resource`", "стандарт для всех одиночных ресурсов"):
+`SubscriptionController.Subscribe` возвращает `CreatedAtRoute(..., result)` с голым `Subscription`,
+`GetSubscription` и `CheckSubscription` — `Ok(result)`
+(`src/DM.Web.API/Features/Personal/Subscriptions/SubscriptionController.cs:78,105,125`), и e2e-тест
+подписки читает `data?.id` вместо `resource.id` (`e2e/tests/personal/subscriptions.spec.ts:101`),
+то есть закрепляет legacy-форму как норму.
+
+Последствие: новый list-эндпоинт, отдающий массив вместо конверта, ломает экран (это уже случалось
+дважды по свидетельству самих докстрингов) и не ловится ничем. Клиент верит атрибуту.
+
+Исправление: сделать проверку перечислимой, а не списочной: получить все `ApiDescription` с
+объявленным `ListEnvelope<>`/`Envelope<>`, для GET без обязательных параметров дернуть их и
+утверждать наличие `resources`/`resource`; для остальных сверить объявленный тип возврата с
+фактическим типом, который возвращает action (по рефлексии). Это тот же прием, что уже применен для
+ProblemDetails, и он там работает.
+
+### [СРЕДНЯЯ] untested-workers-and-realtime — 4366 строк воркеров и 319 строк realtime без ни одного теста
+
+Проекты без тестового проекта: `DM.Domain.Core`, `DM.Tools.Seeder`, `DM.Workers.Mail`,
+`DM.Workers.NotificationDispatcher` (`DM.Web.Client` покрыт vitest). Из них воркеры — 4366 строк, в
+том числе 40+ генераторов уведомлений с реальными EF-запросами и выбором получателя, например
+
+```csharp
+var recipientId = data.WaitingForUserId ?? data.CharacterAuthorId!.Value;
+var daysPending = (int)(DateTimeOffset.UtcNow - data.CreatedUtc).TotalDays;
+```
+
+(`src/DM.Workers.NotificationDispatcher/Implementation/Notifiers/Game/GamePendencyReminderNotificationGenerator.cs`).
+Единственное, что их касается, — `NotificationRoutingShould`, который считает типы (и вторым тестом
+не проверяет ничего, см. выше). Realtime тоже пуст: `NotificationHub` (87 строк),
+`UserConnectionService` (73), `RealtimeNotificationProcessor` (54), `RealtimeNotificationConsumer`
+(68) — тестов нет, а консьюмер вдобавок вырезан из интеграционного хоста
+(`CustomWebApplicationFactory.cs:167-184`).
+
+Последствие: генератор, который после правки схемы выбирает `null` в качестве получателя, уронит
+воркер в рантайме (`.Value` на `null`) или разошлет уведомление не тому человеку; ни один гейт этого
+не увидит. `UserConnectionService` держит соответствие пользователь -> соединения и чувствителен к
+конкурентности — регрессия там выглядит как "уведомления иногда не приходят".
+
+Исправление: минимальный проект `DM.Workers.NotificationDispatcher.Tests`, работающий против того же
+Testcontainers-Postgres, и по одному тесту на генератор в форме "given строки в БД -> ожидаемые
+получатели и метаданные". Для `UserConnectionService` достаточно юнит-тестов на добавление/удаление
+соединений и на многосоединенного пользователя.
+
+### [СРЕДНЯЯ] persistence-tier-is-mostly-mapping-config — 71 репозиторий, 5 с прямым тестом
+
+В `src/` 71 конкретный репозиторий. В `test/DM.Infrastructure.Persistence.Tests` 28 файлов, из
+которых 21 — это `HaveValidConfiguration` для профилей AutoMapper, остальное — валидаторы
+комментариев, `LikeFactory`, `DateRangeFilters`, `UpdateBuilderFactory` и структурный
+`EntityStorageMarkerShould`. Ни одного теста на запрос. Прямые тесты репозиториев есть только в
+интеграционном наборе и только для пяти:
+`Repositories/{Blog,Game,Post,Room}RepositoryShould.cs` и `UserSubscriberSummaryShould.cs`.
+Остальные 66 покрыты косвенно, через контроллеры, и только там, где такой контроллерный тест есть.
+
+Последствие: реляционное поведение — порядок, пагинация, `IgnoreQueryFilters`, включения,
+проекции — проверяется на том подмножестве, которое случайно проходит через покрытый эндпоинт.
+Запрос, который отдает дубли из-за `Include` по коллекции, или фильтр soft-delete, потерянный в одном
+из 71 репозитория, обнаруживается на экране.
+
+Исправление: не писать 66 файлов, а закрыть класс ошибок: тест, который для каждого
+`IRemovable`-набора в `DmDbContext` проверяет, что глобальный фильтр применен (это один тест на
+рефлексии по модели), и прямые тесты на те репозитории, где есть ручной SQL, оконные функции или
+`GroupBy` (их можно перечислить грепом по `FromSql`/`ExecuteSql`/`GroupBy`).
+
+### [СРЕДНЯЯ] e2e-tests-without-assertions — 11 тестов не могут провалиться
+
+Разбор всех 239 объявленных e2e-тестов сопоставлением тела с `expect(` дает 11 без единого
+утверждения, и ни один из них не помечен как пропущенный:
+
+`e2e/tests/sidebar/sidebar.spec.ts:350` ("should show vote button for authenticated users"), `:361`
+("should show results after voting"), `:270`, `:507`, `:515`, `:552`;
+`e2e/tests/accessibility/tooltip.spec.ts:127`, `:181`, `:228`, `:241`;
+`e2e/tests/community/users-search.spec.ts:147`.
+
+Типичное тело целиком (`sidebar.spec.ts:350-359`):
+
+```ts
+const poll = authenticatedPage.locator(".poll").first();
+if (await poll.isVisible().catch(() => false)) {
+  // The "голосовать" button should be visible if user hasn't voted
+}
+```
+
+`:552` — "should hide sidebars on mobile viewport" — меняет вьюпорт, грузит страницу и заканчивается
+комментарием "This test verifies the responsive behavior exists". Сверх этих 11 есть еще 44 места с
+охраной `if (await ...isVisible())` вокруг настоящих утверждений в 13 из 32 файлов: там утверждение
+существует, но не выполняется, если элемента нет.
+
+Последствие: отчет и число "258 tests" в комментарии CI (`.github/workflows/dotnet.yml:93`; в дереве
+на самом деле 239 объявленных тестов) завышают покрытие на тир, в котором часть тестов
+структурно не способна отличить работающую страницу от белого экрана. Именно эту ошибку измерения
+комментарий в `playwright.config.ts:53-72` описывает как уже исправленную для другой причины.
+
+Исправление: у теста должно быть либо утверждение, либо статус `fixme`. Охрану `if (isVisible())`
+заменить на утверждение предпосылки (`await expect(locator).toBeVisible()`), потому что отсутствие
+элемента в засеянной базе — это и есть поломка. Число в комментарии workflow привести к
+фактическому или убрать.
+
+### [СРЕДНЯЯ] weak-verify-on-patch-entities — имя теста обещает обновление, утверждение проверяет только факт вызова
+
+`test/DM.Domain.Game.Tests/Features/Rooms/RoomServiceShould.cs:187-207` — тест
+`UpdateRoomAndPublishEvent` задает `new UpdateRoom { RoomId = roomId, Title = "Updated Room" }` и
+утверждает:
+
+```csharp
+_repository.Verify(r => r.Update(It.IsAny<UpdateRoomEntity>()), Times.Once);
+_producer.Verify(p => p.SendAsync(EventType.ChangedRoom, roomId), Times.Once);
+```
+
+`UpdateRoomEntity` несет 12 патч-полей (`src/DM.Domain.Game/Features/Games/GameEntityDtos.cs:296+`),
+сервис заполняет их вручную (`src/DM.Domain.Game/Features/Rooms/RoomService.cs:135-150`), и в тестах
+проверено ровно одно: `IsArchived`, в обе стороны (`RoomServiceShould.cs:228,250` —
+`It.Is<UpdateRoomEntity>(e => e.IsArchived == true)` и `== null`). `Title` не проверен нигде.
+
+Последствие: если из сборки сущности выпадет `Title = updateRoom.Title`, переименование комнаты
+перестанет работать, а набор останется зеленым — включая тест, который называется "update room".
+Тот же шаблон присутствует в других сервисах: из 340 `Verify` голый `It.IsAny` на весь список
+аргументов встречается 17 раз, из них 8 с `Times.Once` на `Create`/`Update`.
+
+Исправление: там, где значение и есть предмет теста, использовать `It.Is<T>(e => ...)` — прием уже
+применен в этом же файле для `IsArchived`, достаточно распространить его на остальные поля патча
+(разумно одним `[Theory]` по полю).
+
+### [СРЕДНЯЯ] dead-test-auth-scaffolding — сотня строк неработающей подмены аутентификации и комментарий, который врет
+
+В `CustomWebApplicationFactory` живут `TestAuthOptions`, `TestAuthHandler`, `TestIdentityProvider`,
+константа `TestAuthToken` и ветка `if (TestUser != null)` в двух местах (`:225-242` и `:283-310`), с
+TODO, который сам объясняет, что подход не работает из-за порядка регистраций Autofac (`:276-282`), и
+финальным "This registration is overwritten by AuthenticationModule. Keeping for documentation
+purposes." Свойство `TestUser` не выставляет ни один тест: единственный присваивающий код — устаревший
+`IntegrationTestBase.CreateAuthenticatedFactory` (`:70-77`), у которого ноль вызовов (проверено
+грепом по `test/`). Рядом докстринг `:121-124` утверждает "authenticated tests are currently
+skipped" — неправда: аутентифицированных интеграционных тестов сотни, они работают через
+`TestAuthenticationMiddleware`.
+
+Последствие: читающий разбирается, каким из трех механизмов подменяется личность, и находит два
+мертвых; докстринг уводит к неверному выводу, что аутентифицированного покрытия нет.
+
+Исправление: удалить обе ветки `TestUser`, три класса, константу и устаревший метод; докстринг
+класса переписать под фактический механизм (заголовки `X-Test-*` + `IStartupFilter`).
+
+Смежное, стоит зафиксировать отдельно: механизм подмены оставил след в продакшн-коде —
+`AuthenticationMiddleware.InvokeAsync` начинается с `if (identityProvider.Current == null)`
+(`src/DM.Web.API/Middleware/AuthenticationMiddleware.cs:32`), и ветка "личность уже установлена"
+существует только для тестов. В продакшне ее никто не проходит, но это условие, чью ложную ветку
+исполняет исключительно тестовая сборка.
+
+### [СРЕДНЯЯ] gates-report-but-do-not-enforce — что CI собирает и не проверяет
+
+- Покрытие .NET собирается (`--collect:"XPlat Code Coverage"`) и выгружается артефактом
+  (`.github/workflows/dotnet.yml:42,49-55`), но порога нет: ни `.runsettings`, ни threshold-шага в
+  workflow (проверено — файлов `*.runsettings` в репозитории нет). Покрытие backend может уехать в
+  ноль без красного гейта. У фронтенда порог есть (`vite.config.ts:49-52`) — асимметрия ничем не
+  объяснена.
+- Формат C# не проверяется: `dotnet format --verify-no-changes` в workflow отсутствует, при том что
+  у фронтенда стоит `eslint --max-warnings 0` (`dotnet.yml:81`). Следы видны в самих тестах, например
+  `[Fact]` в нулевой колонке (`test/DM.Web.API.IntegrationTests/MappingConfigurationShould.cs:46`).
+- `e2e/` не проходит типизацию: `type-check` запускается на `tsconfig.vitest.json`, который наследует
+  `include: ["env.d.ts", "src/**/*", ...]` из `tsconfig.app.json` и не добавляет `e2e`. 32 спеки
+  проверяются только eslint-ом; ошибка типа в фикстуре обнаружится не в быстрой работе, а падением
+  Playwright.
+- `retries: 2` в CI (`playwright.config.ts:29`): тест, прошедший со второй попытки, делает job
+  зеленым, флейк виден только внутри HTML-артефакта, и ничто не считает их количество во времени.
+- 27 фиксированных `waitForTimeout` в e2e (14 из них в `tooltip.spec.ts`), включая
+  `waitForTimeout(2500)` перед отправкой формы логина (`login.spec.ts:28,46`). Большинство стоит
+  перед авторетрайными `expect`, то есть это потерянное время прогона, а не флейк; но два места в
+  логине — обход бот-задержки таймером, который поедет при изменении расписания задержек.
+
+Исправление: добавить threshold-шаг на cobertura (аналог ratchet-подхода фронтенда, начальные числа
+взять из текущего отчета), `dotnet format --verify-no-changes` отдельной работой, `e2e` — во
+`tsconfig` для type-check, и раз в неделю печатать сводку по флейкам из отчета Playwright.
+
+### [СРЕДНЯЯ] mapping-config-duplication — 58 файлов делают одну и ту же проверку на подвыборках
+
+`AssertConfigurationIsValid` вызывается в 58 файлах (59 мест). Каждый собирает свой
+`MapperConfiguration` из вручную перечисленных профилей, например
+`test/DM.Web.API.Tests/Features/Game/GameMappingProfileShould.cs:18-27` — шесть `AddProfile` для
+одного теста. `MappingConfigurationShould.BeValidForEveryRegisteredProfile`
+(`test/DM.Web.API.IntegrationTests/MappingConfigurationShould.cs:37-44`) проверяет собранную
+конфигурацию приложения целиком и в remark честно объясняет, что подвыборки слабее.
+
+Последствие: профиль, получивший новую зависимость, требует правки в N файлах; при этом
+пер-профильные тесты не могут поймать ничего, чего не поймает композитный, а могут дать ложное
+падение, если в подвыборке забыт профиль. Это ровно тот случай, когда "изменение делается в одном
+месте" не выполняется.
+
+Исправление: удалить пер-профильные `HaveValidConfiguration`, оставив композитный тест, и завести
+вместо них точечные тесты значений (как `KeepTheEditTimestampWhenMappingAComment`,
+`MappingConfigurationShould.cs:46-69`) там, где карта содержит нетривиальное правило.
+
+### [СРЕДНЯЯ] contract-mirror-allowlist — сшивка контракта покрывает 13 интерфейсов из 246
+
+`src/DM.Web.Client/src/shared/api/models/contract.spec.ts:39-60` держит `MAPPING` из 13 пар
+"схема -> интерфейс". В перечисленных каталогах моделей (`shared/api/models` плюс пять
+`entities/*/model`) экспортировано 246 `interface`/`type`, а снапшот содержит 335 схем. Полноту
+`MAPPING` ничто не проверяет.
+
+Последствие: новый рукописный DTO-зеркало не покрыт ничем до тех пор, пока кто-то не вспомнит про
+`MAPPING`, а это ровно тот класс расхождения, из-за которого экраны рендерились пустыми (описано в
+докстринге того же файла).
+
+Исправление: добавить тест "каждый интерфейс из перечисленных каталогов либо в `MAPPING`, либо в
+явном списке локальных типов" — тот же приемчик, что уже применен для `CLIENT_ONLY` (`:239-251`),
+где устаревшее исключение объявлено ошибкой.
+
+### [СРЕДНЯЯ] fixture-seed-bare-any-guards — восемь сидеров фикстуры из тринадцати проверяют голым Any()
+
+`DatabaseFixture.SeedTopics` защищен собственной строкой и объясняет, почему:
+
+```csharp
+// Keyed on this fixture's own row, not on "any topic exists": the
+// migration ships topics of its own, and a bare Any() would silently skip
+// the whole seeder and take every forum test down with it.
+if (db.Set<Topic>().Any(t => t.TopicId == TestConstants.TestTopicId)) return;
+```
+
+(`test/DM.Web.API.IntegrationTests/DatabaseFixture.cs:192-195`). По собственной строке проверяют
+пять сидеров из тринадцати (`SeedUsers:126`, `SeedBoards:175`, `SeedTopics:195`, `SeedBlogs:297`,
+`SeedChats:423`); остальные восемь — `SeedGames:220`, `SeedGameTags:271`, `SeedRooms:323`,
+`SeedGamePosts:353`, `SeedCharacters:392`, `SeedBoardModerators:482`, `SeedSubscriptions:495`,
+`SeedTestimonials:524` — используют голый `Any()`.
+
+Последствие: как только `InitialCreate` начнет сеять хотя бы одну игру, комнату, персонажа или
+подписку (а он уже сеет доски, теги, темы, типы наград, серию конкурсов и системного пользователя),
+соответствующий сидер фикстуры молча выключится, и десятки интеграционных тестов упадут с
+сообщениями, не указывающими на причину.
+
+Исправление: перевести все проверки на собственную строку фикстуры, как в `SeedTopics`, `SeedBlogs`
+и `SeedChats`.
+
+### [НИЗКАЯ] ban-before-password-not-pinned — комментарий утверждает порядок проверок, утверждение его не проверяет
+
+`test/DM.Domain.Account.Tests/Features/Authentication/AuthenticationServiceShould.cs:178-201`:
+комментарий говорит "The ban decides before the password is even consulted, and no session is
+minted", но тест настраивает `ComparePasswords(...) => true` (`:192`) и проверяет только
+`AddSession ... Times.Never`. Порядок в коде действительно такой — `case true when
+user.AccessPolicy.HasFlag(AccessPolicy.FullBan)` стоит перед `case true when
+!_securityManager.ComparePasswords(...)`
+(`src/DM.Domain.Account/Features/Authentication/AuthenticationService.cs:107-112`), то есть
+комментарий верен, — но если ветки поменяют местами, забаненный получит `WrongPassword` вместо
+`Banned`, и тест этого не заметит. То же во втором тесте про бан из таблицы (`:331-356`).
+
+Исправление: настроить `ComparePasswords => false` и утверждать `Error == Banned`, либо добавить
+`_securityManager.Verify(s => s.ComparePasswords(...), Times.Never)`.
+
+### [НИЗКАЯ] docstring-promises-a-pattern-guard — `CallerMistakesShould` охраняет три URL, а обещает шаблон
+
+`test/DM.Web.API.IntegrationTests/Controllers/General/CallerMistakesShould.cs:14-23` перечисляет пять
+мест, где обычная ошибка ввода отвечала 500, и заканчивается: "The pattern is what is being guarded,
+not the endpoints: a new plain exception on any input path shows up here as a 500". В классе три
+теста на три URL; двух названных случаев (личный чат с самим собой, повторный бан) здесь нет — они
+закрыты юнит-тестами (`ChatFactoryShould.cs:53`, `BanServiceShould.cs`). Новое `ArgumentException`
+на любом другом входном пути не покажется нигде.
+
+Исправление: либо снять обещание в докстринге, либо сделать проверку шаблонной — обойти
+`ApiDescription` и утверждать, что ни один ответ 500 не объявлен и ни один тест не получает 500 на
+заведомо некорректном теле.
+
+### [НИЗКАЯ] entity-marker-exemption-by-simple-name — список исключений сматчен по короткому имени
+
+`test/DM.Infrastructure.Persistence.Tests/EntityStorageMarkerShould.cs:27-45` исключает
+встроенные значения по `t.Name` (`Session`, `PollOption`, `RollResult`, ...). Новый класс в
+`*.Entities` с совпадающим коротким именем получит исключение автоматически и уедет без указания
+хранилища.
+
+Исправление: сравнивать `FullName`.
+
+## Чего я не смог определить
+
+- Красный ли сейчас `e2e` в GitHub Actions. Файлы говорят, что два теста в `login.spec.ts` обязаны
+  падать на засеянном стенде, но истории прогонов у меня нет. Локальный
+  `src/DM.Web.Client/test-results/.last-run.json` от 30.07 06:14 сообщает `"status": "passed"` с
+  пустым `failedTests` — при этом `playwright-report/` от 02:45 содержит снимок страницы
+  неаутентифицированного пользователя, то есть похоже на два разных прогона, один из которых был
+  частичным. Решает вопрос один запуск `npx playwright test --project=chromium e2e/tests/auth` на
+  засеянном стенде и вкладка Actions за последнюю неделю.
+- Фактические числа покрытия .NET. Не измерял: `dotnet test --collect` на этом наборе поднимает
+  контейнеры и идет минуты, а рабочая копия должна остаться нетронутой. Без этих чисел нельзя
+  предложить начальный порог для ratchet-гейта; их дает один прогон `build`-работы с сохранением
+  `TestResults/**/coverage.cobertura.xml` и `reportgenerator`.
+- Длительность интеграционного набора. Все 299 тестов лежат в одной коллекции xunit
+  (`[CollectionDefinition("Database")]`, `DatabaseFixture.cs:612-613`), то есть исполняются строго
+  последовательно на трех контейнерах. Это правильно для изоляции, но цена в минутах не измерена, а
+  именно она решает, стоит ли делить на несколько коллекций с независимыми базами.
+- Действительно ли `Utf8JsonWriter` в .NET 8 пишет CRLF на Windows, или файл переписал кто-то
+  другой. Байтовое свидетельство однозначно (2194 из 2194 переводов строки CRLF, разница размеров
+  ровно 2194 байта, единственный писатель этого файла — тест), но прямого замера на этой машине я не
+  делал. Решает трехстрочная программа с `JsonSerializer.Serialize(new {a=1}, new
+  JsonSerializerOptions{WriteIndented=true})` и просмотром байтов.
+- Нужен ли контейнер RabbitMQ интеграционному набору. `RealtimeNotificationConsumer` из хоста
+  вырезан, но продюсер событий работает по-настоящему, значит подключение используется хотя бы на
+  публикацию; экономия от отказа от контейнера (если она есть) измеряется прогоном с замоканным
+  продюсером.
+- Решение владельца: считать ли отсутствие тестов у `DM.Workers.*` и `Realtime` осознанным
+  выбором на время незакрытого фронтенда или долгом к закрытию. От этого зависит, надо ли заводить
+  новый тестовый проект сейчас или после того, как уведомления перестанут меняться.
+
+
+# Архитектура фронтенда (FSD) — C
+
+Оценка среза до опровержения: C. Слой импортов FSD настоящий и чистый: 78 слайсов, ноль deep-import внутрь чужого слайса, восемь узких дверей @x, ни один store сущности не тянется в другой, правило направления реально исполняется линтером (проверено двенадцатью пробами через eslint --stdin) и стоит в CI. Но подслой состояния и данных заметно слабее: гейт, который PATTERNS.md и комментарий в .eslintrc.cjs называют исполняемой копией правила публичного API, этого правила не проверяет; два центральных store "текущей сущности" коммитят ответы без guard и показывают чужую игру под своим URL; кэширование живет в четырех независимых механизмах, контракт ошибки — в двух формах. Это ровно "работает, с видимым долгом: дублирование, частичные инварианты, пробелы в тестах" — не D, потому что все исправления аддитивны и локальны, и не B, потому что часть дефектов доходит до пользователя.
+
+Слой FSD здесь настоящий, а не декоративный: 6 слоев, 78 слайсов (16 entities, 30 features,
+10 widgets, 22 каталога pages), 761 файл `.ts`/`.vue`. Полная инвентаризация alias-импортов
+дала **ноль** deep-import внутрь чужого слайса entities/features/widgets — все 78 слайсов
+адресуются только через barrel или через `@x`. Восемь дверей `@x`, в каждой от одного до трех
+реэкспортов, десять точек потребления. Ни один store сущности не тянется в store другой
+сущности: единственная поперечная зависимость — `useAuthStore` из `shared`. Правило
+направления импортов действительно исполняется линтером: я прогнал двенадцать синтетических
+проб через `eslint --stdin`, и запреты shared→entities, entities→features, pages→app,
+widgets→widgets, а также адресность двери (`entities/blog` не может взять
+`entities/user/@x/game`, а `entities/game` может) сработали все; динамический `import()`
+ловится наравне со статическим; `npm run lint:ci` зеленый и стоит в CI.
+
+Оценка ниже B по двум причинам. Первая: гейт, который PATTERNS.md и комментарий в самом
+`.eslintrc.cjs` называют исполняемой копией правила публичного API, этого правила не
+проверяет — `boundaries/dependencies` различает только тип элемента, и импорт
+`@/entities/user/model/communityStore` со страницы проходит без единой ошибки (проверено
+пробой). Чистота дерева сегодня держится на дисциплине, а документ утверждает, что на
+механизме. Вторая: подслой состояния и загрузки данных заметно слабее слоя импортов.
+`createRequestGuard` вынесен в shared и применен в четырех store сущностей, шести страницах
+и `useApiResource` — но не в `gameDetails` и `blogDetails`, двух центральных store
+"текущей сущности", где рассинхрон коммита показывает пользователю другую игру под своим URL.
+Кэширование живет в четырех независимых механизмах, контракт ошибки — в двух формах
+(`GeneralError` против заранее собранной русской строки), а перехватчик HTTP чистит
+`localStorage` за спиной у store сессии.
+
+Это ровно "работает, с видимым долгом: дублирование, частичные инварианты, пробелы в
+тестах". Не D: ни одно решение не придется переделывать, все исправления аддитивны и локальны
+(добавить правило линтера, добавить guard в два store, поднять один компонент сайдбара в
+`defineAsyncComponent`). Не B: часть дефектов доходит до пользователя, а не создает риск.
+
+## Что сделано хорошо
+
+- Ноль deep-import внутрь слайсов. Полный список alias-импортов вида
+  `@/(entities|features|widgets)/<slice>/<что-то>` без `/@x/` пуст — 198 различных
+  импортируемых путей, ни одного нарушения барьера. Это редкость для дерева такого размера.
+- Двери `@x` узкие. `entities/user/@x/moderation.ts:9` выдает один предикат,
+  `entities/user/@x/testimonial.ts:9` — один тип, `features/leaderboard/@x/topic.ts:9` —
+  один компонент. Ни одной двери, через которую утекает половина слайса. Десять точек
+  потребления против восьми дверей — то есть дверь не превращается во второй публичный API.
+- Правило линтера не выполняется вакуумно. `settings["boundaries/dependency-nodes"]`
+  (`.eslintrc.cjs:43`) включает `dynamic-import`, и проба
+  `pages/home → () => import("@/app/providers")` дает ошибку. Элементы описаны так, что
+  папка `@x` — отдельный тип, перекрывающий тип слайса, и `captured.consumer` сверяется с
+  `captured.slice` потребителя (`.eslintrc.cjs:124-134`); адресность двери реально работает.
+- Store сущностей не связаны между собой. Полный перечень вызовов `use*Store()` внутри
+  `entities`/`features`/`shared/stores` содержит только `useAuthStore` (shared) и обращения
+  внутри собственного слайса (`entities/game/model/store.ts:657` берет `useGamesStore` из
+  того же файла). Ни одного случая "store сущности A читает store сущности B".
+- Оболочка приложения — одна запись роутера с тестом. `app/providers/router.ts:47-50`:
+  все страницы дети записи, которая монтирует сайдбары, а
+  `app/providers/router.spec.ts:44-59` проверяет это для выборки из всех зон и отдельно
+  фиксирует, что OAuth-callback вынесен наружу намеренно. Оговорка: строка
+  `["/chat", {}]` (`router.spec.ts:25`) такого роута не имеет и разрешается в catch-all
+  404 — этот пункт дублирует `/no-such-page-at-all` и ничего дополнительного не утверждает.
+- Осознанные решения по размеру бандла, и они проверяемы. `shared/ui/index.ts:26-29` держит
+  BBCodeEditor вне barrel kit-а с объяснением, и все 24 потребителя импортируют его прямым
+  путем. `shared/api/client.ts:267-275` подгружает клиент SignalR динамически. Мокапы
+  `/dev` регистрируются через `import.meta.env.DEV` (`router.ts:641-650`), то есть чанк не
+  эмитится в продакшн-сборке. Проба собранного `dist` подтверждает: `@tanstack/vue-virtual`
+  и TipTap в entry-чанке отсутствуют, страницы разложены по 199 чанкам.
+- Инверсия зависимости от роутера сделана честно. `shared/api/client.ts:40-45` держит
+  `onSessionExpired` как устанавливаемый обработчик, а `app/main.ts` его ставит — вместо
+  динамического импорта роутера из shared, который прятал бы инверсию, а не убирал.
+- Восстановление после устаревшего чанка. `router.onError` (`router.ts:736-748`) распознает
+  ошибку загрузки динамического модуля после деплоя и делает один перезагрузочный проход,
+  защищенный флагом в `sessionStorage`, который снимается на первой удачной навигации.
+- Новую фичу действительно можно добавить, не трогая shared. `features/message-search`
+  собран целиком внутри слайса: свой `api/messageSearchApi.ts`, свои DTO в
+  `model/types.ts`, свой store. Из shared берутся только `CursorEnvelope` и HTTP-клиент.
+- Дублирование, которое уже свернули, свернули с объяснением. `shared/lib/utils/keyedCache.ts:19-33`
+  и `shared/lib/utils/requestGuard.ts:1-19` описывают, сколько копий они заменили и что
+  осознанно осталось у вызывающей стороны. `shared/api/models/contract.spec.ts` держит
+  рукописные TS-модели у опубликованной схемы OpenAPI — механизм, а не соглашение.
+
+## Находки
+
+### [ВЫСОКАЯ] detail-stores-race — gameDetails и blogDetails коммитят ответы без проверки актуальности
+
+> **Опровержение: подтверждено.**
+
+`entities/game/model/store.ts:388-403` (`loadGame`), `:405-419` (`loadRooms`), `:422-445`
+(`loadPosts`) и `entities/blog/model/store.ts:387-402` (`loadBlog`), `:405-427`
+(`loadPublications`), `:430+` (`loadComments`) записывают результат безусловно:
+
+```ts
+async function loadGame(id: string): Promise<void> {
+  gameLoading.value = true;
+  gameError.value = null;
+  const { data, error } = await gameApi.getGame(id);
+  if (error) { gameError.value = "Не удалось загрузить игру"; game.value = null; }
+  else if (data) { game.value = data.resource ?? (data as unknown as Game); }
+  gameLoading.value = false;
+}
+```
+
+Ни одного счетчика версий, ни `createRequestGuard`. При этом сосед по слою этот механизм
+имеет: `entities/forum/model/store.ts:121,129,198,213` держит `topicsVersion` и не дает
+устаревшему продолжению ни коммитить данные, ни гасить спиннер. `pages/game/GamePage.vue:26-36`
+на смену параметра `id` делает `reset()` и затем `loadGame(id)`, а
+`pages/game/GameRoom.vue:83-97` вызывает `loadPostsByRoomNumber` на смену `num` и на смену
+страницы в query.
+
+Последствие, два разных сценария. Первый: пользователь из сайдбарного списка "Мои игры"
+кликает игру B, затем в течение одного RTT игру A. Если ответ по B приходит позже, `game.value`
+становится B при URL `/game/A/...` — H1 показывает чужое название, `GamePanel` в сайдбаре
+рисует комнаты чужой игры, а ссылки из них ведут внутрь B. Второй: в комнате пользователь
+жмет страницу 3 после страницы 2 (`currentRoom` выставляется синхронно в `loadPosts:432-435`,
+посты — после await), и при обратном порядке ответов в шапке комната 3, а в списке посты
+комнаты 2. Оба состояния молчаливые: ошибки нет, спиннер снят, данные неверные.
+
+Исправление: завести по guard-у на каждый независимый набор (`game`, `rooms`, `posts`,
+`comments`, `characters` и т. д. — так же, как forum развел `boardSelectVersion` и
+`topicSelectVersion`, и по той же причине), взять `createRequestGuard` из
+`shared/lib/utils/requestGuard`, и повторить проверку `isCurrent` перед каждым присваиванием
+и перед сбросом `*Loading`. Тот же прием — в `blogDetails`.
+
+### [ВЫСОКАЯ] session-truth-split — при истечении сессии store остается авторизованным
+
+> **Опровержение: подтверждено.**
+
+Про "кто смотрит" в приложении три источника правды. Перехватчик ответа
+`shared/api/client.ts:102-107` на 401 делает `localStorage.removeItem("user")`, показывает
+тост и вызывает `onSessionExpired`. `Api.isAuthenticated()` (`:146`) читает тот же ключ
+напрямую. `router.beforeEach` (`app/providers/router.ts:681`) тоже читает
+`localStorage.getItem("user")` напрямую, минуя store. А `shared/stores/auth.ts:37` держит
+собственную копию в `user` ref и синхронизируется только через событие `storage`
+(`:57-73`), которое в породившей вкладке не срабатывает.
+
+Полный перечень обращений к `localStorage` подтверждает: ничего не вызывает
+`updateUser(null)` на 401. Единственное место, где store лечится, — `fetchUser()`
+(`entities/user/lib/session.ts:64-69`), а он вызывается один раз, в `onMounted` у
+`app/App.vue:272`.
+
+Последствие: у пользователя истекает cookie посреди сессии (или сервер отзывает ее). Любой
+запрос отвечает 401, `localStorage` очищается, всплывает "Сессия истекла", роутер уводит на
+главную. Но `useAuthStore.user` не пуст, поэтому шапка по-прежнему показывает имя и аватар,
+сайдбар — блоки "Мои игры"/"Мои блоги", формы комментариев и кнопки действий отрисованы как
+для авторизованного. При этом любой переход на маршрут с `requiresAuth` отбрасывает на
+главную с модалкой входа, потому что guard смотрит в `localStorage`. Состояние остается
+таким до перезагрузки страницы. Дополнительно: `useGlobalSignalR` держит сокет,
+негоциированный под прежнюю сессию, потому что watch на `userStore.isAuthenticated`
+(`App.vue:252-264`) не срабатывает.
+
+Исправление: перехватчик не должен трогать `localStorage` — единственная запись этого ключа
+принадлежит `useAuthStore.updateUser`. Дать `client.ts` устанавливаемый обработчик
+"сессия закончилась" по образцу `setSessionExpiredHandler` (`client.ts:43`), а app-слой пусть
+подставляет туда `useAuthStore().updateUser(null)` перед `router.push`. Тогда же убрать
+чтение `localStorage` из `router.beforeEach` и `Api.isAuthenticated()` в пользу store.
+
+### [СРЕДНЯЯ] barrel-rule-not-enforced — линтер не проверяет запрет deep-import, хотя документ и конфиг это утверждают
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Mechanism reproduced: I ran all four probes through `eslint --stdin -c .eslintrc.cjs` and every downward deep-import passed clean (pages←@/entities/user/model/communityStore, pages←@/entities/game/model/store, widgets←@/features/auth/ui/LoginForm.vue, pages←@/widgets/header/Header.vue), while control probes (src/shared/probe.ts←@/pages/home/HomePage.vue, pages←@/app/providers) both errored — so the config is live on stdin and simply does not check entry points on downward edges. PATTERNS.md:121 and :139-141 quoted verbatim and correctly; 22 page dirs, 0 barrels, 91 dynamic imports in router.ts:all verified exactly. Two corrections. (a) The claim "`boundaries/dependencies` не умеет проверять точку входа" is false: v7's element selector carries `fileInternalPath` (@boundaries/elements/dist/index.d.ts:742), and I proved it works — the same deep-import errors under `--rule '{"boundaries/dependencies":["error",{"default":"disallow","policies":[{"from":{"element":{"type":"pages"}},"allow":{"to":{"element":{"type":"entities","fileInternalPath":["index.ts","@x/*.ts"]}}}}]}]}'` while the barrel import passes. Adding `boundaries/entry-point` is one fix, not the only one. (b) The ban IS enforced same-layer: entities/game←@/entities/user/model/store errors, because the target types as `entities` not `entities-x`. So the doc is half-true, not wholly false. Severity: no user is broken and, by the report's own admission (line 29), nothing has to be undone — the fix is one additive lint policy. That is СРЕДНЯЯ under the stated rubric.
+
+PATTERNS.md:121 говорит: "Каждый слайс ... экспортирует наружу только через свой barrel
+`index.ts`. Deep-import мимо barrel во внутренние файлы слайса запрещен". PATTERNS.md:139-141
+уточняет: "Правила слоев проверяются линтером, а не на ревью. `boundaries/dependencies` в
+`.eslintrc.cjs` — исполняемая копия этого раздела: направление импортов, **запрет
+deep-import мимо barrel** и адресность `@x`". Комментарий `.eslintrc.cjs:7` повторяет:
+"this config is that document, enforced".
+
+`boundaries/dependencies` не умеет проверять точку входа — он сопоставляет только типы
+элементов. Правило, которое умеет (`boundaries/entry-point`, установлено в версии 7.1.0,
+`node_modules/eslint-plugin-boundaries/dist/Rules/EntryPoint.js`), в конфиге отсутствует.
+Проверено четырьмя пробами через `eslint --stdin -c .eslintrc.cjs`, все прошли без ошибок:
+
+```
+src/pages/home/probe.ts   <- @/entities/user/model/communityStore   OK
+src/pages/home/probe.ts   <- @/entities/game/model/store            OK
+src/widgets/header/probe.ts <- @/features/auth/ui/LoginForm.vue     OK
+src/pages/home/probe.ts   <- @/widgets/header/Header.vue            OK
+```
+
+Дополнительно `boundaries/no-unknown` и `boundaries/no-unknown-files` выключены
+(`.eslintrc.cjs:107-108`), так что файл, не подошедший ни под один дескриптор элемента,
+вообще не проверяется — конфиг элементов приходится держать в голове.
+
+Последствие: любой разработчик (или агент) может импортировать `@/entities/game/model/store`
+из страницы, и оба гейта CI — `lint:ci` и `type-check` — пройдут. Ревьюер, прочитавший
+PATTERNS.md:139, будет уверен, что механизм это ловит, и не станет смотреть. Дерево чистое
+сегодня (ноль deep-import), поэтому цена нарушения максимальна именно сейчас: первый
+пробитый барьер станет прецедентом, а barrel перестанет быть контрактом.
+
+Исправление: включить `boundaries/entry-point` для четырех нарезанных слоев с разрешенными
+точками входа `index.ts` и `@x/*.ts` (для `pages` — исключение, см. ниже), прогнать
+`lint:ci`, убедиться что 0 ошибок, и только после этого оставлять фразу в PATTERNS.md.
+Отдельно: PATTERNS.md:121 перечисляет `pages/{x}` среди слайсов с обязательным barrel, но
+ни один из 22 каталогов `pages` barrel не имеет, а `app/providers/router.ts` делает 91
+динамический импорт прямо в файлы страниц — и правильно делает, иначе code splitting
+исчезнет. Правило для `pages` надо в документе переписать под реальность, а не наоборот.
+
+### [СРЕДНЯЯ] message-search-race — результаты поиска не соответствуют запросу и сортировке
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> features/message-search/model/searchStore.ts:92-120 is quoted exactly and has no guard; loadMore at 123-151 likewise. All four panel call sites verified at the cited lines: scheduleSearch debounce 66-72, Enter 83-92, selectScope→search 113, onTargetChange→search 175, selectSort→search 190 — three of them fire immediately with no debounce, so two requests can be in flight. The feature is wired and reachable (pages/global-chat/GlobalChatPage.vue:29,971), so the "not built yet" exemption does not apply. Severity is inflated: the consequence is a transient content/order mismatch inside one panel that the next keystroke or re-search overwrites — no wrong navigation targets, no persisted state, nothing a user acts on irreversibly. Same mechanism as detail-stores-race, an order of magnitude less consequence; grouping them at the same level flattens the ranking.
+
+`features/message-search/model/searchStore.ts:92-120`:
+
+```ts
+async function search() {
+  if (!canSearch.value) { reset(); return; }
+  loading.value = true;
+  ...
+  const { data, error: apiError } = await messageSearchApi.searchMessages({...});
+  ...
+  results.value = data?.resources ?? [];
+```
+
+Guard-а нет. `features/message-search/ui/MessageSearchPanel.vue:66-72` дебаунсит ввод на
+300 мс, но `selectScope` (`:113`), `onTargetChange` (`:175`) и `selectSort` (`:190`)
+вызывают `store.search()` немедленно, без дебаунса, а `onQueryKeydown` (`:90`) — по Enter.
+
+Последствие: пользователь набирает "коб", через 300 мс уходит запрос A, продолжает набор до
+"кобольд", еще через 300 мс уходит запрос B. Если A медленнее, в панели показываются
+результаты по "коб" под текстом "кобольд" — и `hasSearched` уже `true`, так что нет никакого
+признака рассинхрона. Тот же эффект при переключении сортировки "По дате" / "Лучшее
+совпадение": ответ старой сортировки перезаписывает новую, и порядок строк противоречит
+активному сегменту контрола.
+
+Исправление: `const guard = createRequestGuard()` в store, `guard.next()` в начале `search()`
+и `loadMore()`, `guard.isCurrent` перед присваиванием `results`, `nextCursor`, `hasMore`,
+`error` и перед сбросом `loading`/`loadingMore`. `loadMore` должен участвовать в том же
+счетчике, иначе догрузка страницы допишет хвост чужого поиска.
+
+### [СРЕДНЯЯ] four-caching-mechanisms — четыре независимых механизма кэширования и два вида guard
+
+Механизмы, каждый со своим TTL, своим понятием "устарело" и своим поведением при промахе:
+
+1. `useApiResource`/`useApiList` (`shared/lib/composables/useApiResource.ts`) — TTL 60 с по
+   умолчанию, stale-while-revalidate, guard внутри. Используется в blog, forum, game, poll,
+   subscription.
+2. `createKeyedCache` + `stableCacheKey` (`shared/lib/utils/keyedCache.ts`) — TTL 30 с,
+   20 записей, ключ по параметрам поиска. Используется в blog, forum, game (`store.ts`),
+   game (`pulseStore.ts:87`), user (`communityStore.ts:46`).
+3. Рукописный TTL. `entities/game/model/ratedPostsStore.ts:23` — `CACHE_TTL = 300_000`,
+   свои `lastFetchBest`/`lastFetchLatest` плюс `Map<string, UserBestPostEntry>` с полем
+   `fetchedAt`. `entities/testimonial/model/store.ts:11` — `CACHE_TTL = 60_000`,
+   `lastFetchTime` и однослотовый `lastQueryKey` с ключом `JSON.stringify(query)`
+   (`:27-29`), чувствительным к порядку полей, в отличие от `stableCacheKey`.
+4. Отсутствие кэша: локальное состояние в компоненте. Из 240 файлов `.vue` в
+   `pages`/`widgets`/`features` 106 вызывают доменный API-клиент напрямую, 105 берут store,
+   43 делают и то и другое в одном компоненте. Например `pages/profile/ProfileGamesTable.vue:119-135`
+   держит собственные `envelope`/`loading`/`error`/guard для того же
+   `gameApi.searchGames`, который в `widgets/games-table/GamesDataTable.vue` идет через
+   store с keyed-кэшем.
+
+Guard тоже в двух видах: `createRequestGuard` в четырех store сущностей, шести страницах
+(`SiteStatisticsPage`, `ProfileBlogsTable`, `ProfileEndorsementsList`, `ProfileGamesTable`,
+`ProfileRatedPostsList`, `ProfileTopicsList`) и `useApiResource`; рукописные счетчики
+версий — в `entities/forum/model/store.ts` (три штуки: `boardSelectVersion`,
+`topicSelectVersion`, `topicsVersion`).
+
+Последствие: на вопрос "что произойдет, если пользователь дважды подряд запросит список"
+в этом фронтенде четыре разных ответа, и выбор делается в каждом файле заново. Практически
+это уже дало три находки в этом же отчете (detail-stores-race, message-search-race,
+api-resource-background-leak) — каждая появилась в том механизме, где guard-а не оказалось.
+Правка поведения кэша (например, инвалидация после мутации) требует четырех разных правок,
+и промах не заметит ни один тест.
+
+Исправление: не сводить все к одному механизму насильно — у 1 и 2 разные задачи (единичный
+ресурс против страницы поиска). Но пункты 3 и 4 надо ликвидировать: `ratedPostsStore` и
+`testimonial/store` переписать на `useApiResource`/`createKeyedCache`, а для компонентов,
+которые обязаны держать запрос локально, ввести один композабл поверх
+`createRequestGuard` + `ErrorState`, чтобы `loading`/`error`/`guard` не собирались руками
+в шестнадцатый раз.
+
+### [СРЕДНЯЯ] api-resource-background-leak — после гонки фонового обновления с принудительным ресурс больше не обновляется
+
+`shared/lib/composables/useApiResource.ts:89-118`:
+
+```ts
+if (backgroundInFlight && !force) { return; }
+...
+if (staleWhileRevalidate && data.value !== null && isStale && !force) {
+  const requestId = guard.next();
+  backgroundInFlight = true;
+  fetcher()
+    .then(({ data: newData, error: fetchError }) => {
+      if (!guard.isCurrent(requestId)) return;   // выходит, НЕ сбросив флаг
+      backgroundInFlight = false;
+      ...
+    })
+    .catch(() => {
+      if (!guard.isCurrent(requestId)) return;   // то же самое
+      backgroundInFlight = false;
+    });
+  return;
+}
+```
+
+Если пока фоновое обновление в полете кто-то вызывает `fetch(true)` или `invalidate()`
+(`:163-173`, `invalidate` вызывает `fetch(true)`), guard продвигается, и обработчик фонового
+ответа выходит по первой строке — `backgroundInFlight` остается `true` навсегда. С этого
+момента любой `fetch()` без `force` на устаревших данных возвращается на строке 89 и не
+делает запроса. Сбрасывает флаг только `reset()` (`:184`).
+
+Реальный путь: `entities/game/model/store.ts:259-270` (`invalidateGameLists`) вызывает
+`invalidate()` сразу у шести ресурсов после мутации игры. Достаточно, чтобы у любого из них
+в этот момент шло фоновое обновление — и дальше stale-while-revalidate у этого ресурса
+мертв: данные будут показываться устаревшими до перезагрузки страницы или до следующей
+мутации. В `shared/lib/composables/useApiResource.spec.ts` шесть тестов, гонки
+"фоновое против принудительного" среди них нет.
+
+Исправление: сбрасывать `backgroundInFlight = false` до проверки `isCurrent` (флаг
+описывает "мой запрос завершился", а не "мой результат актуален"), либо использовать
+отдельный guard для фоновой ветки. Добавить тест: устаревшие данные, `fetch()`, затем
+`fetch(true)` до ответа, затем снова устаревание и `fetch()` — должен уйти запрос.
+
+### [СРЕДНЯЯ] doors-reexport-shared — две из трех дверей entities/user выдают символы, которые лежат в shared
+
+`entities/user/@x/game.ts:9` реэкспортирует `UserLink, AvatarImg, useAuthStore`, а
+комментарий над ним заявляет: "this file is the single sanctioned door from entities/user
+into entities/game". Но `AvatarImg` живет в `shared/ui/AvatarImg` и лишь пробрасывается
+через `entities/user/ui/index.ts:8`, а `useAuthStore` живет в `shared/stores/auth.ts` и
+пробрасывается через `entities/user/model/store.ts:7`. Оба доступны любому слою прямым
+импортом вниз, и `entities/game` этим пользуется: `entities/game/ui/RoomLink.vue:24` берет
+`useAuthStore` через дверь, а `entities/game/model/useGameDisplay.ts:5` — напрямую из
+`@/shared/stores/auth`. Дверь ничего не сузила, а комментарий про "единственную дверь"
+не соответствует коду в соседнем файле того же слайса.
+
+То же с типом. `entities/user/@x/testimonial.ts:9` выдает `type UserRef`, который на самом
+деле объявлен в `shared/api/models/common/user.ts` и лишь реэкспортирован
+`entities/user/model/types.ts:35`. `entities/testimonial/ui/TestimonialCard.vue:11` берет
+его через дверь, а `entities/blog/model/types.ts:1` — прямо из
+`@/shared/api/models/common`. Два законных способа получить один тип в одном слое.
+
+Последствие: читатель не может определить санкционированный путь. Уберешь дверь — часть
+кода сломается, оставишь — часть кода ее игнорирует, и линтер обе ветки пропускает
+(shared→вниз разрешено всегда). Практически это уже приводит к четырем путям импорта
+`useAuthStore`: `@/shared/stores` (12 файлов), `@/shared/stores/auth` (11),
+`@/entities/user` (40), `@/entities/user/@x/game` (1). Grep по потребителям сессии требует
+четырех шаблонов, и любой рефакторинг store сессии обязан найти все четыре.
+
+Исправление: сузить `entities/user/@x/game.ts` до `UserLink` (единственного символа, который
+слайс действительно владеет), убрать `AvatarImg`/`useAuthStore` из двери и из
+`entities/user/ui/index.ts`/`model/store.ts`, а `entities/user/@x/testimonial.ts` удалить —
+`UserRef` берется из `@/shared/api/models/common`, как это уже делает `entities/blog`.
+Выбрать один путь для `useAuthStore` и привести к нему все 64 импорта.
+
+### [СРЕДНЯЯ] gamepanel-in-entry-chunk — самая крупная условная панель сайдбара статична, вопреки правилу тремя строками ниже
+
+`widgets/sidebar/LeftSidebar.vue:40` импортирует `GamePanel` статически, при том что
+комментарий `:46-48` формулирует правило для этого же класса компонентов: "Conditional
+context panels: lazy-loaded so their entity stores/features stay out of the main bundle
+(LeftSidebar itself is statically imported by the router). Each mounts only on its own zone
+or role" — и три соседа по правилу лежат в `defineAsyncComponent` (`BlogPanel:51`,
+`ModerationPanel:52`, `MentorPanel:55`). `GamePanel` — самый большой из четырех (484 строки
+против 351/56/316), рендерится по `v-if="isGameRoute && routeGameId"` (`:7-11`) и тянет
+`useGameDetailsStore` (`:28`) и `features/game-actions` (`:31`).
+
+Проверено на собранном `dist`: в entry-чанке (`assets/index-*.js`, 345 807 Б,
+114 883 Б после gzip) присутствуют строки `Не удалось загрузить игру`,
+`Не удалось загрузить комнаты`, `Не удалось загрузить персонажей`, `Комната №`,
+`Не удалось изменить статус игры`, `Не удалось изменить подписку` — то есть весь
+`gameDetails` store (посты, персонажи, комментарии, чат-комнаты, черный список) и оба
+компонента `features/game-actions` едут в первом чанке. Плюс `blogDetails` и `statistics`
+по той же цепочке (`Не удалось загрузить публикации`, `Не удалось загрузить статистику`).
+
+Последствие: гость, открывший главную и ушедший, скачивает и парсит машинерию игровой
+комнаты, которой не увидит. Это не катастрофа (entry 115 КБ gzip, `vue-vendor` еще 43 КБ),
+но это регресс относительно уже принятого в файле решения, и ровно та несогласованность
+между двумя местами, которые должны совпадать.
+
+Исправление: перевести `GamePanel` в `defineAsyncComponent` рядом с `BlogPanel`. Отдельно
+стоит вынести `useGameDetailsStore` из `entities/game/model/store.ts` (810 строк, два store
+в одном модуле) в собственный модуль: сайдбарный `useGamesStore` и детальный store
+попадают в один чанк только потому, что делят файл, а не потому, что делят потребителя.
+
+### [СРЕДНЯЯ] contract-test-coverage — контрактный тест держит 13 DTO из 335 опубликованных схем
+
+`shared/api/models/contract.spec.ts` — хороший механизм с честной мотивацией в шапке
+("They drifted, twice in ways that reached users"). Но `MAPPING` (`:39`) содержит 13 пар
+"схема сервера → интерфейс клиента", а снапшот `artifacts/openapi-contract.json` содержит
+335 схем. Интерфейсы вне `MAPPING` не проверяются вообще. Кроме того `MODEL_GLOBS` (`:83-90`)
+перечисляет шесть корней вручную: `shared/api/models` и model-каталоги game, blog, forum,
+message, user — то есть 5 из 12 сущностей, имеющих `model/`, и ни одного слайса `features`.
+
+Последствие, конкретно: `features/message-search/model/types.ts` объявляет
+`MessageSearchResult` с полем `author?: User`, и собственный комментарий признает, что
+"`author` is not part of the current backend contract; it is declared optional so the card
+can render it the moment the API starts returning it". Спекулятивное поле без гейта; если
+сервер назовет его иначе, узнает пользователь, а не CI. Переименование `snippet` или
+`sourceTitle` на сервере тоже пройдет все гейты. И — что важнее для архитектуры — слайс,
+поступивший правильно по FSD (свои типы у своего API), тем самым выпал из-под контрактной
+проверки, то есть механизм наказывает за верное размещение.
+
+Исправление: заменить перечень корней сканированием `src/**/model`/`src/**/api` (тест уже
+обходит дерево сам, `collectFiles:92-100`), и добавить в `MAPPING` пары для эндпоинтов,
+которые фронт реально читает, начав с курсорных списков и DTO комнат/постов. Полные 335
+схем не нужны — нужна доля, покрывающая читаемые поля, и число в шапке теста, чтобы падение
+охвата было видно.
+
+### [СРЕДНЯЯ] global-components-ungated — девять компонентов зарегистрированы глобально, и ничто не проверяет, что шаблоны их находят
+
+`app/providers/components.ts:16-25` регистрирует глобально `PageTitle`, `BlockTitle`,
+`SecondaryText`, `Form`, `FormField`, `Button`, `Dialog`, `HumanDate`, `UserLink`. При этом
+те же компоненты массово импортируются явно, причем deep-путем мимо barrel сегмента:
+`@/shared/ui/Layout/SecondaryText.vue` — 71 импорт, `@/shared/ui/Button/Button.vue` — 33,
+`@/shared/ui/Layout/BlockTitle.vue` — 27, `@/shared/ui/Form/FormField.vue` — 18,
+`@/shared/ui/Layout/PageTitle.vue` — 17, при том что `@/shared/ui/Layout` (barrel) — 18 и
+`@/shared/ui` (barrel kit-а) — 15.
+
+Посчитано по дереву: `SecondaryText` используется в 97 файлах, из них 14 не импортируют его
+и полагаются на глобальную регистрацию; `PageTitle` — 52 файла, 34 полагаются на глобальную;
+`BlockTitle` — 38 и 4; `UserLink` — 22 и 1; `HumanDate` — 4 и 0, то есть его глобальная
+регистрация не нужна никому.
+
+Ничто это не проверяет: конфиг расширяет только `plugin:vue/vue3-essential`, правило
+`vue/no-undef-components` не включено, а `vue-tsc` неразрешенный компонент в шаблоне
+ошибкой не считает.
+
+Последствие: кто-то убирает `PageTitle` из `components.ts` (или меняет строку регистрации
+при переименовании) — 34 страницы теряют заголовок h1, Vue пишет предупреждение в консоль,
+`lint:ci`, `type-check` и сборка проходят. Обратный случай тоже реален: новый компонент
+пишут по образцу файла, который полагался на глобальную регистрацию, и он падает только в
+рантайме.
+
+Исправление: включить `vue/no-undef-components` с `ignorePatterns` для того набора, который
+решено оставить глобальным, и сократить сам набор до тех компонентов, где глобальность
+что-то дает (по цифрам выше это `PageTitle` и `SecondaryText`; `HumanDate` и `UserLink`
+можно снимать сразу). Заодно свести три написания импорта одного компонента к одному —
+через barrel сегмента.
+
+### [СРЕДНЯЯ] domain-in-shared — доменные знания живут в shared, и комментарии это признают
+
+`shared/api/models` содержит 179 экспортируемых типов, разложенных по доменным папкам
+`game`, `moderation`, `notepads`, `notifications`, `subscriptions`, `community`,
+`achievements`, `personal`. Комментарии в `shared/api/models/common/index.ts:8,11,14,17`
+объясняют мотив прямо: "Base user types (for FSD compliance - entities import from shared)",
+"Shared ID types (for FSD compliance - shared modules use these instead of entity imports)".
+То есть доменные типы спущены в shared, чтобы линтер не возражал, а не потому, что там их
+место. `shared/config/roles.ts` — та же история: таксономия ролей, русские названия, буквы
+бейджей и `STAFF_ROLES` лежат в shared, тогда как предикаты по тем же ролям
+(`userIsAdmin`, `userIsSeniorModerator`, `userIsModerator`) — в
+`entities/user/lib/helpers.ts`.
+
+Последствие: чтобы добавить роль, надо править `shared/api/models/community` (enum),
+`shared/config/roles.ts` (`ROLE_BADGES`, `ROLE_INFO`, `STAFF_ROLES`) и
+`entities/user/lib/helpers.ts` (предикаты) — три файла в двух слоях. Инвариант "каждая роль
+классифицирована" держится только в `ROLE_INFO` (`Record<UserRole, RoleInfo>`, TS требует
+полноту); `ROLE_BADGES` объявлен `Partial<Record<...>>`, а предикаты — просто списки,
+поэтому пропуск роли в них не заметит ни компилятор, ни тест. Общий эффект: shared перестает
+быть слоем, который можно читать не зная домена, и любое доменное изменение шире одного
+слайса.
+
+Стоит признать противовес: `features/message-search` показывает, что слайс может владеть
+своими DTO и клиентом, ничего в shared не трогая. Значит централизация — привычка, а не
+принуждение, и разворачивать ее можно постепенно.
+
+Исправление: не переносить 179 типов разом. Правило на будущее: новый домен объявляет типы
+у себя (`entities/{x}/model/types.ts`), в `shared/api/models/common` остаются только
+конверты, `ApiResult`, проблемный документ и брендированные `Id`. Из `shared/config/roles.ts`
+перенести `ROLE_BADGES`/`ROLE_INFO`/`STAFF_ROLES` в `entities/user`, где уже лежат
+предикаты, и сделать оба перечисления полными (`Record<UserRole, ...>`).
+
+### [СРЕДНЯЯ] error-status-dropped — store сущностей теряют HTTP-статус, и одинаковый отказ выглядит по-разному
+
+`entities/forum/model/store.ts:77-104` возвращает `{ ok, status }` с объяснением, зачем:
+"so callers can tell a missing board (404) apart from a transient failure (network/500) and
+map each to the right error page instead of flattening everything to 404". Потребитель
+пользуется: `pages/forum/ForumPage.vue:78-84` мапит статус в код и показывает настоящую
+страницу ошибки.
+
+`gameDetails` и `blogDetails` так не делают. `loadGame` (`entities/game/model/store.ts:394-396`)
+кладет в `gameError` строку `"Не удалось загрузить игру"` для любого отказа; `loadBlog`
+(`entities/blog/model/store.ts:393-395`) — `"Не удалось загрузить блог"`. `error.status` не
+сохраняется, наружу store его не отдает. Страницы рисуют это абзацем со ссылкой назад
+(`pages/game/GamePage.vue:54-58`, `pages/blog/BlogPage.vue:102-104`).
+
+Последствие: `/forum/nesushestvuyushchiy` дает 404-страницу проекта; `/game/nesushestvuyushchiy`
+дает абзац "Не удалось загрузить игру", который читается как сбой сети. Пользователь,
+которому игра недоступна (премодерация, черный список, приватность), видит тот же абзац,
+что и при 500, и не может отличить "нет доступа" от "сломалось". Два раздела одного сайта
+трактуют один и тот же класс отказа по-разному.
+
+Исправление: `loadGame`/`loadBlog` должны возвращать `{ ok, status }` по образцу
+`trySelectBoardByAlias`, а страницы — мапить статус в код страницы ошибки. Мапперы при этом
+должны быть одним общим (см. следующую находку), а не третьей и четвертой копией.
+
+### [СРЕДНЯЯ] validation-title-leak — при отказе валидации в русский интерфейс попадает английское "Validation failed"
+
+`src/DM.Web.API/Middleware/ExceptionProblemDetailsFactoryExtensions.cs:40` создает
+проблемный документ валидации с заголовком `"Validation failed"`. На клиенте для этого
+случая есть `describeFailure` (`shared/lib/errors/describeFailure.ts:19-38`), который сначала
+читает коды по полям и только потом падает на `error.title || fallback`; он используется в
+57 файлах. Но два места читают `title` напрямую, минуя его:
+
+```
+features/edit-character/ui/CharacterForm.vue:180
+  errorMessage.value = error.title || "Не удалось сохранить персонажа";
+pages/account/sections/AccountUsernameChangeSection.vue:177
+  submitError.value = error.title || "Не удалось отправить заявку";
+```
+
+Валидаторы для обоих путей существуют (`src/DM.Domain.Game/Features/Characters/CreateCharacterValidator.cs`,
+`UpdateCharacterValidator.cs`), то есть 400 с `ValidationProblemDetails` достижим.
+
+Последствие: пользователь отправляет форму персонажа с пустым или слишком длинным именем и
+получает под формой английскую строку "Validation failed" вместо русского сообщения о том,
+что именно исправить — при том что сервер прислал коды по полям, а клиент умеет их читать.
+То же в заявке на смену логина.
+
+Для контраста `pages/forum/TopicsList.vue:299-310` делает правильно: сначала
+`parseApiErrors(error)` по полям, `error.title` только как общий случай, когда полей нет.
+
+Исправление: в обоих местах заменить `error.title || "..."` на
+`describeFailure(error, "...")`. Заодно стоит запретить прямое чтение `.title` вне
+`shared/lib/errors` — это ровно тот класс правила, который ловится
+`no-restricted-syntax`, и в конфиге уже есть прецедент подобных запретов
+(`.eslintrc.cjs:85-104`).
+
+### [СРЕДНЯЯ] filter-codec-x8 — восемь копий кодека фильтра, и они уже разошлись
+
+Восемь слайсов `features/*-filter` (blog, comment, game, poll, pulse, testimonial, topic,
+user) имеют идентичный скелет: `reducer`, набор `valid*Values`, `createDefaultState`,
+`parseQueryToState`, `buildQueryFromState`, `dispatcher`, `use*Filter`. Общей вынесена только
+дисп/навигационная часть (`shared/lib/composables/createFilterDispatcher.ts`) и примитивы
+разбора (`shared/lib/filters/utils.ts`). Суммарно 6365 строк в восьми слайсах
+(model 2945 + ui 3420).
+
+Расхождение уже произошло. `features/topic-filter/model/useTopicsFilter.ts:138` и
+`features/comment-filter/model/useCommentsFilter.ts` читают строку поиска через общий хелпер:
+
+```ts
+state.search = parseStringFromUrl(query.search as string, 200);
+```
+
+а `features/testimonial-filter/model/useTestimonialsFilter.ts:95-97` пишет свой вариант:
+
+```ts
+if (query.search) {
+  state.search = String(query.search).slice(0, 200);
+}
+```
+
+`parseStringFromUrl` (`shared/lib/filters/utils.ts:125-133`) отдельно обрабатывает случай,
+когда `LocationQuery` вернул массив, и берет первый элемент. Рукописная версия делает
+`String(["foo","bar"])` и получает `"foo,bar"`.
+
+Последствие: ссылка `/testimonials?search=foo&search=bar` (дубль параметра появляется при
+двойной сборке query, редиректе или правке URL руками) заставит фильтр отзывов искать
+литерал `"foo,bar"` и вернуть пусто, тогда как на форуме тот же URL найдет `"foo"`. Более
+общее последствие: любая правка того, как значение проходит круг "URL → состояние → URL",
+требует восьми правок, и промах не увидит ни один тест — ни у одного из восьми слайсов
+`*-filter` нет `.spec.ts`.
+
+Исправление: вынести триаду `parseQueryToState`/`buildQueryFromState`/`reducer` в
+конфигурируемую фабрику рядом с `createFilterDispatcher` — по описанию полей (тип, дефолт,
+допустимые значения, максимум длины), а домен-специфичным оставить только это описание и
+UI. Как минимум — привести все восемь к использованию `parseStringFromUrl` и покрыть круг
+"URL → состояние → URL" одним параметризованным тестом.
+
+### [СРЕДНЯЯ] cross-tab-user-switch — при смене пользователя без выхода сайдбар показывает данные предыдущего
+
+Сброс пользовательских данных при выходе разложен по виджетам, а не сделан централизованно.
+`widgets/sidebar/OwnedGames.vue:190-201`:
+
+```ts
+watch(() => userStore.user?.username, (newUsername, oldUsername) => {
+  if (!oldUsername && newUsername) { store.fetchParticipatingGames(); }
+  else if (oldUsername && !newUsername) { store.resetParticipatingGames(); }
+});
+```
+
+Обе ветки требуют, чтобы `username` прошел через `undefined`. Через `signOut`
+(`entities/user/lib/session.ts:45`) так и происходит. Но обработчик события `storage`
+(`shared/stores/auth.ts:63-68`) присваивает `user.value` новое значение напрямую: если в
+другой вкладке зашли под другим аккаунтом, `username` меняется с A на B за один шаг, и ни
+одна ветка не срабатывает.
+
+Последствие: пользователь входит под вторым аккаунтом во второй вкладке; в первой вкладке
+шапка обновляется на B, а блоки "Мои игры"/"Мои блоги" продолжают показывать список A — то
+есть чужие приватные игры, включая скрытые от B. Данные не утекают за пределы браузера, но
+на экране B видит список A.
+
+Исправление: обработчик `storage` должен проходить через тот же путь, что и обычная смена
+пользователя — при отличии `id` сначала выставить `null`, затем нового пользователя (или
+вызвать явный `switchUser`, который дергает те же watch). Дополнительно: сброс
+пользовательских списков стоит собрать в одном месте — заготовки уже есть
+(`resetAllGames`, `resetAllBlogs`), см. следующую находку.
+
+### [НИЗКАЯ] lint-message-placeholder — в каждом сообщении о нарушении границ пропущен объект импорта
+
+`.eslintrc.cjs:113-115`:
+
+```js
+message:
+  "{{from.element.type}} may not import {{target.element.type}}: FSD allows downward imports only, ...",
+```
+
+Контекст handlebars-шаблона в плагине содержит ключи `from`, `to`, `dependency`, `policy`,
+`rule` (`node_modules/eslint-plugin-boundaries/dist/Messages/CustomMessages.types.d.ts:34-56`).
+`target` существует только в старом синтаксисе `${target.type}`, обрабатываемом отдельной
+функцией. Поэтому `{{target.element.type}}` подставляется пустой строкой, что видно во всех
+моих пробах:
+
+```
+error  shared may not import : FSD allows downward imports only, ...
+error  entities may not import : FSD allows downward imports only, ...
+```
+
+Последствие: в момент, когда правило срабатывает, разработчик не видит, какой слой он
+пытался импортировать. Для `entities → entities` без двери и `entities → entities-x` с
+неправильным адресатом сообщение одинаковое, хотя это разные ошибки с разными исправлениями.
+
+Исправление: заменить `{{target.element.type}}` на `{{to.element.type}}`. Полезно добавить
+`{{dependency.source}}` — тогда сообщение назовет и путь.
+
+### [НИЗКАЯ] dead-reset-all — resetAllGames и resetAllBlogs вызывают только их собственные тесты
+
+`entities/game/model/store.ts:246-253` и `entities/blog/model/store.ts:268-272` объявлены
+как "Reset functions (for logout)". Полный grep по репозиторию находит четыре упоминания
+каждого: объявление, комментарий и два обращения из `store.spec.ts`
+(`entities/game/model/store.spec.ts:412,428`, `entities/blog/model/store.spec.ts:450,466`).
+Продакшн-потребителей нет: выход обслуживается частными сбросами в виджетах
+(`resetParticipatingGames` и т. п.).
+
+Последствие: публичное действие store, у которого есть тест и докстрока про logout, при
+чтении выглядит как реализованный централизованный сброс. Разработчик, добавляющий новый
+пользовательский список, резонно решит, что достаточно вписать его в `resetAllGames` — и
+список не будет сбрасываться никогда, потому что функция мертва. Тест это не поймает, он же
+единственный вызывающий.
+
+Исправление: либо повесить `resetAllGames`/`resetAllBlogs` на реальный путь выхода (что
+одновременно закрывает cross-tab-user-switch), либо удалить обе вместе с тестами. Оставлять
+в текущем виде — держать ловушку.
+
+### [НИЗКАЯ] map-error-code-diverged — две копии одного маппинга статуса в одном слайсе, уже разные
+
+`pages/forum/ForumPage.vue:57-60`:
+
+```ts
+function mapErrorCode(status: number | undefined): number {
+  if (status === 404) return 404;
+  return 500;
+}
+```
+
+`pages/forum/TopicPage.vue:41-48`:
+
+```ts
+function mapErrorCode(status: number | undefined): number {
+  if (status === 403) return 403;
+  if (status === 410) return 410;
+  if (status === 404) return 404;
+  if (!status || status >= 500) return 500;
+  return 404;
+}
+```
+
+Оба файла — один слайс `pages/forum`, то есть общий хелпер разрешен без всяких дверей
+(рядом есть прецедент: `pages/moderation/lib/`). Сегодня расхождение не видно только потому,
+что `GET /forum/boards/{id}` документирует 200 и 404 и не отдает 403/410
+(`src/DM.Web.API/Features/Forum/Boards/BoardController.cs`).
+
+Последствие: в день, когда у раздела появится политика доступа, отказ по разделу покажет
+страницу 500 ("ошибка сервера"), а отказ по топику внутри того же раздела — корректную 403.
+Ошибка будет выглядеть как сбой сайта, а не как отсутствие прав.
+
+Исправление: один `mapErrorCode` в `pages/forum/lib/` (или в `shared/ui/ErrorPage`, рядом с
+`errorConfig.ts`, где уже живет таблица кодов), с полным набором ветвей из версии
+`TopicPage`.
+
+### [НИЗКАЯ] unwrap-inlined — хелпер распаковки конверта продублирован в файлах, которые его же импортируют
+
+`shared/api/envelope.ts:7-11` объявляет `unwrapResource` как SSOT для чтения
+`Envelope { resource }` или голого payload, и 11 мест им пользуются. При этом:
+
+```
+entities/game/model/store.ts:399   game.value = data.resource ?? (data as unknown as Game);
+entities/blog/model/store.ts:398   blog.value = data.resource ?? (data as unknown as Blog);
+entities/statistics/model/store.ts:59-60
+    const data = response.data as { resource: LiveStats } | LiveStats;
+    stats.value = "resource" in data ? data.resource : data;
+```
+
+Первые два файла импортируют `unwrapResource` строкой 32 и 21 соответственно — и рядом
+пишут его вручную с приведением через `unknown`.
+
+Последствие: три варианта одной защиты, из которых рукописные обходят проверку
+`typeof payload === "object"` и на пустом/строковом теле приведут `""` к типу `Game`
+вместо `null`. Плюс приведение через `unknown` глушит компилятор именно там, где форма
+ответа как раз и не определена.
+
+Исправление: `game.value = unwrapResource<Game>(data)` и так далее в трех местах.
+
+### [НИЗКАЯ] auth-store-id-root — идентификатор store сессии не совпадает ни с файлом, ни с хуком
+
+`shared/stores/auth.ts:19`: `defineStore("root", () => {`. Файл называется `auth.ts`,
+экспорт — `useAuthStore`, модуль в докстроке назван `shared/stores/auth`. Второй store
+рядом называет себя корректно (`shared/stores/ui.ts` → `"ui"`).
+
+Последствие: в devtools store сессии показан как "root", и поиск по коду по слову
+`"root"` — единственный способ его там найти. Идентификатор store — это ключ для
+персистентных плагинов Pinia и для `store.$id`-логики; когда такой плагин появится, ключ
+хранилища будет называться `root`, и переименование станет ломающим изменением.
+
+Исправление: `defineStore("auth", ...)`. Персистентности на этом id сейчас нет
+(`app/providers/pinia.ts` — чистый `createPinia()`), так что переименование безопасно
+именно сегодня.
+
+### [НИЗКАЯ] vite-config-comments-lie — два комментария в конфиге сборки не соответствуют коду
+
+`vite.config.ts:93-94`:
+
+```ts
+// Увеличим лимит предупреждения о размере chunk
+chunkSizeWarningLimit: 500,
+```
+
+500 кБ — это и есть значение по умолчанию у Vite, то есть строка ничего не увеличивает.
+
+`vite.config.ts:76`:
+
+```ts
+// TipTap editor - загружается только на chat/messenger
+```
+
+BBCodeEditor импортируют 24 не-тестовых файла: форум (`TopicsList`, `TopicPage`), блоги
+(`BlogComments`, `PublicationForm`), игры (`GameRoom`, `GameComments`, `GameChatRoom`,
+`CharacterSheetFields`), профиль (`ProfileAbout`, `ProfilePage`, `moderation/ModerationNotes`),
+модерация (`BanDialog`, `WarningDialog`, `ModerationTicketPage`), создание игры и блога,
+поддержка. Чат и мессенджер — два из тринадцати разделов.
+
+Последствие: комментарий про TipTap обосновывает решение о чанках ложной посылкой, и
+следующий человек, оптимизирующий загрузку, будет искать выигрыш там, где его нет (или
+наоборот, не станет проверять цену редактора на форуме — 361 КБ raw, 115 КБ gzip).
+Комментарий про лимит создает впечатление, что порог осознанно поднят и предупреждения о
+крупных чанках подавлены, тогда как порог дефолтный.
+
+Исправление: либо задать `chunkSizeWarningLimit` осознанно (текущий tiptap-чанк — 361 КБ,
+так что порог 500 предупреждение не даст и без правки), либо убрать строку. Комментарий про
+TipTap переписать по факту: редактор нужен всюду, где есть форма ввода текста, поэтому он
+вынесен в отдельный чанк, а не в vendor.
+
+## Чего я не смог определить
+
+- Реальная цена entry-чанка в перцентилях времени до интерактивности. Я измерил размеры
+  (entry 345 807 Б / 114 883 Б gzip, `vue-vendor` 110 411 / 43 330, entry-CSS 132 324 /
+  19 973, всего 199 JS-чанков) и подтвердил содержимое поиском строк, но во что это
+  выливается на целевой аудитории — вопрос измерения (Lighthouse на проде и профиль сети
+  реальных пользователей), а решение "делить дальше или нет" — за владельцем.
+- Достижимость гонки в `useApiResource` (`api-resource-background-leak`) в живом
+  приложении. Логика утечки флага доказывается чтением, но частота зависит от того, как
+  часто фоновое обновление совпадает с `invalidateGameLists`. Разрешается инструментовкой
+  (счетчик "фоновый ответ отброшен guard-ом") на dev-стенде за один сеанс работы.
+- Стоит ли разворачивать `shared/api/models` обратно в слайсы. Это 179 типов и правка
+  импортов в примерно 200 файлах; выгода архитектурная, риск — механический. Решение за
+  владельцем; вопрос, который его определяет: планируется ли выделение части фронтенда в
+  отдельно собираемый пакет (тогда доменные типы в shared станут блокером) или нет.
+- Полный список статусов, которые сервер отдает на `GET` детальных ресурсов игры и блога.
+  Для `error-status-dropped` я подтвердил контраст с форумом и то, что валидационный
+  заголовок английский, но какие именно коды надо мапить (403 для премодерации, 404 для
+  удаленной игры, 410 или нет) — читается из контроллеров игры и блога, это отдельный
+  проход по слою API.
+- Согласованность языка комментариев. CLAUDE.md требует комментарии на английском; я нашел
+  356 строк комментариев с кириллицей в `.ts`-файлах `src` (без учета `.vue`), то есть это
+  не локальная небрежность, а сложившаяся практика. Приводить к правилу или менять правило —
+  решение владельца, и это касается всего репозитория, а не только этого слайса.
+
+
+# Качество фронтенда: дизайн-система, a11y, производительность — C
+
+Оценка среза до опровержения: C. Инфраструктура дизайн-системы сделана всерьез и заслуживала бы B (343 токенных font-size против 78 литералов, 766 токенных отступов против 115 px, два настоящих hex-литерала на 326 компонентов, дисциплина «партиал либо миксины, либо правила» с записанной ценой нарушения), но слой доступности и контраста тянет на D: 21 из 30 меток формы указывают на несуществующий id, восемь иконочных кнопок без доступного имени, пара «сплошной акцент + $text-on-*» дает контраст 1.00-1.15 в счетчике непрочитанного, подпись основной кнопки 2.30 в темной теме; C — честное среднее, и оно держится на том, что все исправления локальны и токены для них уже есть.
+
+Вердикт: инфраструктура дизайн-системы сделана всерьез и заслуживала бы B, слой доступности и
+контраста — D, и C это честное среднее. Токены существуют и реально используются: 343 объявления
+`font-size` через переменные против ~78 литералов, 766 объявлений `padding/margin/gap` через шкалу
+против 115 пиксельных, и во всех 326 `.vue`-файлах ровно два настоящих hex-литерала цвета
+(`shared/ui/Button/Button.vue:39`, `shared/ui/Tooltip/TooltipContent.vue:140`) — остальные попадания
+grep это hex внутри комментариев о DM2. Дисциплина, которая обычно нигде не записана, здесь записана
+и работает: партиалы стилей содержат только миксины, поэтому scoped-таблицы стилей не дублируют
+глобальные правила (`assets/styles/InputsGlobal.sass:1-9` называет цену прошлой ошибки —
+84 копии базового блока input, 99 708 байт), `=tint` существует потому, что `rgba(var(--x), .2)`
+молча компилируется в прозрачность (`assets/styles/_Surfaces.sass:33-38`), dev-страница мокапов
+выпилена из прода структурно, а не обещанием (`app/providers/router.ts:637-650`, и в `dist/assets`
+чанка `StyleVariantsPage` действительно нет), ESLint проверяет границы FSD и запрещает нативные
+`confirm/alert/prompt` (`.eslintrc.cjs:85-104`).
+
+Слой доступности гораздо хуже, чем ожидаешь от проекта, в котором есть skip-link, глобальный
+`prefers-reduced-motion`, `Tooltip` с честной реализацией WCAG 1.4.13 и e2e-тестом на нее, и
+`aria`-атрибуты в 132 файлах из 326. Три вещи ломаются одинаково и по одной причине — некому это
+поймать: `eslint-plugin-vuejs-accessibility` не установлен, stylelint отсутствует, а у `Tabs`,
+`Button`, `Form`, `FormField`, `SegmentedControl` нет ни одного спека. Итог: 21 из 30 полей формы,
+использующих встроенную метку `FormField`, имеют `<label for="X">`, для которого нет элемента с
+`id="X"`; восемь иконочных кнопок (весь тулбар сообщений в мессенджере) не имеют доступного имени
+вообще, тогда как их близнец в глобальном чате имеет; стрелочная навигация по табам профиля физически
+не может дойти до третьего таба.
+
+Контраст — отдельная и худшая часть. Тема размечена аккуратно, с посчитанными коэффициентами прямо в
+комментариях (`assets/styles/ThemeVariables.css:6-12`, `:114-117`), но пара «сплошная заливка
+`$accent-*` + текст `$text-on-*`» дает 1.00 в темной теме и 1.15 в светлой — то есть цифра в счетчике
+непрочитанного в мобильном хедере не видна ни в одной теме. Проект эту ловушку уже нашел и починил
+в трех местах тинтами (`pages/personal/NotificationsPage.vue:299-301`,
+`pages/personal/SubscriptionsPage.vue:203-205`, `widgets/notepad/NotepadBoard.vue:544-546`), но два
+места остались. Производительность в целом в порядке (91 маршрут из 91 ленивый, TipTap сознательно
+убран из бочки `shared/ui`, `AvatarImg` с srcset/width/height/fetchpriority), кроме одного крупного
+промаха: 1 048 096 байт шрифтов в формате TTF без `font-display` и без preload.
+
+## Что сделано хорошо
+
+- `assets/styles/_Surfaces.sass:1-10` и `assets/styles/InputsGlobal.sass:1-9` — правило «партиал либо
+  миксины, либо глобальные правила, но не оба» с посчитанной ценой нарушения. Проверено: из 17 файлов
+  в `assets/styles/` правила верхнего уровня эмитят только `Reset.sass`, `InputsGlobal.sass` и
+  `BbcodeGlobal.sass`, и все три подключены ровно один раз из `app/main.ts:16-20`.
+- `assets/styles/_Surfaces.sass:29-40` — миксин `=tint` с объяснением, почему `rgba()` от
+  CSS-переменной не работает (`rgb()` не принимает hex-аргумент, объявление невалидно на этапе
+  computed-value, фон рендерится полностью прозрачным). Это не стилистическое замечание, а описание
+  бага, который уже произошел на 16 вызовах.
+- `shared/ui/Tabs/Tabs.vue:171-179`, `shared/ui/SegmentedControl/SegmentedControl.vue:42`,
+  `assets/styles/Reset.sass:86-88` — `.copy-space` и настоящие текстовые узлы `" | "` вместо
+  flex-раскладки, чтобы выделение полосы копировалось одной строкой, а не по элементу на строку.
+  Требование владельца про копируемость реализовано механизмом, а не соглашением.
+- `shared/ui/Tooltip/Tooltip.vue:1-15,56-60` — hover + `focusin` + `touchstart` + Escape,
+  `role="tooltip"`, `aria-describedby`, курсор не теряется при уходе на саму подсказку; плюс
+  `e2e/tests/accessibility/tooltip.spec.ts` (278 строк) проверяет именно эти сценарии.
+- `shared/ui/AvatarImg/AvatarImg.vue:87-113` — srcset с width-дескрипторами, `sizes`, `width`/`height`
+  против CLS, `loading` + `fetchpriority` по флагу `eager`, `decoding="async"`. Единственная точка
+  выбора из трех вариантов картинки.
+- `shared/ui/DataTable/DataTable.vue:82-95,124-131` — `scope="col"`, `aria-sort` только на активной
+  колонке, `aria-busy` на таблице, скелетон обернут в `aria-hidden`, пустое состояние через
+  `colspan`, футер через `$slots` (а не кэширующий computed) с объяснением почему.
+- `app/providers/router.ts:637-650` — dev-маршруты живут внутри `import.meta.env.DEV`, комментарий
+  явно говорит: «A comment promising future removal is not a mechanism; this is». Проверено по
+  `dist/assets`: чанка страницы мокапов нет.
+- `shared/ui/index.ts:24-28` — `BBCodeEditor` намеренно не реэкспортируется из бочки, с указанием
+  причины (360 КБ TipTap на entry-чанке каждой страницы). В `dist/assets` действительно отдельный
+  `tiptap-Bbw3jUm3.js` на 361 237 байт и `BBCodeEditor-ClpsiMWC.css` на 31 095 байт.
+- `assets/styles/ThemeVariables.css:6-12,45-49,65-78,114-117` — значения токенов подобраны расчетом, а
+  не на глаз, с записанным результатом измерения (`#999` давал 2.85 при пороге 4.5; альфа
+  оверлея откалибрована так, чтобы дельта была ~9-10 пунктов на всех трех разрешенных подложках).
+- `shared/lib/composables/useDialogShell.ts:1-17` — фокус-ловушка вынесена в одно место с описанием
+  дрейфа, который к этому привел (InputDialog не восстанавливал фокус вообще).
+- `.eslintrc.cjs:79-104` — запрет `confirm`/`alert`/`prompt` в обоих написаниях (глобал и свойство
+  `window`), с указанием, что на них уже уползли семь деструктивных действий.
+- Требование про `user-select: none` соблюдено буквально: все 17 вхождений — это либо префикс `"- "`
+  с `aria-hidden` (`widgets/sidebar/SidebarGameLink.vue:54,73-75`, `app/App.vue:82,417`), либо
+  декоративная линия `DashSeparator` с записанным обоснованием
+  (`shared/ui/DashSeparator/DashSeparator.vue:66-70`). Плюс `user-select: all` на однострочном
+  копируемом токене (`pages/account/sections/AccountBotLinksSection.vue:338`).
+- Запрещенная буква U+0451 в исходниках фронтенда: 0 вхождений (проверено grep по `*.vue`, `*.ts`,
+  `*.sass`).
+
+## Находки
+
+### [ВЫСОКАЯ] accent-fill-invisible-label — заливка `$accent-*` с текстом `$text-on-*` дает контраст 1.00-1.15
+
+> **Опровержение: подтверждено.**
+
+Два места остались на паре, которая нечитаема в обеих темах.
+
+`widgets/header/Header.vue:459-462` (счетчик непрочитанного в мобильном хедере):
+
+```sass
+.counter-value
+  background-color: $accent-green
+  color: $text-on-green
+  font-size: 10px
+  font-weight: bold
+```
+
+`pages/personal/SubscriptionsPage.vue:159-162` (активная вкладка фильтра подписок):
+
+```sass
+    &.active
+      background: $accent-green
+      color: $text-on-green
+      border-color: $accent-green
+```
+
+Посчитано по значениям из `assets/styles/ThemeVariables.css`: темная тема — `--accent-green: #8fbc8f`
+(строка 124) и `--text-on-green: #8fbc8f` (строка 129), это один и тот же hex, контраст 1.00.
+Светлая тема — `--accent-green: #267326` (строка 12) и `--text-on-green: #363` (строка 15), контраст
+1.15. `$text-on-green` рассчитан как цвет текста на *тинте* акцента, не на сплошной заливке; ровно это
+записано в `assets/styles/_Surfaces.sass:29-32` и продублировано в трех местах, где заливку уже
+заменили тинтом (`pages/personal/NotificationsPage.vue:299-301`,
+`pages/personal/SubscriptionsPage.vue:203-205`, `widgets/notepad/NotepadBoard.vue:544-546`).
+
+Заодно `pages/game/GameRooms.vue:147-150`: `background-color: $accent-red; color: white` — 6.68 в
+светлой теме, 2.43 в темной (`--accent-red: #de9292`).
+
+Последствие: на ширине ниже 1000px пользователь с непрочитанными сообщениями видит зеленую пилюлю
+16x16 без цифры — счетчик существует, но его значение нельзя прочитать ни в светлой, ни в темной
+теме. На странице подписок активная вкладка («Все (12)») теряет весь текст в темной теме: непонятно
+не только какая вкладка активна, но и что на ней написано. Счетчик непрочитанного в комнате игры
+нечитаем в темной теме.
+
+Исправление: заменить сплошную заливку тинтом ровно как в трех уже починенных местах —
+`+tint($accent-green, 20%)` плюс `color: $text` (или `$accent-green` как цвет текста, он уже прошел
+AA против страницы и карточки). Токены `$text-on-green` / `$text-on-red` переименовать в
+`$text-on-green-tint` / `$text-on-red-tint`, чтобы имя перестало приглашать к неверному
+использованию, — сейчас имя читается как «текст на зеленом» и вводит в заблуждение.
+
+### [ВЫСОКАЯ] button-variant-contrast — белая подпись основной и опасной кнопки не проходит AA
+
+> **Опровержение: подтверждено.**
+
+`shared/ui/Button/Button.vue:33-43`:
+
+```sass
+  &.primary
+    background-color: $link
+    border-color: $link
+    color: #fff
+
+    &:hover:not(:disabled)
+      background-color: $link-hover
+```
+
+Комментарий рядом утверждает: «Navy is dark, so white text keeps a high, theme-stable contrast». В
+темной теме `--link: #7cb0e0` (`ThemeVariables.css:133`) — это светло-голубой, не navy. Посчитано:
+белый на `#304060` — 10.36 (светлая тема, в порядке), белый на `#5090c0` (ховер, светлая тема) —
+3.45, белый на `#7cb0e0` (темная тема) — 2.30, белый на `#9cc8f0` (ховер, темная тема) — 1.76. Размер
+подписи — `$secondary-font-size` (14px), то есть порог 4.5, а не 3.0.
+
+Тот же дефект у `.danger`: `shared/ui/ConfirmDialog/ConfirmDialog.vue:214-216` ставит
+`background-color: $accent-red`, но цвет текста остается `color: $text` из миксина
+`+button` (`assets/styles/Inputs.sass:70`). Контраст `#333` на `#b22222` — 1.89 (светлая),
+`#e0e0e0` на `#de9292` — 1.84 (темная). Этот же трехстрочный блок скопирован дословно еще в трех
+местах: `features/blog-actions/ui/BlogStatusButtons.vue:154-157`,
+`features/game-actions/ui/GameStatusButtons.vue:154-157`, `pages/game/CharacterEdit.vue:420-423`.
+
+Последствие: `variant="primary"` рендерит `Form.vue:9-13`, то есть кнопку отправки на 21 форме —
+вход, регистрация, восстановление доступа, все диалоги модерации, настройки игры и блога. В темной
+теме ее подпись читается на 2.30, на ховере на 1.76 — фактически исчезает. Подтверждающая кнопка в
+`ConfirmDialog` (удаление игры, комнаты, NPC, сброс набора) в обеих темах имеет 1.84-1.89: подпись
+«Удалить» на красном фоне неразличима, и пользователь нажимает деструктивное действие, не прочитав
+кнопку.
+
+Исправление: для `primary` брать явную пару — либо темная заливка, зафиксированная как токен
+`--button-primary-bg` (в темной теме темно-синий, а не `$link`), либо оставить `$link` фоном и взять
+`color: var(--bg-page)`. Для `danger` — добавить пятый вариант в систему кнопок
+(`assets/styles/Inputs.sass`, рядом с `+button` / `+button-link`) с посчитанной парой и убрать четыре
+копии.
+
+### [ВЫСОКАЯ] form-label-dangling-for — 21 из 30 меток формы указывают на несуществующий id
+
+> **Опровержение: подтверждено.**
+
+`shared/ui/Form/FormField.vue:8-16` рендерит метку и слот как *соседей*, а не вложенно:
+
+```html
+    <div v-if="label || $slots.label" class="form-field-label">
+      <slot name="label">
+        <label :for="name">{{ label }}</label>
+      </slot>
+      ...
+    </div>
+    <div class="form-field-row">
+      <slot />
+    </div>
+```
+
+То есть связь держится только на том, что вызывающий вручную поставит `id`, равный `name`. Проверено
+скриптом по всем 326 `.vue`: 35 блоков `<form-field>`, из них 30 используют встроенный проп `label`,
+корректно связаны 9, сломаны 21. Примеры: `features/create-poll/ui/CreatePollForm.vue:46-52`
+(`<form-field label="Название" name="pollTitle">` и `<input>` без `id`), там же `pollDetails`,
+`pollStartsUtc`, `pollEndsUtc`, `pollOptions`; `pages/forum/TopicsList.vue:534-545` (`title`, `text`);
+`features/block-user/ui/BlockUserDialog.vue:61-74` (`username`);
+`features/create-testimonial/ui/CreateTestimonialForm.vue:39-52` (`testimonialText`);
+`features/support-ticket/ui/SupportTicketForm.vue` (`subtype`, `text`);
+`features/attribute-schema-editor/ui/*` (5 блоков). Еще в шести из этих 21 у `<form-field>` вообще нет
+`name`, так что `:for` отсутствует и метка не связана ни с чем
+(`features/create-blog/ui/CreateBlogForm.vue` «Видимость черновика»,
+`features/create-game/ui/CreateGameForm.vue` «Доступ к комментариям», и т. д.).
+
+Рядом второй недоделанный провод: `FormField.vue:17-25` генерирует `id="${name}-error"` на сообщении
+об ошибке — очевидно под `aria-describedby`, но `aria-describedby` на поле не ставит никто (в проекте
+всего два вхождения этого атрибута, оба в других компонентах).
+
+Последствие: скринридер объявляет большинство полей форм как безымянные («поле ввода», без «Название»
+или «Имя пользователя»); пользователь не знает, что заполняет. Клик по подписи не ставит курсор в
+поле — обычная привычка не работает на опросах, темах форума, отзывах, тикетах поддержки, блокировке
+пользователя. Вернувшись на поле с ошибкой, пользователь скринридера не услышит текст ошибки, потому
+что связь `aria-describedby` не установлена.
+
+Исправление: перенести генерацию `id` внутрь `FormField` — прокидывать его в слот
+(`<slot :inputId="inputId" :describedBy="errorId" />`) и требовать от вызывающего разложить их на
+контрол; либо сделать `FormField` оборачивающим `<label>` вокруг всего блока, тогда `for` не нужен.
+Второй шаг обязателен независимо: `aria-invalid` + `aria-describedby` на контроле.
+
+### [ВЫСОКАЯ] icon-buttons-unnamed — восемь иконочных кнопок без доступного имени, и расхождение двух чатов
+
+> **Опровержение: подтверждено.**
+
+Проверено скриптом: из 338 элементов `<button>` в шаблонах восемь не имеют ни текста, ни
+`aria-label`/`aria-labelledby`/`title` (два случая с `<slot />` — `Button.vue`, `RemoveButton.vue` —
+исключены, там имя дает вызывающий):
+
+- `pages/messenger/ChatView.vue:671-676` (подтвердить удаление), `:693-699` (лайк), `:702-704`
+  (редактировать), `:707-712` (удалить), `:612-618` (прокрутить вниз)
+- `pages/global-chat/GlobalChatPage.vue:1188-1194` (подтвердить удаление)
+- `shared/ui/Filters/primitives/FilterDropdownHeader.vue:22-24` (кнопка «назад» в каждом
+  иерархическом фильтре)
+- `shared/ui/Filters/bubbles/ExpandableBubble.vue:153`
+
+Все они завернуты в `<Tooltip text="...">`, что выглядит как разметка имени, но не является им:
+`shared/ui/Tooltip/Tooltip.vue:11` ставит `:aria-describedby` на *обертку-span* и только пока подсказка
+видима. Описание не заменяет имя.
+
+Расхождение измеримо: в `pages/global-chat/GlobalChatPage.vue` семь вхождений `aria-label`, включая
+тулбар сообщения (`:1207-1214` — `:aria-label="isLikedByMe(...) ? 'Убрать лайк' : 'Нравится'"`).
+В `pages/messenger/ChatView.vue` — ноль вхождений `aria-label` на 964 строки, при том что тулбар там
+скопирован с того же экрана, и в файле есть комментарий (`ChatView.vue:117-119`) о том, что
+клавиатурный путь как раз перенесли из глобального чата, «this view had hover only, so a keyboard
+user could reach every message action in one chat and none in the other». Перенесли путь, но не
+подписи.
+
+Тот же корень в `shared/ui/Paging/Paging.vue:27-36,49-58`: ссылки «...» с подсказками «Назад» /
+«Вперед» и `<<` / `>>` объявляются скринридером как «ссылка три точки» и «меньше меньше».
+
+Последствие: пользователь скринридера в мессенджере доходит до тулбара сообщения и слышит три
+одинаковых «кнопка» — лайк, редактирование и удаление не различимы; в том же интерфейсе глобального
+чата все названо. Кнопка «назад» внутри любого фильтра каталога игр/блогов/пользователей безымянна.
+Пагинация не навигируема на слух.
+
+Исправление: `aria-label` на кнопку (не на `Tooltip`), значением — тот же текст, что уходит в
+`Tooltip`; для `Paging` — `aria-label="Страница N"`, `aria-label="Первая страница"`,
+`aria-label="Назад на 5 страниц"`. И зафиксировать правило: `Tooltip` дает описание, не имя.
+
+### [ВЫСОКАЯ] tabs-arrow-navigation-dead-end — стрелкой вправо нельзя дойти дальше второго таба
+
+> **Опровержение: подтверждено.**
+
+`shared/ui/Tabs/Tabs.vue:101-106` переставляет активный таб на визуальный индекс 0, а `:122-150`
+навигирует по этому же переставленному порядку:
+
+```ts
+const orderedTabs = computed(() => {
+  const tabs = visibleTabs.value;
+  const i = tabs.findIndex((t) => t.value === props.modelValue);
+  if (i <= 0) return tabs;
+  return [tabs[i], ...tabs.slice(0, i), ...tabs.slice(i + 1)];
+});
+...
+    case "ArrowRight":
+      nextIndex = currentIndex === last ? 0 : currentIndex + 1;
+```
+
+Так как активный таб всегда индекс 0 и фокус всегда на нем, `ArrowRight` всегда выбирает
+`orderedTabs[1]` — первый в объявленном порядке неактивный таб. Прогон для объявленного списка
+`[about, games, blogs, topics, achievements]` (`pages/profile/ProfilePage.vue:503-511`): из `about`
+вправо → `games`; порядок становится `[games, about, blogs, topics, achievements]`, фокус на индексе
+0, вправо → `about`. Дальше пинг-понг `about ↔ games`. `Home` (`nextIndex = 0`) всегда переизбирает
+текущий таб, то есть ничего не делает. `ArrowLeft` (`nextIndex = last`) работает и обходит весь
+список, `End` прыгает на последний.
+
+Последствие: на странице профиля пользователь клавиатуры, идущий по табам стрелкой вправо (обычное
+направление для `role="tablist"`), не может дойти до «Блоги», «Топики» и «Зал славы» — стрелка вечно
+возвращает его к «О себе». `Home` молча не работает. Тот же баг проявится в любом будущем вызове
+`Tabs` с числом табов больше двух.
+
+Исправление: считать шаг по *объявленному* порядку (`visibleTabs`), а не по `orderedTabs`: держать в
+хендлере значение таба, находить его индекс в `visibleTabs`, шагать там, затем фокусировать
+получившийся активный таб (он окажется на индексе 0). Спека на `Tabs` отсутствует — прогон стрелкой
+через все табы обязателен в ней.
+
+### [ВЫСОКАЯ] mouse-only-controls — два интерактивных элемента доступны только мышью
+
+> **Опровержение: частично неверно.**
+>
+> Half one stands fully: NotepadBoard.vue:210-216 is a v-for div with @click only, no role/tabindex/keydown (cursor: pointer at :392), selectedEntry starts null with no auto-select (:63, :157), and the reader pane plus the per-entry edit/delete buttons only exist under v-if="selectedEntry" (:276-303) — so a keyboard user can open nothing on any of the three notepad pages (NotepadPage.vue:17, GameNotepad.vue:35, BlogNotepad.vue:30). Half two's consequence is fabricated in scope: TooltipContent.vue has exactly 3 consumers (GameTagCloud.vue:19, GamesDataTable.vue:314, TagSelector.vue:100), all game-TAG descriptions inside a Tooltip #content slot — there is no [tip:] path in game/post body text (GamesFilter.vue:217 strips the markup, TagDialog.vue:111 documents it as a tag field), and the visible segment text does render for keyboard users; only the nested hover popup (image / hidden tip text) is lost. Severity stays ВЫСОКАЯ on the notepad half alone.
+
+Первое: `widgets/notepad/NotepadBoard.vue:211-217` — выбор записи блокнота.
+
+```html
+          <div
+            v-for="entry in sortedEntries"
+            :key="entry.id"
+            class="entry-item"
+            :class="{ selected: selectedEntry?.id === entry.id }"
+            @click="selectEntry(entry)"
+          >
+```
+
+Ни `role`, ни `tabindex`, ни `@keydown`; `cursor: pointer` есть (`:392`). Компонент используется тремя
+страницами: `pages/personal/NotepadPage.vue:17`, `pages/game/GameNotepad.vue:35`,
+`pages/blog/BlogNotepad.vue:30`. Это единственный способ открыть текст записи. Для сравнения:
+`shared/ui/ExpandableList/ExpandableList.vue:128-133` и
+`shared/ui/BBCodeEditor/lib/tiptap-extensions/SpoilerView.vue:46-57` в этом же проекте сделаны
+правильно — `role="button"`, `tabindex="0"`, `@keydown`.
+
+Второе: `shared/ui/Tooltip/TooltipContent.vue:121-131` — разметка `[tip:...]` / `[tipimg:...]` внутри
+текста. Обработчики только `@mouseenter` / `@mouseleave`, нет `tabindex`, `focus`, `role="tooltip"`,
+`aria-describedby`, Escape. Это второй, несовместимый тултип в той же папке `shared/ui/Tooltip`, рядом
+с `Tooltip.vue`, который все перечисленное имеет. Дополнительно `white-space: nowrap` на всплывашке
+(`:176`) без `max-width` (ограничение стоит только на картинке, `:182-183`).
+
+Последствие: пользователь клавиатуры не может выбрать запись блокнота — три страницы блокнота для
+него нечитаемы вообще. Пользователь клавиатуры или тач-устройства не может раскрыть ни одну
+подсказку `[tip:]` в тексте игры/поста — содержимое разметки для него не существует. Длинная подсказка
+`[tip:]` уезжает за границу вьюпорта одной неразрывной строкой; горизонтально прокрутить ее нельзя,
+потому что скроллится вся страница целиком (`html, body { overflow: hidden }`,
+`assets/styles/Reset.sass:27-30`).
+
+Исправление: `NotepadBoard` — `role="button"`, `tabindex="0"`, `@keydown.enter/@keydown.space` (или,
+лучше, `role="listbox"` + `role="option"` со стрелками, раз это список выбора одного элемента).
+`TooltipContent` — переписать через `Tooltip.vue` (`#content`-слот уже поддерживается), тогда фокус,
+тач, Escape и `aria-describedby` приходят бесплатно; `white-space: nowrap` заменить на
+`max-width` + `overflow-wrap`.
+
+### [СРЕДНЯЯ] fonts-ttf-no-display — 1 МБ несжатых шрифтов, без `font-display` и без preload
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Every fact checks out: Fonts.sass declares four faces, all format("truetype"), zero font-display; dist/assets byte counts are 288340+210224+270920+278612 = 1048096 exactly, Regular+Bold = 566952 exactly; neither index.html nor dist/index.html has a font preload (only modulepreload + stylesheet); Fonts.sass is on the critical path via main.ts:18. I also settled what the report left open — nginx.conf:9 gzip_types omits font/ttf, so the TTFs really do go over the wire uncompressed. But nothing is broken: the FOIT is bounded (~3s), text renders afterwards, nginx.conf:36-38 caches fonts immutable for a year so it is first-visit only, and the fix (TTF→WOFF2 + font-display + preload) touches one file and undoes no decision. That is a performance defect, not "broken for some users".
+
+`assets/styles/Fonts.sass` объявляет четыре начертания, все `format("truetype")`, ни одного
+`font-display`. Размеры из `dist/assets` (сборка от 30.07): `PTSans-Bold` 288 340,
+`PTSans-Regular` 278 612, `PTSans-Italic` 270 920, `PTSans-BoldItalic` 210 224 — итого 1 048 096 байт.
+В `index.html` нет ни `<link rel="preload">` на шрифт, ни `preconnect`.
+
+Последствие: без `font-display` браузер блокирует отрисовку текста до трех секунд (период FOIT) —
+на медленном соединении первый визит показывает пустой каркас страницы. Regular и Bold нужны на любой
+странице, это 566 952 байта только шрифтов на критическом пути, тогда как WOFF2 те же начертания
+занимают примерно 35-40 % от TTF. Preload отсутствует, поэтому запрос на шрифт уходит только после
+парсинга CSS.
+
+Исправление: сконвертировать четыре TTF в WOFF2, оставить TTF вторым `src` только если нужна
+поддержка совсем старых движков; добавить `font-display: swap` (или `optional` для курсивов);
+`<link rel="preload" as="font" type="font/woff2" crossorigin>` на Regular и Bold в `index.html`.
+
+### [СРЕДНЯЯ] formfield-error-visual-dead — визуальная индикация ошибки поля не срабатывает никогда
+
+`shared/ui/Form/FormField.vue:63-76`:
+
+```sass
+.form-field__labeled
+  ...
+  &.error input
+    animation-name: shake-error
+    animation-duration: 0.4s
+    animation-timing-function: ease-in-out
+    border-color: $border-accent-red
+```
+
+Класс `error` на корне не появляется никогда: `FormField.vue:2-7` вычисляет
+`['form-field', label || $slots.label ? 'form-field__labeled' : null]`, третьего значения нет, и ни
+один из 35 вызовов не передает `class="error"` извне. Правило мертво целиком. Вторым слоем:
+`@keyframes shake-error` не определен нигде в проекте — grep по `*.sass`, `*.css`, `*.vue`, `*.ts` дает
+только две ссылки на него (`FormField.vue:70` и `assets/styles/Reset.sass:57`) и ни одного
+определения. В `Reset.sass:48-63` он висит в блоке для селектора `field` — элемента, которого в
+шаблонах нет ни одного (`grep '<field'` — пусто), то есть 16 строк мертвого CSS.
+
+Последствие: поле, не прошедшее валидацию, выглядит точно так же, как валидное — ни красной рамки, ни
+тряски, ни красной внутренней тени при фокусе. Единственный признак — строка текста под полем. На
+длинной форме (регистрация, создание игры) пользователь после отправки не видит, какое поле требует
+внимания, пока не прочитает весь текст под всеми полями.
+
+Исправление: добавить `error` в список классов корня (`props.errors?.length ? 'error' : null` через
+уже существующий `displayErrors`) и расширить селектор до `input, textarea, select` — сейчас
+`textarea` и `select` не покрыты даже намерением. `@keyframes shake-error` определить в
+`Reset.sass` (глобальный файл, эмитится один раз) или убрать ссылки на него. Мертвый блок `field`
+удалить.
+
+### [СРЕДНЯЯ] input-focus-indicator-too-weak — фокус на поле ввода обозначен изменением оттенка рамки на 1.8:1
+
+`assets/styles/Inputs.sass:14-27`:
+
+```sass
+@mixin input()
+  margin: 0
+  +input-base()
+  outline: none
+  ...
+  &:focus
+    outline: none
+    border-style: solid
+    border-color: $border-focus
+```
+
+`Reset.sass:75-78` возвращает `:focus-visible`-обводку только для `a` и `button`; поля ввода
+исключены явным `outline: none` в самом миксине. Посчитано: `$border-focus` против `$border` —
+`#999` vs `#ccc` = 1.77 (светлая), `#888` vs `#555` = 2.10 (темная); `$border-focus` против заливки
+поля — `#999` vs `#f5f5f5` = 2.61. WCAG 2.4.11 (Focus Appearance) и 1.4.11 (Non-text Contrast)
+требуют 3:1.
+
+Последствие: пользователь клавиатуры на форме из пяти полей не видит, в каком поле находится каретка,
+пока не начнет печатать; на светлой теме разница между `#ccc` и `#999` на однопиксельной рамке
+физически неразличима на большинстве мониторов. `<select>`, построенный на этом же миксине
+(`shared/ui/Select/Select.vue:75`), теряет и родную браузерную обводку.
+
+Исправление: в `@mixin input()` заменить `&:focus { outline: none }` на
+`&:focus-visible { outline: 2px solid $link; outline-offset: 1px }`, оставив `&:focus:not(:focus-visible)`
+без обводки — ровно та же идиома, что уже применена к кнопкам (`Inputs.sass:79-82`).
+
+### [СРЕДНЯЯ] dropdown-header-contrast — заголовок группы в фильтрах: 3.94 при пороге 4.5
+
+`assets/styles/_Filters.sass:205-212`:
+
+```sass
+  .dropdown-header
+    padding: $small $medium
+    font-size: $tertiary-font-size
+    font-weight: 600
+    color: $text-muted
+    text-transform: uppercase
+    letter-spacing: 0.5px
+    background-color: $bg-element-accent
+```
+
+Комментарий к токену калибрует `--text-muted` только под две подложки:
+`ThemeVariables.css:6-8` — «AA на белой странице и на карточке ... (4.74 / 4.50)». Третьей подложки,
+`--bg-element-accent` (`#eaeaea`), в расчете нет. Посчитано: `#737373` на `#eaeaea` = 3.94. В темной
+теме `#a0a0a0` на `#333` = 4.83, там порядок.
+
+Последствие: в светлой теме заголовки групп в выпадающих фильтрах (каталог игр, блогов,
+пользователей, топиков) — 12px, uppercase, с трекингом — не проходят AA. Uppercase и мелкий кегль
+делают ситуацию хуже расчетного числа. `.dropdown-nav-header` (`_Filters.sass:173-178`) сидит на той
+же подложке, так что любой muted-текст, добавленный туда, унаследует проблему.
+
+Исправление: либо взять `$text` для этого заголовка (он и так `font-weight: 600` — визуальная
+иерархия держится на весе и трекинге, а не на цвете), либо ввести третий калиброванный токен
+`--text-muted-on-accent` и дописать `#eaeaea` в комментарий-расчет рядом с двумя существующими
+подложками.
+
+### [СРЕДНЯЯ] dialog-tier-fragmentation — четыре реализации модального окна, и Escape перестает работать после клика по диалогу
+
+`shared/lib/composables/useDialogShell.ts:8-12` заявляет себя единственным местом для поведения
+модалки — и используется двумя компонентами (`ConfirmDialog.vue:48`, `BBCodeEditor/InputDialog.vue`).
+Параллельно живут:
+
+- `shared/ui/Layout/Dialog.vue:24-35` — через `vue-final-modal` (17 файлов-потребителей);
+- `shared/ui/Drawer/MobileDrawer.vue:84-113` — своя копия той же фокус-ловушки, включая свой
+  `focusables()`;
+- `pages/forum/PinnedTopicsManager.vue:105-107` — оверлей без `role="dialog"`, без `aria-modal`, без
+  Escape, без ловушки, без возврата фокуса и без начального фокуса.
+
+Отдельный дефект в самой ловушке: `ConfirmDialog.vue:92-97` вешает `@keydown` на бэкдроп, а контейнер
+диалога (`:98-104`) не имеет `tabindex="-1"`. Клик по неинтерактивной части диалога (заголовок,
+текст) переводит `document.activeElement` на `body`; событие `keydown` тогда возникает на `body`, то
+есть на *предке* бэкдропа, и до обработчика не всплывает. То же в `InputDialog.vue:145-148`.
+
+И геометрия: `shared/ui/Layout/Dialog.vue:54-76` задает `width: 580px` / `380px` без `max-width`.
+
+Последствие: пользователь открывает диалог подтверждения удаления, кликает мышью в текст «Вы
+уверены?», нажимает Escape — ничего не происходит, диалог не закрывается. `PinnedTopicsManager` (упр.
+порядком закрепленных топиков) не закрывается Escape вообще, Tab уводит фокус на страницу под
+оверлеем, а после закрытия фокус не возвращается на кнопку, которая его открыла; скринридер не
+объявляет его модальным. Любой диалог на `vue-final-modal` (17 файлов, включая формы модерации) на
+экране 375px шириной имеет фиксированные 580px и уезжает за границу вьюпорта.
+
+Исправление: `tabindex="-1"` на контейнер диалога и начальный фокус на него, либо перенести
+слушатель Escape на `document` пока диалог открыт. `MobileDrawer` и `PinnedTopicsManager` перевести на
+`useDialogShell`. В `Dialog.vue` — `width: min(580px, calc(100vw - 2 * #{$medium}))` для обоих ярусов.
+
+### [СРЕДНЯЯ] breakpoints-six-values — шесть конкурирующих значений точки перелома, три имени для одной
+
+`assets/styles/_Breakpoints.sass:15-24` объявляет шкалу из четырех токенов и тут же признает
+(`:9-11`), что «many existing components still hardcode 768/640/600 etc. — those are intentionally
+left as-is (future consolidation)». Посчитано по всем `*.vue` и `*.sass`: 51 медиазапрос, из них
+через токен — 10 (`$bp-shell`) плюс 4 через два псевдонима; литералами — 768px ×11, 600px ×4,
+620px ×3, 480px ×3, 640px ×2, и три ступени сжатия хедера (1699/1489/1339). Плюс два дублирующих
+имени: `assets/styles/Layout.sass:6` `$min-width: $bp-shell` (используется в `widgets/footer/Footer.vue:143`)
+и `assets/styles/_Tables.sass:90` `$mobile-breakpoint: 600px` — то же значение, что `$bp-mobile`, но
+объявлено в партиале про таблицы и используется в трех посторонних файлах
+(`pages/rules/RulesHelpLinks.vue:132`, `pages/rules/RulesStaffTable.vue:211`,
+`shared/ui/ExpandableList/ExpandableList.vue:313`).
+
+Последствие: между 600 и 640px три соседних блока переключают раскладку в трех разных точках —
+`pages/profile/ProfileAwardsSection.vue` на 640, `pages/community/SiteStatisticsPage.vue` на 620,
+`pages/community/PollsList.vue` на 600 — то есть на планшете в портрете страница «разваливается»
+тремя рывками вместо одного. Хуже: `shared/ui/DataTable/DataTable.vue` и
+`shared/ui/DataTable/DataTableSkeleton.vue` оба хардкодят 768px в своих scoped-стилях; правка одного
+без другого разводит скелетон и таблицу на мобильном.
+
+Исправление: заменить литералы на `$bp-tablet` / `$bp-mobile` / `$bp-narrow` (механическая правка,
+51 место, из них 23 литеральных); удалить `$mobile-breakpoint` и `$min-width`; 620 и 640 свести к
+`$bp-mobile`; три ступени хедера оставить как есть — они не точки перелома раскладки, а прогрессивное
+сжатие меню, и это записано в `widgets/header/Header.vue:465-469`.
+
+### [СРЕДНЯЯ] fifth-button-variant-duplicated — «контурная пилюля» скопирована в четырех файлах вне системы кнопок
+
+Система кнопок (`assets/styles/Inputs.sass:29-151`) дает четыре варианта: `+button`, `+button-link`,
+`+inline-link-button`, `+expand-toggle-button`. Пятый вариант — контурная пилюля цвета акцента —
+существует, но только как копипаста:
+
+- `pages/personal/NotificationsPage.vue:290-297` (`.mark-all-btn`)
+- `pages/personal/SubscriptionsPage.vue:194-201` (`.unsubscribe-btn`)
+- `widgets/notepad/NotepadBoard.vue:521-528` (`.edit-btn`), `:535-543` (`.delete-btn`)
+
+Во всех: `padding: $minor $small`, `border: 1px solid $accent-*`, `background: transparent`,
+`font-size: 0.85rem`. Три следствия сразу. Первое: `font-size: 0.85rem` = 13.6px — вне шкалы
+(`$secondary-font-size` = 14px); всего в проекте 18 таких rem-объявлений против 343 токенных, и все
+18 сосредоточены в четырех файлах (эти три плюс
+`pages/moderation/ModerationUsernameChanges.vue`). Второе: ни у одной из этих кнопок нет
+`font-family: inherit`, а глобального правила для `<button>` в проекте нет
+(`Reset.sass` перечисляет 60+ элементов, `button` среди них отсутствует;
+`InputsGlobal.sass:12-15` покрывает только `input, textarea, select`) — значит они рендерятся
+шрифтом UA, не PT Sans. Тот же дефект у `pages/personal/SubscriptionsPage.vue:149-154`
+(`.tabs button`) и `widgets/notepad/NotepadBoard.vue:444-453` (`.close-btn`). Третье: высота
+~26px против `$control-height: 38px`.
+
+Заодно комментарий, который врет: `assets/styles/Variables.sass:34-35` — «`$control-height`: unified
+height for all interactive controls (buttons, inputs, filter bar)». Токен применяется в четырех
+местах (`Inputs.sass:47`, `_Filters.sass:77`, `SegmentedControl.vue:63`, `MonthYearPicker.vue:392`) и
+к полям ввода не применяется вообще: `@mixin input()` задает только `padding`, давая ~33px.
+
+Последствие: на странице подписок и в блокноте кнопки набраны системным шрифтом Windows/macOS вместо
+PT Sans — заметно в первую секунду, и это не «неидиоматично», а другой шрифт на той же странице.
+Голое `<input>`, поставленное рядом с `<Button>` в одну flex-строку, будет на 5px ниже нее; в
+фильтр-баре это скрыто оберткой `.search-container` фиксированной высоты (`_Filters.sass:73-78`), но
+в любой новой форме проявится.
+
+Исправление: добавить `+button-outline($color)` в `Inputs.sass` (высота `$control-height`,
+`font-size: $secondary-font-size`, `font-family: inherit`, ховер через `+tint`), заменить четыре
+копии. Добавить в `InputsGlobal.sass` глобальное `button { font-family: inherit }`. Либо применить
+`$control-height` в `@mixin input()`, либо исправить комментарий к токену — сейчас он описывает
+несуществующее свойство системы.
+
+### [СРЕДНЯЯ] profile-avatar-cls — аватар профиля резервирует квадрат под неквадратную картинку
+
+`pages/profile/ProfilePage.vue:620-626` вызывает `AvatarImg` с `:size="220"` и `prefer-original`;
+`shared/ui/AvatarImg/AvatarImg.vue:107-108` всегда ставит `:width="size" :height="size"`, то есть
+220×220. CSS (`ProfilePage.vue:1096-1101`) задает `width: 100%; height: auto`. При `height: auto`
+браузер берет соотношение из атрибутов — 1:1.
+
+Собственный комментарий компонента (`AvatarImg.vue:41-45`) прямо говорит, что этот режим существует
+«for large aspect-preserving avatars (ProfilePage 220px)», то есть картинка сознательно неквадратная.
+
+Последствие: при `eager`-загрузке (а тут именно `eager`, это LCP-кандидат) страница профиля сначала
+резервирует 220×220, а после декодирования картинки блок вырастает до реальной высоты — весь контент
+ниже (роль, статус, статистика, табы) прыгает вниз. Для портретного аватара 220×330 это сдвиг на
+110px, то есть заметный CLS на самой посещаемой странице.
+
+Исправление: в `preferOriginal`-режиме не ставить `height`, а прокинуть реальные размеры картинки
+(бэкенд уже хранит варианты — если в DTO нет width/height оригинала, добавить их) либо задать
+`aspect-ratio` из данных; временно — резервировать высоту контейнера через `min-height`.
+
+### [СРЕДНЯЯ] icon-name-type-hole — типизация имен иконок не защищает ни от одной опечатки
+
+`shared/lib/utils/icons.ts:17` объявляет `export const icons: Record<string, IconDefinition>`, а
+`:318` — `export type IconName = keyof typeof icons`. Явная аннотация `Record<string, ...>` стирает
+литеральные ключи, поэтому `IconName` разворачивается в `string`. `shared/ui/Icon/SvgIcon.vue:18-24`
+принимает `name: IconName` и сразу разыменовывает: `const icon = computed(() => icons[props.name])`,
+затем в шаблоне `:viewBox="icon.viewBox"`. Дополнительно `shared/ui/EmptyState/EmptyState.vue:15`
+расширяет тип еще раз — `icon?: string`.
+
+Последствие: `<SvgIcon name="inbox" />` (иконки `inbox` в реестре нет — там 38 ключей) проходит
+`vue-tsc` без замечаний и падает в рантайме на `undefined.viewBox`, обрушивая рендер всего поддерева
+Vue — то есть белый экран страницы, а не отсутствующая иконка. Сейчас живых опечаток нет: проверены
+все литеральные `name="..."` у `SvgIcon`, все использованные литеральные значения есть в реестре. Ловушка латентная, но
+срабатывает при первой же опечатке в одном из 45 мест использования.
+
+Исправление: `export const icons = { ... } satisfies Record<string, IconDefinition>` — литеральные
+ключи сохраняются, `IconName` становится union из 38 строк, `vue-tsc` начинает ловить опечатки. В
+`EmptyState` заменить `icon?: string` на `icon?: IconName`. Дополнительно — фолбэк в `SvgIcon`
+(`icons[name] ?? icons.question`), чтобы промах не ронял страницу.
+
+### [СРЕДНЯЯ] flip-ignores-reduced-motion — единственная JS-анимация не смотрит на настройку системы
+
+`assets/styles/Reset.sass:201-205` глобально приводит все CSS-переходы и анимации к 0.01ms при
+`prefers-reduced-motion: reduce`, и это правило добросовестно продублировано локально в восьми местах
+(диалоги, тосты, тултип, drawer). Но `shared/lib/composables/useFlipReorder.ts:106-112` анимирует
+через Web Animations API:
+
+```ts
+      const anim = el.animate(
+        [
+          { transform: `translate(${dx}px, ${dy}px)` },
+          { transform: "translate(0, 0)" },
+        ],
+        { duration, easing, fill: "none" },
+      );
+```
+
+`el.animate()` CSS-медиазапросом не отключается. Значение по умолчанию — 280ms
+(`DEFAULT_DURATION_MS`). Это единственный вызов `.animate(` в проекте.
+
+Последствие: пользователь, включивший «уменьшить движение» в системе, все равно получает 280ms
+перелета элементов при каждом переключении таба профиля и раздела форума (`Tabs.vue:156-160`,
+`pages/forum/BoardNavigation.vue:59`). Для части людей с вестибулярными расстройствами это ровно тот
+эффект, от которого настройка защищает; остальной проект настройку уважает, так что расхождение
+неочевидное.
+
+Исправление: в начале `onUpdated` проверять
+`window.matchMedia("(prefers-reduced-motion: reduce)").matches` и при `true` пропускать анимацию
+(порядок DOM все равно уже верный — перелет чисто декоративный). Сохранение фокуса
+(`useFlipReorder.ts:78-89`) должно остаться работать в обеих ветках.
+
+### [СРЕДНЯЯ] zindex-off-scale — три места вне шкалы, одно инвертирует ее порядок
+
+`assets/styles/_ZIndex.sass:9-34` задает девять ярусов с комментариями о том, что над чем. 27
+объявлений берут значения оттуда, девять — литералы:
+
+- `shared/ui/Tooltip/TooltipContent.vue:177` — `z-index: 10001`, то есть *над* `$z-toast: 10000`,
+  тогда как шкала ставит тултипы на 9000 и помечает тосты «always on top».
+- `shared/ui/ScrollNav/ScrollNav.vue:284` — `z-index: 101`, на единицу выше `$z-dropdown: 100`.
+- `widgets/header/Header.vue:300,310` — `40` и `41` для бэкдропа и выпадающего меню выхода, при
+  наличии `$z-dropdown: 100` и `$z-sticky: 200`.
+
+Остальные (`_BbcodeContent.sass:54,271`, `PollCard.vue:229,257`, `ScrollNav.vue:391`) — локальные
+1/2/-1 внутри своего стекингового контекста, они в порядке.
+
+Последствие: подсказка `[tip:]`, открытая в момент показа тоста, накрывает тост — ровно наоборот
+задокументированному приоритету, и пользователь не видит сообщения об ошибке. Пузырь настроек
+`ScrollNav` перекрывает любой выпадающий фильтр, который до него дотянется. Меню выхода в хедере
+(41) уйдет под любой дропдаун (100), если они окажутся рядом.
+
+Исправление: `TooltipContent` — на `$z-tooltip`; `ScrollNav.settings-bubble` — на `$z-popover` (у нее
+и семантика поповера); хедер — на `$z-dropdown`/`$z-sticky`. Литеральные значения в шкале запретить —
+эти четыре и есть весь остаток.
+
+### [СРЕДНЯЯ] tap-targets-under-24 — иконочные цели меньше минимума WCAG 2.5.8
+
+`app/App.vue:408-413` фиксирует норму проекта явным комментарием: «>= 44px tap target via padding
+(not font-size bloat)». Три места ниже даже смягченного порога 24×24:
+
+- `shared/ui/Filters/primitives/FilterDropdownHeader.vue:41-53` — `.nav-back-btn`, 20×20 (кнопка
+  «назад» в каждом иерархическом фильтре каталогов);
+- `pages/profile/ProfilePersonalInfo.vue:357-362` — `.contact-remove`, 20×20 (удаление контакта);
+- `shared/ui/ScrollNav/ScrollNav.vue:409-414` — `.mirror-btn`, 36×18.
+
+Последствие: на тач-устройстве возврат на предыдущий уровень фильтра требует попасть в квадрат
+20×20 CSS-px (около 3мм) — промах закрывает выпадашку кликом мимо. Удаление контакта в профиле — тот
+же размер, и промах по нему стоит дороже, чем промах по «назад».
+
+Исправление: добавить `padding` (визуальный размер иконки не меняется, растет только область) до
+минимум 24×24, лучше 44×44 через отрицательные внешние отступы, чтобы раскладка не поехала. Стоит
+завести миксин `+icon-button` рядом с остальными в `Inputs.sass` — сейчас каждый такой контрол
+собирается вручную.
+
+### [СРЕДНЯЯ] tooling-gap — ничто в CI не может поймать ни одну из находок выше
+
+`package.json` не содержит `eslint-plugin-vuejs-accessibility`, `stylelint`, `axe-core` или
+`@axe-core/playwright`. `.eslintrc.cjs:23-28` расширяет `plugin:vue/vue3-essential` — самый слабый
+ярус правил Vue. Из 50 файлов `*.spec.ts` у `shared/ui/Tabs`, `shared/ui/Button`, `shared/ui/Form`
+(включая `FormField`), `shared/ui/SegmentedControl` нет ни одного. Весь автоматический a11y — один
+файл `e2e/tests/accessibility/tooltip.spec.ts`, покрывающий только WCAG 1.4.13 для одного компонента.
+
+Последствие: 21 висящий `for`, восемь безымянных кнопок, `div` с `@click` без клавиатуры, мертвый
+класс `error` и пинг-понг стрелок в `Tabs` — все это класс дефектов, который ловится линтером или
+одним прогоном axe по маршрутам. Пока их нет, каждая следующая правка добавляет новые экземпляры тех
+же ошибок, а ratchet покрытия (`vite.config.ts:38-52`, строка 49 — `lines: 16`) на это не реагирует, потому что
+считает строки, а не доступность.
+
+Исправление: подключить `eslint-plugin-vuejs-accessibility` с правилами
+`label-has-for`, `form-control-has-label`, `click-events-have-key-events`, `anchor-has-content`,
+`aria-props` (на первом прогоне будет много находок — включать по одному правилу за раз с
+`--max-warnings 0`). Добавить `stylelint` с запретом hex-литералов вне `assets/styles/` и
+литеральных значений в медиазапросах. Один playwright-тест с `@axe-core/playwright` по десяти
+основным маршрутам закроет контрастную часть автоматически.
+
+### [СРЕДНЯЯ] redundant-work-in-hot-paths — глубокий watch на списке сообщений и неpassive-слушатель прокрутки
+
+Первое: `pages/messenger/ChatView.vue:377-385` — `watch(messagesList, ..., { deep: true })`, который в
+`nextTick` вызывает `initBbcodeInteractive(messagesContainer.value)` на всем контейнере. Работа
+избыточна: каждый `ChatMessage` уже инициализирует свою разметку сам через колбэк
+`:on-content-mounted="initMessageBbcode"` (`widgets/chat-message/ChatMessage.vue:135-137,291,453`).
+Глубокий watch на массиве сообщений означает реактивный обход каждого объекта сообщения при любой
+вложенной мутации (лайк, флаг прочитанности), плюс `querySelectorAll` по всему контейнеру.
+
+Второе: `shared/ui/DatePicker/DateInput.vue:170-179` вешает
+`document.addEventListener("scroll", updatePosition, true)` без `{ passive: true }`, а
+`updatePosition` (`:130-141`) синхронно читает `getBoundingClientRect()`, `offsetWidth`,
+`offsetHeight`, `clientWidth`, `clientHeight`. Рядом в том же слое `shared/ui/Tooltip/useTooltip.ts:115-119`
+тот же слушатель поставлен с `{ passive: true, capture: true }` — то есть идиома в проекте есть, но
+применена не везде.
+
+Третье, из той же серии: константы геометрии поповеров живут в JS тремя разными числами —
+`DateInput.vue:137-138` (`gap = 2; // matches $tiny offset of other dropdowns`, `edge = 8`) и
+`useTooltip.ts:4` (`TOOLTIP_OFFSET = 12`). Токены отступов существуют только в Sass, экспорта в JS
+нет.
+
+Последствие: в чате с 500 загруженными сообщениями каждое входящее сообщение из SignalR запускает
+глубокий обход 500 объектов и полный `querySelectorAll` по контейнеру — при активной переписке это
+заметная нагрузка на главном потоке в момент, когда пользователь ожидает мгновенной отрисовки. Пока
+открыт поповер выбора даты, каждый кадр прокрутки вызывает принудительный расчет раскладки в
+неpassive-обработчике — рывки прокрутки. Комментарий `// matches $tiny offset` живет ровно до первой
+правки `$tiny`, после чего поповер даты молча разъедется с остальными дропдаунами.
+
+Исправление: убрать watch в `ChatView` целиком (инициализация уже покрыта компонентом) либо, если он
+нужен, сузить до `() => messagesList.value.length` без `deep`. В `DateInput` добавить
+`{ passive: true, capture: true }`. Отступы вынести в один разделяемый модуль
+(`shared/lib/constants/geometry.ts`) и сгенерировать из него Sass-переменные, либо наоборот — иначе
+две шкалы будут расходиться и дальше.
+
+### [НИЗКАЯ] duplicated-keyframes-in-bundle — 20 копий одной анимации в собранном CSS
+
+`assets/styles/_Skeleton.sass:35-39` эмитит `@keyframes skeleton-shimmer` на верхнем уровне партиала,
+который подключают 20 компонентов в свои scoped-блоки. Измерено по существующей сборке в
+`dist/assets`: `grep -o "@keyframes skeleton-shimmer" *.css | wc -l` = 20, из них 8 в entry-файле
+`index-CdLLFHT6.css`. Это тот самый паттерн, против которого создан
+`assets/styles/InputsGlobal.sass` — единственный партиал, который его еще нарушает.
+
+Соседняя мелочь: бочка `shared/ui/index.ts` используется 15 файлами против ~600 глубоких импортов
+(`from "@/shared/ui/Layout"` — 172, `.../Icon` — 45, `.../ErrorState` — 40 и т.д.), то есть две
+идиомы импорта для одной задачи, причем доминирующая — не та, которая объявлена барелем. При этом
+восемь директорий `shared/ui` (`DashSeparator`, `DatePicker`, `ErrorPage`, `ErrorState`, `Filters`,
+`MonthYearPicker`, `SegmentedControl`, `Select`) из бареля не экспортируются вовсе.
+
+Последствие: ~2.4 КБ дублированных правил в CSS-бандле, восемь копий из них — на критическом пути.
+Само по себе мало; важнее, что дисциплина, записанная в двух местах и объясненная цифрами, имеет
+живое исключение, на которое будут ссылаться.
+
+Исправление: перенести `@keyframes skeleton-shimmer` в `Reset.sass` (или новый `SkeletonGlobal.sass`,
+подключаемый из `main.ts`), оставив в партиале только миксин. Учесть, что Vue переименовывает
+keyframes в scoped-блоках — после переноса имя станет глобальным, и `animation:` в миксине должно
+ссылаться именно на глобальное. Барель `shared/ui/index.ts` либо достроить до полного и перевести
+проект на него, либо удалить — 15 против 600 не идиома, а остаток.
+
+### [НИЗКАЯ] muted-class-double-meaning — один класс означает две разные вещи
+
+`assets/styles/Reset.sass:144-145` объявляет глобальный `.muted { color: $text-muted }` — утилита для
+приглушенного текста, использована 80 раз (`<span class="muted">удаленный пользователь</span>`,
+`<span class="muted">—</span>`, `<span class="muted">нет</span>` и т.п.). Шесть компонентов
+переопределяют тот же класс локально, добавляя `user-select: none`:
+`app/App.vue:415-417`, `features/blog-actions/ui/BlogJoinActions.vue:80-82`,
+`features/blog-actions/ui/BlogStatusButtons.vue:123-125`,
+`features/game-actions/ui/GameJoinActions.vue:131-133`,
+`features/game-actions/ui/GameStatusButtons.vue:123-125`, `widgets/sidebar/*` — там он значит
+«декоративный префикс `"- "`, не попадающий в копирование».
+
+Последствие: сейчас живого дефекта нет — в этих шести файлах `.muted` используется только для
+префикса. Но требование владельца «текст должен выделяться» ломается автоматически, как только
+кто-то напишет в одном из этих файлов `<span class="muted">нет</span>` по общей идиоме: текст
+станет невыделяемым, и причина будет неочевидной.
+
+Исправление: переименовать локальный класс в `.dash-prefix` (или `.bullet`) в шести файлах — имя
+тогда описывает роль, а глобальная утилита остается одной сущностью.
+
+### [НИЗКАЯ] design-language-drift — эмодзи в интерфейсе и запрещенный разделитель
+
+Три отклонения от заявленного языка интерфейса:
+
+- `shared/lib/utils/icons.ts:326` — `clock: "⏰"`. U+23F0 ALARM CLOCK имеет
+  `Emoji_Presentation=Yes`, то есть по умолчанию рендерится цветным эмодзи без селектора вариации.
+  Используется как `.status-icon` в `pages/account/sections/AccountUsernameChangeSection.vue:19` —
+  цветная картинка в монохромной строке статуса. Соседний `warning: "⚠"` в порядке
+  (`Emoji_Presentation=No`).
+- `shared/ui/ScrollNav/ScrollNav.vue:222-225` — `🇷🇺` и `🌐︎` прямо в шаблоне. Флаг набран парой
+  regional indicator; Windows флаговые эмодзи не рендерит, поэтому на Windows кнопка показывает
+  буквы «RU» в боксе высотой 18px. Плюс `🌐︎` содержит U+FE0E (текстовый вариант), а флаг — нет:
+  одна кнопка, две разные политики рендеринга.
+- `pages/game/GameRoom.vue:207` — `const hidden = roll.public === false ? " · скрытый" : "";`.
+  Символ «·» в проекте запрещен, полосовой разделитель — `" | "`.
+
+Последствие: цветной будильник и «RU»-плашка в двух местах ломают монохромную иконочную систему из
+38 SVG; на разных ОС эти два места выглядят по-разному, тогда как все остальное — одинаково.
+Превью броска кубика показывает запрещенный разделитель.
+
+Исправление: `clock` — либо добавить U+FE0E, либо (лучше) завести SVG-иконку в реестре, как для
+остальных 37. Флаг/глобус — SVG-иконки. В `GameRoom.vue:207` — `" | скрытый"`.
+
+### [НИЗКАЯ] tooltipcontent-dom-surgery — подмена узла через `outerHTML` за спиной Vue, плюс отладочный текст в проде
+
+`shared/ui/Tooltip/TooltipContent.vue:134-146`:
+
+```html
+            ><img
+              :src="activeSegment.imageUrl"
+              alt=""
+              class="popup-image"
+              @error="
+                ($event.target as HTMLImageElement).outerHTML =
+                  '<span style=\'color: #ff6b6b;\'>Ошибка загрузки GIF</span>'
+              " /></template
+          ...
+          ><template v-else
+            >[Debug: type={{ activeSegment.type }}]</template
+```
+
+Три проблемы в одиннадцати строках. `outerHTML` заменяет узел, которым владеет виртуальный DOM Vue:
+после этого Vue продолжает считать, что `<img>` на месте, и следующий патч этого поддерева работает
+с отсоединенным узлом. `#ff6b6b` — второй и последний настоящий hex-литерал цвета во всем проекте,
+вне палитры (`--accent-red` — `#b22222` / `#de9292`). Текст «Ошибка загрузки GIF» утверждает про GIF
+для любого типа картинки. И ветка `v-else` печатает `[Debug: type=...]` — отладочная строка в
+пользовательском интерфейсе (сейчас недостижима: `tipimg` всегда имеет `imageUrl`, `tip` всегда
+`tipText`, а `text`-сегменты не становятся активными, — но она стоит в шаблоне продакшн-сборки).
+
+Последствие: после неудачной загрузки картинки в подсказке повторное открытие той же подсказки или
+изменение текста-источника работает по отсоединенному узлу — либо исключение, либо застывшая старая
+разметка. Цвет сообщения об ошибке не следует теме.
+
+Исправление: заменить `@error` на реактивный флаг (`failedImages` — `Set` индексов) и рендерить
+`<span v-if="failed" class="popup-error">` со `color: $accent-red`; текст — «Не удалось загрузить
+изображение». Ветку `v-else` с `[Debug:` удалить.
+
+### [НИЗКАЯ] contacts-list-key-collisions — список контактов профиля ключуется по неуникальному полю
+
+`pages/profile/ProfilePersonalInfo.vue:283-289` рендерит контакты с `:key="contact.contactType"`, а
+редактор (`:224-264`) позволяет создать сколько угодно строк с любым `contactType` — `addContact`
+(`:129`) толкает пустую пару, уникальность нигде не проверяется (`:142-146` только эмитит, когда оба
+поля заполнены). Тот же редактор ключуется по индексу (`:227`) при наличии
+`removeContact(index)` со `splice` (`:132-134`).
+
+Последствие: пользователь добавляет два контакта с типом «Telegram» — Vue получает дублирующиеся
+ключи, пишет предупреждение в консоль и патчит список некорректно (одна из двух строк может
+перестать обновляться). При удалении средней строки в режиме редактирования фокус остается на поле с
+тем же индексом, в котором теперь лежат данные следующего контакта, — пользователь дописывает в
+чужую запись.
+
+Исправление: ключевать отображение по `` `${contact.contactType}:${contact.value}` `` или выдавать
+черновикам локальный `uid` при создании и использовать его в обоих `v-for`. Плюс запретить
+дублирующийся `contactType` в валидации формы.
+
+### [НИЗКАЯ] default-avatar-follows-os-theme — дефолтный аватар не слушает тему приложения
+
+`shared/lib/utils/icons.ts:347` собирает data-URI SVG с
+`@media (prefers-color-scheme: dark){.bg{fill:#2a2a2a}...}`. Тема приложения переключается вручную
+классом на `<html>` (`app/App.vue:192-201`), а SVG в `data:`-URI не видит CSS документа-хозяина.
+Комментарий (`:342-346`) это признает и оправдывает выбором средних тонов.
+
+Последствие: пользователь с системной светлой темой и приложением в темной теме видит светло-серый
+квадрат `#e0e0e0` на странице `#222` — заметное пятно там, где ожидается силуэт в тон. Обратная
+комбинация дает темный квадрат на белом. Контраст силуэта при этом действительно остается приемлемым,
+так что дефект чисто визуальный.
+
+Исправление: два data-URI (светлый и темный) и выбор по `uiStore.theme` — это одна вычисляемая
+строка в `AvatarImg`; либо отрисовать дефолт не картинкой, а инлайновым `<svg>` с `currentColor`,
+тогда тема приходит из каскада бесплатно.
+
+### [НИЗКАЯ] dead-weight-and-lying-comments — неиспользуемые ассеты и два комментария не про код
+
+Ассеты, на которые нет ни одной ссылки в `src/` (проверено grep по всем упоминаниям
+`assets/images/` и `assets/fonts/`): `assets/images/illustrations/hobo-original.png` (405 089 байт),
+`hobo-reference.png` (354 949), `assets/fonts/dm-icons.otf` (20 588),
+`assets/images/logos/logo.png` (9 794), `logo-old.png` (4 032) — итого около 794 КБ. В бандл они не
+попадают (Vite собирает только достижимые ассеты, в `dist/assets` их нет), так что это вес
+репозитория, не рантайма.
+
+Комментарий `vite.config.ts:76`: «TipTap editor — загружается только на chat/messenger». У
+`BBCodeEditor` 23 импортера — форум, блоги, комментарии, посты игр, тикеты, модерация. Заодно
+комментарии в `vite.config.ts` (`:70`, `:74`, `:76`, `:88`, `:93`) написаны по-русски при правиле «код и
+комментарии на английском».
+
+Последствие: 794 КБ мертвых файлов в истории git и в каждом клоне; следующий человек, читающий
+комментарий про TipTap, будет искать редактор в двух местах вместо двадцати трех.
+
+Исправление: удалить пять файлов; исправить комментарий про TipTap на «loaded by the 23 consumers of
+BBCodeEditor»; комментарии в `vite.config.ts` перевести на английский.
+
+## Чего я не смог определить
+
+- **Почему CSS ленивых компонентов попадает в entry-чанк.** Измерено: `dist/assets/index-CdLLFHT6.css`
+  — 132 324 байта и 107 различных scoped-хешей; в нем лежат стили `ExpandableList`
+  (`.expandable-row` — 9 вхождений), при том что ее JS сидит в отдельном чанке
+  `ExpandableList-CThELHGC.js`, а все 15 потребителей бареля `shared/ui` — ленивые страницы. Это
+  либо эффект барель-модуля, ставшего общим чанком, либо особенность атрибуции CSS в Vite. Разрешит
+  прогон `rollup-plugin-visualizer` (или `vite build --mode analyze`) с картой модулей entry-чанка;
+  до этого нельзя сказать, сколько именно килобайт лишнего на критическом пути.
+- **Реальный вес критического пути после сжатия.** Все цифры выше — несжатые байты из `dist`
+  (JS: 1 891 165 в 199 чанках, CSS: 398 028 в 109 файлах, entry — 345 767 + 132 324). Отношение
+  brotli к сырому размеру для JS и CSS различается вдвое, а `nginx.conf` я не проверял на предмет
+  включенного сжатия. Нужен замер с `curl -H 'Accept-Encoding: br'` по собранному образу.
+- **Есть ли настоящий FOIT.** Отсутствие `font-display` и 1 МБ TTF — факт из файлов; длительность
+  блокировки отрисовки зависит от кеша, сети и того, отдает ли nginx `Cache-Control` на шрифты.
+  Разрешит Lighthouse-прогон на throttled 3G по трем маршрутам.
+- **Насколько виден CLS аватара профиля.** Зависит от фактических пропорций загруженных картинок: если
+  обработчик загрузки на бэкенде уже приводит оригинал к квадрату, находка исчезает. Разрешит один
+  запрос в базу за распределением width/height у `UserPicture.originalUrl` — или замер CLS в
+  Lighthouse на профиле с портретным аватаром.
+- **Артефакт `min-height: 100vh` на мобильных.** `app/App.vue:300` ставит `min-height: 100vh`
+  внутри `.main` фиксированной высоты 100%. На iOS Safari `100vh` больше визуального вьюпорта, что
+  обычно дает паразитную прокрутку на короткой странице. Проверяется только на устройстве; если
+  подтвердится — замена на `100%` или `100dvh`.
+- **Решение владельца: `font-weight: 700` у активного сегмента `SegmentedControl`.**
+  `shared/ui/SegmentedControl/SegmentedControl.vue:85-88` — жирный активный вариант шире обычного,
+  поэтому пилюля меняет ширину при переключении и сдвигает соседей в строке контролов
+  (`pages/community/SiteStatisticsPage.vue:236-247` — рядом стоит `MonthYearPicker`). Сам жирный
+  активный вариант согласован владельцем, так что это не дефект, а следствие; лечится
+  зарезервированной шириной (невидимый жирный дубль текста) — но менять это без аппрува нельзя.
+
+
+# Пользовательские сценарии — D
+
+Оценка среза до опровержения: D. Дефекты доходят до пользователя в обычных сценариях, а не в экзотике: тупик в главном цикле продукта (прием заявок), молчаливые ложные успехи в аутентификации, удалении и выходе, потеря набранного текста в мессенджере, ссылка приглашения на 404, неудачная загрузка переписок как «Нет переписок». Каркас при этом верный и местами образцовый, поэтому не F.
+
+Оценка D: в главном цикле продукта есть тупик, из которого мастер не может выйти
+кликами (заявку игрока некому принять, если в игре нет NPC), а рядом с ним лежит
+семейство путей, где действие сообщает об успехе, которого не было: вход
+забаненного закрывает диалог как удачный, удаление комментария рисует «удален»
+при отказе сервера, «Выйти» гасит локальную сессию независимо от ответа,
+отправка личного сообщения при сбое теряет набранный текст вместе с черновиком.
+Это не «не дописано» — это построенные экраны, которые врут пользователю о
+результате.
+
+Инфраструктура при этом сделана правильно и местами образцово: `notifyFailure` с
+разделением «кто говорит — перехватчик или вызывающая сторона» (50 файлов),
+`describeFailure` с приоритетом кодов полей над заголовком, единый
+`ConfirmDialog` (29 потребителей вне shared), `ErrorState` с «Повторить»
+(40 файлов),
+автосохранение черновиков BBCode, полный набор страниц ошибок по статусам,
+словарь всех 13 серверных кодов валидации. Беда в неравномерном применении: в
+одном месте написан комментарий «терять написанное при сбое не входит в эту
+сделку» и текст возвращается, а в мессенджере тот же код текст выбрасывает; в
+`CommentsList` стоит комментарий «неудачную загрузку нельзя показывать как
+пустоту», а список переписок ровно это и делает.
+
+Ставлю D, а не C, потому что перечисленное доходит до пользователя в обычных
+сценариях, не в экзотике; и не F, потому что каркас верный, большинство потоков
+работает, а хорошие места хороши по существу, а не формально.
+
+## Что сделано хорошо
+
+- `shared/lib/errors/notifyFailure.ts:19-42` — один тост на одну ошибку с
+  явным списком статусов, о которых говорит перехватчик (401/403/429/5xx), и
+  остальными, о которых говорит вызывающая сторона. Проблема двух тостов
+  (перехватчик + место вызова, оба без автозакрытия) закрыта механизмом, а не
+  договоренностью.
+- `shared/lib/errors/describeFailure.ts:19-38` — коды полей побеждают заголовок,
+  заголовок побеждает запасную фразу, дубли кодов схлопываются. Именно поэтому
+  неверный текущий пароль и слабый новый пароль дают разные подсказки.
+- `shared/lib/errors/validationErrors.ts:14-28` — все 13 констант из
+  `DM.Domain.Core/Exceptions/ValidationError.cs` переведены (проверено
+  посчитанным сравнением: 13 и 13), неизвестный код показывается как есть,
+  чтобы пропуск был заметен.
+- `shared/api/client.ts:64-77` — пустое тело ответа превращается в
+  problem-документ. Без этого `if (error)` читал 404 как успех без данных;
+  комментарий описывает ровно этот дефект и его следствие в сторах.
+- `widgets/notepad/NotepadBoard.vue` + `NotepadBoard.spec.ts:5-11` — три копии
+  блокнота (личный, игровой, блог) сведены в одну, и тест закрепляет именно то,
+  что раньше разъезжалось: подтверждение удаления, скелет, единые тосты.
+- `pages/forum/TopicPage.vue:41-47,131-155` + `shared/ui/ErrorPage/errorConfig.ts`
+  — отсутствующий, приватный и удаленный топик различаются (403/404/410/500) и
+  отдаются постоянной оболочке форума, чтобы ошибка не рисовалась под шапкой
+  раздела.
+- `pages/game/GameComments.vue:135-162`, `pages/blog/BlogComments.vue:113-138`,
+  `pages/forum/TopicPage.vue:60-75`, `pages/global-chat/GlobalChatPage.vue:918-934`
+  — очистка редактора до запроса ради мгновенности, возврат текста при сбое.
+- `features/moderation-actions/ui/BanDialog.vue:95-129` — обязательная причина,
+  ошибки полей на форму, `notifyFailure` только когда полей нет, тост об успехе.
+  Эталон для остальных модераторских действий.
+- `pages/game/CharacterEdit.vue:208-302` — жизненный цикл персонажа как таблица
+  действий с per-action `confirm`, единым `ConfirmDialog`, тостами и
+  `notifyFailure`. Логика правильная; недоступна из интерфейса (см. находку 1).
+- `features/auth/ui/LoginPrompt.vue:22-24` — гостевой призыв сохраняет текущий
+  маршрут и query, добавляя только `action=login`. Ровно то, чего не делает
+  навигационный гард.
+
+## Находки
+
+### [ВЫСОКАЯ] game-application-review-unreachable — заявку в игру нельзя ни принять, ни отклонить, если в игре нет NPC
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: КРИТИЧНО -> ВЫСОКАЯ.
+>
+> Quotes are exact and the grep recount holds: accept/decline exist only at pages/game/CharacterEdit.vue:213-226, and `game-character-edit` is linked from exactly three places (features/game-actions/ui/GameJoinActions.vue:85,116 — own character only, and widgets/sidebar/GamePanel.vue:326-333 behind `v-if="firstNpcId"`). GamePanel.vue:115 `canActOnGame = !!user && !isMaster` really does hide GameJoinActions from the master; entities/game/ui/CharacterCard.vue has no actions and no link at all; pages/game/GameSettings.vue mounts Info/Rooms/Roles/Blacklist/Invitations sections and no character review; the NewCharacter notification lands on /game/:id/characters (pages/personal/NotificationsPage.vue:105-106). So the dead end is real. But it is not КРИТИЧНО by the stated bar: no data loss, no security hole, and there are click paths for an assistant who owns a character and for any master once one NPC exists — the master's escape is "Создать NPC" then "Редактировать NPC" then the "Персонаж:" selector (CharacterEdit.vue:61-66 includes other people's applications for staff). One missing link on a built page, blocking the recruitment loop for a fresh game: ВЫСОКАЯ.
+
+Принять или отклонить заявку умеет только `pages/game/CharacterEdit.vue:213-226`:
+
+```js
+if (c.status === "UnderReview" && canManage.value) {
+  list.push({ key: "accept", label: "Принять в игру", run: () => applyStatus("Active") });
+  list.push({ key: "decline", label: "Отклонить заявку", danger: true, ... });
+}
+```
+
+Ссылок на маршрут `game-character-edit` в приложении три (проверено
+grep по всему `src`, исключая спеки):
+
+- `features/game-actions/ui/GameJoinActions.vue:85,116` — только на СВОЙ
+  персонаж (`myCharacter`, фильтр по `c.author?.id === user.value?.id`), и сам
+  компонент рисуется лишь для не-мастера: `widgets/sidebar/GamePanel.vue:115`
+  `const canActOnGame = computed(() => !!user.value && !isMaster.value)`;
+- `widgets/sidebar/GamePanel.vue:326-333` — пункт «Редактировать NPC», и он
+  спрятан за `v-if="firstNpcId"` (`GamePanel.vue:110`).
+
+Страница со заявками ничего не предлагает: `pages/game/GameCharacters.vue:98-107`
+рендерит блок «На рассмотрении» из `entities/game/ui/CharacterCard.vue`, а в
+карточке нет ни действий, ни ссылки — только раскрытие атрибутов
+(`CharacterCard.vue:61-115`). `pages/game/GameDetails.vue:38-45` фильтрует ростер
+до `Active`/`Retired`, то есть заявок там нет вовсе.
+
+Уведомление ведет туда же: `pages/personal/NotificationsPage.vue:105-106`
+
+```js
+case NotificationType.NewCharacter:
+  return payload.gameId ? `/game/${payload.gameId}/characters` : null;
+```
+
+Последствие: мастер создает игру, открывает набор, игрок подает заявку
+(`CharacterCreate.vue:42` показывает «Заявка отправлена»), мастер получает
+уведомление «Новый персонаж», переходит по нему и попадает на страницу, где
+заявка видна и ничего с ней сделать нельзя. Пока в игре не создан хотя бы один
+NPC, у мастера нет ни одного клика, ведущего к кнопкам «Принять в игру» /
+«Отклонить заявку». Ассистент со своим персонажем попадет туда случайно — через
+«Редактировать персонажа» и селектор «Персонаж:» (`CharacterEdit.vue:323-330`,
+список `editableCharacters` для стаффа включает чужие заявки). Наставник
+(`isMentor`) не попадает никак: `canEdit` в панели false, персонажа у него нет.
+Ломается основной цикл продукта для каждой новой игры.
+
+Исправление: в `CharacterCard.vue` для `status === "UnderReview"` и зрителя с
+`canManage` добавить действия «Принять в игру» / «Отклонить заявку» (вызов
+`gameApi.updateCharacterStatus`, подтверждение отказа через `ConfirmDialog`, как
+в `CharacterEdit.vue`), либо, как минимум, ссылку на
+`game-character-edit` с `characterId` карточки. Ссылку «Редактировать NPC» в
+`GamePanel.vue:326` дополнить пунктом «Персонажи и заявки», не зависящим от
+наличия NPC.
+
+### [ВЫСОКАЯ] login-403-silent-success — вход и регистрация докладывают об успехе на любом ответе, кроме 400
+
+> **Опровержение: подтверждено.**
+
+`entities/user/lib/session.ts:28-41`:
+
+```js
+export async function signIn(credentials: LoginCredentials) {
+  const { data, error } = await accountApi.signIn(credentials);
+  if (data) { useAuthStore().updateUser(data); return null; }
+  if (error && "errors" in error) { return error as BadRequestError; }
+  return null;
+}
+```
+
+`null` для вызывающей стороны значит «успех»:
+`features/auth/ui/LoginForm.vue:76-101` при `!badRequest` делает
+`emit("success")`, а `widgets/header/GuestActions.vue:25` на `onSuccess` просто
+закрывает диалог. Сервер отвечает 403 в четырех случаях
+(`DM.Web.API/Features/Account/Authentication/AuthenticationApiService.cs:99-116`):
+`Banned` («Аккаунт заблокирован.»), `Removed` («Аккаунт удален.»), `Forbidden`,
+`AccountLocked` («Слишком много неудачных попыток. Попробуйте позже.»). У 403
+нет ключа `errors`, значит `signIn` вернет `null`.
+
+`register` устроен так же (`session.ts:21-25`), а `RegistrationForm.vue:150-153`
+на «успех» кладет почту в `sessionStorage` и открывает `RegistrationSuccess`.
+
+Последствие: забаненный пользователь вводит верные логин и пароль, видит
+единственный тост «Недостаточно прав для этого действия»
+(`shared/api/client.ts:110-114`), диалог входа закрывается, шапка по-прежнему
+показывает «Вход | Регистрация». Настоящая причина («Аккаунт заблокирован»,
+«Слишком много неудачных попыток») до него не доходит вообще. При регистрации,
+упершейся в лимит запросов (429, политика `RateLimitPolicies.Auth`), он получает
+экран «письмо отправлено» — письма нет.
+
+Исправление: `signIn`/`register` должны возвращать различимый результат — либо
+`{ ok: false, error }` вместо `null`, либо пробрасывать `GeneralError`. В
+`LoginForm.submit` при не-400 ошибке не делать `emit("success")`, а показывать
+`describeFailure(error, "Не удалось войти")` в форме. Для 403 при входе снять
+общий тост перехватчика (см. `403-reason-discarded`) — на форме входа он вреден.
+
+### [ВЫСОКАЯ] create-game-tags-discarded — выбранные теги игры молча выбрасываются
+
+> **Опровержение: подтверждено.**
+
+`features/create-game/ui/CreateGameForm.vue:89-90`:
+
+```js
+// Note: selected tags are not submitted — CreateGameRequest.Tags expects
+// backend Guids, but /games/tags exposes only numeric short ids.
+```
+
+Расхождение реально: `DM.Web.API/Features/Game/Games/Tag.cs` отдает `int Id`,
+`CreateGameRequest.cs:48` ждет `IEnumerable<Guid>? Tags`. Но контрол при этом
+полностью рабочий: `CreateGameForm.vue:209-212` рисует секцию «Теги», а
+`features/create-game/ui/TagSelector.vue:102-117` — кнопки-чипы с подсветкой
+выбранного и счетчиком «Выбрано тегов: N».
+
+Последствие: мастер размечает игру по семи группам (Система, Жанр, Формат игры,
+Формат постов, Темп, Ограничения, Новичкам), видит «Выбрано тегов: 5», создает
+игру — у игры нет тегов. Ни в форме, ни после создания об этом не сказано.
+Игра не находится фильтрами `/games` по тегам, то есть теряется набор игроков —
+и мастер уверен, что разметил ее.
+
+Исправление: до починки контракта убрать секцию из формы или отключить контрол с
+явной подписью, что теги назначаются позже в настройках игры. По существу —
+привести типы: либо `CreateGameRequest.Tags` принимает `int[]` коротких id, либо
+`/games/tags` отдает и `Guid`.
+
+### [ВЫСОКАЯ] messenger-send-loses-text — сбой отправки личного сообщения уничтожает набранный текст и черновик
+
+> **Опровержение: подтверждено.**
+
+`pages/messenger/ChatView.vue:344-351`:
+
+```js
+async function handleSend() {
+  if (!newMessage.value.trim() || sending.value || !selectedChat.value) return;
+  const text = newMessage.value;
+  newMessage.value = "";
+  editorRef.value?.clear();
+  await messagingStore.sendMessage(selectedChat.value.id, text);
+  scrollToBottom();
+}
+```
+
+`text` объявлен и не используется: результат `sendMessage` не проверяется, а сам
+стор ошибку не отдает — `entities/message/model/store.ts:296-319` возвращает
+`data ?? null`. `clear()` дополнительно стирает сохраненный черновик:
+`shared/ui/BBCodeEditor/BBCodeEditor.vue:905-913` вызывает `clearDraft()`,
+`BBCodeEditor.vue:778-783` делает `localStorage.removeItem(key)` для
+`bbcode_draft_chat_<chatId>`.
+
+Из семи мест, очищающих редактор до ответа сервера, шесть текст возвращают
+(`GameComments.vue:159-161`, `BlogComments.vue:135-137`, `TopicPage.vue:71-74`,
+`GlobalChatPage.vue:928-930`) или очищают только после успеха
+(`GameChatRoom.vue:185-190`, `SupportTicketForm.vue:196`). Мессенджер —
+единственное исключение, причем в четырех из них стоит один и тот же
+комментарий: «терять написанное при сбое не входит в эту сделку».
+
+Последствие: пользователь пишет длинное личное сообщение, жмет «Отправить»,
+запрос падает (обрыв связи, 400 по длине текста, 403 — получатель внес его в
+черный список). Поле пусто, сообщения в переписке нет, черновик удален из
+localStorage. Восстановить текст нечем.
+
+Исправление: `sendMessage` в сторе уже имеет `error` в руках — вернуть
+`{ error }`, как это делают `globalChatStore.sendMessage`
+(`entities/global-chat/model/store.ts:296-314`) и `TopicPage.createComment`. В
+`handleSend` при ошибке вернуть `newMessage.value = text` и позвать
+`notifyFailure(error, "Не удалось отправить сообщение")`.
+
+### [ВЫСОКАЯ] comment-delete-fake-success — комментарий и сообщение помечаются удаленными независимо от ответа сервера
+
+> **Опровержение: подтверждено.**
+
+Один и тот же код в четырех сторах. `entities/game/model/store.ts:524-530`:
+
+```js
+async function deleteComment(id: string) {
+  await gameApi.deleteGameComment(id);
+  const index = comments.value.findIndex((c) => c.id === id);
+  if (index !== -1) {
+    comments.value[index] = markRemoved(comments.value[index]);
+  }
+}
+```
+
+То же: `entities/forum/model/store.ts:411-421`,
+`entities/blog/model/store.ts:463-469`,
+`entities/global-chat/model/store.ts:334-347`. `Api` никогда не бросает
+исключение (`shared/api/client.ts:221-249`), поэтому `await` без разбора `error`
+означает «делай вид, что получилось».
+
+Редактирование зеркально: `entities/game/model/store.ts:515-522` при ошибке не
+делает ничего, а `features/comment/ui/CommentItem.vue:178-183` закрывает
+редактор безусловно:
+
+```js
+function saveEdit() {
+  if (editText.value.trim()) { emit("edit", props.comment.id, editText.value); }
+  isEditing.value = false;
+}
+```
+
+Обработчики страниц ошибку тоже не смотрят (`GameComments.vue:43-49`,
+`CommentsList.vue:69-75`, `BlogComments.vue:49-61`).
+
+Последствие 1: модератор удаляет сообщение в глобальном чате, сервер отвечает
+403 или 500. На экране появляется «Комментарий удален» / вычеркнутое сообщение,
+рядом висит тост «Недостаточно прав для этого действия» — два противоречащих
+утверждения. Модератор уходит, считая, что убрал текст; для всех остальных
+сообщение на месте. Последствие 2: автор правит комментарий, PUT падает с 400
+(текст после вырезания неавторизованного `[mod]` стал пустым —
+`TopicCommentService.cs:124-132`), редактор закрывается, показан старый текст,
+правка потеряна без единого слова.
+
+Исправление: во всех четырех сторах разобрать `{ error }` и вернуть его наверх;
+патчить список только при `!error`. В `CommentItem.saveEdit` не закрывать
+редактор до подтверждения (страница уже умеет отдавать результат — см.
+`widgets/game-post/GamePost.vue:380-395`, где ровно это сделано правильно).
+Страницам добавить `notifyFailure(error, "Не удалось удалить комментарий")`.
+
+### [ВЫСОКАЯ] signout-reports-success-on-failure — «Выйти» и «Выйти со всех устройств» гасят локальную сессию независимо от сервера
+
+> **Опровержение: подтверждено.**
+
+`entities/user/lib/session.ts:43-58`:
+
+```js
+export async function signOut() {
+  await accountApi.signOut();
+  useAuthStore().updateUser(null);
+}
+
+export async function signOutAll() {
+  await accountApi.logoutAll();
+  await accountApi.signOut();
+  useAuthStore().updateUser(null);
+}
+```
+
+Ошибка не проверяется ни разу; `Api` не бросает. `Header.vue:45-52` тоже ничего
+не проверяет.
+
+Последствие: на общем или публичном компьютере пользователь жмет «Выйти» в
+момент обрыва связи. localStorage очищен, интерфейс показывает гостя — а
+серверная сессия жива, cookie HttpOnly не отозван, срок при «Запомнить меня» —
+365 дней (описано в `AuthenticationController.cs:44-47`). Для «Выйти со всех
+устройств» отдельный сценарий: `logoutAll` падает, `signOut` проходит, человеку
+сказано, что он вышел везде, при этом чужие сессии остались. Это действие
+безопасности, и оно докладывает об исходе, которого не было.
+
+Исправление: проверять `error` у обоих вызовов. При неудаче не чистить локальное
+состояние, показать `notifyFailure(error, "Не удалось выйти. Попробуйте снова")`.
+Для `signOutAll` не вызывать `signOut`, если `logoutAll` не прошел.
+
+### [ВЫСОКАЯ] 403-reason-discarded — причина отказа, которую сервер называет в 68 местах, заменяется одной общей фразой
+
+> **Опровержение: подтверждено.**
+
+`shared/api/client.ts:109-114`:
+
+```js
+if (error.response?.status === 403) {
+  const { error: showError } = useToast();
+  showError("Недостаточно прав для этого действия");
+}
+```
+
+А `shared/lib/errors/notifyFailure.ts:19-21` намеренно молчит на 403, чтобы не
+дублировать тост, — значит `error.title` для 403 не показывается нигде. Между тем
+в бэкенде 68 бросков `HttpException(HttpStatusCode.Forbidden, ...)` с конкретной
+причиной (посчитано grep по `src`, без `obj`). Примеры:
+`BlogService.cs:532` «Cannot subscribe to your own blog»,
+`BlogCommentService.cs:68` «You are blacklisted from this blog»,
+`PublicationCommentService.cs:82` «Commenting is not available while you are banned»,
+`TopicCommentService.cs:76` «You cannot comment on this topic».
+
+Последствие: владелец блога вносит пользователя в черный список. Тот открывает
+блог, видит рабочее поле комментария (`BlogComments.vue` не знает о черном
+списке), пишет текст, жмет «Отправить». Текст возвращается, поверх — «Недостаточно
+прав для этого действия». Пользователь не понимает, что он в черном списке; он
+пробует снова, потом идет в поддержку. То же для DemocraticBan: `User` DTO
+намеренно не несет `accessPolicy` (`shared/api/models/common/user.ts:168-171`,
+«The server decides») — рассуждение о том, что плоский флаг не выразит исключения
+для своих игр, верно, но следствие в том, что забаненному негде узнать ни факт
+бана, ни срок: его единственный сигнал — то же самое «Недостаточно прав».
+
+Показать `error.title` как есть нельзя по двум причинам, и обе надо чинить:
+сообщения на английском, а `IntentionManagerException`
+(`DM.Domain.Core/Exceptions/IntentionManagerException.cs:26-35`) кладет в
+`Message` строку `"User {guid} is not allowed to perform {intention} action on
+{JsonSerializer.Serialize(target)}"`, которая через
+`Middleware/ExceptionProblemDetailsFactoryExtensions.cs:13-15` попадает в
+`ProblemDetails.title` и уходит в браузер целиком.
+
+Исправление: ввести машинный код причины в problem-документе 403 (`type` или
+поле `errors`), перевести человекочитаемые причины на русский, а
+`IntentionManagerException` заменить на константный заголовок с деталями только
+в лог. После этого разрешить `notifyFailure` говорить о 403, когда сервер назвал
+причину, и оставить общий тост перехватчика лишь для безымянных отказов.
+
+### [СРЕДНЯЯ] activation-retry-field-mismatch — защита от повторной активации мертва из-за расхождения имени поля
+
+> **Опровержение: частично неверно.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> The mismatch is real: accountApi.ts:52-58 sends `expectedEmail`, ActivationRequest.cs:32 binds `RetryEmail`, no JsonPropertyName anywhere, so ActivationService.cs:57-72 always takes the 410 branch — the idempotency guard is dead code (the controller's own XML doc at RegistrationController.cs:123 even calls the field ExpectedEmail, so the backend disagrees with itself). But the described user path is unreachable. `activate` has exactly one caller (AccountActivationPage.vue:137) gated by `canSubmit = phase === 'confirmUsername'` (line 57-59), set synchronously to 'submitting' before the request, so a double tap cannot fire a second POST; after any failure the phase goes to selectUsername/expired/notFound, never back to confirmUsername. On reload the page first calls GET activation/{token}, which 404s for a consumed token (RegistrationController.cs:98-105) → phase 'notFound', whose first bullet is "Аккаунт уже активирован — попробуйте войти" (line 321-324). So no client ever retries the POST and the 410 → recover-as-password-reset detour needs a two-tab race that BroadcastChannel (line 71-77) mostly covers. Latent contract bug, no live harm.
+
+Клиент отправляет `expectedEmail`
+(`entities/user/api/accountApi.ts:52-58`):
+
+```js
+public activate(token: string, request: { username: string; expectedEmail?: string }) {
+  return Api.post<User>(`account/activation/${token}`, request);
+}
+```
+
+`pages/account/AccountActivationPage.vue:137-140` передает
+`{ username, expectedEmail: pendingEmail.value }`. DTO ждет другое имя —
+`DM.Web.API/Features/Account/Registration/ActivationRequest.cs:32`
+`public string? RetryEmail { get; set; }`. Ни `JsonPropertyName`, ни маппинга
+имен нет, `ActivationApiService.cs:55` кладет `RetryEmail = request.RetryEmail`,
+то есть всегда `null`. Идемпотентная ветка в
+`DM.Domain.Account/Features/Registration/ActivationService.cs:57-72`:
+
+```csharp
+if (pending == null)
+{
+    if (!string.IsNullOrEmpty(request.RetryEmail)) { ... return existingUser.UserId; }
+    throw new HttpException(HttpStatusCode.Gone, "Ссылка недействительна или уже использована");
+}
+```
+
+Последствие: пользователь жмет «Завершить регистрацию», ответ теряется (мобильная
+сеть, двойной тап, повтор браузера), он жмет снова. Токен уже израсходован,
+`pending == null`, `RetryEmail` пуст → 410. Клиент по
+`AccountActivationPage.vue:159-163` показывает «Токен регистрации устарел» и
+предлагает выслать новую ссылку; вызов уходит в `accountApi.recover`, который для
+уже активной почты сработает как сброс пароля. Аккаунт при этом создан и в него
+можно войти — но пользователь уводится в чужой сценарий. Защита, написанная
+именно от этого случая, не выполняется никогда.
+
+Исправление: переименовать поле на клиенте в `retryEmail` (или добавить
+`[JsonPropertyName("expectedEmail")]` в DTO — но лучше выправить клиент, имя
+`retryEmail` описано в комментариях обоих DTO). Добавить интеграционный тест на
+двойную активацию.
+
+### [СРЕДНЯЯ] invitation-game-link-404 — ссылка на игру в приглашении ведет на «Страница не найдена»
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> AccountInvitationsSection.vue:16-21 is quoted correctly and the route table confirms the 404: router.ts has only `/games` (226), `/games/create` (476) and `/game/:id` (482), so `/games/<guid>` falls to the catch-all at 662. But the consequence is overstated — the same rows carry working "Принять"/"Отклонить" buttons (AccountInvitationsSection.vue:44-58) plus the game title, inviter link and role label, so the decision is not blocked, only the game preview is. A dead secondary link with no data loss is СРЕДНЯЯ.
+
+`pages/account/sections/AccountInvitationsSection.vue:16-21`:
+
+```html
+<RouterLink :to="`/games/${invitation.gameId}`" class="invitation-game-link">
+  {{ invitation.gameTitle }}
+</RouterLink>
+```
+
+Маршрутов `/games/...` два: `{ name: "games", path: "/games" }`
+(`app/providers/router.ts:225-229`) и `{ name: "create-game", path: "/games/create" }`
+(`router.ts:474-480`). Игра живет по `/game/:id` (`router.ts:482`). Значит
+`/games/<guid>` попадает в catch-all `/:pathMatch(.*)*` (`router.ts:660-665`) и
+показывает страницу 404.
+
+Последствие: приглашенный игрок открывает «Настройки аккаунта» (ссылка есть в
+шапке), видит блок «Приглашения в игры» и жмет на название игры, чтобы понять,
+куда его звали. Получает «Страница не найдена». Единственный контекст для решения
+«Принять / Отклонить» недоступен.
+
+Исправление: `:to="{ name: 'game', params: { id: invitation.gameId } }"`. Плюс
+заменить остальные ручные шаблоны путей на именованные маршруты — та же ошибка
+живет в `pages/personal/SubscriptionsPage.vue:47-59` (см. ниже).
+
+### [СРЕДНЯЯ] chats-list-error-as-empty — неудачная загрузка переписок показана как «Нет переписок»
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Verified: pages/messenger/ChatsList.vue:20 destructures only `{ chats }`, and the template (171-195) is `v-if="chats?.resources.length"` / EmptyState `v-else`, so both the loading tick and a failure render "Нет переписок". The store does keep the state it needs — entities/message/model/store.ts:22-39 sets `error = "Не удалось загрузить переписки"` and nulls `chats` — and pages/forum/CommentsList.vue does use ErrorState+retry for the same situation, so the inconsistency is genuine. Severity is inflated though: it needs a server failure to appear, nothing is lost, a reload recovers, and the author graded the structurally identical GameCharacters case (which at least has an error branch) as СРЕДНЯЯ.
+
+`pages/messenger/ChatsList.vue:171,190-195`:
+
+```html
+<div v-if="chats?.resources.length" ref="chatsListRef" class="chats-list">
+  ...
+</div>
+<EmptyState v-else icon="envelope" title="Нет переписок"
+            hint="Найдите собеседника через поиск выше" />
+```
+
+Ни `loadingChats`, ни `error` не используются, хотя стор их ведет:
+`entities/message/model/store.ts:20-33` при ошибке пишет
+`error.value = "Не удалось загрузить переписки"` и обнуляет `chats`.
+
+Последствие: сервер отвечает 500 (или запрос не ушел) — пользователь видит
+«Нет переписок» и подсказку искать собеседника. Он делает вывод, что его
+переписки пропали или что их никогда не было; ни сообщения об ошибке, ни кнопки
+«Повторить» нет, помогает только перезагрузка страницы. Тот же экран мигает
+пустотой при каждом обычном открытии, пока идет загрузка.
+
+Это прямо противоречит идиоме, зафиксированной в
+`pages/forum/CommentsList.vue:124-130`: «неудачную загрузку нельзя показывать как
+поддельную пустоту», с `ErrorState` и `:retry`.
+
+Исправление: добавить ветки `v-if="loadingChats && !chats"` (скелет) и
+`v-else-if="error && !chats?.resources.length"` c `<ErrorState :message="error"
+:retry="() => store.fetchChats()" />`, `EmptyState` оставить последней.
+
+### [СРЕДНЯЯ] auth-guard-drops-destination — гостя и пользователя с истекшей сессией уводит на главную, теряя, куда он шел
+
+`app/providers/router.ts:679-684`:
+
+```js
+router.beforeEach((to) => {
+  if (to.meta.requiresAuth && !localStorage.getItem("user")) {
+    return { name: "home", query: { action: "login" } };
+  }
+});
+```
+
+Адрес `to` нигде не сохраняется. Тот же подход в обработчике истекшей сессии,
+`app/main.ts:26-28`: `void router.push({ name: "home" })`, и он срабатывает на
+любой 401 из любого запроса (`shared/api/client.ts:101-107`).
+
+Рядом лежит правильная идиома: `features/auth/ui/LoginPrompt.vue:22-24` уходит на
+`{ query: { ...route.query, action: "login" } }`, то есть остается на месте.
+
+Последствие 1: пользователь получает ссылку на переписку `/messenger/c/<id>`,
+открывает ее без сессии, попадает на главную с диалогом входа, входит — и стоит
+на главной. Запись `/messenger/c/<id>` в историю не попала (гард подменяет
+навигацию), «Назад» ведет туда, откуда он пришел. Ссылку надо искать заново.
+Последствие 2: сессия истекает, пока человек читает комнату игры. Фоновый или
+любой ответ 401 срывает его с текущей страницы на главную; то, что набрано в
+компонентах без `draft-key` (правка комментария, правка поста, форма профиля),
+теряется.
+
+Исправление: гарду возвращать `{ name: "home", query: { action: "login",
+redirect: to.fullPath } }`, а `GuestActions.onSuccess` после закрытия диалога
+делать `router.replace(redirect)`, если параметр есть. Обработчику 401 не
+навигировать вообще: тост «Сессия истекла» плюс сброс состояния достаточны, а
+защищенную страницу закроет гард при следующей навигации.
+
+### [СРЕДНЯЯ] signout-leaves-protected-page — после выхода со страницы настроек остается пустой экран с заголовком
+
+`widgets/header/Header.vue:45-48` вызывает `signOut()` и не навигирует.
+Гард `beforeEach` без навигации не запускается. `pages/account/AccountPage.vue:4`
+— `<div v-if="user" class="account-page">`.
+
+Последствие: пользователь находится на `/account`, жмет «Выйти». На экране
+остается заголовок «Настройки аккаунта» и ничего больше: ни объяснения, ни
+ссылки. Оболочка с шапкой на месте, так что это не полный тупик, но состояние
+неинформативное и достигается одним обычным действием. При этом путь истекшей
+сессии на главную уводит (`main.ts:26-28`) — два выхода из сессии ведут себя
+по-разному.
+
+Исправление: в `handleSignOut`/`handleSignOutAll` после успешного выхода делать
+`router.push({ name: "home" })`, если `route.meta.requiresAuth`.
+
+### [СРЕДНЯЯ] subscriptions-page-guids-and-broken-links — страница подписок показывает GUID и три ссылки из четырех ведут в никуда
+
+`pages/personal/SubscriptionsPage.vue:47-59`:
+
+```js
+case SubscriptionTargetType.Game:  return `/games/${subscription.targetId}`;
+case SubscriptionTargetType.Blog:  return `/blogs/${subscription.targetId}`;
+case SubscriptionTargetType.Topic: return `/forum/topics/${subscription.targetId}`;
+case SubscriptionTargetType.User:  return `/users/${subscription.targetId}`;
+```
+
+Игра: маршрут `/game/:id`, `/games/<guid>` → catch-all 404. Топик: маршрут
+`/forum/:alias/:num` съест `alias="topics"`, `num=<guid>`, а
+`pages/forum/TopicPage.vue:140` делает `parseInt(route.params.num)` → `NaN` →
+ветка ошибки; канонический путь для id — `/forum-topic/:topicId`
+(`router.ts:632-636`). Пользователь: `/users/:username`, а в `targetId` лежит
+GUID. Текст ссылки — сам GUID (`SubscriptionsPage.vue:118-121`
+`{{ subscription.targetId }}`), потому что DTO `Subscription`
+(`shared/api/models/subscriptions/index.ts:57-63`) несет только
+`id/targetType/targetId/settings/createdUtc`, без названия.
+
+Последствие: попав на страницу, пользователь видит список вида
+«Игра | 3f2a…-…», и клик по трем из четырех типов дает 404. Отписаться можно, но
+понять, от чего, — нет. Смягчающее обстоятельство: ссылки на `/subscriptions` в
+приложении нет ни одной (проверено grep по `name: 'subscriptions'` — только
+объявление маршрута), то есть страница достижима лишь по прямому адресу, хотя
+`features/user-subscribe/ui/UserSubscribeButton.vue:74-80` на нее ссылается в
+комментарии как на место управления email-каналом.
+
+Исправление: перейти на именованные маршруты (`game`, `blog`,
+`forum-topic-redirect`, `profile`) и добавить в DTO подписки название цели и
+`username` для пользовательских подписок — иначе показывать нечего. До этого не
+добавлять пункт в навигацию.
+
+### [СРЕДНЯЯ] no-unsaved-guard — уход со страницы уносит все набранное там, где нет draft-key
+
+В проекте нет ни одного `onBeforeRouteLeave` и ни одного обработчика
+`beforeunload` (проверено grep по всему `src`). Единственная защита —
+автосохранение BBCode по `draft-key`, и оно передано в 13 местах
+(`grep "draft-key"`): комментарии игры/блога, топик, посты комнаты, оба чата,
+мессенджер, создание публикации, обращение в поддержку.
+
+Без `draft-key` остались формы, где текста больше всего:
+`features/edit-character/ui/CharacterForm.vue:243-248` (вся анкета персонажа —
+поля по схеме игры, включая BBCode), `features/create-game/ui/CreateGameForm.vue:196-205`
+(описание игры), `features/create-blog/ui/CreateBlogForm.vue:133-141` (описание
+блога), `features/publication/ui/PublicationForm.vue:56-64` в режиме
+редактирования (`draftKey` намеренно не передается — `PublicationForm.vue:6-7`).
+
+Последствие: игрок полчаса заполняет анкету персонажа, задевает ссылку в левом
+сайдбаре (он виден на всех страницах игры) — переход происходит мгновенно и
+молча, анкета пуста. То же для описания игры при создании.
+
+Исправление: либо добавить `draft-key` этим редакторам (для анкеты — ключ по
+`gameId`), либо ввести общий composable-страж на «форма изменена» с
+`onBeforeRouteLeave` + `ConfirmDialog`. Второе предпочтительнее: он закроет и
+не-BBCode поля (имя персонажа, название игры, выбор рубрики).
+
+### [СРЕДНЯЯ] publication-draft-not-cleared — после публикации черновик остается и предлагается снова
+
+`pages/blog/PublicationCreate.vue:44-67` при успехе показывает тост и уходит на
+фид, не вызывая `clear()` у редактора. Черновик живет 7 дней
+(`BBCodeEditor.vue:681` `DRAFT_EXPIRATION_MS`), а при монтировании
+`BBCodeEditor.vue:802-809` поднимает флаг:
+
+```js
+const draft = loadDraft();
+if (draft && draft.trim() && draft !== props.modelValue) {
+  hasDraft.value = true;
+}
+```
+
+и шаблон рисует предложение восстановить (`BBCodeEditor.vue:1478-1481`). Все
+остальные потоки черновик гасят: `GameRoom.vue:250-251`, `GameComments.vue:140`,
+`BlogComments.vue:118`, `TopicPage.vue:64`, `SupportTicketForm.vue:196`,
+`GlobalChatPage.vue:922`, `ChatView.vue:348`.
+
+Последствие: автор публикует запись, через день заходит писать следующую и видит
+предложение восстановить черновик — с текстом уже опубликованной записи. Приняв
+его, он публикует дубль.
+
+Исправление: в `PublicationCreate` держать `ref` на `PublicationForm`, пробросить
+`clear()`/`clearDraft` (редактор уже экспонирует `clearDraft` отдельно —
+`BBCodeEditor.vue:915`) и вызывать его после успешного `createPublication`,
+до `router.push`.
+
+### [СРЕДНЯЯ] token-pages-blank-while-loading — две страницы по ссылке из письма не показывают ничего, пока проверяют токен
+
+`pages/account/AccountActivationPage.vue:99` ставит `phase = "loading"`, но в
+шаблоне ветки для этой фазы нет: первый блок — `v-if="phase === 'selectUsername'"`
+(строка 215), второй начинает новую цепочку `v-if="phase === 'confirmUsername' ||
+phase === 'submitting'"` (строка 238) с `v-else-if` на `success`/`expired`/
+`notFound`. При `phase === "loading"` не проходит ни одна, и рендерится только
+подвал `.help-section` (строка 338) — карточка с единственной строкой «Нужна
+помощь? Обратитесь в поддержку».
+
+То же в `pages/account/PasswordResetPage.vue`: `pageState = "loading"` (строка
+20), в шаблоне ветки `completed`/`expired`/`invalid`/`ready`, «loading» нет.
+
+Третья страница того же семейства сделана правильно:
+`pages/account/EmailChangePage.vue:49-52` — `<div v-if="loading">Подтверждаем
+смену почты...</div>`.
+
+Последствие: человек переходит по ссылке активации из письма и на медленном
+соединении видит пустую карточку с приглашением в поддержку — ровно тот сигнал,
+что что-то не работает, в момент, когда все работает.
+
+Исправление: добавить ветку загрузки в обе страницы с текстом того же вида, что
+в `EmailChangePage` («Проверяем ссылку...»). Заодно объединить первую цепочку
+`v-if` со второй, чтобы фазы были взаимоисключающими явно.
+
+### [СРЕДНЯЯ] game-page-error-is-one-sentence — удаленная, приватная и недоступная игра выглядят одинаково
+
+`entities/game/model/store.ts:387-404`:
+
+```js
+const { data, error } = await gameApi.getGame(id);
+if (error) {
+  gameError.value = "Не удалось загрузить игру";
+  game.value = null;
+}
+```
+
+`error.status` не сохраняется, поэтому `pages/game/GamePage.vue:54-57` может
+показать только эту фразу и ссылку «Вернуться к списку игр». Форум для тех же
+случаев различает 403/404/410/500 (`pages/forum/TopicPage.vue:41-47`) и отдает
+полноценную страницу ошибки из `shared/ui/ErrorPage/errorConfig.ts`, где для
+каждого статуса написан текст и подобрана иллюстрация.
+
+Последствие: пользователь идет по старой ссылке на удаленную игру и читает «Не
+удалось загрузить игру» — то же, что при упавшем сервере. Он будет обновлять
+страницу. Если игра приватная, он вдобавок получит тост «Недостаточно прав»,
+который к «не удалось загрузить» не пришивается.
+
+Исправление: хранить в сторе `gameErrorStatus` и в `GamePage` показывать
+`ErrorPage` с кодом, как это делает форум. То же для `pages/blog/BlogPage.vue:103`.
+
+### [СРЕДНЯЯ] silent-mutations-in-forum-and-room — четыре модераторских и мастерских действия не сообщают ни об успехе, ни об отказе
+
+`pages/forum/TopicsList.vue:232-255`:
+
+```js
+async function handleTogglePin(row: DisplayTopic) {
+  ...
+  try { await store.togglePinTopic(topicId); } finally { pinningTopicId.value = null; }
+}
+
+async function handleSavePinnedOrder(topicIds: string[]) {
+  savingPinnedOrder.value = true;
+  try {
+    await store.reorderPinnedTopics(topicIds);
+    showPinnedManager.value = false;
+  } finally { savingPinnedOrder.value = false; }
+}
+```
+
+`togglePinTopic` возвращает `{ error }` (`entities/forum/model/store.ts:242-258`)
+— он игнорируется. Второй обработчик закрывает диалог управления закрепленными
+даже при неудаче, то есть докладывает об успехе.
+
+`pages/game/GameRoom.vue:283-297` — то же для очереди ходов:
+
+```js
+const { error } = await gameApi.createPendency(room.value.id as string, { characterId: ... });
+if (!error) await gameStore.loadRooms(gameId.value);
+pendencyBusy.value = false;
+```
+
+При ошибке не происходит ничего и не говорится ничего.
+
+Последствие: модератор перетаскивает порядок закрепленных топиков, жмет
+сохранение, запрос падает с 409 или 404 — диалог закрывается, порядок на экране
+новый, на сервере старый. Мастер добавляет персонажа в очередь ходов, кнопка
+разблокируется, список не меняется, объяснения нет; он жмет еще раз.
+
+Исправление: во всех четырех обработчиках разобрать `error` и вызвать
+`notifyFailure(error, ...)`; `showPinnedManager.value = false` выполнять только
+при `!error`.
+
+### [СРЕДНЯЯ] characters-empty-flash — список персонажей во время загрузки утверждает, что персонажей нет
+
+`pages/game/GameCharacters.vue:55-70`: `onMounted` запускает
+`loadCharacters`, а шаблон после ветки ошибки сразу переходит к
+`v-else-if="!hasAnything"` → «В этой игре пока нет персонажей». Флаг
+`charactersLoading` в сторе есть (`entities/game/model/store.ts:308,474-487`) и
+не используется на странице.
+
+Последствие: открывая раздел «Персонажи» игры с полным ростером, пользователь на
+время запроса читает, что персонажей нет. На медленной сети это секунды, и это
+единственное, что написано на экране. Для сравнения, `GameComments.vue:198`
+показывает `CommentSkeleton`, а `GamePage.vue:62-64` — скелет заголовка.
+
+Исправление: добавить ветку `v-if="charactersLoading && !characters.length"` со
+скелетом карточек; заодно заменить `.characters-error` на `ErrorState` с
+`:retry`, чтобы неудачная загрузка не требовала перезагрузки страницы.
+
+### [СРЕДНЯЯ] e2e-assertions-behind-dead-selectors — тесты сценария персонажей ничего не проверяют
+
+`e2e/tests/gaming/characters.spec.ts` целиком построен на
+
+```js
+const charactersTab = page.locator('.game-tabs a[href*="characters"]');
+if (await charactersTab.isVisible()) { ... }
+```
+
+Класса `game-tabs` в `src` нет (grep по `*.vue`, `*.sass` — ноль совпадений):
+навигация по игре живет в левом сайдбаре `widgets/sidebar/GamePanel.vue`.
+Ожидания внутри ссылаются на `.characters-group-title, .group-title`, которых
+тоже нет — компонент использует `.section-title`. Оба теста зелены, потому что
+`isVisible()` возвращает false и тело не выполняется. Всего по набору 35
+конструкций `if (await ...)` (посчитано grep).
+
+Из 32 e2e-спек только 15 вообще открывают браузер (`page.goto`), остальные 17 —
+чистые вызовы API. Поэтому дефекты вида «ссылка ведет на 404» и «в карточке
+заявки нет действий» некому поймать.
+
+Последствие: КРИТИЧНО-находка выше живет в области, формально покрытой тестами
+«Game Characters».
+
+Исправление: убрать условные обертки — тест должен падать, когда селектор не
+найден. Переписать `characters.spec.ts` на реальные селекторы сайдбара и
+добавить сценарий «мастер видит заявку и принимает ее».
+
+### [НИЗКАЯ] comment-delete-no-confirm — удаление комментария не подтверждается, в отличие от поста и топика
+
+`features/comment/ui/CommentItem.vue:201-203`:
+
+```js
+function handleDelete() {
+  emit("delete", props.comment.id);
+}
+```
+
+Кнопка «Удалить» (строка 438-444) сразу отправляет действие. Пост игры
+(`widgets/game-post/GamePost.vue:401-416,704-712`) и топик
+(`pages/forum/TopicPage.vue:212-226,341-350`) используют `ConfirmDialog`, чат —
+двухшаговое подтверждение в наведенной панели (`ChatView.vue:353-366,668-686`).
+
+Последствие: промах по кнопке в подвале комментария (кнопки «Редактировать»,
+«Удалить», «Предупреждение» стоят рядом с шагом `$small`) удаляет комментарий без
+вопроса. Отменить нечем.
+
+Исправление: подключить `ConfirmDialog` в `CommentItem`, как в `GamePost`.
+
+### [НИЗКАЯ] loading-copy-two-ellipses — «Загрузка...» и «Загрузка…» вперемешку
+
+Многоточие из трех точек: `pages/account/sections/AccountBlacklistSection.vue:9,71`,
+`AccountInvitationsSection.vue:6`, `AccountNotificationsSection.vue:6`,
+`AccountSecurityHistorySection.vue:6`, `AccountSessionsSection.vue:7`,
+`AccountUsernameChangeSection.vue:11`, `pages/blog/PublicationEdit.vue:140`,
+`pages/messenger/ChatView.vue:431`, `pages/moderation/FundraisingPage.vue:49`,
+`pages/moderation/ModerationTags.vue:194`. Символ U+2026:
+`features/message-search/ui/MessageSearchPanel.vue:392,483`,
+`pages/moderation/ModerationAwards.vue:81`, `ModerationAwardsSeries.vue:243`,
+`ModerationUsernameChanges.vue:136`, `pages/personal/NotificationsPage.vue:221,270`,
+`pages/personal/SubscriptionsPage.vue:105`, `pages/profile/moderation/ModerationViolations.vue:160,208`,
+`pages/profile/ProfileAchievementsSection.vue:255`, `ProfileAwardsSection.vue:163`,
+`pages/game/CharacterEdit.vue:332`.
+
+Последствие: на одной странице настроек «Загрузка...», на подписках «Загрузка…».
+Разница видна и читается как небрежность, а не как замысел.
+
+Исправление: выбрать один вариант (в правилах русского текста проекта он не
+зафиксирован — это вопрос к владельцу) и привести все места; лучше вынести строку
+в константу, чтобы вопрос не возникал снова.
+
+### [НИЗКАЯ] english-fallback-in-tag-selector — в русском интерфейсе показывается «Failed to load tags»
+
+`features/create-game/ui/TagSelector.vue:64-65`:
+
+```js
+if (apiError) {
+  error.value = apiError.title || "Failed to load tags";
+```
+
+Запасная фраза достижима: при не дошедшем запросе `shared/api/client.ts:239-247`
+кладет `title: ""` намеренно, чтобы победила фраза вызывающей стороны, — и
+побеждает английская.
+
+Последствие: мастер создает игру без сети, в секции «Теги» появляется английское
+сообщение.
+
+Исправление: `describeFailure(apiError, "Не удалось загрузить теги")`.
+
+### [НИЗКАЯ] password-reset-success-no-login-link — после смены пароля нет кнопки войти
+
+`pages/account/PasswordResetPage.vue:100-109`: успех дает текст «Теперь вы можете
+войти с новым паролем» и кнопку «На главную». Ветка недействительного токена в
+той же странице (строка 133) уже умеет открывать диалог входа ссылкой
+`{ path: '/', query: { action: 'login' } }`.
+
+Последствие: сменивший пароль попадает на главную и должен сам найти «Вход» в
+шапке — лишний шаг в конце потока восстановления.
+
+Исправление: заменить кнопку на переход `{ path: "/", query: { action: "login" } }`.
+
+### [НИЗКАЯ] game-post-error-generic — при отказе публикации поста теряется причина
+
+`pages/game/GameRoom.vue:236-239`:
+
+```js
+if (error) {
+  composerError.value = "Не удалось отправить пост";
+  return;
+}
+```
+
+Текст поста сохраняется — это правильно, но `error` отбрасывается, хотя
+`describeFailure` умеет достать и коды полей, и заголовок.
+
+Последствие: мастер архивировал комнату или в ней действует премодерация — игрок
+читает «Не удалось отправить пост» и не понимает, надо ли повторить.
+
+Исправление: `composerError.value = describeFailure(error, "Не удалось отправить
+пост")`.
+
+## Чего я не смог определить
+
+- Сколько заявок один игрок вправе подать в одну игру.
+  `features/game-actions/ui/GameJoinActions.vue:75-80` показывает «Подать заявку»
+  рядом с «Редактировать персонажа», а `CharacterService.CreateAsync`
+  (`DM.Domain.Game/Features/Characters/CharacterService.cs:71-116`) не проверяет
+  ни наличие персонажа у автора, ни `recruitment.pcLimit`. Многоперсонажные игры
+  — нормальная практика жанра, поэтому это решение владельца, а не дефект.
+  Разрешил бы вопрос ответ: «один персонаж на игрока» или «сколько разрешит
+  мастер».
+- Единый вариант многоточия в текстах загрузки — вопрос к владельцу, в правилах
+  русского текста он не закреплен.
+- Насколько заметен мигающий пустой экран в `GameCharacters` и `ChatsList` на
+  реальных задержках API: нужен замер времени ответа `GET /games/{id}/characters`
+  и `GET /chats` на наполненной базе. При ответе в 30 мс это НИЗКАЯ, при 400 мс —
+  то, что видит каждый.
+- Живут ли `/subscriptions` и `/notepad` без ссылок намеренно (обе страницы
+  построены и работают, но в шапке, сайдбаре и профиле ссылок на них нет —
+  проверено grep по `name: 'subscriptions'` и `name: 'notepad'`), или навигация
+  просто не дописана. Если первое, находку про подписки можно понизить; если
+  второе, она станет ВЫСОКОЙ в момент появления ссылки.
+- Поведение SignalR при истечении cookie посреди сессии: соединение
+  переустанавливается через `withAutomaticReconnect`
+  (`shared/api/client.ts:267-275`), но что видит пользователь при провале
+  переподключения — не читается из кода, нужен запущенный стенд.
+
+
+# Копирайт и язык интерфейса — D
+
+Оценка среза до опровержения: D. Механические правила владельца соблюдены в отгружаемом коде почти идеально (0 вхождений буквы "е с двумя точками" вне таблицы транслитерации, елочки только в девизе /about, один запрещенный "·", один гомоглиф — и тот в сидах), а русский текст, который клиент пишет сам, специфичен и единообразен в своих доминирующих шаблонах. Оценка D продиктована двумя швами, на которых нерусский текст доходит до пользователей сегодня: домен отдает 255 английских сообщений HttpException в title проблемного документа (191 из них на статусах, которые клиент не подавляет, при 113 местах, предпочитающих title своему запасному тексту), а воркер уведомлений печатает в письма и боты 37 неподписанных английских ключей метаданных из 52. Плюс системная причина: словаря терминов в конвенциях нет и ни одно правило ничем не проверяется, поэтому один ModuleStatus называется пятью способами, причем два из них видны одновременно на экране блога.
+
+Срез охватывает весь текст, который видит человек: строки Vue-шаблонов и сторов
+(711 файлов клиента, 2786 различных русских фрагментов), сообщения об ошибках API,
+темы и тела писем, тексты уведомлений в боты, стартовые данные и подписи в
+конвенциях. Механическая дисциплина здесь образцовая и проверяема: в
+отгружаемом коде нет ни одной буквы "е с двумя точками", елочки стоят ровно в
+одном месте — девиз на /about (AboutPage.vue:54-56), гомоглифов внутри слов
+один (и он в сидах), запрещенный "·" в живом UI один. Правила при этом
+записаны, а не держатся в голове: docs/conventions/CODE_STYLE.md:9-20.
+
+Оценка D не про русский текст, который клиент пишет сам, — он как раз хорош.
+Она про два шва, на которых в русский интерфейс сегодня выходит нерусский
+текст. Первый: домен бросает `HttpException` с английским сообщением, и это
+сообщение попадает в `title` проблемного документа
+(ExceptionProblemDetailsFactoryExtensions.cs:14), а клиентский `describeFailure`
+возвращает `title` читателю. Английских сообщений 255 против 15 русских, из них
+191 на статусах, которые перехватчик не подменяет (NotFound 117, Conflict 39,
+BadRequest 19, Gone 14, UnprocessableEntity 2), а мест, предпочитающих `title`
+своему запасному тексту, — 113. Второй шов: воркер уведомлений печатает в письмо
+и в бота сырые имена полей метаданных — 37 ключей из 52 без русской подписи, так
+что письмо про лайк выглядит как "LikerUsername: vasya", а письмо про бан — как
+"Reason: … EndedUtc: 2026-…".
+
+К этому добавляется системная причина, а не случайность: словаря терминов в
+конвенциях нет. Поэтому один и тот же `ModuleStatus` называется пятью способами,
+причем два из них видны одновременно на одном экране блога, роль наставника на
+странице настроек игры зовется "Ментор", а набор подписей событий уведомлений
+живет в трех независимых копиях, которые уже разошлись и по формулировке, и по
+смыслу. Ни одно из этих правил ничем не проверяется: в pre-push и в двух
+воркфлоу CI нет ни грепа по "е с двумя точками", ни проверки паритета словарей.
+
+## Что сделано хорошо
+
+- Механические правила владельца соблюдены в отгружаемом коде. Поиск по всему
+  репозиторию: буква "е с двумя точками" встречается 15 раз и только в трех
+  файлах внутри `.claude/` (README.md, skills/requirement-ledger/SKILL.md,
+  skills/skeleton-parity/SKILL.md); в `src/` единственное вхождение —
+  ReadableGuidHelper.cs:80, где это ключ таблицы транслитерации, то есть
+  обработка пользовательского ввода, а не текст интерфейса. Елочки в живом UI —
+  только девиз AboutPage.vue:54-56.
+- Каталог мокапов с елочками-шевронами и семикратным дублированием реального
+  текста регистрации (StyleVariantsPage.vue) не попадает в сборку не по обещанию,
+  а по механизму: router.ts:641-650 оборачивает маршрут в `import.meta.env.DEV`,
+  и комментарий там прямо говорит, почему обещание в комментарии механизмом не
+  является.
+- Единый шаблон текста отказа: 153 различных сообщения вида
+  "Не удалось &lt;глагол&gt; &lt;объект&gt;" (например store.ts:414 "Не удалось
+  загрузить комнаты", ModerationBans.vue:47 "Не удалось загрузить баны"). Ни
+  одного "Извините", ни одного "Упс", объект всегда назван.
+- Словарь серверных кодов валидации полон и обоснован:
+  shared/lib/errors/validationErrors.ts:14-28 покрывает все 13 констант
+  `DM.Domain.Core.Exceptions.ValidationError`, я сверил поштучно; комментарий
+  объясняет, почему неизвестный код показывается как есть, а не заменяется
+  пожатием плеч.
+- Слоение тостов продумано и задокументировано: notifyFailure.ts:19-21
+  перечисляет статусы, о которых уже сказал перехватчик, чтобы на один сбой не
+  выпадало два незакрываемых тоста; client.ts:236 объясняет, почему пустой
+  `title` лучше английской заглушки.
+- roles.ts:60-68 выводит `ROLE_FULL_NAMES` из `ROLE_BADGES`, поэтому подпись
+  бейджа и полное имя роли разойтись не могут. Шуточные никнеймы ролей
+  ("Тролли", "Младшие гоблины", "Гоблины-наставники") сохранены как данные, а не
+  как случайные строки.
+- pluralize.ts реализует русские формы корректно (я прогнал 0-999 против
+  локальной реализации в moderation/lib/labels.ts — расхождений нет) и
+  используется там, где подключен: formatThreshold.ts:42-68 (11 метрик).
+- Термин "игрок" применяется строго как роль в игре, а не как синоним
+  пользователя: "Игры (игрок)" против "Игры (ведущий)" в user-filter/model/types.ts:217,
+  "В роли игрока" в UsersDataTable.vue:165. Обобщающий термин "Ведущие" введен
+  осознанно и с подсказкой, что он значит: "Мастер или ассистент" для игр
+  (GamesFilter.vue:89) и "Автор или ассистент" для блогов (BlogsFilter.vue:74).
+- Копирайт формы обращения построен параллельными структурами с честным
+  переключением ветки жалобы и поддержки: SupportTicketForm.vue:93-118.
+
+## Находки
+
+### [ВЫСОКАЯ] api-english-error-titles — 255 английских сообщений домена выходят в русский интерфейс
+
+> **Опровержение: подтверждено.**
+
+`ExceptionProblemDetailsFactoryExtensions.cs:12-14` кладет текст исключения в
+`title` проблемного документа:
+
+```csharp
+public static ProblemDetails CreateFrom(this ProblemDetailsFactory factory,
+    HttpException httpException, HttpContext httpContext) =>
+    factory.CreateProblemDetails(httpContext, (int)httpException.StatusCode, httpException.Message);
+```
+
+`describeFailure.ts:37` возвращает этот `title` читателю, когда полевых кодов
+нет: `return error.title || fallback;`.
+
+Я посчитал сообщения `HttpException` по всему `src/`: 255 английских против 15
+русских. По статусам английские: NotFound 117, Forbidden 59, Conflict 39,
+BadRequest 19, Gone 14, Unauthorized 3, UnprocessableEntity 2,
+InternalServerError 1, TooManyRequests 1. Перехватчик подменяет своим текстом
+только 401/403/429/5xx (notifyFailure.ts:20), значит 191 английское предложение
+доходит до читателя дословно. Мест, предпочитающих `title` своему запасному
+тексту: 95 вызовов `notifyFailure` в 50 файлах, 8 прямых `describeFailure` и 10
+конструкций `error.title || "..."`.
+
+Прослеженный путь целиком: владелец блога добавляет в черный список того, кто там
+уже есть → BlogBlacklistService.cs:92 бросает
+`HttpException(Conflict, $"User '{username}' is already blacklisted")` →
+BlacklistSection.vue:28 вызывает
+`notifyFailure(error, "Не удалось добавить в черный список")` → 409 не подавлен →
+тост показывает "User 'vasya' is already blacklisted".
+
+Последствие: любой пользователь, попавший в 404/409/400/410 на любом из 113
+мест, получает английскую фразу вместо русской. Это не редкий путь: "Blog not
+found" (BlogService.cs:155, :176, :218) — обычная реакция на устаревшую ссылку.
+Русский запасной текст, который автор страницы написал именно для этого случая,
+проигрывает английскому `title`.
+
+Исправление: закрыть шов в одном месте, а не переводить 255 строк. Либо
+перестать отдавать `httpException.Message` в `title` (вернуть код ошибки, как это
+уже сделано для валидации через `ValidationError`, и завести русский словарь
+рядом с `VALIDATION_MESSAGES`), либо в `describeFailure` брать `title` только
+когда он помечен как предназначенный читателю. Первый вариант согласуется с уже
+работающей схемой кодов и не требует держать язык в домене.
+
+### [ВЫСОКАЯ] notification-metadata-english-keys — письма и боты печатают английские имена полей
+
+> **Опровержение: подтверждено.**
+
+`NotificationEmailSender.cs:249-266` и `NotificationBotSender.cs:289-304`
+переводят имена полей метаданных через `switch` с ветвью `_ => name`. Я собрал
+все ключи, которые генераторы реально кладут в `Metadata` (41 генератор): 52
+различных ключа, подписаны 15, без подписи 37 — `LikerUsername`,
+`InviterUsername`, `BlogId`, `PublicationId`, `CommentId`, `BoardId`,
+`BoardTitle`, `NewStatus`, `Reason`, `Points`, `StartedUtc`, `EndedUtc`,
+`AwardTitle`, `AwardDescription`, `AwardTier`, `ModeratorUsername`,
+`MasterUsername`, `TokenId`, `InvitationType` и далее.
+
+Кроме того две копии словаря подписей разошлись: у письма есть
+`"IsReminder" => "Напоминание"` (NotificationEmailSender.cs:264), у бота такой
+ветви нет (NotificationBotSender.cs:289-304), поэтому одно и то же поле в письме
+"Напоминание: Да", а в Discord и Telegram "IsReminder: Да".
+
+Отдельно: подписанные `GameId`, `RoomId`, `CharacterId`, `TopicId` дают не
+объект, а слаг из `EncodeToReadable` (ReadableGuidHelper.cs:20-26,
+формат `nazvanie~base64`), и рядом печатается `GameTitle` → "Название игры".
+То есть письмо содержит строку "Игра: poterjannye-hroniki~aBc..." и ниже
+"Название игры: Потерянные Хроники".
+
+Последствие: каждое письмо и каждое сообщение бота, то есть весь канал
+уведомлений для всех, кто его включил, выглядит как дамп полей. Письмо о лайке
+публикации читается так: "Лайк на публикацию / LikerUsername: vasya /
+PublicationId: … / Публикация: … / BlogId: … / Блог: …". Письмо о бане показывает
+"Reason: спам" и "EndedUtc: 2026-08-01T12:00:00Z".
+
+Исправление: подписи полей — это копирайт, и он не должен жить в двух `switch`.
+Вынести единый словарь `имя поля → русская подпись` в одно место рядом с
+`EventType`, добавить недостающие 37 ключей, служебные идентификаторы
+(`*Id`, `TokenId`, `IconName`) в письмо не печатать вовсе, а даты форматировать,
+а не отдавать ISO-строку.
+
+### [ВЫСОКАЯ] notification-labels-three-copies — подписи событий существуют в трех копиях и уже разошлись
+
+> **Опровержение: подтверждено.**
+
+Один и тот же набор подписей событий заведен трижды:
+
+- `NotificationEmailSender.cs:28-91` — 48 записей;
+- `NotificationBotSender.cs:30-93` — 48 записей, побайтово те же строки (я
+  сверил пары ключ-значение программно: расхождений в значениях 0);
+- `NotificationsPage.vue:24-69` — 22 ветви `switch` со своими формулировками.
+
+Формулировки клиента и сервера для одного события различаются:
+"Лайк на публикацию" против "Лайк публикации"; "Новый комментарий в блоге"
+против "Комментарий в блоге"; "Новый комментарий в подписанной теме" против
+"Комментарий в топике"; "Новая игра от подписанного автора" против "Новая игра
+автора"; "Новая заявка на персонажа" против "Новый персонаж" — последнее меняет
+смысл, заявка и персонаж это разные состояния.
+
+В том же серверном словаре форумная сущность названа и топиком, и темой:
+`NewTopic` = "Новый топик на форуме", `NewTopicFromSubscribedAuthor` = "Новая
+тема от подписанного автора", `NewCommentInSubscribedTopic` = "Новый комментарий
+в подписанной теме".
+
+Дальше — дыры. `NotificationCategoryMapper.cs:14-59` относит к категориям 60
+типов событий; подписи есть у 47 из них. Без подписи остаются 13:
+`ChangedMessage`, `ChangedTopic`, `ChangedTopicComment`, `ChangedPublication`,
+`ChangedBlogComment`, `ChangedPublicationComment`, `BlogInvitationCreated`,
+`BlogInvitationAccepted`, `BlogInvitationRejected`, `TicketCreated`,
+`TicketAssigned`, `TicketResolved`, `AwardGranted`. Обратная дыра одна:
+`RoomPendencyReminder` имеет подпись, но не имеет категории, то есть эта строка
+недостижима.
+
+Последствие: пользователю выдали награду или закрыли его обращение в поддержку —
+он получает письмо с темой "Dungeon Master: Уведомление" и заголовком
+"Уведомление" в теле (NotificationEmailSender.cs:158-160,
+NotificationBotSender.cs:250). Пригласили в блог — то же самое. А то
+уведомление, которое он видит в списке на /notifications, называется иначе, чем
+письмо о нем же, так что сопоставить их нельзя.
+Сверх того: `NotificationService.GetAsync` (NotificationService.cs:39-45) не
+фильтрует по типу, а клиентский `NotificationType` знает 20 значений из 60 —
+бан, предупреждение, оценка поста, смена статуса персонажа приходят в список как
+"Уведомление" без ссылки (NotificationsPage.vue:66-67).
+
+Исправление: один словарь `EventType → подпись` на бэкенде, отдаваемый клиенту
+вместе с уведомлением (или сгенерированный в общий модуль), плюс тест на
+паритет: каждый категоризованный `EventType` обязан иметь подпись, каждая
+подпись — категорию. Клиентский `switch` тогда исчезает.
+
+### [СРЕДНЯЯ] blog-status-five-names — статус блога называется двумя словами на одном экране
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Mechanism fully verified: router.ts (src/DM.Web.Client/src/app/providers/router.ts:246-255) makes BlogDetails the default child of BlogPage, BlogPage.vue:74-76 renders BlogStatusBadge unconditionally (no v-if, no CSS hide), BlogStatusBadge.vue:17-19 says "Оформляется/Открыт/Закрыт", BlogDetails.vue:24-27 rendered at :51 says "Черновик/Активен/Закрыт" — both on screen for every visitor of every Active blog, not just drafts. Five dictionaries confirmed (blog-filter/model/types.ts:88-95, ModuleStatus.cs:13-25, tooltipBuilders.ts:74-81). The tooltip lie is real and independently verified: UserRepository.cs:508-522 buckets every ModuleStatus.Closed into `counts.Closed` with no reference to ClosedReason, while ClosedReason.cs distinguishes None/Finished/Frozen — so a frozen game is counted under "Завершенные". But nothing here is broken, lost or exploitable; it is a wording split, the same class the author himself graded СРЕДНЯЯ four times over (topik/tema, Ментор/Наставник, Почта/Email). Same-screen simultaneity makes it the worst instance of that class, not a level above it.
+
+`BlogPage.vue` — оболочка зоны блога с `<router-view />`, `BlogDetails.vue` —
+дочерний маршрут (router.ts:250-255). Значит на /blogs/:id оба текста видны
+одновременно.
+
+В шапке (BlogPage.vue:75) стоит `<BlogStatusBadge :status="blog.status" />`,
+который отдает (BlogStatusBadge.vue:17-19):
+
+```ts
+if (isDraft.value) return "Оформляется";
+if (isActive.value) return "Открыт";
+if (isClosed.value) return "Закрыт";
+```
+
+На две строки ниже, в таблице сведений (BlogDetails.vue:24-27, отрисовка на :51):
+
+```ts
+const STATUS_LABEL: Record<string, string> = {
+  Draft: "Черновик",
+  Active: "Активен",
+  Closed: "Закрыт",
+};
+```
+
+Всего для `ModuleStatus` в проекте пять словарей: два выше, плюс фильтр блогов
+(blog-filter/model/types.ts:90-94 — "Оформляется / Открыт / Закрыт"), плюс
+`[Description]` на сервере (ModuleStatus.cs:13-25 — "Оформляется / Активен /
+Закрыт"), плюс тултипы таблицы пользователей (tooltipBuilders.ts:73-81 —
+"Черновики / Активные / Завершенные").
+
+Последний словарь еще и врет по смыслу: `ModuleStatusCounts.closed`
+(UserDtos.cs:65, :75, :85) считает статус `Closed` независимо от причины, а
+`ClosedReason` в фильтре игр (game-filter/model/types.ts:207-210) различает
+"Без флагов", "Заморожена" и "Завершена". Тултип называет "Завершенными" все три,
+включая брошенные и замороженные.
+
+Последствие: блог в состоянии `Draft` подписан на одном экране как
+"Оформляется" и как "Черновик"; в состоянии `Active` — как "Открыт" и как
+"Активен". Читатель не может понять, одно это состояние или два. В таблице
+сообщества при наведении на "В роли ведущего" замороженная игра попадает в
+"Завершенные".
+
+Исправление: один модуль подписей `ModuleStatus` на клиенте, из которого берут и
+бейдж, и таблица сведений, и фильтр, и тултип; род согласуется параметром
+сущности (блог мужского рода, игра женского) — это уже сделано правильно между
+фильтрами блогов и игр, осталось убрать локальные копии. `STATUS_LABEL` в
+BlogDetails.vue удалить. В тултипе заменить "Завершенные" на "Закрытые".
+
+### [СРЕДНЯЯ] topik-vs-tema — форумная сущность называется топиком и темой, включая одну и ту же пару полей
+
+Создание топика (TopicsList.vue:542, :555):
+
+```
+placeholder="Заголовок топика"
+placeholder="Текст топика..."
+```
+
+Правка того же объекта (TopicView.vue:178, :184, :190):
+
+```
+<label class="edit-label">Заголовок темы</label>
+placeholder="Заголовок темы"
+placeholder="Текст темы..."
+```
+
+Дальше вразнобой: "Не удалось создать топик" (TopicsList.vue:308) и "Не удалось
+загрузить топики" (:366) против "Не удалось сохранить тему" (TopicPage.vue:203),
+"Не удалось изменить статус темы" (:209), "Тема удалена" (:230), "Удалить тему?"
+(:344); бейдж "Тема закрыта" (TopicCard.vue:177, :186) против колонки "Топики"
+(ForumIndexPage.vue:32) и заголовка раздела профиля "Топики"
+(ProfileTopicsList.vue:3). В достижениях единица измерения — "топик"
+(formatThreshold.ts:60).
+
+Последствие: пользователь создает "топик", открывает его правку и правит "тему",
+удаляет "тему", а в профиле видит счетчик "Топиков". Поиск по сайту и разговор в
+поддержке ломаются на том, что это два разных слова.
+
+Исправление: выбрать один термин (в пользу "топика" говорит преобладание: он в
+навигации, в счетчиках профиля и в достижениях) и заменить остальные вхождения.
+Рядом на этих же строках несогласованный лимит: создание допускает 200 символов
+заголовка (TopicsList.vue:543, совпадает с CreateTopicRequest.cs:14), правка
+ставит `maxlength="130"` (TopicView.vue:183) — это уже не копирайт, но найдено
+здесь же.
+
+### [СРЕДНЯЯ] mentor-vs-nastavnik — роль наставника на странице настроек игры названа "Ментор"
+
+`game/settings/RolesSection.vue:105, :107`:
+
+```
+<div class="role-label">Ментор (премодерация)</div>
+<SecondaryText v-else>Ментор не назначен</SecondaryText>
+```
+
+Везде остальное — "Наставник": roles.ts:41 (`ROLE_BADGES[Mentor].label`),
+roles.ts:100-107 (`ROLE_INFO`: "Наставники", "Гоблины-наставники"),
+GameDetails.vue:198 (`<th>Наставник</th>`), GameNotepad.vue:39 ("Блокнот доступен
+только мастеру, ассистентам и наставнику"), UsersFilter.vue:77,
+user-filter/model/types.ts:152-155.
+
+Последствие: мастер открывает настройки своей игры и видит "Ментор не назначен";
+переходит на страницу сведений той же игры и видит строку "Наставник". Два имени
+одной роли на соседних экранах одной зоны.
+
+Исправление: заменить обе строки на "Наставник (премодерация)" и "Наставник не
+назначен".
+
+### [СРЕДНЯЯ] email-vs-pochta — поле называется "Почта", а ошибка под ним говорит "Email"
+
+Клиент называет адрес почтой последовательно: LoginForm.vue:144 (`label="Почта"`),
+AccessRecoveryForm.vue:172, AccountSecuritySection.vue:13 ("Новая почта"),
+router.ts:577 ("Подтверждение почты"), useValidatedField.ts:205 ("Неверный формат
+почты").
+
+Сервер под тем же полем говорит "Email": LoginRequest.cs:15 ("Email должен быть
+от 1 до 100 символов"), RegistrationRequest.cs:17 и EmailChangeRequest.cs:22
+("Email не должен превышать 100 символов"), подпись события
+"Email изменен" (NotificationEmailSender.cs:83), тема письма "Подтвердите email
+на Dungeon Master" (RegistrationMailSender.cs:41). Третий вариант — в теме
+другого письма: "Подтверждение смены адреса электронной почты на Dungeon Master"
+(EmailChangeMailSender.cs:41). И четвертый — в форме обращения: "Email для
+ответа" и "Email или Discord, чтобы мы могли ответить"
+(SupportTicketForm.vue:84-91).
+
+Последствие: пользователь вводит адрес в поле "Почта", получает под ним ошибку
+про "Email" и не сразу понимает, что речь о том же поле. Одно понятие названо
+четырьмя способами в трех слоях.
+
+Исправление: закрепить "почта" как термин интерфейса (Email оставить только там,
+где это техническое имя протокола) и переписать четыре серверных сообщения и две
+темы писем.
+
+### [СРЕДНЯЯ] mail-subject-conventions — пять форматов тем писем и одна эмодзи
+
+Девять тем на весь проект, пять несовместимых форматов:
+
+- суффикс через тире: "Вход в аккаунт с нового устройства — Dungeon Master"
+  (SuspiciousLoginNotificationSender.cs:41), "Запрос на смену имени одобрен —
+  Dungeon Master" и "… отклонен — Dungeon Master"
+  (UsernameChangeMailSender.cs:40, :69);
+- префикс через двоеточие: `$"Dungeon Master: {subj}"`
+  (NotificationEmailSender.cs:158) — это 48 вариантов;
+- "… на Dungeon Master для {username}" (EmailChangeMailSender.cs:41,
+  PasswordResetMailSender.cs:41);
+- "Ваш пароль на Dungeon Master был изменен" (PasswordChangeMailSender.cs:33);
+- "Подтвердите email на Dungeon Master" (RegistrationMailSender.cs:41).
+
+Плюс единственная эмодзи во всем копирайте проекта:
+"⚠️ Запрос на смену email — Dungeon Master" (EmailChangeWarningMailSender.cs:55).
+
+Последствие: письма проекта не группируются в ящике ни по префиксу, ни по
+суффиксу; фильтр "тема начинается с Dungeon Master" поймает только уведомления и
+пропустит все письма безопасности, включая предупреждение о смене адреса.
+Пользователь, поставивший такой фильтр, не увидит именно то письмо, ради
+которого он его ставил.
+
+Исправление: один формат на все девять (префикс "Dungeon Master: " уже покрывает
+48 из 57 тем — дешевле привести к нему остальные). Эмодзи убрать или ввести
+осознанно во все темы безопасности.
+
+### [СРЕДНЯЯ] two-ellipsis-forms — многоточие набирается двумя разными символами
+
+Символ U+2026 встречается в 38 файлах клиента, три точки после кириллицы — в 37.
+Пары для одного и того же состояния:
+
+- "Загрузка..." — 12 мест в UI (AccountBlacklistSection.vue:9, :71,
+  AccountInvitationsSection.vue:6, AccountNotificationsSection.vue:6,
+  AccountSecurityHistorySection.vue:6, AccountSessionsSection.vue:7,
+  AccountUsernameChangeSection.vue:11, PublicationEdit.vue:140,
+  ChatView.vue:431, FundraisingPage.vue:49, ModerationTags.vue:194,
+  useRegion.ts:53);
+- "Загрузка…" — 13 мест (MessageSearchPanel.vue:392, :483,
+  ModerationAwards.vue:81, ModerationAwardsSeries.vue:243,
+  ModerationUsernameChanges.vue:136, NotificationsPage.vue:221, :270,
+  SubscriptionsPage.vue:105, ProfileAchievementsSection.vue:255,
+  ProfileAwardsSection.vue:163, ModerationViolations.vue:160, :208,
+  GamePost.vue:725);
+- "Сохранение..." — 2 (PinnedTopicsManager.vue:184, FundraisingPage.vue:79)
+  против "Сохранение…" — 7 (CreateTestimonialForm.vue:56, PollEditForm.vue:110,
+  ProfilePage.vue:727, :872, :947, BBCodeEditor.vue:208, NotepadBoard.vue:269).
+
+При этом стандарт зафиксирован: `_Skeleton.sass:6` предписывает текст
+"Загрузка..." тремя точками.
+
+Последствие: FundraisingPage.vue показывает "Загрузка..." (:49) и "Сохранение..."
+(:79), а соседняя ModerationAwards.vue — "Загрузка…". На одном разделе модерации
+два начертания одного знака. Дополнительно ломается копируемость и поиск по
+строке.
+
+Исправление: выбрать один символ (предписанный — три точки), заменить второй
+механически, добавить греп в pre-push рядом с проверкой буквы "е с двумя точками".
+
+### [СРЕДНЯЯ] empty-value-placeholders — пять разных заглушек для отсутствующего значения, две из них в одной таблице
+
+- `"n/a"` — GameDetails.vue:60, :265; ProfilePage.vue:288;
+  SiteStatistics.vue:13, :86, :90;
+- `"—"` — GameDetails.vue:56; ForumIndexPage.vue:171; RoomsSection.vue:229;
+  ModerationNewUsers.vue:101; datetime.ts:30;
+- `"не указан" / "не указана" / "не указано"` — StatLine.vue:36 (значение по
+  умолчанию), ProfilePersonalInfo.vue:169, :178, :187, :195, :220,
+  AccountSecuritySection.vue:10, ProfilePage.vue:652;
+- `"Нет данных"` — DataTable.vue:35 (значение по умолчанию),
+  ModerationIpInfo.vue:58;
+- `"Неизвестно" / "неизвестно" / "Неизвестное устройство"` —
+  ModerationUsernameChanges.vue:35, SubscriptionsPage.vue:43,
+  ChatMessage.vue:105, AccountSessionsSection.vue:21.
+
+Худший случай — одна таблица состава игры: `descriptorOf`
+(GameDetails.vue:55-57) отдает `"—"`, а `lastPostOf` (:59-61) в соседней колонке
+отдает `"n/a"`.
+
+Последствие: персонаж без класса и без постов дает строку, где в одной колонке
+стоит тире, а в другой латинская аббревиатура; читателю приходится
+догадываться, значат ли они одно и то же. `"n/a"` вдобавок латиница в русской
+шапке сайта (SiteStatistics.vue:13). Обоснование там есть — комментарий на :77
+объясняет, что лучше показать "n/a", чем поддельные нули; аргумент верный, но он
+оправдывает отказ от нуля, а не выбор латинского токена.
+
+Исправление: один токен на "значения нет" (тире), один на "данных нет"
+("Нет данных" в таблицах), один на "поле не заполнено" ("не указано"). `"n/a"`
+убрать полностью.
+
+### [СРЕДНЯЯ] hardcoded-plurals — счетчики с зашитой формой существительного
+
+Шаблон `pluralize` есть и корректен, но подключен только в двух файлах
+(formatThreshold.ts, tooltipBuilders.ts). Мимо него:
+
+- `AccountSecurityHistorySection.vue:41`: "Показаны последние {{ events.length }}
+  событий" → "последние 2 событий", "последние 21 событий";
+- `ModerationTags.vue:282`: `{{ tag.gamesCount }} игр` → "1 игр", "2 игр",
+  "3 игр";
+- `ModerationTags.vue:164`: "Нельзя удалить тег, который используется в
+  ${tag.gamesCount} играх" → "используется в 1 играх";
+- `ModerationViolations.vue:147`: "({{ violations.activeWarningPoints }}
+  активных баллов)" → "(1 активных баллов)", причем корректный `pointsNoun`
+  лежит в двух файлах от него (moderation/lib/labels.ts:82-87);
+- `ModerationLinkedProfiles.vue:24`: "{{ p.sharedIpsCount }} общих IP" →
+  "1 общих IP";
+- `chat.ts:158`: "и еще ${count - 3} оценили это" → при четырех оценивших "и еще
+  1 оценили это".
+
+Плюс три независимые реализации одного правила: pluralize.ts:8-30,
+`pointsNoun` (labels.ts:82-87), `daysNoun` (labels.ts:105-112). Я прогнал
+`pointsNoun` против `pluralize` на 0-999 — расхождений нет, то есть это чистое
+дублирование, а не разные правила.
+
+Последствие: каждый из перечисленных счетчиков читается неграмотно при
+большинстве значений. История безопасности аккаунта — экран, который человек
+открывает именно тогда, когда встревожен, и первая строка там "Показаны
+последние 3 событий".
+
+Исправление: перевести перечисленные шесть мест на `pluralize`, а `pointsNoun`
+и `daysNoun` заменить вызовами `pluralize` с нужными формами.
+
+### [СРЕДНЯЯ] filter-hints-drift — подсказки фильтра перечисляют не те варианты, что в списке
+
+`UsersFilter.vue:76-77`:
+
+```ts
+{ key: "activity", label: "Активность", hint: "Онлайн, Активные, Все" },
+{ key: "role", label: "Роль", hint: "Админ, Модератор, Наставник" },
+```
+
+Фактические варианты: `ACTIVITY_OPTIONS` (user-filter/model/types.ts:119-136) —
+четыре: "Онлайн", "Активные", "Неактивные", "Все пользователи". Подсказка теряет
+"Неактивные" и сокращает "Все пользователи" до "Все". `ROLE_OPTIONS`
+(types.ts:141-167) — шесть: "Все роли", "Пользователь", "Наставник",
+"Модератор", "Старший модератор", "Администратор". Подсказка называет три,
+теряет "Старший модератор" и "Пользователь", переворачивает порядок и вводит
+форму "Админ", которой нет больше нигде в проекте (я проверил: единственное
+вхождение слова — эта строка).
+
+Для сравнения, подсказки фильтров игр и блогов честны: GamesFilter.vue:87
+"Оформляется, Идет игра, Закрыта" и BlogsFilter.vue:73 "Оформляется, Открыт,
+Закрыт" перечисляют все содержательные варианты, опуская только "Все".
+
+Отдельно: подсказка фильтра рейтинга в одном месте общая — "Диапазон значений"
+(UsersFilter.vue:79, та же строка у трех других фильтров), а в другом
+конкретная — "Диапазон рейтинга поста" (PulseFilter.vue:65).
+
+Последствие: пользователь, читающий подсказку, не знает, что можно отфильтровать
+неактивных или старших модераторов, и встречает сокращение роли, которого больше
+не увидит нигде.
+
+Исправление: генерировать подсказку из первых элементов соответствующего
+`*_OPTIONS`, а не набирать руками. Тогда она не сможет разойтись.
+
+### [СРЕДНЯЯ] moderation-gate-copy-missing — отказ в доступе объяснен на 12 страницах из 21
+
+Фраза "Страница доступна только модераторам" продублирована дословно 11 раз
+(ModerationBans.vue:90, ModerationComplaints.vue:23, ModerationModerators.vue:55,
+ModerationNewUsers.vue:81, ModerationPremoderatedBlogs.vue:96,
+ModerationPremoderatedGames.vue:98, ModerationRatedPosts.vue:51,
+ModerationTicketPage.vue:179, ModerationUploads.vue:110,
+ModerationViolators.vue:75, ModerationWarnings.vue:72) плюс вариант
+"…только администраторам" (ModerationSupport.vue:21).
+
+Не имеют этой фразы семь содержательных страниц: FundraisingPage.vue,
+ModerationAchievements.vue, ModerationAwardTypes.vue, ModerationAwards.vue,
+ModerationAwardsSeries.vue, ModerationTags.vue, ModerationUsernameChanges.vue.
+Роль маршрутом не проверяется: глобальный `beforeEach` (router.ts:679-684) знает
+только `requiresAuth`.
+
+Последствие: обычный вошедший пользователь, открывший /moderation/bans, читает
+внятное объяснение. Тот же пользователь на /moderation/tags попадает в ветку
+`error` (ModerationTags.vue:51-54), где текст берется из
+`describeFailure(failure, "Не удалось загрузить данные")`, то есть либо ложное
+"Не удалось загрузить данные" (данные загрузились бы, ему просто нельзя), либо —
+поскольку 403 здесь не подавляется — сырое английское
+"User &lt;guid&gt; is not allowed to perform … action" из
+IntentionManagerException.cs:28.
+
+Исправление: вынести фразу в один компонент-заглушку и применить на всех 21
+страницах, а на 403 в теле страницы всегда показывать ее, а не текст сбоя
+загрузки.
+
+### [СРЕДНЯЯ] no-terminology-standard — нет словаря терминов и нет автопроверки правил
+
+`docs/conventions/CODE_STYLE.md:9-20` фиксирует три правила: буква "е с двумя
+точками" не используется, кавычки прямые кроме девиза, без тире вместо связки.
+Правила про "одно понятие — одно слово" нет ни в CODE_STYLE.md, ни в
+UI_STANDARDS.md; поиска по словам "глоссарий" и "терминология" в `docs/` не
+находится. Именно этого правила не хватило всем находкам про топик/тему,
+Ментор/Наставник, Почта/Email, Черновик/Оформляется.
+
+Проверок тоже нет: `scripts/hooks/pre-push` гоняет линт, типы, тесты, сборку и
+бэкенд, но не грепает ни один из трех символов; в `.github/workflows/` (dotnet.yml,
+security.yml) их тоже нет. Сама конвенция это признает — "проверяется поиском по
+этому символу", то есть вручную.
+
+Дополнительно та же конвенция называет девизную страницу "О сайте"
+(CODE_STYLE.md:16), тогда как страница называется "О проекте"
+(AboutPage.vue:31, router.ts:60, Header.vue:204).
+
+Последствие: сейчас репозиторий чист по всем трем механическим правилам, то есть
+ручной процесс работает. Но ничто не мешает регрессии, а от расхождения терминов
+не защищает вообще ничто — что и произошло пять раз, задокументировано выше.
+
+Исправление: добавить в pre-push и в dotnet.yml три грепа (U+0451, елочки вне
+AboutPage.vue, "·" вне UI_STANDARDS.md) — раннер уже есть, гейт стоит три
+строки. В CODE_STYLE.md завести раздел с таблицей канонических терминов
+(топик, наставник, почта, статусы модуля, заглушки пустого значения) — это
+конвенция, а не снимок состояния, так что правилу документации не противоречит.
+Заодно исправить название страницы.
+
+### [СРЕДНЯЯ] dead-description-attributes — 43 русские подписи на сервере, которых никто не читает
+
+В десяти перечислениях висят `[Description]` с русским текстом: ClosedReason.cs
+(3), CommentsAccessMode.cs (3), ModuleStatus.cs (6), PlayerParticipation.cs (2),
+PollStatus.cs (3), RecruitmentFilter.cs (5), Theme.cs (2), TicketStatus.cs (4),
+TicketSubtype.cs (7), UserSort.cs (8) — 43 всего. Метод чтения существует
+(DescriptionExtensions.cs:17), но `GetDescription()` не вызывается ни в `src`,
+ни в `test` — я искал по всему репозиторию.
+
+Последствие: это второй, невидимый словарь подписей, который уже разошелся с
+клиентским: `ModuleStatus.Active` = "Активен" против "Идет игра"
+(game-filter/model/types.ts:182), `RecruitmentFilter.Open` = "Открыт" против
+"Набор игроков" (:197), `RecruitmentFilter.Closed` = "Закрыт" против "Набор
+закрыт" (:200). Разработчик, который найдет их первыми, будет считать их
+источником истины и получит на экране не тот текст.
+
+Исправление: либо начать их отдавать (тогда клиентские словари удаляются, и
+расхождение становится невозможным), либо удалить атрибуты. Держать неиспользуемый
+параллельный копирайт — гарантированный источник расхождений. Комментарий
+labels.ts:66 честно называет клиентскую копию зеркалом серверных
+`[Description]` — но зеркало не сверяется ничем.
+
+### [СРЕДНЯЯ] otmena-vs-otmenit — в диалогах бана и предупреждения кнопка закрытия названа "Отменить"
+
+Проп `cancel` компонента `Form` получает "Отмена" в 14 диалогах (LoginForm.vue:141,
+RegistrationForm.vue:227, :294, AccessRecoveryForm.vue:159,
+BlockUserDialog.vue:59, CharacterForm.vue:224, шесть диалогов в
+pages/moderation/dialogs/ и другие), и `ConfirmDialog.vue:33` тоже по умолчанию
+отдает "Отмена". Два исключения — именно те, где это опасно:
+
+```
+action="Оформить бан"        cancel="Отменить"   (BanDialog.vue:147-148)
+action="Отправить предупреждение"  cancel="Отменить"   (WarningDialog.vue:163-164)
+```
+
+Последствие: модератор видит пару "Оформить бан" / "Отменить" и может прочесть
+вторую кнопку как "отменить бан" — тем более что операция снятия бана в проекте
+существует и называется "Снять бан" (ModerationBans.vue:168). Ошибка чтения
+здесь стоит либо невыданного бана, либо лишнего клика в чужой карточке.
+
+Исправление: "Отмена" в обоих диалогах, как во всех остальных.
+
+### [НИЗКАЯ] mixed-language-user-strings — четыре строки на смеси языков или не на том языке
+
+> **Опровержение: частично неверно.** Severity исправлен: ВЫСОКАЯ -> НИЗКАЯ.
+>
+> All four strings exist as quoted (UpdateChat.cs:15 in src/DM.Web.API/Features/Messaging/Chats, TagSelector.vue:65, ExceptionProblemDetailsFactoryExtensions.cs:40 and :52-53), but three of the four consequences do not reach a user. (a) Nothing calls updateChat except the API wrapper messagingApi.ts:81 — there is no chat-rename form, so the mixed "Title must not exceed 100 символов" is unreachable through the UI today (frontend-not-finished). (b) TagSelector.vue:65 is the only genuinely user-visible item: verified as the sole English fallback in the whole client (grep of every `title || "…"` construct returns 9 hits, 8 Russian), rendered at :79 on the create-game form. (c) The report itself concedes the 500 title is never shown, and its stated consequence is false on inspection: SupportTicketForm.vue has no correlation-token field at all, so "форма обращения в поддержку остается без того, что просит" is invented — and API_DESIGN.md:88 documents the token as a log-lookup handle, not user copy. (d) "Validation failed" is likewise never displayed, as the author admits. One English fallback on one form's failure path is НИЗКАЯ, and it is already subsumed by finding 1's mechanism.
+
+- `UpdateChat.cs:15`: `[StringLength(100, ErrorMessage = "Title must not exceed 100 символов")]`
+  — половина по-английски, половина по-русски. Сообщения `DataAnnotations`
+  доходят до полей формы через `parseApiErrors`/`getFieldError`
+  (apiErrors.ts:8-31), то есть переименование переписки с заголовком длиннее 100
+  символов покажет именно эту фразу.
+- `TagSelector.vue:65`: `error.value = apiError.title || "Failed to load tags";`
+  — единственный английский запасной текст в клиенте, и он на форме создания
+  игры.
+- `ExceptionProblemDetailsFactoryExtensions.cs:52-53`: заголовок
+  "Internal server error" и текст "Server error. Address the administration for
+  technical support. Use the following token to help us identify your issue:
+  {correlationId}" — по-английски. Сам текст при этом действенный: он дает
+  корреляционный токен, единственное, с чем пользователь может прийти в
+  поддержку. Клиент его выбрасывает и показывает "Ошибка сервера. Попробуйте
+  позже." (client.ts:128), так что токен до пользователя не доходит ни на каком
+  языке.
+- `ExceptionProblemDetailsFactoryExtensions.cs:40`: заголовок "Validation failed"
+  по-английски; спасает только то, что полевые коды при 400 всегда есть и
+  `describeFailure` берет их первыми.
+
+Последствие: конкретные вводы (длинный заголовок переписки, недоступный список
+тегов, любая пятисотка) дают пользователю английский текст либо теряют
+единственную полезную деталь — токен.
+
+Исправление: перевести три строки, а текст пятисотки заменить русским с
+подстановкой токена и показывать его в тосте перехватчика вместо "Попробуйте
+позже" — иначе форма обращения в поддержку остается без того, что просит.
+
+### [НИЗКАЯ] middot-and-guillemets — один "·" в живом UI и три пары елочек в конвенциях
+
+`UI_STANDARDS.md:165` объявляет "·" запрещенным. В интерфейсе он остался в одном
+месте — `GameRoom.vue:207`:
+
+```ts
+const hidden = roll.public === false ? " · скрытый" : "";
+```
+
+Строка рисуется в чипе броска в композере поста (GameRoom.vue:434), то есть
+мастер видит "2d6 +1 · скрытый".
+
+В `docs/PROGRESS.md` символ стоит 58 раз на 10 строках как разделитель списков
+маршрутов. В `docs/conventions/` остались три пары елочек вне девиза:
+API_DESIGN.md:139, DATA_STORAGE.md:49, PATTERNS.md:479.
+
+Последствие: в одном живом месте нарушен разделитель, объявленный запрещенным, и
+собственные конвенции нарушают собственное правило кавычек — то есть текст,
+который читают как эталон, эталоном не является.
+
+Исправление: в GameRoom.vue заменить на " | " (или на скобку, если " | " в чипе
+не годится визуально — это уже вопрос аппрува). В трех файлах конвенций
+заменить елочки на прямые кавычки, в PROGRESS.md — на " | ".
+
+### [НИЗКАЯ] yo-in-claude-docs — 15 вхождений буквы "е с двумя точками" в трех файлах .claude
+
+`.claude/README.md` (6 вхождений, включая строку интерфейса в примере кода на
+:351 — там "Загрузить еще" набрано запрещенной буквой),
+`.claude/skills/requirement-ledger/SKILL.md` (5),
+`.claude/skills/skeleton-parity/SKILL.md` (3). Правило CODE_STYLE.md:11 явно
+распространяется на документацию.
+
+Последствие: пример кода в README.md:351 содержит строку интерфейса с
+запрещенной буквой — то есть документ, по которому пишут код, показывает
+нарушение как образец.
+
+Исправление: заменить букву в трех файлах; в README.md:351 это критично, потому
+что строка выглядит как копируемый образец.
+
+### [НИЗКАЯ] comments-that-lie — четыре комментария описывают не то, что делает код
+
+- `useGameDisplay.ts:141` и `:153`, `useBlogDisplay.ts:88` и `:99` обещают
+  подпись "Ассистент(ы):", а код на `useGameDisplay.ts:156` и
+  `useBlogDisplay.ts:102` выдает "Ассистент" или "Ассистенты" по числу. Форма со
+  скобкой в интерфейсе не появляется никогда.
+- `tooltipBuilders.ts:58-62` объясняет строковую ветку `wordOrForms` как
+  совместимость с существующими вызовами. Вызовов три
+  (UsersDataTable.vue:152, :167, :182), и все три передают кортеж форм — ветка
+  мертва, а комментарий утверждает обратное.
+- Название награды в базе — "Народное признание, например"
+  (DmDbContext.cs:1857), и это намеренная шутка. Три комментария цитируют его
+  без ", например": AwardType.cs:18, AwardDtos.cs:13,
+  ProfileAwardsSection.vue:20. Ровно так шутку и "исправляют": разработчик
+  сверится с комментарием и решит, что в сиде опечатка.
+- `roles.ts:71` описывает поле `title` как множественное название раздела, но у
+  трех ролей оно единственное: "Пользователь", "Гость", "Система"
+  (roles.ts:108-124).
+
+Последствие: комментарий, расходящийся с кодом, стоит дороже отсутствующего —
+по нему принимают решения. Случай с наградой прямо ведет к удалению
+намеренной шутки.
+
+Исправление: привести четыре комментария в соответствие с кодом; в цитатах
+названия награды дописать ", например" и рядом отметить, что это часть названия.
+
+### [НИЗКАЯ] orthography-and-quoted-labels — дефисы и регистр в цитируемых названиях
+
+- "арт конкурс" без дефиса: `formatThreshold.ts:89`
+  (`return \`${ordinal} арт конкурс\`` → "1-й арт конкурс") и
+  `ProfileAwardsSection.vue:127` ("Арт конкурс"). По-русски "арт-конкурс";
+  проект сам так пишет в сиде тега "Шок-контент" (DmDbContext.cs:1067).
+- `RulesPage.vue:168` цитирует тег как `"без мата"`, тогда как тег называется
+  "Без мата" (DmDbContext.cs:995). На той же странице `:155` цитирует
+  "Острые темы" точно, как в сиде (DmDbContext.cs:1076) — то есть внутри одной
+  страницы одно название процитировано верно, другое нет.
+- Награда за конкурс называется "Литконкурс" (DmDbContext.cs:1824, :1836, :1848),
+  а серия того же конкурса — "литературный конкурс"
+  (formatThreshold.ts:86).
+
+Последствие: читатель правил ищет в фильтре игр тег ровно так, как он
+процитирован, и не находит совпадения по регистру; в профиле он видит награду
+"Литконкурс" и подпись серии "23-й литературный конкурс" и не уверен, что это
+одно и то же.
+
+Исправление: дефис в "арт-конкурс"; цитаты названий тегов и наград приводить
+дословно; выбрать одну форму для конкурса.
+
+### [НИЗКАЯ] greeting-register — приветствие в трех регистрах
+
+- "Здравствуй," — шапка сайта (Header.vue:119) и мобильный ящик (App.vue:41),
+  форма на "ты";
+- "Здравствуйте, {username}!" — письма (UsernameChangeMailSender.cs:27, :57,
+  EmailChangeWarningMailSender.cs:31), форма на "вы";
+- "Привет! Мы рады видеть вас…" — вводная к правилам (RulesIntro.vue:10),
+  неформальное приветствие с формальным местоимением.
+
+Весь остальной интерфейс обращается на "вы" последовательно ("Проверьте почту",
+"Вы можете отключить email-уведомления в настройках профиля").
+
+Последствие: пользователь получает "Здравствуй" на сайте и "Здравствуйте" в
+письме о том же аккаунте. Возможно, "Здравствуй" — сознательный перенос со
+старого сайта, но обоснования в коде нет, и письма с ним не согласованы.
+
+Исправление: решение владельца — какой регистр канонический; после решения
+привести шапку, ящик и три письма к одному. Обратите внимание: страницы ошибок в
+эту правку не входят по отдельному указанию их не трогать.
+
+### [НИЗКАЯ] required-validator-no-message — обязательность поля не объясняется словами
+
+`useValidatedField.ts:196-200`:
+
+```ts
+required:
+  (message = ""): SyncValidator =>
+  (v) =>
+    v.trim() ? null : message,
+```
+
+Все пять вызовов идут без сообщения: LoginForm.vue:30, :34,
+RegistrationForm.vue:49, AccessRecoveryForm.vue:32. Механика при этом корректна —
+`isValid` сравнивает с `null`, а не с ложным значением (useValidatedField.ts:61),
+так что пустая строка считается ошибкой и кнопка остается заблокированной.
+
+Последствие: пользователь оставил пароль пустым, видит неактивную кнопку "Войти"
+и ни одного слова о том, чего не хватает. Форма не врет, но и не помогает.
+
+Исправление: передать "Обязательное поле" (текст уже есть в
+`VALIDATION_MESSAGES.Empty`, validationErrors.ts:15) или задать его значением по
+умолчанию вместо пустой строки.
+
+### [НИЗКАЯ] pagination-label-and-politeness — два слова для одного действия и одно "пожалуйста"
+
+- Кнопка догрузки называется "Показать еще" в поиске по сообщениям
+  (MessageSearchPanel.vue:483) и "Загрузить еще" в уведомлениях
+  (NotificationsPage.vue:271).
+- В слое тостов единственная вежливая формула: "Сессия истекла. Пожалуйста,
+  войдите снова." (client.ts:105). Соседние сообщения прямые: "Недостаточно
+  прав для этого действия" (:112), "Ошибка сервера. Попробуйте позже." (:128),
+  "Нет соединения с сервером" (:134).
+- Формулировка "тысячи игроков создают здесь свои истории"
+  (AboutPage.vue:70-73) относит к игрокам и мастеров, тогда как в остальном
+  интерфейсе "игрок" — строго роль в игре.
+
+Последствие: мелкая рябь регистра и терминологии. Ни одно из трех не ломает
+понимание, но каждое требует от читателя решить, разное это или одно и то же.
+
+Исправление: одно слово для догрузки; "пожалуйста" убрать или добавить всюду;
+в тексте /about заменить "игроков" на "участников" или "пользователей".
+
+## Чего я не смог определить
+
+- Сознательна ли форма "Здравствуй" в шапке. Это перенос со старого сайта или
+  недосмотр — обоснования в коде нет. Решает владелец; если сознательна, стоит
+  привести к ней письма, а не наоборот.
+- Согласована ли замена "·" в чипе броска (GameRoom.vue:207) на " | ".
+  Визуальное изменение требует поштучного аппрува; функционально правка
+  тривиальна.
+- Что именно видит непривилегированный пользователь на семи страницах модерации
+  без фразы отказа. Я проследил код до `describeFailure`, и там развилка зависит
+  от того, что сервер положит в `title` для конкретного 403 — либо
+  IntentionManagerException с английским текстом, либо русская фраза из
+  AuthenticationApiService.cs. Развести это можно только на поднятом стенде
+  запросом от обычного аккаунта.
+- Насколько заметен английский `title` на практике: доля тех 113 мест, где
+  сервер действительно кладет в `title` английское сообщение, а не оставляет
+  его пустым, зависит от эндпоинта. Точная цифра требует прогона API и
+  фиксации ответов на 400/404/409/410 — я подтвердил механизм и один сквозной
+  путь (BlogBlacklistService.cs:92 → BlacklistSection.vue:28), но не измерил
+  охват.
+- Как читаются письма уведомлений глазами: я разобрал генератор тела
+  (NotificationEmailSender.cs:181-247) и состав метаданных по 41 генератору, но
+  отправку писем не поднимал. Оценить, сколько строк дампа видит человек в
+  типичном письме, можно только отправив несколько на живом стенде.
+
+
+# Документация — C
+
+Оценка среза до опровержения: C. Слой конвенций силен и проверяем (числа безопасности, битовые маски, счетчики сида, названные тесты-механизмы — все сверено и совпадает, ноль битых ссылок), но три контрактных документа описывают параметры, которых в коде нет (?page вместо ?number, ?sort вместо sortBy/sortOrder, порядок middleware с маршрутизацией в конце), агентский .claude/README.md — устаревший сирота, учащий запрещенным паттернам, а дублирование правил в двух документах уже разошлось.
+
+Срез — это 25 файлов под `docs/` (плюс один .docx), корневой README и весь `.claude/`: инструкция агентам, три определения агентов, два скилла, три хука. Судить их надо как контракт: новичок и агент читают их вместо кода и действуют по написанному.
+
+Вердикт: слой конвенций хорош и в основном проверяем. Я вытащил из docs десятки конкретных чисел и имен и сверил их с кодом: параметры Argon2, порог блокировки, длительности сессий, битовую маску доступа к разделам форума, счетчики стартовых данных, наличие тестов, на которые документы ссылаются как на механизм принуждения, — совпадает. Сломанных относительных ссылок в дереве нет ни одной, все 25 файлов под `docs/` достижимы из индекса README. Сильная часть — это разделы "почему не так" с названным триггером пересмотра (`API_DESIGN.md:18-24`, `PATTERNS.md:475-486`, `DATA_STORAGE.md:179-183`, `DEPLOYMENT.md:158-169`): именно это из кода не прочитать, и именно это написано.
+
+Оценка не выше C по трем причинам. Первая: три документа, которые по своей роли являются контрактом, описывают параметры, которых в коде нет — `?page=N` вместо реального `?number=`, `?sort=field:desc` вместо `sortBy`+`sortOrder`, и порядок middleware, в котором маршрутизация стоит последней, то есть ровно та ошибка, от которой предупреждает `PATTERNS.md:496-498`. Ошибка тут молчаливая: неизвестный query-параметр биндер игнорирует, страница отдает первую страницу и порядок по умолчанию, и никто не узнает. Вторая: `.claude/README.md` — 509 строк, на которые никто не ссылается, где хуки названы `.sh` (они `.js`), а примеры для агента учат класть компоненты в `src/components/`, писать `LoadingSpinner` (запрещен `CODE_STYLE.md:322`) и ставить запрещенную букву в строку интерфейса. Третья: дублирование уже разошлось — таблица защиты от атак и политика паролей живут в двух документах с разными наборами строк, а "перед коммитом" существует в трех несовпадающих версиях.
+
+Дефектов, которые дотягиваются до пользователя, здесь шесть, и два из них — деплойные: имена образов в `DEPLOYMENT.md` не те, что публикует CI, а обещанные уведомления по алертам не подключены ничем. По отдельности эти находки тянут на D; массив остальных документов удерживает срез на C.
+
+## Что сделано хорошо
+
+- `AUTHENTICATION.md:91-96` не просто приводит верные числа (сверено с `src/DM.Web.API/appsettings.json:42-45` — 8760 / 365 / 10080 / 1), но называет ловушку: дефолт 24 часа в `AuthenticationConfiguration.cs:13` перекрыт конфигурацией и не действует никогда, поэтому снятая галочка "запомнить меня" ничего не меняет. Это тот класс знания, за которым документация и нужна.
+- Числа безопасности проверяемы и верны: `SECURITY.md:9-16` против `HashProvider.cs:13-28` (KeyLength 32, память 19*1024, t=2, p=1) и `SecurityManager.cs:24` + `SaltFactory.Create` (100 символов base64 = ровно 75 байт соли); `SECURITY.md:73` против `AuthenticationConfiguration.cs:59,65` (15 попыток, 30 минут); `SECURITY.md:160-166` против `PasswordPolicyConfiguration.cs:12,20`.
+- `AUTHORIZATION.md:200-208` воспроизводит `BoardAccessPolicy` дословно, включая пропуск `1 << 4` — то есть таблицу писали с кода, а не по памяти (`src/DM.Domain.Core/Enums/BoardAccessPolicy.cs`).
+- `PATTERNS.md:139-143` объявляет правила слоев FSD исполняемой копией в `.eslintrc.cjs` — и это правда в обе стороны: `.eslintrc.cjs:29,44-51,109-114` реализует направление импортов, барьер barrel и адресность `@x`, а текст сообщения об ошибке ссылается назад на `docs/conventions/PATTERNS.md`. Расхождение здесь невозможно бесшумно.
+- Документы ссылаются на тесты как на механизм, и тесты существуют: `test/DM.Web.API.Tests/Features/General/DbContextScopeResolutionShould.cs` (инвариант `PATTERNS.md:510-512`), `test/DM.Architecture.Tests/ServiceLayerBoundaryShould.cs` (`PATTERNS.md:41`), `test/DM.Web.API.Tests/Shared/MutatingActionsShould.cs` (`API_DESIGN.md:126-133`), `test/DM.Web.API.IntegrationTests/Controllers/General/OpenApiContractShould.cs` (`API_DESIGN.md:93-95`), `test/DM.Infrastructure.Core.Tests/Storage/ImageProcessingServiceShould.cs:47` — `Enum.GetValues<UploadType>().Where(type => !_sut.IsImageType(type))`, ровно обещание `UPLOADS.md:93-97`.
+- `BBCODE_RENDERING.md` — единственный документ, где я проверил каждый названный идентификатор, и все нашлись: `ModBlockSanitizer`, `PermissionFilteringVisitor`, `GetForSurface`, `GetForAuthorEdit`, `htmlToBbcode`, `PostBbText` / `CommonBbText` / `InfoBbText`. Инструкция "как добавить новый тег" (`:142-152`) исполнима как есть.
+- `LOCAL_SETUP.md:75-77` обещает 11 разделов форума и 65 тегов в 8 группах — в `DmDbContext.cs` ровно 8 `new TagGroup` (блок с 436), 65 `new Tag` (блок с 494) и 11 `new Board` (блок с 1081).
+- Ноль битых относительных ссылок на 26 md-файлах (проверено обходом всех `[](...)`), и индекс README покрывает все 25 файлов `docs/` без пропусков.
+- `.claude/agents/frontend-developer.md:26-29` отказывается перечислять файлы и объясняет почему: "A file inventory in an agent definition rots the moment the tree moves, and a stale one is worse than none". Это правило, которого не хватает половине остального дерева.
+- Хуки документируют собственные решения там, где они принимались: `block-new-migrations.js:7-25` (почему node, а не bash+jq; почему следить не только за Write; что именно запрещено и почему пересоздание разрешено), `lint-edited-file.js:4-21` (почему один файл, почему не type-check, почему exit 2 не блокирует). Это ровно та документация, которая не отстанет от кода, потому что живет в нем.
+
+## Находки
+
+### [ВЫСОКАЯ] api-design-sort-contract — раздел Sorting описывает несуществующий формат, противоречащий соседнему разделу того же документа
+
+> **Опровержение: подтверждено.**
+
+`API_DESIGN.md:178-187`:
+
+```
+GET /v1/games?sort=subscribersCount:desc     # Popular = по подписчикам
+GET /v1/games?sort=lastPostUtc:desc          # Active = по последнему посту
+...
+**Формат:** `?sort=field:asc|desc` (default: `desc`)
+```
+
+Параметра `sort` в проекте нет: поиск `public string? Sort` и `FromQuery(Name = "sort")` по `src/` пуст. Есть пара `SortBy` + `SortOrder` (`src/DM.Web.API/Features/Game/Games/GamesQuery.cs`, `src/DM.Domain.Game/Features/Games/GamesQuery.cs:110,115`), и допустимые значения поля — не те, что в примерах: `GamesQueryValidator.cs:11-21` разрешает только `created`, `recruitmentstarted`, `title`, `popularity`, `status`, `availableslots`, `activated`, `closed`. Ни `subscribersCount`, ни `lastPostUtc`, ни `createdUtc`, ни `rating`. При этом соседняя таблица того же документа (`:191-197`) пишет правильную форму — `sortBy=popularity` — и она же используется клиентом (`entities/game/api/gameApi.ts:193-194,264-265`).
+
+Последствие: клиент, написанный по разделу Sorting, получает 200 и порядок по умолчанию (`created desc`), а не запрошенный. "Популярные игры" на такой странице — это просто самые новые. Валидатор не спасает: он проверяет `SortBy`, а не отвергает лишние параметры. Внутреннее противоречие документа делает его хуже, чем просто устаревшим — из двух соседних разделов читатель выберет тот, что ближе.
+
+Исправление: удалить раздел с `?sort=field:dir`, оставить один формат `?sortBy=<поле>&sortOrder=asc|desc`, перечислить допустимые поля ссылкой на валидатор (не копией) и указать поведение при неизвестном поле (400 от FluentValidation) и при отсутствии параметра.
+
+### [ВЫСОКАЯ] monitoring-alerting-not-wired — документ обещает уведомления по алертам, которых некому отправлять
+
+> **Опровержение: подтверждено.**
+
+`MONITORING.md:152-183` описывает алертинг как настраиваемую вещь: "7 правил в `docker/prometheus/alerts.yml`", инструкция из трех шагов ("Открыть Grafana → Alerting → Notification channels", "Добавить канал", "Привязать к правилам") и YAML-сниппет для `docker/prometheus/alertmanager.yml`.
+
+В инфраструктуре нет ни alertmanager, ни маршрутизации: `docker/prometheus.yml` содержит только `rule_files` (строка 5) и не содержит секции `alerting`; сервиса alertmanager в `docker/docker-compose.yml` нет (поиск по строке пуст); файла `docker/prometheus/alertmanager.yml` не существует (в каталоге `docker/prometheus/` лежит один `alerts.yml`); в провижининге Grafana есть только датасорсы и дашборды (`docker/grafana/provisioning/`), контакт-точек и правил нет. Правила при этом действительно есть, но их восемь, а не семь: `alerts.yml` объявляет `ApiDown`, `HighErrorRate`, `HighLatency`, `ConsumerDown`, `ConsumerScrapeTargetMissing`, `PostgresDown`, `HighMemoryUsage`, `DiskSpaceLow`. Восьмое, `ConsumerScrapeTargetMissing`, отсутствует в таблице `MONITORING.md:158-166` и в `DEPLOYMENT.md:183` — при том, что тот же `MONITORING.md:97` о нем пишет как о существующем. Документ противоречит себе через 60 строк.
+
+Последствие: правила Prometheus вычисляются и никуда не уходят. Оператор, прошедший три шага из документа, не найдет в Grafana ни одного из этих правил (они не Grafana-правила) и либо решит, что алертинг сломан, либо — что он настроен. `ApiDown` при этом молчит именно тогда, когда нужен. Это операционная слепота, оформленная как инструкция.
+
+Исправление: разделить факт и план. Факт: правила лежат в `alerts.yml`, вычисляются Prometheus, получателя нет. План: подключить alertmanager (сервис в compose, секция `alerting` в `prometheus.yml`, файл конфигурации) либо перевести правила в Grafana unified alerting с провижинингом контакт-точки. Число правил из текста убрать, оставив ссылку на файл.
+
+### [СРЕДНЯЯ] system-md-middleware-order — SYSTEM.md перечисляет конвейер в порядке, который сам проект называет дефектом
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Quote is exact: docs/architecture/SYSTEM.md:150-159 lists RateLimiter 6th and Routing 9th, while src/DM.Web.API/Startup.cs:264-269 has UseRouting() then UseRateLimiter() with the comment the report quotes verbatim, and UseForwardedHeaders() at :235 is absent from the list along with compression/caching. But the claimed consequence needs someone to rebuild a pipeline from prose: grep shows exactly two UseRouting sites, and the second (src/DM.Infrastructure.Core/Extensions/WebBuilderExtensions.cs:24, worker health+metrics host) has no limiter or auth at all, so the 5→100 req/min brute-force escalation is hypothetical. The invariant is also stated in PATTERNS.md:498 and in the code comment. Docs-only inaccuracy, nothing reachable.
+
+`SYSTEM.md:150-159` дает нумерованный список из 9 шагов, где `RateLimiter` стоит шестым, а `Routing` — девятым, последним:
+
+```
+6. RateLimiter (100 req/min global, 5 req/min auth)
+7. AuthenticationMiddleware (Cookie → Identity)
+8. Authorization
+9. Routing → Controllers + SignalR Hub
+```
+
+В коде порядок обратный, и там же стоит комментарий, объясняющий цену ошибки (`src/DM.Web.API/Startup.cs:264-272`):
+
+```csharp
+.UseRouting()
+// After UseRouting on purpose: the limiter resolves its policy from
+// endpoint metadata, which routing is what populates. Registered
+// before it, every [EnableRateLimiting] attribute was inert and only
+// the global limiter ever ran.
+.UseRateLimiter()
+```
+
+Список пропускает и `UseForwardedHeaders`, который в коде объявлен первым осознанно (`Startup.cs:232-235`) и на котором держится все, что читает адрес клиента, включая правило из `SECURITY.md:87-95`. Плюс `UseResponseCompression` и `UseResponseCaching`. И тот же инвариант, что нарушен в списке, отдельно сформулирован в `PATTERNS.md:496-498`: "Компонент, читающий метаданные эндпоинта, обязан стоять после маршрутизации".
+
+Последствие: тот, кто собирает конвейер по документу — второй хост, воркер с HTTP-поверхностью, ревью `Startup.cs` на соответствие документации — ставит лимитер перед маршрутизацией. Все `[EnableRateLimiting]` становятся мертвыми, остается только глобальный лимит, и бюджет онлайн-подбора пароля молча растет с 5 запросов в минуту до 100. Ни сборка, ни тесты этого не покажут.
+
+Исправление: заменить нумерованный список на порядок из `Startup.cs` (`UseForwardedHeaders` → `SecurityHeaders` → сжатие/кеш → `Correlation` → `ErrorHandling` → CORS → CSRF → `UseRouting` → `UseRateLimiter` → аутентификация → авторизация → эндпоинты), а рядом одной строкой оставить причину, по которой два элемента стоят именно там, со ссылкой на `PATTERNS.md`. Числа лимитов из списка убрать — их место в `API_DESIGN.md`.
+
+### [СРЕДНЯЯ] url-structure-page-param — документ URL обещает `?page=N`, которого в проекте нет
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Facts hold and the report undercounted: docs/conventions/URL_STRUCTURE.md states ?page=N at :183, :186-188 and again at :243, and never mentions the real key. shared/ui/Paging/Paging.vue:101 defaults queryKey to "number", 16 call sites pass query-key="number", readers use route.query.number (pages/forum/TopicsList.vue:136, pages/game/GameRoom.vue:41), route.query.page has zero hits, e2e uses ?number=1 (e2e/tests/community/users-search.spec.ts:130), and the API takes skip/take (DM.Domain.Core/Dto/PagingQuery.cs). But no user or shipped link is broken — the app is internally consistent; only a reader is misled, and the mistake surfaces on the first click. No sitemap exists to poison.
+
+`URL_STRUCTURE.md:181-192`:
+
+```
+### Пагинация
+
+**Всегда query parameter `?page=N`**
+
+/forum/general?page=2
+/game/kxmnt/comments?page=3
+/community?page=5
+```
+
+Реальный параметр — `number`. Дефолт в компоненте пагинации: `shared/ui/Paging/Paging.vue:101` — `queryKey: "number"`, и страницы передают его явно (`pages/forum/CommentsList.vue:117,180`, `pages/blog/BlogFeed.vue:135`, `pages/blog/BlogComments.vue:205`, `pages/forum/TopicsList.vue:476`). Читают его так же: `pages/forum/TopicsList.vue:136` (`route.query.number`), `pages/game/GameRoom.vue:41`, `pages/blog/BlogFeed.vue:47`. Поиск `route.query.page` по всему клиенту дает ноль совпадений. На стороне API пагинация вообще не страничная: `DM.Domain.Core/Dto/PagingQuery.cs` — `Skip`/`Take` с максимумом 100.
+
+Последствие: любая ссылка, собранная по документу, ведет на первую страницу — неизвестный query-параметр Vue Router и биндер просто игнорируют, ошибки нет. Это ломает то, ради чего документ существует: ссылку в письме, ссылку в тикете, e2e-тест, sitemap. Отладка неприятная: страница открывается, выглядит целой, просто показывает не то.
+
+Исправление: заменить `page` на `number` в правиле и в трех примерах, добавить строку про то, что `page=1` в URL не пишется (`Paging.vue:265-267` удаляет ключ), и отдельной строкой — что API страниц не знает и принимает `skip`/`take`, а перевод делает клиент.
+
+### [СРЕДНЯЯ] claude-readme-antipatterns — 509 строк, на которые никто не ссылается, учат тому, что проект запрещает
+
+> **Опровержение: частично неверно.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> The file is 509 lines, tracked, and referenced by no md (only .claude/CLAUDE.md:33 links the root README); hooks are named .sh at :477 and :497 while the files are .js; block-new-migrations is described as Write-only at :499-503 though .claude/hooks/block-new-migrations.js:69-78 also catches Bash/PowerShell; lint-edited-file.js (settings.json PostToolUse) is not mentioned; :59 points at the nonexistent docs/reference/standards.md; the :313-399 example uses src/components/ and LoadingSpinner (banned by CODE_STYLE.md:322-323, zero hits in src/). Two bullets are wrong: the е count is already fixed — HEAD (5e70d0e5, "Fifteen instances of the letter the project does not use are gone") removed them; 5e70d0e5^ had exactly the lines cited (6/6/3), the current tree has 0. And "такие пути запрещены линтером" is false: src/DM.Web.Client/.eslintrc.cjs:107-108 turns boundaries/no-unknown-files and boundaries/no-unknown off deliberately, so src/components/** is invisible to ESLint — the ban is convention-only (PATTERNS.md:96-134). Harm requires a human to hand the file to someone; the harness never loads it.
+
+`.claude/README.md` не достижим ни из одного md-файла (проверено обходом ссылок: единственный документ `.claude/`, на который есть ссылка, — `agents/code-reviewer.md` из `CLAUDE.md:49`). Харнесс его тоже не загружает: автоматически читается `CLAUDE.md`, а не `README.md`. Содержимое при этом расходится с проектом почти во всем проверяемом:
+
+- Хуки названы `block-dangerous-git.sh` и `block-new-migrations.sh` (`:477,499`) — файлы называются `.js` (`.claude/hooks/`), и третий хук, `lint-edited-file.js`, не упомянут вовсе, хотя он единственный, который срабатывает на каждую правку.
+- Описание `block-new-migrations` (`:499-508`) сводит его к перехвату `Write` — хук с 2026-07-28 ловит еще `dotnet ef migrations add` в Bash и PowerShell (`block-new-migrations.js:69-78`), и именно это его основная работа.
+- Пример для frontend-агента (`:313-399`) кладет компонент в `src/components/forum/TopicList.vue` и composable в `src/composables/useTopics.ts` — вне FSD; такие пути запрещены линтером (`.eslintrc.cjs:40,44-51`) и правилами `PATTERNS.md:96-134`.
+- В том же примере — `import LoadingSpinner from '@/components/common/LoadingSpinner.vue'` и текст "Загрузка...". `CODE_STYLE.md:320-324` запрещает буквально это: "Компоненты типа `LoadingSpinner`". В коде такого компонента нет (поиск по `src/` пуст).
+- Шесть вхождений "е с двумя точками" (`:93,215,351,412,466,468`), одно из них внутри строки UI: `'Загрузить еще'`.
+- `:59` ссылается на `docs/reference/standards.md` — такого файла нет и не было (в `docs/references/` лежат `GLOSSARY.md` и `CONFIGURATION.md`).
+
+Последствие: документ безвреден, пока его никто не открыл, и вреден в тот момент, когда открыл. Агент или человек, которому его дали как "конфигурацию проекта", получает готовый пример неправильной раскладки файлов, запрещенного спиннера и "е с двумя точками" в строке интерфейса — три правки, которые потом ловятся ревью или линтером поштучно. Расхождение по хукам хуже: читатель считает, что правки после записи ничем не проверяются, и не понимает, откуда приходят замечания ESLint.
+
+Исправление: либо удалить файл (агенты описаны в `.claude/agents/*.md`, хуки — в `settings.json` и в собственных заголовках, и оба источника точнее), либо сократить до одной страницы без примеров кода: список агентов одной строкой каждый, список хуков с реальными именами файлов и тем, на какие инструменты они навешены, ссылка из `CLAUDE.md`. Примеры вызова Task не нужны — харнесс выбирает агента сам.
+
+### [СРЕДНЯЯ] deployment-image-names — имена публикуемых образов в документе не те, что публикует CI
+
+> **Опровержение: частично неверно.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Inventory errors confirmed: .github/workflows/dotnet.yml has seven jobs (build:27, frontend:67, e2e:100, dependency-scan:203, publish:227, publish-frontend:288, compose-topology:332), IMAGE_PREFIX is <owner>/dm (:23) with suffixes api/worker-mail/worker-notification (:238-242) plus dm-front (:312) — four images, not the three named dm3/consumer-* in DEPLOYMENT.md:24,27; and MaxPoolSize=100 in docker/docker-compose.yml:24 and in every appsettings.json, never 200 as DEPLOYMENT.md:171 claims. The consequence is refuted: nothing takes image names from the doc — docker-compose.yml:472 hardcodes ${API_IMAGE:-ghcr.io/dm-am/dm-api:latest} and DEPLOYMENT.md:71-73 itself says images are pulled from the registry by default, so `docker compose pull` cannot fail from a wrong table. Cost is confusion when hunting the images in GHCR, not a broken deploy.
+
+`DEPLOYMENT.md:24,27`:
+
+```
+| Build & Test | dotnet.yml | ... | 4 jobs: Build+Test, Frontend CI (type-check + build),
+  Dependency Scanning (dotnet+npm audit), Publish (matrix: 3 Docker images: dm-api,
+  consumer-mail, consumer-notification) |
+
+**Образы публикуются в:** `ghcr.io/<username>/dm3` (3 образа: dm-api, consumer-mail, consumer-notification)
+```
+
+Фактически (`.github/workflows/dotnet.yml`): jobs семь — `build`, `frontend`, `e2e`, `dependency-scan`, `publish`, `publish-frontend`, `compose-topology`. Префикс образа `${{ github.repository_owner }}/dm` (`:23`), суффиксы из матрицы — `api`, `worker-mail`, `worker-notification` (`:237-242`), плюс отдельный образ фронтенда `dm-front` (`:312`). То есть реальные имена — `ghcr.io/<owner>/dm-api`, `dm-worker-mail`, `dm-worker-notification`, `dm-front`, и их четыре, а не три. В `dotnet.yml:20-22` рядом стоит предупреждение, что имена обязаны совпадать с тем, что тянет `docker-compose.yml`, иначе CI публикует то, что никто не потребляет.
+
+Тут же рядом: `DEPLOYMENT.md:171` обещает `MaxPoolSize=200`, а строка подключения в `docker/docker-compose.yml:24` задает `MaxPoolSize=100`.
+
+Последствие: развертывание по документу тянет `ghcr.io/<username>/dm3-consumer-mail` — тега не существует, `docker compose pull` падает или, хуже, поднимает старый локальный образ. Тот, кто планирует пул соединений по документу, планирует под вдвое большую цифру. И тот, кто сверяет CI со списком "4 jobs", не заметит, что e2e-гейт (блокирующий publish) вообще не описан.
+
+Исправление: убрать из документа перечисление jobs и имен образов, оставив правило "имена образов задаются `IMAGE_PREFIX` в `dotnet.yml` и обязаны совпадать с `docker-compose.yml`" со ссылкой на оба файла; `MaxPoolSize` не дублировать, а сослаться на `x-workload-env`. Инвентарь CI в документе не выживет ни одного изменения workflow.
+
+### [СРЕДНЯЯ] progress-stale-snapshot — живой документ прогресса датирован и уже неверен в числах и в инвентаре
+
+`docs/PROGRESS.md` по решению владельца существует как живой спутник полного плана, но его содержимое зафиксировано на 2026-07-14 и с тех пор не обновлялось:
+
+- `:8` — "14 проектов, 1697 тестов + DM.Web.API 54", "vitest 798/798". Сейчас в `test/` 16 csproj (15 тестовых плюс библиотека `DM.Testing`), объявлений `[Fact]`/`[Theory]` — 1825, спек-файлов фронта — 50, вызовов `it(`/`test(` — 915. Числа не сходятся ни по одному измерению.
+- `:8` — "диакритическая е в src/docs — 0". По `src/` одно вхождение: `DM.Domain.Core/Extensions/ReadableGuidHelper.cs:80`, где "е с двумя точками" — ключ таблицы транслитерации, то есть законное. По `docs/` действительно ноль, но в `.claude/` — 14 (см. находку про "е с двумя точками").
+- `:24` — "Модерация (11 страниц + панель)", а собственный инвентарь на `:53` перечисляет 18 адресов плюс панель, и роутер (`app/providers/router.ts:291-476`) дает столько же.
+- `:54` перечисляет `/auth/transfer`. Такого роута нет: в `router.ts` из `auth/` только `/auth/callback` (`:672-673`), поиск "transfer" по роутеру пуст. Зато в инвентаре нет `/support/track/:token`, `/forum-topic/:topicId`, `/game/:id/posts/unread`, `/game/:id/comments/unread`, `/moderation/awards/series/:id`.
+- Все ссылки инвентаря ведут на `localhost:5174` — это порт `vite preview`, который поднимается только под e2e (`dotnet.yml:180-182`); dev-сервер, обещанный README и `LOCAL_SETUP.md`, слушает 5173.
+
+Последствие: числа из `:8` работают как база для поиска регрессий ("было 798 — стало 798, значит зеленое"), а реальная база выше на сотню тестов, то есть выпавшие тесты так не заметить. Инвентарь используется для ручного прохода: тестировщик открывает `/auth/transfer`, получает catch-all 404 и открывает баг на несуществующую страницу, а четыре реальных адреса не проверяет, потому что их в списке нет. Ссылки на 5174 не открываются вовсе.
+
+Исправление: числа заменить на команду, которой они получаются (и не хранить в тексте), либо проставить дату рядом с каждым и обновлять вместе с волной. Инвентарь страниц не держать руками — он выводится из `router.ts`; если он нужен как чек-лист, генерировать. Порт в ссылках — 5173.
+
+### [СРЕДНЯЯ] three-precommit-checklists — "перед коммитом" существует в трех несовпадающих версиях
+
+Три места дают три разных ответа на один вопрос:
+
+- `CODE_STYLE.md:141-144`: `dotnet build`, `npm run type-check`.
+- `TESTING.md:156-161`: `dotnet test`, `npm run test:unit`, покрытие, "нет flaky".
+- `scripts/hooks/pre-push:27-45`: `npm run lint:ci`, `npm run type-check`, `npx vitest run`, `npm run build`, `dotnet build -c Release`, `dotnet test`.
+
+Ни один из первых двух не является подмножеством другого, и оба беднее хука. CI при этом гоняет больше и хука (`dotnet.yml`: те же гейты плюс e2e, plus `dependency-scan`, plus `compose-topology`; `security.yml`: ZAP). Установка хука упомянута ровно один раз и не в конвенциях, а в `README.md:25-26`.
+
+Последствие: контрибьютор, следующий `CODE_STYLE.md`, не запускает ни линтер, ни тесты. Он узнает о падении из CI после пуша в `dev` — то есть после того, как красное уже стало общим. Второй эффект тоньше: два разных чек-листа обесценивают оба, потому что читатель не знает, какой авторитетный.
+
+Исправление: один список в одном месте (естественное — `TESTING.md`), сформулированный как "то же, что гоняет `scripts/hooks/pre-push`", плюс строка про `git config core.hooksPath scripts/hooks` там же, а не только в README. Из `CODE_STYLE.md` чек-лист убрать, оставив ссылку.
+
+### [СРЕДНЯЯ] testing-no-e2e — руководство по тестам не знает про целый ярус из 32 файлов, блокирующий публикацию
+
+`TESTING.md:7-11` объявляет два яруса — backend unit (xUnit) и frontend unit (Vitest). Раздел "Запуск тестов" (`:32-58`) дает команды только для них.
+
+В проекте есть третий ярус: `src/DM.Web.Client/playwright.config.ts`, 32 файла `*.spec.ts` под `e2e/tests/` (десять областей: accessibility, auth, blogs, common, community, forum, gaming, messaging, personal, sidebar), фикстуры с логином (`e2e/fixtures/auth.ts`, `global-setup.ts`), четыре npm-скрипта (`test:e2e`, `:ui`, `:debug`) и job `e2e` в CI, от которого зависят оба publish-job (`dotnet.yml:228,289`). Комментарий в самом workflow (`:93-95`) описывает историю: "32 spec files and 258 tests that only ever executed on the owner's machine". `PATTERNS.md:163` упоминает E2E в пирамиде, но без единого указания, где они и как запускаются.
+
+Последствие: новичок не знает, что e2e существуют, не запускает их локально и получает красный CI на гейте, о котором в руководстве нет строки. Обратная сторона хуже: ярус, не описанный в руководстве по тестированию, гниет — правку UI не сопровождают правкой спеки, потому что о спеке никто не знает.
+
+Исправление: третья строка в таблице обзора (Playwright, E2E, "браузерные сценарии против поднятого стека"), раздел запуска с `npx playwright test --project=chromium` и указанием, что нужен поднятый стек и сид, и одна строка про то, почему в CI только chromium (причина уже написана в `dotnet.yml:171-175` — перенести смысл, не копировать текст).
+
+### [СРЕДНЯЯ] codestyle-unified-names-false — таблица "унифицированных имен между слоями" не описывает ни один слой
+
+`CODE_STYLE.md:37-50` объявляет цель "одинаковые имена свойств в Entity → Domain DTO → API DTO → Frontend" и обещает, что при совпадении AutoMapper маппит автоматически. Строка `:48`: "Мастер игры | `MasterUsername`, `Master` | `MasterLogin`".
+
+Слои называют это по-разному: домен — `OwnerUsernames` (`src/DM.Domain.Game/Features/Games/GamesQuery.cs:51`), API (то есть провод) — `AuthorUsernames` (`src/DM.Web.API/Features/Game/Games/GamesQuery.cs:51`), и связывает их ручной `ForMember` (`GameMappingProfile.cs:46-49`) — то самое, чего таблица обещала избежать. Клиент шлет третье имя: `masterUsernames` (`entities/game/api/gameApi.ts:79,164-165`). `USERNAME_POLICY.md:60` документирует четвертую форму — `?masterUsername=adam`.
+
+Последствие: фильтр по владельцу, отправленный клиентом, до сервера не доходит — `masterUsernames` не биндится ни на что, список игр приходит нефильтрованным, ошибки нет. Это уже случилось и живет в коде; документ, который должен был это предотвратить, называет правильным именем то, которого нет ни на проводе, ни в домене.
+
+Исправление: привести таблицу в соответствие с фактическим именем на проводе (`authorUsernames`) или, если каноном выбирается `master*`, переименовать три места и поправить `USERNAME_POLICY.md:60`. Решение за владельцем, но три имени одного понятия в трех слоях документ обязан либо запрещать проверяемо, либо не обещать вовсе.
+
+### [СРЕДНЯЯ] security-auth-duplicate-tables — одно правило в двух документах, наборы строк уже разошлись
+
+Три таблицы существуют дважды:
+
+- Защита от атак: `SECURITY.md:67-80` (десять строк, включая "Подмена адреса клиента" и "Утечка внутренних деталей") и `AUTHENTICATION.md:113-124` (восемь строк, без этих двух).
+- Параметры токенов: `SECURITY.md:25-32` и `AUTHENTICATION.md:71-78` — дословная копия.
+- Политика паролей: `SECURITY.md:160-166` (три строки) и `AUTHENTICATION.md:98-107` (шесть строк, композиционные правила расписаны по одному).
+
+При этом `AUTHENTICATION.md:69` для хеширования делает правильно: не копирует, а ссылается на `SECURITY.md` как на единый источник. То есть автор знал приемчик и применил его к одному разделу из четырех.
+
+Последствие: смена любого параметра требует правки в двух местах, и первое расхождение уже произошло (два класса атак есть в одном документе и отсутствуют в другом). Читатель `AUTHENTICATION.md` не узнает, что подмена `X-Forwarded-For` вообще считается угрозой. При смене максимальной длины пароля с 128 лгать начнет то место, куда не заглянули.
+
+Исправление: в `AUTHENTICATION.md` оставить ссылки вместо трех таблиц — так же, как это уже сделано для хеширования на `:69`. Требования безопасности живут в `SECURITY.md`, `AUTHENTICATION.md` описывает поток входа.
+
+### [СРЕДНЯЯ] api-design-exceptions-list-stale — реестр "записанных исключений" перечисляет 4 из как минимум 9
+
+`API_DESIGN.md:146-149` вводит правило "один list endpoint с параметрами вместо специализированных" и `:208-218` — механизм для отступлений: список осознанно оставленных специализированных GET. В списке четыре адреса, и все четыре в коде есть (`UserController.cs:47`, `PublicationController.cs:78`, `TopicController.cs:118`, `BanController.cs:70`).
+
+Того же вида эндпоинтов в API больше: `HttpGet("mine")` (`Features/Moderation/Tickets/TicketController.cs:100`), `HttpGet("assigned")` (там же, `:81`), `HttpGet("violators")` (`Features/Moderation/Warnings/ViolatorController.cs:50`), `HttpGet("active")` (`Features/Messaging/GlobalChatEvents/GlobalChatEventController.cs:61`), `HttpGet("/v1/users/{username}/written-endorsements")` (`Features/Community/Endorsements/UserEndorsementController.cs:59`). Последний — прямой двойник задокументированного `best-publication` и в реестр не попал.
+
+Последствие: механизм, который держится на дисциплине пополнения, не пополняется, и его уже нельзя использовать по назначению. Ревьюер, применяющий правило буквально, блокирует новый `/mine`, хотя два уже существуют; ревьюер, посмотревший на код, делает вывод, что правило не действует. Оба вывода неверны, и различить их по документу нельзя.
+
+Исправление: либо дописать реестр и завести дешевую проверку (тест по опубликованному OpenAPI: literal-сегмент в GET-маршруте вне белого списка — падение; инфраструктура для этого уже есть в `OpenApiContractShould.cs`), либо переформулировать правило как предпочтение без реестра. Реестр, который не проверяется, устаревает по построению.
+
+### [СРЕДНЯЯ] api-design-ratelimits-incomplete — таблица лимитов перечисляет 4 политики из 7
+
+`API_DESIGN.md:222-231` дает четыре строки: глобальный 100/мин, аутентификация 5/мин, проверка имени 20/мин, проверка почты 10/мин.
+
+Политик семь (`src/DM.Web.API/Shared/RateLimiting/RateLimitingExtensions.cs:27,53-79`): глобальный 100, `auth` 5, `username-check` 20, `email-check` 10, `uploads` 10, `sliding` 30 со скользящим окном из шести сегментов, `default` 60. Три отсутствующих — не экзотика: `uploads` висит на `POST /v1/uploads` (`UploadController.cs:128`), `sliding` — на поиске и проверке доступности чата, `default` — на обычных авторизованных записях (подписки, приглашения, предпочтения). Про `uploads` 10/мин при этом написано в другом документе (`UPLOADS.md:99-102`), то есть один лимит документирован, а два — нигде.
+
+Последствие: клиентский код, написанный по этой таблице, считает, что кроме auth-путей действует только 100/мин. Поиск с набором по мере ввода упирается в 30/мин, пакетная загрузка изображений — в 10/мин, и оба получают 429 в продакшене, а не на ревью. В `dotnet.yml:129-134` уже зафиксировано, во что это обходится в тестах: одна загрузка `/games` — 17 запросов, и лимит выжигается за три теста.
+
+Исправление: дополнить таблицу тремя строками (что считается: адрес или аккаунт с откатом на адрес) и добавить строку про то, что при `RateLimiting:Enabled=false` политики регистрируются как no-op, а не исчезают.
+
+### [СРЕДНЯЯ] ui-standards-centralization-overstated — шкалы объявлены централизованными, код утверждает обратное
+
+`UI_STANDARDS.md:29-40` называет брейкпоинты "централизованной шкалой breakpoint-токенов для layout-медиазапросов". Сам файл токенов честнее (`src/assets/styles/_Breakpoints.sass:9-12`): "many existing components still hardcode 768/640/600 etc. ... this scale is authoritative only where it is actually used (the page shell + off-canvas drawer for now)". Счет: 70 медиазапросов с литеральными пикселями в 42 файлах против 20 упоминаний `$bp-*` по всему клиенту.
+
+Таблица z-index (`:11-25`) расходится с `_ZIndex.sass` иначе: в файле есть `$z-chat-fab: 10`, которого в таблице нет; строка "Dialog backdrop | 900" не соответствует ни одному токену (900 — это `$z-drawer-scrim`); а уровень 1000 в коде называется `$z-modal`, хотя `UI_STANDARDS.md:76` запрещает термин "Modal" в именах.
+
+Последствие: разработчик, поверивший в централизацию, меняет `$bp-mobile` и ждет перекомпоновку сайта — получает изменение в двух местах из сорока четырех. Ищет `$z-dialog-backdrop`, чтобы положить свой оверлей рядом с диалогом, не находит и придумывает число, то есть заводит еще один литерал. Ирония в том, что документ запрещает термин, которым назван токен, на который он же ссылается.
+
+Исправление: перенести оговорку из `_Breakpoints.sass` в документ (шкала обязательна для нового кода, старое консолидируется отдельной работой) и привести таблицу z-index к именам токенов — колонка "переменная" вместо колонки "значение", включая `$z-chat-fab`; строку "Dialog backdrop" либо убрать, либо завести токен. Переименование `$z-modal` в `$z-dialog` — видимое только для кода, но по словарю документа обязательное.
+
+### [СРЕДНЯЯ] owner-rules-outside-repo — часть жестких правил владельца не существует ни в одном файле репозитория
+
+`.claude/CLAUDE.md` — единственный файл, который читается автоматически. В нем есть запрет опасных git-команд, правило одной миграции, язык и ссылка на текстовые правила. В нем нет ничего про: поштучный аппрув визуальных изменений, запрет пинов моделей у агентов, запрет вызова голого `python` на Windows, формат коммитов без соавторства, обязательный прогон всех гейтов CI перед пушем. Все это — действующие требования владельца, живущие только в его личной памяти вне репозитория.
+
+Два из них уже нарушены внутри самого `.claude/`: все три агента пинят модель — `agents/code-reviewer.md:5`, `agents/debugger.md:5`, `agents/frontend-developer.md:5`, каждый `model: sonnet`. И `settings.local.json` явно разрешает `Bash(python:*)` и `Bash(python3:*)`.
+
+Последствие: правило, которого нет в репозитории, не действует для агента без доступа к этой памяти, для другой машины и для свежего клона. Конкретно: ревью, которое владелец считает прогнанным на модели сессии, молча уезжает на Sonnet; агент вызывает `python` и вешает попап Microsoft Store; конвейер по умолчанию дописывает `Co-Authored-By` в коммит, потому что запрет живет вне репозитория (в истории его нет: 0 вхождений на 50 последних коммитов — правило соблюдается, но не поддерживается ничем).
+
+Исправление: перенести в `CLAUDE.md` то, что является правилом проекта, а не предпочтением в разговоре: визуальные изменения только по аппрув-каталогу, коммиты без соавторства, гейты перед пушем (ссылкой на хук), модель не пинить. Из трех агентов убрать `model:`. Личный журнал требований остается вне гита — это отдельное решение и оно к правилам не относится.
+
+### [СРЕДНЯЯ] local-setup-newbie-claim — обещание "все пользователи начинают с 0 постов" неверно после сида
+
+`LOCAL_SETUP.md:128`: "Все пользователи начинают с 0 постов (статус "новичок")".
+
+Сид назначает рейтинги явно: `src/DM.Tools.Seeder/Seeding/DataSeeder.Users.cs:226-241` задает `QuantityRating` от 40 до 2000 (`SolohinLex` 1500, `TestHonorary` 2000, `TestUser` 300, `TestMentor` 1200), и `:256-257` записывает их в пользователя; дальше `DataSeeder.Games.cs:852` инкрементирует автора за каждый пост. Порог новичка — `QuantityRating < 100` (`DM.Domain.Core/Dto/GeneralUser.cs:221`, вычисляемая колонка в `DmDbContext.cs:2058`). Из шестнадцати профилей под порог попадают три. Устаревший комментарий с тем же текстом сидит и в коде (`DataSeeder.Users.cs:62`) — вероятно, оттуда и переписано.
+
+Последствие: тестировщик, которому нужно проверить премодерацию новичка (главное ограничение из `AUTHORIZATION.md:232-242`), входит под `TestUser`, как обещает документ, и не видит премодерации — потому что у него 300 постов. Дальше он ищет несуществующий баг в гейте.
+
+Исправление: заменить строку на перечисление того, кто именно новичок в сиде (или на правило "новичок = `QuantityRating < 100`, в сиде это `Player Four`, `Тест Елки`, `OnlyReader`"), поправить комментарий в сидере.
+
+### [НИЗКАЯ] yo-and-quotes-in-agent-docs — файлы, задающие текстовые правила, их же нарушают
+
+`CODE_STYLE.md:11-18` распространяет правила русского текста на документацию и комментарии: "е с двумя точками" не используется, кавычки прямые, елочки зарезервированы за девизом на странице "О сайте".
+
+Точный подсчет по репозиторию: "е с двумя точками" — 14 вхождений в `.claude/` (`README.md:93,215,351,412,466,468`; `skills/requirement-ledger/SKILL.md:3,29,30,34,41`; `skills/skeleton-parity/SKILL.md:18,22,37`) и одно законное в `src/` (таблица транслитерации, `ReadableGuidHelper.cs:80`). Елочки — четыре вне девиза: `API_DESIGN.md:139`, `DATA_STORAGE.md:49`, `PATTERNS.md:479`, `skills/requirement-ledger/SKILL.md:17`.
+
+Отдельно: `CODE_STYLE.md:15` предписывает способ проверки ("поиском по этому символу") и не называет единственное законное вхождение. Тот, кто выполнит проверку буквально, "починит" таблицу транслитерации и сломает перевод кириллических имен DM2 в URL.
+
+Последствие: `SKILL.md` и `README.md` — файлы, чей текст агент цитирует и повторяет; "е с двумя точками" из них попадает в ответы и в строки интерфейса (в `.claude/README.md:351` она уже стоит внутри примера UI-строки). Прямая рекомендация "грепни и почини" ломает работающий код.
+
+Исправление: заменить "е с двумя точками" на "е" в четырех файлах `.claude/`, елочки на прямые кавычки в трех документах, и в `CODE_STYLE.md:15` дописать единственное исключение (таблица транслитерации) с указанием, что оно данные, а не текст.
+
+### [НИЗКАЯ] dm2-migration-arithmetic — план переименований не сходится сам с собой, а предписанный BBCode рендерится в текст
+
+`DM2_MIGRATION.md:18-22` заявляет 13,027 пользователей, "~74 (0.6%)" требуют переименования и "~12,953" соответствуют. Группы ниже дают 4 + 57 + 17 + 3 = 81 строку (посчитано построчно: группа A с `:24`, B с `:33`, C с `:95`, D с `:117`; заявленные в заголовках числа совпадают с числом строк, не совпадает сумма).
+
+Второе: `:351-359` предписывает переносить `MasterMessage` в метаигровой комментарий как `[private=master,assistant]`. Значение атрибута у `[private]` — это ключ снимка адресатов (`RenderContext.cs:43`, `PermissionFilteringVisitor.cs:122`), и оно же выводится читателю: шаблон закрытия тега — `Получатели: {value}` (`BbParserProvider.cs:74-75`). Мастера и ассистенты приватный блок увидят, но по правилу lead-override, а не по атрибуту.
+
+Последствие: сверка после конвертера ("ожидаем 74 переименования") не сойдется, а если список урежут до заявленных 74 — семь пользователей останутся с невалидными именами. Каждый перенесенный пост получит подпись "Получатели: master,assistant" латиницей в русском интерфейсе.
+
+Исправление: заменить "~74" на 81 (или пересчитать группы), и в разделе про `MasterMessage` либо задать значение атрибута списком имен персонажей, либо использовать `[private]` без атрибута и добавить строку про то, что видимость обеспечивается lead-override.
+
+### [НИЗКАЯ] roadmap-vs-mirroring-session-transfer — два документа противоречат друг другу о переносе сессий
+
+`ROADMAP.md:34` планирует "Session transfer | Перенос сессий между зеркалами". `MIRRORING.md:118` объясняет, почему этого не будет: "Сессия между зеркалами не переносится. Кука привязана к домену... Переключатель региона переводит на тот же путь другого зеркала, не более". Третий голос — `PROGRESS.md:54`, где числится страница `/auth/transfer` (в роутере ее нет).
+
+Последствие: читатель не может понять, отложенная это работа или закрытое решение, и при следующем заходе на тему разбирает его заново. Для плана это дорогая неопределенность: перенос сессий между доменами — не задача из строки таблицы.
+
+Исправление: одно решение в одном месте. Если решение принято (не переносим, и вот почему) — убрать строку из `ROADMAP` и оставить обоснование в `MIRRORING`. Если тема открыта — в `MIRRORING` дописать, что это текущее поведение, а не окончательный выбор, со ссылкой на `ROADMAP`.
+
+### [НИЗКАЯ] performance-unmarked-aspirations — в одном списке лежат действующие правила и никогда не принятые практики
+
+`PERFORMANCE.md` смешивает проверяемые правила проекта (fast-path кэш с accessPolicy в ключе, TTL против интервала polling, очередь действий URL-фильтров, бакеты кэша BBCode — все это описывает реальный код) с практиками, которых в проекте нет и, похоже, не планировалось: "ETags | Conditional requests" (`:178`) — ноль вхождений `ETag` по `src/`; "Compiled Queries | Для частых запросов" (`:91`) — ноль `EF.CompileAsyncQuery`; "Анализ бандла | Регулярный аудит с vite-bundle-analyzer" (`:76`) — такого пакета нет в `package.json`. Отличительной пометки у этих строк нет.
+
+Последствие: ревьюер или агент, читающий документ как список требований, блокирует правку за отсутствие ETag или требует скомпилированных запросов — работа поверх практики, которую проект не принимал. Обратный эффект: реальные правила рядом теряют вес, потому что список выглядит как каталог общих советов.
+
+Исправление: разделить документ на "действует и проверяется" и "рассматривается", либо вынести непринятое в `ROADMAP.md`, где для этого есть раздел.
+
+### [НИЗКАЯ] doc-pointers-drift — указатели "Файл:" ведут не туда, где лежит описанное
+
+Два случая:
+
+- `SECURITY.md:21` после таблицы параметров Argon2 указывает `src/DM.Domain.Account/Features/Security/SecurityManager.cs`. Файл существует, но параметров в нем нет: память, итерации, параллелизм и длина ключа объявлены в `HashProvider.cs:13-28`; `SecurityManager` только запрашивает соль и сравнивает хеши.
+- `CODE_STYLE.md:200` утверждает: "все SVG иконки в `shared/lib/utils/icons.ts`". Иконок там 38, но есть второй реестр — `shared/ui/Icon/gameIcons.ts` с 25 записями `path` (иконки game-icons.net, на которые ссылается БД через `AchievementType.IconName`), и документ о нем не знает. Запрет "Inline SVG в компонентах" (`:247`) тоже имеет неназванные исключения: логотип в `pages/about/AboutPage.vue:39` и dev-каталог `pages/dev/StyleVariantsPage.vue`.
+
+Последствие: правка параметров хеширования начинается с открытия неверного файла; добавление иконки для награды делается в `icons.ts`, где ее никто не найдет, потому что бэкенд валидирует ключи по `GameIconCatalog.cs`, парный `gameIcons.ts`.
+
+Исправление: в `SECURITY.md` указать `HashProvider.cs` (или убрать указатель — параметры и так в одном файле и находятся поиском). В `CODE_STYLE.md` описать два реестра и границу между ними: общие иконки интерфейса против каталога наград и достижений, чей ключ хранится в БД.
+
+### [НИЗКАЯ] error-pages-table-columns — таблица с шестью заголовками и пятью колонками данных читается неверно
+
+`ERROR_PAGES_AND_LORE.md:32-40`: заголовок объявляет шесть колонок (`Код | Значение | Картинка | Описание | Связь с ошибкой | Есть?`), а каждая строка содержит пять значений. В рендере "готово" уезжает в колонку "Связь с ошибкой", а "Есть?" остается пустой у всех строк.
+
+Последствие: единственный смысл раздела — понять, какие картинки нужно дорисовать. Читатель видит пустую колонку "Есть?" и должен догадываться. Фактическое состояние (проверено): в `src/assets/images/errors/` лежат `400.png`, `401.png`, `403.png`, `500.png`, `general-error.png`; для 404, 409 и 410 картинок нет — то есть содержимое таблицы верно, сломана только разметка.
+
+Исправление: убрать лишний заголовок (колонка "Описание" и "Связь с ошибкой" дублируют друг друга по смыслу) или дописать шестое значение в семь строк.
+
+### [НИЗКАЯ] docx-not-in-index — полный план функционала достижим только из первой строки другого документа
+
+`docs/Документация_по_разработке_DM3.docx` отслеживается гитом и по решению владельца является полным планом функционала (спекой игрового модуля). Ссылка на него одна — `PROGRESS.md:3`. Индекс документации в `README.md:41-91` перечисляет 25 md-файлов и не упоминает его.
+
+Последствие: новичок, который открыл README, чтобы понять, что вообще строится, не узнает о существовании документа с ответом. Раздел "plans/" в индексе выглядит полным.
+
+Исправление: строка в таблице `plans/` индекса README с честной формулировкой того, что это за файл и почему он в бинарном формате.
+
+## Чего я не смог определить
+
+- Точные числа тестов, на которые ссылается `PROGRESS.md:8`. Я посчитал объявления (`[Fact]`/`[Theory]` — 1825, `it(`/`test(` — 915), но `[Theory]` разворачивается в несколько кейсов (`[InlineData]` — 472 штуки), так что реальное число прогонов больше и получается только запуском `dotnet test` и `vitest run`. Утверждаю только то, что заявленные 1697+54 и 798 не могут быть верны одновременно с текущим деревом.
+- Действует ли алертинг хоть в каком-то виде на живом сервере. Я проверил репозиторий: alertmanager нет ни в compose, ни в `prometheus.yml`, контакт-точек в провижининге Grafana нет. Если на боевой машине что-то донастроено руками, это не в гите — и тогда находка меняет форму: документ описывает не то, что развернуто. Разрешается одним взглядом на `docker compose ps` и `Grafana → Alerting` на сервере.
+- Насколько велик реальный ущерб от `[private=master,assistant]` при миграции. Атрибут не ломает рендер и не отбрасывается валидацией, видимость для ведущих обеспечивается lead-override, но снимок адресатов (`PrivateAddresseeSnapshotJson`) конвертер должен чем-то заполнить, и в плане про него нет ни строки. Решает прогон конвертера на копии DM2 с проверкой одного перенесенного поста глазами.
+- Сколько из "записанных исключений" `API_DESIGN.md` на самом деле требуется дописать. Я нашел пять эндпоинтов той же формы, но часть литеральных сегментов (`stats`, `history`, `sessions`) — это агрегации и подресурсы, которые правило разрешает. Границу между "шорткат вместо фильтра" и "подресурс" должен провести владелец; без этого решения реестр не пополнить корректно.
+- Нужен ли `docs/PROGRESS.md` в том виде, в котором он есть. Владелец требовал живой документ прогресса, и это не обсуждается; но инвентарь страниц и счетчики тестов внутри него — ровно тот класс данных, который его правило о документации запрещает. Что делать с этим противоречием — решение владельца: либо генерировать инвентарь, либо принять его гниение как цену.
+
+
+# Сборка, CI/CD, деплой, эксплуатация — D
+
+Оценка среза до опровержения: D. Гейты сборки сделаны всерьез и почти все действительно валят сборку, но доставка и эксплуатация ни разу не проходили целиком: dependency-scan падает без restore и блокирует обе publish-job, инсталлятор обрывается без .env, а поднятый по документации стенд не пускает пользователя в аккаунт, не отдает аватары и открывает API в интернет в обход basic auth.
+
+Срез состоит из двух половин очень разного качества. Половина "сборка и проверки" — 9 job в двух
+воркфлоу (7 в `.github/workflows/dotnet.yml`, 2 в `security.yml`), 18 сервисов в
+`docker/docker-compose.yml`, оверлей боевого стенда, e2e с реальным стеком, CodeQL, ZAP c
+`fail_action: true`, снапшот OpenAPI-контракта с `if-no-files-found: error`, allow-list уязвимостей с
+записанной причиной, гейт консистентности инсталлятора и systemd-юнита. Это сделано взрослыми руками:
+почти каждый гейт именно валит сборку, а не рапортует, и почти у каждого решения в комментарии
+записана причина, которая при проверке оказывается верной.
+
+Половина "деплой и эксплуатация" ни разу не проходила целиком. Документированная установка
+`curl ... setup-server.sh | bash` обрывается на последнем шаге: `.env` никто не создает, а
+`docker-compose.yml:34` объявляет крипто-ключ через `${...:?}`, и compose падает на интерполяции —
+после того как systemd-юнит и cron уже установлены. Если довести `.env` руками, поднявшийся стенд
+все равно нерабочий для пользователя: cookie сессии выставляется с `Secure` на любом хосте кроме
+localhost (`ApiCredentialsStorage.cs:60`), а nginx в оверлее слушает только HTTP (блок HTTPS
+закомментирован), то есть войти нельзя; imgproxy привязан к 127.0.0.1 и не проброшен через nginx, а
+`Endpoint` по умолчанию `http://localhost:8080`, то есть аватары и превью не грузятся ни у кого;
+`dmapi` — единственный сервис из 18, опубликованный на `0.0.0.0` (`docker-compose.yml:480`), то есть
+весь API, `/metrics` и `/_health/detail` доступны из интернета в обход basic auth, который и есть вся
+защита preview-стенда.
+
+Отдельно стоит `dependency-scan`: job не делает restore, а `dotnet list package --vulnerable` без
+assets-файла выходит с кодом 1 ("No assets file was found. Please run restore before running this
+command" — проверено локально, SDK 9.0.308, exit=1). `scripts/check-vulnerable-packages.sh:14`
+присваивает вывод в переменную под `set -e`, значит job красный на каждом пуше, а `publish` и
+`publish-frontend` объявлены через `needs: [build, frontend, e2e, dependency-scan]` — то есть ни один
+образ никогда не публиковался. Локально скрипт проходит, потому что на машине разработчика obj/ уже
+есть, и pre-push-хук этот гейт не гоняет вовсе. Оценка D: гейты сборки заслуживают B, но доставка не
+доставляет, деплой не поднимается по документированному пути, а восстановление из бэкапа
+задокументировано командами, которые физически не могут сработать.
+
+## Что сделано хорошо
+
+- `scripts/check-vulnerable-packages.sh:5-8` — единственное место в проекте, где прямо разобрано,
+  почему `dotnet list package` нельзя использовать как гейт напрямую (exit 0 при найденных
+  advisory), и allow-list `.github/vulnerability-allowlist.txt:8` требует не молчания, а записанного
+  решения с условием снятия.
+- `.github/workflows/dotnet.yml:59-65` — контракт OpenAPI выгружается с `if-no-files-found: error`,
+  а `test/.../OpenApiContractShould.cs:142-147` пишет снапшот и падает с текстом "review the diff and
+  commit it". Гейт непустой в обе стороны: и артефакт обязан появиться, и диффа схемы не бывает
+  незамеченного.
+- `.github/workflows/dotnet.yml:353-373` — проверка, что каждый `context:` из развернутой пары
+  оверлеев существует на диске, причем `sed`-выборка берет все после ключа, а не поле по пробелу
+  (пути с пробелами). Это ловит именно тот класс поломки, который иначе виден только на сервере.
+- `docker/docker-compose.yml:21` — `ASPNETCORE_ENVIRONMENT: ${...:-Production}`: незаданная
+  переменная не открывает dev-эндпоинты, дефолт выбран в сторону закрытия.
+- `docker/docker-compose.yml:34` и `docker/.env.example:31-45` — крипто-ключ единственная переменная
+  без дефолта, через `${...:?}`, и в примере записано, почему ключ из репозитория секретом не
+  является. Оба воркфлоу отдают разовый ключ через окружение, а не переписывают файл: compose
+  предпочитает окружение файлу, и sed по строке примера не нужен (`dotnet.yml:118-124`,
+  `security.yml:77-87`).
+- 17 из 18 публикаций портов привязаны к `127.0.0.1` (`docker-compose.yml:93-335,420,448`), и
+  `docs/guides/MONITORING.md:106-115` объясняет, почему адрес привязки, а не iptables, единственная
+  надежная граница для docker-портов. Это верно и это редкое знание.
+- `docker/prometheus/alerts.yml:48-59` — `ConsumerScrapeTargetMissing` через `absent()` рядом с
+  `ConsumerDown`: правило на молчание правила. Имена job в `docker/prometheus.yml:9-29` совпадают с
+  `container_name` всех пяти целей, метрики в правилах и в трех дашбордах — реальные OTel-имена
+  (`http_server_request_duration_seconds_*`, `process_runtime_dotnet_*`), а не выдуманные.
+- `docker/mongo-init.js:19-23` — initdb-хук создает least-privilege пользователя и падает с
+  внятным текстом, если переменные не заданы, вместо того чтобы оставить базу без пользователя.
+  Этот путь реально прогоняется в CI: и e2e, и ZAP каждый раз стартуют на пустом томе.
+- `docker/app.Dockerfile:8-40` — csproj-first restore (18 отдельных COPY), непривилегированный
+  `dmuser`, и `docker/app.Dockerfile.dockerignore:5-19` с разобранным объяснением, почему паттерны
+  пишутся с `**/` и почему `src/DM.Web.Client/` исключен целиком (290 МБ из 1.1 ГБ контекста).
+- `src/DM.Web.Client/playwright.config.ts:53-82` — `reuseExistingServer: false` и `--strictPort` с
+  записанной историей: прогон против чужого dev-сервера дал цифру "37 из 38 красных", по которой
+  делались выводы о спеке. Гейт защищен от того, чтобы измерять не то.
+- `.github/workflows/dotnet.yml:14-16` и `security.yml:14-16` — concurrency с
+  `cancel-in-progress`, `permissions: contents: read` по умолчанию, расширение прав только в
+  publish-job.
+
+## Находки
+
+### [КРИТИЧНО] devops-api-port-bypasses-perimeter — API preview-стенда опубликован в интернет в обход basic auth
+
+> **Опровержение: подтверждено.**
+
+`docker/docker-compose.yml:480` — единственная публикация без адреса привязки:
+
+```yaml
+    ports:
+      - '5000:5000'
+```
+
+Оверлей `docker/docker-compose.preview.yml:36-38` переопределяет у `dmapi` только
+`DM_CdnConfiguration__PublicUrl` и порт не трогает. Вся защита стенда — `auth_basic` в
+`docker/nginx/nginx.conf:57-59`, и она стоит на порту 80. `docker/setup-server.sh:22-24` открывает
+iptables только 80 и 443, но опубликованный докером порт идет через цепочки nat/DOCKER мимо INPUT —
+это прямо написано в `docs/guides/MONITORING.md:106-112`, и правило нарушено ровно один раз, в самом
+важном сервисе. Через `:5000` доступны: весь `/v1/**` без basic auth, `/metrics`
+(`Startup.cs:279`), `/_health/detail` со списком всех проверок и их деталей (`Startup.cs:294`), а при
+`ASPNETCORE_ENVIRONMENT=Development` (что и получается при `cp .env.example .env`, см.
+`.env.example:78`) — еще и Swagger с dev-эндпоинтами.
+
+Последствие: любой, кто узнал IP стенда, работает с API напрямую: регистрируется, читает и пишет
+контент, снимает метрики. Basic auth защищает только SPA, то есть картинку, а не данные. Подбор
+пароля к basic auth вообще не нужен.
+
+Исправление: `- '127.0.0.1:5000:5000'` в базовом compose (локальной разработке этого достаточно —
+фронт ходит на localhost). Если внешний доступ к API нужен, он должен идти через nginx, а не в обход
+него. Добавить в `compose-topology` шаг, который валит сборку на любой публикации без префикса
+`127.0.0.1:` в `docker-compose.yml` и в оверлее, кроме порта 80/443 у nginx.
+
+### [КРИТИЧНО] devops-dependency-scan-cannot-run — гейт уязвимостей падает не по делу, и вместе с ним умирает вся публикация образов
+
+> **Опровержение: подтверждено.**
+
+`.github/workflows/dotnet.yml:203-215` — job `dependency-scan` состоит из checkout, setup-dotnet и
+запуска скрипта. Шага `dotnet restore` нет. `scripts/check-vulnerable-packages.sh:9-14`:
+
+```bash
+set -euo pipefail
+report="$(dotnet list "$REPO_ROOT/DM.sln" package --vulnerable --include-transitive 2>&1)"
+```
+
+`dotnet list package` требует assets-файл. Проверено локально на пустом проекте и на solution: вывод
+"No assets file was found for ... Please run restore before running this command", код возврата 1
+(SDK 9.0.308; требование restore одинаково для SDK 8). Присваивание из упавшей подстановки под
+`set -e` завершает скрипт, job красный. `dotnet.yml:228` и `dotnet.yml:289` объявляют
+`needs: [build, frontend, e2e, dependency-scan]`, то есть `publish` (матрица из 3 образов) и
+`publish-frontend` не запускаются никогда.
+
+Почему это не заметили: локально в `src/**/obj` assets-файлы есть от обычной сборки, поэтому скрипт
+руками проходит; а `scripts/hooks/pre-push` этот гейт не гоняет вовсе (список гейтов в хуке —
+строки 27-45).
+
+Последствие: (1) уязвимости в NuGet-зависимостях не проверяет никто — ни MSBuild (NU1902/NU1903
+подавлены в `Directory.Build.props`, и там прямо написано, что единственная точка контроля —
+`dependency-scan`), ни CI; (2) ни один образ — `dm-api`, `dm-worker-mail`, `dm-worker-notification`,
+`dm-front` — никогда не публиковался в ghcr, при том что весь деплой в `DEPLOYMENT.md:71-74` описан
+как "образы, а не сборка на сервере". Если в другой версии SDK команда начнет отдавать 0, гейт станет
+хуже: он будет проходить, ничего не проверив.
+
+Исправление: добавить `- run: dotnet restore` перед вызовом скрипта (или `dotnet restore DM.sln`
+внутрь скрипта до `dotnet list`), и в самом скрипте отличать "advisory не найдены" от "команда не
+смогла выполниться": проверять код возврата отдельно и падать с разными сообщениями. Дополнительно
+внести `check-vulnerable-packages.sh` в `scripts/hooks/pre-push`, иначе локальный гейт продолжит
+расходиться с CI.
+
+### [КРИТИЧНО] devops-minio-backups-never-run — бэкап объектного хранилища не выполняется под cron, проверка его не покрывает, а восстановление задокументировано нерабочими командами
+
+> **Опровержение: подтверждено.**
+
+`docker/scripts/install-cron.sh:25-29` пишет в crontab четыре строки без окружения:
+
+```
+0 4 * * * $SCRIPT_DIR/backup-minio.sh >> $LOG_FILE 2>&1
+```
+
+`docker/scripts/backup-minio.sh:11-14` первым делом требует `MINIO_ROOT_PASSWORD` и выходит с кодом 1,
+если он не задан. Cron не читает `docker/.env` — ни в crontab, ни в самом скрипте нет ни `--env-file`,
+ни `set -a; . ../.env`. То же касается `S3_BACKUP_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+(`.env.example:70-74`): офсайт-репликация в трех скриптах (`backup-postgres.sh:29-33`,
+`backup-mongodb.sh:27-31`, `backup-minio.sh:39-43`) выключается тем же способом — переменной нет,
+блок пропускается молча.
+
+`docker/scripts/verify-backup.sh:63-65` проверяет только PostgreSQL и MongoDB. Каталога MinIO в
+проверке нет, поэтому единственный сторож рапортует "All backups OK", пока бэкапов загрузок не
+существует вообще.
+
+Восстановление: `docs/guides/DEPLOYMENT.md:147-149` предлагает
+`docker exec -i dm-pg psql -U postgres dm3 < backup.sql` — но `backup-postgres.sh:13` создает
+`*.sql.gz`, и psql получит gzip; и
+`docker exec dm-mongo mongorestore --archive=/backup.archive --drop` — архив лежит на хосте
+(`/var/backups/mongodb/*.archive.gz`), внутрь контейнера не смонтирован, и он сжат, а `--gzip` в
+команде нет. Ни одна из двух команд не может выполниться. Репетиции восстановления нет ни в CI, ни в
+скриптах.
+
+Последствие: в день, когда появятся данные, загрузки пользователей (аватары, картинки постов) не
+имеют ни одной копии, и узнать об этом можно только при попытке восстановления. Дампы PG и Mongo
+есть, но лежат на том же диске (офсайт не работает), а команды восстановления придется отлаживать во
+время инцидента.
+
+Исправление: (1) в crontab передавать окружение — либо `. /opt/dm3/docker/.env` в начале каждого
+скрипта (с проверкой существования файла), либо `env -S` в строке cron; (2) добавить в
+`verify-backup.sh` проверку каталога MinIO (свежесть последнего подкаталога и непустота); (3)
+исправить обе команды восстановления в `DEPLOYMENT.md` (`gunzip -c file.sql.gz | docker exec -i dm-pg
+psql ...`, `docker exec -i dm-mongo mongorestore --archive --gzip --drop < file`) и завести скрипт
+`restore-*.sh`, который можно прогнать на тестовом стенде; (4) отчет `verify-backup.sh` должен куда-то
+приходить, сейчас его код возврата уходит в почту root, а MTA на чистой Ubuntu нет.
+
+### [ВЫСОКАЯ] devops-installer-cannot-finish — документированная установка на сервер обрывается на последнем шаге
+
+> **Опровержение: подтверждено.**
+
+`docker/setup-server.sh` клонирует репозиторий (строка 19), настраивает iptables, генерирует
+`.htpasswd`, ставит systemd-юнит и cron, и на строке 45 выполняет:
+
+```bash
+sudo docker compose -f docker-compose.yml -f docker-compose.preview.yml up -d --build
+```
+
+`docker/.env` в репозитории нет (`.gitignore:24`), и никто его не создает: `init-env.sh` существует
+(`docker/scripts/init-env.sh`), но не вызывается ни из инсталлятора, ни откуда-либо еще — grep по
+`init-env` дает ноль вхождений вне самого файла. Значит на строке 45 compose падает на интерполяции
+`${DM_CryptoConfiguration__KeyBase64:?...}` (`docker-compose.yml:34`), а также на
+`MONGO_ROOT_PASSWORD:?` и `MONGO_PASSWORD:?` (строки 124, 128). Скрипт под `set -euo pipefail` выходит
+с ошибкой — уже включив `dm3.service` и cron-задачи бэкапов, которым нечего бэкапить.
+
+Последствие: установка по команде из `DEPLOYMENT.md:50` не работает, сервер остается в
+полусостоянии: юнит включен и при каждой перезагрузке падает с той же ошибкой интерполяции, cron
+каждую ночь пишет в лог четыре неудачи. Ошибка, которую видит оператор — сообщение compose про
+переменную, а не про пропущенный шаг.
+
+Исправление: в `setup-server.sh` перед строкой 45 вызвать `init-env.sh` и сгенерировать ключ
+(`openssl rand -base64 32`) и пароли инфраструктуры, если `.env` не существует, — как это уже делает
+`scripts/dm.ps1:250-261` для локальной машины. Пути "создать .env" сейчас три (init-env.sh, dm.sh,
+dm.ps1) и все три разные; должен быть один, и инсталлятор должен вызывать его.
+
+### [ВЫСОКАЯ] devops-secure-cookie-over-plain-http — на развернутом стенде нельзя войти
+
+> **Опровержение: подтверждено.**
+
+`src/DM.Web.API/Shared/Authentication/ApiCredentialsStorage.cs:60` (и то же на строке 83):
+
+```csharp
+Secure = !httpContext.Request.Host.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase),
+```
+
+Развернутый стенд обслуживает HTTP: в `docker/nginx/nginx.conf` весь блок HTTPS закомментирован
+(строки 124-209), редирект на 443 тоже (строка 55), а `docker-compose.preview.yml:14-15` публикует
+только 80. Хост при обращении по IP или домену не `localhost`, значит cookie уходит с атрибутом
+`Secure` по незащищенному соединению, и браузер его отбрасывает.
+
+Последствие: пользователь проходит basic auth, отправляет форму входа, получает 200 — и остается
+неаутентифицированным, потому что cookie не сохранилась. Следующий запрос анонимный. Симптом
+выглядит как "вход не работает молча", отладить его со стороны фронта невозможно. Локально и в e2e
+проблема не видна: там хост именно `localhost`.
+
+Исправление: определять `Secure` по фактической схеме запроса (`httpContext.Request.IsHttps`) с
+уважением `X-Forwarded-Proto` — что требует непустого `TrustedNetworks`, см. следующую находку, —
+либо признать, что стенд обязан быть на TLS, и не публиковать его без сертификата (раскомментировать
+HTTPS-блок и вписать certbot в `setup-server.sh`, а не в абзац документации).
+
+### [ВЫСОКАЯ] devops-forwarded-headers-never-trusted — за nginx все запросы приходят с одного адреса
+
+> **Опровержение: подтверждено.**
+
+`src/DM.Web.API/appsettings.json:5-6`:
+
+```json
+  "ReverseProxyConfiguration": {
+    "TrustedNetworks": [],
+```
+
+`src/DM.Web.API/Shared/Configuration/ReverseProxyExtensions.cs:36-38` при пустом списке ставит
+`ForwardedHeaders.None` — решение правильное и объясненное. Но ни `docker-compose.yml`
+(`x-workload-env`, строки 16-81), ни `docker-compose.preview.yml` не задают
+`DM_ReverseProxyConfiguration__TrustedNetworks__0`, хотя оверлей ставит перед API именно nginx,
+который аккуратно проставляет `X-Real-IP` и `X-Forwarded-For` (`nginx.conf:83-85`).
+
+Последствие: `RateLimitingExtensions.cs:181` берет `context.Connection.RemoteIpAddress`, то есть
+адрес контейнера nginx, одинаковый для всех посетителей. Глобальный лимит на адрес становится
+лимитом на весь сайт: по оценке из самого воркфлоу (`dotnet.yml:129-134`) одна загрузка `/games` —
+17 запросов при бюджете 100 в минуту, то есть примерно шесть загрузок страниц в минуту на всех
+пользователей вместе, после чего сайт отдает ошибки загрузки данных. Плюс журнал входов и
+security-audit пишут адрес прокси для каждой попытки, и блокировки по адресу либо бесполезны, либо
+задевают всех.
+
+Исправление: добавить в `x-workload-env` строку
+`DM_ReverseProxyConfiguration__TrustedNetworks__0: ${TRUSTED_PROXY_NETWORK:-}` и задавать сеть docker
+в `.env` для стендов с nginx (значение `ProxyCount` при одном прокси = 1). Отдельно стоит завести
+проверку старта: если приложение видит `X-Forwarded-For`, но `TrustedNetworks` пуст, писать warning —
+сейчас это состояние ничем не отличимо от корректного.
+
+### [ВЫСОКАЯ] devops-imgproxy-unreachable-in-deployment — в развернутой топологии не отдаются аватары и превью
+
+> **Опровержение: подтверждено.**
+
+`src/DM.Infrastructure.Core/Storage/ImgproxyUrlBuilder.cs:48` строит абсолютный URL
+`{Endpoint}/{signature}{path}`, и он уходит клиенту: `AvatarPictureConverter.cs:27-30`,
+`CharacterMappingProfile.cs`, `PersonalProfileMappingProfile.cs`. Значение по умолчанию —
+`docker-compose.yml:56`: `${IMGPROXY_PUBLIC_URL:-http://localhost:8080}`, причем
+`.env.example:60` оставляет переменную закомментированной. Сам контейнер привязан к
+`127.0.0.1:8080` (`docker-compose.yml:251`), и в `docker/nginx/nginx.conf` нет ни одной локации,
+проксирующей imgproxy: есть `/v1/`, `/whatsup`, `/dm-uploads/` и `/` (строки 77-121).
+
+Последствие: браузер каждого посетителя стенда получает ссылки на аватары вида
+`http://localhost:8080/...` и не грузит ни одну — на месте аватаров и превью персонажей пустота. И
+это не лечится заполнением `IMGPROXY_PUBLIC_URL`: маршрута к imgproxy через край нет, а порт слушает
+только loopback. Ни один гейт этого не видит, потому что e2e гоняется против `vite preview` и API
+напрямую, а оверлей с nginx нигде не поднимается — `compose-topology` только валидирует `config`.
+
+Исправление: добавить в `nginx.conf` локацию imgproxy (например `/img/` с
+`proxy_pass http://imgproxy:8080/`), задавать `IMGPROXY_PUBLIC_URL` от домена стенда и завести smoke-job,
+который поднимает пару `docker-compose.yml + docker-compose.preview.yml` и проверяет через край:
+`/nginx-health`, `/`, `/v1/...`, один URL imgproxy и один объект `/dm-uploads/`.
+
+### [ВЫСОКАЯ] devops-nothing-consumes-published-images — доставка описана как pull, выполнена как build, включена нигде
+
+> **Опровержение: подтверждено.**
+
+Три механизма противоречат друг другу:
+- `docker/setup-server.sh:45` ставит стенд командой `up -d --build`, то есть собирает образы на
+  сервере из SDK-образа (весь solution, 18 проектов).
+- `docker/dm3.service:14` при перезапуске выполняет `up -d` без `--build`, то есть берет что
+  осталось локально.
+- watchtower, который в `MIRRORING.md:127-133` и `DEPLOYMENT.md:114-116` назначен механизмом
+  обновления, объявлен с `profiles: [production, mirror]` (`docker-compose.yml:542-544`), а ни
+  инсталлятор, ни юнит профиль не передают — контейнер не запускается вообще.
+- `DEPLOYMENT.md:71-74` утверждает обратное: "и API, и фронтенд по умолчанию тянутся из реестра;
+  сборка на месте включается только переменной API_IMAGE / FRONT_IMAGE с локальным тегом".
+
+Последствие: даже если исправить `dependency-scan` и публикация заработает, опубликованные образы
+никто не тянет: preview-стенд собирает свою версию сам, а обновление требует ручного
+`up -d --build` на сервере. Сборка .NET-solution на маленьком VPS — это несколько ГБ диска и
+пиковая память, которых у preview-класса машины может не быть; отката к предыдущему образу при такой
+схеме нет вовсе, потому что тег с версией нигде не фиксируется. Плюс расхождение источников: репозиторий
+клонируется с дефолтной ветки (dev), а тег `latest` публикуется только с main (`dotnet.yml:269`).
+
+Исправление: выбрать одно. Если pull — включить watchtower в preview-профиле (или убрать
+profile-гейт) и убрать `--build` из инсталлятора, а `API_IMAGE`/`FRONT_IMAGE` в `.env` фиксировать
+конкретным тегом (sha), чтобы откат был сменой одной строки. Если build на сервере — убрать из
+документации абзац про реестр и не публиковать четыре образа, которые никто не потребляет.
+
+### [СРЕДНЯЯ] devops-no-alertmanager — восемь правил алертинга срабатывают в никуда
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Facts hold: docker/prometheus.yml has rule_files at 5-6 and no `alerting:` block, `grep -rni 'alertmanager|alerting' docker/` hits only an unrelated Loki comment, grafana/provisioning has only datasources/ and dashboards/, and MONITORING.md:176-183 points at docker/prometheus/alertmanager.yml which does not exist. But this is an unwired half of a subsystem, not something that breaks or must be undone: adding alertmanager or a Grafana contact point is pure addition, the eight rules stay valid, and there is no production traffic to miss an alert about. MONITORING.md:167-170 already frames notification setup as a manual operator step. The one hard error is the dead file reference.
+
+`docker/prometheus.yml:5-6` подключает `rule_files`, но блока `alerting:` в файле нет, и сервиса
+alertmanager нет ни в `docker-compose.yml` (18 сервисов, перечислены на строках 89-532), ни в
+оверлее. Grafana provisioning (`docker/grafana/provisioning/`) содержит только datasources и
+dashboards — ни contact points, ни notification policies. `docs/guides/MONITORING.md:176-183`
+ссылается на `docker/prometheus/alertmanager.yml`, которого в репозитории не существует.
+
+Последствие: `ApiDown`, `PostgresDown`, `ConsumerDown`, `DiskSpaceLow` и остальные четыре правила
+переходят в состояние firing внутри Prometheus и остаются там. Уведомления никому не приходят; узнать
+о падении API можно, только открыв Grafana через SSH-туннель, то есть заранее зная, что что-то не так.
+Для сервиса без внешнего мониторинга (см. следующую находку) это означает, что первым о падении
+узнает пользователь.
+
+Исправление: либо добавить сервис alertmanager с одним receiver (Telegram) и блок `alerting:` в
+`prometheus.yml`, либо перенести правила в Grafana unified alerting и провизионить contact point
+файлом рядом с datasources. Второе дешевле: Grafana уже стоит и уже провизионится. Заодно убрать из
+`MONITORING.md` инструкцию, ссылающуюся на несуществующий файл.
+
+### [СРЕДНЯЯ] devops-env-example-ships-working-secrets — все секреты кроме одного имеют рабочее значение в репозитории
+
+> **Опровержение: частично неверно.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> The count is right — .env.example:3-6,15,17,22-23 is eight working values, compose:337 defaults Grafana to admin, DEPLOYMENT.md:139 calls .env.example the production path — but the load-bearing consequence is unreachable by the report's own evidence: it claims anyone can burn CPU with arbitrary imgproxy transforms, while its own imgproxy finding proves the service is bound to 127.0.0.1:8080 with no nginx route, so no external caller can reach it signed or not. The DB/RabbitMQ/Grafana passwords likewise need a second entry point that does not exist (all loopback). This is also a re-raise of AUDIT.md CD-13, which the owner adjudicated "Опровергнуто — все закоммиченные секреты документированные локальные заглушки" with the same DEPLOYMENT.md:139 argument already on the table.
+
+`docker/.env.example:3-6,15,17,22-23` — восемь значений, которые пройдут валидацию и поднимут стенд:
+`POSTGRES_PASSWORD`, `RABBITMQ_DEFAULT_PASS`, `MINIO_ROOT_PASSWORD`, `GF_SECURITY_ADMIN_PASSWORD`,
+`MONGO_ROOT_PASSWORD`, `MONGO_PASSWORD` — все `TestP@ss123!`; `IMGPROXY_KEY` и `IMGPROXY_SALT` —
+конкретные 64-символьные значения. Единственная переменная, которая не пускает дальше, — крипто-ключ
+(`строка 45`), и его защищает `${...:?}` в compose. Плюс `docker-compose.yml:337` дает
+`GF_SECURITY_ADMIN_PASSWORD:-admin` собственный дефолт, то есть Grafana поднимется с паролем `admin`
+даже без `.env`.
+
+Последствие: путь, который документация называет боевым (`DEPLOYMENT.md:139`: "создать из
+.env.example"), дает сервер, у которого пароли Postgres, Mongo, MinIO, RabbitMQ и Grafana лежат в
+публичном репозитории, а ключ подписи imgproxy известен — то есть anti-abuse подписи трансформаций
+не существует, любой может жечь CPU произвольными resize. Пока порты БД привязаны к loopback, нужна
+вторая точка входа; но `docs/guides/MIRRORING.md:96-99` прямо инструктирует открыть 5432, 27017,
+5672 и 9000 наружу.
+
+Исправление: убрать значения из примера, оставив пустые ключи, и объявить остальные секреты через
+`${VAR:?}` в compose, как крипто-ключ (тогда пустой файл валит старт, а не запускает стенд с
+известными паролями). Для CI и локальной разработки генерировать значения скриптом
+(`init-env.sh`) — воркфлоу уже умеют отдавать разовый ключ через окружение, тот же прием годится для
+остальных.
+
+### [СРЕДНЯЯ] devops-mirror-command-starts-everything — документированная команда зеркала поднимает второй экземпляр всего, включая миграции против main
+
+> **Опровержение: частично неверно.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> The mechanism is correct — `--profile mirror` (MIRRORING.md:66,113; DEPLOYMENT.md:111) adds to the default set rather than narrowing it, so 16 of 18 services plus watchtower start, migration (compose:391-408) inherits x-workload-env with DM_MigrateOnStart: true and would Migrate() against the DB_HOST from .env.mirror, and nginx never starts because it lives only in the overlay, so the MIRRORING.md:25 diagram is unreachable. But consequence (2) is false: MailConsumer.cs:47 and NotificationDispatcherConsumer.cs:45 bind fixed queue names ("dm.mail.sender", "dm.notifications"), so a mirror's workers are competing consumers on the same queues — messages are split, not doubled. The real duplication the report missed is the API's in-process periodic jobs, which DEPLOYMENT.md:158-169 documents as requiring exactly one instance. With the headline consequence wrong, mirroring undeployed, and no production database to migrate, СРЕДНЯЯ.
+
+`docs/guides/MIRRORING.md:66,113` и `DEPLOYMENT.md:111`:
+
+```bash
+docker compose --env-file .env.mirror --profile mirror up -d
+```
+
+`--profile mirror` не сужает набор сервисов, а расширяет его: поднимается весь default-профиль
+базового compose (16 сервисов из 18: все кроме `seeder` и `watchtower`, у которых профили) плюс
+watchtower. При этом `.env.mirror` по инструкции (`MIRRORING.md:87`) указывает `DB_HOST`,
+`MONGO_HOST`, `RABBITMQ_HOST`, `MINIO_HOST` на main-сервер, а сервис `migration`
+(`docker-compose.yml:391-408`) наследует `x-workload-env` и запускается с `DM_MigrateOnStart: true`.
+
+Последствие: (1) `migration` на зеркале выполняет `Database.Migrate()` против базы главного сервера;
+(2) `dm-mail-worker` и `dm-notification-worker` на зеркале подключаются к той же RabbitMQ и начинают
+разбирать те же очереди — письма и уведомления удваиваются; (3) на зеркале зря поднимаются свои
+Postgres, Mongo, MinIO, Loki, Jaeger, Prometheus, Grafana, съедая ресурсы и вводя оператора в
+заблуждение (локальная пустая база рядом с рабочим подключением к main); (4) nginx не поднимается
+вообще, так как он живет только в оверлее — при том что схема в `MIRRORING.md:25` рисует
+"nginx → dm-api". Схема из документации не воспроизводится ни одной командой.
+
+Исправление: сделать отдельный оверлей `docker-compose.mirror.yml`, который явно перечисляет
+`dmapi` и `nginx` (и watchtower, если он остается), запускать зеркало парой
+`-f docker-compose.yml -f docker-compose.mirror.yml`, и внести эту пару в тот же гейт
+`compose-topology`, что уже сверяет пару инсталлятора и юнита. `MIRRORING.md:96-99` про ufw
+переписать: порты БД привязаны к `127.0.0.1`, и правила ufw их не откроют — нужен либо bind на
+приватный интерфейс, либо VPN.
+
+### [СРЕДНЯЯ] devops-production-config-never-validated — все проверки гоняются в Development
+
+`.github/workflows/dotnet.yml:126-127` и `security.yml:89-92` создают `.env` копией
+`.env.example`, а `.env.example:78` заканчивается строкой `ASPNETCORE_ENVIRONMENT=Development`.
+Значит и e2e (258 тестов), и ZAP-скан работают против API в Development: со Swagger
+(`Startup.cs:245`), с dev-эндпоинтами сида и ролей, с другим поведением
+`SecurityHeadersMiddleware` (строка 73 ветвится по `IsProduction()`).
+
+Последствие: конфигурация, которая реально поедет на сервер, не проверяется ничем. Класс поломок,
+который проходит все гейты: сервис, зарегистрированный только в Development; заголовок безопасности,
+который добавляется только в Production и ломает страницу; ошибка привязки конфигурации, видимая
+только при `ASPNETCORE_ENVIRONMENT=Production`. Обратная сторона: правила ZAP триажились по
+dev-поверхности (`.zap/rules.tsv:3` игнорирует уязвимую JS-библиотеку "потому что Swagger только в
+Development") — то есть скан видит то, чего в проде нет, и не видит того, что есть.
+
+Исправление: в e2e и zap-job переопределять `ASPNETCORE_ENVIRONMENT: Production` через окружение
+(compose уже предпочитает окружение файлу — прием использован для крипто-ключа), а dev-only тесты,
+если они есть, оставить отдельным прогоном. Тогда `.zap/rules.tsv` можно очистить от правил,
+существующих только из-за Swagger.
+
+### [СРЕДНЯЯ] devops-no-log-rotation — журналы контейнеров растут без ограничения
+
+Ни в `docker-compose.yml`, ни в `docker-compose.preview.yml` нет ни одной секции `logging:` — grep по
+`logging|max-size` не дает вхождений. Дефолтный драйвер json-file на Ubuntu без
+`/etc/docker/daemon.json` не ротируется. При этом Serilog пишет и в консоль тоже
+(`MONITORING.md:22`), то есть каждая строка лога дублируется в json-file, а Loki хранит свои 30 дней
+(`loki/loki.yaml:41`) отдельно.
+
+Последствие: на VPS диск заполняется журналами API и воркеров; при заполнении диска первым падает
+Postgres. Алерт `DiskSpaceLow` (`alerts.yml:81-88`) существует, но, как описано выше, никуда не
+отправляется. `logrotate` настроен только для `/var/log/dm3-backup.log`
+(`install-cron.sh:42-51`) — то есть для самого маленького файла в системе.
+
+Исправление: добавить в оба compose-файла общий якорь с
+`logging: {driver: json-file, options: {max-size: "10m", max-file: "3"}}` и применить его ко всем
+сервисам, либо задать те же значения в `/etc/docker/daemon.json` из `setup-server.sh`.
+
+### [СРЕДНЯЯ] devops-no-config-validation-gates — конфигурацию края никто не проверяет, и развернутая топология ни разу не запускается
+
+В обоих воркфлоу нет ни `nginx -t`, ни `promtool check rules`, ни `shellcheck`, ни hadolint (grep по
+именам инструментов дает ноль вхождений). `compose-topology` проверяет только `docker compose config`
+и существование контекстов. Ни один job не поднимает пару
+`docker-compose.yml + docker-compose.preview.yml` — e2e поднимает базовый набор плюс собственный
+оверлей и ходит в API напрямую.
+
+Последствие: опечатка в `docker/nginx/nginx.conf` или в `src/DM.Web.Client/nginx.conf` проходит все
+гейты и обнаруживается как crash-loop nginx на сервере, то есть полным падением сайта; ошибка в
+`docker/prometheus/alerts.yml` не дает Prometheus запуститься и убивает мониторинг целиком; опечатка
+в любом из четырех bash-скриптов бэкапа обнаруживается в 2 часа ночи в логе, который никто не читает.
+Ровно этот класс — "сломано только в развернутой топологии" — дал три находки выше
+(imgproxy, cookie, порт 5000).
+
+Исправление: три дешевых шага в `compose-topology`: `docker run --rm -v ...:/etc/nginx/nginx.conf:ro
+nginx:alpine nginx -t` для обоих конфигов, `promtool check config/rules` для prometheus, `shellcheck
+docker/scripts/*.sh docker/setup-server.sh`. И один недешевый, но окупающийся: smoke-job, поднимающий
+именно ту пару оверлеев, которая деплоится, и проверяющий через край четыре маршрута.
+
+### [СРЕДНЯЯ] devops-external-heartbeat-monitors-the-spa — рекомендованная внешняя проверка не видит API
+
+`docs/guides/MONITORING.md:219-224` предлагает завести внешний heartbeat на `/_health`. В
+`docker/nginx/nginx.conf` локаций всего четыре: `/nginx-health`, `/v1/`, `/whatsup`, `/`. Путь
+`/_health` попадает в `/` и уходит на `dmfront`, где SPA-фоллбек
+(`src/DM.Web.Client/nginx.conf:12-13`) отдает `index.html` с кодом 200.
+
+Последствие: внешний монитор, настроенный по документации, отдает "все хорошо", даже когда API лежит:
+он проверяет, что nginx и контейнер SPA живы. Живой `/_health` API снаружи недоступен в принципе (он
+есть только на `:5000`, который не должен быть открыт, и на нем же нет basic auth).
+
+Исправление: добавить в край локацию `/_health` (и `/_ready`) c `auth_basic off` и `proxy_pass` в
+API — тогда внешний heartbeat проверяет то, что нужно, а `/metrics` остается непроброшенным.
+
+### [СРЕДНЯЯ] devops-pre-push-claims-parity-it-does-not-have — локальный гейт заявляет паритет с CI и не имеет его
+
+`scripts/hooks/pre-push:3-9` — "Гоняет те же гейты, что и CI". Фактически хук запускает пять шагов
+(строки 27-45): lint, type-check, vitest, сборка фронта, `dotnet build -c Release` и
+`dotnet test -c Debug`. Не запускаются: `dependency-scan` (см. КРИТИЧНО выше — именно поэтому его
+поломка и не была замечена), `compose-topology`, e2e (258 тестов, которые в CI блокируют публикацию),
+CodeQL, ZAP. Плюс тесты гоняются в Debug, тогда как CI гоняет их в Release с `--no-build`
+(`dotnet.yml:42`), и сборка Release в хуке нужна только чтобы упасть на warnings-as-errors.
+
+Последствие: разработчик, доверяя хуку, пушит ветку с красным e2e или с невалидным compose-оверлеем и
+узнает об этом из CI — то есть ровно тот сценарий, который хук описывает как недопустимый. Разница
+конфигураций дает второй класс: падение, воспроизводимое только в Release (например, поведение,
+зависящее от `#if DEBUG` или от анализаторов), хук не поймает.
+
+Исправление: либо привести список к реальному (дописать `check-vulnerable-packages.sh`,
+`docker compose config` для деплойной пары, и e2e хотя бы для затронутых спеков), либо переписать
+комментарий так, чтобы он перечислял, чего хук не проверяет. Тесты гонять в той же конфигурации,
+что CI, чтобы `dotnet build` не выполнялся дважды.
+
+### [СРЕДНЯЯ] devops-compose-topology-step-can-pass-vacuously — сравнение инсталлятора и юнита проходит при пустом результате
+
+`.github/workflows/dotnet.yml:375-381`:
+
+```bash
+installer=$(grep -oE '\-f [a-z.-]+\.yml' docker/setup-server.sh | sort -u)
+unit=$(grep -oE '\-f [a-z.-]+\.yml' docker/dm3.service | sort -u)
+test "$installer" = "$unit" || { echo "::error::..."; exit 1; }
+```
+
+Сейчас обе выборки непусты (проверено: по два значения, `docker-compose.yml` и
+`docker-compose.preview.yml`). Но если любой из файлов перейдет на `--file`, на `COMPOSE_FILE=` или
+на путь с заглавной буквой либо цифрой (класс `[a-z.-]` их не берет), grep вернет пустую строку — и
+сравнение двух пустых строк пройдет. Гейт, чья задача ловить расхождение, будет зеленым при
+отсутствии обоих значений.
+
+Последствие: возвращается поломка, которую этот шаг заведен ловить (юнит поднимает базовую топологию
+без nginx и фронта, перезапуск подменяет сайт голым API), — и теперь уже с зеленым CI.
+
+Исправление: после greps проверять непустоту (`test -n "$installer"`), и сравнивать не имена файлов, а
+результат `docker compose ... config --hash` или нормализованный список сервисов, который поднимает
+каждая из двух команд.
+
+### [СРЕДНЯЯ] devops-unpinned-images — четыре образа из тринадцати не зафиксированы, и самый опасный из них имеет доступ к docker.sock
+
+Зафиксированы: `postgres:16`, `mongo:7`, `grafana/loki:3.1.1`, `rabbitmq:3-management`,
+`quay.io/minio/minio:RELEASE.2024-06-13T22-53-53Z`, `darthsim/imgproxy:v3.27`,
+`jaegertracing/all-in-one:1.56`, `prom/prometheus:v2.51.0`, `grafana/grafana:10.4.0`,
+`prometheuscommunity/postgres-exporter:v0.15.0`, `prom/node-exporter:v1.7.0`. Не зафиксированы:
+`mailhog/mailhog` (`docker-compose.yml:199`), `containrrr/watchtower` (`:534`), `nginx:alpine`
+(`docker-compose.preview.yml:13` и `src/DM.Web.Client/Dockerfile:22`), `node:20-alpine`
+(`Dockerfile:2`), плюс `mcr.microsoft.com/dotnet/{sdk,aspnet}:8.0` (`app.Dockerfile:1,42`) — плавающие
+патч-теги.
+
+Последствие: `containrrr/watchtower:latest` монтирует `/var/run/docker.sock`
+(`docker-compose.yml:535-536`) — это полный контроль над хостом, и версия образа выбирается тем, что
+сегодня лежит в реестре. Обновление nginx:alpine с ломающим изменением конфигурации кладет край при
+следующем `up -d`. Сборка образов не воспроизводима: тот же коммит через месяц дает другой рантайм.
+
+Исправление: зафиксировать теги (а для watchtower — по возможности digest), и оставить обновление
+дежурному dependabot: `.github/dependabot.yml` уже следит за nuget, npm и github-actions, но не за
+docker — добавить `package-ecosystem: docker` с `directory: /docker`.
+
+### [СРЕДНЯЯ] devops-nginx-body-limit-vs-api-limit — загрузка больше 1 МБ обрывается на краю
+
+В `docker/nginx/nginx.conf` нет `client_max_body_size`, то есть действует дефолт 1 МБ. API принимает
+до 10 МБ на эндпоинте загрузки (`src/DM.Web.API/Features/General/Upload/UploadController.cs:129`,
+`[RequestSizeLimit(10 * 1024 * 1024)]`) и до 30 МБ на уровне Kestrel (`Startup.cs:155-159`).
+Клиентское сжатие не гарантирует размер: `imageCompression.ts:66-68` возвращает файл без изменений,
+если его стороны не больше 1024 — то есть PNG 1000x1000 на 4 МБ уйдет как есть.
+
+Последствие: посетитель развернутого стенда выбирает такой файл и получает HTML-страницу 413 от
+nginx вместо ответа API. Фронт не может показать это как ошибку поля: тело ответа не в формате
+ошибок API, а CORS-заголовков на ответе nginx нет. Симптом — "загрузка не работает без объяснения".
+
+Исправление: `client_max_body_size 10m;` в `http`-блоке края (согласовать с
+`RequestSizeLimit` одним числом), и на будущее — единый источник для лимита, чтобы край и контроллер
+не расходились.
+
+### [СРЕДНЯЯ] devops-htpasswd-committed — хеш пароля preview-стенда лежит в репозитории, а .gitignore создает видимость обратного
+
+`docker/nginx/.htpasswd` находится под версионным контролем (`git ls-files docker` его показывает) и
+одновременно перечислен в `.gitignore:21` — для уже отслеживаемого файла запись в .gitignore не
+делает ничего. Содержимое — `preview:$apr1$...`, то есть MD5-crypt (apr1), формат, который подбирается
+офлайн быстро. `docs/guides/DEPLOYMENT.md:53` при этом утверждает, что учетные данные "в документации
+не публикуются", и ссылается на этот файл.
+
+Последствие: хеш пароля к стенду доступен каждому, у кого есть доступ к репозиторию, вместе с полной
+историей его изменений; запись в .gitignore заставляет думать, что файл не отслеживается, поэтому
+следующая правка пароля тоже уедет в коммит незамеченной.
+
+Исправление: удалить файл из индекса (`git rm --cached`, оставив на диске), а `setup-server.sh:33`
+уже умеет генерировать его на сервере; для нового пароля использовать bcrypt (`htpasswd -nbB`).
+Формулировку в `DEPLOYMENT.md:53` исправить.
+
+### [СРЕДНЯЯ] devops-dm-sh-vs-ps1-drift — первый запуск на Linux и Mac падает, хотя README обещает те же команды
+
+`README.md:20` — "Linux/Mac — те же команды через ./scripts/dm.sh". Фактически `scripts/dm.ps1:250-261`
+генерирует крипто-ключ, если в `.env` он пустой, а `scripts/dm.sh:46-53` только копирует
+`.env.example` и сразу запускает `docker compose up -d --build`. В примере ключ пустой
+(`.env.example:45`), значит compose падает на интерполяции. Дальше расхождение продолжается:
+`dm.ps1` стартует конкретный список сервисов и ждет health по каждому, `dm.sh` поднимает все одной
+командой без ожидания. Третья реализация того же шага, `docker/scripts/init-env.sh`, не вызывается
+ниоткуда.
+
+Последствие: разработчик на Linux или Mac по README получает ошибку интерполяции compose на первой
+же команде; чтобы понять, что делать, надо открыть `.env.example` и прочитать 15 строк комментария.
+Три реализации одного шага гарантируют, что следующая правка попадет в одну из них.
+
+Исправление: `dm.sh` и `dm.ps1` должны вызывать `init-env.sh` (и он же должен генерировать ключ),
+инсталлятор — тоже (см. ВЫСОКАЯ выше). Тогда правка одна и место одно.
+
+### [СРЕДНЯЯ] devops-no-dotnet-coverage-gate — покрытие бэкенда собирается и не проверяется
+
+`.github/workflows/dotnet.yml:42-55` собирает cobertura и выгружает артефакт с
+`if-no-files-found: error` — то есть гарантирует, что файл есть, но ни одного порога нет. У фронта
+порог есть и он ратчет с объяснением (`src/DM.Web.Client/vite.config.ts:38-53`).
+
+Последствие: удаление тестов на бэкенде или крупный новый модуль без тестов не виден ни в одном
+гейте: сборка зеленая, артефакт на месте, число внутри артефакта никто не читает.
+
+Исправление: добавить проверку порога по cobertura (например ReportGenerator с
+`--fail-on-threshold`, или простая проверка `line-rate` из XML), с тем же правилом, что у фронта:
+поднимать после роста, не опускать после падения.
+
+### [НИЗКАЯ] devops-docs-numbers-do-not-match-reality — цифры и пороги в эксплуатационной документации расходятся с файлами
+
+Проверено пересчетом:
+- `DEPLOYMENT.md:24` — "4 jobs" в `dotnet.yml`; фактически 7 (`build`, `frontend`, `e2e`,
+  `dependency-scan`, `publish`, `publish-frontend`, `compose-topology`). e2e и compose-topology в
+  таблице отсутствуют.
+- `DEPLOYMENT.md:24,27` — "3 Docker images: dm-api, consumer-mail, consumer-notification" и
+  "`ghcr.io/<username>/dm3`"; фактически четыре образа с именами `dm-api`, `dm-worker-mail`,
+  `dm-worker-notification`, `dm-front` (`dotnet.yml:23,237-242,312`).
+- `DEPLOYMENT.md:183` и `MONITORING.md:156` — "7 правил"; в `alerts.yml` их 8
+  (`ConsumerScrapeTargetMissing` не упомянут).
+- `MONITORING.md:162-166` — четыре порога из семи неверны: HighErrorRate указан как ">1%" при
+  `> 0.05` (`alerts.yml:18`), ConsumerDown как "> 5 мин" при `for: 2m` (`:54`), HighMemoryUsage как
+  "> 85%" при `> 0.9` (`:73`), DiskSpaceLow как "< 10% свободного" при пороге 85% занятого (`:82`).
+- `DEPLOYMENT.md:41` — "BuildKit NuGet cache mount"; в `app.Dockerfile` нет ни одного
+  `--mount=type=cache`.
+- `DEPLOYMENT.md:171` — "MaxPoolSize=200"; в строке подключения `MaxPoolSize=100`
+  (`docker-compose.yml:24`).
+- `MONITORING.md:121-127` — примеры PromQL на `http_requests_total` и
+  `http_request_duration_seconds_bucket`; таких метрик нет, приложение отдает OTel-имена
+  (`http_server_request_duration_seconds_*`), которые правильно использованы в alerts.yml и в
+  дашбордах.
+- `MONITORING.md:88-90` — абзац про хост, отдающий gRPC, у которого health и метрики на отдельном
+  порту; такого сервиса нет, оба воркера — обычный Kestrel на 5000 (`Program.cs` каждого,
+  `WebBuilderExtensions.cs:35-38`).
+
+Последствие: дежурный, читающий runbook, ждет алерт при 1% ошибок (получит при 5%), считает, что
+образов три (их четыре), и копирует запросы, которые дают пустые графики. Каждая из этих строк
+дороже своего размера именно во время инцидента.
+
+Исправление: сверить перечисленные числа с файлами и заменить перечисления на ссылку на источник
+истины там, где перечисление не несет смысла (правила и пороги — в `alerts.yml`, состав job — в
+воркфлоу).
+
+### [НИЗКАЯ] devops-installer-prints-password-and-trusts-curl-bash — установщик печатает пароль и ставится из ветки dev
+
+`docker/setup-server.sh:51` печатает `DM_PREVIEW_PASSWORD` в stdout по завершении — то есть в
+терминал, в историю сессии и в лог, если установка идет через `tee`. `DEPLOYMENT.md:50` и
+`setup-server.sh:5` рекомендуют `curl -sSL .../dev/docker/setup-server.sh | bash`: скрипт,
+исполняемый с правами sudo, берется с ветки разработки, где он же и меняется.
+
+Последствие: пароль стенда остается в артефактах установки; любой коммит в dev немедленно становится
+инсталлятором для следующего сервера, включая незакоммиченный в main промежуточный вариант.
+
+Исправление: не печатать пароль (оператор его и задал), а ссылку на установку привязать к main или к
+тегу.
+
+### [НИЗКАЯ] devops-backups-volume-unused — том backups смонтирован в Postgres и никем не используется
+
+`docker-compose.yml:8,97` объявляет том `backups` и монтирует его в `/var/backups` контейнера
+Postgres. Все три скрипта бэкапа работают на хосте: `backup-postgres.sh:14` пишет через
+`docker exec ... | gzip > $BACKUP_DIR` в хостовой `/var/backups/postgresql`. В том не пишет ничего.
+
+Последствие: место в томе выглядит как хранилище бэкапов и им не является; `dm.sh:82` (reset) и
+`security.yml:127` (cleanup) выполняют `docker compose down -v`, то есть удаляют этот том вместе с
+остальными — и если кто-то однажды начнет писать бэкапы внутрь контейнера, они исчезнут при первом
+reset.
+
+Исправление: убрать монтирование, либо перенести бэкапы внутрь тома и тогда исключить его из
+`down -v` (отдельный внешний том с `external: true`).
+
+### [НИЗКАЯ] devops-front-image-context-and-build-details — мелочи сборки образов
+
+- `src/DM.Web.Client/.dockerignore` исключает `node_modules`, `dist` и `*.local`, но не `e2e`,
+  `playwright-report`, `test-results`, `coverage` и `.env.preview`. Контекст SPA-образа тащит
+  отчеты прогонов и e2e-спеки, которые в образе не нужны.
+- `docker/app.Dockerfile:40` — `dotnet publish` без `--no-restore` после явного `restore` на строке
+  34: restore выполняется дважды.
+- `docker/app.Dockerfile:49-50` — `apt-get update && install curl` стоит после `COPY --from=build`,
+  то есть слой пересобирается при каждом изменении кода; и curl попадает в рантайм-образ только для
+  healthcheck (альтернатива — `wget`, который уже есть, или health через `dotnet`).
+
+Последствие: время сборки и размер образов больше необходимого; на сборке на сервере (см. ВЫСОКАЯ
+про доставку) это заметно.
+
+Исправление: дописать `.dockerignore`, добавить `--no-restore`, поднять `apt-get` выше `COPY`.
+
+## Чего я не смог определить
+
+- Фактический цвет `dependency-scan` в GitHub Actions. Локальный замер однозначен (exit 1 без
+  restore, SDK 9.0.308), но подтвердить, что job красный на последних прогонах, я не могу: `gh` в
+  окружении нет, сети к Actions нет. Решается одним взглядом на историю прогонов workflow ".NET" —
+  и это стоит сделать до всего остального, потому что от этого зависит, публиковались ли образы
+  вообще.
+- Ведет ли себя `docker compose up -d --wait migration` (`dotnet.yml:154`) корректно для
+  одноразового контейнера с `restart: "no"`: в части версий compose `--wait` считает вышедший
+  контейнер ошибкой. Проверяется прогоном e2e-job; если он проходит, вопрос закрыт.
+- Хватает ли API лимита 512 МБ (`docker-compose.yml:499`) при пуле в 100 соединений, SignalR и
+  периодических заданиях внутри процесса. Нужна нагрузка на стенде: OOM-kill проявится как
+  перезапуск контейнера без записи в логе приложения.
+- Реальный размер образов и время сборки на целевом VPS (docker build локально я не запускал).
+  Существенно только если владелец оставит сборку на сервере.
+- Решение владельца по двум развилкам: (1) preview-стенд на TLS или на HTTP — от этого зависит,
+  чинить `Secure`-cookie сменой условия или включением сертификата; (2) доставка через реестр или
+  сборка на месте — от этого зависит, включать watchtower или выкидывать его вместе с абзацами
+  документации.
+
+
+# Процесс разработки: человек и Claude — C
+
+Оценка среза до опровержения: C. Работает, но с видимым долгом ровно по трем маркерам C: дублирование (реестр аудита живет в трех руками синхронизируемых копиях при существующем генераторе register.js, и они уже разъехались по md5 и на 4 записи), частичные инварианты (хук против потери работы блокирует 2 команды из 10 проверенных, `deny` в settings.local.json отсутствует, чистота доменных сборок нарушалась трижды и не проверяется ни одним из 4 архитектурных тестов), гаps в тестах (30 из 74 коммитов fix/security/perf не трогают тестов, включая утечку счетчиков между пользователями; red-green проверку документируют 4 сообщения из 156). Против этого — сильный корпус коммитов (медиана 6 файлов, сообщения с замером и самоопровержением), измеримо окупившийся оппонирующий агент (1 из 82 против 8 из 127) и реально установленный pre-push гейт; этого хватает на C, но не на B, потому что артефакты долговечности (реестр требований, тег с историей) стали ненадежны именно там, где создавались для надежности.
+
+Вердикт: работа делается методом, который сильнее среднего сеньорского, а инфраструктура,
+которая должна этот метод удерживать между сессиями, держится на ручной синхронизации и уже
+разъехалась. 156 коммитов ветки (07-27 20:31 — 07-30 06:47, `pre-squash-2026-07-30`) закрыли
+261 запись реестра из 306. Медиана коммита — 6 файлов, 76 коммитов из 156 меняют не больше
+пяти файлов, сообщения описывают механизм и замер, а не намерение. Метод "воспроизвести
+фактом, починить, снять фикс и убедиться, что тест краснеет" зафиксирован в памяти как
+стандарт и в нескольких местах реально применен. Опровергающий агент измеримо окупился:
+из 82 находок, прошедших оппонента, при реализации оказалась ложной одна (`devops:CD-13`,
+1.2%), из 127 средних/низких, оппонента не проходивших, — восемь (6.3%).
+
+Против этого — три вещи, которые в сумме дают C, а не B. Первое: гейты не покрывают тот
+класс ошибок, который повторяется. Хук, существующий ровно для того, чтобы не потерять
+работу, блокирует 2 команды из 10 проверенных, и `git restore .`, `git clean -f`,
+`git stash clear` проходят; `deny` в `settings.local.json` отсутствует вовсе, а
+`Bash(python:*)` разрешен вопреки прямому запрету владельца. Второе: доказательная база
+аудита висит на одном непушнутом локальном теге — 106 из 110 хешей, на которые ссылаются
+заметки реестра, недостижимы ни из одной ветки, на удаленном репозитории тегов ноль, и один
+хеш (`a1e2dbb2`) уже не резолвится. Третье: реестр требований — артефакт, назначенный
+переживать компакт, — показывает ⏳ ("одобрено, не сделано") для семи требований BE-17..BE-23,
+реализованных и закоммиченных 29 июля, а его собственная сводка называет 177 требований при
+196 строках в таблице.
+
+Отдельно про верификацию: 30 из 74 коммитов `fix`/`security`/`perf` не трогают ни одного
+тестового файла, включая утечку счетчиков непрочитанного между пользователями (`a2a03033`),
+проверенную curl'ом по живому стеку и не закрепленную ничем. Явную red-green проверку
+("снял фикс — тест покраснел") документируют 4 сообщения коммитов из 156. Разрыв между
+объявленным методом и следом, который метод оставил в артефактах, — главная претензия этого
+среза.
+
+## Что сделано хорошо
+
+- **Хуки объяснены той поломкой, которую они закрывают, а не назначением.**
+  `.claude/hooks/block-new-migrations.js:7-9`: предыдущая версия на bash+jq падала на каждом
+  Write и выходила с кодом 0, "то есть пропускала все". `.claude/hooks/lint-edited-file.js:54-56`:
+  `npx.cmd` из `child_process` на Windows не запускался вовсе (`status=null`, пустой вывод),
+  "то есть хук молча пропускал все". Это привычка проверять гейт на способность падать, а не
+  на способность запускаться.
+- **Гейт перед пушем не декларация, а установленный механизм.** `scripts/hooks/pre-push`
+  существует, `git config core.hooksPath` возвращает `scripts/hooks`, файл имеет режим 100755
+  (исправлен в `6c14ba23`: до этого на любом POSIX-клоне гейт был "установлен и молча никогда
+  не запускался"). Порядок гейтов от дешевого к дорогому, `set -e`.
+- **Конвенции переведены в машинные проверки, четыре раза за ветку.**
+  `0a4d8aba` — граница Controller → ApiService → Service стала тестом
+  (`test/DM.Architecture.Tests/ServiceLayerBoundaryShould.cs:63-75` отдельно утверждает, что
+  загрузчик вообще что-то нашел, потому что правило, не нашедшее цели, зеленеет);
+  `1813d994` — границы слоев FSD стали правилом линтера (`src/DM.Web.Client/.eslintrc.cjs:29-160`,
+  плагин `boundaries`); `e252e7bb` — нативные `confirm`/`alert` запрещены линтером, включая
+  форму `window.confirm` (`.eslintrc.cjs:85-99`); `a9b16a7d` — миграция держится тестом против
+  модели.
+- **Быстрая петля на фронтенде реально быстрая.** `lint-edited-file.js` гоняет ESLint по
+  одному измененному файлу сразу после записи и объясняет, почему не весь проект и почему не
+  `vue-tsc` (десятки секунд против секунды). Класс ошибок "нарушил границу слоя, вернул нативный
+  confirm, оставил неиспользованный импорт" всплывает через секунду, а не через CI.
+- **Сообщения коммитов несут замер и опровержение самих себя.** `64804421` фиксирует
+  "1 of 38 passed against :5173, 17 of 38 against :5174" и прямо говорит, что прежняя запись
+  реестра "37 из 38 красных" была прочитана с белого экрана. `6a7cb07d` объясняет, почему
+  compose-оверлей генерируется, а не коммитится, и почему тир запускается только в chromium.
+  `fd23ec2d` называет три независимые причины, по которым 37 тестов не запускались, и признает,
+  что прогон был зеленым.
+- **Отказы от предложенного лечения записаны с причиной.** `frontend-quality:FE-14`:
+  "Атрибуты width/height НЕ добавлялись сознательно, вопреки формулировке находки" — под текущим
+  CSS они инертны. `f1d599e3`: ETag не добавлен, потому что ответы маленькие и уже покрыты
+  max-age. `api-design:API-10`: `Asp.Versioning` не взят, потому что у API один потребитель в
+  том же репозитории. Это то, чего обычно не хватает: обоснованное "нет" вместо механического
+  выполнения брифа.
+- **Собственные находки ведутся с той же строгостью, что чужие.** 73 записи реестра имеют
+  префикс `extra:` (найдены при работе, а не аудитом), 67 из них исправлены, 4 — опровергнуты
+  самим же измерением: `extra:tiptap-eager-chain-misdiagnosed` ("грep по dist/assets/index-*.js
+  попадает в два разных файла"), `extra:validation-required-sole-exception-producer`
+  ("опровергнуто замером: 58 вызовов ValidateAndThrow").
+- **Независимая перепроверка закрытого проводилась и находила незакрытое.** `1e06c2bb`:
+  "A verification pass over all 59 findings marked closed took each one back to the current code,
+  the live database and the running API rather than to its commit message. Five did not survive."
+  Пять названы поименно с механизмом (HYG-02: неоднозначный маршрут давал 500 неаутентифицированному
+  PATCH, проверено 500 -> 401).
+- **Отказ пушить трактуется как действие наружу, требующее решения владельца.**
+  `process:P6` в реестре: "Пуш — действие наружу", 152 коммита оставлены локально. Это верная
+  граница, и она соблюдена без напоминания.
+
+## Находки
+
+### [ВЫСОКАЯ] git-guard-blocks-two-of-ten — хук против потери работы пропускает восемь эквивалентных команд
+
+> **Опровержение: подтверждено.**
+
+`.claude/hooks/block-dangerous-git.js:17-22` содержит четыре шаблона:
+
+```js
+/git\s+checkout(?:\s|$)/i,
+/git\s+reset\s+--hard/i,
+/git\s+clean\s+-[a-z]*f[a-z]*d|git\s+clean\s+-[a-z]*d[a-z]*f/i,
+/git\s+stash\s+drop/i
+```
+
+Прогон хука десятью полезными нагрузками (скрипт-проба, вход собран из частей, чтобы не
+сработал внешний хук) дал:
+
+```
+ALLOWED  git restore .
+ALLOWED  git switch main
+ALLOWED  git clean -f
+ALLOWED  git stash clear
+BLOCKED  git checkout .
+BLOCKED  git reset --hard
+ALLOWED  git worktree remove --force wt
+ALLOWED  rm -rf src
+ALLOWED  git branch -D dev
+ALLOWED  git update-ref -d refs/tags/pre-squash-2026-07-30
+```
+
+`git restore .` — прямой современный эквивалент заблокированного `git checkout .`, и именно
+эту форму документация git рекомендует с 2.23. `git clean -f` удаляет untracked файлы, а шаблон
+требует одновременно `f` и `d`. `git stash clear` уничтожает все stash-и, то есть хуже
+заблокированного `git stash drop`, — при том что сам хук в тексте отказа советует
+"git stash (без drop)" как безопасную альтернативу.
+
+Второй слой отсутствует: в `.claude/settings.local.json` есть только ключ `allow` (107 записей),
+`deny` и `ask` не объявлены вообще. В allow-листе стоят `Bash(rm:*)`, `Bash(git:*)`,
+`Bash(kill:*)`, `Bash(pkill:*)`, `Bash(taskkill:*)`, `Bash(chmod:*)` и `Bash(python:*)` — последнее
+прямо противоречит требованию PROC-7 реестра ("Не звать голый python — попап Microsoft Store").
+31 запись allow-листа — одноразовые литеральные команды вида
+`Bash(magick header_bg.gif -fuzz 10% -transparent white header_edge.png)`.
+
+Последствие: агент (или сессия), решивший откатить рабочее дерево, с высокой вероятностью
+возьмет `git restore .` — команду, которую хук пропустит, а allow-лист `Bash(git:*)` пропустит
+без запроса подтверждения. Незакоммиченные изменения теряются молча, ровно тот сценарий,
+против которого правило записано в `<critical_rules>` CLAUDE.md. Отдельно:
+`git update-ref -d refs/tags/pre-squash-2026-07-30` проходит и уничтожает единственный ref,
+держащий 156 коммитов (см. следующую находку).
+
+Исправление: добавить в шаблоны `git\s+restore`, `git\s+switch`, `git\s+clean\s+-[a-z]*f`
+(без требования `d`), `git\s+stash\s+clear`, `git\s+branch\s+-D`, `git\s+update-ref\s+-d`,
+`git\s+worktree\s+remove.*--force`, `git\s+reflog\s+expire`, `git\s+gc\s+--prune`. Завести
+`permissions.deny` с `Bash(rm -rf:*)` и `Bash(python:*)` — правило, которое живет только в
+памяти, харнесс не исполняет. Прогнать пробу повторно и приложить вывод к хуку как тест:
+хук без теста на способность блокировать — тот же самый декоративный гейт, который этот же
+файл в других местах ловит.
+
+### [ВЫСОКАЯ] ledger-stale-where-compaction-hurts — реестр требований показывает "не сделано" для сделанного
+
+> **Опровержение: подтверждено.**
+
+`.claude/skills/requirement-ledger/SKILL.md` объявляет файл единственным SSOT и требует:
+"Начало каждого ответа после компакта: прочитать реестр, свериться, не полагаться на память
+разговора". Состояние файла:
+
+- `REQUIREMENTS.md:283-289` — BE-17..BE-23 со статусом ⏳ ("владелец сказал делать, еще не
+  сделано"). Все семь реализованы: BE-17..BE-22 коммитом `dae4b2a9` от 07-29 01:10
+  ("A ban can now be issued only against someone strictly lower in role... Lifting your own ban
+  is forbidden. Unbanning now lands in the audit... Seven denormalized comment columns on the
+  board are removed... The ban validator is wired in: an indefinite ban is expressed as a
+  hundred-year term. Two duplicate chat room validators are removed"), BE-23 — коммитом
+  `19ed598f`.
+- Сводка в конце файла: "Всего требований: **177**". Строк с ID в таблицах — 196.
+- Три ID использованы дважды: `PROF-18` (строки 67 и 68), `FORUM-18` (95 и 96), `RULE-4`
+  (250 и 251). Сверка "по ID" на них неоднозначна.
+- Строка 182 (`COMM-12`) содержит неэкранированный `|` внутри текста, из-за чего колонки
+  разъезжаются и в колонке "Статус" оказывается фрагмент прозы
+  ("›), середина фиксированной ширины (по самому длинному месяцу"). Ровно эта ловушка описана
+  в памяти (`project-dm3-audit-state.md:19`: "Заметки с каналом | внутри текста ломают строку
+  таблицы, если не экранировать") и в строке 78 того же файла экранирование сделано правильно.
+
+Последствие: сессия после компакта читает реестр, видит семь ⏳ и либо переделывает работу
+(правила банов, аудит снятия, счетчики досок), либо задает владельцу вопрос, на который он уже
+отвечал 29 июля. Это самый дорогой из возможных отказов реестра, потому что он подделывается
+именно под то, для чего реестр создан. Дополнительно: расхождение 177/196 означает, что
+"сводка" — не производная от таблицы, а отдельная руками поддерживаемая цифра, и доверять ей
+нельзя.
+
+Исправление: перевести BE-17..BE-23 в 🔨 с хешами `dae4b2a9`/`19ed598f`. Развести три
+дублирующихся ID. Экранировать `|` в строке 182. Сводку не писать руками — считать скриптом на
+десять строк (тот же приемом, что `memory/audit/register.js` считает реестр аудита), иначе она
+расходится при первом же добавлении строки.
+
+### [ВЫСОКАЯ] agent-model-pins-contradict-a-direct-order — три агента запинены на sonnet вопреки прямому указанию
+
+> **Опровержение: подтверждено.**
+
+`.claude/agents/code-reviewer.md:5`, `.claude/agents/debugger.md:5`,
+`.claude/agents/frontend-developer.md:5` — во всех трех `model: sonnet`.
+
+Память `project-orchestration-model-strategy.md:10`: "**МОДЕЛИ (прямой приказ владельца,
+2026-07-13, отменяет прежнюю пин-стратегию): «Делай все по дефолту на фейбле» — model-пины у
+агентов НЕ ставить вообще; Workflow/Agent наследуют модель сессии.**" То же требование в
+реестре как PROC-9 со статусом 👁 (verified) — то есть помечено проверенным, хотя пины на месте.
+
+Коммит `ea8df29c` от 07-28 называется "docs: realign agent definitions and CLAUDE.md with
+reality" и подробно чинит в этих файлах структуру проекта, синтаксис стилей, имена контейнеров
+и битые ссылки — пины не тронуты.
+
+Последствие: любой вызов `code-reviewer`, `debugger` или `frontend-developer` выполняется на
+модели слабее сессионной, молча, и владелец про это не знает. Для `code-reviewer` это прямо
+влияет на качество: его задача — находить обходы RBAC и утечки, то есть работа, где разница
+модели видна. Плюс PROC-9 помечен 👁 при невыполненном требовании, значит реестр в этом месте
+не просто устарел, а утверждает ложное.
+
+Исправление: удалить строку `model:` из трех файлов, PROC-9 перепроверить и оставить 👁 только
+после греpа `model:` по `.claude/agents/`.
+
+### [СРЕДНЯЯ] audit-trail-on-one-unpushed-tag — 106 из 110 ссылок реестра держит один локальный тег
+
+> **Опровержение: частично неверно.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> The peripheral facts check out — `git ls-remote --tags origin` is empty, `git branch -a --contains pre-squash-2026-07-30` is empty, origin/dev is f705c41e, and `a1e2dbb2` genuinely no longer resolves — but the central claim is wrong. Recounted: status.json holds 110 distinct 8-hex tokens, 109 resolve (not 108), 107 are unreachable from origin/dev (not 106). Of those 107, only **35** are under the tag. 54 are held by `refs/heads/backup/pre-msg-rewrite` + `backup/pre-translate` + `refs/original/refs/heads/dev`, and 18 hang on `backup/pre-msg-rewrite` alone: they are pre-filter-branch hashes (the message-translation rewrite changed them), which is also why `a1e2dbb2` is gone. So "живут только под тегом" is false for two thirds of the citations, and the prescribed remedy — push or bundle the tag — would preserve 35 of 107 while leaving 72 on filter-branch leftovers that git's own docs tell you to delete. The exposure is messier than described but the stake is a temporary traceability artifact: the code itself is safe in the squash on dev, so ВЫСОКАЯ over-ranks it.
+
+Заметки `status.json` цитируют коммиты хешами. Измерено: 110 различных восьмисимвольных
+хешей, 108 резолвятся в коммиты, **106 из 108 недостижимы из `origin/dev`**, то есть живут
+только под тегом `pre-squash-2026-07-30`. При этом:
+
+- `git ls-remote --tags origin` — пустой вывод, на удаленном репозитории тегов нет ни одного;
+- `git branch -a --contains pre-squash-2026-07-30` — пустой вывод, ни одна ветка тег не содержит;
+- `origin/dev` стоит на `f705c41e` (07-27 19:55), вся ветка из 156 коммитов не пушнута.
+
+Один хеш уже не резолвится: `a1e2dbb2`, цитируемый в `frontend-arch:FE-11` — "Три захода.
+Первый (fac16626)... Второй (a1e2dbb2)... Третий (3cc64741)". `git cat-file -e a1e2dbb2^{commit}`
+не находит объект.
+
+Ситуация записана в реестре требований как PROC-14 ("tag pre-squash-2026-07-30 держит прежнюю
+цепочку из 156 коммитов достижимой — на их хеши ссылается AUDIT.md"), то есть риск осознан,
+но мера — один локальный ref без копии.
+
+Последствие: любой из перечисленных выше непокрытых хуком путей (`git update-ref -d`,
+`git branch -D` плюс `git gc --prune`), переустановка машины, или просто чистка тегов через
+полгода — и 96% доказательной базы 261 закрытой находки превращается в текст без проверяемых
+ссылок. Проверить "чем закрыто" станет нельзя ни по одной записи: код есть в сквош-коммите,
+но связь запись → изменение теряется целиком.
+
+Исправление: спросить владельца про пуш тега (`git push origin pre-squash-2026-07-30`) — это
+действие наружу, но оно дешевле любой альтернативы. До решения — второй ref на тот же объект
+(`git update-ref refs/audit/pre-squash <sha>`) и bundle-архив
+(`git bundle create audit-history.bundle pre-squash-2026-07-30`) вне репозитория. Плюс
+одноразовый скрипт-валидатор: пройти все хеши в `status.json` через `git cat-file -e` и падать
+на первом не резолвящемся — сейчас он бы нашел `a1e2dbb2`.
+
+### [СРЕДНЯЯ] fixes-without-a-failing-test — 30 из 74 поведенческих правок не закреплены ничем
+
+Подсчитано по всем 156 коммитам ветки (пересечение измененных путей с
+`Tests?/|\.spec\.|\.test\.|Test\.cs$|e2e/`):
+
+| тип | коммитов | трогают тесты |
+|---|---|---|
+| fix | 62 | 37 (59%) |
+| refactor | 35 | 17 (48%) |
+| test | 13 | 13 (100%) |
+| perf | 9 | 5 (55%) |
+| feat | 8 | 7 (87%) |
+| security | 3 | 2 (66%) |
+
+Тридцать `fix`/`security`/`perf` коммитов не трогают тестов. Среди них те, где инвариант
+дешевый и последствие серьезное:
+
+- `a2a03033` "stop serving one user's unread counters to everyone from the response cache" —
+  меняет `docs/conventions/API_DESIGN.md`, `UnreadCountersRepository.cs`, удаляет
+  `ForumController.GetForum`. Проверка в сообщении: "Verified on the running stack: GET /v1/forum
+  is 404". Инвариант "персонализированный ответ не несет публичного Cache-Control" после
+  этого держится одной фразой в документе.
+- `f1d599e3` "cache policy is an attribute" — привел пять директив кеша на 148 GET-эндпоинтах к
+  одному виду, "Measured against the live API", 4 файла, ноль тестов.
+- `690cc948` "make the search authorization filter actually filter", `8151578b` "correct the
+  MongoDB index set", `742c5e14` "stop publishing datastores on 0.0.0.0" — то же.
+
+При этом идиома "конвенция как отражающий тест" в проекте есть и работает:
+`test/DM.Web.API.Tests/Shared/MutatingActionsShould.cs:11-33` перебирает действия контроллеров и
+запрещает мутациям принимать `CancellationToken`, с объяснением почему в докстринге. Правило
+про Cache-Control выражается там же на пятнадцати строках.
+
+Явную red-green проверку документируют 4 сообщения коммитов из 156 (`5c08def5`, `7ef0075c`,
+`aa003ba1`, `5d88b94a`), при том что память `project-dm3-audit-state.md:29` называет этот метод
+обязательным: "потом red-green проверить тестом — снять фикс и убедиться, что тест краснеет".
+Отсутствие фразы не доказывает отсутствие проверки, но для процесса артефакт — это сообщение,
+и по сообщениям метод виден в 6.5% случаев.
+
+Последствие: утечка счетчиков между пользователями возвращается в тот день, когда кто-то
+поставит `[ResponseCache(Location = Any)]` на персонализированный эндпоинт; ничто не покраснеет.
+То же для фильтра авторизации в поиске и для набора индексов Mongo.
+
+Исправление: для каждого повторяемого инварианта из этого списка — один отражающий тест по
+образцу `MutatingActionsShould`. Минимум: ни одно действие не объявляет
+`ResponseCache(Location = Any)`/`public` вне явного allow-листа лукапов. И в шаблон сообщения
+коммита добавить строку "red-green: <как проверено>" — если ее нечем заполнить, значит теста нет.
+
+### [СРЕДНЯЯ] domain-purity-has-no-guard — правило, нарушавшееся трижды, не проверяется ничем
+
+`test/DM.Architecture.Tests/` — один файл, четыре теста: `LoadTheHostAndTheDomainAssemblies`,
+`KeepControllersOffTheDomainAbstractions`, `KeepControllersOffTheMapper`,
+`KeepApiServicesOffTheDbContext`. Ни один не касается чистоты доменных сборок.
+
+`.claude/agents/code-reviewer.md` объявляет это архитектурным правилом: "**No framework
+dependencies in Domain:** No EF Core, no ASP.NET Core in Domain.*". За ветку правило чинилось
+трижды:
+
+- `fd5f1719` — `Serilog.AspNetCore` и `using Serilog.Context` удалены из `DM.Domain.Account`;
+- `f51a694e` — `Npgsql` удален из `DM.Domain.Community` и `DM.Domain.Game` ("Three domain
+  services caught PostgresException by SQLSTATE, which pulled the Npgsql package into
+  DM.Domain.Game and DM.Domain.Community");
+- `backend-arch:http-vocabulary-in-domain-kernel` — HTTP-словарь в ядре, закрыто решением о
+  трейд-оффе (`bed07671`).
+
+Сегодня в восьми `src/DM.Domain.*/*.csproj` нет ни `Npgsql`, ни `Serilog.*`, ни
+`Microsoft.AspNetCore.*`, ни `Microsoft.EntityFrameworkCore.*` (проверено по всем восьми файлам;
+`DM.Infrastructure.Persistence` фигурирует только как `InternalsVisibleTo`, ProjectReference-ов
+из Domain в Infrastructure нет). То есть правило выполнено — и ничем не зафиксировано.
+
+Асимметрия с фронтендом полная: там границы слоев проверяет линтер, а линтер запускается хуком
+после каждой правки файла. На бэкенде — четыре ArchUnit-правила и никакой петли до `pre-push`.
+
+Последствие: четвертое возвращение того же класса ошибки (поймать `PostgresException` там, где
+удобно; залогировать в домене) пройдет в коммит незамеченным и будет найдено следующим аудитом,
+а не за секунду. Именно этот класс за ветку повторился три раза — это самая частая повторяющаяся
+ошибка в корпусе.
+
+Исправление: одно правило ArchUnitNET в существующем файле —
+`Types().That().ResideInAssembly("DM.Domain.*")` не зависит от типов из `Npgsql`, `Serilog`,
+`Microsoft.AspNetCore.*`, `Microsoft.EntityFrameworkCore.*`, с явным исключением для `Autofac`
+(модули Autofac внутри доменных сборок — сознательное решение из `module-di-composition`).
+Сегодня оно зеленое, то есть добавляется без работы и запирает достигнутое.
+
+### [СРЕДНЯЯ] register-in-three-hand-synced-copies — генератор реестра есть и обходится
+
+Одни и те же статусы находок лежат в трех местах:
+
+- `D:/Code Projects/dm3/AUDIT.md` — 2968 строк, 777 584 байта, **отслеживается git**, добавлен
+  коммитом `40a0423b` с заголовком "docs: add the audit finding registry to the project
+  (temporary)";
+- `memory/audit/DM3-AUDIT.md` — 2963 строки, 766 806 байт, md5 отличается от репозиторного;
+- `memory/audit/status.json` — 306 записей, ключ `срез:id`, правится руками.
+
+`memory/audit/register.js` умеет собирать markdown из `result.json` + `status.json`
+(`node register.js result.json DM3-AUDIT.md status.json <путь-к-копии>`), то есть инструмент
+для одного источника истины существует. Он обходится: коммиты `ce18d65c`, `41ffa4a9`, `2fd30df8`,
+`64ed812e`, `7b3d8376`, `5be3a52c` правят `AUDIT.md` руками, дописывая или меняя строку таблицы.
+Память сама фиксирует последствие (`project-dm3-audit-state.md:19`): "`AUDIT.md` в репозитории
+— документ, который читает владелец. Он **расходится с реестром молча**: статус лежит и в
+индексной таблице (шестиколоночной), и строкой `**Статус: X.**` под каждым разделом. Сверять
+надо оба места".
+
+Последствие: статус одной находки записан в четырех местах (индексная таблица и раздел внутри
+`AUDIT.md`, плюс два внешних файла), синхронизация ручная, расхождение не детектируется. Уже
+разъехались: копия в памяти на пять строк короче репозиторной и имеет другой хеш; заметка
+`project-dm3-audit-state.md:13` говорит "302 записи реестра: исправлено 257", в `status.json`
+их 306 и 261. Следующая сессия, читающая память (а она читает память), получит цифры,
+расходящиеся с реальностью на четыре записи.
+
+Отдельно: 777 КБ снапшота текущего состояния лежит в продуктовом репозитории под словом
+"temporary" третьи сутки, а PROC-16 планирует туда же `AUDIT-2.md`. Правило проекта
+"документация — только конвенции, без снапшотов" на корень репозитория формально не
+распространяется, но дух ровно тот же, и коммит `7b6bd196` ("purge inventories, state snapshots
+and duplicates from the docs") чистил именно это.
+
+Исправление: `status.json` — единственный источник, `AUDIT.md` собирается `register.js` и
+никогда не правится руками (в generated-файле первой строкой это написать). Убрать дублирующий
+`**Статус:**` из раздела, оставив статус только в индексной таблице. Вынести `AUDIT.md` из
+git или назначить дату удаления в самом файле.
+
+### [СРЕДНЯЯ] bundled-commits-against-own-diagnosis — 13 коммитов делают три и больше несвязанных дела
+
+Распределение находок на коммит по 156 сообщениям: 78 без тега, 46 с одним, 19 с двумя,
+8 с тремя, 4 с четырьмя, 1 с шестью. То есть 32 коммита (21%) закрывают две и более находки,
+13 — три и более. Экстремумы:
+
+- `340e01a0` "fix: logs, tracing, mockups (CR-10, CR-16, HYG-17, FE-13, P13, HYG-15)" — шесть
+  находок, 11 файлов;
+- `dae4b2a9` "feat: ban rules, unban audit, board counts (BE-17..BE-22, P-04, P-07)" — 31 файл,
+  и внутри: правила старшинства при бане, запрет самораспаковки, аудит снятия, удаление семи
+  денормализованных колонок, снятие часового кеша списка досок, подключение валидации каталога
+  тегов, приведение длин в валидаторах заметок, валидатор бана, удаление двух дублей валидаторов
+  комнат, индекс на `Likes` и перегенерация миграции.
+
+При этом собственный вывод по методу (`project-dm3-audit-state.md:31`): "«То же, что X» и правки
+по нескольким местам сразу — **главный источник недоделок**". И измеренная цена: `1e06c2bb`
+показывает, что из 59 находок, помеченных закрытыми, пять (8.5%) не выдержали независимой
+перепроверки, причем формулировки причин ровно про это — "the duplicate moderation route was
+only half removed", "the dead duplicate background services were not all removed", "MassTransit
+survived in two places the earlier pass did not touch".
+
+Последствие: откат индекса на `Likes` означает откат правил полномочий при бане; бисект
+регрессии в счетчиках досок приводит на коммит, который заодно поменял модель бана и
+перегенерировал миграцию. Для 261 записи реестра это же означает, что "чем закрыто (хеш)" в
+трети случаев указывает на коммит, где искомое изменение — одно из шести.
+
+Исправление: один коммит — одна находка, кроме случая, когда правки физически неразделимы
+(перегенерация миграции). Практическое правило, которое здесь бы сработало: если в заголовке
+больше двух ID, коммит делится. Тег в сообщении — не оглавление проделанного за час, а адрес
+одной записи реестра.
+
+### [СРЕДНЯЯ] local-gate-is-not-the-ci-gate — pre-push утверждает, что гоняет то же, что CI
+
+Сообщение `4ccea8c1`: "scripts/hooks/pre-push runs exactly what CI runs, cheapest first".
+Фактически:
+
+| гейт CI (`.github/workflows/dotnet.yml`) | в pre-push |
+|---|---|
+| `dotnet build -c Release` (строка 40) | есть |
+| `dotnet test --no-build -c Release` (строка 42) | **`dotnet test -c Debug`** (`scripts/hooks/pre-push:44`) |
+| `frontend`: lint, type-check, build, vitest | есть |
+| `dependency-scan`: `./scripts/check-vulnerable-packages.sh` (строка 215) + `npm audit --omit=dev --audit-level=high` (строка 225) | **нет** |
+| `e2e` (258 тестов, строка 100) | нет (20-25 минут, обоснованно) |
+| `compose-topology` (строка 332) | нет |
+
+`dependency-scan` — блокирующая зависимость обеих джоб публикации (`needs: [build, frontend,
+e2e, dependency-scan]`, строки 228 и 289) и входит в требование владельца дословно
+(`feedback-verify-ci-before-push.md:18`: "`bash scripts/check-vulnerable-packages.sh` и
+`npm audit --omit=dev --audit-level=high`"). Там же требуются сборка четырех docker-образов
+(строка 19) и ZAP при правках заголовков (строка 20) — тоже не в хуке.
+
+Дополнительно: `dotnet build -c Release` и следом `dotnet test -c Debug` компилируют решение
+дважды, и тестируются не те бинари, которые проверил Release-гейт.
+
+Последствие: локальный гейт зеленый, публикация в CI падает на `dependency-scan` — в истории
+проекта это уже происходило дважды (`bb5d8d2d` "patch 8 CVEs", `c0829574` "fix 6 shipped npm
+vulnerabilities"), то есть класс подтвержден. И тест, чувствительный к конфигурации сборки,
+локально не выполняется вовсе. Второй эффект тише: двойная компиляция делает гейт дороже, а
+дорогой гейт обходят через `--no-verify`.
+
+Исправление: `dotnet test --no-build -c Release` вместо Debug (сборка уже сделана строкой выше);
+добавить `bash scripts/check-vulnerable-packages.sh` и `npm audit --omit=dev --audit-level=high`;
+в шапке хука перечислить, какие джобы CI он НЕ покрывает и почему (e2e — время,
+publish — секреты), вместо утверждения "exactly what CI runs".
+
+### [СРЕДНЯЯ] frontend-agent-points-at-the-owners-port — бриф агента ведет на :5173
+
+`.claude/agents/frontend-developer.md` в блоке Commands: `npm run dev # Dev server (localhost:5173)`.
+`src/DM.Web.Client/package.json`: `"dev": "vite"`; `src/DM.Web.Client/vite.config.ts:10-11`:
+`port: 5173, strictPort: true`. Это сервер владельца. Собственный preview ассистента объявлен
+на 5174 (`.claude/launch.json`, `--port 5174`).
+
+Ловушка :5173 за эту же ветку чинилась дважды: `6c14ba23` удалил
+`src/DM.Web.Client/.claude/launch.json`, объявлявший "a second server also named 'dev', on :5173,
+next to the root config's :5174. Two configs with one name is how a preview ends up served from
+a stale port"; `64804421` (через семь часов) убрал дефолт `baseURL` на :5173 из
+`playwright.config.ts`, где стейл-сервер отдавал `ReferenceError: __WS_TOKEN__ is not defined`.
+Третий экземпляр той же ловушки жив в брифе агента.
+
+Последствие: субагент `frontend-developer`, следующий своему брифу, при поднятом сервере
+владельца падает на занятом порте (`strictPort: true`), а при опущенном — занимает порт
+владельца, и открытая у владельца вкладка начинает обслуживаться сервером агента. Измерение,
+сделанное на этом сервере, попадает в отчет как факт — ровно так запись "37 из 38 красных"
+была прочитана с белого экрана.
+
+Исправление: в брифе заменить на preview-конфигурацию из `.claude/launch.json`
+(`npx vite --config vite.preview.config.ts --port 5174`) и одной строкой сказать, что :5173
+принадлежит владельцу и трогать его нельзя.
+
+### [НИЗКАЯ] own-config-breaks-the-projects-text-rules — 14 "е с точками" в файлах .claude
+
+`docs/conventions/CODE_STYLE.md` (добавлено коммитом `ea8df29c`): "**Буква "е с двумя точками"
+(U+0451) не используется.** Всегда обычная "е". Проверяется поиском по этому символу: находки
+в новом тексте недопустимы."
+
+Подсчет по файлам:
+
+```
+.claude/README.md                              6
+.claude/skills/requirement-ledger/SKILL.md     5
+.claude/skills/skeleton-parity/SKILL.md        3
+.claude/CLAUDE.md                              0
+.claude/agents/*.md                            0
+```
+
+Все три файла попали под git коммитом `6c14ba23`. Последняя строка того же сообщения коммита —
+исправление ровно этого символа в слове "Запрещенные" внутри `block-dangerous-git.js`, то есть
+правило применялось к одному файлу и не применялось к 509 строкам и двум скиллам, добавленным
+тем же коммитом.
+
+Последствие: правило, которое владелец повторял многократно и которое проверяется грепом за
+секунду, нарушено в конфигурации самого исполнителя. Для проекта это косметика; как сигнал —
+это разметка "правила для репозитория, не для моих инструментов".
+
+Исправление: заменить 14 вхождений; добавить символ U+0451 в `lint-edited-file.js` как проверку
+для `.md` (сейчас хук обрабатывает только `.vue/.ts/.js` под `src/DM.Web.Client`).
+
+### [НИЗКАЯ] claude-readme-is-the-doc-the-purge-missed — 509 строк инвентаря и выдуманных примеров
+
+`.claude/README.md` — 509 строк против 53 у `.claude/CLAUDE.md`. Содержимое: примеры вызова трех
+агентов (по 6-7 блоков на каждого) и выдуманные примеры их вывода с конкретными именами —
+"Code Review: TopicController.cs, TopicService.cs", "Debug Report: NullReferenceException in
+TopicCreatingService", "Frontend Task: Create TopicList.vue". Файл не менялся с 9 марта и
+попал под git 29 июля в исходном виде.
+
+При этом `.claude/CLAUDE.md:47-49` объявляет обратный принцип: "Этот файл держится на том же
+принципе: чек-лист ревью и перечень разобранных ложных срабатываний живут в code-reviewer, а не
+дублируются здесь." А `ea8df29c` вычистил инвентари из брифа `frontend-developer` с явным
+обоснованием: "an inventory goes stale on the first move, and a stale one is worse than none,
+because it feeds a fresh context false facts."
+
+Последствие: файл в 9.6 раза больше CLAUDE.md конкурирует с ним за внимание при чтении
+конфигурации, содержит имена классов пятимесячной давности и примеры вывода, которых никогда не
+было. Для свежей сессии это ровно те "wrong facts", против которых написан соседний коммит.
+
+Исправление: сократить до навигации (кто из трех агентов для чего, ссылка на frontmatter) —
+десять строк — или удалить: описания агентов уже лежат в их `description`.
+
+### [НИЗКАЯ] audit-state-memory-misattributes-its-own-numbers — "опровергнуто оппонентом 33" неверно
+
+`project-dm3-audit-state.md:13`: "**Счет на 2026-07-30 (302 записи реестра):** исправлено 257,
+опровергнуто оппонентом 33, принято как исключение 5, отклонено решением владельца 3, не
+проблема 1, за владельцем 3."
+
+Разбор 33 записей со статусом "Опровергнуто" по их происхождению в `result.json`:
+
+- 20 — уже были опровергнуты оппонентом до реализации (статус лишь повторяет его вердикт);
+- 8 — средние/низкие находки, оппонента не проходившие вовсе;
+- 4 — собственные находки с префиксом `extra:`, опровергнутые своим же замером;
+- 1 — `devops:CD-13`, оппонентом **подтвержденная** и при реализации оказавшаяся ложной.
+
+Последствие: цифра, по которой оценивается метод, не восстанавливается из памяти. Настоящая
+величина — сколько находок прошло оппонента и все равно оказалось ложным — равна 1 из 82 (1.2%),
+и это главный аргумент в пользу фан-аута. Формулировка "опровергнуто оппонентом 33" читается как
+"оппонент отсеял 33", то есть в 33 раза преувеличивает работу оппонента и скрывает измеренную
+пользу. Плюс сама цифра устарела на четыре записи (302/257 против 306/261 в `status.json`).
+
+Исправление: заменить строку на три числа с определениями — "оппонент отсеял до реализации: 24
+из 106; из 82 прошедших оппонента оказалась ложной 1; из 127 не проходивших оппонента — 8" — и
+пересчитать итоги из `status.json`, а не переписывать руками.
+
+## Чего я не смог определить
+
+- **Работал ли метод red-green в тех коммитах, где тест есть, а revert-проверка не описана**
+  (82 коммита ветки трогают тестовые файлы, revert-проверку описывают 4). Судить можно только
+  по сообщению. Установил бы: строка "red-green: <как проверено>"
+  в шаблоне сообщения, либо `git notes` с выводом падающего теста до фикса.
+- **Насколько сравнение 1.2% против 6.3% чистое.** Оппонента проходили только critical/high, а
+  средние/низкие — нет, значит на разницу влияет и серьезность находки, а не только наличие
+  оппонента. Разделить можно было бы, пропустив выборку из 20 средних находок через того же
+  оппонента и сравнив долю опровергнутых; это прогон, а не чтение.
+- **Сколько времени фактически съел фан-аут.** `result.json` фиксирует "120 агентов, 3555
+  обращений к коду", но ни стоимости, ни длительности в артефактах нет. Без этого "окупился"
+  доказан по качеству и не доказан по цене. Установили бы логи прогона оркестрации.
+- **Проходят ли все гейты CI на текущем HEAD.** 156 коммитов не пушнуты, ни один из шести
+  джобов не запускался (`process:P6` в реестре). Локально прогнан только тот набор, что в
+  `pre-push`; `dependency-scan`, `compose-topology` и `publish` не выполнялись ни локально, ни в
+  CI. Установит один пуш — решение владельца.
+- **Воспроизводим ли сид.** `process:P9` оставлен за владельцем: RNG засеян константой, эпоха в
+  `DM_SeedEpochUtc`, но два прогона с диффом не сделаны, потому что сид пишет в Postgres, Mongo и
+  MinIO. Установит одноразовый стек или ресет рабочей базы.
+- **Правильно ли сужать allow-лист и как именно.** `process:P14` — сужение меняет полномочия
+  агента, а не чистит файл; решение владельца. Фактура для решения собрана: 107 разрешений,
+  31 одноразовое, `deny` отсутствует.
+
+
+# Гигиена кода и техдолг — D
+
+Оценка среза до опровержения: D. Формальная дисциплина здесь измеримо выше средней — 3 маркера TODO на 2555 файлов, 0 пустых catch, 0 SuppressMessage, 0 @ts-ignore, 8 обоснованных pragma, 14 мертвых типов из 1937, — но неудержанное дублирование уже доехало до пользователя в четырех местах (мертвый механизм Razor-шаблонов превращает тело каждого письма аккаунта в JSON; четвертая копия GetDiscussion потеряла фильтр черного списка под публикациями; генератор активации игры помечает уведомления как "новая игра"; шесть типов событий выпали из NotificationCategoryMapper, включая AccountLocked), плюс половина кодовой базы не имеет гейта форматирования при 177 из 1859 файлов, на которых dotnet format падает.
+
+Оценка D, и она держится не на объеме мусора, а на том, куда этот мусор доехал. Формальная
+дисциплина здесь выше средней и это измеримо: на 1776 файлов C# и 779 файлов фронтенда приходится
+**3** маркера TODO/FIXME (`src/DM.Web.Client/src/pages/warnings/WarningsPage.vue:4`,
+`src/DM.Web.Client/src/shared/ui/ErrorPage/errorConfig.ts:28`,
+`test/DM.Web.API.IntegrationTests/CustomWebApplicationFactory.cs:276`), **0** вхождений
+`NotImplementedException`, **0** пустых блоков `catch`, **0** атрибутов `SuppressMessage`, **0**
+директив `@ts-ignore`, **8** негенерированных `#pragma warning disable` — каждая с причиной на
+месте, и ровно **1** буква "е с точками" во всем коде, причем это запись таблицы транслитерации
+(`src/DM.Domain.Core/Extensions/ReadableGuidHelper.cs:80`). Мертвых типов 14 из 1937 объявленных,
+мертвых именованных экспортов фронтенда 16 из 662. Это не запущенный код.
+
+Запущено другое: дублирование, которое никто не сдерживает, и оно уже разошлось. Четыре
+параллельных стека комментариев в домене (1779 строк) и четыре копии `GetDiscussion` в API — в
+одной из четырех копий потерян фильтр черного списка, так что настройка "скрывать комментарии
+заблокированных" работает в блогах, форуме и играх и не работает под публикациями. Два словаря
+русских подписей событий по 48 записей в двух файлах, и в одном из них 15 плеч
+`FormatPropertyName`, а в другом 14. Генератор уведомлений об активации игры помечает свои
+уведомления типом "новая игра от подписанного автора", потому что он копия генератора подписок.
+Шесть типов событий, для которых генераторы есть, отсутствуют в `NotificationCategoryMapper`, и
+среди них `AccountLocked` — заблокированный пользователь получает только внутрисайтовое
+уведомление, до которого не может дойти. Пять живых типов событий уходят письмом с темой
+"Уведомление". И, наконец, весь механизм Razor-шаблонов писем мертв — файлов `.razor` в репозитории
+ноль — а `TemplateRenderer` на этот случай возвращает `JsonSerializer.Serialize(model)`, так что
+телом письма о подтверждении регистрации является JSON.
+
+Отдельно к оценке: половина кодовой базы не имеет гейта форматирования. Фронтенд гейтится
+(`prettier/prettier` через `@vue/eslint-config-prettier` при `--max-warnings 0` в `lint:ci`), а
+`dotnet format --verify-no-changes` не запускается нигде, и он падает на **177 из 1859** файлов
+солюшена, из них 139 — на отсутствии финального перевода строки, который `.editorconfig:11`
+требует. То есть правило записано, инструмент его видит, гейта нет.
+
+## Что сделано хорошо
+
+- **Настройки сборки объяснены на месте, а не вычищены до пустоты.**
+  `Directory.Build.props:5-8` фиксирует отсутствие `WarningsNotAsErrors` с причиной ("список
+  освобождал десять nullable-кодов и оставлял дыру"), `:11-19` объясняет, почему `NU1902/NU1903`
+  глушатся именно в MSBuild и где стоит единственная точка контроля, `:21-26` объясняет, почему
+  `LangVersion` пиннится на `12.0` вместо дефолта SDK. `<Nullable>enable</Nullable>` и
+  `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>` — на весь солюшен, включая тесты
+  (`test/Directory.Build.props:5` явно импортирует корневой props, с объяснением, почему это нужно).
+- **Инварианты выражены исполняемым кодом, а не текстом.**
+  `test/DM.Architecture.Tests/ServiceLayerBoundaryShould.cs` проверяет границу
+  Controller → ApiService → Service по IL, и, что важнее, `:69-77` утверждает сам загрузчик
+  ("правило, которое ничего не нашло, зеленое"). `test/DM.Web.API.Tests/Shared/MutatingActionsShould.cs`
+  рефлексией запрещает `CancellationToken` в мутирующих экшенах и объясняет, почему (три
+  `BeginTransaction` на весь слой персистентности). `src/DM.Web.Client/.eslintrc.cjs:38-135`
+  кодирует слои FSD и двери `@x` как правило `boundaries/dependencies`, включая
+  `dynamic-import` в `dependency-nodes:41` с записью, что именно этот вид импорта прятал нарушение.
+- **Подавления единичны и обоснованы поштучно.** 8 негерированных `#pragma` — 7 из них
+  `CS1591` на DAL-сущностях со ссылкой на доменный аналог
+  (`src/DM.Infrastructure.Persistence/Entities/Community/UserAward.cs:1`), одна `CA1814` в
+  миграции. 3 `eslint-disable` во всем фронтенде.
+- **Гейты CI шире, чем "собралось и прогнались юниты".** `.github/workflows/dotnet.yml` держит 7
+  джоб: сборку в Release (ровно ту конфигурацию, которая пакуется), фронтенд-линт с
+  `--max-warnings 0`, e2e на реальном стеке с сидом, `dependency-scan` как гейт (а не отчет),
+  `compose-topology` с проверкой существования каждого build-контекста и сверкой файлов между
+  `setup-server.sh` и `dm3.service` (`:352-359`). Хук `scripts/hooks/pre-push` установлен
+  (`core.hooksPath = scripts/hooks`) и гоняет те же гейты.
+- **Порог покрытия описан как трещотка, а не как пол.**
+  `src/DM.Web.Client/vite.config.ts:39-50` фиксирует, что числа стоят чуть ниже измеренных, чем
+  именно они считаются и что понижать их нельзя.
+- **Централизованные версии пакетов с объясненными исключениями.**
+  `Directory.Packages.props:5-7` объясняет `CentralPackageTransitivePinningEnabled`, `:24-25`
+  помечает блок закрепленных транзитивов. Из 70 записей 6 без прямой ссылки, и 5 из них —
+  ровно этот объясненный блок.
+
+## Находки
+
+### [КРИТИЧНО] razor-templates-dead-body-is-json — механизм шаблонов писем мертв, телом каждого письма аккаунта уходит JSON
+
+> **Опровержение: подтверждено.**
+
+`src/DM.Infrastructure.Mail/DM.Infrastructure.Mail.csproj:1` объявляет `Sdk="Microsoft.NET.Sdk.Razor"`.
+`src/DM.Infrastructure.Mail/Rendering/TemplateRenderer.cs:32` строит карту шаблонов сканированием
+собственной сборки на типы `IComponent`:
+
+```csharp
+_templateTypes = GetAvailableComponents();
+...
+return GetPropertyTypes(Assembly.GetExecutingAssembly().GetTypes()).ToImmutableDictionary();
+```
+
+Файлов `.razor` в репозитории **0** (`git ls-files | grep -iE "\.razor|\.cshtml"` пуст), значит
+`_templateTypes` всегда пуста. `TemplateRenderer.cs:73-80`:
+
+```csharp
+var haveTemplateType = _templateTypes.TryGetValue(typeof(TModel), out var templateType);
+if (!haveTemplateType)
+{
+    return Task.FromResult(JsonSerializer.Serialize(model));
+}
+```
+
+Результат идет прямо в тело: `src/DM.Domain.Account/Features/Registration/RegistrationMailSender.cs:35-42`
+пишет `Body = emailBody`, `src/DM.Infrastructure.Mail/MailSender.cs:29` кладет письмо в очередь без
+изменений, `src/DM.Workers.Mail/MailSendingProcessor.cs:70` делает
+`new TextPart(TextFormat.Html) { Text = message.Body }`. Пять отправителей на этом пути:
+`RegistrationMailSender`, `src/DM.Domain.Account/Features/Recovery/PasswordResetMailSender.cs`,
+`.../EmailChange/EmailChangeMailSender.cs`, `.../PasswordChange/PasswordChangeMailSender.cs`,
+`.../Authentication/SuspiciousLoginNotificationSender.cs`, и пять моделей в
+`src/DM.Domain.Core/Mail/ViewModels/`. Тестов на рендер нет ни одного
+(`test/DM.Infrastructure.Mail.Tests/` содержит только `EmailLetterValidatorShould.cs`).
+Мертвы вместе с механизмом: `src/DM.Infrastructure.Mail/Rendering/EmailConstants.cs` целиком (0
+ссылок, `Layout => "_EmailLayout"` указывает на несуществующий макет) и помеченный DEPRECATED
+`src/DM.Infrastructure.Mail/Rendering/IRenderer.cs:10`.
+
+Последствие: любой регистрирующийся получает письмо, тело которого —
+`{"ConfirmationLinkUrl":"http://localhost:5173/activate/<guid>"}`. То же для восстановления
+пароля, смены почты, уведомления о смене пароля и о подозрительном входе. Логотип при этом
+прикрепляется как `LinkedResource` с `ContentId = "logo"`
+(`src/DM.Infrastructure.Mail/Assets/EmailAssetsProvider.cs:19-24`) и ни одним `cid:` не
+используется, потому что HTML отсутствует.
+
+Исправление: решение владельца, какой из двух путей единственный. Либо вернуть Razor-компоненты
+(тогда `EmailConstants` и `_EmailLayout` обретают смысл, а `TemplateRenderer` перестает быть
+заглушкой), либо удалить `Sdk.Razor`, `TemplateRenderer`, `IRenderer`, `EmailConstants` и собирать
+письма тем же способом, каким их уже собирает `NotificationEmailSender`. В любом варианте
+`RenderAsync` не должен молча подменять шаблон сериализацией: отсутствие шаблона для модели —
+это `InvalidOperationException`, а не тело письма. Тест: по одному ассерту на каждую из пяти
+моделей, что результат не начинается с `{`.
+
+### [ВЫСОКАЯ] publication-comments-skip-blacklist — четвертая копия GetDiscussion потеряла фильтр черного списка
+
+> **Опровержение: подтверждено.**
+
+`DiscussionResponse GetDiscussion` реализован четыре раза:
+`src/DM.Web.API/Features/Blog/Comments/BlogCommentApiService.cs:40`,
+`src/DM.Web.API/Features/Blog/PublicationComments/PublicationCommentApiService.cs:35`,
+`src/DM.Web.API/Features/Forum/Comments/ForumCommentApiService.cs:37`,
+`src/DM.Web.API/Features/Game/Comments/GameCommentApiService.cs:40`. Три из четырех делают:
+
+```csharp
+var blockedIds = await _blacklistChecker.GetBlockedUserIdsIfFlagEnabledAsync(
+    currentUserId, UserBlacklistSettings.HideComments);
+if (blockedIds.Count > 0) { excludeUserIds = blockedIds; }
+```
+
+Четвертая — нет. `PublicationCommentApiService` не инжектирует `IUserBlacklistChecker` вовсе
+(конструктор `:24-31`: только `IPublicationCommentService`, `IIdentityProvider`, `IMapper`), а
+вызов `:37` идет как `_commentService.GetAsync(publicationId, query)` — при том что домен параметр
+принимает: `IPublicationCommentService.GetAsync(Guid, PublicationCommentsQuery, IReadOnlyCollection<Guid>? excludeUserIds = null)`.
+Тела: 42 / **29** / 44 / 42 строки.
+
+Последствие: пользователь, добавивший кого-то в черный список с флагом `HideComments`, продолжает
+видеть его комментарии под каждой публикацией блога, хотя в блоге, на форуме и в игре они скрыты.
+Никакой ошибки не возникает, поведение просто отличается от трех остальных мест.
+
+Исправление: вынести тело `GetDiscussion` в один общий сервис, параметризованный источником
+комментариев (домен уже отдает одинаковый `IEnumerable<Comment>` и `PagingResult` во всех
+четырех). Пока этого нет — прокинуть `IUserBlacklistChecker` в `PublicationCommentApiService` и
+передать `excludeUserIds`. Тест: один параметризованный кейс на четыре поверхности, что
+комментарий заблокированного автора отсутствует в `DiscussionResponse`.
+
+### [ВЫСОКАЯ] notification-tables-out-of-sync — три таблицы, которые обязаны совпадать, расходятся на 20 записей
+
+> **Опровержение: частично неверно.**
+>
+> Every number recomputed and correct: 36 EventType overrides, 60 mapper members, 48/48 subject entries (sorted diff: 0 differences), 6 generator types missing from the mapper, 13 mapper types missing from subjects, 1 unreachable subject (RoomPendencyReminder) = 20. FormatPropertyName arms 24 vs 23 (author said 15/14 — wrong absolute count, right delta of one). But both headline examples are dead code. EventType.AccountLocked (=95) is never sent to the bus by anything — AuthenticationService.cs:84 logs the unrelated SecurityEventType.AccountLocked — so AccountLockedNotificationGenerator never runs and the locked user gets nothing at all, not "only an in-app notification he cannot reach". EventType.TicketCreated is likewise never raised. Real live impact is narrower: GameInactivityWarning, LikedGameComment, RoomPendencyFulfilled, RoomPendencyReminder and NewGlobalChatMessage are raised and silently dropped by both channels (NotificationEmailSender.cs:107-110, NotificationBotSender.cs:111-112), and AwardGranted / BlogInvitationCreated / ChangedPublication / ChangedTopic do go out titled "Уведомление". Also the generator inventory is incomplete: BlogStatusChanged, GameStatusChanged and GameCharacterStatusChanged implement CanResolve via a SupportedTypes array instead of overriding EventType, adding 16 more trigger types — all present in the mapper, so the conclusion survives, but a reflection test built the author's way would miss them. No test touches NotificationCategoryMapper. Severity holds on the live subset.
+
+Доставка уведомления проходит три независимых таблицы:
+множество генераторов (`src/DM.Workers.NotificationDispatcher/Implementation/Notifiers/`, 36
+переопределений `protected override EventType EventType`),
+`src/DM.Domain.Personal/Features/Notifications/NotificationCategoryMapper.cs` (60 членов
+`EventType`) и два словаря подписей по 48 записей. Посчитано:
+
+- **6 типов событий, для которых генератор есть, отсутствуют в `NotificationCategoryMapper`**:
+  `LikedGameComment`, `GameInactivityWarning`, `RoomPendencyFulfilled`, `RoomPendencyReminder`,
+  `NewGlobalChatMessage`, `AccountLocked`. `NotificationEmailSender.cs:107-110` и
+  `NotificationBotSender` выходят по `if (category == null) return;`, то есть письмо и бот молчат.
+- **13 типов есть в маппере, но отсутствуют в словаре подписей**, из них живые генераторы у пяти:
+  `AwardGranted`, `BlogInvitationCreated`, `ChangedPublication`, `ChangedTopic`, `TicketCreated`.
+  `NotificationEmailSender.cs:202`: `EventTypeSubjects.TryGetValue(eventType, out var subj) ? subj : "Уведомление"`.
+- **1 подпись недостижима**: `[EventType.RoomPendencyReminder] = ...` в
+  `NotificationEmailSender.cs`, при отсутствии этого типа в маппере.
+
+Последствие: пользователь, которому выдали награду, пригласили в блог или создали тикет, получает
+письмо с темой "Уведомление". Пользователь, чей аккаунт заблокировали (`AccountLocked`), не
+получает ни письма, ни сообщения в бот — только внутрисайтовое уведомление, войти за которым он
+не может. Асимметрия `GameClosureWarning` (в маппере) и `GameInactivityWarning` (нет) означает,
+что о приближающемся закрытии игры мастер узнает письмом, а о неактивности — нет.
+
+Исправление: свести три таблицы к одной. Ключ — `EventType`; значение — запись с категорией и
+подписью; отсутствие записи для типа, у которого есть генератор, ловится тестом, который
+рефлексией собирает `EventType` всех `INotificationGenerator` и требует записи для каждого. Это
+единственная форма, при которой добавление генератора нельзя завершить наполовину.
+
+### [ВЫСОКАЯ] game-activated-emits-wrong-event-type — уведомление об активации игры помечено как "новая игра"
+
+> **Опровержение: подтверждено.**
+
+`src/DM.Workers.NotificationDispatcher/Implementation/Notifiers/Game/GameActivatedNotificationGenerator.cs:32`
+объявляет `EventType => EventType.StatusGameActive`, а на `:94` выдает:
+
+```csharp
+yield return new CreateNotification
+{
+    EventType = EventType.NewGameFromSubscribedAuthor,
+    ...
+    Metadata = new { GameId = ..., GameTitle = ..., AuthorUsername = gameData.MasterUsername }
+};
+```
+
+Ровно тот же тип и та же форма метаданных приходят из
+`Notifiers/Subscriptions/NewGameFromSubscribedAuthorNotificationGenerator.cs:89`, который обрабатывает
+`EventType.NewGame`. `NotificationProcessor.cs:56-58` подменяет тип только когда генератор его не
+задал, так что здесь подмена принудительная. Его копия-близнец
+`GameRecruitmentOpenedNotificationGenerator.cs` (jaccard 0.80, отличается 15 строками из ~100)
+`EventType` в уведомлении не задает и потому работает правильно; она же переименовала ключ
+метаданных с `AuthorUsername` на `MasterUsername`. То же в блогах:
+`Notifiers/Blog/BlogActivatedNotificationGenerator.cs:93` ставит `NewBlogFromSubscribedAuthor` при
+собственном типе `StatusBlogActive`.
+
+Последствие: мастер открывает существующую игру — все подписчики мастера получают письмо с темой
+"Новая игра от подписанного автора" и внутрисайтовое уведомление того же вида. Отличить настоящую
+новую игру от смены статуса старой по уведомлению невозможно. Комментарий на
+`GameActivatedNotificationGenerator.cs:80` при этом ссылается на `GameStatusChangedNotificationGenerator`
+как на место, где уведомляют команду игры, то есть автор считал этот генератор именно
+статусным.
+
+Исправление: убрать явное присваивание `EventType` из обоих генераторов активации и добавить
+`StatusGameActive` / `StatusBlogActive` в словари подписей (в маппере они уже есть). Правило
+"свой `EventType` задают только генераторы подписок" зафиксировать тестом: генератор вне папки
+`Subscriptions/` не должен выдавать `CreateNotification` с непустым `EventType`.
+
+### [СРЕДНЯЯ] dmsh-cannot-start-the-stack — документированный старт на Linux падает на первой команде
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Mechanism verified empirically, not argued: `printf ... | TESTKEY="" docker compose -f - config` returns "required variable TESTKEY is missing a value", so compose's :? does reject an empty .env value. docker-compose.yml:34, .env.example:45, dm.ps1:254-260 and dm.sh:45-56 are all as quoted, and LOCAL_SETUP.md:19 does prescribe ./scripts/dm.sh start. The manual alternative in the same doc (cp .env.example .env; docker compose up -d) is broken identically, on Windows too — the author missed that. Downgrading: this is dev tooling with zero product impact, the failure is self-describing (the :? message names `openssl rand -base64 32`), .env.example spends five lines on the manual step, and one command fixes it permanently. A broken documented first run on a platform nobody currently develops on is СРЕДНЯЯ, not ВЫСОКАЯ.
+
+`docker/docker-compose.yml:34`:
+
+```yaml
+DM_CryptoConfiguration__KeyBase64: ${DM_CryptoConfiguration__KeyBase64:?DM_CryptoConfiguration__KeyBase64 is required, generate with openssl rand -base64 32}
+```
+
+`docker/.env.example:45` содержит `DM_CryptoConfiguration__KeyBase64=` — пустое значение, которое
+`:?` отвергает так же, как отсутствующее. `scripts/dm.ps1:254-260` это лечит:
+
+```powershell
+if ($envContent -match '(?m)^DM_CryptoConfiguration__KeyBase64=\s*$') {
+    [System.Security.Cryptography.RandomNumberGenerator]::Fill($keyBytes)
+    ...
+```
+
+`scripts/dm.sh:45-56` — нет: копирует шаблон, печатает "Please edit docker/.env and set secure
+passwords!" и сразу выполняет `docker compose up -d --build`. `docs/guides/LOCAL_SETUP.md:19`
+предписывает Linux/macOS именно `./scripts/dm.sh start`.
+
+Последствие: разработчик на Linux или macOS, выполняющий документированный старт на чистом клоне,
+получает отказ compose с текстом про переменную, а не про то, что делать. Сообщение хука
+`:?` содержит подсказку `openssl rand -base64 32`, но ее нужно заметить и применить вручную,
+причем к файлу, который скрипт только что создал. Windows-путь работает.
+
+Исправление: перенести генерацию ключа в общий шаг. Наименьшее изменение — вставить в
+`dm.sh` перед `docker compose up` то же условие, что в `dm.ps1`:
+`grep -q '^DM_CryptoConfiguration__KeyBase64=$' .env && sed -i "s|^DM_CryptoConfiguration__KeyBase64=$|DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)|"`.
+Лучше — вынести подготовку `.env` в `docker/scripts/init-env.sh`, который уже существует, и
+вызывать его из обоих скриптов, чтобы третьего расхождения не появилось.
+
+### [СРЕДНЯЯ] dead-types-and-members — 14 типов и несколько членов без единой ссылки
+
+Проверено по всем 1937 объявленным типам `src` и `test`; отфильтрованы классы расширений
+(вызываются через синтаксис метода) и internal-реализации, регистрируемые сканом Autofac.
+Осталось 14 типов с нулем ссылок вне собственного объявления, все отсутствуют и в
+опубликованном контракте `artifacts/openapi/*.json`:
+
+| Тип | Файл |
+|---|---|
+| `CreateAssistantInvitationRequest` | `src/DM.Web.API/Features/Blog/Invitations/BlogInvitation.cs:67` |
+| `CreateReaderInvitationRequest` | `src/DM.Web.API/Features/Blog/Invitations/BlogInvitation.cs:79` |
+| `VoteRequest` | `src/DM.Web.API/Features/Community/Polls/PollDtos.cs:173` |
+| `RejectUsernameChange` | `src/DM.Web.API/Features/Moderation/UsernameChanges/UsernameChangeDtos.cs:85` |
+| `UpdateGameReviewRequest` | `src/DM.Web.API/Features/Game/Reviews/GameReviewDtos.cs:60` |
+| `UpdatePostReviewRequest` | `src/DM.Web.API/Features/Game/Reviews/PostReviewDtos.cs:87` |
+| `NotificationChannel` (enum) | `src/DM.Web.API/Features/Personal/Notifications/NotificationDtos.cs:127` |
+| `ITokenExtractor` (internal interface, реализаций нет) | `src/DM.Web.API/Shared/Authentication/Credentials/ITokenExtractor.cs:9` |
+| `RenderResult` (record) | `src/DM.Infrastructure.Core/Parsing/RenderResult.cs:9` |
+| `GameComment` | `src/DM.Domain.Game/Features/Games/GameModels.cs:1193` |
+| `DomainEvent` | `src/DM.Domain.Core/Events/DomainEvent.cs:8` |
+| `InvalidateInvitation` | `src/DM.Domain.Blog/Features/Invitations/InvalidateInvitation.cs:8` |
+| `UpdateBlogComment` | `src/DM.Domain.Blog/Features/Comments/UpdateBlogComment.cs:8` |
+| `UpdatePublicationComment` | `src/DM.Domain.Blog/Features/PublicationComments/UpdatePublicationComment.cs:8` |
+
+Мертвые члены: `IBanService.IsUserBanned` (`src/DM.Domain.Moderation/Features/Warnings/IBanService.cs:47`) —
+объявлен, реализован, ни одного вызова; `BbParserWrapper.DefaultMaxWidth` и `DefaultMaxHeight`
+(`src/DM.Infrastructure.Core/Parsing/BbParserWrapper.cs:34,39`) — ноль использований.
+`NotificationChannel` при этом соседствует с живым `NotificationChannelPreference`
+(`src/DM.Infrastructure.Persistence/Entities/Account/Settings/NotificationChannelPreference.cs:26`),
+то есть каналы уведомлений в системе описаны дважды и читается только одно описание.
+
+Из перечисленного два типа заслуживают отдельной оговорки. `RenderResult` — публичный `sealed
+record` с `required`-членами и документацией "Output of the permission-aware rendering pipeline",
+тогда как конвейер отдает `string`: `BbParserWrapper.Render.cs:26` и `:45` объявляют
+`RenderHtml`/`RenderText` со возвратом `string`. Документация врет про роль типа.
+`UpdateBlogComment` и `UpdatePublicationComment` — структурно одинаковые копии (`CommentId`,
+`Text`, `LastUpdateUtc`) одной мертвой идеи в двух папках фич.
+
+Последствие: примерка контракта. Разработчик, добавляющий отклонение смены логина, находит готовый
+`RejectUsernameChange` и достраивает вокруг него, не зная, что он не подключен ни к одному экшену;
+разработчик, добавляющий кэширование рендера, находит `RenderResult` с полями `Bucket` и
+`SourceHash` и предполагает, что конвейер их уже возвращает. Дальше — либо дубль, либо
+переделка.
+
+Исправление: удалить. Для `RenderResult` решение шире: либо удалить, либо действительно вернуть
+из `RenderHtml`/`RenderText` — сейчас `RenderedBbCache.ComputeSourceHash` и
+`PermissionBucket.Compute` считаются вызывающими кодом отдельно, и тип описывает именно тот набор,
+который они собирают вручную.
+
+### [СРЕДНЯЯ] comment-subsystem-quadruplication — четыре стека комментариев, отличающиеся именами типов
+
+В домене четыре набора одинаковой формы:
+`src/DM.Domain.Blog/Features/Comments/` (463 строки),
+`src/DM.Domain.Blog/Features/PublicationComments/` (497),
+`src/DM.Domain.Forum/Features/Comments/` (447),
+`src/DM.Domain.Game/Features/Comments/` (344) — итого 1779 строк на четыре реализации одного
+понятия, при том что общая часть уже выделена: `src/DM.Domain.Core/Comments/` (`Comment`,
+`CreateComment`, `UpdateComment`, 85 строк). Замер похожести по 5-граммам токенов:
+`BlogCommentsQuery.cs` ↔ `PublicationCommentsQuery.cs` — 0.71,
+`BlogCommentsQuery.cs` ↔ `CommentsQuery.cs` — 0.66,
+`BlogCommentsQuery.cs` ↔ `GameCommentsQuery.cs` — 0.66,
+`IBlogCommentService.cs` ↔ `IPublicationCommentService.cs` — 0.62,
+`BlogCommentApiService.cs` ↔ `GameCommentApiService.cs` — 0.73.
+Диффом `BlogCommentService.cs` против `PublicationCommentService.cs`: различаются имена типов,
+одна проверка бана и переход `blog` → `publication`; остальное совпадает построчно.
+
+Последствие уже реализовалось в двух местах: потерянный фильтр черного списка (см. выше) и
+разное место проверки бана — в блогах правило живет в
+`src/DM.Domain.Blog/Authorization/BlogIntentionResolver.cs:111`, в публикациях вписано прямо в
+сервис (`PublicationCommentService.cs:74-83`) с объяснением, почему. Объяснение честное, но оно
+означает, что "где именно проверяется право говорить" зависит от того, какой из четырех стеков
+читаешь.
+
+Исправление: не сводить домен в один сервис — там действительно четыре разных владельца и четыре
+разных набора прав. Свести API-слой: `GetDiscussion` одинаков во всех четырех и должен быть один.
+`CommentsQuery` тоже один — четыре копии отличаются только именем.
+
+### [СРЕДНЯЯ] notification-labels-duplicated — 48 подписей в двух файлах и одно плечо расхождения
+
+`src/DM.Workers.NotificationDispatcher/Implementation/Email/NotificationEmailSender.cs:28`
+(`EventTypeSubjects`) и `.../Bot/NotificationBotSender.cs` (`EventTypeMessages`) содержат по **48**
+записей `[EventType.X] = "русская подпись"`, и на сегодня они совпадают запись в запись (сверено
+сортированным диффом, различий 0). Общего базового класса у них нет.
+
+Рядом дублируются два форматтера метаданных. `FormatPropertyValue` идентичен в обоих файлах.
+`FormatPropertyName` — **15 плеч в письме и 14 в боте**: письмо знает `"IsReminder" => "Напоминание"`,
+бот не знает. Ключ `IsReminder` производит
+`Notifiers/Game/GamePendencyReminderNotificationGenerator.cs:75`.
+
+Последствие сейчас дремлет — `RoomPendencyReminder` отсутствует в `NotificationCategoryMapper`, так
+что ни один канал этих уведомлений не отправляет (см. notification-tables-out-of-sync). В день,
+когда тип добавят в маппер, письмо покажет "Напоминание", а Telegram и Discord — сырой ключ
+`IsReminder`. Форма находки важнее срока: два словаря по 48 записей и два форматтера, которые
+обязаны совпадать, уже разошлись на одну запись, и заметить это можно только диффом файлов.
+
+Исправление: одна таблица `EventType → (категория, подпись)` и один форматтер метаданных на общем
+базовом классе отправителей (оба уже наследуют общий предок через `base(mongoClient)`). Имена
+`EventTypeSubjects` и `EventTypeMessages` для одних и тех же данных свести к одному.
+
+### [СРЕДНЯЯ] moderation-silent-catches — пять голых catch в модерации отвечают "нарушений нет"
+
+`src/DM.Domain.Moderation/Features/Warnings/BanService.cs:50,64,223` и
+`.../WarningService.cs:52,125` устроены одинаково:
+
+```csharp
+try
+{
+    var user = await _userLookupService.GetAsync(username);
+    return await _banRepository.GetUserBans(user.UserId, ct);
+}
+catch
+{
+    return [];
+}
+```
+
+Возвраты по местам: `[]`, `null`, `false`, `[]`, `0`. Фильтра типа нет, логирования нет.
+Это единственные полностью беззвучные `catch` в кодовой базе с семантикой безопасности: всего
+`catch` 102, из них без лога и без переброса 22, и у 17 из этих 22 причина записана рядом
+(`src/DM.Infrastructure.Persistence/Repositories/Community/AchievementRepository.cs:153` фильтрует
+`SqlState: "23505"`, `.../General/UploadGarbageCollector.cs:86` — `NotFound` из S3, и так далее).
+
+Последствие: обрыв соединения с Postgres, `DbUpdateException`, `OperationCanceledException` при
+отмене запроса — любое из этого превращается в ответ "у пользователя нет банов" / "нет
+предупреждений" / "0 штрафных баллов" для страницы модератора, без записи в лог. Модератор видит
+чистый профиль нарушителя и не может отличить это от настоящей чистоты.
+`GetActiveBan` вызывается из `src/DM.Web.API/Features/Moderation/Bans/BanApiService.cs:28,43,57` —
+в том числе на публичном маршруте `/v1/users/{username}/bans/active`.
+
+Исправление: сузить до того исключения, ради которого catch написан — ненайденный пользователь.
+`catch (HttpException e) when (e.StatusCode == HttpStatusCode.NotFound)` (тип, который бросает
+`_userLookupService`), а остальное пропускать наверх, где `ErrorHandlingMiddleware` его увидит.
+`IsUserBanned` заодно удалить — вызовов нет.
+
+### [СРЕДНЯЯ] no-dotnet-format-gate — правило форматирования записано, инструмент падает на 177 файлах, гейта нет
+
+`.editorconfig:11` требует `insert_final_newline = true`, `:12` — `trim_trailing_whitespace = true`.
+`dotnet format DM.sln --verify-no-changes` завершается сообщением
+`Formatted 177 of 1859 files` (прогон 141 с). Разбор причин: подсчетом по всем файлам —
+**139 файлов C# без финального перевода строки** (из 1776) и **6 с висящими пробелами**; выборочный
+отчет по двум проектам показал, что все 7 попаданий там — `FINALNEWLINE`. На фронтенде та же
+проверка дает 1 файл из 779.
+
+В `.github/workflows/dotnet.yml` нет ни одного вызова `dotnet format`. У фронтенда гейт есть:
+`package.json:16` — `lint:ci` с `--max-warnings 0`, а `@vue/eslint-config-prettier` включает
+`prettier/prettier` как `warn`, что при этом флаге равно ошибке.
+
+Последствие: половина кодовой базы форматируется на усмотрение редактора. Практическое следствие
+не косметическое: файл без финального перевода строки дает лишнюю строку в каждом дифффе, который
+его касается, а `git diff` показывает `\ No newline at end of file` — ревью читает шум вместо
+изменения. Число не стоит на месте: 139 сейчас, и ничто не мешает ему расти.
+
+Исправление: добавить шаг `dotnet format DM.sln --verify-no-changes` в джобу `build` (после
+`restore`, до `build`) и в `scripts/hooks/pre-push`. Разовое приведение — `dotnet format DM.sln`
+одним коммитом, отдельно от содержательных.
+
+### [СРЕДНЯЯ] filter-props-declared-twice — 7 интерфейсов пропсов дублируют defineProps, два уже разошлись
+
+`src/DM.Web.Client/src/shared/ui/Filters/types.ts` (165 строк) объявляет 7 интерфейсов пропсов, ни
+один из которых не импортирован ничем (кроме `export * from "./types"` в `index.ts:2`). Каждый
+компонент объявляет те же пропсы заново через `defineProps<{...}>`, вместе с теми же
+doc-комментариями. Сверено поле в поле:
+
+| Интерфейс в types.ts | Компонент | Совпадает |
+|---|---|---|
+| `DropdownItemProps` | `primitives/FilterDropdownItem.vue` | нет: нет `searchQuery` |
+| `NumericRangePickerProps` | `inputs/NumericRangePicker.vue` | нет: нет `step` |
+| `DateRangePickerProps` | `inputs/DateRangePicker.vue` | да |
+| `OptionsListProps` | `inputs/OptionsList.vue` | да |
+| `FilterBubbleProps` | `bubbles/FilterBubble.vue` | да |
+| `ExpandableBubbleProps` | `bubbles/ExpandableBubble.vue` | да |
+| `SortButtonProps` | `controls/SortButton.vue` | да |
+
+Последствие: контракт компонента объявлен в двух местах, компилятор проверяет только одно.
+Разработчик, правящий `types.ts` в уверенности, что это описание пропсов, не меняет ничего —
+`vue-tsc` промолчит, потому что интерфейс никем не используется. Расхождение уже есть в двух из
+семи.
+
+Исправление: либо компоненты импортируют свои интерфейсы (`defineProps<DateRangePickerProps>()`) —
+тогда `types.ts` становится настоящим контрактом и `vue-tsc` начинает его сторожить, либо
+`types.ts` теряет 7 интерфейсов пропсов и оставляет только реально общие типы (`BubbleValue`,
+`SortOption`). Первое предпочтительнее: `withDefaults` с внешним интерфейсом работает.
+
+### [СРЕДНЯЯ] frontend-page-pairs — шесть пар почти одинаковых файлов, 971 строка на одной стороне
+
+Замерено диффом (различающихся строк с обеих сторон / строк в первом файле):
+
+| Пара | Строк | Различий |
+|---|---|---|
+| `features/comment-filter/model/useCommentsFilter.ts` ↔ `features/topic-filter/model/useTopicsFilter.ts` | 283 | 67 |
+| `features/comment-filter/ui/CommentsFilter.vue` ↔ `features/topic-filter/ui/TopicsFilter.vue` | 279 | 55 |
+| `features/blog-actions/ui/BlogStatusButtons.vue` ↔ `features/game-actions/ui/GameStatusButtons.vue` | 158 | 28 |
+| `pages/moderation/ModerationPremoderatedBlogs.vue` ↔ `pages/moderation/ModerationPremoderatedGames.vue` | 147 | 48 |
+| `pages/profile/GivenReviewsPage.vue` ↔ `pages/profile/ReceivedReviewsPage.vue` | 53 | 27 |
+| `pages/profile/GivenEndorsementsPage.vue` ↔ `pages/profile/ReceivedEndorsementsPage.vue` | 51 | 21 |
+
+Пара композаблов фильтра — самый чистый случай: `useTopicsFilter.ts` отличается от
+`useCommentsFilter.ts` заменой `Comments` на `Topics` в именах типов и одним словом в заголовке
+секции (`// VALIDATION & PARSING` против `// VALIDATION & PARSING (using shared utilities)`).
+Редьюсер, набор действий, разбор URL, `createDefaultState` — построчно одинаковы.
+
+Последствие: правка логики фильтра (например, порядок применения диапазона дат или сброс страницы
+при смене сортировки) должна быть сделана дважды, и ничто не подскажет, что второе место
+существует. Владелец требует поштучного аппрува визуальных изменений — значит расхождение между
+двумя фильтрами, которые должны выглядеть одинаково, обнаружится глазами и в проде, а не в CI.
+
+Исправление: композабл параметризовать типом состояния и списком полей (`useEntityFilter<TState>`);
+для `CommentsFilter.vue` / `TopicsFilter.vue` — один компонент со слотами под специфичные бабблы.
+Пары страниц профиля (`Given*` / `Received*`) сводятся к одной странице с пропсом направления.
+
+### [СРЕДНЯЯ] dead-config-keys — четыре ключа конфигурации, которые никто не читает, и два источника, которые никто не монтирует
+
+Проверены все 12 корневых секций `src/DM.Web.API/appsettings.json` — все привязаны. Мертвы
+отдельные ключи:
+
+- `IntegrationSettings.AdminUrl` (`src/DM.Domain.Core/Configuration/IntegrationSettings.cs:21`) и
+  `MobileUrl` (`:26`) — 0 чтений. Присутствуют и в `appsettings.json:34-35`, и в
+  `docker/docker-compose.yml:73-74`.
+- `IntegrationSettings.StaticAssetsUrl` (`:36`, комментарий "Base URL for static assets (logo,
+  images in emails)") — 0 чтений, при этом `docker/docker-compose.yml:77` подставляет в него
+  `${STATIC_ASSETS_URL:-http://localhost:9000/dm-uploads}`. Логотип писем на самом деле вложен
+  как ресурс: `src/DM.Infrastructure.Mail/Assets/EmailAssetsProvider.cs:19-24`,
+  `ContentId = "logo"`.
+- `CryptoConfiguration.Algorithm = "AES-256-GCM"`
+  (`src/DM.Domain.Account/Configuration/CryptoConfiguration.cs:30`) — 0 чтений. Собственный
+  комментарий признает, что значение не настраивается ("Encryption algorithm (always AES-256-GCM)"),
+  но ключ выставлен в `appsettings.json:40` как настраиваемый.
+- `src/DM.Infrastructure.Core/Configuration/WebHostBuilderExtensions.cs:29-30,32-33` добавляет
+  четыре источника `secrets/appsettings*.json` и `commonCfg/appsettings*.json`. Ни `secrets/`, ни
+  `commonCfg/` не монтируются ни одним compose-файлом и ни одним скриптом в `docker/`.
+
+Последствие: `STATIC_ASSETS_URL` в `.env` выглядит как рабочая настройка адреса картинок в письмах,
+и правка его ничего не меняет. `CryptoConfiguration:Algorithm` выглядит как переключатель
+алгоритма шифрования — самая опасная разновидность мертвого ключа, потому что читающий
+`appsettings.json` заключит, что алгоритм настраиваемый. Все три ключа `IntegrationSettings`
+объявлены как `= null!`, то есть при попытке чтения дадут `null` под non-nullable типом.
+
+Исправление: удалить `AdminUrl`, `MobileUrl`, `Algorithm` из классов конфигурации, из
+`appsettings.json` и из `docker-compose.yml`. По `StaticAssetsUrl` — решение владельца: либо
+удалить вместе с переменной `STATIC_ASSETS_URL`, либо подключить (тогда логотип в письмах идет
+ссылкой, а не вложением). Мертвые источники `secrets/` и `commonCfg/` — либо удалить, либо
+объяснить комментарием, какое развертывание их подкладывает.
+
+### [СРЕДНЯЯ] enum-layer-conversions-unguarded — числовой каст между тремя объявлениями SecurityEventType и три плеча `_ =>`, глушащих проверку полноты
+
+Одно понятие объявлено трижды: колонка `public int EventType`
+(`src/DM.Infrastructure.Persistence/Entities/Account/SecurityAuditEntry.cs:26`), enum
+`SecurityEventType` на 11 членов в домене
+(`src/DM.Domain.Account/Features/Security/SecurityEventType.cs:6`) и такой же на 11 членов в API
+(`src/DM.Web.API/Features/Account/Security/SecurityEvent.cs:8`). Сверено — совпадают дословно,
+включая явные значения `= 1 .. = 11`. Связаны двумя нефильтрованными кастами:
+`src/DM.Infrastructure.Persistence/Repositories/Account/SecurityAuditRepository.cs:148`
+(`(SecurityEventType)entry.EventType`) и
+`src/DM.Web.API/Features/Account/Security/SecurityApiService.cs:46` (то же выражение, другой enum).
+
+Там, где конвертация написана switch-выражением, полнота заглушена:
+`src/DM.Web.API/Features/Account/Availability/AvailabilityApiService.cs:31` и `:50`,
+`src/DM.Web.API/Features/Account/Recovery/RecoveryApiService.cs:77` — все три оканчиваются
+`_ => null` после `null => null`, то есть плечо недостижимо сегодня и существует ровно для того,
+чтобы компилятор не жаловался завтра. Всего таких плеч в `src` шесть; три остальных — в
+`NotificationCategoryMapper.cs:59` (там неполнота документирована как намеренная),
+`MessageSearchService.cs:120` и `WebhookController.cs:88`.
+
+Последствие: добавление члена в один из трех `SecurityEventType` без правки двух других даст
+запись журнала безопасности с чужим или несуществующим именем события, без ошибки на сборке и без
+исключения в рантайме — `(EnumType)int` не проверяет диапазон. Добавление причины в
+`EmailUnavailableReason`/`UsernameUnavailableReason`/`RecoveryResult` попадет в плечо `_ => null`,
+и клиент получит `IsAvailable: false, Reason: null` — форма ответа, которую фронтенд обязан
+как-то показать, не зная причины.
+
+Исправление: убрать `_ => null` из трех конвертаций — тогда `CS8509` при
+`TreatWarningsAsErrors` валит сборку на добавленном члене, что и требуется. Для
+`SecurityEventType` — оставить одно объявление и мапить один раз, в репозитории, с явным switch;
+второй enum в API удалить и отдавать доменный (он публичный).
+
+### [СРЕДНЯЯ] modblock-invariant-has-26-call-sites-and-no-test — правило снятия привилегированной разметки держится на памяти
+
+`src/DM.Domain.Core/Content/ModBlockSanitizer.SanitizeForAuthor` вызывается **26 раз в 12 сервисах**
+(`BlogService` ×4, `BlogCommentService` ×2, `PublicationCommentService` ×2, `TopicCommentService` ×2,
+`TopicService` ×2, `GameCommentService` ×2, `GameReviewService` ×2, `PostReviewService` ×1,
+`PostService` ×2, `GlobalChatEventService` ×2, `MessageService` ×2, `TicketService` ×3). Тестов на
+сам `ModBlockSanitizer` — **ноль**: единственное упоминание в `test/` это
+`DM.Infrastructure.Core.Tests/PermissionFilteringVisitorShould.cs`, где он попадается попутно.
+
+Правило владельца зафиксировано в самом файле (`:6-16`): `[mod]` публичен на чтение, авторство —
+от `Moderator`, неавторизованная разметка разворачивается при сохранении. `[mod]` разрешен только
+на поверхностях `Comment` и `GlobalChatMessage`
+(`src/DM.Infrastructure.Core/Parsing/BbSurface.cs:17,22`), при этом `PostService` санирует и текст
+поверхности `GamePost`, где тег не разрешен вовсе — то есть вызов там нужен, чтобы парсер не
+упал, а не чтобы скрыть плашку. Восемь сервисов, принимающих свободный текст, вызова не делают
+(`GameService`, `GameNotepadService`, `GameBlacklistService`, `UserEndorsementService`,
+`WebsiteTestimonialService`, `UserNotepadService`, `UserProfileNoteService`, `UserService`).
+
+Последствие: инвариант "каждый путь записи сырого BBCode проходит через санитайзер" ничем не
+выражен. 27-й путь записи не вызовет ничего, и обнаружится это либо зеленой плашкой модератора у
+обычного пользователя, либо исключением парсера при отображении — в зависимости от поверхности.
+Правильность распределения 26 вызовов и 8 невызовов сейчас нельзя проверить иначе как
+перечислением руками, что я и сделал; повторить это придется каждому.
+
+Исправление: тест на сам санитайзер (разворачивание для роли ниже `Moderator`, сохранение для
+`Moderator+`, `[modify]`/`[mods]` не трогать) — его отсутствие ничем не оправдано. Инвариант
+выразить структурно: тип-обертка `RawBbCode`, конструируемая только через санитайзер, чтобы
+"забыл вызвать" стало ошибкой типизации, либо тест, который перечисляет сервисы, принимающие
+BBCode-поверхность, и требует вызова.
+
+### [СРЕДНЯЯ] dead-test-auth-scaffolding — 104 из 370 строк фабрики интеграционных тестов недостижимы и помечены как неработающие
+
+`test/DM.Web.API.IntegrationTests/CustomWebApplicationFactory.cs` содержит два механизма
+аутентификации в тестах. Живой — `TestAuthenticationMiddleware` с заголовками
+`X-Test-User-Id/Username/Role/Access-Policy` (`test/DM.Web.API.IntegrationTests/TestAuthenticationMiddleware.cs:27-30`),
+используемый через `IntegrationTestBase.CreateAuthenticatedRequest` (`:43-45`). Мертвый:
+
+- `TestAuthOptions` (`:60-66`) и `TestAuthHandler` (`:68-102`) — 42 строки, `TestAuthHandler` и
+  `TestAuthOptions` вне этого файла не упоминаются;
+- свойство `CustomWebApplicationFactory.TestUser` (`:124`);
+- блок `if (TestUser != null)` в `ConfigureWebHost` (`:229-246`, 18 строк);
+- блок `if (TestUser != null)` в `ConfigureTestContainer` (`:275-314`, 40 строк).
+
+Единственный путь, где `TestUser` присваивается — `IntegrationTestBase.cs:75` внутри
+`CreateAuthenticatedFactory`, помеченного `[Obsolete]` на `:70`. Вызовов у него ноль (при
+`TreatWarningsAsErrors` вызов и невозможен: `CS0618` стал бы ошибкой). Над мертвым блоком лежит
+TODO (`:276-282`), сообщающий, что подход не работает из-за порядка регистраций Autofac, и
+перечисляющий три альтернативы, из которых вторая ("test-only middleware") уже реализована и
+работает.
+
+Последствие: 28% файла — механизм, который автор пометил как неработающий, с работающей заменой в
+соседнем файле. Читающий эту фабрику видит два способа и TODO, обсуждающий выбор, который уже
+сделан. Заодно `[Obsolete]`-метод в базовом классе тестов приглашает им воспользоваться.
+
+Исправление: удалить `TestAuthOptions`, `TestAuthHandler`, `TestUser`, оба блока и
+`CreateAuthenticatedFactory` вместе с TODO. Комментарий, объясняющий выбор
+`TestAuthenticationMiddleware` вместо переопределения Autofac, оставить — одной строкой, в
+`TestAuthenticationMiddleware.cs`.
+
+### [НИЗКАЯ] image-size-defaults-declared-three-times-none-authoritative — 600×400 в C#, 600×400 в TS, 100%×500px в CSS
+
+`src/DM.Infrastructure.Core/Parsing/BbParserWrapper.cs:34,39` объявляет
+`public const int DefaultMaxWidth = 600` и `DefaultMaxHeight = 400` — **0 использований**.
+`src/DM.Web.Client/src/shared/lib/utils/bbcodeConstants.ts:49-53` объявляет
+`DEFAULT_IMG_MAX_WIDTH = 600` и `DEFAULT_IMG_MAX_HEIGHT = 400` с комментарием
+"must match backend BbParserWrapper.DefaultMaxWidth"; они импортируются в
+`bbcode.ts:92-93` и там же реэкспортируются (`:97`), но не используются нигде — то есть мертвы,
+причем `no-unused-vars` их не видит именно из-за реэкспорта. Действующий дефолт —
+`src/DM.Web.Client/src/assets/styles/_BbcodeContent.sass:125-126`:
+
+```sass
+img, .bb-image
+  max-width: var(--bb-image-max-width, 100%)
+  max-height: var(--bb-image-max-height, 500px)
+```
+
+Последствие: три объявления одного дефолта, три разных значения, работает третье. Комментарий в
+`bbcodeConstants.ts` предписывает синхронизировать первые два друг с другом, и они синхронны —
+только оба не влияют ни на что. Правка 600 на 800 в обоих местах не изменит ни одного пикселя, и
+причину этого придется искать в SASS.
+
+Исправление: удалить четыре константы и оба комментария "must match"; в
+`_BbcodeContent.sass:125-126` оставить комментарий, что этот файл — единственное место, где
+дефолтный размер картинки задан. Живой аналог такой связки рядом работает правильно и его надо
+сохранить: `BbParserWrapper.DefaultSpoilerText` (`:29`) действительно используется (`:422`),
+совпадает с `SPOILER_SHOW_TEXT` (`bbcodeConstants.ts:26`) и покрыт ассертом
+(`test/DM.Infrastructure.Core.Tests/BbParserWrapperShould.cs:134`).
+
+### [НИЗКАЯ] message-layouts-declared-three-times — комментарий обещает расширяемость, которой нет
+
+`src/DM.Web.Client/src/shared/stores/ui.ts:5-21` объявляет один набор из двух значений трижды:
+
+```ts
+/**
+ * Future-proof union — new values (e.g. "cozy") can be added without refactoring.
+ */
+export type MessageLayout = "compact" | "full";
+export const MESSAGE_LAYOUTS = ["compact", "full"] as const;
+...
+function isMessageLayout(value: unknown): value is MessageLayout {
+  return value === "compact" || value === "full";
+}
+```
+
+`MESSAGE_LAYOUTS` (`:14`) не импортирован ничем; `MessageLayout` набран руками, а не выведен из
+массива; `isMessageLayout` (`:19-21`) перечисляет те же строки в третий раз, через пять строк
+после массива, который для этого и создан.
+
+Последствие: комментарий на `:7-8` неверен. Добавление `"cozy"` требует правки трех мест; при
+правке двух из трех `getInitialMessageLayout` (`:52-54`) молча вернет `"full"`, и сохраненный в
+localStorage выбор пользователя потеряется без ошибки.
+
+Исправление: `export const MESSAGE_LAYOUTS = ["compact", "full"] as const;`,
+`export type MessageLayout = (typeof MESSAGE_LAYOUTS)[number];`,
+`isMessageLayout = (v: unknown): v is MessageLayout => MESSAGE_LAYOUTS.includes(v as MessageLayout);`.
+Тогда обещание комментария становится правдой.
+
+### [НИЗКАЯ] comments-and-docs-that-lie — четыре ссылки и объяснения, не соответствующие коду
+
+1. `src/DM.Infrastructure.Core/Parsing/BbParserWrapper.cs:255` (в doc-комментарии
+   `WrappedNodeTree`): "See BBCODE_PIPELINE.md "Why int.Parse() Instead of int.TryParse()" for
+   details." Файла с таким именем в репозитории нет (`find -iname "BBCODE_PIPELINE*"` пуст);
+   существует `docs/architecture/BBCODE_RENDERING.md`, и раздела с таким названием в нем нет.
+2. `src/DM.Web.API/Shared/BbRendering/BbConverter.cs:120-124`: `catch { ... return null; }` с
+   объяснением "Some endpoints render BbText before the authorization context is fully
+   materialized". Ловится вызов `provider.GetService<IAuthorizationContextProvider>()`, который в
+   описанном случае возвращает `null`, а не бросает — и `null` уже обработан оператором `?.`.
+   Сработать catch может, но по другой причине (обращение к уничтоженному scope), и комментарий
+   ведет читателя не туда.
+3. `src/DM.Infrastructure.Core/Parsing/RenderResult.cs:5-8`: "Output of the permission-aware
+   rendering pipeline" — конвейер возвращает `string` (см. dead-types-and-members).
+4. `src/DM.Web.Client/src/shared/config/roles.ts:59-62`: `ROLE_FULL_NAMES` с комментарием
+   "so the two never drift apart" — 0 импортов. Полное имя роли живет в трех местах
+   (`ROLE_BADGES[].label`, `ROLE_FULL_NAMES`, `ROLE_INFO[].title`), UI берет его из первого и
+   третьего, второе мертво.
+
+Последствие: комментарий, который врет, дороже отсутствующего — он останавливает поиск. Ссылка на
+`BBCODE_PIPELINE.md` заставит искать удаленный документ; объяснение в `BbConverter` заставит
+искать несуществующий сценарий; `ROLE_FULL_NAMES` заставит поверить, что синхронизация имен ролей
+уже решена.
+
+Исправление: (1) заменить на `docs/architecture/BBCODE_RENDERING.md` и перенести обоснование
+`int.Parse` в этот документ либо оставить его целиком в коде; (2) переписать причину на настоящую
+или заменить catch на проверку `RequestServices` без try; (3) см. dead-types-and-members;
+(4) удалить `ROLE_FULL_NAMES` либо подключить его туда, где `ROLE_INFO[].title` используется как
+единственное имя роли.
+
+### [НИЗКАЯ] cypress-remnants — конфигурация для тестового раннера, которого в проекте нет
+
+E2E построен на Playwright: `src/DM.Web.Client/playwright.config.ts`, каталог `e2e/` с 32
+spec-файлами. Остатки Cypress:
+
+- `package.json:60` — devDependency `eslint-plugin-cypress`;
+- `.eslintrc.cjs:31-34` — override для `files: ["cypress/e2e/**/*.{cy,spec}.{js,ts,jsx,tsx}"]`
+  с `extends: ["plugin:cypress/recommended"]`; каталога `cypress/` нет;
+- `.eslintrc.cjs:137` — комментарий "Files outside src/ (config, cypress) are simply not FSD
+  elements";
+- `tsconfig.config.json:3` — `"include": [..., "cypress.config.*", ...]`; такого файла нет.
+  В том же include есть `"vitest.config.*"`, которого тоже нет (конфиг vitest живет внутри
+  `vite.config.ts:22-52`).
+
+Последствие: `npm ci` тянет пакет, который не используется ничем; override никогда не
+активируется; читающий `.eslintrc.cjs` заключит, что в проекте есть каталог `cypress/`.
+
+Исправление: удалить зависимость, override, упоминание из комментария и два несуществующих
+шаблона из `tsconfig.config.json`. Заодно проверить `sass-loader` (`package.json:74`) — это
+webpack-загрузчик, Vite использует `sass` напрямую — и `start-server-and-test` (`:76`), при том
+что `playwright.config.ts` поднимает сервер сам.
+
+### [НИЗКАЯ] leaderboard-top-n-is-a-literal-eight-times — `.Take(10)` без имени
+
+`src/DM.Infrastructure.Persistence/Repositories/Community/CommunityStatsRepository.cs` — метод
+`GetLeaderboards` (`:116`) содержит `.Take(10)` на строках 126, 142, 158, 175, 194, 220, 237, 259:
+восемь досок одного лидерборда, размер восемь раз литералом. Константы в файле нет (`grep -n
+"const"` пуст).
+
+Последствие: изменить размер доски с 10 на 5 — восемь правок, и седьмая забудется. Расхождение
+между досками не поймает ни компилятор, ни тест: `test/DM.Domain.Community.Tests/Features/Statistics/LeaderboardRankingShould.cs`
+проверяет ранжирование, не размер.
+
+Исправление: `private const int LeaderboardSize = 10;` в этом классе и восемь ссылок на нее. Если
+размер должен быть настраиваемым — в `CommunityStatsOptions`, но тогда одним значением на все
+восемь.
+
+### [НИЗКАЯ] russian-comments-in-code — 37 строк в 17 файлах против правила проекта
+
+`.claude/CLAUDE.md` задает "документация на русском, код и комментарии на английском". Подсчет
+(строки-комментарии, где русских слов от трех и больше и больше, чем латинских — то есть не
+цитирование строки интерфейса, а связный русский текст): **37 строк в 17 файлах**. Больше всего в
+`src/DM.Web.Client/src/pages/dev/StyleVariantsPage.vue` (7),
+`src/DM.Web.Client/src/widgets/notepad/NotepadBoard.vue` (4),
+`src/DM.Web.Client/vite.config.ts` (4), `src/DM.Web.Client/playwright.config.ts` (3),
+по 2 в `src/DM.Web.API/Middleware/CsrfProtectionMiddleware.cs` и
+`src/DM.Web.API/Middleware/ErrorHandlingMiddleware.cs`. `scripts/hooks/pre-push` написан
+по-русски целиком.
+
+Последствие: чисто читательское — правило записано и в основном соблюдается (37 строк на 2555
+файлов), но два файла посередине важного пути (обработка ошибок и CSRF) объясняют свои решения на
+языке, отличном от языка соседних объяснений в тех же файлах. Никакой гейт этого не проверяет.
+
+Исправление: перевести 37 строк, либо — если владелец считает русский язык в комментариях
+допустимым — снять правило из `CLAUDE.md`, чтобы оно не создавало ложного ожидания. Второе честнее
+первого, если правка комментариев не приоритет.
+
+### [НИЗКАЯ] naming-drift — одно понятие под двумя именами в шести местах
+
+- `RecoveryResult` (`src/DM.Domain.Account/Features/Recovery/RecoveryResult.cs:6`) и
+  `RecoveryStatus` (`src/DM.Web.API/Features/Account/Recovery/RecoveryResponse.cs:22`) — одно
+  трехзначное состояние, и член расходится тоже: `PasswordReset` против `PasswordResetSent`.
+- `EventTypeSubjects` (email) и `EventTypeMessages` (bot) — одна таблица (см. выше).
+- `IForumCommentApiService` и `ITopicCommentApiService` живут в одной папке
+  `src/DM.Web.API/Features/Forum/Comments/` и обслуживают одну сущность; первый называется
+  "forum", но принимает `topicId` (`IForumCommentApiService.cs:19`). `TopicController` инжектирует
+  первый, `TopicCommentController` — второй, и оба читают комментарии темы, только один отдает
+  `Comment`, а другой `DiscussionComment` с флагами прав.
+- `WebBuilderExtensions` (`src/DM.Infrastructure.Core/Extensions/`) и `WebHostBuilderExtensions`
+  (`src/DM.Infrastructure.Core/Configuration/`) — разные задачи, почти одно имя, в одном проекте.
+- `BoardAccessPolicyExtension` (`src/DM.Domain.Forum/Features/Boards/`) — единственный класс
+  расширений в единственном числе; остальные 20+ называются `*Extensions`.
+- `VersionOverride` в `test/DM.Web.API.IntegrationTests/DM.Web.API.IntegrationTests.csproj:16-19`
+  — четыре штуки, из них две (`Npgsql.EntityFrameworkCore.PostgreSQL` 8.0.4,
+  `Testcontainers.PostgreSql` 4.3.0) дублируют то же значение из
+  `Directory.Packages.props`, а две (`Testcontainers.MongoDb`, `Testcontainers.RabbitMq`) обходят
+  централизацию совсем.
+
+Последствие: ищущий "как API отдает статус восстановления" находит два типа и должен понять, какой
+из них на проводе. Поднятие `Testcontainers.PostgreSql` в `Directory.Packages.props` не даст
+эффекта — override сильнее, — и три пакета одного семейства смогут разъехаться по версиям
+незаметно.
+
+Исправление: доменное имя вести в API без переименования (`RecoveryResult`, `PasswordReset`);
+`IForumCommentApiService` переименовать по тому, что он делает (`ITopicDiscussionApiService`) либо
+слить с `ITopicCommentApiService`; убрать две избыточные `VersionOverride` и внести
+`Testcontainers.MongoDb`/`Testcontainers.RabbitMq` в `Directory.Packages.props`;
+`BoardAccessPolicyExtension` → `...Extensions`.
+
+### [НИЗКАЯ] redundant-nullable-directives-and-cs1591-split — двенадцать no-op директив и две политики документирования в одной папке
+
+`Directory.Build.props:9` включает `<Nullable>enable</Nullable>` на весь солюшен, после чего
+`#nullable enable` в начале файла ничего не меняет. Таких директив **12**: 8 в
+`src/DM.Infrastructure.Core/Parsing/` (`BbAudienceHeader.cs`, `BbParserWrapper.cs`,
+`BbParserWrapper.Render.cs`, `PermissionBucket.cs`, `RenderContext.cs`, `RenderedBbCache.cs`,
+`RenderResult.cs`, `Visitors/PermissionFilteringVisitor.cs`), 4 в `src/DM.Web.API/`
+(`Middleware/CsrfProtectionMiddleware.cs`, `Middleware/SecurityHeadersMiddleware.cs`,
+`Shared/BbRendering/BbConverter.cs`, `Shared/BbRendering/RenderContextEnvelope.cs`).
+Отдельно: из 85 файлов `src/DM.Infrastructure.Persistence/Entities/` ровно **7** глушат `CS1591`
+как "DAL entity — fields are self-documenting", остальные 78 несут полные XML-комментарии на
+каждый член.
+
+Последствие: `#nullable enable` в шапке файла читается как признак, что в остальных 1764 файлах
+nullable выключен — ровно наоборот. Разделение 7/78 в сущностях означает, что автор новой
+сущности не знает, какая из двух политик действует, и обоснование "поля самодокументируемы"
+одинаково применимо ко всем 85.
+
+Исправление: удалить 12 директив. По `CS1591` — выбрать одно: либо `<NoWarn>$(NoWarn);CS1591</NoWarn>`
+для проекта `DM.Infrastructure.Persistence` целиком (и убрать 7 pragma), либо дописать
+комментарии в 7 файлах. Первое согласуется с записанным обоснованием.
+
+## Чего я не смог определить
+
+- **Действительно ли письмо аккаунта уходит с JSON-телом в развернутом стеке.** Цепочку я
+  проследил по коду до `MimeMessage.Body`, но не запускал. Решает это один прогон: поднять стек,
+  зарегистрироваться и прочитать письмо в MailHog (`docker-compose.yml` его поднимает). Если тело
+  окажется HTML, значит шаблоны приходят откуда-то, чего я не нашел, и находка КРИТИЧНО снимается.
+- **Сколько из 177 файлов, на которых падает `dotnet format`, падают не на финальном переводе
+  строки.** Точно посчитано: 139 без финального перевода строки, 6 с висящими пробелами. Остаток
+  (около 30) я атрибутировал только на выборке из двух проектов, где все попадания были
+  `FINALNEWLINE`. Полный разбор — `dotnet format DM.sln --verify-no-changes --report <dir>` на весь
+  солюшен, около трех минут.
+- **Намеренность разделения доменных и API-перечислений.** `EmailUnavailableReason`,
+  `UsernameUnavailableReason` и `SecurityEventType` объявлены дважды, дословно совпадая. Является
+  ли это требованием слоя (API не зависит от доменного enum) или следом копирования — вопрос к
+  `docs/conventions/PATTERNS.md` и к владельцу. Небезопасен здесь не сам дубль, а числовой каст и
+  плечи `_ => null`; это стоит починить при любом ответе.
+- **Нужны ли шесть типов событий в `NotificationCategoryMapper`.** Для `AccountLocked` ответ,
+  по-моему, очевиден. Для `NewGlobalChatMessage` умолчание может быть намеренным (письмо на каждое
+  сообщение в общем чате). Список из шести — решение владельца по каждому.
+- **Состояние рабочего дерева на момент замеров.** Дерево не было чистым: на момент прогона в нем
+  5 измененных файлов (`src/DM.Infrastructure.Core/Parsing/BbParserProvider.cs`,
+  `src/DM.Web.API/HostedServices/PopularityScoreService.cs`,
+  `src/DM.Web.Client/e2e/tests/auth/login.spec.ts`,
+  `src/DM.Web.Client/e2e/tests/auth/password-reset.spec.ts`,
+  `test/DM.Infrastructure.Core.Tests/PermissionFilteringVisitorShould.cs`) и 2 неотслеживаемых
+  (`docker/docker-compose.e2e.yml`, `src/DM.Infrastructure.Core/Parsing/BbParserProvider.cs.bak`)
+  — правки параллельной сессии, не мои. Ни одна из моих находок этих файлов не касается, но числа
+  по форматированию и по мертвому коду сняты с дерева в таком состоянии, а не с HEAD.
+
+
+# Комментарии: правда, польза, объем — C
+
+Оценка среза до опровержения: C. Механическая гигиена ссылок высокая (5 висячих идентификаторов из 320, 0 из 62 токенов стилей, 4 расхождения response-док/атрибут из 75 контроллеров, ноль брошенных TODO), но десяток комментариев прямо противоречит коду, один лжет про покрытие инварианта схемы, четыре одинаковых блока лгут во внешнем контракте API, устаревшее число размножено по семи файлам, и больше половины объема XML-дока — синтаксис, порожденный гейтом, который проверяет наличие, а не смысл.
+
+Вердикт: проза этого кода в основном правдива, но объем ее наполовину пустой, а ложь сконцентрирована ровно там, где ее и следует искать: в числах, в именах файлов и в утверждениях "это покрыто тестом". Механическая проверка ссылок дает высокую гигиену: из 320 идентификаторов, упомянутых в комментариях через `<c>` или бэктики, не разрешаются 5 (1,6 %); из 62 ссылок на токены стилей не разрешается ни одна; из 75 контроллеров расхождение между `<response code>` и `[ProducesResponseType]` есть в 4 действиях; во всем C# нет ни одного TODO/FIXME/HACK, во фронтенде их два и оба конкретные. Проверка ссылок на имена файлов ломает картину: из 123 упомянутых имен 17 не существует, и это не случайный шум, а два кластера: мертвый документ `BBCODE_PIPELINE.md` и десять указателей `@see src/DM.Web.API/Dto/...` в рукописных FE-зеркалах C#-DTO, где каталога `Dto` не существует с момента перехода на feature-папки.
+
+Объем измерен. В `src` 136 431 строка C# в 1471 файле, из них 33 744 строки `///`, 3712 отдельных `//` и 247 хвостовых, всего 37 703, то есть 27,6 %. Внутри XML-дока 16 477 строк не несут ни единого слова: это одиночные `<summary>`, `</summary>`, `<remarks>`, `</remarks>`; еще 2242 строки это `<inheritdoc />`. Итого 18 719 строк из 33 744, то есть 55,5 % объема XML-дока, это синтаксис, а не информация; в пересчете на файл это 13,7 % всего C#. Из 8269 блоков `<summary>` в 3075 (37,2 %) не более трех содержательных слов, а 1658 (20,1 %) при мягкой мере и 633 (7,7 %) при жесткой являются пересказом имени члена. Причина одна и она структурная: `Directory.Build.props` включает `GenerateDocumentationFile` вместе с `TreatWarningsAsErrors`, то есть CS1591 это ошибка сборки, и гейт требует наличия дока, а не его содержания. Отсюда 52 конструктора контроллеров из 75 и 107 конструкторов сервисов и репозиториев, помеченных `/// <inheritdoc />` — на конструкторе это семантически пустой тег, наследовать ему нечего. При этом Swagger подключает только `DM.Web.API.xml` (`SwaggerExtensions.cs:64`), так что 21 013 строк `///` из 33 744 (62,3 %) не потребляет никто, кроме подсказки IDE.
+
+Контраст со фронтендом решает вопрос оценки. Там гейта на документацию нет вовсе (`.eslintrc.cjs` не содержит правил jsdoc), плотность комментариев 14 285 строк на 109 949 (13,0 %), и качество прозы заметно выше: 285 блоков по восемь строк и больше объясняют, почему сделано так, а не пересказывают подпись. То есть проблема не в том, что разработчик не умеет писать комментарии. Проблема в том, что гейт заставляет писать их там, где сказать нечего, а никакое правило не запрещает дублировать один продуктовый факт в семь мест — и именно дублирование породило все крупные находки ниже. C, а не B, потому что десяток комментариев прямо противоречит коду, один из них лжет про покрытие инварианта схемы, четыре одинаковых блока лгут во внешнем контракте API, а одно устаревшее число размножено по семи файлам. C, а не D, потому что до пользователя из этого доходит только описание в OpenAPI, а не поведение — за одним исключением (находка `award-tier-5-uneditable`), где ложный док прикрывает реальную поломку.
+
+## Что сделано хорошо
+
+- `.eslintrc.cjs` — эталон для всего репозитория. Комментарий на 41-42 строке объясняет, почему в `dependency-nodes` попал `dynamic-import` ("the single upward import this rule was written for hid behind exactly that form"); на 51-55 честно назван компромисс с устаревшим `mode: "full"` вместо `partialMatch: false` и условие пересмотра; на 77-83 запрет нативных модалок обоснован числом ("seven destructive actions had drifted back onto them, including two halves of one copy-pasted screen"). Ни один из этих фактов из кода не читается.
+- `Directory.Build.props:4-9, 11-18, 20-24` — три настройки, у каждой сказано, почему так, и приведена проверка ("a Rebuild of the whole solution in Release produces zero warnings"). Про `NoWarn=NU1902;NU1903` прямо сказано, где единственная точка контроля (`.github/vulnerability-allowlist.txt`), то есть комментарий не оправдывает подавление, а переадресует.
+- `src/DM.Web.Client/src/features/publication/ui/PublicationCard.vue:3-17` — датированное продуктовое решение (2026-07-11), условие его истечения и точное указание, где менять, когда истечет. Ровно тот комментарий, которого не может быть в коде.
+- `src/DM.Web.Client/src/entities/achievement/lib/formatThreshold.ts:29-30` — "ceil rounding in the seed makes a tier fire on the anniversary day; round back here recovers the human 1/5/10/15 years". Проверено: пороги в сиде 366, 1827, 3653, 5479 (`DmDbContext.cs:1355, 1364, 1373, 1382`) это ровно `ceil(n * 365,25)`, а `Math.round(value / 365.25)` возвращает 1/5/10/15. Из кода эта связь не выводится.
+- `src/DM.Domain.Community/Features/Achievements/AchievementMetricResolver.cs:21-23` — "Returns 0 for unknown enum values, a safe fallback that never triggers a threshold". Проверено дважды: ветка `_ => 0` на месте, и `AchievementValidators.cs:20` требует `Threshold > 0`, то есть обещание действительно чем-то защищено.
+- `src/DM.Web.Client/src/shared/api/client.ts:85-87` — "ASP.NET Core expects: key=val1&key=val2 (no brackets/indices)" рядом с `indexes: null`. Единственное место в репозитории, где правило сериализации массивов сформулировано верно.
+- `src/DM.Infrastructure.Persistence/Repositories/Forum/BoardMappingProfile.cs:34-35` — "CommentsCount and LastComment are not columns any more: they are computed on read in BoardRepository". Проверено: в `Entities/Forum/Board.cs` таких полей нет, значение проставляется в `BoardRepository.cs:112`.
+- `src/DM.Infrastructure.Core/Storage/ImageProcessingService.cs:47-48` — "Every upload type the product has is an image, and every one of them goes through this pipeline". Проверено: в `UploadType` ровно три значения и все три перечислены в `IsImageType`, то есть метод исчерпывающий и это сказано вслух.
+- `src/DM.Infrastructure.Persistence/DmDbContext.cs:233-241` — почему `regexp_replace`, `setweight` и явный конфиг `to_tsvector` допустимы внутри generated column (все IMMUTABLE) и почему `[private]` вырезается до индексации. Ни то, ни другое из выражений не видно.
+- `src/DM.Web.Client/src/shared/api/models/contract.spec.ts:5-24` — редкий случай, когда комментарий говорит, чего проверка НЕ делает: сравниваются только имена свойств, не типы, и объяснено, почему этого достаточно.
+- Утверждения о покрытии проверены выборочно и оказались правдой: `CreateUserProfileNoteValidator.cs:15-17` ("that is covered by a test") подтверждается `CreateUserProfileNoteValidatorShould.cs:43`; `UploadOrphanCleanupService.cs:78-80` ("internal rather than private so the regression test can drive a single pass") подтверждается `UploadOrphanCleanupShould.cs:78`.
+- Запрещенная буква встречается во всем `src` единственный раз, в таблице транслитерации (`ReadableGuidHelper.cs:80`), то есть является входными данными, а не текстом. Ни в одном комментарии кода ее нет: ни в 37 703 строках C#, ни в 14 285 строках фронтенда.
+
+## Находки
+
+### [ВЫСОКАЯ] false-comma-separated-authors — четыре контроллера документируют формат параметра, которого биндинг не понимает
+
+> **Опровержение: подтверждено.**
+
+Один и тот же блок `## Query Parameters` продублирован дословно в четырех контроллерах, и в каждом есть строка:
+
+- `src/DM.Web.API/Features/Blog/Comments/BlogCommentController.cs:70`
+- `src/DM.Web.API/Features/Blog/PublicationComments/PublicationCommentController.cs:65`
+- `src/DM.Web.API/Features/Forum/Comments/TopicCommentController.cs:66`
+- `src/DM.Web.API/Features/Game/Comments/GameCommentController.cs:56`
+
+```
+/// - **authors**: Filter by author usernames (comma-separated, OR logic)
+```
+
+Свойство объявлено как `public IReadOnlyCollection<string>? Authors` (`src/DM.Domain.Forum/Features/Comments/CommentsQuery.cs:20`). Кастомного биндера для коллекций в проекте нет: единственный `IModelBinder` это `src/DM.Web.API/Shared/Binding/ReadableGuidBinder.cs`, и он работает только с Guid. Свой же фронтенд знает правило верно и делает наоборот: `src/DM.Web.Client/src/shared/api/client.ts:85-87` ставит `indexes: null` с комментарием "ASP.NET Core expects: key=val1&key=val2", а `useCommentsFilter.ts:221` отправляет `params.authors = [...state.authors]` массивом. Запятые в этом фильтре есть, но только в URL браузера (`useCommentsFilter.ts:166`), не на проводе.
+
+Отдельно: `PostsQuery.cs:52` документирует "comma-separated" правдиво, потому что там поле `string? AuthorUsernames` и `PostRepository.cs:129-130` действительно делает `Split(',')`. То есть в системе два разных формата одного по смыслу фильтра, и оба названы одним словом.
+
+Последствие: внешний потребитель OpenAPI посылает `?authors=alice,bob`, биндинг собирает коллекцию из одного элемента `"alice,bob"`, ни один username не совпадает, и клиент получает 200 с пустым списком. Не ошибка, а молча неверный ответ — худший вид расхождения контракта.
+
+Исправление: заменить формулировку на "repeatable: authors=alice&authors=bob" во всех четырех местах, а лучше вынести весь блок `## Query Parameters` из `<remarks>` и оставить его в `<summary>` свойств `CommentsQuery`/`PagingQuery`, откуда Swashbuckle и так его берет. Заодно исчезнет четырехкратное дублирование, из которого эта ошибка и выросла.
+
+### [ВЫСОКАЯ] award-tier-5-uneditable — устаревший док про Tier прикрывает нередактируемую строку каталога
+
+> **Опровержение: подтверждено.**
+
+`src/DM.Domain.Community/Features/Awards/AwardType.cs:28-29`:
+
+```
+/// Tier for the visual style (1=gold, 2=silver, 3=bronze).
+/// For literary contest placements: 1/2/3 = 1st/2nd/3rd place. For special awards: 1.
+```
+
+В сиде есть седьмая строка каталога с `Tier = 5` (`DmDbContext.cs:1886-1894`, `honorary_goblin`, "Почетный гоблин"), фронтенд ее знает и рисует как diamond (`ProfileAwardsSection.vue:82`, `ModerationAwardTypes.vue:131`), а диалог редактирования подписывает поле как "Tier (1 gold / 2 silver / 3 bronze / 5 diamond / null)" (`AwardTypeEditDialog.vue:113`). При этом валидатор режет Tier до 1..4: `src/DM.Domain.Community/Features/Awards/AwardValidators.cs:24` и `:51` — `InclusiveBetween(1, 4)`.
+
+Последствие: администратор открывает "Почетный гоблин" в `AwardTypeEditDialog`, правит одно описание и жмет сохранить. Диалог всегда отправляет текущий tier (`AwardTypeEditDialog.vue:27` читает `props.awardType.tier`, строка 50 кладет его в запрос), валидатор возвращает 400 Invalid, и запись оказывается нередактируемой через UI — при том что подпись поля в этом же диалоге объявляет 5 допустимым. Найти причину по коду мешает именно док на `AwardType.Tier`: он перечисляет 1/2/3 и не упоминает ни 4, ни 5, так что тот, кто пришел разбираться, решит, что 5 в базе это мусор.
+
+Исправление: расширить `InclusiveBetween(1, 5)` в обоих валидаторах и переписать док на `Tier`, перечислив реально используемые уровни и их смысл, включая место без места (diamond). Проверить, нужен ли 4 (steel): CSS-класс `.tier-steel` есть (`ProfileAwardsSection.vue:359`), а ни одна строка каталога его не использует.
+
+### [СРЕДНЯЯ] false-fk-test-coverage — комментарий в миграции утверждает, что отсутствие FK защищено тестом; тест его не проверяет
+
+> **Опровержение: частично неверно.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> The quote is exact (Migrations/20260729122733_InitialCreate.cs:2817-2820) and the coverage claim is genuinely false: InvitationTokenPersistenceShould.cs:58 queries only conrelid = '"Tokens"'::regclass, the word Comments appears nowhere in its 132 lines, and grep FK_Comments across test/ returns nothing. But the stated consequence — "у комментариев не упадет ничего" — is wrong. .github/workflows/dotnet.yml:163-165 runs `docker compose run --rm -T --build seeder all` as an unconditional step of the e2e job on every push and PR, and the seeder inserts comments whose EntityId is a GameId (DataSeeder.Games.cs:1043) and a PublicationId (DataSeeder.Blogs.cs:304), so a reintroduced FK_Comments_Topics_EntityId fails CI loudly at that step. The invariant is guarded, just not by the named test. The secondary complaint is also wrong: "the two token constraints above" is accurate — grep FK_Tokens in the migration shows only FK_Tokens_Users_*, both EntityId constraints really are absent, and the single comment at :982 covers exactly those two. Net defect: a misattributed reference in one comment.
+
+`src/DM.Infrastructure.Persistence/Migrations/20260729122733_InitialCreate.cs:2817-2820`:
+
+```
+// FK_Comments_Topics_EntityId is deliberately absent, for the same reason as the
+// two token constraints above: Comment.EntityId is polymorphic and points at a
+// topic, a game, a blog or a publication. The constraint would reject every
+// comment that is not on a topic. Guarded by the same integration test.
+```
+
+Тест, на который ссылается фраза, это `test/DM.Web.API.IntegrationTests/Controllers/General/InvitationTokenPersistenceShould.cs`. Его единственная проверка списка ограничений (`NotConstrainPolymorphicEntityIdToASingleTable`, строка 58) читает `WHERE conrelid = '"Tokens"'::regclass` и утверждает только про `FK_Tokens_Blogs_EntityId`, `FK_Tokens_Games_EntityId` и `FK_Tokens_Users_UserId`. Слова `Comments` в файле нет (132 строки, проверено полностью), и во всем каталоге `test` нет ни одного вхождения `FK_Comments`.
+
+Кроме того, фраза "for the same reason as the two token constraints above" описывает не то, что есть: во всей миграции ровно один такой комментарий (строка 982), он покрывает оба токен-ограничения сразу, а `DmDbContext.cs:2045` отправляет читателя "see the NOTE comment in InitialCreate.cs", хотя комментарий словом NOTE не помечен.
+
+Последствие: инвариант "в схеме не должно быть FK_Comments_Topics_EntityId" держится только на том, что никто не перегенерирует миграцию. Если его нарушить, у токенов тест упадет громко, а у комментариев не упадет ничего: сломается INSERT любого комментария к игре, блогу или публикации, то есть три из четырех типов комментариев на сайте. Ревьюер, читающий комментарий, считает случай закрытым.
+
+Исправление: добавить в `InvitationTokenPersistenceShould` (или в отдельный тест схемы) второй запрос `conrelid = '"Comments"'::regclass` с `NotContain("FK_Comments_Topics_EntityId")`. До этого убрать из комментария фразу про покрытие, а вместо "the two token constraints above" дать ссылку на строку 982.
+
+### [СРЕДНЯЯ] stale-award-catalog-count — "6 rows" в шести файлах кода и в PROGRESS.md, строк семь
+
+> **Опровержение: подтверждено, severity завышен.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> Recounted: 7 `new AwardType` in DmDbContext.cs (1820, 1831, 1842, 1853, 1864, 1875, 1886) against "6 rows" at AwardType.cs:6, DmDbContext.cs:2582, ContestSeries.cs:14, AwardCatalogController.cs:16, ModerationAwardTypes.vue:3, ProfileAwardsSection.vue:7 and PROGRESS.md:16 — seven sites, not the "восемь мест" the body claims (its own bullet list is seven; a number error inside a finding about number errors). The self-contradictions check out (ProfileAwardsSection.vue:74-76 explains tier 5 diamond; ModerationAwardTypes.vue:132 styles .tier-5). The report missed a genuinely worse eighth occurrence: user-visible copy at ModerationAwardTypes.vue:52-53, "Timeless каталог — 6 типов", shown to moderators. Still nothing is broken for anyone and no decision has to be undone — this is stale prose multiplied, not ВЫСОКАЯ.
+
+Утверждение продублировано и устарело везде:
+
+- `src/DM.Domain.Community/Features/Awards/AwardType.cs:6` — "Award type catalog, timeless (6 rows)"
+- `src/DM.Infrastructure.Persistence/DmDbContext.cs:2582` — "Award type catalog (timeless, 6 rows in seed)"
+- `src/DM.Infrastructure.Persistence/Entities/Community/ContestSeries.cs:14` — "which keeps the type catalog timeless (6 rows)"
+- `src/DM.Web.API/Features/Moderation/Awards/AwardCatalogController.cs:16-17` — "a timeless catalog (6 rows by default): 1st/2nd/3rd place, popular vote, best critic, guesser"
+- `src/DM.Web.Client/src/pages/moderation/ModerationAwardTypes.vue:3` — "the award-type catalog (timeless, 6 rows)"
+- `src/DM.Web.Client/src/pages/profile/ProfileAwardsSection.vue:7` — "The award catalog (`AwardType`) is timeless (6 rows forever)"
+- `docs/PROGRESS.md:16` — "6 наград timeless + серии"
+
+В сиде семь `new AwardType` (`DmDbContext.cs:1820, 1831, 1842, 1853, 1864, 1875, 1886`). Два файла противоречат сами себе: `ProfileAwardsSection.vue` объявляет "6 rows forever" на 7 строке и через 65 строк, на 71-73, объясняет седьмую награду ("5 is diamond, reserved for a unique, place-less honor (the Почетный гоблин)"); `ModerationAwardTypes.vue` объявляет 6 строк и в собственном CSS на 131 строке стилизует `.tier-5`, который существует только у седьмой. Перечисление в `AwardCatalogController` называет шесть по именам и не называет седьмую, то есть врет в публичном описании endpoint-а.
+
+Последствие: любой, кто сверяет базу с документацией, видит лишнюю строку и не знает, ошибка это или нет. Восемь мест, которые надо править синхронно при добавлении восьмой награды, гарантируют, что синхронно их не поправят.
+
+Исправление: убрать число из всех восьми формулировок. Слово "timeless" несет смысл (тип не привязан к году), число не несет никакого — актуальное количество читается из `HasData`. Если счет действительно нужен как инвариант, его место в тесте на сид, а не в семи комментариях.
+
+### [СРЕДНЯЯ] stale-module-cs-replaced — Startup утверждает, что Module.cs больше нет, и тут же их регистрирует
+
+> **Опровержение: частично неверно.** Severity исправлен: ВЫСОКАЯ -> СРЕДНЯЯ.
+>
+> The three false statements are real: Startup.cs:202 and :303 both say central registration replaces individual Module.cs files, while :333-334 register AccountModule and ModerationModule; :308 says "Using Module classes as assembly markers" when the markers on :309-316 are Intention types; and there are exactly 6 Module classes in src, 2 of them in Domain.*. But the consequence is not reachable as described. Two lines above the calls, Startup.cs:331-332 already states the truth ("Lifetimes that differ from the scan default are declared by the assembly that owns the types"), so a developer reading the method body is not misled. And the DmDbContext-second-instance scenario is impossible: RegisterDefaultTypes ends in .PreserveExistingDefaults() (ModuleRegistrationExtensions.cs:109, with a comment naming exactly that hazard), and DM.Infrastructure.Persistence is not in domainAssemblies at all. AccountModule exists for IdentityProvider and TokenFactory lifetimes, not for DbContext. Real but low-impact comment rot.
+
+`src/DM.Web.API/Startup.cs:202`:
+
+```
+// Register all Domain services centrally (replaces individual Module.cs files)
+```
+
+`src/DM.Web.API/Startup.cs:300-303`:
+
+```
+/// <summary>
+/// Register all Domain layer services centrally.
+/// This replaces individual Module.cs files in Domain.* projects.
+/// </summary>
+```
+
+Внутри этого же метода, на строках 332-333:
+
+```
+builder.RegisterModuleOnce<DM.Domain.Account.AccountModule>();
+builder.RegisterModuleOnce<DM.Domain.Moderation.ModerationModule>();
+```
+
+То есть два Module-класса в Domain.* живы, и `AccountModule.cs:10-17` подробно объясняет, почему они вернулись: скан регистрирует все per-dependency, а `IdentityProvider` и `TokenFactory` должны быть per-scope, и раньше это жило в хосте по строке namespace, где переименование давало null и падение на старте.
+
+Там же вторая ложь: `Startup.cs:306-307` — "Using Module classes as assembly markers (they are public)". Маркерами на строках 308-315 служат `AccountIntention`, `UserIntention`, `PollIntention`, `ModerationIntention`, `ChatIntention`, `ForumIntention`, `BlogIntention`, `GameIntention`, то есть Intention-типы. Module-классов у шести из восьми домейнов вообще нет: во всем `src` их шесть (`AccountModule`, `ModerationModule`, `CoreModule`, `MailModule`, `MessageQueuingModule`, `PersistenceModule`), из которых к Domain относятся два.
+
+Последствие: разработчик, добавляющий домен, которому нужен нестандартный lifetime, читает "центральная регистрация заменила Module.cs", ограничивается сканом и получает per-dependency вместо per-scope. Для `DmDbContext` это второй экземпляр на scope — ровно тот класс дефекта, из-за которого `AccountModule` и существует.
+
+Исправление: обе формулировки заменить на то, что происходит: скан покрывает дефолтные lifetime-ы, а отклонения объявляет владеющая сборка своим Module, который хост подключает. В комментарии про маркеры написать Intention, а не Module.
+
+### [СРЕДНЯЯ] stale-dto-see-paths — десять `@see` в рукописных FE-зеркалах C#-DTO ведут в несуществующий каталог
+
+Все десять ссылок указывают на `src/DM.Web.API/Dto/...`; такого каталога нет (в `src/DM.Web.API` лежат `Features`, `HostedServices`, `Middleware`, `Notifications`, `Realtime`, `Shared`, `Swagger`, `Validation`).
+
+- `src/DM.Web.Client/src/shared/api/models/common/user.ts:58` — `Dto/Users/UserPicture.cs`, реально `Features/Community/Users/UserDtos.cs`
+- `.../common/user.ts:73` — `Dto/Personal/Rating.cs`, реально там же
+- `.../common/user.ts:150` — `Dto/Users/User.cs`, реально там же
+- `.../community/users.ts:36` — `Dto/Personal/Birthday.cs`, реально там же
+- `.../community/users.ts:46` — `Dto/Users/VisibilitySettings.cs`, реально `Features/Personal/Profiles/ProfileDtos.cs`
+- `.../community/users.ts:55` — `Dto/Personal/Contact.cs`, реально `Features/Community/Users/UserDtos.cs`
+- `.../community/users.ts:71` — `Dto/Users/UserProfile.cs`, реально там же
+- `.../community/users.ts:90` — `Dto/Users/PersonalProfile.cs`, реально `Features/Personal/Profiles/ProfileDtos.cs`
+- `.../personal/blacklist.ts:3` и `.../personal/index.ts:3` — `Dto/Personal/`, каталога нет
+
+Последствие: эти TS-типы рукописные, и `contract.spec.ts:18-20` держит их только по именам свойств, не по типам и не по семантике. `@see` был единственным способом дойти до оригинала, чтобы сверить смысл поля. Сейчас переход не работает ни в IDE, ни глазами, а имена файлов вдобавок стали неверными: пер-классовые `.cs` слиты в `UserDtos.cs` и `ProfileDtos.cs`.
+
+Исправление: заменить пути на два актуальных файла. Дешевле и надежнее — указывать не файл, а полное имя типа (`DM.Web.API.Features.Community.Users.UserProfile`), тогда ссылка выживет следующее переселение файлов.
+
+### [СРЕДНЯЯ] false-bbcode-pipeline-doc — два комментария ссылаются на документ и разделы, которых нет
+
+- `src/DM.Infrastructure.Core/Parsing/BbParserWrapper.cs:269` — `See BBCODE_PIPELINE.md "Why int.Parse() Instead of int.TryParse()" for details.`
+- `src/DM.Web.Client/src/shared/ui/BBCodeEditor/BBCodeEditor.vue:443` — `See BBCODE_PIPELINE.md "Why Toolbar Functions Are Not Fully Abstracted" for details.`
+
+Файла `BBCODE_PIPELINE.md` в репозитории нет (единственный родственный документ — `docs/architecture/BBCODE_RENDERING.md`), и ни одного из двух названных разделов в нем тоже нет: его заголовки это "Принцип: сервер — единственный render authority", "Surface", "Инвариант prose-полей", "Audience", "Матрица видимости privacy-тегов", "Правило ведущих игры", "Zero-information erase", "Асимметричный контракт редактора", "Contract render context", "Кэширование с permission-бакетами", "Plain-text каналы", "Как добавить новый тег", "Связанные документы".
+
+Последствие: обещание "for details" ложное. В случае `BbParserWrapper` детали и не нужны — четыре пункта над ссылкой самодостаточны, так что ссылка чистый шум. Хуже другое: читатель, которому этих четырех пунктов недостаточно, пойдет искать документ, потратит время и не найдет, а решить, был ли там аргумент сильнее, уже нельзя.
+
+Исправление: удалить обе строки. Если аргументация должна жить в документации, ее место в `BBCODE_RENDERING.md` разделом "Как добавить новый тег", но по правилу проекта конвенции держат правила, а не разбор конкретной функции, так что рассуждение правильнее оставить в коде и ссылку убрать.
+
+### [СРЕДНЯЯ] false-toolbar-exception-count — обоснование "5 функций" называет тег, удаленный в том же файле
+
+`src/DM.Web.Client/src/shared/ui/BBCodeEditor/BBCodeEditor.vue:430-432`:
+
+```
+// 1. EXCEPTIONS: 5 functions (link, image, private, cut, tab) have significantly
+//    different behavior (dialogs, self-closing tags, parameters) that would
+//    create a leaky abstraction if forced into a common pattern.
+```
+
+Функции `cut` нет. В файле 15 toolbar-функций (`toggleBold`, `toggleItalic`, `toggleUnderline`, `toggleStrike`, `toggleCode`, `toggleBulletList`, `toggleOrderedList`, `toggleBlockquote`, `insertLink`, `insertImage`, `insertSpoiler`, `insertPrivate`, `insertTab`, `insertNsfw`, `insertNoparse`, `insertMod`, `insertWarning`), из них выбиваются четыре: `insertLink`, `insertImage`, `insertPrivate` (диалоги) и `insertTab` (вставка по курсору вместо обертки). А ровно 144 строками выше, на `BBCodeEditor.vue:286`, стоит `horizontalRule: false, // [cut] marker was removed — truncation is now height-based`.
+
+Последствие: 22-строчное обоснование "почему мы намеренно не абстрагировали 15 почти одинаковых функций" держится на числе исключений, и это число завышено на 25 % за счет тега, которого в продукте нет. Тот, кто придет пересматривать решение, начнет с поиска функции `cut` и потеряет доверие ко всему блоку.
+
+Исправление: "4 functions (link, image, private, tab)". Здесь же проверить, живо ли само решение: если из 15 функций 11 отличаются только двумя строковыми литералами, аргумент "READABILITY" и "DEBUGGING" стоит взвесить заново, а не поддерживать текстом.
+
+### [СРЕДНЯЯ] stale-topiccard-consumers — шапка TopicCard указывает на два файла, один из которых не существует, а второй его не рендерит
+
+`src/DM.Web.Client/src/features/topic/ui/TopicCard.vue:5-9`:
+
+```
+ * Single source of the topic-card markup and styles, shared by:
+ *   - Topic.vue (forum topics: full navigation + viewer-dependent actions)
+ *   - ProfileBestPublicationSection.vue (a blog publication rendered in the exact
+ *     same visual shell, ...)
+```
+
+Файла `Topic.vue` в проекте нет; форумного потребителя зовут `TopicView.vue` (`src/DM.Web.Client/src/features/topic/ui/TopicView.vue:208`). `ProfileBestPublicationSection.vue` `TopicCard` не рендерит: он рендерит `PublicationCard` (`ProfileBestPublicationSection.vue:22, 70`), а `TopicCard` подключает уже `PublicationCard.vue:20, 37` через FSD-дверь `src/DM.Web.Client/src/features/topic/@x/publication.ts`. Слоя `@x` шапка не упоминает вовсе.
+
+Последствие: `PublicationCard.vue:9-12` прямо говорит, что менять при появлении своего дизайна публикаций нужно внутренности `PublicationCard`, а `TopicCard` должен остаться чисто форумным. Шапка `TopicCard` ведет разработчика мимо этой двери — прямо в форумный компонент, объявляя его общим для форума и блогов. Это тот случай, когда правка "как написано в комментарии" ломает границу, которую вторая половина кода специально построила.
+
+Исправление: переписать список на `TopicView.vue` и `PublicationCard.vue` (через `@x/publication`) и добавить одну фразу о том, что публикационная ветка временная. Ссылку на текущего владельца решения оставить одну — на `PublicationCard.vue`.
+
+### [СРЕДНЯЯ] false-comment-vue-refs — четыре комментария сверяют геометрию с файлом, которого нет
+
+`Comment.vue` в проекте отсутствует; реальный компонент это `src/DM.Web.Client/src/features/comment/ui/CommentItem.vue`.
+
+- `src/DM.Web.Client/src/shared/ui/Skeleton/CommentSkeleton.vue:5` — "Layout contract — matches Comment.vue:" и далее четыре пункта геометрии
+- `.../CommentSkeleton.vue:60` — "Matches Comment.vue: flex row, $medium padding/gap, dashed border"
+- `.../CommentSkeleton.vue:85-87` — "matching Comment.vue's author block"
+- `src/DM.Web.Client/src/features/topic/ui/TopicCard.vue:427` — "matching Comment.vue's .like-static"
+
+Последствие: единственная функция скелетона — совпадать по геометрии с настоящей карточкой, и весь его контракт выражен в комментарии как ссылка в пустоту. При правке паддингов в `CommentItem.vue` найти зависимый скелетон поиском по имени файла нельзя: `grep Comment.vue` находит только эти четыре комментария. Расхождение проявится как дерганье layout-а при замене скелетона реальным списком, и никакой тест на это не смотрит.
+
+Исправление: заменить на `CommentItem.vue` во всех четырех местах. Заодно рассмотреть замену прозы на фактическую связь: скелетон и карточка могут делить один SCSS-миксин геометрии, и тогда комментарий не нужен.
+
+### [СРЕДНЯЯ] xmldoc-ceremony — гейт требует наличия дока, поэтому больше половины XML-дока это синтаксис
+
+`Directory.Build.props` включает `GenerateDocumentationFile` (строка 3) вместе с `TreatWarningsAsErrors` (строка 4), то есть CS1591 "Missing XML comment for publicly visible type or member" останавливает сборку. Единственное правило про комментарии в документации проекта — один пункт чеклиста "XML documentation" для нового endpoint-а (`docs/conventions/CODE_STYLE.md:137`). Правила о содержании нет ни в `CODE_STYLE.md`, ни в `PATTERNS.md`.
+
+Что из этого вышло, посчитано:
+
+- 33 744 строки `///`, из них 16 477 не содержат ни одного слова (одиночные `<summary>`, `</summary>`, `<remarks>`, `</remarks>`) и 2242 это `<inheritdoc />`; вместе 55,5 % объема.
+- 8269 блоков `<summary>`; в 3075 (37,2 %) не более трех содержательных слов; 1658 (20,1 %) при мягкой мере и 633 (7,7 %) при жесткой — пересказ имени. Примеры: `AchievementType.cs:13` "Identifier." над `public Guid Id`; `Entities/Messaging/UserChatLink.cs:44` "Chat" над `public virtual Chat Chat`; `Entities/Account/User.cs:330` "Messages" над `public virtual ICollection<Message> Messages`; `Features/Game/Games/GameController.cs:120` "Delete game" над `DeleteGame`; `Shared/Dto/CreateInvitationRequest.cs:5` "Request to create an invitation".
+- 52 конструктора контроллеров из 75 и 107 конструкторов сервисов и репозиториев помечены `/// <inheritdoc />`. У конструктора нет базового члена, от которого наследуется документация: тег компилируется, ничего не наследует и существует только чтобы погасить CS1591. Остальные 23 контроллера решают то же иначе: "Creates a new instance of BlogCommentController" (`BlogCommentController.cs:46-48`).
+- Swagger подключает только `DM.Web.API.xml` (`src/DM.Web.API/Swagger/SwaggerExtensions.cs:64`). Из 33 744 строк `///` в `DM.Web.API` лежит 12 731, остальные 21 013 (62,3 %) не читает ничего, кроме подсказки IDE. При этом `DM.Domain.Core` состоит из комментариев на 52 % (3363 строки из 6416).
+- CS1591 распространяется только на публичные члены, но проект документирует и приватные: `HashProvider` внутренний, а его `private const int KeyLength` несет `<summary>` "Output key length in bytes (256 bits)" (`Features/Security/HashProvider.cs:10-13`) — здесь текст полезен, но три соседних константы документированы пересказом имени.
+
+Последствие: цена не в дисковом месте, а в шуме. Двадцать тысяч строк, не несущих информации, обучают читателя пролистывать `///`, и на том же движении пролистываются те 15 000 строк, где сказано что-то важное. Каждая находка выше пряталась именно в такой прозе.
+
+Исправление: снять CS1591 с уровня ошибки для всего, кроме `DM.Web.API` (в `Directory.Build.props` — `NoWarn`, включаемый обратно в `DM.Web.API.csproj`), там он оправдан, потому что кормит OpenAPI. Записать в `CODE_STYLE.md` одно правило вместо чеклист-пункта: док обязателен там, где его читает генератор контракта, в остальных местах комментарий пишется только когда говорит то, чего имя сказать не может. Отдельным проходом снести `<inheritdoc />` с конструкторов — это чистый шум в 159 файлах.
+
+### [СРЕДНЯЯ] false-endorsement-composable — бекенд-контракт сверяется с FE-композаблом, которого нет
+
+`src/DM.Web.API/Features/Community/Endorsements/UserEndorsementsQuery.cs:5-9`:
+
+```
+/// Search / sort / paging for the endorsement GET endpoints
+/// (both received and given). The contract mirrors the
+/// FE composable <c>useReviewsFilter</c>: default sort =
+/// date desc, search optional.
+```
+
+Композабла `useReviewsFilter` во фронтенде нет ни одного вхождения. Фильтр этой поверхности зовется `useTestimonialsFilter` (`src/DM.Web.Client/src/features/testimonial-filter/model/useTestimonialsFilter.ts`), а страницы — `ReceivedEndorsementsPage.vue` и `GivenEndorsementsPage.vue`.
+
+Последствие: единственная связь между дефолтами сортировки на двух сторонах названа неверно, и проверить утверждение "default sort = date desc" по указанному месту невозможно. Это одно из пяти висячих упоминаний идентификаторов из 320 — то есть аккуратность здесь высокая, но именно эта ссылка несет смысл (согласованность дефолтов), а не украшение.
+
+Исправление: `useTestimonialsFilter`. Ссылку на имя композабла лучше заменить на утверждение, которое можно проверить в этом же репозитории тестом: дефолт сортировки объявить в одном месте и сверять контрактным тестом, а не прозой.
+
+### [СРЕДНЯЯ] stale-response-404 — публичный OpenAPI обещает 404 там, где endpoint отдает 410
+
+`src/DM.Web.API/Features/Account/Registration/RegistrationController.cs:127`:
+
+```
+/// <response code="404">Token expired or not found</response>
+```
+
+Атрибут рядом (строка 131) объявляет `StatusCodes.Status410Gone`, и сервис действительно кидает Gone дважды: `src/DM.Domain.Account/Features/Registration/ActivationService.cs:71` ("Ссылка недействительна или уже использована") и `:77` ("Ссылка устарела. Запросите новую."). 404 на этом пути не возникает.
+
+Второй случай мягче: `src/DM.Web.API/Features/Game/Rooms/RoomController.cs:93` документирует `<response code="404">Room not found</response>`, а `[ProducesResponseType]` для 404 не объявлен, так что в схеме этот код не появится вовсе.
+
+Последствие: Swashbuckle сливает описания из `///` с кодами из атрибутов, поэтому в опубликованной схеме у `POST /v1/registration/activation/{token}` появляется ветка 404, которой не бывает, а у настоящего 410 нет описания. Сгенерированный из схемы клиент получит обработчик мертвой ветки и необработанный живой код.
+
+Исправление: `<response code="410">` в `RegistrationController`; добавить `[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]` в `RoomController.GetRoom`. Расхождение автоматизируемо: сверка `<response code>` с `ProducesResponseType` по всем 75 контроллерам дает сейчас 4 несовпадения и легко становится тестом.
+
+### [СРЕДНЯЯ] activitypolicy-overpromise — комментарий обещает единственную точку правки, которой нет через границу стека
+
+`src/DM.Domain.Core/Configuration/ActivityPolicy.cs:8-14`:
+
+```
+/// These are product decisions, not technical ones, and several screens have to
+/// agree on them: ... Held here so that
+/// changing the definition is one edit rather than four across two assemblies —
+/// a partial change produces screens that quietly disagree with each other.
+```
+
+Внутри .NET это правда: `ActivePeriod` и `OnlinePeriod` читают `BlogRepository.cs:882`, `UserRepository.cs:91, 93, 115, 118, 559, 560` и `PopularityScoreService.cs:84`. Но `OnlinePeriod = 5 минут` продублирован во фронтенде отдельным литералом: `src/DM.Web.Client/src/shared/lib/constants/user.ts:1` — `export const ONLINE_THRESHOLD_MINUTES = 5;`, без комментария и без ссылки на `ActivityPolicy`. Его читают `CommentItem.vue:142`, `TopicCard.vue:148`, `ProfilePage.vue:239`, `chat.ts:168`.
+
+Последствие: изменение `OnlinePeriod` на 10 минут выполняется "одной правкой" по инструкции комментария, после чего бекенд сортирует и считает по 10 минутам, а зеленая точка "онлайн" в трех местах интерфейса гаснет через 5 — то самое "screens that quietly disagree", от которого класс и написан.
+
+Исправление: либо отдавать порог с бекенда (например в module-status/конфиге, который фронт уже читает), либо, если дублирование сознательное, дописать это в оба места: в `ActivityPolicy` — что FE держит свою копию, в `constants/user.ts` — что значение обязано совпадать с `ActivityPolicy.OnlinePeriod`. Второе дешево, но остается инвариантом, который никто не проверяет.
+
+### [СРЕДНЯЯ] schema-helpers-embed-count — "три места встраивания", их два, и одно из названных не существует
+
+`src/DM.Web.Client/src/entities/game/model/schemaHelpers.ts:1-3`:
+
+```
+// Pure helpers and constants for the attribute-schema editor.
+// Kept framework-free so they can be unit-tested and reused across the
+// three embed sites (create-game, game schema page, game settings page).
+```
+
+`<AttributeSchemaEditor>` встраивается ровно дважды: `src/DM.Web.Client/src/features/create-game/ui/CreateGameForm.vue:217` и `src/DM.Web.Client/src/pages/game/GameSettings.vue:112`. Отдельной "game schema page" нет: в `src/app/providers/router.ts` нет ни одного маршрута со словом schema, и компонента-страницы тоже нет.
+
+Последствие: обоснование "держим framework-free, потому что три потребителя" опирается на потребителя, которого нет. Это не ломает поведение, но именно так пишется правило, которое потом никто не решается отменить: третий потребитель воспринимается как существующий, и никто не проверяет, стоит ли ограничение своей цены.
+
+Исправление: "two embed sites (create-game form, game settings page)". Либо, если страница схемы запланирована и просто не построена, сказать это словом "planned" — тогда утверждение снова становится правдой.
+
+### [НИЗКАЯ] dead-board-update-comment — комментарий описывает действие над пустым блоком
+
+`src/DM.Tools.Seeder/Seeding/DataSeeder.Forum.cs:358-362`:
+
+```
+                // Update board
+                var board = boards.FirstOrDefault(b => b.BoardId == topic.BoardId);
+                if (board != null)
+                {
+                }
+```
+
+Рядом еще два следа того же удаления: на строке 251 стоит "// Add comments (track them to update LastCommentId later)", хотя подход с отслеживанием заменен повторным запросом на строках 349-352, а локальная переменная `lastComment`, объявленная на 254 и присваиваемая на 330, после этого нигде не читается.
+
+Последствие: комментарий утверждает, что здесь обновляется board, поэтому пустой блок выглядит намеренным, а не забытым. Читатель, разбирающийся, почему у доски не сходятся счетчики после сида, поверит комментарию и пойдет искать дальше.
+
+Исправление: удалить блок вместе с комментарием и неиспользуемую локальную переменную; поправить формулировку на 251 строке под фактический алгоритм.
+
+### [НИЗКАЯ] false-useunmounted — тест объясняет свою настройку через несуществующий символ
+
+`src/DM.Web.Client/src/entities/game/model/useGameDisplay.spec.ts:13-15`:
+
+```
+// Pinia must be active so `useGameDisplay` — which touches Pinia-backed
+// state via `useUnmounted` — can resolve its dependencies. Re-created
+// fresh between tests to isolate store state.
+```
+
+Символа `useUnmounted` нет ни в проекте, ни во Vue. Pinia нужна потому, что `useGameDisplay.ts:39` вызывает `useAuthStore().isAuthenticated`.
+
+Последствие: комментарий существует ровно затем, чтобы следующий читатель не удалил `setActivePinia` как лишний, и при этом дает неверную причину. Проверка причины ведет в тупик, и хрупкость `beforeEach` остается необъясненной.
+
+Исправление: заменить `useUnmounted` на `useAuthStore`.
+
+### [НИЗКАЯ] false-profileendorsements-precedent — ссылка на прецедент, которого нет
+
+`src/DM.Web.Client/src/pages/profile/ProfileEndorsementsList.vue:188-193`:
+
+```
+ * UserEndorsement and WebsiteTestimonial are structurally compatible
+ * ... The existing ProfileEndorsements.vue does the same coercion.
+```
+
+Файла `ProfileEndorsements.vue` нет (в `src/pages/profile` 24 файла, такого среди них нет), и приведение `as unknown as WebsiteTestimonial` во всем фронтенде встречается только здесь (`ProfileEndorsementsList.vue:195`).
+
+Последствие: небезопасное приведение типов оправдано ссылкой на прецедент, которого не существует. При ревью двойного каста это как раз то предложение, на которое обопрется "значит, так уже принято".
+
+Исправление: убрать последнее предложение. Оставшиеся три строки объясняют приведение самостоятельно и правдиво.
+
+### [НИЗКАЯ] false-api-standards-doc — правило про формат ответа ссылается на несуществующий документ
+
+`src/DM.Web.Client/src/shared/api/models/common/index.ts:2-3`:
+
+```
+// Note: Single resources are returned directly without wrapper (per API_STANDARDS.md)
+// Only collections use ListEnvelope or CursorEnvelope
+```
+
+`API_STANDARDS.md` в репозитории нет; правило живет в `docs/conventions/API_DESIGN.md`. Похожая история с путями `USERNAME_POLICY.md`: четыре комментария указывают на `docs/architecture/USERNAME_POLICY.md` (`AvailabilityService.cs:21`, `UsernameChangeService.cs:19`, `DataSeeder.Users.cs:65`, `UsernameInput.vue:70`), а файл лежит в `docs/conventions/`, и два других комментария (`ActivationRequestValidator.cs:14`, `GamesQueryValidator.cs:31`) указывают верно.
+
+Последствие: само правило сформулировано верно, теряется только возможность проверить его источник. Пять неверных путей из шести упоминаний одного документа означают, что путь копировали, а не проверяли.
+
+Исправление: `API_DESIGN.md` и `docs/conventions/USERNAME_POLICY.md`. Такие ссылки дешево проверять скриптом в CI: имена документов из комментариев сопоставить с `docs/**`.
+
+### [НИЗКАЯ] misplaced-jsdoc-formatthreshold — док функции стоит над другой функцией
+
+`src/DM.Web.Client/src/entities/achievement/lib/formatThreshold.ts:7-16` описывает `formatThreshold` ("Human-readable threshold for a tier. SSOT for every place thresholds are shown"), но за ним сразу идет второй блок 17-23 и объявление `metricDisplayNumber` (строка 24). Сама `formatThreshold` объявлена на строке 36 и дока не имеет.
+
+Последствие: подсказка IDE над `metricDisplayNumber` показывает чужое описание (в TS два подряд идущих блока схлопываются, к символу привязывается ближайший), а над `formatThreshold` не показывает ничего. Утверждение "When adding a new metric, this changes + the paired case in getMetricValue" при этом относится к `formatThreshold` и там оно нужнее всего: именно в ней 12 `case`.
+
+Исправление: перенести первый блок к объявлению на строке 36.
+
+### [НИЗКАЯ] narrative-comments — жанр "история правки" вместо описания текущего кода
+
+Измерено: из 428 блоков `<remarks>` (1727 строк) 16 блоков и 81 строка содержат явные маркеры повествования; во фронтенде 85 таких строк. Абсолютный объем небольшой, но это шапки классов, то есть первое, что читают.
+
+Крайний случай — `src/DM.Domain.Core/Users/UserFilter.cs:6-16`: и `<summary>`, и `<remarks>` целиком посвящены восемнадцати и пятнадцати позиционным аргументам, которых больше нет, и тому, как две подписи были разъехавшимися на три слота. О том, что этот `record` собой представляет сейчас, сказано полстроки. Тот же жанр: `SubscriptionPolicy.cs:6-12` (история литерала 20 в трех репозиториях и восьми DTO), `AccountModule.cs:10-17`, `ImageProcessingService.cs:46-53` (пересказ закрытой дыры в загрузке в прошедшем времени), `Startup.cs` (см. выше), `PopularityScoreService.cs:47-49` ("It used to be deferred on the strength of a comment saying..." — комментарий о комментарии), `PermissionFilteringVisitor.cs:82` ("so it is never stripped here despite what this comment used to claim" — комментарий, спорящий со своей прошлой версией). Во фронтенде: `requestGuard.ts:5-7` ссылается на `currentRequestId`, которого во всем проекте больше нет; `entities/game/model/store.ts:2` — "Migrated from stores/games.ts and stores/gameDetails.ts", оба файла удалены; `entities/user/model/communityStore.ts:2` — то же про `shared/stores/community.ts`; `AwardTypeEditDialog.vue:4-5` — "Dialog twin of the former hand-rolled modal in ModerationAwardTypes.vue".
+
+Последствие: три отдельные издержки. Первая — такой текст надо поддерживать, и он гниет быстрее всего остального, потому что описывает то, чего нет (три висячих ссылки выше это именно narrative). Вторая — он вытесняет описание настоящего контракта: по `UserFilter` нельзя понять, какие поля обязательны и как они комбинируются. Третья, важнейшая: `ImageProcessingService` и `Webhooks/WebhookController.cs:97` рассказывают о закрытых дефектах прозой вместо теста, и если завтра кто-то добавит четвертый `UploadType` не-картинкой, поймает это только внимательное чтение параграфа.
+
+Исправление: правило одной строкой — комментарий описывает код, который есть, в настоящем времени. Причина изменения живет в сообщении коммита, где она найдется через `git log -L`. Из перечисленных мест сохранить стоит только те фразы, которые формулируют инвариант ("every upload type is an image", "bit 6 is intentionally vacant"), и там, где инвариант важен, довести его до теста: у `SubscriptionPolicy` это уже сделано (`UserSubscriberSummaryShould.cs:67, 74`), и это правильный образец.
+
+### [НИЗКАЯ] uneven-guard-annotation — из четырех одинаковых проверок объяснены две
+
+В `src/DM.Domain.Community/Features/Awards/AwardService.cs` четыре метода делают один и тот же guard `?? throw new HttpException(NotFound)` перед вызовом репозитория, который внутри использует `FirstAsync`. Прокомментированы два: `:77-78` ("The repository materializes with FirstAsync, which throws on an absent row — an unknown id answered 500 where the endpoint declares 404") и `:119` ("Same as DeactivateTypeAsync"). Не прокомментированы идентичные `UpdateTypeAsync` (`:70`) и `UpdateSeriesAsync` (`:112`). Само утверждение правдиво: `AwardRepository.cs:80, 130, 196` действительно вызывают `FirstAsync`.
+
+Последствие: неравномерная разметка одной идиомы читается как различие. Тот, кто рефакторит `UpdateTypeAsync`, не видит причины для guard-а и может его снять, вернув 500 вместо 404.
+
+Исправление: объяснение принадлежит не четырем вызовам, а самому репозиторию — одна фраза на `AwardRepository` о том, что мутирующие методы предполагают проверенное существование строки. В сервисе комментарии убрать.
+
+### [НИЗКАЯ] unmarked-deferral — отложенная работа записана прозой, поэтому не находится grep-ом
+
+`src/DM.Domain.Game/Features/Games/GameRoleResolver.cs:55-57`:
+
+```
+        // Note: Applicant role (pending character) requires character status check
+        // which is not currently available in the Game DTO
+        // For now, we don't return Applicant - can be enhanced later
+```
+
+и то же на `:87`. Утверждение правдиво: `GameRole.Applicant = 2` объявлен (`src/DM.Domain.Core/Enums/GameRole.cs:21`) и ни одной ветки, возвращающей его, нет. В то же время во всем C# (136 431 строка) ноль вхождений TODO, FIXME, HACK и XXX, а во фронтенде их два (`WarningsPage.vue:4`, `errorConfig.ts:28`).
+
+Последствие: ноль маркеров выглядит как отсутствие долга, но долг есть — он просто написан словами, которые не ищутся. Кто пройдет по репозиторию grep-ом перед релизом, не узнает, что одна из семи ролей игры никогда не вычисляется.
+
+Исправление: либо поставить `// TODO(applicant-role):` рядом с прозой, либо, что честнее, признать решение окончательным и убрать `Applicant` из enum, если ни один потребитель его не ждет.
+
+## Чего я не смог определить
+
+- Ссылки на разделы продуктового документа. В комментариях 94 упоминания вида "doc 4.2.1.4" (16 в C#, 78 во фронтенде), 39 различных номеров. Проверить их можно только по `docs/Документация_по_разработке_DM3.docx`, который я не открывал; при этом номера в спеке подвижны, так что это самый вероятный кандидат на скрытое гниение. Решается однократной сверкой номеров со спекой и, лучше, заменой номера на название раздела — название переживает перенумерацию.
+- Правдивость фактов, сформулированных в прошедшем времени. Утверждения вроде "seven destructive actions had drifted back onto them" (`.eslintrc.cjs:80`) или "they drifted, twice in ways that reached users: five list endpoints promised a bare array" (`contract.spec.ts:8-9`) нельзя ни подтвердить, ни опровергнуть по текущему дереву. Их точность устанавливается только по истории git, и это одна из причин рекомендовать перенос таких фраз в сообщения коммитов.
+- Влияет ли объем XML-дока на время сборки и размер артефактов. `GenerateDocumentationFile` для 17 проектов означает 17 `.xml` рядом с dll, из которых Swagger читает один. Стоит ли это чего-то в CI, показывает только замер `dotnet build` с и без флага; на решение это не влияет, но цифра сделала бы аргумент про 21 013 бесполезных строк окончательным.
+- Решение владельца по политике. Три предложения ниже меняют правила проекта, а не код, и не мои: (1) снять CS1591 с уровня ошибки вне `DM.Web.API`; (2) запретить дублирование продуктовых чисел в прозе, оставив число в одном месте кода и в тесте; (3) договориться, что комментарий описывает настоящее, а история изменения живет в коммите.
+
+Правильная политика для этой кодовой базы, четырьмя строками. XML-док обязателен только там, где его читает генератор контракта, то есть в `DM.Web.API`; в остальных сборках комментарий пишется, когда сообщает то, чего имя сказать не может: причину, компромисс, ловушку, инвариант. Число, имя файла и счет потребителей в комментарии запрещены, если то же самое можно утверждать тестом или константой, потому что именно они гниют первыми, и все крупные находки выше — они. Комментарий описывает код, который есть, в настоящем времени; история правки живет в сообщении коммита. Комментарий, объясняющий запутанный дизайн, читается как заявка на упрощение дизайна, а не как решение задачи.
+
