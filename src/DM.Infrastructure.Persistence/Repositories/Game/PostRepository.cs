@@ -355,39 +355,24 @@ internal class PostRepository : IPostRepository
             .ToArray();
         if (uniqueGameIds.Length > 0)
         {
-            // Guid.Empty, deliberately: the id handed to GetByIds drives the
-            // accessibility filter as well as the hydration, and this feed has
-            // already fixed its own visibility above — open rooms of approved,
-            // non-draft games. Passing the real viewer here could only narrow
-            // that, dropping a game they are blacklisted from out of the
-            // dictionary and leaving a live post with a null Room.Game.
-            var gamesById = (await _gameRepository.GetByIds(uniqueGameIds, Guid.Empty))
+            // Two different ids on purpose. Accessibility is Guid.Empty because
+            // this feed has already fixed its own visibility above — open rooms
+            // of approved, non-draft games — and the real viewer could only
+            // narrow that, dropping a game they are blacklisted from out of the
+            // dictionary and leaving a live post with a null Room.Game. The
+            // viewer-scoped fields are filled for the real viewer, because
+            // otherwise a subscriber loses "reader" from the attached game's
+            // participation: the whole subscriber set used to travel in the DTO
+            // and the resolver found them in it.
+            //
+            // Note what the accessibility choice does NOT do: it is not what
+            // lets a blacklisted user read this feed. The feed's own filter has
+            // no blacklist term at all, unlike every other post read, which goes
+            // through GameAccessibilityFilters.RoomAvailable. Closing that is a
+            // decision about what a blacklist means for reading, not a choice of
+            // sentinel here.
+            var gamesById = (await _gameRepository.GetByIds(uniqueGameIds, Guid.Empty, viewerId))
                 .ToDictionary(g => g.Id);
-
-            // The one field that does depend on who is asking. An anonymous read
-            // fills it for nobody, so a subscriber lost "reader" from the
-            // attached game's participation — the whole subscriber set used to
-            // travel in the DTO and the resolver found them in it. One query,
-            // covered by IX_Subscriptions_TargetType_TargetId, bounded by the
-            // number of distinct games on the page.
-            if (viewerId != Guid.Empty)
-            {
-                var subscribedGameIds = await _dbContext.Subscriptions
-                    .TagWith("DM.Game.PostsRated.ViewerSubscriptions")
-                    .Where(s => s.TargetType == SubscriptionTargetType.Game &&
-                                uniqueGameIds.Contains(s.TargetId) &&
-                                s.SubscriberId == viewerId)
-                    .Select(s => s.TargetId)
-                    .ToArrayAsync();
-
-                foreach (var gameId in subscribedGameIds)
-                {
-                    if (gamesById.TryGetValue(gameId, out var subscribedGame))
-                    {
-                        subscribedGame.IsViewerSubscriber = true;
-                    }
-                }
-            }
 
             var rawByPostId = rawData.ToDictionary(x => x.PostId);
             foreach (var post in posts)

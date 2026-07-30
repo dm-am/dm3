@@ -244,7 +244,12 @@ internal class GameRepository : IGameRepository
             .Select(g => new
             {
                 GameId = g.Key,
-                Count = g.Count(),
+                // Distinct subscribers, not subscription rows. Subscriptions has
+                // no unique constraint on (SubscriberId, TargetType, TargetId) and
+                // subscribing is check-then-insert, so a double-clicked button
+                // leaves two rows for one reader. The set this replaced collapsed
+                // them; a plain COUNT(*) would count the reader twice.
+                Count = g.Select(s => s.SubscriberId).Distinct().Count(),
                 ViewerSubscribed = g.Any(s => s.SubscriberId == userId),
                 // Subscribers who have never been active must sort last, and a
                 // plain DESC in Postgres puts nulls first.
@@ -856,15 +861,30 @@ internal class GameRepository : IGameRepository
             .FirstOrDefaultAsync(ct);
     }
 
-    public Task<GameDto?> GetGameByPublicId(string publicId, Guid userId, CancellationToken ct = default)
+    public async Task<GameDto?> GetGameByPublicId(string publicId, Guid userId, CancellationToken ct = default)
     {
-        return _dbContext.Games
+        var game = await _dbContext.Games
             .Where(GameAccessibilityFilters.GameAvailable(userId))
             .Where(g => g.PublicId == publicId)
             // See GetGame: AsSplitQuery avoids the multi-collection cartesian.
             .ProjectTo<GameDto>(_mapper.ConfigurationProvider)
             .AsSplitQuery()
-            .FirstOrDefaultAsync(ct)!;
+            .FirstOrDefaultAsync(ct);
+
+        // The projection cannot produce these, so without this the same endpoint
+        // answered two different payloads: addressed by its five-letter alias a
+        // game reported no subscribers, no active characters and pcCount 0, and
+        // addressed by its GUID it reported all three. It also decided
+        // authorization on a different set of facts — PendingInvitedUserIds is
+        // filled here and nowhere else, so GameIntention.Read refused a user
+        // holding a pending invitation to a hidden game by alias and served it
+        // by GUID.
+        if (game != null)
+        {
+            await EnrichGamesAsync(new[] { game }, userId, ct);
+        }
+
+        return game;
     }
 
     public async Task<GameDetails?> GetGameDetailsByPublicId(string publicId, Guid userId, CancellationToken ct = default)
@@ -906,7 +926,8 @@ internal class GameRepository : IGameRepository
             .ToArrayAsync(ct);
     }
 
-    public async Task<IEnumerable<GameDto>> GetByIds(IEnumerable<Guid> gameIds, Guid userId, CancellationToken ct = default)
+    public async Task<IEnumerable<GameDto>> GetByIds(
+        IEnumerable<Guid> gameIds, Guid userId, Guid viewerId, CancellationToken ct = default)
     {
         var gameIdList = gameIds.ToList();
         if (gameIdList.Count == 0)
@@ -922,7 +943,7 @@ internal class GameRepository : IGameRepository
             .AsSplitQuery()
             .ToArrayAsync(ct);
 
-        await EnrichGamesAsync(games, userId, ct);
+        await EnrichGamesAsync(games, viewerId, ct);
         return games;
     }
 

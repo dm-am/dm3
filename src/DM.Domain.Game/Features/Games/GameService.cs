@@ -451,7 +451,7 @@ internal class GameService : IGameService
             return Array.Empty<Game>();
         }
 
-        var games = (await _repository.GetByIds(gameIdList, currentUserId)).ToArray();
+        var games = (await _repository.GetByIds(gameIdList, currentUserId, currentUserId)).ToArray();
         if (games.Length > 0)
         {
             await _unreadCountersRepository.FillEntityCounters(games, currentUserId,

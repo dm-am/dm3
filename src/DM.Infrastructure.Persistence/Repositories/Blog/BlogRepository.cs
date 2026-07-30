@@ -890,7 +890,9 @@ internal class BlogRepository : IBlogRepository
             .Select(g => new
             {
                 BlogId = g.Key,
-                Count = g.Count(),
+                // Distinct subscribers, not subscription rows — see the same count in
+                // GameRepository.EnrichGamesAsync for why the two differ.
+                Count = g.Select(s => s.SubscriberId).Distinct().Count(),
                 ViewerSubscribed = g.Any(s => s.SubscriberId == userId),
                 Preview = g.OrderByDescending(s => s.Subscriber.LastActivityUtc != null)
                     .ThenByDescending(s => s.Subscriber.LastActivityUtc)

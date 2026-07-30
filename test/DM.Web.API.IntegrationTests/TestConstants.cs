@@ -37,6 +37,14 @@ public static class TestConstants
     public static readonly Guid TestGameId = Guid.Parse("00000000-0000-0000-0000-000000000040");
     public static readonly Guid TestRoomId = Guid.Parse("00000000-0000-0000-0000-000000000041");
 
+    /// <summary>
+    /// The alias TestGame is reachable by. The fixture derives public ids from
+    /// the seeding order ($"game{'a' + index}") and TestGame is first, so this
+    /// name has to agree with that order — it is asserted by the read that
+    /// compares the alias and GUID forms of GET /v1/games/{id}.
+    /// </summary>
+    public const string TestGamePublicId = "gamea";
+
     // Characters (seeded into TestGame so game/room tooltips have content to render)
     public static readonly Guid TestCharacterId = Guid.Parse("00000000-0000-0000-0000-000000000050");
     public static readonly Guid SecondCharacterId = Guid.Parse("00000000-0000-0000-0000-000000000051");

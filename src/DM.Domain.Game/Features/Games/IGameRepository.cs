@@ -88,7 +88,23 @@ public interface IGameRepository
     /// <summary>
     /// Get games by IDs
     /// </summary>
-    Task<IEnumerable<Game>> GetByIds(IEnumerable<Guid> gameIds, Guid userId, CancellationToken ct = default);
+    /// <param name="gameIds">Game identifiers</param>
+    /// <param name="userId">
+    /// Whose accessibility decides which of the ids resolve: a game this user
+    /// may not see is simply absent from the result.
+    /// </param>
+    /// <param name="viewerId">
+    /// Who the viewer-scoped fields are filled for —
+    /// <see cref="Game.IsViewerSubscriber" /> and nothing else today. The same
+    /// as <paramref name="userId" /> for an ordinary read; the two differ only
+    /// where the caller has already fixed visibility by other means and wants
+    /// the accessibility filter to stay out of it, which is the rated-post feed.
+    /// Two parameters rather than one so that a caller in that position does not
+    /// have to re-query the subscriptions this method already reads.
+    /// </param>
+    /// <param name="ct">Cancellation token</param>
+    Task<IEnumerable<Game>> GetByIds(
+        IEnumerable<Guid> gameIds, Guid userId, Guid viewerId, CancellationToken ct = default);
 
     // === WRITE ===
 

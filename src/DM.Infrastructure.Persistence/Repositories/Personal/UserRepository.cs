@@ -849,12 +849,22 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         var subscriberSummaries = await _dmDbContext.Subscriptions
             .Where(s => s.TargetType == SubscriptionTargetType.User && userIds.Contains(s.TargetId))
             .Join(_dmDbContext.Users, s => s.SubscriberId, u => u.UserId,
-                (s, u) => new { s.TargetId, s.SubscriptionId, s.Settings, u.Username, u.LastActivityUtc })
+                (s, u) => new
+                {
+                    s.TargetId,
+                    s.SubscriptionId,
+                    s.SubscriberId,
+                    s.Settings,
+                    u.Username,
+                    u.LastActivityUtc,
+                })
             .GroupBy(x => x.TargetId)
             .Select(g => new
             {
                 UserId = g.Key,
-                Count = g.Count(),
+                // Distinct subscribers, not subscription rows — see the same count in
+                // GameRepository.EnrichGamesAsync for why the two differ.
+                Count = g.Select(x => x.SubscriberId).Distinct().Count(),
                 // Never-active subscribers sort last; a plain DESC in Postgres
                 // would put their nulls first.
                 Preview = g.OrderByDescending(x => x.LastActivityUtc != null)
