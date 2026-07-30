@@ -90,7 +90,7 @@ Task(
 
 Claude: Запускаю code-reviewer...
 [Вызывает Task tool]
-[Показывает отчёт]
+[Показывает отчет]
 ```
 
 ---
@@ -212,7 +212,7 @@ Test mock not configured + production code missing null check.
 
 Claude: Запускаю debugger...
 [Вызывает Task tool]
-[Показывает отчёт с root cause и fix]
+[Показывает отчет с root cause и fix]
 ```
 
 ---
@@ -348,7 +348,7 @@ onMounted(() => loadMore());
         :disabled="loading"
         class="load-more"
       >
-        {{ loading ? 'Загрузка...' : 'Загрузить ещё' }}
+        {{ loading ? 'Загрузка...' : 'Загрузить еще' }}
       </button>
 
       <div v-if="!topics.length" class="empty">
@@ -409,7 +409,7 @@ Created TopicList component with pagination, loading states, and useTopics compo
 
 Claude: Запускаю frontend-developer...
 [Вызывает Task tool]
-[Создаёт компонент, composable, типы]
+[Создает компонент, composable, типы]
 ```
 
 ---
@@ -463,9 +463,9 @@ Claude: Запускаю frontend-developer...
      prompt: "Create GameStatisticsPage.vue with charts for player activity"
    )
 
-3. Frontend-developer создаёт компонент
+3. Frontend-developer создает компонент
 
-4. Claude проверяет что API endpoint существует, если нет — создаёт
+4. Claude проверяет что API endpoint существует, если нет — создает
 ```
 
 ---

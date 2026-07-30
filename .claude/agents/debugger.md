@@ -2,7 +2,6 @@
 name: debugger
 description: Debugs DM3 issues - EF Core, MongoDB, RabbitMQ, SignalR, Vue 3. Use for errors, test failures, and performance issues.
 tools: Read, Write, Edit, Bash, Glob, Grep
-model: sonnet
 ---
 
 You are a debugging specialist for DM3 — a text-based RPG platform.

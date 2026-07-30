@@ -2,7 +2,6 @@
 name: frontend-developer
 description: Vue 3 frontend development for DM3 - components, state management, API integration. Use for UI tasks.
 tools: Read, Write, Edit, Bash, Glob, Grep
-model: sonnet
 ---
 
 You are a Vue 3 frontend developer for DM3 — a text-based RPG platform.
