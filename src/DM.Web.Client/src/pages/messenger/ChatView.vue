@@ -26,6 +26,10 @@ import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { messagingApi } from "@/entities/message";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
 import { useMessageToolbar } from "@/shared/lib/composables/useMessageToolbar";
+import {
+  useAnchoredInfiniteScroll,
+  LANDING_SCROLL_MS,
+} from "@/shared/lib/composables/useAnchoredInfiniteScroll";
 
 const route = useRoute();
 const router = useRouter();
@@ -39,6 +43,7 @@ const {
   interlocutor,
   hasMoreBefore,
   hasMoreAfter,
+  errorBefore,
 } = storeToRefs(messagingStore);
 
 const MAX_MESSAGE_HEIGHT = 200;
@@ -60,12 +65,28 @@ const newMessage = ref("");
 const messagesContainer = ref<HTMLElement | null>(null);
 const editorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 const topSentinel = ref<HTMLElement | null>(null);
-let topObserver: IntersectionObserver | null = null;
 
 // Scroll position tracking
-let isLoadingOlder = false;
 let isScrolling = false;
 let scrollEndTimeout: ReturnType<typeof setTimeout> | null = null;
+
+// Infinite scroll: shared with the global chat. Only the older direction
+// exists here — this list ends at the newest message, so there is nothing
+// below to page into.
+const {
+  loadOlder,
+  setupInfiniteScroll,
+  suspend: suspendInfiniteScroll,
+  resume: resumeInfiniteScroll,
+} = useAnchoredInfiniteScroll({
+  container: messagesContainer,
+  older: {
+    sentinel: topSentinel,
+    hasMore: () => hasMoreBefore.value,
+    load: () => messagingStore.fetchMoreBefore(),
+    failed: () => Boolean(errorBefore.value),
+  },
+});
 
 // Group messages with date separators (shared utility)
 const messagesWithSeparators = computed((): MessageOrSeparator[] =>
@@ -123,54 +144,6 @@ const hoveredMessage = computed(() => {
 // Expanded messages
 const expandedDeletedMessages = ref<Set<string>>(new Set());
 
-function setupInfiniteScroll() {
-  if (!messagesContainer.value) return;
-
-  // Top sentinel - load older messages
-  if (topSentinel.value) {
-    topObserver = new IntersectionObserver(
-      async (entries) => {
-        if (
-          !entries[0].isIntersecting ||
-          isLoadingOlder ||
-          !hasMoreBefore.value
-        )
-          return;
-        isLoadingOlder = true;
-
-        const container = messagesContainer.value;
-        if (!container) {
-          isLoadingOlder = false;
-          return;
-        }
-
-        const scrollHeightBefore = container.scrollHeight;
-        await messagingStore.fetchMoreBefore();
-
-        nextTick(() => {
-          if (container) {
-            const scrollHeightAfter = container.scrollHeight;
-            const heightDiff = scrollHeightAfter - scrollHeightBefore;
-            container.scrollTop = heightDiff;
-          }
-          isLoadingOlder = false;
-        });
-      },
-      {
-        root: messagesContainer.value,
-        rootMargin: "100px 0px 0px 0px",
-        threshold: 0,
-      },
-    );
-    topObserver.observe(topSentinel.value);
-  }
-}
-
-function cleanupInfiniteScroll() {
-  topObserver?.disconnect();
-  topObserver = null;
-}
-
 // Scroll the virtualized list to a message and flash it (jump-to-context).
 function scrollToMessage(msgId: string) {
   const index = messagesWithSeparators.value.findIndex(
@@ -202,11 +175,16 @@ async function loadChat() {
     const jumpMsgId =
       typeof route.query.msg === "string" ? route.query.msg : null;
     if (jumpMsgId) {
+      // Landing in the middle of the history sweeps the list past the top
+      // sentinel; the observers stay off until that scroll has settled, or the
+      // landing itself pages in history the reader never asked for.
+      suspendInfiniteScroll();
       await messagingStore.navigateToMessage(id, jumpMsgId as MessageId);
       await messagingStore.markAsRead(id);
       nextTick(() => {
         setupInfiniteScroll();
         scrollToMessage(jumpMsgId);
+        setTimeout(resumeInfiniteScroll, LANDING_SCROLL_MS);
       });
       return;
     }
@@ -417,7 +395,6 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  cleanupInfiniteScroll();
   messagingStore.clearSelection();
   messagesContainer.value?.removeEventListener("wheel", handleWheel);
   messagesContainer.value?.removeEventListener("scroll", handleScroll);
@@ -471,7 +448,18 @@ onUnmounted(() => {
               v-if="hasMoreBefore"
               ref="topSentinel"
               class="scroll-sentinel top-sentinel"
-            ></div>
+            >
+              <secondary-text v-if="errorBefore" class="sentinel-error">
+                {{ errorBefore }}
+                <button
+                  type="button"
+                  class="sentinel-retry"
+                  @click="loadOlder()"
+                >
+                  Повторить
+                </button>
+              </secondary-text>
+            </div>
 
             <!-- Virtual scroll container -->
             <div
@@ -806,16 +794,30 @@ onUnmounted(() => {
   padding: $big
 
 .scroll-sentinel
-  height: 1px
   width: 100%
 
 .top-sentinel
   display: flex
   justify-content: center
   align-items: center
-  min-height: 30px
-  &:empty
-    min-height: 1px
+  min-height: 1px
+  // Grows to fit the retry banner when a history-pagination request fails;
+  // otherwise stays a hairline intersection target. Keyed off the banner's
+  // presence rather than :empty — a v-if that renders nothing still leaves a
+  // comment node behind, so the sentinel is never empty in the CSS sense.
+  &:has(.sentinel-error)
+    min-height: 30px
+    padding: $small 0
+
+.sentinel-error
+  display: flex
+  align-items: center
+  gap: $small
+  color: $accent-red
+
+.sentinel-retry
+  flex-shrink: 0
+  +button
 
 .date-separator
   display: flex

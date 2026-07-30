@@ -43,6 +43,10 @@ import { useGlobalSignalR } from "@/shared/lib/composables/useSignalR";
 import { EventType } from "@/shared/api/models/notifications/signalr";
 import type { SignalRNotification } from "@/shared/api/models/notifications/signalr";
 import { useMessageToolbar } from "@/shared/lib/composables/useMessageToolbar";
+import {
+  useAnchoredInfiniteScroll,
+  LANDING_SCROLL_MS,
+} from "@/shared/lib/composables/useAnchoredInfiniteScroll";
 
 const router = useRouter();
 const route = useRoute();
@@ -119,102 +123,35 @@ const topSentinel = ref<HTMLElement | null>(null);
 const bottomSentinel = ref<HTMLElement | null>(null);
 const toolbarEl = ref<HTMLElement | null>(null);
 
-let topObserver: IntersectionObserver | null = null;
-let bottomObserver: IntersectionObserver | null = null;
-
 // Scroll position tracking
-let isLoadingOlder = false;
-let isLoadingNewer = false;
 const isScrolling = ref(false);
 let scrollEndTimeout: ReturnType<typeof setTimeout> | null = null;
-let isInitialScrolling = false; // Block infinite scroll during initial anchor navigation
 
-// Loads older messages while preserving the reader's visual scroll anchor
-// (the container would otherwise jump when content is prepended above the
-// viewport). Shared by the intersection-observer auto-load path and the
-// sentinel's manual "Повторить" retry button, so both anchor identically.
-async function loadOlderAnchored() {
-  if (isLoadingOlder || !hasMoreBefore.value) return;
-  isLoadingOlder = true;
-
-  const container = messagesContainer.value;
-  if (!container) {
-    isLoadingOlder = false;
-    return;
-  }
-
-  const scrollHeightBefore = container.scrollHeight;
-  await globalChatStore.fetchMoreBefore();
-
-  nextTick(() => {
-    if (container) {
-      const scrollHeightAfter = container.scrollHeight;
-      const heightDiff = scrollHeightAfter - scrollHeightBefore;
-      container.scrollTop = heightDiff;
-    }
-    isLoadingOlder = false;
-  });
-}
-
-function setupInfiniteScroll() {
-  if (!messagesContainer.value) return;
-
-  // Top sentinel - load older messages
-  if (topSentinel.value) {
-    topObserver = new IntersectionObserver(
-      (entries) => {
-        if (
-          isInitialScrolling ||
-          !entries[0].isIntersecting ||
-          isLoadingOlder ||
-          !hasMoreBefore.value ||
-          errorBefore.value // Stay put after a failure — require the explicit "Повторить" click instead of auto-retrying every intersection
-        )
-          return;
-        loadOlderAnchored();
-      },
-      {
-        root: messagesContainer.value,
-        rootMargin: "100px 0px 0px 0px",
-        threshold: 0,
-      },
-    );
-    topObserver.observe(topSentinel.value);
-  }
-
-  // Bottom sentinel - load newer messages
-  if (bottomSentinel.value) {
-    bottomObserver = new IntersectionObserver(
-      async (entries) => {
-        if (
-          isInitialScrolling ||
-          !entries[0].isIntersecting ||
-          isLoadingNewer ||
-          !hasMoreAfter.value ||
-          errorAfter.value
-        )
-          return;
-        isLoadingNewer = true;
-
-        await globalChatStore.fetchMoreAfter();
-        isLoadingNewer = false;
-      },
-      {
-        root: messagesContainer.value,
-        rootMargin: "0px 0px 100px 0px",
-        threshold: 0,
-      },
-    );
-    bottomObserver.observe(bottomSentinel.value);
-  }
-}
-
-function cleanupInfiniteScroll() {
-  topObserver?.disconnect();
-  bottomObserver?.disconnect();
-  topObserver = null;
-  bottomObserver = null;
-}
+// Infinite scroll: shared with the messenger. Both ends page here — the feed
+// can sit in the middle of the history (archive dates, permalinks), so newer
+// messages are as fetchable as older ones. errorBefore/errorAfter park the
+// direction that failed until the sentinel's "Повторить" is clicked.
+const {
+  loadOlder,
+  loadNewer,
+  setupInfiniteScroll,
+  suspend: suspendInfiniteScroll,
+  resume: resumeInfiniteScroll,
+} = useAnchoredInfiniteScroll({
+  container: messagesContainer,
+  older: {
+    sentinel: topSentinel,
+    hasMore: () => hasMoreBefore.value,
+    load: () => globalChatStore.fetchMoreBefore(),
+    failed: () => Boolean(errorBefore.value),
+  },
+  newer: {
+    sentinel: bottomSentinel,
+    hasMore: () => hasMoreAfter.value,
+    load: () => globalChatStore.fetchMoreAfter(),
+    failed: () => Boolean(errorAfter.value),
+  },
+});
 
 // autoGrowEdit removed - BBCodeEditor handles its own sizing
 
@@ -609,7 +546,7 @@ onMounted(async () => {
     typeof route.query.date === "string" ? route.query.date : null;
 
   if (hashMsgId) {
-    isInitialScrolling = true;
+    suspendInfiniteScroll();
     await globalChatStore.navigateToMessage(hashMsgId);
     if (!messages.value?.length) {
       // Broken/stale #msg- link (message deleted or never existed) — the
@@ -622,7 +559,7 @@ onMounted(async () => {
       nextTick(() => {
         setupInfiniteScroll();
         initBbcodeInteractive(messagesContainer.value);
-        isInitialScrolling = false;
+        resumeInfiniteScroll();
       });
       return;
     }
@@ -630,10 +567,7 @@ onMounted(async () => {
       scrollToMessage(hashMsgId);
       setupInfiniteScroll();
       initBbcodeInteractive(messagesContainer.value);
-      // Allow infinite scroll after animation completes
-      setTimeout(() => {
-        isInitialScrolling = false;
-      }, 600);
+      setTimeout(resumeInfiniteScroll, LANDING_SCROLL_MS);
     });
   } else if (dateQuery) {
     await loadArchiveDate(dateQuery);
@@ -668,7 +602,6 @@ onMounted(async () => {
 
 onUnmounted(() => {
   document.removeEventListener("keydown", handleSearchHotkey);
-  cleanupInfiniteScroll();
   if (scrollEndTimeout) clearTimeout(scrollEndTimeout);
   stopPolling();
   unsubscribeSignalR?.();
@@ -1082,7 +1015,7 @@ async function confirmDelete() {
             <button
               type="button"
               class="globalChat-retry sentinel-retry"
-              @click="loadOlderAnchored()"
+              @click="loadOlder()"
             >
               Повторить
             </button>
@@ -1221,7 +1154,7 @@ async function confirmDelete() {
             <button
               type="button"
               class="globalChat-retry sentinel-retry"
-              @click="globalChatStore.fetchMoreAfter()"
+              @click="loadNewer()"
             >
               Повторить
             </button>
