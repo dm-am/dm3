@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { symbols } from "@/shared/lib/utils/icons";
-import notificationApi from "@/shared/api/notificationApi";
+import { notificationApi } from "@/entities/notification";
 import {
   NotificationType,
   type UserNotification,

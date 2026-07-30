@@ -2,11 +2,12 @@
 import { ref, onMounted, computed, reactive, type Ref } from "vue";
 import { useModal } from "vue-final-modal";
 import { useToast } from "@/shared/lib/composables/useToast";
-import moderationApi, {
+import {
+  moderationApi,
   UsernameChangeRequestStatus,
   type UsernameChangeRequest,
   type ResolveUsernameChangeRequest,
-} from "@/shared/api/moderationApi";
+} from "@/entities/moderation";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";

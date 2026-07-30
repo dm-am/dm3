@@ -1,12 +1,8 @@
 import { ref, computed, onMounted } from "vue";
-import { accountApi } from "@/shared/api";
+import { mirrorApi, type Mirror } from "@/shared/api";
 
-export interface RegionConfig {
-  id: string;
-  name: string;
-  webUrl: string;
-  isCurrent: boolean;
-}
+/** A mirror as the region switcher speaks about it. */
+export type RegionConfig = Mirror;
 
 export function useRegion() {
   const mirrors = ref<RegionConfig[]>([]);
@@ -16,7 +12,7 @@ export function useRegion() {
 
   async function fetchMirrors() {
     try {
-      const { data } = await accountApi.getMirrors();
+      const { data } = await mirrorApi.getMirrors();
       if (data?.mirrors) {
         mirrors.value = data.mirrors;
       }

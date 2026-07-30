@@ -5,10 +5,11 @@
  * ModerationUsernameChanges.vue.
  */
 import { ref, computed } from "vue";
-import moderationApi, {
+import {
+  moderationApi,
   UsernameChangeRequestStatus,
   type UsernameChangeRequest,
-} from "@/shared/api/moderationApi";
+} from "@/entities/moderation";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import Form from "@/shared/ui/Form/Form.vue";

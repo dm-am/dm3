@@ -5,10 +5,11 @@
  * twin of ModerationPremoderatedGames (same filter/merge behavior).
  */
 import { computed, onMounted, ref } from "vue";
-import moderationApi, {
+import {
+  moderationApi,
   type PremoderatedBlog,
   type PremoderationStatus,
-} from "@/shared/api/moderationApi";
+} from "@/entities/moderation";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { Select, type SelectOption } from "@/shared/ui/Select";

@@ -19,7 +19,7 @@
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import communityApi from "@/shared/api/communityApi";
+import { statisticsApi } from "@/entities/statistics";
 import { unwrapResource } from "@/shared/api";
 import type { Leaderboards } from "@/shared/api/models/community";
 import { LeadText } from "@/shared/ui/Layout";
@@ -181,7 +181,7 @@ async function fetchStats() {
   const year = granularity.value === "all" ? 0 : selYear.value;
   const month = granularity.value === "month" ? selMonth.value : undefined;
 
-  const { data, error } = await communityApi.getLeaderboards(year, month);
+  const { data, error } = await statisticsApi.getLeaderboards(year, month);
   if (!guard.isCurrent(requestId)) return;
   loading.value = false;
 

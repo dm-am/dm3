@@ -9,11 +9,12 @@
  * only splits the visible tickets between the two pages.
  */
 import { computed, onMounted, ref } from "vue";
-import moderationApi, {
+import {
+  ticketApi,
   type Ticket,
   type TicketStatus,
-} from "@/shared/api/moderationApi";
-import type { TicketSubtype } from "@/shared/api/supportApi";
+  type TicketSubtype,
+} from "@/entities/ticket";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { Select, type SelectOption } from "@/shared/ui/Select";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
@@ -57,7 +58,7 @@ const statusOptions: SelectOption[] = [
 
 async function fetch() {
   loading.value = true;
-  const { data, error } = await moderationApi.getTickets({
+  const { data, error } = await ticketApi.getTickets({
     status: statusFilter.value || undefined,
     subtype: subtypeFilter.value || undefined,
   });

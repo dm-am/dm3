@@ -2,7 +2,7 @@
  * User types for community API
  * @module shared/api/models/community/users
  *
- * All user-related API types that are needed by communityApi and other shared modules.
+ * All user-related API types that are needed by the user client and other shared modules.
  * Entities should re-export from shared for FSD compliance.
  */
 
@@ -115,7 +115,7 @@ export type UserProfileNoteRequest = {
 
 // Public warning/ban aggregate types used to live here, but never matched
 // the actual wire contract (wrong field names, wrong envelope) and were
-// never consumed for rendering — see shared/api/moderationApi.ts for the
+// never consumed for rendering — see entities/moderation/api for the
 // real trimmed public shapes (PublicWarning / PublicBan), which back
 // GET users/{username}/warnings|bans and are consumed by
 // pages/profile/ProfileViolations.vue.

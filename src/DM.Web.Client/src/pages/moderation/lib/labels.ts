@@ -1,11 +1,11 @@
 // Russian display labels for moderation enums (mirror the backend enum
 // Description attributes — TicketStatus.cs / TicketSubtype.cs / BanType).
-import type {
-  PremoderationStatus,
-  TicketStatus,
-} from "@/shared/api/moderationApi";
-import type { TicketSubtype } from "@/shared/api/supportApi";
-import { BanType, type Ban } from "@/shared/api/moderationApi";
+import {
+  BanType,
+  type Ban,
+  type PremoderationStatus,
+} from "@/entities/moderation";
+import type { TicketStatus, TicketSubtype } from "@/entities/ticket";
 
 // ==================== Ticket status ====================
 

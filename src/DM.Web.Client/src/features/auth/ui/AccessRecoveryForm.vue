@@ -4,7 +4,7 @@ import { useRouter } from "vue-router";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import Button from "@/shared/ui/Button/Button.vue";
-import { accountApi } from "@/shared/api";
+import { accountApi } from "@/entities/user";
 import {
   useValidatedField,
   validators,

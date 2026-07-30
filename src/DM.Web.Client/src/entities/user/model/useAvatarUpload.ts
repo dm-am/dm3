@@ -1,7 +1,8 @@
 import { computed, onMounted, onUnmounted, ref, type Ref } from "vue";
 import type { AxiosProgressEvent } from "axios";
-import { personalApi, uploadApi } from "@/shared/api";
-import { useAuthStore } from "@/entities/user";
+import { uploadApi } from "@/shared/api";
+import { personalApi } from "../api";
+import { fetchUser } from "../lib/session";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { compressImage } from "@/shared/lib/utils/imageCompression";
 import type { User } from "@/shared/api/models/community/users";
@@ -24,14 +25,13 @@ const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
  * - Drag-drop via handleDrop / clipboard paste via a document-level listener.
  * - Progress via axios onUploadProgress.
  * - Idempotency via `crypto.randomUUID()` in uploadApi (under the hood).
- * - After a successful upload/reset — userStore.fetchUser(), plus a SignalR
+ * - After a successful upload/reset — fetchUser(), plus a SignalR
  *   `UserAvatarChanged` broadcast to open tabs.
  *
  * @param user — a reactive ref to the User (.id is needed for targetId and to
  *   determine "is there anything to reset").
  */
 export function useAvatarUpload(user: Ref<User | null | undefined>) {
-  const userStore = useAuthStore();
   const toast = useToast();
 
   const uploading = ref(false);
@@ -86,7 +86,7 @@ export function useAvatarUpload(user: Ref<User | null | undefined>) {
         return;
       }
 
-      await userStore.fetchUser();
+      await fetchUser();
       toast.success("Аватар успешно обновлен");
     } catch {
       toast.error("Не удалось загрузить аватар");
@@ -109,7 +109,7 @@ export function useAvatarUpload(user: Ref<User | null | undefined>) {
         toast.error("Не удалось сбросить аватар");
         return;
       }
-      await userStore.fetchUser();
+      await fetchUser();
       toast.success("Аватар сброшен");
     } catch {
       toast.error("Не удалось сбросить аватар");

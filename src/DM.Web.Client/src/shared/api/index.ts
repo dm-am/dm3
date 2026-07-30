@@ -18,29 +18,19 @@ export {
 // Envelope unwrap helper (single-resource responses)
 export { unwrapResource } from "./envelope";
 
-// API services. Every module exports a singleton instance, so the name is
-// camelCase — one name per thing. A parallel PascalCase set used to be exported
-// "for backward compatibility" with nothing, and both halves accumulated real
-// consumers, so the codebase had two names for every client.
-export { default as accountApi } from "./accountApi";
-export { default as achievementApi } from "./achievementApi";
-export { default as blacklistApi } from "./blacklistApi";
-export { default as communityApi } from "./communityApi";
-export { default as moderationApi } from "./moderationApi";
-export { default as notepadApi } from "./notepadApi";
-export { default as notificationApi } from "./notificationApi";
+// Mirror list — deployment topology, not a domain concept
 export {
-  default as personalApi,
-  type UpdateProfilePayload,
-} from "./personalApi";
-export { default as subscriptionApi } from "./subscriptionApi";
-export {
-  default as supportApi,
-  type TicketSubtype,
-  type CreateTicketIntake,
-  type Ticket,
-  type TicketStatus,
-} from "./supportApi";
+  default as mirrorApi,
+  type Mirror,
+  type MirrorList,
+} from "./mirrorApi";
+
+// Uploading a binary with progress and an idempotency key is transport, and the
+// two consumers belong to different domains — so this one client stays here
+// while every domain client lives in its entity slice
+// (docs/conventions/PATTERNS.md). The singleton is exported under a camelCase
+// name: a parallel PascalCase set used to exist "for backward compatibility"
+// with nothing, and both halves accumulated real consumers.
 export { default as uploadApi } from "./uploadApi";
 
 // Re-export models

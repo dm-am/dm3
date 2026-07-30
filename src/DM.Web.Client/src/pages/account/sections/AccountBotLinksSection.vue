@@ -123,7 +123,7 @@
 
 <script setup lang="ts">
 import { ref, onUnmounted } from "vue";
-import { accountApi } from "@/shared/api";
+import { accountApi } from "@/entities/user";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { useToast } from "@/shared/lib/composables/useToast";
 

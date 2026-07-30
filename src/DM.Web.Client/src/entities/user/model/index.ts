@@ -1,7 +1,6 @@
 export * from "./types";
 
-// Auth store re-exported from shared for backward compatibility
-// Use @/shared/stores directly for new code
+// Session store, re-exported from shared — see ./store for why it lives there
 export { useAuthStore } from "./store";
 
 // Community-specific store (stays in entities). createCacheKey and the query

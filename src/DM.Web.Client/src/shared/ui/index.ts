@@ -10,7 +10,6 @@ export * from "./Date";
 export * from "./Content";
 export * from "./EditableField";
 export * from "./PasswordInput";
-export * from "./UsernameInput";
 export * from "./Toast";
 export * from "./DataTable";
 export * from "./ExpandableList";

@@ -38,7 +38,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from "vue";
-import { communityApi } from "@/shared/api";
+import { testimonialApi } from "@/entities/testimonial";
 import type { WebsiteTestimonial } from "@/shared/api/models/community";
 import { useTestimonialStore } from "@/entities/testimonial";
 import { TestimonialCard, TestimonialSkeleton } from "@/entities/testimonial";
@@ -91,7 +91,7 @@ async function loadMoreTestimonials(): Promise<boolean> {
   if (loading.value || !hasMore.value) return false;
   loading.value = true;
   try {
-    const { data, error } = await communityApi.getTestimonials({
+    const { data, error } = await testimonialApi.getTestimonials({
       take: 10,
       number: Math.floor(testimonials.value.length / 10) + 1,
     });

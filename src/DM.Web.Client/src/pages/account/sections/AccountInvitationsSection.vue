@@ -66,7 +66,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { RouterLink } from "vue-router";
-import { accountApi } from "@/shared/api";
+import { accountApi } from "@/entities/user";
 import { formatDate } from "@/shared/lib/utils/datetime";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { Invitation, InvitationType } from "@/entities/game";

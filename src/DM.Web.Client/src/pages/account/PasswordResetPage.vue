@@ -2,7 +2,7 @@
 import { ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useNewPasswordField } from "@/shared/lib/composables/useNewPasswordField";
-import { accountApi } from "@/shared/api";
+import { accountApi } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import {

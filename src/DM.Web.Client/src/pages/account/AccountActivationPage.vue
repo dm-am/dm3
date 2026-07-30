@@ -2,11 +2,10 @@
 import { ref, onMounted, onUnmounted, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useToast } from "@/shared/lib/composables/useToast";
-import { useAuthStore } from "@/entities/user";
-import { accountApi } from "@/shared/api";
+import { useAuthStore, UsernameInput, accountApi } from "@/entities/user";
+
 import type { User } from "@/shared/api/models/community";
 import Button from "@/shared/ui/Button/Button.vue";
-import { UsernameInput } from "@/shared/ui/UsernameInput";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import StatusIcon from "@/shared/ui/Icon/StatusIcon.vue";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";

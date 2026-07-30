@@ -10,6 +10,15 @@
 export * from "./model";
 export { useCommunityStore } from "./model/communityStore";
 
+// API: the user directory plus the viewer's own account, settings and blacklist
+export {
+  userApi,
+  accountApi,
+  personalApi,
+  blacklistApi,
+  type UpdateProfilePayload,
+} from "./api";
+
 // UI Components
 export {
   UserLink,
@@ -17,6 +26,7 @@ export {
   AvatarImg,
   UserAutocomplete,
   UserMultiSelect,
+  UsernameInput,
 } from "./ui";
 
 // Helpers

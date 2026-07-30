@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive } from "vue";
 import { useModal } from "vue-final-modal";
-import moderationApi, {
+import {
+  gameTagApi,
   type ModerationTagGroup,
   type ModerationTag,
-} from "@/shared/api/moderationApi";
+} from "@/entities/game";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { EmptyState } from "@/shared/ui";
@@ -42,8 +43,8 @@ async function loadData() {
   error.value = null;
   try {
     const [groupsRes, tagsRes] = await Promise.all([
-      moderationApi.getTagGroups(),
-      moderationApi.getTags(),
+      gameTagApi.getTagGroups(),
+      gameTagApi.getTags(),
     ]);
     groups.value = groupsRes.data?.resources ?? [];
     tags.value = tagsRes.data?.resources ?? [];
@@ -101,7 +102,7 @@ async function confirmDeleteGroup() {
   if (!deleteGroupTarget.value || deletingGroup.value) return;
   deletingGroup.value = true;
   try {
-    await moderationApi.deleteTagGroup(deleteGroupTarget.value.id);
+    await gameTagApi.deleteTagGroup(deleteGroupTarget.value.id);
     if (selectedGroupId.value === deleteGroupTarget.value.id) {
       selectedGroupId.value = null;
     }
@@ -163,7 +164,7 @@ async function confirmDeleteTag() {
   if (!deleteTagTarget.value || deletingTag.value) return;
   deletingTag.value = true;
   try {
-    await moderationApi.deleteTag(deleteTagTarget.value.id);
+    await gameTagApi.deleteTag(deleteTagTarget.value.id);
     deleteTagTarget.value = null;
     await loadData();
   } catch (e) {

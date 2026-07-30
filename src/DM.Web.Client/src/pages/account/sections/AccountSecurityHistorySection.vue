@@ -46,7 +46,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { accountApi } from "@/shared/api";
+import { accountApi } from "@/entities/user";
 import { EmptyState } from "@/shared/ui";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import type {

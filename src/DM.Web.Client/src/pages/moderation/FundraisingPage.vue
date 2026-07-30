@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import fundraisingApi from "@/shared/api/fundraisingApi";
+import { fundraisingApi } from "@/entities/fundraising";
 import { useToast } from "@/shared/lib/composables/useToast";
 
 const loading = ref(true);

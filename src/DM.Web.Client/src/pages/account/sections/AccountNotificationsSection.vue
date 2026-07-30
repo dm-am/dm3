@@ -146,7 +146,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from "vue";
-import { accountApi } from "@/shared/api";
+import { accountApi } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type {
   NotificationPreferences,

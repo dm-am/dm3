@@ -9,11 +9,12 @@
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import supportApi, {
+import {
+  ticketApi,
   type TrackedTicket,
   type TicketStatus,
   type TicketSubtype,
-} from "@/shared/api/supportApi";
+} from "@/entities/ticket";
 import { LeadText, SecondaryText } from "@/shared/ui/Layout";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
@@ -60,7 +61,7 @@ async function fetch() {
   }
   loading.value = true;
   notFound.value = false;
-  const { data, error } = await supportApi.trackTicket(token.value);
+  const { data, error } = await ticketApi.trackTicket(token.value);
   loading.value = false;
   if (error) {
     // A 404 means the token does not match any ticket; anything else is a

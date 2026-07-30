@@ -12,13 +12,15 @@ import {
   useAuthStore,
   UserRole,
   AvatarImg,
-  useModeratedProfile,
   useProfileEdit,
+  userApi,
+  blacklistApi,
+  accountApi,
   type Username,
   type UsernameHistoryEntry,
 } from "@/entities/user";
+import { useModeratedProfile } from "@/entities/moderation";
 import { Gender } from "@/shared/api/models/community";
-import { communityApi, blacklistApi, accountApi } from "@/shared/api";
 import type { BlacklistEntry } from "@/shared/api/models/personal";
 import type { UserProfileNote } from "@/shared/api/models/community";
 import { useSubscriptionsStore } from "@/entities/subscription";
@@ -358,7 +360,7 @@ const noteVisible = computed(() => !!currentUser.value && !isOwnProfile.value);
 
 async function fetchNote() {
   if (!noteVisible.value) return;
-  const { data } = await communityApi.getUserProfileNote(
+  const { data } = await userApi.getUserProfileNote(
     usernameParam.value as Username,
   );
   note.value = data ?? null;
@@ -379,7 +381,7 @@ function cancelEditNote() {
 async function saveNote() {
   if (!noteEditText.value.trim()) return deleteNote();
   isNoteSaving.value = true;
-  const { data } = await communityApi.upsertUserProfileNote(
+  const { data } = await userApi.upsertUserProfileNote(
     usernameParam.value as Username,
     noteEditText.value,
   );
@@ -390,7 +392,7 @@ async function saveNote() {
 
 async function deleteNote() {
   isNoteSaving.value = true;
-  await communityApi.deleteUserProfileNote(usernameParam.value as Username);
+  await userApi.deleteUserProfileNote(usernameParam.value as Username);
   note.value = null;
   noteEditText.value = "";
   isNoteSaving.value = false;

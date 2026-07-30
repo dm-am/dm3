@@ -7,10 +7,11 @@
  * date, active ban details.
  */
 import { computed, onMounted, ref } from "vue";
-import moderationApi, {
+import {
+  moderationApi,
   type Violator,
   type ViolatorsFilter,
-} from "@/shared/api/moderationApi";
+} from "@/entities/moderation";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { Select, type SelectOption } from "@/shared/ui/Select";

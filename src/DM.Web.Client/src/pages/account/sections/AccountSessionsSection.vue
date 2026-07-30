@@ -68,7 +68,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import { accountApi } from "@/shared/api";
+import { accountApi } from "@/entities/user";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import Button from "@/shared/ui/Button/Button.vue";
 import { EmptyState } from "@/shared/ui";

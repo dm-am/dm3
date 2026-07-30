@@ -82,8 +82,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import { useAuthStore } from "@/entities/user";
-import { personalApi } from "@/shared/api";
+import { personalApi, fetchUser } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
 import { FormField } from "@/shared/ui/Form";
 import { Select, type SelectOption } from "@/shared/ui/Select";
@@ -98,7 +97,6 @@ const props = defineProps<{
   user: User;
 }>();
 
-const userStore = useAuthStore();
 const uiStore = useUiStore();
 const toast = useToast();
 
@@ -163,7 +161,7 @@ const saveSettings = () => {
     // Apply theme immediately
     uiStore.updateTheme(settingsForm.value.theme);
 
-    await userStore.fetchUser();
+    await fetchUser();
     toast.success("Настройки успешно сохранены");
   });
 };

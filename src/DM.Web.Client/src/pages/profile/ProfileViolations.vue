@@ -5,14 +5,15 @@ import type { Username } from "@/shared/api/models/community";
 // The public warnings/bans endpoints return bare `UserWarningsInfo` /
 // `PublicUserBanStatus` payloads (NOT a ListEnvelope). `moderationApi`
 // already declares those exact trimmed-public shapes, so we consume it
-// here — `communityApi`'s ListEnvelope-typed pair never matched the wire
+// here — the old ListEnvelope-typed pair on the user client never matched the
 // contract and always produced empty results.
-import moderationApi, {
+import {
+  moderationApi,
   BanType,
   type UserWarningsInfo,
   type PublicUserBanStatus,
   type PublicBan,
-} from "@/shared/api/moderationApi";
+} from "@/entities/moderation";
 import { StatLine } from "@/shared/ui/StatLine";
 
 // Mirrors the backend warning policy (6+ points in 30 days triggers an

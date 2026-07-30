@@ -26,7 +26,7 @@
  *    coordinates the tab-level empty state with the awards block.
  */
 import { computed, onMounted, ref, watch } from "vue";
-import { achievementApi } from "@/shared/api";
+import { achievementApi } from "@/entities/achievement";
 import type {
   AchievementType,
   UserAchievement,
@@ -36,11 +36,11 @@ import { GameIcon } from "@/shared/ui/Icon";
 import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { Tooltip } from "@/shared/ui/Tooltip";
-import { getMetricValue } from "@/shared/lib/achievements/getMetricValue";
 import {
+  getMetricValue,
   formatThreshold,
   metricDisplayNumber,
-} from "@/shared/lib/achievements/formatThreshold";
+} from "@/entities/achievement";
 
 const props = defineProps<{
   username: string;

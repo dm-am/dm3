@@ -13,9 +13,11 @@ import type {
   ContestSeries,
   ContestSeriesAward,
 } from "@/shared/api/models/achievements";
-import { achievementApi } from "@/shared/api";
-import { useContestSeries } from "@/shared/lib/achievements/useContestSeries";
-import { formatContestSeriesTitle } from "@/shared/lib/achievements/formatThreshold";
+import {
+  achievementApi,
+  useContestSeries,
+  formatContestSeriesTitle,
+} from "@/entities/achievement";
 import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import { UserAutocomplete } from "@/entities/user";
 import { GameIcon } from "@/shared/ui/Icon";

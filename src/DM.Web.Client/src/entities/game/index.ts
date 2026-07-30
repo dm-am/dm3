@@ -91,7 +91,15 @@ export {
 } from "./model/schemaHelpers";
 
 // API
-export { gameApi } from "./api";
+export { gameApi, gameTagApi } from "./api";
+export type {
+  ModerationTagGroup,
+  ModerationTag,
+  CreateTagGroupRequest,
+  UpdateTagGroupRequest,
+  CreateTagRequest,
+  UpdateTagRequest,
+} from "./api";
 
 // UI Components
 export {

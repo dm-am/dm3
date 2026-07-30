@@ -7,7 +7,7 @@ import { useAuthStore, AvatarImg } from "@/entities/user";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import ChatPreview from "./ChatPreview.vue";
 import Paging from "@/shared/ui/Paging/Paging.vue";
-import communityApi from "@/shared/api/communityApi";
+import { userApi } from "@/entities/user";
 import type { User } from "@/shared/api/models/community";
 import { symbols } from "@/shared/lib/utils/icons";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
@@ -67,7 +67,7 @@ async function searchUsers(query: string) {
   }
   isSearching.value = true;
   try {
-    const { data } = await communityApi.searchUsers(query, 6);
+    const { data } = await userApi.searchUsers(query, 6);
     searchResults.value = data?.resources ?? [];
   } finally {
     isSearching.value = false;

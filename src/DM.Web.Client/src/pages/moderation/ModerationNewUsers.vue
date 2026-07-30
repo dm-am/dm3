@@ -7,7 +7,7 @@
  */
 import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import communityApi from "@/shared/api/communityApi";
+import { userApi } from "@/entities/user";
 import type { User } from "@/shared/api/models/community";
 import type { Paging as PagingModel } from "@/shared/api/models/common";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
@@ -48,7 +48,7 @@ function threeMonthsAgoUtc(): string {
 
 async function fetch() {
   loading.value = true;
-  const { data, error } = await communityApi.getUsers({
+  const { data, error } = await userApi.getUsers({
     isNewbie: true,
     activity: "All",
     sort: "Registered",

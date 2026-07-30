@@ -6,7 +6,8 @@ import { ref } from "vue";
 import type { GeneralError, ListEnvelope } from "@/shared/api/models/common";
 import type { User, Username } from "./types";
 import { UserActivityFilter } from "./types";
-import { communityApi, unwrapResource } from "@/shared/api";
+import { unwrapResource } from "@/shared/api";
+import { userApi } from "../api";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 
 /**
@@ -185,7 +186,7 @@ export const useCommunityStore = defineStore("community", () => {
 
     searchLoading.value = true;
 
-    const { data, error } = await communityApi.getUsers(buildApiParams(params));
+    const { data, error } = await userApi.getUsers(buildApiParams(params));
 
     // Ignore stale responses
     if (!requestGuard.isCurrent(requestId)) {
@@ -224,7 +225,7 @@ export const useCommunityStore = defineStore("community", () => {
     // Skip if already cached
     if (searchCache.has(cacheKey)) return;
 
-    const { data } = await communityApi.getUsers(buildApiParams(params));
+    const { data } = await userApi.getUsers(buildApiParams(params));
     if (data) {
       searchCache.set(cacheKey, { data, timestamp: Date.now() });
     }
@@ -247,7 +248,7 @@ export const useCommunityStore = defineStore("community", () => {
     // Profile page needs the rich UserProfile DTO (status, name, gender,
     // birthday, location, contacts, info, mediumUrl picture) — not the
     // truncated User DTO from /v1/users/{username} which is meant for lists.
-    const { data, error } = await communityApi.getUserProfile(username);
+    const { data, error } = await userApi.getUserProfile(username);
     loadingProfile.value = false;
 
     if (error) return error;

@@ -122,7 +122,7 @@
 import { ref, reactive, onMounted } from "vue";
 import { RouterLink } from "vue-router";
 import { useModal } from "vue-final-modal";
-import { blacklistApi } from "@/shared/api";
+import { blacklistApi } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { EmptyState } from "@/shared/ui";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";

@@ -7,7 +7,7 @@
  * to the ticket page.
  */
 import { computed } from "vue";
-import type { Ticket } from "@/shared/api/moderationApi";
+import type { Ticket } from "@/entities/ticket";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import {
   TICKET_STATUS_CLASSES,

@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import { computed } from "vue";
 import type { Subscription } from "@/shared/api/models/subscriptions";
 import { SubscriptionTargetType } from "@/shared/api/models/subscriptions";
-import { subscriptionApi } from "@/shared/api";
+import { subscriptionApi } from "../api";
 import { useApiList } from "@/shared/lib/composables/useApiResource";
 
 export const useSubscriptionsStore = defineStore("subscriptions", () => {

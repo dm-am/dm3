@@ -106,8 +106,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { useAuthStore } from "@/entities/user";
-import { accountApi } from "@/shared/api";
+import { accountApi, fetchUser } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
 import { FormField } from "@/shared/ui/Form";
 import { PasswordStrengthIndicator } from "@/shared/ui/PasswordInput";
@@ -121,7 +120,6 @@ defineProps<{
   user: User;
 }>();
 
-const userStore = useAuthStore();
 const toast = useToast();
 
 // Email form
@@ -175,7 +173,7 @@ const changeEmail = () => {
       throw new Error(describeFailure(error, "Не удалось изменить почту"));
 
     emailForm.value = { newEmail: "", password: "" };
-    await userStore.fetchUser();
+    await fetchUser();
     toast.success("На новую почту отправлено письмо с подтверждением.");
   });
 };

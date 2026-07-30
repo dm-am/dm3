@@ -3,20 +3,18 @@
  * @module shared/stores/auth
  *
  * Global authentication state. Used across all layers.
- * Manages user session, login/logout, and current user info.
+ * Holds who the viewer is, persists it and keeps browser tabs in step.
+ *
+ * State only, by design: signing in, signing out and refreshing the viewer are
+ * account endpoints, and a store in `shared` calling those would put domain
+ * knowledge in the layer every other layer may import. Those live in
+ * entities/user (`session.ts`) and come back in through `updateUser`.
  */
 import { defineStore } from "pinia";
 import type { User } from "@/shared/api/models/common/user";
 import { Theme } from "@/shared/api/models/personal";
 import { ref, computed } from "vue";
-import accountApi from "@/shared/api/accountApi";
-import personalApi from "@/shared/api/personalApi";
 import { useUiStore } from "./ui";
-import type { BadRequestError } from "@/shared/api/models/common";
-import type {
-  LoginCredentials,
-  RegisterCredentials,
-} from "@/shared/api/models/account";
 
 export const useAuthStore = defineStore("root", () => {
   const userKey = "user";
@@ -45,52 +43,6 @@ export const useAuthStore = defineStore("root", () => {
     if (newUser === null) localStorage.removeItem(userKey);
     else localStorage.setItem(userKey, JSON.stringify(newUser));
     updateTheme(newUser?.settings?.theme ?? Theme.Light);
-  }
-
-  async function register(credentials: RegisterCredentials) {
-    const { error } = await accountApi.register(credentials);
-    if (error && "errors" in error) return error as BadRequestError;
-    return null;
-  }
-
-  async function signIn(credentials: LoginCredentials) {
-    // Use cookie-based auth (signIn sets HttpOnly cookie)
-    const { data, error } = await accountApi.signIn(credentials);
-
-    if (data) {
-      updateUser(data);
-      return null;
-    }
-
-    if (error && "errors" in error) {
-      return error as BadRequestError;
-    }
-
-    return null;
-  }
-
-  async function signOut() {
-    await accountApi.signOut();
-    updateUser(null);
-  }
-
-  // "Выйти со всех устройств": terminate every other active session first,
-  // then sign the current one out. The backend has no single "logout
-  // everywhere" endpoint (DELETE account/sessions/others keeps the current
-  // session), so combining the two calls logs the user out on all devices.
-  async function signOutAll() {
-    await accountApi.logoutAll();
-    await accountApi.signOut();
-    updateUser(null);
-  }
-
-  async function fetchUser() {
-    if (!accountApi.isAuthenticated()) return;
-
-    // User is already initialized from localStorage when store is created
-    // Here we only refresh from server (background refresh)
-    const { data } = await personalApi.getMyProfile();
-    updateUser(data ?? null);
   }
 
   // Initialize theme immediately based on stored user
@@ -123,11 +75,6 @@ export const useAuthStore = defineStore("root", () => {
   return {
     user,
     isAuthenticated,
-    register,
-    signIn,
-    signOut,
-    signOutAll,
-    fetchUser,
     updateUser,
   };
 });

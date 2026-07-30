@@ -116,7 +116,7 @@
 import { ref, computed, onMounted } from "vue";
 import { symbols } from "@/shared/lib/utils/icons";
 import { formatDate } from "@/shared/lib/utils/datetime";
-import { accountApi } from "@/shared/api";
+import { accountApi } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
 import { FormField } from "@/shared/ui/Form";
 import { useToast } from "@/shared/lib/composables/useToast";

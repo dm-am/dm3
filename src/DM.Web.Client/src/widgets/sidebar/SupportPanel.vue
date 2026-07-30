@@ -39,7 +39,7 @@ import { SvgIcon } from "@/shared/ui/Icon";
 import SidebarBlock from "./SidebarBlock.vue";
 import SidebarSkeleton from "./SidebarSkeleton.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import fundraisingApi, { type Fundraising } from "@/shared/api/fundraisingApi";
+import { fundraisingApi, type Fundraising } from "@/entities/fundraising";
 import { useApiResource } from "@/shared/lib/composables/useApiResource";
 import { useAuthStore, userIsAdmin } from "@/entities/user";
 import type { Envelope } from "@/shared/api/models/common";

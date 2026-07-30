@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { blacklistApi } from "@/shared/api";
+import { blacklistApi } from "@/entities/user";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import Form from "@/shared/ui/Form/Form.vue";

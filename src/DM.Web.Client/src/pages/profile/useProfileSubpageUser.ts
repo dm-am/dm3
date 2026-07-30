@@ -1,5 +1,6 @@
 import { ref, computed, type Ref } from "vue";
-import { communityApi, unwrapResource } from "@/shared/api";
+import { unwrapResource } from "@/shared/api";
+import { userApi } from "@/entities/user";
 import type { User, Username } from "@/entities/user";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 
@@ -12,7 +13,7 @@ import { useFetchData } from "@/shared/lib/composables/useFetchData";
  * casing in the h1/document title) plus a way to distinguish "user does
  * not exist" (404 page) from "the request failed" (ErrorState, retry).
  *
- * Uses `communityApi.getUser` (`GET /v1/users/{username}`) — the same
+ * Uses `userApi.getUser` (`GET /v1/users/{username}`) — the same
  * truncated DTO used for list rows, already returned in canonical case.
  */
 export function useProfileSubpageUser(username: Ref<string>): {
@@ -42,9 +43,7 @@ export function useProfileSubpageUser(username: Ref<string>): {
     loading.value = true;
     notFound.value = false;
     error.value = false;
-    const { data, error: apiError } = await communityApi.getUser(
-      name as Username,
-    );
+    const { data, error: apiError } = await userApi.getUser(name as Username);
     loading.value = false;
     if (apiError) {
       if (apiError.status === 404 || apiError.status === 410) {

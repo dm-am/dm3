@@ -11,10 +11,10 @@ import {
   collapseAll,
   clearRegistry,
 } from "@/shared/lib/composables/useExpandableRegistry";
-import communityApi from "@/shared/api/communityApi";
+import { statisticsApi } from "@/entities/statistics";
 
-vi.mock("@/shared/api/communityApi", () => ({
-  default: { getLeaderboards: vi.fn() },
+vi.mock("@/entities/statistics", () => ({
+  statisticsApi: { getLeaderboards: vi.fn() },
 }));
 
 const entry = (name: string, rank: number) => ({
@@ -41,7 +41,7 @@ const leaderboards = {
   topBlogAuthorsByVolume: board("volume-author"),
 };
 
-const getLeaderboards = vi.mocked(communityApi.getLeaderboards);
+const getLeaderboards = vi.mocked(statisticsApi.getLeaderboards);
 
 describe("PeriodDigestBoards", () => {
   beforeEach(() => {

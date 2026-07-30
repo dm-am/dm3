@@ -1,7 +1,7 @@
 import { ref, computed, type Ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useAuthStore } from "@/shared/stores";
-import { personalApi, type UpdateProfilePayload } from "@/shared/api";
+import { personalApi, type UpdateProfilePayload } from "../api";
 
 /**
  * Composable for managing profile edit mode with centralized pending changes.

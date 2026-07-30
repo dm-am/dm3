@@ -2,7 +2,7 @@
 // Personal notepad — private notes, visible to their owner only. The screen
 // itself is NotepadBoard, shared with the game-master and blog notepads; this
 // page only binds it to `/v1/users/me/notepad`.
-import notepadApi from "@/shared/api/notepadApi";
+import { notepadApi } from "@/entities/notepad";
 import { NotepadBoard, type NotepadAdapter } from "@/widgets/notepad";
 
 const adapter: NotepadAdapter = {

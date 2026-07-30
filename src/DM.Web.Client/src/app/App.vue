@@ -57,7 +57,7 @@
               type="button"
               class="action-link"
               data-testid="drawer-logout-button"
-              @click="userStore.signOut"
+              @click="signOut"
             >
               Выйти
             </button>
@@ -65,7 +65,7 @@
               type="button"
               class="action-link"
               data-testid="drawer-logout-all-button"
-              @click="userStore.signOutAll"
+              @click="signOutAll"
             >
               Выйти со всех устройств
             </button>
@@ -130,7 +130,13 @@
 
 <script setup lang="ts">
 import { useUiStore } from "@/shared/stores/ui";
-import { useAuthStore, userIsModerator } from "@/entities/user";
+import {
+  useAuthStore,
+  userIsModerator,
+  signOut,
+  signOutAll,
+  fetchUser,
+} from "@/entities/user";
 import { useMessagingStore } from "@/entities/message";
 import { useNotificationStore } from "@/entities/notification";
 import { setScrollContainer } from "@/shared/lib/scroll";
@@ -238,7 +244,7 @@ function handleAvatarChanged(payload: Record<string, unknown>) {
   if (currentUserId === userId) {
     // Re-fetch current user — guarantees settings/visibility
     // are picked up too, not only the picture.
-    userStore.fetchUser();
+    fetchUser();
   }
 }
 
@@ -263,7 +269,7 @@ onMounted(async () => {
 
   // The user is already initialized from localStorage in the store
   // Refresh data from the server in parallel
-  userStore.fetchUser();
+  fetchUser();
   messagingStore.fetchUnreadCount(true); // immediate on app start
   notificationStore.fetchUnreadCount(true); // immediate on app start
 

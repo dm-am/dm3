@@ -8,8 +8,11 @@ import type {
   ModerationPermissions,
 } from "@/shared/api/models/moderation";
 import type { Username } from "@/shared/api/models/community";
-import type { PublicWarning, PublicBan } from "@/shared/api/moderationApi";
-import { moderationApi } from "@/shared/api";
+import {
+  moderationApi,
+  type PublicWarning,
+  type PublicBan,
+} from "@/entities/moderation";
 import { WarningDialog, BanDialog } from "@/features/moderation-actions";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import Button from "@/shared/ui/Button/Button.vue";

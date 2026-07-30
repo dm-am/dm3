@@ -12,11 +12,12 @@
  * holds the subject line, `description` holds the ticket body.
  */
 import { computed, onMounted, ref, watch } from "vue";
-import supportApi, {
+import {
+  ticketApi,
   type Ticket,
   type TicketStatus,
   type TicketSubtype,
-} from "@/shared/api/supportApi";
+} from "@/entities/ticket";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import { useAuthStore } from "@/shared/stores/auth";
 import {
@@ -87,7 +88,7 @@ const loadError = ref<string | null>(null);
 
 async function fetch() {
   loading.value = true;
-  const { data, error } = await supportApi.getMyTickets({
+  const { data, error } = await ticketApi.getMyTickets({
     status: (statusFilter.value || undefined) as TicketStatus | undefined,
     subtype: (subtypeFilter.value || undefined) as TicketSubtype | undefined,
   });

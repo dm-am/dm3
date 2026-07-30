@@ -1,6 +1,11 @@
 ﻿<script setup lang="ts">
 import { computed, ref } from "vue";
-import { useAuthStore, userIsModerator } from "@/entities/user";
+import {
+  useAuthStore,
+  userIsModerator,
+  signOut,
+  signOutAll,
+} from "@/entities/user";
 import { useMessagingStore } from "@/entities/message";
 import { useNotificationStore } from "@/entities/notification";
 import { useUiStore } from "@/shared/stores/ui";
@@ -13,7 +18,6 @@ import SiteStatistics from "./SiteStatistics.vue";
 const uiStore = useUiStore();
 const userStore = useAuthStore();
 const { user } = storeToRefs(userStore);
-const { signOut, signOutAll } = userStore;
 
 const messagingStore = useMessagingStore();
 const { totalUnreadCount } = storeToRefs(messagingStore);

@@ -10,7 +10,7 @@
  */
 import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import moderationApi from "@/shared/api/moderationApi";
+import { moderationApi } from "@/entities/moderation";
 import type { Upload } from "@/shared/api/models/common/upload";
 import type { Paging as PagingModel } from "@/shared/api/models/common";
 import { DataTable, type Column } from "@/shared/ui/DataTable";

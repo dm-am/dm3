@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useAuthStore } from "@/entities/user";
+import { signIn } from "@/entities/user";
 import { ref, computed, onMounted } from "vue";
 import type { LoginCredentials } from "@/shared/api/models/account";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
@@ -46,9 +46,6 @@ const canSubmit = computed(
 onMounted(() => {
   formLoadTime.value = Date.now();
 });
-
-const userStore = useAuthStore();
-const { signIn } = userStore;
 
 const submit = async () => {
   // Validate both fields

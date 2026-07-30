@@ -7,7 +7,7 @@
  * "от {Имя}, dd.MM.yyyy HH:mm", delete button (Moderator+).
  */
 import { computed, onMounted, ref } from "vue";
-import moderationApi, { type Warning } from "@/shared/api/moderationApi";
+import { moderationApi, type Warning } from "@/entities/moderation";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";

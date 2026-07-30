@@ -19,7 +19,7 @@
 import { ref } from "vue";
 import type { ModNote } from "@/shared/api/models/moderation";
 import type { Username } from "@/shared/api/models/community";
-import { moderationApi } from "@/shared/api";
+import { moderationApi } from "@/entities/moderation";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";

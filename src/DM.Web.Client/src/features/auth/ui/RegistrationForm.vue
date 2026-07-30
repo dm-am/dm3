@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from "vue";
 import { useRouter } from "vue-router";
 import type { RegisterCredentials } from "@/shared/api/models/account";
-import { useAuthStore } from "@/entities/user";
+
 import { useNewPasswordField } from "@/shared/lib/composables/useNewPasswordField";
 import {
   useValidatedField,
@@ -14,7 +14,7 @@ import {
   PasswordStrengthIndicator,
 } from "@/shared/ui/PasswordInput";
 import { Tooltip } from "@/shared/ui/Tooltip";
-import { accountApi } from "@/shared/api";
+import { accountApi, register } from "@/entities/user";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
 
 const router = useRouter();
@@ -111,7 +111,7 @@ const submitEmail = async () => {
 };
 
 // Step 2: Submit registration
-const { register } = useAuthStore();
+
 const passwordError = ref("");
 
 const submitPassword = async () => {

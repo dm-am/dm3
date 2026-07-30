@@ -6,7 +6,7 @@
  * contest type.
  */
 import { ref, computed, watch } from "vue";
-import { achievementApi } from "@/shared/api";
+import { achievementApi } from "@/entities/achievement";
 import {
   ContestType,
   type ContestSeries,

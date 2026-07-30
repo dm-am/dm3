@@ -6,9 +6,7 @@
  * highest role first). Moderator+ (server-enforced via RequireRole).
  */
 import { onMounted, ref } from "vue";
-import moderationApi, {
-  type ModeratorOverview,
-} from "@/shared/api/moderationApi";
+import { moderationApi, type ModeratorOverview } from "@/entities/moderation";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
