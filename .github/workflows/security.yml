@@ -78,10 +78,17 @@ jobs:
       # it with ${...:?} — which rejects an empty value, not just a missing
       # one. Copying the example alone left every step below dead. A throwaway
       # key is generated here because this stack is torn down with the job.
+      #
+      # Through the environment rather than by rewriting the line in .env:
+      # compose prefers the environment over the file, so this keeps working if
+      # the example ever gains a value, a comment or trailing whitespace — the
+      # anchored sed it replaces would have silently matched nothing.
+      - name: Generate a throwaway encryption key
+        run: echo "DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+
       - name: Create .env for Docker Compose
         run: |
           cp docker/.env.example docker/.env
-          sed -i "s|^DM_CryptoConfiguration__KeyBase64=$|DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)|" docker/.env
           cd docker && docker compose config --quiet
 
       - name: Start infrastructure with Docker Compose

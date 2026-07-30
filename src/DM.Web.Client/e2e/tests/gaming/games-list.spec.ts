@@ -314,20 +314,11 @@ test.describe("Games List Page", () => {
         (url) => url.searchParams.get("sortBy") === "title",
       );
 
-      // LEFT FAILING ON PURPOSE — the app disagrees with itself here, and this
-      // assertion states the contract the app declares.
-      //
       // SORT_OPTIONS gives "title" defaultDirection: "asc", so picking
-      // "Название" must sort А→Я. It sorts Я→А. GamesFilter reacts to the one
-      // click twice: handleSortByChange dispatches SET_SORT with the option's
-      // default (asc), then handleSortOrderChange compares that same "asc"
-      // against filterState.sortOrder — which is still read from the URL, so
-      // still the previous "desc" — sees a difference and dispatches
-      // TOGGLE_SORT_ORDER on top of the pending state, flipping asc back to
-      // desc. The second dispatch is redundant: SET_SORT already applied the
-      // direction. Fix belongs in src/features/game-filter (not this session's
-      // file), after which desc disappears from the URL as the default and
-      // this reads sortOrder=asc.
+      // "Название" must sort А→Я. This once read desc: SortButton reported the
+      // field and the direction as two events, and the filter handled the
+      // second one while its own state still held the pre-click direction, so
+      // it flipped the asc it had just been given. One event now carries both.
       await expect(page).toHaveURL(
         (url) => url.searchParams.get("sortOrder") === "asc",
       );

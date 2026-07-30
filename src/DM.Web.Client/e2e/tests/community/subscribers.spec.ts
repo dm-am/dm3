@@ -1,6 +1,7 @@
 import { test, expect, APIRequestContext } from "@playwright/test";
 import {
   authenticatedContext,
+  primaryUser,
   secondaryUser,
   PRIMARY_STORAGE_STATE,
   SECONDARY_STORAGE_STATE,
@@ -8,23 +9,23 @@ import {
 
 const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
 
+// The self-subscription test addresses the account it is signed in as, so it
+// needs the name as well as the session. It was reading an undefined USER_A,
+// which is a ReferenceError at run time — the file is not covered by
+// type-check, whose project is src/** only.
+const USER_A = primaryUser;
 const USER_B = secondaryUser;
 
 let userAContext: APIRequestContext;
 let userBContext: APIRequestContext;
 
+// Deliberately unguarded. Both sessions are written by global setup, which
+// fails the whole run if a login fails; a try/catch here turned that into a
+// console line and left every test below to skip itself on a null context.
+// That is how this tier came to report green while nothing in it ran.
 test.beforeAll(async () => {
-  try {
-    userAContext = await authenticatedContext(PRIMARY_STORAGE_STATE);
-  } catch (e) {
-    console.error("Failed to login as User A:", e);
-  }
-
-  try {
-    userBContext = await authenticatedContext(SECONDARY_STORAGE_STATE);
-  } catch (e) {
-    console.error("Failed to login as User B:", e);
-  }
+  userAContext = await authenticatedContext(PRIMARY_STORAGE_STATE);
+  userBContext = await authenticatedContext(SECONDARY_STORAGE_STATE);
 });
 
 test.afterAll(async () => {
@@ -34,8 +35,6 @@ test.afterAll(async () => {
 
 test.describe("User Subscribers API", () => {
   test("should subscribe to a user", async () => {
-    test.skip(!userAContext, "User A auth failed");
-
     // User A subscribes to User B
     const response = await userAContext.post(
       `${API_URL}/v1/users/${USER_B.username}/subscribers`,
@@ -58,8 +57,6 @@ test.describe("User Subscribers API", () => {
   });
 
   test("should check subscription status", async () => {
-    test.skip(!userAContext, "User A auth failed");
-
     // Check if User A is subscribed to User B
     const response = await userAContext.get(
       `${API_URL}/v1/users/${USER_B.username}/subscribers/me`,
@@ -70,8 +67,6 @@ test.describe("User Subscribers API", () => {
   });
 
   test("should unsubscribe from a user", async () => {
-    test.skip(!userAContext, "User A auth failed");
-
     // User A unsubscribes from User B
     const response = await userAContext.delete(
       `${API_URL}/v1/users/${USER_B.username}/subscribers`,
@@ -82,8 +77,6 @@ test.describe("User Subscribers API", () => {
   });
 
   test("should not allow subscribing to yourself", async () => {
-    test.skip(!userAContext, "User A auth failed");
-
     // User A tries to subscribe to themselves
     const response = await userAContext.post(
       `${API_URL}/v1/users/${USER_A.username}/subscribers`,
