@@ -24,11 +24,13 @@ public static class WebHostBuilderExtensions
                 .ToArray();
             cfg.Sources.Clear();
             cfg
+                // secrets/ is intentionally absent from the repository (.gitignore) and
+                // from every compose file: it is the operator-supplied drop-in that the
+                // secrets convention names next to the DM_* variables. Nothing mounts it
+                // because it is not meant to be baked into an image.
                 .AddJsonFile("secrets/appsettings.json", optional: true, reloadOnChange: true)
-                .AddJsonFile("commonCfg/appsettings.json", optional: true, reloadOnChange: false)
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
                 .AddJsonFile($"secrets/appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true)
-                .AddJsonFile($"commonCfg/appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: false)
                 .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: false);
             foreach (var defaultCfg in defaultNonJsonCfgs)
             {

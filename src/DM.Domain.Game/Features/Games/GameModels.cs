@@ -4,7 +4,6 @@ using DM.Domain.Core.Comments;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Likes;
 
 namespace DM.Domain.Game.Features.Games;
 
@@ -1204,57 +1203,6 @@ public class GameInvitation
     /// When the invitation expires
     /// </summary>
     public DateTimeOffset ExpiresUtc { get; set; }
-}
-
-/// <summary>
-/// Game comment
-/// </summary>
-public class GameComment : ILikable
-{
-    /// <summary>
-    /// Comment identifier
-    /// </summary>
-    public Guid Id { get; set; }
-
-    /// <summary>
-    /// Game identifier
-    /// </summary>
-    public Guid GameId { get; set; }
-
-    /// <summary>
-    /// Author
-    /// </summary>
-    public GeneralUser Author { get; set; } = null!;
-
-    /// <summary>
-    /// Comment text
-    /// </summary>
-    public string Text { get; set; } = null!;
-
-    /// <summary>
-    /// Created date
-    /// </summary>
-    public DateTimeOffset CreatedUtc { get; set; }
-
-    /// <summary>
-    /// Modified date
-    /// </summary>
-    public DateTimeOffset? ModifiedUtc { get; set; }
-
-    /// <summary>
-    /// Likes count
-    /// </summary>
-    public int LikesCount { get; set; }
-
-    /// <summary>
-    /// Users who liked this comment
-    /// </summary>
-    public IEnumerable<GeneralUser> Likes { get; set; } = [];
-
-    /// <summary>
-    /// Like entity type
-    /// </summary>
-    public LikeEntityType LikeEntityType => LikeEntityType.Comment;
 }
 
 /// <summary>

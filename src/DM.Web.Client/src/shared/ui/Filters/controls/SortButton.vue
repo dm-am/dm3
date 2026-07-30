@@ -6,18 +6,11 @@
  */
 import { ref, computed } from "vue";
 import { SvgIcon } from "@/shared/ui/Icon";
-import type { SortOption } from "../types";
+import type { SortButtonProps } from "../types";
 
 defineOptions({ name: "SortButton" });
 
-const props = defineProps<{
-  /** Available sort options */
-  options: SortOption[];
-  /** Current sort field */
-  sortBy: string;
-  /** Current sort direction */
-  sortOrder: "asc" | "desc";
-}>();
+const props = defineProps<SortButtonProps>();
 
 const emit = defineEmits<{
   /**

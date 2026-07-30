@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -24,71 +23,6 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
     private readonly DmDbContext _dbContext;
     private readonly IMailSender _mailSender;
     private readonly ILogger<NotificationEmailSender> _logger;
-
-    private static readonly Dictionary<EventType, string> EventTypeSubjects = new()
-    {
-        // Games
-        [EventType.StatusGameActive] = "Игра началась",
-        [EventType.StatusGameClosed] = "Игра закрыта",
-        [EventType.StatusGameFrozen] = "Игра заморожена",
-        [EventType.StatusGameFinished] = "Игра завершена",
-        [EventType.GameClosureWarning] = "Предупреждение о закрытии игры",
-        [EventType.GameRecruitmentOpened] = "Открыт набор в игру",
-        [EventType.NewCharacter] = "Новая заявка на персонажа",
-        [EventType.StatusCharacterAccepted] = "Персонаж принят",
-        [EventType.StatusCharacterDeclined] = "Персонаж отклонен",
-        [EventType.StatusCharacterExiled] = "Персонаж изгнан",
-        [EventType.StatusCharacterRetired] = "Персонаж выбыл из игры",
-        [EventType.StatusCharacterDied] = "Персонаж погиб",
-        [EventType.StatusCharacterResurrected] = "Персонаж воскрешен",
-        [EventType.StatusCharacterLeft] = "Персонаж покинул игру",
-        [EventType.StatusCharacterReturned] = "Персонаж вернулся в игру",
-        [EventType.AssignmentRequestCreated] = "Приглашение стать ассистентом",
-        [EventType.PlayerInvitationCreated] = "Приглашение в игру",
-        [EventType.ReaderInvitationCreated] = "Приглашение стать читателем",
-        [EventType.RoomPendencyCreated] = "Ожидание поста",
-        [EventType.RoomPendencyReminder] = "Напоминание о посте",
-        [EventType.PostReviewed] = "Пост оценен",
-
-        // Forum
-        [EventType.NewTopic] = "Новый топик на форуме",
-        [EventType.LikedTopic] = "Лайк на топик",
-        [EventType.NewTopicComment] = "Новый комментарий в топике",
-        [EventType.LikedTopicComment] = "Лайк на комментарий",
-
-        // Blog
-        [EventType.NewPublication] = "Новая публикация",
-        [EventType.LikedPublication] = "Лайк на публикацию",
-        [EventType.NewBlogComment] = "Новый комментарий в блоге",
-        [EventType.LikedBlogComment] = "Лайк на комментарий в блоге",
-        [EventType.NewPublicationComment] = "Новый комментарий к публикации",
-        [EventType.LikedPublicationComment] = "Лайк на комментарий к публикации",
-        [EventType.StatusBlogActive] = "Блог открыт",
-        [EventType.StatusBlogClosed] = "Блог закрыт",
-        [EventType.StatusBlogFrozen] = "Блог заморожен",
-        [EventType.StatusBlogFinished] = "Блог завершен",
-
-        // Messages
-        [EventType.NewMessage] = "Новое сообщение",
-        [EventType.LikedMessage] = "Лайк на сообщение",
-
-        // Subscriptions
-        [EventType.NewCommentInSubscribedTopic] = "Новый комментарий в подписанной теме",
-        [EventType.NewGameFromSubscribedAuthor] = "Новая игра от подписанного автора",
-        [EventType.NewBlogFromSubscribedAuthor] = "Новый блог от подписанного автора",
-        [EventType.NewTopicFromSubscribedAuthor] = "Новая тема от подписанного автора",
-        [EventType.NewPostInSubscribedGame] = "Новый пост в подписанной игре",
-
-        // Security
-        [EventType.PasswordChanged] = "Пароль изменен",
-        [EventType.EmailChanged] = "Email изменен",
-        [EventType.SuspiciousLoginActivity] = "Подозрительная активность входа",
-
-        // Moderation
-        [EventType.WarningIssued] = "Вынесено предупреждение",
-        [EventType.BanIssued] = "Выдан бан",
-        [EventType.BanLifted] = "Бан снят"
-    };
 
     public NotificationEmailSender(
         DmDbContext dbContext,
@@ -158,9 +92,7 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
                 }
 
                 // Send the email
-                var subject = EventTypeSubjects.TryGetValue(eventType, out var subj)
-                    ? $"Dungeon Master: {subj}"
-                    : "Dungeon Master: Уведомление";
+                var subject = $"Dungeon Master: {NotificationText.GetTitle(eventType)}";
 
                 var body = BuildEmailBody(eventType, notification.Metadata);
 
@@ -199,7 +131,7 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
         // Content
         sb.AppendLine("<div style=\"padding: 20px; background: #f9f9f9;\">");
 
-        var subject = EventTypeSubjects.TryGetValue(eventType, out var subj) ? subj : "Уведомление";
+        var subject = NotificationText.GetTitle(eventType);
         sb.AppendLine($"<h2 style=\"color: #333;\">{subject}</h2>");
 
         // Format metadata as readable content
@@ -220,8 +152,8 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
                 sb.AppendLine("<dl style=\"margin: 0;\">");
                 foreach (var prop in root.EnumerateObject())
                 {
-                    var name = FormatPropertyName(prop.Name);
-                    var value = FormatPropertyValue(prop.Value);
+                    var name = NotificationText.FormatPropertyName(prop.Name);
+                    var value = NotificationText.FormatPropertyValue(prop.Value);
                     if (!string.IsNullOrEmpty(value))
                     {
                         sb.AppendLine($"<dt style=\"font-weight: bold; color: #555; margin-top: 10px;\">{name}</dt>");
@@ -251,34 +183,4 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
 
         return sb.ToString();
     }
-
-    private static string FormatPropertyName(string name) => name switch
-    {
-        "GameId" => "Игра",
-        "GameTitle" => "Название игры",
-        "RoomId" => "Комната",
-        "RoomTitle" => "Название комнаты",
-        "CharacterId" => "Персонаж",
-        "CharacterName" => "Имя персонажа",
-        "TopicId" => "Топик",
-        "TopicTitle" => "Название топика",
-        "Username" => "Пользователь",
-        "AuthorUsername" => "Автор",
-        "CreatedByUsername" => "Создал",
-        "BlogTitle" => "Блог",
-        "PublicationTitle" => "Публикация",
-        "DaysPending" => "Дней ожидания",
-        "IsReminder" => "Напоминание",
-        _ => name
-    };
-
-    private static string FormatPropertyValue(JsonElement element) => element.ValueKind switch
-    {
-        JsonValueKind.String => element.GetString() ?? "",
-        JsonValueKind.Number => element.ToString(),
-        JsonValueKind.True => "Да",
-        JsonValueKind.False => "Нет",
-        JsonValueKind.Null => "",
-        _ => element.ToString()
-    };
 }

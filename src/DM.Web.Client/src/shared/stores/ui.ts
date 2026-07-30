@@ -4,20 +4,23 @@ import { Theme } from "@/shared/api/models/community";
 
 /**
  * Layout of messages, posts, comments and topics.
- * Future-proof union — new values (e.g. "cozy") can be added without refactoring.
  *
  * - `compact` — no avatars, dense layout
  * - `full`    — with avatars, expanded layout
+ *
+ * This array is the only declaration of the set: the union type and the guard
+ * over the persisted value are derived from it, so a new layout is added here
+ * and nowhere else.
  */
-export type MessageLayout = "compact" | "full";
-
 export const MESSAGE_LAYOUTS = ["compact", "full"] as const;
+
+export type MessageLayout = (typeof MESSAGE_LAYOUTS)[number];
 
 const THEME_STORAGE_KEY = "dm_theme";
 const MESSAGE_LAYOUT_KEY = "dm_message_layout";
 
 function isMessageLayout(value: unknown): value is MessageLayout {
-  return value === "compact" || value === "full";
+  return (MESSAGE_LAYOUTS as readonly unknown[]).includes(value);
 }
 
 /**

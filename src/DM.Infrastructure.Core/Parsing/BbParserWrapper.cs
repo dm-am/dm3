@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,16 +26,6 @@ public partial class BbParserWrapper : IBbParser
     /// Must match SPOILER_SHOW_TEXT constant in frontend bbcodeConstants.ts
     /// </summary>
     public const string DefaultSpoilerText = "Показать содержимое";
-
-    /// <summary>
-    /// Default max width for images (in pixels)
-    /// </summary>
-    public const int DefaultMaxWidth = 600;
-
-    /// <summary>
-    /// Default max height for images (in pixels)
-    /// </summary>
-    public const int DefaultMaxHeight = 400;
 
     /// <summary>
     /// Default display text for links without custom text (Russian: "ссылка")

@@ -80,14 +80,3 @@ public class CreatePostReviewRequest
     [Required(ErrorMessage = "Text is required")]
     public string Text { get; set; } = null!;
 }
-
-/// <summary>
-/// Request to update a post review
-/// </summary>
-public class UpdatePostReviewRequest
-{
-    /// <summary>
-    /// Updated rating sign
-    /// </summary>
-    public ReviewSign? Sign { get; set; }
-}

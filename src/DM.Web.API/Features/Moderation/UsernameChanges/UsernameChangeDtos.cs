@@ -80,19 +80,6 @@ public class CreateUsernameChangeRequest
 }
 
 /// <summary>
-/// DTO for rejecting a username change request
-/// </summary>
-public class RejectUsernameChange
-{
-    /// <summary>
-    /// Reason for rejection (shown to user)
-    /// </summary>
-    [Required(ErrorMessage = "Причина обязательна")]
-    [StringLength(500, MinimumLength = 5, ErrorMessage = "Причина должна быть от 5 до 500 символов")]
-    public string Reason { get; set; } = "";
-}
-
-/// <summary>
 /// API DTO for resolving (approving/rejecting) a username change request
 /// </summary>
 public class ResolveUsernameChangeRequest

@@ -40,11 +40,6 @@ public interface IBanService
     /// Lift (cancel) a ban early (senior moderators; permanent bans - admins only)
     /// </summary>
     Task LiftBan(Guid banId, string? reason = null, CancellationToken ct = default);
-
-    /// <summary>
-    /// Check if a user is currently banned
-    /// </summary>
-    Task<bool> IsUserBanned(string username, CancellationToken ct = default);
 }
 
 /// <summary>

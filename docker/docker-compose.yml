@@ -77,11 +77,8 @@ x-workload-env: &workload-env
   # === Интеграция ===
   DM_IntegrationSettings__WebUrl: ${WEB_URL:-http://localhost:5173}
   DM_IntegrationSettings__ApiUrl: ${API_URL:-http://localhost:5000}
-  DM_IntegrationSettings__AdminUrl:
-  DM_IntegrationSettings__MobileUrl:
   DM_IntegrationSettings__CorsUrls__0: ${CORS_URL_0:-http://localhost:5173}
   DM_IntegrationSettings__CorsUrls__1: ${CORS_URL_1:-http://localhost:8080}
-  DM_IntegrationSettings__StaticAssetsUrl: ${STATIC_ASSETS_URL:-http://localhost:9000/dm-uploads}
 
   # === Зеркало ===
   DM_MirrorConfiguration__CurrentMirrorId: ${MIRROR_ID:-main}

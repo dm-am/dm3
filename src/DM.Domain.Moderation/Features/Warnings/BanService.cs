@@ -212,17 +212,4 @@ internal class BanService : IBanService
         await _banRepository.Remove(banId, currentUser.UserId, _dateTimeProvider.Now, reason, ct);
     }
 
-    /// <inheritdoc />
-    public async Task<bool> IsUserBanned(string username, CancellationToken ct = default)
-    {
-        try
-        {
-            var user = await _userLookupService.GetAsync(username);
-            return await _banRepository.IsUserBanned(user.UserId, ct);
-        }
-        catch
-        {
-            return false;
-        }
-    }
 }

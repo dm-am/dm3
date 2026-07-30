@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Community.Features.Polls;
+using DM.Domain.Community.Features.Statistics;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Identity;
 using DM.Domain.Personal.Features.Profiles;
@@ -67,8 +68,8 @@ internal sealed partial class DataSeeder
     /// </summary>
     private async Task EnsureLeaderboardCoverage(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
     {
-        // A little over the board's top-10 so each board is unambiguously full.
-        const int target = 12;
+        // A little over the board size so each board is unambiguously full.
+        const int target = LeaderboardBoards.BoardSize + 2;
 
         var monthStart = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero);
         var prevMonthStart = monthStart.AddMonths(-1);
@@ -126,7 +127,7 @@ internal sealed partial class DataSeeder
             var positiveGames = windowReviews.GroupBy(r => r.GameId).Count(g => g.Sum(x => x.Sign) > 0);
             var positiveAuthors = windowReviews.GroupBy(r => r.PostAuthorId).Count(g => g.Sum(x => x.Sign) > 0);
 
-            if (positiveGames < 10 || positiveAuthors < 10)
+            if (positiveGames < LeaderboardBoards.BoardSize || positiveAuthors < LeaderboardBoards.BoardSize)
             {
                 // Current month: any pre-week post (keeps topped-up posts out of
                 // the weekly-best widget). Closed windows: the window's own

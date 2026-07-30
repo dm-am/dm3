@@ -120,24 +120,3 @@ public class UpdateBotConnection
     /// </summary>
     public HashSet<NotificationCategory>? EnabledCategories { get; set; }
 }
-
-/// <summary>
-/// Channels for delivering notifications
-/// </summary>
-public enum NotificationChannel
-{
-    /// <summary>
-    /// Email notifications (always available)
-    /// </summary>
-    Email = 1,
-
-    /// <summary>
-    /// Telegram bot notifications (requires connection)
-    /// </summary>
-    Telegram = 2,
-
-    /// <summary>
-    /// Discord bot notifications (requires connection)
-    /// </summary>
-    Discord = 3
-}

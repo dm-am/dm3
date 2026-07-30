@@ -6,34 +6,17 @@
  */
 import { SvgIcon } from "@/shared/ui/Icon";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
+import type { DropdownItemProps } from "../types";
 
 defineOptions({ name: "FilterDropdownItem" });
 
-withDefaults(
-  defineProps<{
-    /** Display label */
-    label: string;
-    /** Optional hint/description shown below label */
-    hint?: string;
-    /** Optional avatar URL */
-    avatarUrl?: string;
-    /** Whether this item is highlighted (keyboard navigation) */
-    highlighted?: boolean;
-    /** Whether to indent this item (for hierarchy) */
-    indent?: boolean;
-    /** Whether this item has sub-options (shows arrow) */
-    hasSubOptions?: boolean;
-    /** Search query for highlighting matches in label */
-    searchQuery?: string;
-  }>(),
-  {
-    hint: undefined,
-    avatarUrl: undefined,
-    highlighted: false,
-    indent: false,
-    hasSubOptions: false,
-  },
-);
+withDefaults(defineProps<DropdownItemProps>(), {
+  hint: undefined,
+  avatarUrl: undefined,
+  highlighted: false,
+  indent: false,
+  hasSubOptions: false,
+});
 
 const emit = defineEmits<{
   "item-select": [];

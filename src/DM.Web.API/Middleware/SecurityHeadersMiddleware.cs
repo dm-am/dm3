@@ -1,4 +1,3 @@
-#nullable enable
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;

@@ -123,7 +123,7 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             .Select(g => new { UserId = g.Key, Score = g.Sum(r => (int)r.SignValue) })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score).ThenBy(x => x.UserId)
-            .Take(10)
+            .Take(LeaderboardBoards.BoardSize)
             .Join(_dbContext.Users, x => x.UserId, u => u.UserId, (x, u) => new LeaderboardEntry
             {
                 EntityId = u.UserId,
@@ -139,7 +139,7 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             .Select(g => new { UserId = g.Key, Score = g.Count() })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score).ThenBy(x => x.UserId)
-            .Take(10)
+            .Take(LeaderboardBoards.BoardSize)
             .Join(_dbContext.Users, x => x.UserId, u => u.UserId, (x, u) => new LeaderboardEntry
             {
                 EntityId = u.UserId,
@@ -155,7 +155,7 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             .Select(g => new { GameId = g.Key, Score = g.Sum(r => (int)r.SignValue) })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score).ThenBy(x => x.GameId)
-            .Take(10)
+            .Take(LeaderboardBoards.BoardSize)
             .Join(_dbContext.Games, x => x.GameId, g => g.GameId, (x, g) => new LeaderboardEntry
             {
                 EntityId = g.GameId,
@@ -172,7 +172,7 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             .Select(g => new { GameId = g.Key, Score = g.Count() })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score).ThenBy(x => x.GameId)
-            .Take(10)
+            .Take(LeaderboardBoards.BoardSize)
             .Join(_dbContext.Games, x => x.GameId, g => g.GameId, (x, g) => new LeaderboardEntry
             {
                 EntityId = g.GameId,
@@ -191,7 +191,7 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             .Select(g => new { UserId = g.Key, Score = g.Sum(p => (int)p.GameText.Length) })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score).ThenBy(x => x.UserId)
-            .Take(10)
+            .Take(LeaderboardBoards.BoardSize)
             .Join(_dbContext.Users, x => x.UserId, u => u.UserId, (x, u) => new LeaderboardEntry
             {
                 EntityId = u.UserId,
@@ -217,7 +217,7 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             .Select(g => new { BlogId = g.Key, Score = g.Count() })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score).ThenBy(x => x.BlogId)
-            .Take(10)
+            .Take(LeaderboardBoards.BoardSize)
             .Join(_dbContext.Blogs, x => x.BlogId, b => b.BlogId, (x, b) => new LeaderboardEntry
             {
                 EntityId = b.BlogId,
@@ -234,7 +234,7 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             .Select(g => new { BlogId = g.Key, Score = g.Count() })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score).ThenBy(x => x.BlogId)
-            .Take(10)
+            .Take(LeaderboardBoards.BoardSize)
             .Join(_dbContext.Blogs, x => x.BlogId, b => b.BlogId, (x, b) => new LeaderboardEntry
             {
                 EntityId = b.BlogId,
@@ -256,7 +256,7 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             .Select(g => new { UserId = g.Key, Score = g.Sum(p => (int)p.Content.Length) })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score).ThenBy(x => x.UserId)
-            .Take(10)
+            .Take(LeaderboardBoards.BoardSize)
             .Join(_dbContext.Users, x => x.UserId, u => u.UserId, (x, u) => new LeaderboardEntry
             {
                 EntityId = u.UserId,

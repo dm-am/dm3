@@ -22,6 +22,8 @@ export interface DropdownItemProps {
   indent?: boolean;
   /** Whether this item has sub-options (shows arrow) */
   hasSubOptions?: boolean;
+  /** Search query for highlighting matches in label */
+  searchQuery?: string;
 }
 
 // =============================================================================
@@ -52,9 +54,9 @@ export interface DateRangePickerProps {
  * Props for NumericRangePicker component.
  */
 export interface NumericRangePickerProps {
-  /** Minimum value */
+  /** Minimum value (null = unset) */
   minValue: number | null;
-  /** Maximum value */
+  /** Maximum value (null = unset) */
   maxValue: number | null;
   /** Label for min input */
   minLabel?: string;
@@ -66,6 +68,8 @@ export interface NumericRangePickerProps {
   maxPlaceholder?: string;
   /** Allow negative numbers */
   allowNegative?: boolean;
+  /** Step for +/− buttons */
+  step?: number;
 }
 
 // =============================================================================

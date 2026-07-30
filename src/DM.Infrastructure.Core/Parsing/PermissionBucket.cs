@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using System.Globalization;
 using DM.Domain.Core.Enums;

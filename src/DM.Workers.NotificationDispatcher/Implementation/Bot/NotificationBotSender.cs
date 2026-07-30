@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -26,71 +25,6 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
     private readonly BotConfiguration _botConfig;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<NotificationBotSender> _logger;
-
-    private static readonly Dictionary<EventType, string> EventTypeMessages = new()
-    {
-        // Games
-        [EventType.StatusGameActive] = "Игра началась",
-        [EventType.StatusGameClosed] = "Игра закрыта",
-        [EventType.StatusGameFrozen] = "Игра заморожена",
-        [EventType.StatusGameFinished] = "Игра завершена",
-        [EventType.GameClosureWarning] = "Предупреждение о закрытии игры",
-        [EventType.GameRecruitmentOpened] = "Открыт набор в игру",
-        [EventType.NewCharacter] = "Новая заявка на персонажа",
-        [EventType.StatusCharacterAccepted] = "Персонаж принят",
-        [EventType.StatusCharacterDeclined] = "Персонаж отклонен",
-        [EventType.StatusCharacterExiled] = "Персонаж изгнан",
-        [EventType.StatusCharacterRetired] = "Персонаж выбыл из игры",
-        [EventType.StatusCharacterDied] = "Персонаж погиб",
-        [EventType.StatusCharacterResurrected] = "Персонаж воскрешен",
-        [EventType.StatusCharacterLeft] = "Персонаж покинул игру",
-        [EventType.StatusCharacterReturned] = "Персонаж вернулся в игру",
-        [EventType.AssignmentRequestCreated] = "Приглашение стать ассистентом",
-        [EventType.PlayerInvitationCreated] = "Приглашение в игру",
-        [EventType.ReaderInvitationCreated] = "Приглашение стать читателем",
-        [EventType.RoomPendencyCreated] = "Ожидание поста",
-        [EventType.RoomPendencyReminder] = "Напоминание о посте",
-        [EventType.PostReviewed] = "Пост оценен",
-
-        // Forum
-        [EventType.NewTopic] = "Новый топик на форуме",
-        [EventType.LikedTopic] = "Лайк на топик",
-        [EventType.NewTopicComment] = "Новый комментарий в топике",
-        [EventType.LikedTopicComment] = "Лайк на комментарий",
-
-        // Blog
-        [EventType.NewPublication] = "Новая публикация",
-        [EventType.LikedPublication] = "Лайк на публикацию",
-        [EventType.NewBlogComment] = "Новый комментарий в блоге",
-        [EventType.LikedBlogComment] = "Лайк на комментарий в блоге",
-        [EventType.NewPublicationComment] = "Новый комментарий к публикации",
-        [EventType.LikedPublicationComment] = "Лайк на комментарий к публикации",
-        [EventType.StatusBlogActive] = "Блог открыт",
-        [EventType.StatusBlogClosed] = "Блог закрыт",
-        [EventType.StatusBlogFrozen] = "Блог заморожен",
-        [EventType.StatusBlogFinished] = "Блог завершен",
-
-        // Messages
-        [EventType.NewMessage] = "Новое сообщение",
-        [EventType.LikedMessage] = "Лайк на сообщение",
-
-        // Subscriptions
-        [EventType.NewCommentInSubscribedTopic] = "Новый комментарий в подписанной теме",
-        [EventType.NewGameFromSubscribedAuthor] = "Новая игра от подписанного автора",
-        [EventType.NewBlogFromSubscribedAuthor] = "Новый блог от подписанного автора",
-        [EventType.NewTopicFromSubscribedAuthor] = "Новая тема от подписанного автора",
-        [EventType.NewPostInSubscribedGame] = "Новый пост в подписанной игре",
-
-        // Security
-        [EventType.PasswordChanged] = "Пароль изменен",
-        [EventType.EmailChanged] = "Email изменен",
-        [EventType.SuspiciousLoginActivity] = "Подозрительная активность входа",
-
-        // Moderation
-        [EventType.WarningIssued] = "Вынесено предупреждение",
-        [EventType.BanIssued] = "Выдан бан",
-        [EventType.BanLifted] = "Бан снят"
-    };
 
     public NotificationBotSender(
         DmDbContext dbContext,
@@ -252,7 +186,7 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
 
     private static string BuildMessage(EventType eventType, object metadata)
     {
-        var title = EventTypeMessages.TryGetValue(eventType, out var msg) ? msg : "Уведомление";
+        var title = NotificationText.GetTitle(eventType);
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"<b>Dungeon Master: {title}</b>");
         sb.AppendLine();
@@ -269,8 +203,8 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
                 using var doc = JsonDocument.Parse(metadataJson);
                 foreach (var prop in doc.RootElement.EnumerateObject())
                 {
-                    var name = FormatPropertyName(prop.Name);
-                    var value = FormatPropertyValue(prop.Value);
+                    var name = NotificationText.FormatPropertyName(prop.Name);
+                    var value = NotificationText.FormatPropertyValue(prop.Value);
                     if (!string.IsNullOrEmpty(value))
                     {
                         sb.AppendLine($"<b>{name}:</b> {value}");
@@ -285,33 +219,4 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
 
         return sb.ToString();
     }
-
-    private static string FormatPropertyName(string name) => name switch
-    {
-        "GameId" => "Игра",
-        "GameTitle" => "Название игры",
-        "RoomId" => "Комната",
-        "RoomTitle" => "Название комнаты",
-        "CharacterId" => "Персонаж",
-        "CharacterName" => "Имя персонажа",
-        "TopicId" => "Топик",
-        "TopicTitle" => "Название топика",
-        "Username" => "Пользователь",
-        "AuthorUsername" => "Автор",
-        "CreatedByUsername" => "Создал",
-        "BlogTitle" => "Блог",
-        "PublicationTitle" => "Публикация",
-        "DaysPending" => "Дней ожидания",
-        _ => name
-    };
-
-    private static string FormatPropertyValue(JsonElement element) => element.ValueKind switch
-    {
-        JsonValueKind.String => element.GetString() ?? "",
-        JsonValueKind.Number => element.ToString(),
-        JsonValueKind.True => "Да",
-        JsonValueKind.False => "Нет",
-        JsonValueKind.Null => "",
-        _ => element.ToString()
-    };
 }

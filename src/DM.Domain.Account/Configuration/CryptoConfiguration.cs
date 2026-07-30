@@ -23,9 +23,4 @@ public class CryptoConfiguration
     /// Allows reading tokens encrypted with old keys during rotation.
     /// </summary>
     public Dictionary<int, string> PreviousKeys { get; set; } = new();
-
-    /// <summary>
-    /// Encryption algorithm (always AES-256-GCM)
-    /// </summary>
-    public string Algorithm { get; set; } = "AES-256-GCM";
 }

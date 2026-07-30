@@ -87,14 +87,7 @@ type HtmlToBbcodePhase = (state: HtmlToBbcodeState) => HtmlToBbcodeState;
 // CONSTANTS
 // ============================================================================
 
-import {
-  DEFAULT_LINK_TEXT,
-  DEFAULT_IMG_MAX_WIDTH,
-  DEFAULT_IMG_MAX_HEIGHT,
-} from "./bbcodeConstants";
-
-// Re-export image constants for backward compatibility
-export { DEFAULT_IMG_MAX_WIDTH, DEFAULT_IMG_MAX_HEIGHT };
+import { DEFAULT_LINK_TEXT } from "./bbcodeConstants";
 
 /** Base tags available in all contexts */
 const BASE_TAGS = [

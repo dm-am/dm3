@@ -42,11 +42,6 @@ public interface IBanRepository
         CancellationToken ct = default);
 
     /// <summary>
-    /// Check if user is currently banned
-    /// </summary>
-    Task<bool> IsUserBanned(Guid userId, CancellationToken ct = default);
-
-    /// <summary>
     /// Get all active bans
     /// </summary>
     Task<IEnumerable<Ban>> GetAllActiveBans(CancellationToken ct = default);

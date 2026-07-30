@@ -97,14 +97,6 @@ internal class BanRepository : IBanRepository
     }
 
     /// <inheritdoc />
-    public async Task<bool> IsUserBanned(Guid userId, CancellationToken ct = default)
-    {
-        var now = _dateTimeProvider.Now;
-        return await _dbContext.Bans
-            .AnyAsync(b => b.TargetUserId == userId && !b.IsRemoved && b.StartedUtc <= now && b.EndedUtc > now, ct);
-    }
-
-    /// <inheritdoc />
     public async Task<IEnumerable<Ban>> GetAllActiveBans(CancellationToken ct = default)
     {
         var now = _dateTimeProvider.Now;
