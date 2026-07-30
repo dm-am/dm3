@@ -92,6 +92,7 @@ import { useToast } from "@/shared/lib/composables/useToast";
 import { Theme, type Preferences } from "@/shared/api/models/personal";
 import type { User } from "@/shared/api/models/community/users";
 import { useUiStore } from "@/shared/stores/ui";
+import { describeFailure } from "@/shared/lib/errors";
 
 const props = defineProps<{
   user: User;
@@ -156,7 +157,8 @@ const saveSettings = () => {
     };
 
     const { error } = await personalApi.updateMyPreferences(preferences);
-    if (error) throw new Error("Не удалось сохранить настройки");
+    if (error)
+      throw new Error(describeFailure(error, "Не удалось сохранить настройки"));
 
     // Apply theme immediately
     uiStore.updateTheme(settingsForm.value.theme);

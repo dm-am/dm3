@@ -75,6 +75,7 @@ import { EmptyState } from "@/shared/ui";
 import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { SessionInfo } from "@/shared/api/models/account";
+import { describeFailure } from "@/shared/lib/errors";
 
 const toast = useToast();
 
@@ -119,7 +120,8 @@ const logoutAllAction = useAsyncAction();
 const logoutFromAll = () => {
   logoutAllAction.execute(async () => {
     const { error } = await accountApi.logoutAll();
-    if (error) throw new Error("Не удалось завершить сессии");
+    if (error)
+      throw new Error(describeFailure(error, "Не удалось завершить сессии"));
     // Keep only current session
     sessions.value = sessions.value.filter((s) => s.isCurrent);
     toast.success("Вы вышли со всех других устройств");
