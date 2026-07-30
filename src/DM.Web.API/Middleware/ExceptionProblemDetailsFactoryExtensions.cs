@@ -56,7 +56,7 @@ internal static class ExceptionProblemDetailsFactoryExtensions
         }
 
         return factory.CreateValidationProblemDetails(httpContext,
-            modelStateDictionary, StatusCodes.Status400BadRequest, "Validation failed");
+            modelStateDictionary, StatusCodes.Status400BadRequest, "Некорректные данные");
     }
 
     /// <summary>
@@ -68,6 +68,6 @@ internal static class ExceptionProblemDetailsFactoryExtensions
     /// </summary>
     public static ProblemDetails CreateFrom(this ProblemDetailsFactory factory,
         Exception exception, HttpContext httpContext, Guid correlationId) =>
-        factory.CreateProblemDetails(httpContext, StatusCodes.Status500InternalServerError, "Internal server error",
-            detail: $"Server error. Address the administration for technical support. Use the following token to help us identify your issue: {correlationId}");
+        factory.CreateProblemDetails(httpContext, StatusCodes.Status500InternalServerError, "Ошибка сервера",
+            detail: $"Ошибка сервера. Обратитесь в поддержку и назовите этот токен: {correlationId}");
 }

@@ -153,6 +153,16 @@ public class OpenApiContractShould : IntegrationTestBase
             "the API contract changed; artifacts/openapi-contract.json has just been rewritten, review the diff and commit it");
     }
 
+    /// <summary>The media type a success body travels under.</summary>
+    private const string JsonContentType = "application/json";
+
+    /// <summary>
+    /// The media type ErrorHandlingMiddleware writes on every refusal. Repeated
+    /// here rather than referenced: the point of the check is that the two sides
+    /// agree, and importing the constant would make them agree by construction.
+    /// </summary>
+    private const string ProblemJsonContentType = "application/problem+json";
+
     /// <summary>
     /// Every failure response is a problem document, and the contract says so.
     /// </summary>
@@ -206,6 +216,18 @@ public class OpenApiContractShould : IntegrationTestBase
                         {
                             wrong.Add($"{operation.Name.ToUpperInvariant()} {path.Name} {status.Name} -> {schemaRef}");
                         }
+
+                        // The type is only half of the contract. A generated client
+                        // picks its deserialiser by media type, and Swashbuckle's
+                        // guess when no [Produces] is present names three of them —
+                        // none the one the middleware writes.
+                        var mediaTypes = MediaTypesOf(status.Value);
+                        if (mediaTypes.Count != 1 || mediaTypes[0] != ProblemJsonContentType)
+                        {
+                            wrong.Add(
+                                $"{operation.Name.ToUpperInvariant()} {path.Name} {status.Name} " +
+                                $"-> {string.Join(", ", mediaTypes)}");
+                        }
                     }
                 }
             }
@@ -214,6 +236,69 @@ public class OpenApiContractShould : IntegrationTestBase
         checked_.Should().BeGreaterThan(0, "the API declares failure responses");
         wrong.Should().BeEmpty(
             "the middleware answers every failure with ProblemDetails, so no endpoint may declare another type");
+    }
+
+    /// <summary>
+    /// A success body is JSON, and the contract names that and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// The same absent [Produces] put text/plain and text/json under every
+    /// success body too. One output formatter is registered, so neither was ever
+    /// written: a client generated from this document had two wrong deserialiser
+    /// choices out of three for every response it reads.
+    /// </remarks>
+    [Fact]
+    public async Task DescribeEverySuccessBodyAsJson()
+    {
+        var wrong = new List<string>();
+        var checked_ = 0;
+
+        foreach (var group in SwaggerExtensions.ApiGroups)
+        {
+            var response = await Client.GetAsync($"/swagger/{group}/swagger.json");
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            foreach (var path in document.RootElement.GetProperty("paths").EnumerateObject())
+            {
+                foreach (var operation in path.Value.EnumerateObject())
+                {
+                    if (operation.Value.ValueKind != JsonValueKind.Object ||
+                        !operation.Value.TryGetProperty("responses", out var responses))
+                    {
+                        continue;
+                    }
+
+                    foreach (var status in responses.EnumerateObject())
+                    {
+                        if (!int.TryParse(status.Name, out var code) || code >= 400)
+                        {
+                            continue;
+                        }
+
+                        // 204 and its neighbours declare no body at all, which is
+                        // the honest description of an empty response.
+                        var mediaTypes = MediaTypesOf(status.Value);
+                        if (mediaTypes.Count == 0)
+                        {
+                            continue;
+                        }
+
+                        checked_++;
+                        if (mediaTypes.Count != 1 || mediaTypes[0] != JsonContentType)
+                        {
+                            wrong.Add(
+                                $"{operation.Name.ToUpperInvariant()} {path.Name} {status.Name} " +
+                                $"-> {string.Join(", ", mediaTypes)}");
+                        }
+                    }
+                }
+            }
+        }
+
+        checked_.Should().BeGreaterThan(0, "the API declares response bodies");
+        wrong.Should().BeEmpty(
+            "the host has one output formatter, so a success body is application/json and nothing else");
     }
 
     /// <summary>
@@ -447,5 +532,22 @@ public class OpenApiContractShould : IntegrationTestBase
         }
 
         return null;
+    }
+
+    /// <summary>Media type names a response declares its body under.</summary>
+    private static List<string> MediaTypesOf(JsonElement response)
+    {
+        var names = new List<string>();
+        if (!response.TryGetProperty("content", out var content))
+        {
+            return names;
+        }
+
+        foreach (var mediaType in content.EnumerateObject())
+        {
+            names.Add(mediaType.Name);
+        }
+
+        return names;
     }
 }

@@ -62,7 +62,11 @@ async function loadTags() {
   const { data, error: apiError } = await gameApi.getTags();
 
   if (apiError) {
-    error.value = apiError.title || "Failed to load tags";
+    // UI_STANDARDS: error copy is Russian, and the server's raw title is not put
+    // in front of the reader. A tag list carries no per-field errors worth
+    // relaying, so the title could only ever be a generic server sentence this
+    // page already words better.
+    error.value = "Не удалось загрузить теги";
   } else if (data) {
     tags.value = data.resources;
   }

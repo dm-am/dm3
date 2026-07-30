@@ -1,9 +1,11 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using DM.Domain.Core.Exceptions;
 using DM.Infrastructure.Core.Configuration;
 using DM.Web.API.Features.Personal.Notifications;
 using Microsoft.AspNetCore.Http;
@@ -112,13 +114,17 @@ public class WebhookController : ControllerBase
         if (!CryptographicOperations.FixedTimeEquals(provided, expected))
         {
             _logger.LogWarning("Invalid webhook secret for {Type}", type);
-            return StatusCode(403, new { error = "Invalid webhook secret" });
+            // Thrown, not assembled here: ErrorHandlingMiddleware owns the body of
+            // every refusal in this host. A hand-built {"error": "..."} is a shape
+            // no other endpoint answers with, so a client parsing errors centrally
+            // has to special-case this one.
+            throw new HttpException(HttpStatusCode.Forbidden, "Invalid webhook secret");
         }
 
         // Find handler
         if (!_handlers.TryGetValue(normalizedType, out var handler))
         {
-            return BadRequest(new { error = $"Unknown webhook type: {type}" });
+            throw new HttpException(HttpStatusCode.BadRequest, $"Unknown webhook type: {type}");
         }
 
         try

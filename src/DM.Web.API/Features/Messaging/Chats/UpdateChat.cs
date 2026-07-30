@@ -12,7 +12,7 @@ public class UpdateChat
     /// <summary>
     /// New title (null to keep current)
     /// </summary>
-    [StringLength(100, ErrorMessage = "Title must not exceed 100 символов")]
+    [StringLength(100, ErrorMessage = "Заголовок не должен превышать 100 символов")]
     public string? Title { get; set; }
 
     /// <summary>
