@@ -126,7 +126,7 @@ internal class BoardService : IBoardService
             string.Equals(b.Title, aliasOrTitle, System.StringComparison.OrdinalIgnoreCase));
         if (board == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, $"Board {aliasOrTitle} not found");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.BoardNotFound(aliasOrTitle));
         }
 
         return board;
@@ -149,13 +149,13 @@ internal class BoardService : IBoardService
         var user = await _userRepository.GetUserAsync(username);
         if (user == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, $"User {username} not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(username));
         }
 
         var isAlreadyModerator = await _moderatorRepository.IsModerator(board.Id, user.UserId);
         if (isAlreadyModerator)
         {
-            throw new HttpException(HttpStatusCode.Conflict, $"User {username} is already a moderator of this board");
+            throw new HttpException(HttpStatusCode.Conflict, $"Пользователь {username} уже модератор этого раздела");
         }
 
         await _moderatorRepository.Add(board.Id, user.UserId);
@@ -170,13 +170,13 @@ internal class BoardService : IBoardService
         var user = await _userRepository.GetUserAsync(username);
         if (user == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, $"User {username} not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(username));
         }
 
         var isModerator = await _moderatorRepository.IsModerator(board.Id, user.UserId);
         if (!isModerator)
         {
-            throw new HttpException(HttpStatusCode.NotFound, $"User {username} is not a moderator of this board");
+            throw new HttpException(HttpStatusCode.NotFound, $"Пользователь {username} не модератор этого раздела");
         }
 
         await _moderatorRepository.Remove(board.Id, user.UserId);
@@ -199,7 +199,7 @@ internal class BoardService : IBoardService
             string.Equals(b.Alias, alias, System.StringComparison.OrdinalIgnoreCase));
         if (board == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, $"Board {alias} not found");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.BoardNotFound(alias));
         }
 
         return board;

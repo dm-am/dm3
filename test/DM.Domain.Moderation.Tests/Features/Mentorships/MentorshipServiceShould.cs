@@ -50,7 +50,7 @@ public class MentorshipServiceShould : UnitTestBase
         var act = () => _service.AssignGameMentor(_gameId);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("Mentor role"));
+            .Where(e => e.Message.Contains("роль наставника"));
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public class MentorshipServiceShould : UnitTestBase
         var act = () => _service.AssignGameMentor(_gameId);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("not found"));
+            .Where(e => e.Message.Contains("не найдена"));
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public class MentorshipServiceShould : UnitTestBase
         var act = () => _service.AssignGameMentor(_gameId);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("already has a mentor"));
+            .Where(e => e.Message.Contains("уже есть наставник"));
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public class MentorshipServiceShould : UnitTestBase
         var act = () => _service.RemoveGameMentor(_gameId);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("not the mentor"));
+            .Where(e => e.Message.Contains("не наставник"));
     }
 
     [Fact]

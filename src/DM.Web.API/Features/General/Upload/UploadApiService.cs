@@ -113,14 +113,14 @@ internal class UploadApiService : IUploadApiService
 
         if (upload == null)
         {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, "Upload not found");
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.UploadNotFound);
         }
 
         // Owner self-view; viewing another user's file is a moderation action
         // (Moderator+), aligned with the list + delete endpoints.
         if (upload.UserId != userId && _identityProvider.Current.User.Role < UserRole.Moderator)
         {
-            throw new HttpException(System.Net.HttpStatusCode.Forbidden, "Access denied");
+            throw new HttpException(System.Net.HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
         }
 
         return MapToDto(upload);
@@ -134,13 +134,13 @@ internal class UploadApiService : IUploadApiService
 
         if (upload == null)
         {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, "Upload not found");
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.UploadNotFound);
         }
 
         // Owner self-service; deleting others' files is a moderation action (Moderator+).
         if (upload.UserId != userId && _identityProvider.Current.User.Role < UserRole.Moderator)
         {
-            throw new HttpException(System.Net.HttpStatusCode.Forbidden, "Access denied");
+            throw new HttpException(System.Net.HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
         }
 
         await _uploadRepository.SoftDeleteAsync(id, _dateTimeProvider.Now);
@@ -342,9 +342,9 @@ internal class UploadApiService : IUploadApiService
     {
         var requirement = type switch
         {
-            UploadType.UserAvatar => "User avatar requires a target user ID",
-            UploadType.CharacterAvatar => "Character avatar requires a target character ID",
-            UploadType.PostAttachment => "Post attachment requires a target post ID",
+            UploadType.UserAvatar => "Не указан пользователь",
+            UploadType.CharacterAvatar => "Не указан персонаж",
+            UploadType.PostAttachment => "Не указан пост",
             _ => throw new InvalidOperationException($"Unknown UploadType {type}"),
         };
 

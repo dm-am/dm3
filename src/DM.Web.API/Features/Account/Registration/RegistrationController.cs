@@ -70,8 +70,8 @@ public class RegistrationController : ControllerBase
         {
             throw new HttpBadRequestException(new Dictionary<string, string>
             {
-                ["email"] = "Invalid registration attempt",
-            }, "Invalid request");
+                ["email"] = "Не удалось зарегистрироваться",
+            }, RefusalMessage.InvalidData);
         }
 
         await _registrationApiService.Register(registration);
@@ -100,7 +100,7 @@ public class RegistrationController : ControllerBase
         var info = await _activationApiService.GetPendingInfo(token);
         if (info == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Token not found or already used");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.LinkInvalidOrUsed);
         }
 
         return Ok(info);

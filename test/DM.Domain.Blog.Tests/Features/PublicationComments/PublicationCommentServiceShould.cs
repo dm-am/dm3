@@ -115,7 +115,7 @@ public class PublicationCommentServiceShould : UnitTestBase
         var act = async () => await _service.CreateAsync(createComment);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("blacklisted"));
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("черном списке"));
     }
 
     [Fact]

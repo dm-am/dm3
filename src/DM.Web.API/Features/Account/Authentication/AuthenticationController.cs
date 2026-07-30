@@ -68,8 +68,8 @@ public class AuthenticationController : ControllerBase
         if (!string.IsNullOrWhiteSpace(request.Website))
         {
             throw new HttpBadRequestException(
-                new Dictionary<string, string> { ["identifier"] = "Invalid login attempt" },
-                "Invalid request");
+                new Dictionary<string, string> { ["identifier"] = "Не удалось войти" },
+                RefusalMessage.InvalidData);
         }
 
         var result = await _authenticationApiService.Login(request, HttpContext);

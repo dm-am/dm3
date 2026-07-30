@@ -73,7 +73,7 @@ internal class GlobalChatEventService : IGlobalChatEventService
         var chatEvent = await _repository.Get(eventId).ConfigureAwait(false);
         if (chatEvent == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Chat event not found");
+            throw new HttpException(HttpStatusCode.NotFound, "Событие не найдено");
         }
 
         return chatEvent;
@@ -141,7 +141,7 @@ internal class GlobalChatEventService : IGlobalChatEventService
         // Check if there's already an active event
         if (await _repository.HasActiveEvent())
         {
-            throw new HttpException(HttpStatusCode.Conflict, "There is already an active chat event");
+            throw new HttpException(HttpStatusCode.Conflict, "Сейчас уже идет другое событие");
         }
 
         var result = await _repository.UpdateStatus(
@@ -190,7 +190,7 @@ internal class GlobalChatEventService : IGlobalChatEventService
 
         if (await _repository.IsParticipant(eventId, userId))
         {
-            throw new HttpException(HttpStatusCode.Conflict, "User is already a participant");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.UserAlreadyParticipant);
         }
 
         var participant = _factory.CreateParticipant(eventId, userId, isOrganizer: false);
@@ -222,7 +222,7 @@ internal class GlobalChatEventService : IGlobalChatEventService
 
         if (await _repository.IsParticipant(eventId, userId))
         {
-            throw new HttpException(HttpStatusCode.Conflict, "User is already a participant");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.UserAlreadyParticipant);
         }
 
         var participant = _factory.CreateParticipant(eventId, userId, isOrganizer: false);

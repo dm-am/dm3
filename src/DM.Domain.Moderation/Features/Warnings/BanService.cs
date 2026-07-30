@@ -120,7 +120,7 @@ internal class BanService : IBanService
             if (targetUser.Role >= UserRole.Admin)
             {
                 throw new HttpException(HttpStatusCode.Forbidden,
-                    "An administrator cannot be banned");
+                    "Администратора нельзя забанить");
             }
 
             // Strictly below your own role. Equal-role bans let two senior
@@ -129,7 +129,7 @@ internal class BanService : IBanService
             if (targetUser.Role >= currentUser.Role)
             {
                 throw new HttpException(HttpStatusCode.Forbidden,
-                    "You can only ban a user whose role is below yours");
+                    "Забанить можно только пользователя с ролью ниже вашей");
             }
         }
 
@@ -138,7 +138,7 @@ internal class BanService : IBanService
         if (existingBan != null)
         {
             throw new HttpException(HttpStatusCode.Conflict,
-                $"User {createBan.Username} is already banned until {existingBan.EndedUtc}");
+                $"Пользователь {createBan.Username} уже забанен до {existingBan.EndedUtc}");
         }
 
         var now = _dateTimeProvider.Now;
@@ -209,7 +209,7 @@ internal class BanService : IBanService
         var ban = await _banRepository.Get(banId, ct);
         if (ban == null || ban.IsRemoved)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Ban not found");
+            throw new HttpException(HttpStatusCode.NotFound, "Бан не найден");
         }
 
         // A democratic ban leaves the moderator role and authentication intact,
@@ -217,7 +217,7 @@ internal class BanService : IBanService
         if (ban.TargetUserId == currentUser.UserId)
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "You cannot lift your own ban");
+                "Нельзя снять бан с самого себя");
         }
 
         // Permanent bans are stored with a far-future end date (see CreateBan);
@@ -225,7 +225,7 @@ internal class BanService : IBanService
         var isPermanent = ban.IsPermanentAt(_dateTimeProvider.Now);
         if (isPermanent && currentUser.Role < UserRole.Admin)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Only administrators can lift permanent bans");
+            throw new HttpException(HttpStatusCode.Forbidden, "Постоянный бан может снять только администратор");
         }
 
         await _banRepository.Remove(banId, currentUser.UserId, _dateTimeProvider.Now, reason, ct);

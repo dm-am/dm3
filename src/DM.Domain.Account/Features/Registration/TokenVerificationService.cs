@@ -24,7 +24,7 @@ internal class TokenVerificationService : ITokenVerificationService
         var owner = await _repository.GetTokenOwner(token);
         if (owner == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Token is invalid");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.LinkInvalidOrUsed);
         }
 
         return owner;

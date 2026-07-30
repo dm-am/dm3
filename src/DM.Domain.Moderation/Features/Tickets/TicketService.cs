@@ -146,7 +146,7 @@ internal class TicketService : ITicketService
         // oracle for out-of-scope tickets probed by GUID.
         if (ticket == null)
         {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, "Ticket not found");
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
         }
 
         // The reporter can always read their own ticket.
@@ -163,7 +163,7 @@ internal class TicketService : ITicketService
             return ticket;
         }
 
-        throw new HttpException(System.Net.HttpStatusCode.NotFound, "Ticket not found");
+        throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
     }
 
     /// <inheritdoc />
@@ -176,7 +176,7 @@ internal class TicketService : ITicketService
 
         if (targetUser.UserId == currentUser.UserId)
         {
-            throw new HttpException(System.Net.HttpStatusCode.BadRequest, "Cannot report yourself");
+            throw new HttpException(System.Net.HttpStatusCode.BadRequest, "Нельзя пожаловаться на себя");
         }
 
         var entity = new CreateTicketEntity
@@ -263,7 +263,7 @@ internal class TicketService : ITicketService
 
         if (ticket == null)
         {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, "Ticket not found");
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
         }
 
         // Out-of-scope subtypes are invisible to this role: 404 (not 403) so a
@@ -271,12 +271,12 @@ internal class TicketService : ITicketService
         var visible = GetVisibleSubtypes(currentUser.Role);
         if (visible != null && !visible.Contains(ticket.Subtype))
         {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, "Ticket not found");
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
         }
 
         if (ticket.Status is TicketStatus.Closed or TicketStatus.Spam)
         {
-            throw new HttpException(System.Net.HttpStatusCode.BadRequest, "Cannot assign a closed ticket");
+            throw new HttpException(System.Net.HttpStatusCode.BadRequest, "Закрытое обращение нельзя взять в работу");
         }
 
         var updateEntity = new UpdateTicketEntity
@@ -298,7 +298,7 @@ internal class TicketService : ITicketService
 
         if (ticket == null)
         {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, "Ticket not found");
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
         }
 
         // Out-of-scope subtypes are invisible to this role: 404 (not 403) so a
@@ -306,12 +306,12 @@ internal class TicketService : ITicketService
         var visible = GetVisibleSubtypes(currentUser.Role);
         if (visible != null && !visible.Contains(ticket.Subtype))
         {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, "Ticket not found");
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
         }
 
         if (ticket.Status is TicketStatus.Closed or TicketStatus.Spam)
         {
-            throw new HttpException(System.Net.HttpStatusCode.BadRequest, "Ticket is already closed");
+            throw new HttpException(System.Net.HttpStatusCode.BadRequest, "Обращение уже закрыто");
         }
 
         var now = _dateTimeProvider.Now;
@@ -327,7 +327,7 @@ internal class TicketService : ITicketService
         if ((resolveTicket.IssueWarning || resolveTicket.IssueBan) && ticket.TargetUsername == null)
         {
             throw new HttpException(System.Net.HttpStatusCode.BadRequest,
-                "Cannot issue a warning or ban: the ticket has no target user");
+                "В обращении не указан пользователь: некому выдать предупреждение или бан");
         }
 
         // Issue warning if requested. Routed through IWarningService so it
@@ -356,7 +356,7 @@ internal class TicketService : ITicketService
             if (currentUser.Role < UserRole.SeniorModerator)
             {
                 throw new HttpException(System.Net.HttpStatusCode.Forbidden,
-                    "Only senior moderators can issue bans");
+                    "Выдавать баны может только старший модератор");
             }
 
             var ban = await _banService.CreateBan(new CreateBan

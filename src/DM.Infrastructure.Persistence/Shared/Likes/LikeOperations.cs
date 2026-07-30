@@ -38,7 +38,7 @@ internal class LikeOperations : ILikeOperations
         if (entity.Likes.Any(l => l.UserId == currentUser.UserId))
         {
             throw new HttpException(HttpStatusCode.Conflict,
-                $"User already liked this {entity.GetType().Name.ToLower()}");
+                "Вы уже поставили лайк");
         }
 
         var like = _likeFactory.Create(entity.Id, entity.LikeEntityType, currentUser.UserId);
@@ -54,7 +54,7 @@ internal class LikeOperations : ILikeOperations
         if (entity.Likes.All(l => l.UserId != currentUser.UserId))
         {
             throw new HttpException(HttpStatusCode.Conflict,
-                $"User never liked this {entity.GetType().Name.ToLower()} in the first place");
+                "Вы еще не ставили лайк");
         }
 
         await _likeRepository.Delete(entity.Id, currentUser.UserId);

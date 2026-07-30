@@ -98,16 +98,16 @@ public class StatisticsController : ControllerBase
         var errors = new Dictionary<string, string>();
 
         if (year != 0 && (year < MinYear || year > MaxYear))
-            errors["year"] = $"Year must be 0 (all-time) or between {MinYear} and {MaxYear}";
+            errors["year"] = $"Год должен быть 0 (за все время) или от {MinYear} до {MaxYear}";
 
         if (month.HasValue && (month.Value < 1 || month.Value > 12))
-            errors["month"] = "Month must be between 1 and 12";
+            errors["month"] = "Месяц должен быть от 1 до 12";
 
         if (month.HasValue && year == 0)
-            errors["year"] = "A monthly period requires a concrete year";
+            errors["year"] = "Для месяца нужен конкретный год";
 
         if (errors.Count > 0)
-            throw new HttpBadRequestException(errors, "Invalid period");
+            throw new HttpBadRequestException(errors, "Некорректный период");
     }
 
     #endregion

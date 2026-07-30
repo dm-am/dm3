@@ -54,7 +54,7 @@ public class UserProfileNoteController : ControllerBase
         var note = await _userProfileNoteApiService.GetNote(username);
         if (note == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "No note found for this user");
+            throw new HttpException(HttpStatusCode.NotFound, "Заметка не найдена");
         }
         return Ok(note);
     }

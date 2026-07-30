@@ -119,7 +119,7 @@ internal class TopicService : ITopicService
                 await _repository.Exists(topicId, ct)
                     ? HttpStatusCode.Gone
                     : HttpStatusCode.NotFound,
-                "Topic not found");
+                "Тема не найдена");
         }
 
         if (identity.User.IsAuthenticated)
@@ -152,7 +152,7 @@ internal class TopicService : ITopicService
                 await _repository.ExistsByBoardAndNumber(board.Id, topicNumber, ct)
                     ? HttpStatusCode.Gone
                     : HttpStatusCode.NotFound,
-                $"Topic #{topicNumber} not found in board {boardAlias}");
+                $"Тема #{topicNumber} не найдена в разделе {boardAlias}");
         }
 
         if (identity.User.IsAuthenticated)

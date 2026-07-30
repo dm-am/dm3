@@ -78,7 +78,7 @@ internal class PostService : IPostService
         var room = await _roomRepository.GetForUpdate(createPost.RoomId, identity.User.UserId);
         if (room == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Room not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(RoomIntention.CreatePost, (room, createPost.CharacterId));
@@ -158,7 +158,7 @@ internal class PostService : IPostService
         var post = await _repository.Get(postId, _identityProvider.Current.User.UserId);
         if (post == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Post not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.PostNotFound);
         }
 
         // Enrich post with dice rolls

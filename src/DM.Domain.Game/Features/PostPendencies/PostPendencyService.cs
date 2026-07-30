@@ -66,7 +66,7 @@ internal class PostPendencyService : IPostPendencyService
                 e.WaitingForUser.UserId == waitingForUserId))
         {
             throw new HttpException(HttpStatusCode.Conflict,
-                $"There's already a pendency for user {createPostPendency.WaitingForUsername}");
+                $"Ожидание хода для {createPostPendency.WaitingForUsername} уже есть");
         }
 
         if (room.Accesses.All(a => a.Character.Author.UserId != waitingForUserId))
@@ -93,7 +93,7 @@ internal class PostPendencyService : IPostPendencyService
         var pendency = await _repository.Get(pendencyId);
         if (pendency == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Post pendency not found");
+            throw new HttpException(HttpStatusCode.NotFound, "Ожидание хода не найдено");
         }
 
         _intentionManager.ThrowIfForbidden(RoomIntention.DeletePostPendency, pendency);

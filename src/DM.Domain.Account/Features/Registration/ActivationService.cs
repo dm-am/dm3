@@ -68,7 +68,7 @@ internal class ActivationService : IActivationService
                 }
             }
 
-            throw new HttpException(HttpStatusCode.Gone, "Ссылка недействительна или уже использована");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.LinkInvalidOrUsed);
         }
 
         // Check token expiry

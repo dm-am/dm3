@@ -123,7 +123,7 @@ internal class BlogLikeService : IBlogLikeService
     {
         if (blog.BlacklistedUserIds.Contains(_identityProvider.Current.User.UserId))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You are blacklisted from this blog");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromBlog);
         }
     }
 }

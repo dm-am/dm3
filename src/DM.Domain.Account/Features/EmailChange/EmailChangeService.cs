@@ -56,7 +56,8 @@ internal class EmailChangeService : IEmailChangeService
         var user = await _repository.FindUser(emailChange.Username);
         if (user == null)
         {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, $"User {emailChange.Username} not found");
+            throw new HttpException(System.Net.HttpStatusCode.NotFound,
+                RefusalMessage.UserNotFoundByUsername(emailChange.Username));
         }
 
         var token = _tokenFactory.Create(user.UserId, TokenType.EmailChange);
@@ -92,8 +93,7 @@ internal class EmailChangeService : IEmailChangeService
 
         if (!foundTokenId.HasValue)
         {
-            throw new HttpException(HttpStatusCode.NotFound,
-                "Email change confirmation token is invalid or expired");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.LinkInvalidOrExpired);
         }
 
         await _confirmationRepository.MarkTokenUsed(foundTokenId.Value);

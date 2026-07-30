@@ -56,13 +56,13 @@ internal class PostAttachmentUploadAuthorizer : IUploadTargetAuthorizer
         var post = await _postRepository.Get(targetId, userId);
         if (post == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Post not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.PostNotFound);
         }
 
         var room = await _roomRepository.GetForUpdate(post.RoomId, userId);
         if (room == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Room not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(RoomIntention.CreatePost, room);

@@ -98,7 +98,7 @@ public class RecoveryController : ControllerBase
         var tokenInfo = await _recoveryService.GetTokenInfo(token);
         if (tokenInfo == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Token not found or already used");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.LinkInvalidOrUsed);
         }
         return Ok(tokenInfo);
     }

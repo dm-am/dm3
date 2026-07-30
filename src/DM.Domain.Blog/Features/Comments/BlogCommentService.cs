@@ -65,7 +65,7 @@ internal class BlogCommentService : IBlogCommentService
         var currentUser = _identityProvider.Current.User;
         if (blog.BlacklistedUserIds.Contains(currentUser.UserId))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You are blacklisted from this blog");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromBlog);
         }
 
         // Strip [mod] authored by a non-moderator (it renders as a green mod
@@ -102,7 +102,7 @@ internal class BlogCommentService : IBlogCommentService
     public async Task<Comment> GetAsync(Guid commentId)
     {
         return await _repository.Get(commentId) ??
-               throw new HttpException(HttpStatusCode.NotFound, $"Comment {commentId} not found");
+               throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));
     }
 
     /// <inheritdoc />
@@ -143,7 +143,7 @@ internal class BlogCommentService : IBlogCommentService
         var comment = await _repository.GetForDelete(commentId);
         if (comment == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, $"Comment {commentId} not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));
         }
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Delete, (Comment)comment);

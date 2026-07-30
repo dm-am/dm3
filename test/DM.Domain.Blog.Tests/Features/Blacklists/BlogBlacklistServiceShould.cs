@@ -116,7 +116,7 @@ public class BlogBlacklistServiceShould : UnitTestBase
         var act = async () => await _service.AddToBlacklistAsync(blogId, "owner");
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("owner"));
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("автора блога"));
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public class BlogBlacklistServiceShould : UnitTestBase
         var act = async () => await _service.AddToBlacklistAsync(blogId, "mentor");
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("mentor"));
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("наставника"));
     }
 
     [Fact]

@@ -207,7 +207,7 @@ public class BlogServiceShould : UnitTestBase
         var act = async () => await _service.Subscribe(blogId);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("own blog"));
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("собственный блог"));
     }
 
     [Fact]

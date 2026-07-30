@@ -89,14 +89,14 @@ internal class BlogInvitationService : IBlogInvitationService
         // Check content blacklist
         if (blog.BlacklistedUserIds.Contains(userId))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Cannot invite a blacklisted user");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.CannotInviteBlacklistedUser);
         }
 
         // Check personal blacklist - cannot invite someone you've blocked
         var currentUserId = _identityProvider.Current.User.UserId;
         if (await _userBlacklistChecker.IsBlockedAsync(currentUserId, userId))
         {
-            throw new HttpException(HttpStatusCode.UnprocessableEntity, "Cannot invite a user you have blocked");
+            throw new HttpException(HttpStatusCode.UnprocessableEntity, RefusalMessage.CannotInviteBlockedUser);
         }
     }
 
@@ -151,19 +151,19 @@ internal class BlogInvitationService : IBlogInvitationService
         // Validate invitation exists and matches current user
         if (invitation == null || invitation.InvitedUser.UserId != userId)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Invitation not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.InvitationNotFound);
         }
 
         // Check if it's a valid blog invitation type (Reader or Assistant)
         if (invitation.TargetRole != BlogRole.Assistant && invitation.TargetRole != BlogRole.Reader)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Invitation not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.InvitationNotFound);
         }
 
         // Check if invitation has expired
         if (_dateTimeProvider.Now > invitation.ExpiresUtc)
         {
-            throw new HttpException(HttpStatusCode.Gone, "Invitation has expired");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.InvitationExpired);
         }
 
         // Mark token as used
@@ -195,7 +195,7 @@ internal class BlogInvitationService : IBlogInvitationService
         var invitation = await _repository.GetInvitation(tokenId);
         if (invitation == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Invitation not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.InvitationNotFound);
         }
 
         var blog = await _blogService.GetBlogAsync(invitation.BlogId);

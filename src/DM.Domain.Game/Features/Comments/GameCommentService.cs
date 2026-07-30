@@ -69,7 +69,7 @@ internal class GameCommentService : IGameCommentService
         var currentUser = _identityProvider.Current.User;
         if (game.BlacklistedUsers.Any(b => b.UserId == currentUser.UserId))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You are blacklisted from this game");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
         }
 
         var entity = new CreateGameCommentEntity
@@ -111,7 +111,7 @@ internal class GameCommentService : IGameCommentService
     public async Task<Comment> GetAsync(Guid commentId)
     {
         return await _repository.Get(commentId) ??
-               throw new HttpException(HttpStatusCode.Gone, $"Comment {commentId} not found");
+               throw new HttpException(HttpStatusCode.Gone, RefusalMessage.CommentNotFound(commentId));
     }
 
     /// <inheritdoc />
@@ -151,7 +151,7 @@ internal class GameCommentService : IGameCommentService
         var comment = await _repository.GetForDelete(commentId);
         if (comment == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, $"Comment {commentId} not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));
         }
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Delete, comment);

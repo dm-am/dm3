@@ -51,12 +51,12 @@ internal class BlogNotepadService : IBlogNotepadService
         var entry = await _repository.GetEntryAsync(entryId, ct);
         if (entry == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Entry not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.NotepadEntryNotFound);
         }
 
         if (entry.NotepadType != NotepadType.Blog)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Access denied");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
         }
 
         await ThrowIfNotBlogParticipant(entry.ContainerId, ct);
@@ -90,12 +90,12 @@ internal class BlogNotepadService : IBlogNotepadService
         var entry = await _repository.GetEntryAsync(entryId, ct);
         if (entry == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Entry not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.NotepadEntryNotFound);
         }
 
         if (entry.NotepadType != NotepadType.Blog)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Access denied");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
         }
 
         await ThrowIfNotBlogParticipant(entry.ContainerId, ct);
@@ -123,7 +123,7 @@ internal class BlogNotepadService : IBlogNotepadService
 
         if (entry.NotepadType != NotepadType.Blog)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Access denied");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
         }
 
         await ThrowIfNotBlogParticipant(entry.ContainerId, ct);
@@ -140,7 +140,7 @@ internal class BlogNotepadService : IBlogNotepadService
 
         if (!isOwner && !isAssistant && !isMentor)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Access denied to blog notepad");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нет доступа к заметкам блога");
         }
     }
 }

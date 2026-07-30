@@ -77,7 +77,7 @@ internal class PasswordChangeService : IPasswordChangeService
         // For OldPassword flow (no token), require authentication
         if (!passwordChange.Token.HasValue && !_identityProvider.Current.User.IsAuthenticated)
         {
-            throw new HttpException(System.Net.HttpStatusCode.Unauthorized, "Authentication required");
+            throw new HttpException(System.Net.HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
         }
 
         // Check that either token or oldPassword is provided (after auth check)
@@ -85,7 +85,7 @@ internal class PasswordChangeService : IPasswordChangeService
         {
             throw new HttpBadRequestException(new Dictionary<string, string>
             {
-                [nameof(passwordChange.OldPassword)] = "Either a password reset token or the current password must be provided"
+                [nameof(passwordChange.OldPassword)] = "Введите текущий пароль"
             });
         }
 
@@ -96,7 +96,7 @@ internal class PasswordChangeService : IPasswordChangeService
 
         if (user == null)
         {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, "User not found");
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.UserNotFound);
         }
 
         // Check if new password matches current password
@@ -113,7 +113,7 @@ internal class PasswordChangeService : IPasswordChangeService
         {
             throw new HttpBadRequestException(new Dictionary<string, string>
             {
-                [nameof(passwordChange.NewPassword)] = "Этот пароль был скомпрометирован в результате утечки данных. Пожалуйста, выберите другой пароль."
+                [nameof(passwordChange.NewPassword)] = RefusalMessage.PasswordBreached
             });
         }
 

@@ -63,7 +63,7 @@ internal class AttributeSchemaService : IAttributeSchemaService
         var attributeSchema = await _repository.GetSchema(schemaId);
         if (attributeSchema == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Schema not found");
+            throw new HttpException(HttpStatusCode.NotFound, "Схема атрибутов не найдена");
         }
         return attributeSchema;
     }
@@ -79,7 +79,7 @@ internal class AttributeSchemaService : IAttributeSchemaService
 
         if (!allowed)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Not allowed to read this schema");
+            throw new HttpException(HttpStatusCode.Forbidden, "Эта схема атрибутов вам недоступна");
         }
 
         return schema;
@@ -114,7 +114,7 @@ internal class AttributeSchemaService : IAttributeSchemaService
         if (await _repository.IsUsedByAnyGame(schemaId))
         {
             throw new HttpException(HttpStatusCode.Conflict,
-                "Schema is used by a game and cannot be deleted");
+                "Схема используется в игре, ее нельзя удалить");
         }
 
         await _repository.Delete(schemaId);

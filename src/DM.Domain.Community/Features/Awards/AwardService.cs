@@ -58,7 +58,7 @@ internal class AwardService : IAwardService
         var existing = await _repository.GetTypeByCodeAsync(create.Code, ct);
         if (existing != null)
         {
-            throw new HttpException(HttpStatusCode.Conflict, $"Award type with code '{create.Code}' already exists");
+            throw new HttpException(HttpStatusCode.Conflict, $"Тип награды с кодом \"{create.Code}\" уже существует");
         }
         return await _repository.CreateTypeAsync(create, ct);
     }
@@ -68,14 +68,14 @@ internal class AwardService : IAwardService
         await _updateTypeValidator.ValidateAndThrowAsync(update, ct);
         if (update.IconName != null) EnsureIconValid(update.IconName);
         _ = await _repository.GetTypeAsync(update.Id, ct)
-            ?? throw new HttpException(HttpStatusCode.NotFound, "Award type not found");
+            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.AwardTypeNotFound);
         return await _repository.UpdateTypeAsync(update, ct);
     }
 
     public async Task DeactivateTypeAsync(Guid id, CancellationToken ct = default)
     {
         _ = await _repository.GetTypeAsync(id, ct)
-            ?? throw new HttpException(HttpStatusCode.NotFound, "Award type not found");
+            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.AwardTypeNotFound);
         await _repository.UpdateTypeAsync(new UpdateAwardType { Id = id, IsActive = false }, ct);
     }
 
@@ -98,7 +98,7 @@ internal class AwardService : IAwardService
         if (series.Any(s => s.ContestType == create.ContestType && s.Number == create.Number))
         {
             throw new HttpException(HttpStatusCode.Conflict,
-                $"Contest series {create.Number} of this type already exists");
+                $"Серия конкурсов {create.Number} этого типа уже существует");
         }
 
         return await _repository.CreateSeriesAsync(create, ct);
@@ -108,14 +108,14 @@ internal class AwardService : IAwardService
     {
         await _updateSeriesValidator.ValidateAndThrowAsync(update, ct);
         _ = await _repository.GetSeriesAsync(update.Id, ct)
-            ?? throw new HttpException(HttpStatusCode.NotFound, "Contest series not found");
+            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ContestSeriesNotFound);
         return await _repository.UpdateSeriesAsync(update, ct);
     }
 
     public async Task DeactivateSeriesAsync(Guid id, CancellationToken ct = default)
     {
         _ = await _repository.GetSeriesAsync(id, ct)
-            ?? throw new HttpException(HttpStatusCode.NotFound, "Contest series not found");
+            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ContestSeriesNotFound);
         await _repository.UpdateSeriesAsync(new UpdateContestSeries { Id = id, IsActive = false }, ct);
     }
 
@@ -130,7 +130,7 @@ internal class AwardService : IAwardService
     public async Task<IReadOnlyCollection<UserAward>> GetSeriesAwardsAsync(Guid seriesId, CancellationToken ct = default)
     {
         _ = await _repository.GetSeriesAsync(seriesId, ct)
-            ?? throw new HttpException(HttpStatusCode.NotFound, "Contest series not found");
+            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ContestSeriesNotFound);
         return await _repository.GetSeriesAwardsAsync(seriesId, ct);
     }
 
@@ -139,19 +139,19 @@ internal class AwardService : IAwardService
         var user = await _userLookup.GetAsync(username);
 
         var type = await _repository.GetTypeAsync(awardTypeId, ct)
-            ?? throw new HttpException(HttpStatusCode.NotFound, "Award type not found");
+            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.AwardTypeNotFound);
         if (!type.IsActive)
         {
-            throw new HttpException(HttpStatusCode.BadRequest, "Cannot grant an inactive award type");
+            throw new HttpException(HttpStatusCode.BadRequest, "Нельзя выдать награду неактивного типа");
         }
 
         if (contestSeriesId.HasValue)
         {
             var series = await _repository.GetSeriesAsync(contestSeriesId.Value, ct)
-                ?? throw new HttpException(HttpStatusCode.NotFound, "Contest series not found");
+                ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ContestSeriesNotFound);
             if (!series.IsActive)
             {
-                throw new HttpException(HttpStatusCode.BadRequest, "Cannot grant in an inactive contest series");
+                throw new HttpException(HttpStatusCode.BadRequest, "Нельзя выдать награду в неактивной серии конкурсов");
             }
         }
 
@@ -174,7 +174,7 @@ internal class AwardService : IAwardService
     public async Task RevokeAsync(Guid awardId, CancellationToken ct = default)
     {
         _ = await _repository.GetAsync(awardId, ct)
-            ?? throw new HttpException(HttpStatusCode.NotFound, "Award not found");
+            ?? throw new HttpException(HttpStatusCode.NotFound, "Награда не найдена");
 
         await _repository.RevokeAsync(awardId, _identity.Current.User.UserId, ct);
     }
@@ -184,7 +184,7 @@ internal class AwardService : IAwardService
         if (!GameIconCatalog.IsValid(iconName))
         {
             throw new HttpException(HttpStatusCode.BadRequest,
-                $"Unknown icon name '{iconName}'. Add it to the game-icons sprite first.");
+                RefusalMessage.UnknownIconName(iconName));
         }
     }
 }

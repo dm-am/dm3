@@ -63,7 +63,7 @@ internal class RoomAccessService : IRoomAccessService
         var room = await _roomRepository.GetForUpdate(createRoomAccess.RoomId, _identityProvider.Current.User.UserId);
         if (room == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Room not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
@@ -77,8 +77,8 @@ internal class RoomAccessService : IRoomAccessService
         if (await _repository.AccessExists(link.RoomId, link.CharacterId, link.ReaderUserId))
         {
             throw new HttpException(HttpStatusCode.Conflict, link.CharacterId.HasValue
-                ? "Room access for this character already exists"
-                : "Room access for this reader already exists");
+                ? "Доступ для этого персонажа уже есть"
+                : "Доступ для этого читателя уже есть");
         }
 
         var result = await _repository.Create(link);
@@ -102,7 +102,7 @@ internal class RoomAccessService : IRoomAccessService
         var access = await _repository.GetAccess(accessId, _identityProvider.Current.User.UserId);
         if (access == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Access not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomAccessNotFound);
         }
         return access;
     }
@@ -119,13 +119,13 @@ internal class RoomAccessService : IRoomAccessService
         var oldAccess = await _repository.GetAccess(updateRoomAccess.AccessId, currentUserId);
         if (oldAccess == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Room access not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomAccessNotFound);
         }
 
         var room = await _roomRepository.GetForUpdate(oldAccess.RoomId, currentUserId);
         if (room == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Room not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
@@ -160,13 +160,13 @@ internal class RoomAccessService : IRoomAccessService
         var oldAccess = await _repository.GetAccess(accessId, currentUserId);
         if (oldAccess == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Room access not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomAccessNotFound);
         }
 
         var room = await _roomRepository.GetForUpdate(oldAccess.RoomId, currentUserId);
         if (room == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Room not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);

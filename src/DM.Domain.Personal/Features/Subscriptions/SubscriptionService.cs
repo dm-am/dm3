@@ -59,7 +59,7 @@ internal class SubscriptionService : ISubscriptionService
         // Prevent self-subscription for User type
         if (targetType == SubscriptionTargetType.User && targetId == userId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Cannot subscribe to yourself");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя подписаться на себя");
         }
 
         // Check if already subscribed
@@ -90,14 +90,14 @@ internal class SubscriptionService : ISubscriptionService
 
         if (subscription == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Subscription not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.SubscriptionNotFound);
         }
 
         // Verify ownership
         var userId = _identityProvider.Current.User.UserId;
         if (subscription.SubscriberId != userId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Cannot modify another user's subscription");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя изменить чужую подписку");
         }
 
         var update = new UpdateSubscription
@@ -124,7 +124,7 @@ internal class SubscriptionService : ISubscriptionService
         var userId = _identityProvider.Current.User.UserId;
         if (subscription.SubscriberId != userId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Cannot unsubscribe another user");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя отписать другого пользователя");
         }
 
         await _repository.DeleteAsync(subscriptionId, ct);

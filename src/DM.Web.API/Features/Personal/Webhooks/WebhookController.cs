@@ -118,13 +118,13 @@ public class WebhookController : ControllerBase
             // every refusal in this host. A hand-built {"error": "..."} is a shape
             // no other endpoint answers with, so a client parsing errors centrally
             // has to special-case this one.
-            throw new HttpException(HttpStatusCode.Forbidden, "Invalid webhook secret");
+            throw new HttpException(HttpStatusCode.Forbidden, "Неверный секрет вебхука");
         }
 
         // Find handler
         if (!_handlers.TryGetValue(normalizedType, out var handler))
         {
-            throw new HttpException(HttpStatusCode.BadRequest, $"Unknown webhook type: {type}");
+            throw new HttpException(HttpStatusCode.BadRequest, $"Неизвестный тип вебхука: {type}");
         }
 
         try

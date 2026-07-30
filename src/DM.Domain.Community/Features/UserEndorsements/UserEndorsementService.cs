@@ -61,13 +61,13 @@ internal class UserEndorsementService : IUserEndorsementService
         if (await IsNewbieAsync(authorId))
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "You need at least 100 game posts to create user endorsements");
+                "Чтобы рекомендовать других, нужно не меньше 100 постов в играх");
         }
 
         // Can't endorse yourself
         if (authorId == targetUserId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You cannot endorse yourself");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя рекомендовать самого себя");
         }
 
         // Check if users have played together
@@ -75,13 +75,13 @@ internal class UserEndorsementService : IUserEndorsementService
         if (!havePlayedTogether)
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "You can only endorse users you have played with in the same game");
+                "Рекомендовать можно только тех, с кем вы играли в одной игре");
         }
 
         // Check if already endorsed
         if (await ExistsAsync(authorId, targetUserId))
         {
-            throw new HttpException(HttpStatusCode.Conflict, "You have already endorsed this user");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyEndorsedUser);
         }
 
         var entity = new CreateUserEndorsementEntity
@@ -99,7 +99,7 @@ internal class UserEndorsementService : IUserEndorsementService
         }
         catch (DuplicateEntityException)
         {
-            throw new HttpException(HttpStatusCode.Conflict, "You have already endorsed this user");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyEndorsedUser);
         }
     }
 
@@ -109,7 +109,7 @@ internal class UserEndorsementService : IUserEndorsementService
         var endorsement = await _repository.GetAsync(id);
         if (endorsement == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Endorsement not found");
+            throw new HttpException(HttpStatusCode.NotFound, "Рекомендация не найдена");
         }
 
         return endorsement;
@@ -160,7 +160,7 @@ internal class UserEndorsementService : IUserEndorsementService
         if (currentUser.Role != UserRole.Admin && !CanEdit(endorsement))
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "Endorsements can only be edited within 24 hours of creation");
+                "Рекомендацию можно править только в течение суток после создания");
         }
 
         if (string.IsNullOrEmpty(updateEndorsement.Text))

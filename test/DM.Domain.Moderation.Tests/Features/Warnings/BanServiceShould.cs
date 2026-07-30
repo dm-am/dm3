@@ -165,7 +165,7 @@ public class BanServiceShould : UnitTestBase
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict)
-            .Where(e => e.Message.Contains("already banned"));
+            .Where(e => e.Message.Contains("уже забанен"));
     }
 
     [Fact]

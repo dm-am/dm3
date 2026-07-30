@@ -66,7 +66,7 @@ internal class ChatRoomApiService : IChatRoomApiService
         var room = await _roomService.GetAsync(id);
         if (room.Type != RoomType.Chat)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Chat room not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
         }
         return new Envelope<ChatRoom>(_mapper.Map<ChatRoom>(room));
     }
@@ -104,7 +104,7 @@ internal class ChatRoomApiService : IChatRoomApiService
         var room = await _roomService.GetAsync(id);
         if (room.Type != RoomType.Chat)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Chat room not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
         }
 
         var updateRoom = new UpdateRoom
@@ -124,7 +124,7 @@ internal class ChatRoomApiService : IChatRoomApiService
         var room = await _roomService.GetAsync(id);
         if (room.Type != RoomType.Chat)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Chat room not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
         }
 
         // Delete linked chat if exists
@@ -172,7 +172,7 @@ internal class ChatRoomApiService : IChatRoomApiService
 
         if (room == null || room.Type != RoomType.Chat || !room.ChatId.HasValue)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Chat room not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
         }
 
         return room;

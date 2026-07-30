@@ -73,7 +73,7 @@ internal class TopicCommentService : ITopicCommentService
         var currentUser = _identityProvider.Current.User;
         if (topic.Author != null && await _userBlacklistChecker.IsBlockedAsync(topic.Author.UserId, currentUser.UserId))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You cannot comment on this topic");
+            throw new HttpException(HttpStatusCode.Forbidden, "Вы не можете комментировать эту тему");
         }
 
         var createEntity = new CreateTopicCommentEntity
@@ -110,7 +110,7 @@ internal class TopicCommentService : ITopicCommentService
     public async Task<Comment> GetAsync(Guid commentId)
     {
         return await _repository.Get(commentId) ??
-               throw new HttpException(HttpStatusCode.Gone, $"Comment {commentId} not found");
+               throw new HttpException(HttpStatusCode.Gone, RefusalMessage.CommentNotFound(commentId));
     }
 
     /// <inheritdoc />
@@ -151,7 +151,7 @@ internal class TopicCommentService : ITopicCommentService
         var comment = await _repository.GetForDelete(commentId);
         if (comment == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, $"Comment {commentId} not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));
         }
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Delete, (Comment)comment);

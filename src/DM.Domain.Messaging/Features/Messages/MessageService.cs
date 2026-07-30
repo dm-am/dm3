@@ -103,7 +103,7 @@ internal class MessageService : IMessageService
                     otherUser.UserId, UserBlacklistSettings.BlockDirectMessages, ct);
                 if (blockedIds.Contains(userId))
                 {
-                    throw new HttpException(HttpStatusCode.Forbidden, "Cannot send message to this user");
+                    throw new HttpException(HttpStatusCode.Forbidden, "Нельзя отправить сообщение этому пользователю");
                 }
             }
         }
@@ -121,7 +121,7 @@ internal class MessageService : IMessageService
                 if (!isParticipant)
                 {
                     throw new HttpException(HttpStatusCode.Forbidden,
-                        "There is a closed chat event in progress. Only event participants can send messages.");
+                        "Идет закрытое событие. Писать могут только его участники.");
                 }
             }
         }
@@ -169,7 +169,7 @@ internal class MessageService : IMessageService
         var message = await _repository.Get(messageId, _identityProvider.Current.User.UserId, ct);
         if (message == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Message not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.MessageNotFound);
         }
 
         return message;
@@ -234,7 +234,7 @@ internal class MessageService : IMessageService
         var message = await _repository.Get(messageId, currentUserId);
         if (message == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Message not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.MessageNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(MessageIntention.Delete, message);

@@ -75,13 +75,13 @@ internal class GameBlacklistService : IGameBlacklistService
         var (_, userId) = await _userLookupService.FindUserIdAsync(operateBlacklistLink.Username);
         if (game.BlacklistedUsers.Any(b => b.UserId == userId))
         {
-            throw new HttpException(HttpStatusCode.Conflict, "User already blacklisted");
+            throw new HttpException(HttpStatusCode.Conflict, "Пользователь уже в черном списке");
         }
 
         if (game.Master.UserId == userId || game.Mentor?.UserId == userId)
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "Game master and game moderator cannot be blacklisted");
+                "Мастера и наставника игры нельзя внести в черный список");
         }
 
         // Cannot blacklist a member (they must be removed first). Membership is
@@ -100,7 +100,7 @@ internal class GameBlacklistService : IGameBlacklistService
         if (isMember)
         {
             throw new HttpException(HttpStatusCode.Conflict,
-                "Remove user from game first before blacklisting");
+                "Сначала удалите пользователя из игры");
         }
 
         var currentUserId = _identityProvider.Current.User.UserId;
@@ -139,7 +139,7 @@ internal class GameBlacklistService : IGameBlacklistService
         var (_, userId) = await _userLookupService.FindUserIdAsync(operateBlacklistLink.Username);
         if (!game.BlacklistedUsers.Any(b => b.UserId == userId))
         {
-            throw new HttpException(HttpStatusCode.Conflict, "User is not blacklisted");
+            throw new HttpException(HttpStatusCode.Conflict, "Пользователя нет в черном списке");
         }
 
         await _repository.Remove(game.Id, userId);

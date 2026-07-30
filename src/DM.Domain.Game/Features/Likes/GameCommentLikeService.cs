@@ -48,7 +48,7 @@ internal class GameCommentLikeService : IGameCommentLikeService
         var game = await _gameService.GetAsync(comment.EntityId);
         if (game.BlacklistedUsers.Any(b => b.UserId == _identityProvider.Current.User.UserId))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You are blacklisted from this game");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
         }
 
         return await _likeOperations.LikeAsync(comment, EventType.LikedGameComment);
@@ -64,7 +64,7 @@ internal class GameCommentLikeService : IGameCommentLikeService
         var game = await _gameService.GetAsync(comment.EntityId);
         if (game.BlacklistedUsers.Any(b => b.UserId == _identityProvider.Current.User.UserId))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You are blacklisted from this game");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
         }
 
         await _likeOperations.UnlikeAsync(comment);

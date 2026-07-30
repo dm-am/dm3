@@ -105,7 +105,7 @@ public class TicketServiceShould : UnitTestBase
         var act = () => _service.CreateTicket(createTicket);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("Cannot report yourself"));
+            .Where(e => e.Message.Contains("пожаловаться на себя"));
     }
 
     [Fact]
@@ -427,7 +427,7 @@ public class TicketServiceShould : UnitTestBase
         var act = () => _service.AssignToMe(_ticketId);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("not found"));
+            .Where(e => e.Message.Contains("не найдено"));
     }
 
     [Fact]
@@ -462,7 +462,7 @@ public class TicketServiceShould : UnitTestBase
         var act = () => _service.AssignToMe(_ticketId);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("Cannot assign a closed ticket"));
+            .Where(e => e.Message.Contains("нельзя взять в работу"));
     }
 
     [Fact]
@@ -528,7 +528,7 @@ public class TicketServiceShould : UnitTestBase
         var act = () => _service.ResolveTicket(_ticketId, resolveTicket);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("already closed"));
+            .Where(e => e.Message.Contains("уже закрыто"));
     }
 
     [Fact]
@@ -553,7 +553,7 @@ public class TicketServiceShould : UnitTestBase
         var act = () => _service.ResolveTicket(_ticketId, resolveTicket);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("no target user"));
+            .Where(e => e.Message.Contains("не указан пользователь"));
     }
 
     [Fact]
@@ -671,7 +671,7 @@ public class TicketServiceShould : UnitTestBase
             .ReturnsAsync(ticket);
         _banService.Setup(s => s.CreateBan(It.IsAny<CreateBan>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new HttpException(HttpStatusCode.Conflict,
-                "User TargetUser is already banned until ..."));
+                "Пользователь TargetUser уже забанен до ..."));
 
         var resolveTicket = new ResolveTicket
         {
@@ -685,7 +685,7 @@ public class TicketServiceShould : UnitTestBase
         // The conflict check inside the ban service fires and is not swallowed.
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict)
-            .Where(e => e.Message.Contains("already banned"));
+            .Where(e => e.Message.Contains("уже забанен"));
         _ticketRepository.Verify(
             r => r.Update(It.IsAny<UpdateTicketEntity>(), It.IsAny<CancellationToken>()), Times.Never);
     }

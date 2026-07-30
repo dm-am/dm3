@@ -64,12 +64,12 @@ internal class UserBlacklistService : IUserBlacklistService
 
         if (userToBlockId == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "User not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFound);
         }
 
         if (userToBlockId.Value == userId)
         {
-            throw new HttpException(HttpStatusCode.BadRequest, "Cannot block yourself");
+            throw new HttpException(HttpStatusCode.BadRequest, "Нельзя заблокировать самого себя");
         }
 
         // Check if already blocked

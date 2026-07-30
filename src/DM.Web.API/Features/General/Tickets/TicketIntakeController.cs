@@ -58,8 +58,8 @@ public class TicketIntakeController : ControllerBase
         {
             throw new HttpBadRequestException(new Dictionary<string, string>
             {
-                ["subject"] = "Invalid submission attempt",
-            }, "Invalid request");
+                ["subject"] = "Не удалось отправить обращение",
+            }, RefusalMessage.InvalidData);
         }
 
         var response = await _ticketIntakeApiService.CreateTicket(request);

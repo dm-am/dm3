@@ -38,8 +38,7 @@ internal class UserAvatarUploadAuthorizer : IUploadTargetAuthorizer
     {
         if (targetId != _identityProvider.Current.User.UserId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden,
-                "Недостаточно прав для этого действия");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
         }
 
         return Task.CompletedTask;

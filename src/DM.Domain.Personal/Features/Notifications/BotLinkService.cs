@@ -105,6 +105,6 @@ internal class BotLinkService : IBotLinkService
     {
         if (!Array.Exists(ValidChannelTypes, t => t.Equals(channelType, StringComparison.OrdinalIgnoreCase)))
             throw new HttpException(HttpStatusCode.BadRequest,
-                $"Invalid channel type: {channelType}. Must be 'discord' or 'telegram'.");
+                $"Неизвестный канал: {channelType}. Доступны discord и telegram.");
     }
 }

@@ -99,7 +99,7 @@ internal class ChatService : IChatService
         var chat = await _repository.Get(chatId, currentUserId);
         if (chat == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Chat not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
         }
 
         await _unreadCountersRepository.FillEntityCounters(new[] { chat }, currentUserId,
@@ -116,7 +116,7 @@ internal class ChatService : IChatService
         var chat = await _repository.GetForUpdate(chatId);
         if (chat == null || chat.Type != ChatType.GameRoom)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Chat not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
         }
 
         var currentUserId = _identityProvider.Current.User.UserId;
@@ -133,7 +133,7 @@ internal class ChatService : IChatService
         var chat = await _repository.GetByPublicId(publicId, currentUserId);
         if (chat == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Chat not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
         }
 
         await _unreadCountersRepository.FillEntityCounters(new[] { chat }, currentUserId,
@@ -148,7 +148,7 @@ internal class ChatService : IChatService
         var otherUserId = await _repository.FindUser(username);
         if (!otherUserId.HasValue)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "User not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFound);
         }
 
         return await GetOrCreateDirectInternalAsync(otherUserId.Value);
@@ -196,7 +196,7 @@ internal class ChatService : IChatService
         var chat = await _repository.GetForUpdate(updateChat.ChatId);
         if (chat == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Chat not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(ChatIntention.UpdateChat, chat);
@@ -247,7 +247,7 @@ internal class ChatService : IChatService
         var chat = await _repository.GetForUpdate(chatId);
         if (chat == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Chat not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(ChatIntention.DeleteChat, chat);

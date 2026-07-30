@@ -76,7 +76,7 @@ internal class CharacterService : ICharacterService
         // Check blacklist
         if (game.BlacklistedUsers.Any(b => b.UserId == currentUserId))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You are blacklisted from this game");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
         }
 
         var gameRoles = game.GetRoles(currentUserId);
@@ -130,7 +130,7 @@ internal class CharacterService : ICharacterService
         var character = await _repository.FindCharacter(characterId);
         if (character == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Character not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CharacterNotFound);
         }
 
         var game = await _gameService.GetAsync(character.GameId);
@@ -201,7 +201,7 @@ internal class CharacterService : ICharacterService
         // объявляет 404.
         if (await _repository.FindCharacter(characterId) == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Character not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CharacterNotFound);
         }
 
         var character = await _repository.GetForUpdate(characterId);
@@ -264,7 +264,7 @@ internal class CharacterService : ICharacterService
                 break;
 
             default:
-                throw new HttpException(HttpStatusCode.BadRequest, "Unknown status transition");
+                throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.UnknownStatusTransition);
         }
 
         // Возврат в игру снимает все три причины ухода: иначе воскрешенный
@@ -305,7 +305,7 @@ internal class CharacterService : ICharacterService
         if (!allowed.Contains(character.Status))
         {
             throw new HttpException(HttpStatusCode.BadRequest,
-                $"Transition '{transition}' is not allowed from status '{character.Status}'");
+                $"Переход \"{transition}\" недоступен из статуса \"{character.Status}\"");
         }
     }
 

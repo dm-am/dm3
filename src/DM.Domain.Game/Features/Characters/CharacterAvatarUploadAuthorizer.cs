@@ -47,7 +47,7 @@ internal class CharacterAvatarUploadAuthorizer : IUploadTargetAuthorizer
         var character = await _repository.FindCharacter(targetId);
         if (character == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Character not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CharacterNotFound);
         }
 
         var characterToUpdate = await _repository.GetForUpdate(targetId);

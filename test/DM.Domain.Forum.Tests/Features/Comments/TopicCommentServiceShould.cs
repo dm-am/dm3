@@ -161,7 +161,7 @@ public class TopicCommentServiceShould : UnitTestBase
 
         var exception = await act.Should().ThrowAsync<HttpException>();
         exception.Which.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        exception.Which.Message.Should().Contain("You cannot comment on this topic");
+        exception.Which.Message.Should().Contain("Вы не можете комментировать эту тему");
     }
 
     [Fact]
@@ -208,6 +208,6 @@ public class TopicCommentServiceShould : UnitTestBase
 
         var exception = await act.Should().ThrowAsync<HttpException>();
         exception.Which.StatusCode.Should().Be(HttpStatusCode.NotFound);
-        exception.Which.Message.Should().Contain($"Comment {commentId} not found");
+        exception.Which.Message.Should().Contain($"Комментарий {commentId} не найден");
     }
 }

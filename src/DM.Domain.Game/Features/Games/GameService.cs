@@ -350,7 +350,7 @@ internal class GameService : IGameService
         var game = await _repository.GetGame(gameId, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, "Game not found");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
@@ -370,7 +370,7 @@ internal class GameService : IGameService
 
         // Same answer as the aggregate read gives for an id that addresses
         // nothing visible, so a caller cannot tell which path it took.
-        return gameId ?? throw new HttpException(HttpStatusCode.Gone, "Game not found");
+        return gameId ?? throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
     }
 
     public async Task<Game> GetByPublicIdAsync(string publicId)
@@ -379,7 +379,7 @@ internal class GameService : IGameService
         var game = await _repository.GetGameByPublicId(publicId, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, "Game not found");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
@@ -398,7 +398,7 @@ internal class GameService : IGameService
         var game = await _repository.GetGameDetails(gameId, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, "Game not found");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
@@ -423,7 +423,7 @@ internal class GameService : IGameService
         var game = await _repository.GetGameDetailsByPublicId(publicId, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, "Game not found");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
@@ -658,7 +658,7 @@ internal class GameService : IGameService
                 break;
 
             default:
-                throw new HttpException(HttpStatusCode.BadRequest, "Unknown status transition");
+                throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.UnknownStatusTransition);
         }
 
         var result = await _repository.Update(update);
@@ -682,7 +682,7 @@ internal class GameService : IGameService
             : await _repository.GetGameDetailsByPublicId(id, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, "Game not found");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
         }
 
         var gameId = game.Id;
@@ -694,7 +694,7 @@ internal class GameService : IGameService
                 if (game.PremoderationStatus != PremoderationStatus.AwaitingEdits)
                 {
                     throw new HttpException(HttpStatusCode.BadRequest,
-                        $"Cannot send to premoderation from status '{game.PremoderationStatus}'");
+                        RefusalMessage.CannotSubmitForPremoderation(game.PremoderationStatus));
                 }
                 update.PremoderationStatus = PremoderationStatus.AwaitingApproval;
                 update.MentorId = currentUserId;
@@ -705,7 +705,7 @@ internal class GameService : IGameService
                 if (game.PremoderationStatus != PremoderationStatus.AwaitingApproval)
                 {
                     throw new HttpException(HttpStatusCode.BadRequest,
-                        $"Cannot remove from premoderation from status '{game.PremoderationStatus}'");
+                        RefusalMessage.CannotWithdrawFromPremoderation(game.PremoderationStatus));
                 }
                 update.PremoderationStatus = PremoderationStatus.Approved;
                 update.MentorId = null;
@@ -713,7 +713,7 @@ internal class GameService : IGameService
                 break;
 
             default:
-                throw new HttpException(HttpStatusCode.BadRequest, "Unknown premoderation transition");
+                throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.UnknownPremoderationTransition);
         }
 
         var result = await _repository.Update(update);
@@ -748,7 +748,7 @@ internal class GameService : IGameService
 
     private static HttpException IllegalTransition(GameStatusTransition transition, Game game) =>
         new(HttpStatusCode.BadRequest,
-            $"Transition '{transition}' is not allowed from status '{game.Status}'" +
+            $"Переход \"{transition}\" недоступен из статуса \"{game.Status}\"" +
             (game.Status == ModuleStatus.Closed ? $" ({game.ClosedReason})" : ""));
 
     #endregion
@@ -775,7 +775,7 @@ internal class GameService : IGameService
             if (totalPosts >= 10 || hasRatedPosts)
             {
                 throw new HttpException(HttpStatusCode.Forbidden,
-                    "The game can no longer be deleted: it has 10 or more posts, or some posts are rated");
+                    "Игру уже нельзя удалить: в ней 10 или больше постов или есть оцененные посты");
             }
         }
 
@@ -800,7 +800,7 @@ internal class GameService : IGameService
 
         if (!await _userRepository.IsAssistantByUsername(gameId, username))
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Assistant not found in this game");
+            throw new HttpException(HttpStatusCode.NotFound, "Помощник не найден в этой игре");
         }
 
         await _userRepository.RemoveAssistantByUsername(gameId, username);
@@ -818,7 +818,7 @@ internal class GameService : IGameService
         // Cannot leave own game
         if (game.Master.UserId == userId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Cannot leave own game");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя покинуть свою игру");
         }
 
         var isReader = await _userRepository.IsReader(userId, gameId);
@@ -828,7 +828,7 @@ internal class GameService : IGameService
         // Check if user is a member of the game
         if (!isReader && !isAssistant && charactersLeft == 0)
         {
-            throw new HttpException(HttpStatusCode.Conflict, "User is not a member of this game");
+            throw new HttpException(HttpStatusCode.Conflict, "Вы не участвуете в этой игре");
         }
 
         // Remove reader subscription

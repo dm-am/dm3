@@ -173,7 +173,7 @@ public class CredentialsController : ControllerBase
     {
         var result = await _credentialsService.GetUsernameChangeApprovalAsync(token);
         if (result == null)
-            throw new HttpException(HttpStatusCode.NotFound, "Invalid or expired approval token");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.LinkInvalidOrExpired);
         return Ok(result);
     }
 

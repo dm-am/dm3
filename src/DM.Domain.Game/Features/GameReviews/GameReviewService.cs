@@ -64,7 +64,7 @@ internal class GameReviewService : IGameReviewService
         if (await IsNewbieAsync(authorId))
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "You need at least 100 game posts to create game reviews");
+                "Писать рецензии можно после 100 постов в играх");
         }
 
         // Check if user can review this game (has at least one post in the game)
@@ -72,13 +72,13 @@ internal class GameReviewService : IGameReviewService
         if (!canReview)
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "You can only review games where you have at least one post");
+                "Рецензию можно написать только на игру, где у вас есть хотя бы один пост");
         }
 
         // Check if already reviewed
         if (await ExistsAsync(authorId, gameId))
         {
-            throw new HttpException(HttpStatusCode.Conflict, "You have already reviewed this game");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyReviewedGame);
         }
 
         var entity = new CreateGameReviewEntity
@@ -98,7 +98,7 @@ internal class GameReviewService : IGameReviewService
         }
         catch (DuplicateEntityException)
         {
-            throw new HttpException(HttpStatusCode.Conflict, "You have already reviewed this game");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyReviewedGame);
         }
     }
 
@@ -108,7 +108,7 @@ internal class GameReviewService : IGameReviewService
         var review = await _repository.GetAsync(id);
         if (review == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Review not found");
+            throw new HttpException(HttpStatusCode.NotFound, "Рецензия не найдена");
         }
 
         return review;
@@ -159,7 +159,7 @@ internal class GameReviewService : IGameReviewService
         if (currentUser.Role != UserRole.Admin && !CanEdit(review))
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "Reviews can only be edited within 24 hours of creation");
+                "Рецензию можно править в течение суток после публикации");
         }
 
         if (string.IsNullOrEmpty(updateReview.Text))

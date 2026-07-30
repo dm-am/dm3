@@ -31,7 +31,7 @@ internal static class ExceptionProblemDetailsFactoryExtensions
     public static ProblemDetails CreateFrom(this ProblemDetailsFactory factory,
         IntentionManagerException intentionException, HttpContext httpContext) =>
         factory.CreateProblemDetails(httpContext, (int)intentionException.StatusCode,
-            "Недостаточно прав для этого действия");
+            RefusalMessage.AccessDenied);
 
     public static ProblemDetails CreateFrom(this ProblemDetailsFactory factory,
         HttpBadRequestException httpBadRequestException, HttpContext httpContext)
@@ -56,7 +56,7 @@ internal static class ExceptionProblemDetailsFactoryExtensions
         }
 
         return factory.CreateValidationProblemDetails(httpContext,
-            modelStateDictionary, StatusCodes.Status400BadRequest, "Некорректные данные");
+            modelStateDictionary, StatusCodes.Status400BadRequest, RefusalMessage.InvalidData);
     }
 
     /// <summary>

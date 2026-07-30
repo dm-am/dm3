@@ -73,7 +73,7 @@ public class SubscriptionController : ControllerBase
         var result = await _apiService.GetByIdAsync(id);
         if (result == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Subscription not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.SubscriptionNotFound);
         }
         return Ok(result);
     }
@@ -100,7 +100,7 @@ public class SubscriptionController : ControllerBase
         var result = await _apiService.GetSubscriptionAsync(type, targetId);
         if (result == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Not subscribed to this target");
+            throw new HttpException(HttpStatusCode.NotFound, "Вы не подписаны");
         }
         return Ok(result);
     }

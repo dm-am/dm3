@@ -52,7 +52,7 @@ internal class TopicLikeService : ITopicLikeService
         var currentUserId = _identityProvider.Current.User.UserId;
         if (topic.Author != null && await _userBlacklistChecker.IsBlockedAsync(topic.Author.UserId, currentUserId))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You cannot like this topic");
+            throw new HttpException(HttpStatusCode.Forbidden, "Вы не можете поставить лайк этой теме");
         }
 
         return await _likeOperations.LikeAsync(topic, EventType.LikedTopic);
@@ -68,7 +68,7 @@ internal class TopicLikeService : ITopicLikeService
         var currentUserId = _identityProvider.Current.User.UserId;
         if (comment.Author != null && await _userBlacklistChecker.IsBlockedAsync(comment.Author.UserId, currentUserId))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You cannot like this comment");
+            throw new HttpException(HttpStatusCode.Forbidden, "Вы не можете поставить лайк этому комментарию");
         }
 
         return await _likeOperations.LikeAsync(comment, EventType.LikedTopicComment);

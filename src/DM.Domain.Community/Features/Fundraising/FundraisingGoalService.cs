@@ -35,7 +35,7 @@ internal class FundraisingGoalService : IFundraisingGoalService
         if (goal == null)
         {
             // The row is seeded in the InitialCreate migration, so this is exceptional
-            throw new HttpException(HttpStatusCode.NotFound, "Fundraising goal not found");
+            throw new HttpException(HttpStatusCode.NotFound, "Цель сбора средств не найдена");
         }
 
         return goal;

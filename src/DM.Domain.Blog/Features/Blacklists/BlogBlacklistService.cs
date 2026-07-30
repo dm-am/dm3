@@ -64,32 +64,32 @@ internal class BlogBlacklistService : IBlogBlacklistService
         var user = await _userLookupService.GetAsync(username);
         if (user == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, $"User '{username}' not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(username));
         }
 
         // Cannot blacklist Owner
         if (user.UserId == blog.Author.UserId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Cannot blacklist the blog owner");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя добавить в черный список автора блога");
         }
 
         // Cannot blacklist Mentor
         if (blog.Mentor != null && user.UserId == blog.Mentor.UserId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Cannot blacklist the blog mentor");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя добавить в черный список наставника блога");
         }
 
         // Cannot blacklist an assistant (they must be removed first)
         var isAssistant = blog.Assistants.Any(a => a.UserId == user.UserId);
         if (isAssistant)
         {
-            throw new HttpException(HttpStatusCode.Conflict, "Remove user from blog assistants first before blacklisting");
+            throw new HttpException(HttpStatusCode.Conflict, "Сначала уберите пользователя из ассистентов блога");
         }
 
         // Check if already blacklisted
         if (await _repository.IsBlocked(blogId, user.UserId, ct))
         {
-            throw new HttpException(HttpStatusCode.Conflict, $"User '{username}' is already blacklisted");
+            throw new HttpException(HttpStatusCode.Conflict, $"Пользователь {username} уже в черном списке");
         }
 
         var currentUserId = _identityProvider.Current.User.UserId;
@@ -116,12 +116,12 @@ internal class BlogBlacklistService : IBlogBlacklistService
         var user = await _userLookupService.GetAsync(username);
         if (user == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, $"User '{username}' not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(username));
         }
 
         if (!await _repository.IsBlocked(blogId, user.UserId, ct))
         {
-            throw new HttpException(HttpStatusCode.Conflict, $"User '{username}' is not in the blacklist");
+            throw new HttpException(HttpStatusCode.Conflict, $"Пользователя {username} нет в черном списке");
         }
 
         await _repository.Remove(blogId, user.UserId, ct);

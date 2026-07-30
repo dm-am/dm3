@@ -65,7 +65,7 @@ internal class PollService : IPollService
         var poll = await _repository.Get(pollId);
         if (poll == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Poll not found");
+            throw new HttpException(HttpStatusCode.NotFound, "Опрос не найден");
         }
 
         return poll;

@@ -66,7 +66,7 @@ internal class PublicationCommentService : IPublicationCommentService
         var currentUser = _identityProvider.Current.User;
         if (blog.BlacklistedUserIds.Contains(currentUser.UserId))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You are blacklisted from this blog");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromBlog);
         }
 
         // Ban check lives here rather than in PublicationIntentionResolver: the
@@ -76,7 +76,7 @@ internal class PublicationCommentService : IPublicationCommentService
         // AccessRestrictions.MaySpeak owns what a ban does with the answer.
         if (!currentUser.MaySpeak(inOwnSpace: blog.IsOwnBlog(currentUser.UserId)))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Commenting is not available while you are banned");
+            throw new HttpException(HttpStatusCode.Forbidden, "Во время бана комментировать нельзя");
         }
 
         // Strip [mod] authored by a non-moderator (it renders as a green mod
@@ -113,7 +113,7 @@ internal class PublicationCommentService : IPublicationCommentService
     public async Task<Comment> GetAsync(Guid commentId)
     {
         return await _repository.Get(commentId) ??
-               throw new HttpException(HttpStatusCode.NotFound, $"Comment {commentId} not found");
+               throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));
     }
 
     /// <inheritdoc />
@@ -154,7 +154,7 @@ internal class PublicationCommentService : IPublicationCommentService
         var comment = await _repository.GetForDelete(commentId);
         if (comment == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, $"Comment {commentId} not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));
         }
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Delete, (Comment)comment);

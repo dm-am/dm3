@@ -49,7 +49,7 @@ internal class TagManagementService : ITagManagementService
         _intentionManager.ThrowIfForbidden(ModerationIntention.ManageTags);
 
         var group = await _repository.GetGroup(groupId, ct)
-            ?? throw new HttpException(HttpStatusCode.NotFound, $"Tag group {groupId} not found");
+            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.TagGroupNotFound(groupId));
 
         return group;
     }
@@ -62,7 +62,7 @@ internal class TagManagementService : ITagManagementService
 
         if (await _repository.GroupTitleExists(createGroup.Title, ct: ct))
         {
-            throw new HttpException(HttpStatusCode.Conflict, $"Tag group '{createGroup.Title}' already exists");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.TagGroupTitleTaken(createGroup.Title));
         }
 
         return await _repository.CreateGroup(createGroup, ct);
@@ -75,11 +75,11 @@ internal class TagManagementService : ITagManagementService
         _intentionManager.ThrowIfForbidden(ModerationIntention.ManageTags);
 
         var group = await _repository.GetGroup(updateGroup.Id, ct)
-            ?? throw new HttpException(HttpStatusCode.NotFound, $"Tag group {updateGroup.Id} not found");
+            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.TagGroupNotFound(updateGroup.Id));
 
         if (await _repository.GroupTitleExists(updateGroup.Title, updateGroup.Id, ct))
         {
-            throw new HttpException(HttpStatusCode.Conflict, $"Tag group '{updateGroup.Title}' already exists");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.TagGroupTitleTaken(updateGroup.Title));
         }
 
         return await _repository.UpdateGroup(updateGroup, ct);
@@ -91,11 +91,11 @@ internal class TagManagementService : ITagManagementService
         _intentionManager.ThrowIfForbidden(ModerationIntention.ManageTags);
 
         var group = await _repository.GetGroup(groupId, ct)
-            ?? throw new HttpException(HttpStatusCode.NotFound, $"Tag group {groupId} not found");
+            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.TagGroupNotFound(groupId));
 
         if (group.TagsCount > 0)
         {
-            throw new HttpException(HttpStatusCode.Conflict, "Cannot delete a group that contains tags");
+            throw new HttpException(HttpStatusCode.Conflict, "Нельзя удалить группу, в которой есть теги");
         }
 
         await _repository.DeleteGroup(groupId, ct);
@@ -121,7 +121,7 @@ internal class TagManagementService : ITagManagementService
         _intentionManager.ThrowIfForbidden(ModerationIntention.ManageTags);
 
         var tag = await _repository.GetTag(tagId, ct)
-            ?? throw new HttpException(HttpStatusCode.NotFound, $"Tag {tagId} not found");
+            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.TagNotFound(tagId));
 
         return tag;
     }
@@ -133,11 +133,11 @@ internal class TagManagementService : ITagManagementService
         _intentionManager.ThrowIfForbidden(ModerationIntention.ManageTags);
 
         var group = await _repository.GetGroup(createTag.GroupId, ct)
-            ?? throw new HttpException(HttpStatusCode.NotFound, $"Tag group {createTag.GroupId} not found");
+            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.TagGroupNotFound(createTag.GroupId));
 
         if (await _repository.TagTitleExists(createTag.Title, createTag.GroupId, ct: ct))
         {
-            throw new HttpException(HttpStatusCode.Conflict, $"Tag '{createTag.Title}' already exists in group '{group.Title}'");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.TagTitleTaken(createTag.Title, group.Title));
         }
 
         return await _repository.CreateTag(createTag, ct);
@@ -150,14 +150,14 @@ internal class TagManagementService : ITagManagementService
         _intentionManager.ThrowIfForbidden(ModerationIntention.ManageTags);
 
         var tag = await _repository.GetTag(updateTag.Id, ct)
-            ?? throw new HttpException(HttpStatusCode.NotFound, $"Tag {updateTag.Id} not found");
+            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.TagNotFound(updateTag.Id));
 
         var group = await _repository.GetGroup(updateTag.GroupId, ct)
-            ?? throw new HttpException(HttpStatusCode.NotFound, $"Tag group {updateTag.GroupId} not found");
+            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.TagGroupNotFound(updateTag.GroupId));
 
         if (await _repository.TagTitleExists(updateTag.Title, updateTag.GroupId, updateTag.Id, ct))
         {
-            throw new HttpException(HttpStatusCode.Conflict, $"Tag '{updateTag.Title}' already exists in group '{group.Title}'");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.TagTitleTaken(updateTag.Title, group.Title));
         }
 
         return await _repository.UpdateTag(updateTag, ct);
@@ -169,12 +169,12 @@ internal class TagManagementService : ITagManagementService
         _intentionManager.ThrowIfForbidden(ModerationIntention.ManageTags);
 
         var tag = await _repository.GetTag(tagId, ct)
-            ?? throw new HttpException(HttpStatusCode.NotFound, $"Tag {tagId} not found");
+            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.TagNotFound(tagId));
 
         var usageCount = await _repository.GetTagUsageCount(tagId, ct);
         if (usageCount > 0)
         {
-            throw new HttpException(HttpStatusCode.Conflict, $"Cannot delete tag '{tag.Title}' - it is used by {usageCount} game(s)");
+            throw new HttpException(HttpStatusCode.Conflict, $"Нельзя удалить тег \"{tag.Title}\": он используется в играх ({usageCount})");
         }
 
         await _repository.DeleteTag(tagId, ct);

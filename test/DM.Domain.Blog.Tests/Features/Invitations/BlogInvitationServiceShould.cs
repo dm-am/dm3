@@ -105,7 +105,7 @@ public class BlogInvitationServiceShould : UnitTestBase
         var act = async () => await _service.InviteAssistant(blogId, "invitee");
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("blacklisted"));
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("черного списка"));
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public class BlogInvitationServiceShould : UnitTestBase
         var act = async () => await _service.InviteAssistant(blogId, "invitee");
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.UnprocessableEntity && e.Message.Contains("blocked"));
+            .Where(e => e.StatusCode == HttpStatusCode.UnprocessableEntity && e.Message.Contains("личного черного списка"));
     }
 
     [Fact]
@@ -174,7 +174,7 @@ public class BlogInvitationServiceShould : UnitTestBase
         var act = async () => await _service.AcceptInvitation(tokenId);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Gone && e.Message.Contains("expired"));
+            .Where(e => e.StatusCode == HttpStatusCode.Gone && e.Message.Contains("истек"));
     }
 
     [Fact]

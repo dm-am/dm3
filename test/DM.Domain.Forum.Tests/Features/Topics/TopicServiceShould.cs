@@ -175,7 +175,7 @@ public class TopicServiceShould : UnitTestBase
 
         var exception = await act.Should().ThrowAsync<HttpException>();
         exception.Which.StatusCode.Should().Be(HttpStatusCode.NotFound);
-        exception.Which.Message.Should().Contain("Topic not found");
+        exception.Which.Message.Should().Contain("Тема не найдена");
     }
 
     [Fact]

@@ -92,7 +92,7 @@ public class BlogLikeServiceShould : UnitTestBase
         var act = async () => await _service.LikeBlogCommentAsync(commentId);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("blacklisted"));
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("черном списке"));
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public class BlogLikeServiceShould : UnitTestBase
         var act = async () => await _service.LikePublicationAsync(publicationId);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("blacklisted"));
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("черном списке"));
     }
 
     private static IIdentity CreateAuthenticatedIdentity(Guid userId)

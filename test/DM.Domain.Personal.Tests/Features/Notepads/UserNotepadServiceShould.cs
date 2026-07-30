@@ -65,7 +65,7 @@ public class UserNotepadServiceShould : UnitTestBase
         var act = () => _service.GetEntry(_entryId);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("not found"));
+            .Where(e => e.Message.Contains("не найдена"));
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public class UserNotepadServiceShould : UnitTestBase
         var act = () => _service.GetEntry(_entryId);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("Access denied"));
+            .Where(e => e.Message.Contains("Недостаточно прав"));
     }
 
     [Fact]

@@ -326,7 +326,7 @@ internal class AuthenticationService : IAuthenticationService
             // middleware maps only HttpException and its kin. Terminating one's own
             // session is a caller mistake, not a server fault.
             throw new HttpException(HttpStatusCode.BadRequest,
-                "Cannot terminate current session. Use logout instead.");
+                "Нельзя завершить текущую сессию. Для этого есть кнопка Выйти");
         }
 
         await _repository.RemoveSession(userId, sessionId);

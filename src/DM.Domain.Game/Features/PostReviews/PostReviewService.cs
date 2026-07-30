@@ -65,33 +65,33 @@ internal class PostReviewService : IPostReviewService
         var postInfo = await _repository.GetPostInfoAsync(postId);
         if (postInfo == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Post not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.PostNotFound);
         }
 
         // Can't review own post
         if (authorId == postInfo.AuthorId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You cannot review your own post");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя оценивать собственный пост");
         }
 
         // Newbies can only create neutral post reviews
         if (createReview.Sign != ReviewSign.Neutral && await IsNewbieAsync(authorId))
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "You need at least 100 game posts to create positive or negative reviews");
+                "Ставить плюс и минус можно после 100 постов в играх");
         }
 
         // Check if already reviewed this post
         if (await ExistsAsync(authorId, postId))
         {
-            throw new HttpException(HttpStatusCode.Conflict, "You have already reviewed this post");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyReviewedPost);
         }
 
         // Check cooldown: can't review posts in the same game within 3 days
         if (await HasRecentReviewInGameAsync(authorId, postInfo.GameId))
         {
             throw new HttpException(HttpStatusCode.TooManyRequests,
-                "You can only submit one post review per game every 3 days");
+                "Оценивать посты в одной игре можно раз в три дня");
         }
 
         var entity = new CreatePostReviewEntity
@@ -123,7 +123,7 @@ internal class PostReviewService : IPostReviewService
         }
         catch (DuplicateEntityException)
         {
-            throw new HttpException(HttpStatusCode.Conflict, "You have already reviewed this post");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyReviewedPost);
         }
     }
 
@@ -133,7 +133,7 @@ internal class PostReviewService : IPostReviewService
         var review = await _repository.GetAsync(id);
         if (review == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Review not found");
+            throw new HttpException(HttpStatusCode.NotFound, "Оценка не найдена");
         }
 
         return review;
@@ -184,7 +184,7 @@ internal class PostReviewService : IPostReviewService
         if (currentUser.Role != UserRole.Admin && !CanEdit(review))
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "Reviews can only be edited within 24 hours of creation");
+                "Оценку можно править в течение суток после публикации");
         }
 
         // Handle sign change impact on QualityRating

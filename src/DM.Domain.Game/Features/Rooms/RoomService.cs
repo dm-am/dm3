@@ -107,7 +107,7 @@ internal class RoomService : IRoomService
         var room = await _repository.GetAvailable(roomId, currentUserId);
         if (room == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Room not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomNotFound);
         }
 
         await _unreadCountersRepository.FillEntityCounters(new[] { room }, currentUserId,
@@ -127,7 +127,7 @@ internal class RoomService : IRoomService
         var room = await _repository.GetForUpdate(updateRoom.RoomId, currentUserId);
         if (room == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Room not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
@@ -164,7 +164,7 @@ internal class RoomService : IRoomService
         var room = await _repository.GetForUpdate(roomId, _identityProvider.Current.User.UserId);
         if (room == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Room not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
