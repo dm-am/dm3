@@ -79,8 +79,9 @@ internal class GameRoleResolver : IGameRoleResolver
         if (game.Players.Any(p => p.UserId == userId))
             return GameRole.Player;
 
-        // Check subscriber (requires SubscriberIds to be populated from Subscriptions)
-        if (game.SubscriberIds.Contains(userId))
+        // Check subscriber. The flag is filled for the user the game was read
+        // for, which is the only user this overload is ever asked about.
+        if (game.IsViewerSubscriber)
             return GameRole.Reader;
 
         // Note: Applicant role detection would require pending character data

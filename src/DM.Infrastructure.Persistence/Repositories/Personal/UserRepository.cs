@@ -44,50 +44,17 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     // ═══ READ ═══
 
     /// <inheritdoc />
-    public Task<int> CountUsersAsync(
-        UserActivityFilter filter,
-        string? search = null,
-        UserRole? role = null,
-        bool? isNewbie = null,
-        bool? isOnline = null,
-        int? minRating = null,
-        int? maxRating = null,
-        int? minGamesHosting = null,
-        int? maxGamesHosting = null,
-        int? minGamesPlaying = null,
-        int? maxGamesPlaying = null,
-        int? minBlogsHosting = null,
-        int? maxBlogsHosting = null,
-        DateTimeOffset? registeredFromUtc = null,
-        DateTimeOffset? registeredToUtc = null) =>
-        GetQuery(filter, search, role, isNewbie, isOnline, minRating, maxRating,
-            minGamesHosting, maxGamesHosting, minGamesPlaying, maxGamesPlaying, minBlogsHosting, maxBlogsHosting,
-            registeredFromUtc, registeredToUtc).CountAsync();
+    public Task<int> CountUsersAsync(UserFilter filter) => GetQuery(filter).CountAsync();
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GeneralUser>> GetUsersAsync(
-        PagingData paging,
-        UserActivityFilter filter,
-        string? search = null,
-        UserRole? role = null,
-        UserSort sort = UserSort.Name,
-        bool sortAscending = true,
-        bool? isNewbie = null,
-        bool? isOnline = null,
-        int? minRating = null,
-        int? maxRating = null,
-        int? minGamesHosting = null,
-        int? maxGamesHosting = null,
-        int? minGamesPlaying = null,
-        int? maxGamesPlaying = null,
-        int? minBlogsHosting = null,
-        int? maxBlogsHosting = null,
-        DateTimeOffset? registeredFromUtc = null,
-        DateTimeOffset? registeredToUtc = null)
+    public async Task<IEnumerable<GeneralUser>> GetUsersAsync(PagingData paging, UserFilter filter)
     {
-        var baseQuery = GetQuery(filter, search, role, isNewbie, isOnline, minRating, maxRating,
-                minGamesHosting, maxGamesHosting, minGamesPlaying, maxGamesPlaying, minBlogsHosting, maxBlogsHosting,
-                registeredFromUtc, registeredToUtc)
+        // Read once each: the ordering below branches on them a dozen times.
+        var search = filter.Search;
+        var sort = filter.Sort;
+        var sortAscending = filter.SortAscending;
+
+        var baseQuery = GetQuery(filter)
             .Include(u => u.AvatarUpload)
             .Include(u => u.UsernameHistories);
 
@@ -323,6 +290,32 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         return users;
     }
 
+    /// <inheritdoc />
+    public async Task<IEnumerable<UserReference>> GetUserReferencesAsync(IEnumerable<Guid> userIds)
+    {
+        var idsList = userIds.ToList();
+        if (idsList.Count == 0)
+        {
+            return Array.Empty<UserReference>();
+        }
+
+        // Written out rather than routed through ProjectTo: the mapping to
+        // GeneralUser is what drags the counter properties along, and the point
+        // here is to select five columns and stop.
+        return await _dmDbContext.Users
+            .TagWith("DM.User.References")
+            .Where(u => !u.IsRemoved && idsList.Contains(u.UserId))
+            .Select(u => new UserReference
+            {
+                UserId = u.UserId,
+                Username = u.Username,
+                LastActivityUtc = u.LastActivityUtc,
+                Role = u.Role,
+                IsNewbie = u.IsNewbie,
+            })
+            .ToArrayAsync();
+    }
+
     // ═══ WRITE ═══
 
     /// <inheritdoc />
@@ -532,24 +525,15 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
                 });
     }
 
-    private IQueryable<User> GetQuery(
-        UserActivityFilter filter,
-        string? search = null,
-        UserRole? role = null,
-        bool? isNewbie = null,
-        bool? isOnline = null,
-        int? minRating = null,
-        int? maxRating = null,
-        int? minGamesHosting = null,
-        int? maxGamesHosting = null,
-        int? minGamesPlaying = null,
-        int? maxGamesPlaying = null,
-        int? minBlogsHosting = null,
-        int? maxBlogsHosting = null,
-        DateTimeOffset? registeredFromUtc = null,
-        DateTimeOffset? registeredToUtc = null)
+    private IQueryable<User> GetQuery(UserFilter filter)
     {
-        IQueryable<User> query = filter switch
+        // Everything below reads off the filter directly, rather than aliasing
+        // fifteen locals first and rebuilding the positional list this record
+        // exists to remove. The search term is the exception: nullable-flow
+        // analysis narrows a local, not a property.
+        var search = filter.Search;
+
+        IQueryable<User> query = filter.Activity switch
         {
             UserActivityFilter.Pending => _dmDbContext.Users.Where(u => false),
             // Exclude removed users and system users from public lists
@@ -575,30 +559,30 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         var activeRange = now - ActivityPolicy.ActivePeriod;
         var onlineRange = now - ActivityPolicy.OnlinePeriod;
 
-        if (filter == UserActivityFilter.Active)
+        if (filter.Activity == UserActivityFilter.Active)
         {
             query = query.Where(u => u.LastActivityUtc.HasValue && u.LastActivityUtc > activeRange);
         }
-        else if (filter == UserActivityFilter.Inactive)
+        else if (filter.Activity == UserActivityFilter.Inactive)
         {
             query = query.Where(u => !u.LastActivityUtc.HasValue || u.LastActivityUtc <= activeRange);
         }
 
         // Online filter: users active in last 5 minutes
-        if (isOnline == true)
+        if (filter.IsOnline == true)
         {
             query = query.Where(u => u.LastActivityUtc.HasValue && u.LastActivityUtc > onlineRange);
         }
 
-        if (role.HasValue)
+        if (filter.Role.HasValue)
         {
-            query = query.Where(u => u.Role == role.Value);
+            query = query.Where(u => u.Role == filter.Role.Value);
         }
 
         // Newbie filter (users with < 100 posts)
-        if (isNewbie.HasValue)
+        if (filter.IsNewbie.HasValue)
         {
-            if (isNewbie.Value)
+            if (filter.IsNewbie.Value)
             {
                 query = query.Where(u => u.QuantityRating < NewbieThreshold);
             }
@@ -609,73 +593,73 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         }
 
         // Rating filter (based on QualityRating = post review score sum)
-        if (minRating.HasValue)
+        if (filter.MinRating.HasValue)
         {
-            query = query.Where(u => !u.RatingDisabled && u.QualityRating >= minRating.Value);
+            query = query.Where(u => !u.RatingDisabled && u.QualityRating >= filter.MinRating.Value);
         }
-        if (maxRating.HasValue)
+        if (filter.MaxRating.HasValue)
         {
-            query = query.Where(u => !u.RatingDisabled && u.QualityRating <= maxRating.Value);
+            query = query.Where(u => !u.RatingDisabled && u.QualityRating <= filter.MaxRating.Value);
         }
 
         // Registration date range filter
-        if (registeredFromUtc.HasValue)
+        if (filter.RegisteredFromUtc.HasValue)
         {
-            query = query.Where(u => u.CreatedUtc >= registeredFromUtc.Value);
+            query = query.Where(u => u.CreatedUtc >= filter.RegisteredFromUtc.Value);
         }
-        if (registeredToUtc.HasValue)
+        if (filter.RegisteredToUtc.HasValue)
         {
-            query = query.WhereAtOrBefore(u => u.CreatedUtc, registeredToUtc.Value);
+            query = query.WhereAtOrBefore(u => u.CreatedUtc, filter.RegisteredToUtc.Value);
         }
 
         // Games hosting filter (master + assistant)
-        if (minGamesHosting.HasValue)
+        if (filter.MinGamesHosting.HasValue)
         {
             query = query.Where(u =>
                 _dmDbContext.Games.Count(g => !g.IsRemoved && g.MasterId == u.UserId) +
                 _dmDbContext.Set<Entities.Game.Links.GameAssistant>().Count(a => a.UserId == u.UserId && !a.Game.IsRemoved)
-                >= minGamesHosting.Value);
+                >= filter.MinGamesHosting.Value);
         }
-        if (maxGamesHosting.HasValue)
+        if (filter.MaxGamesHosting.HasValue)
         {
             query = query.Where(u =>
                 _dmDbContext.Games.Count(g => !g.IsRemoved && g.MasterId == u.UserId) +
                 _dmDbContext.Set<Entities.Game.Links.GameAssistant>().Count(a => a.UserId == u.UserId && !a.Game.IsRemoved)
-                <= maxGamesHosting.Value);
+                <= filter.MaxGamesHosting.Value);
         }
 
         // Games playing filter (distinct games where user has active character)
-        if (minGamesPlaying.HasValue)
+        if (filter.MinGamesPlaying.HasValue)
         {
             query = query.Where(u =>
                 _dmDbContext.Set<Entities.Game.Characters.Character>()
                     .Where(c => c.AuthorId == u.UserId && !c.IsNpc && !c.IsRemoved && !c.Game.IsRemoved)
                     .Select(c => c.GameId).Distinct().Count()
-                >= minGamesPlaying.Value);
+                >= filter.MinGamesPlaying.Value);
         }
-        if (maxGamesPlaying.HasValue)
+        if (filter.MaxGamesPlaying.HasValue)
         {
             query = query.Where(u =>
                 _dmDbContext.Set<Entities.Game.Characters.Character>()
                     .Where(c => c.AuthorId == u.UserId && !c.IsNpc && !c.IsRemoved && !c.Game.IsRemoved)
                     .Select(c => c.GameId).Distinct().Count()
-                <= maxGamesPlaying.Value);
+                <= filter.MaxGamesPlaying.Value);
         }
 
         // Blogs hosting filter (owner + assistant)
-        if (minBlogsHosting.HasValue)
+        if (filter.MinBlogsHosting.HasValue)
         {
             query = query.Where(u =>
                 _dmDbContext.Blogs.Count(b => !b.IsRemoved && b.AuthorId == u.UserId) +
                 _dmDbContext.Set<Entities.Blog.BlogAssistant>().Count(a => a.UserId == u.UserId && !a.Blog.IsRemoved)
-                >= minBlogsHosting.Value);
+                >= filter.MinBlogsHosting.Value);
         }
-        if (maxBlogsHosting.HasValue)
+        if (filter.MaxBlogsHosting.HasValue)
         {
             query = query.Where(u =>
                 _dmDbContext.Blogs.Count(b => !b.IsRemoved && b.AuthorId == u.UserId) +
                 _dmDbContext.Set<Entities.Blog.BlogAssistant>().Count(a => a.UserId == u.UserId && !a.Blog.IsRemoved)
-                <= maxBlogsHosting.Value);
+                <= filter.MaxBlogsHosting.Value);
         }
 
         return query;
@@ -851,44 +835,41 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             .Select(g => new StatusCountItem(g.Key.UserId, g.Key.Status, g.Count()))
             .ToListAsync();
 
-        // Subscribers: fetch username + last activity + settings flags
-        // for richer profile display. Settings is the bitmask the profile
-        // UI uses to filter subscribers per active tab (games / blogs /
-        // topics). The username-only list is kept for tooltip compatibility.
-        // Limit retained at 20 per user — same budget across all three fields.
-        var subscriberData = await _dmDbContext.Subscriptions
+        // Subscribers: the total plus a capped preview carrying username, last
+        // activity and the settings bitmask the profile UI filters tabs by
+        // (games / blogs / topics). Every subscriber row used to be materialised
+        // to produce a count and a slice of twenty; the slice is now taken in SQL
+        // by ROW_NUMBER() OVER (PARTITION BY TargetId), so the transfer is bounded
+        // by the cap instead of by how popular the users on the page are.
+        //
+        // The Join, rather than relying on the navigation, keeps the count over the
+        // same rows the preview comes from: the subscriber's soft-delete filter
+        // reaches the join and so removes a departed subscriber from both, which
+        // is what the previous single materialised list did.
+        var subscriberSummaries = await _dmDbContext.Subscriptions
             .Where(s => s.TargetType == SubscriptionTargetType.User && userIds.Contains(s.TargetId))
-            .Select(s => new
+            .Join(_dmDbContext.Users, s => s.SubscriberId, u => u.UserId,
+                (s, u) => new { s.TargetId, s.SubscriptionId, s.Settings, u.Username, u.LastActivityUtc })
+            .GroupBy(x => x.TargetId)
+            .Select(g => new
             {
-                s.TargetId,
-                Username = s.Subscriber.Username,
-                LastActivityUtc = s.Subscriber.LastActivityUtc,
-                Settings = s.Settings,
-            })
-            .ToListAsync();
-
-        var subscribersDict = subscriberData
-            .GroupBy(s => s.TargetId)
-            .ToDictionary(g => g.Key, g => g.Count());
-
-        var subscriberUsernamesDict = subscriberData
-            .GroupBy(s => s.TargetId)
-            .ToDictionary(
-                g => g.Key,
-                g => g.Select(s => s.Username).Take(20).ToList());
-
-        var subscribersInfoDict = subscriberData
-            .GroupBy(s => s.TargetId)
-            .ToDictionary(
-                g => g.Key,
-                g => g.Take(20)
-                    .Select(s => new Domain.Core.Dto.SubscriberInfo
+                UserId = g.Key,
+                Count = g.Count(),
+                // Never-active subscribers sort last; a plain DESC in Postgres
+                // would put their nulls first.
+                Preview = g.OrderByDescending(x => x.LastActivityUtc != null)
+                    .ThenByDescending(x => x.LastActivityUtc)
+                    .ThenBy(x => x.SubscriptionId)
+                    .Take(SubscriptionPolicy.PreviewCap)
+                    .Select(x => new Domain.Core.Dto.SubscriberInfo
                     {
-                        Username = s.Username,
-                        LastActivityUtc = s.LastActivityUtc,
-                        Settings = s.Settings,
+                        Username = x.Username,
+                        LastActivityUtc = x.LastActivityUtc,
+                        Settings = x.Settings,
                     })
-                    .ToList());
+                    .ToList(),
+            })
+            .ToDictionaryAsync(x => x.UserId);
 
         // Username history: fetch and group by user
         var usernameHistoryData = await _dmDbContext.Set<Entities.Account.UsernameHistory>()
@@ -965,9 +946,11 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             user.BlogsHostingByStatus = blogsHostingByStatusDict.TryGetValue(user.UserId, out var bh) ? bh : null;
             user.BlogsHosting = user.BlogsHostingByStatus?.Total ?? 0;
 
-            user.SubscribersCount = subscribersDict.TryGetValue(user.UserId, out var subs) ? subs : 0;
-            user.SubscriberUsernames = subscriberUsernamesDict.TryGetValue(user.UserId, out var names) ? names : [];
-            user.Subscribers = subscribersInfoDict.TryGetValue(user.UserId, out var infos) ? infos : [];
+            var subscribers = subscriberSummaries.GetValueOrDefault(user.UserId);
+            user.SubscribersCount = subscribers?.Count ?? 0;
+            user.Subscribers = subscribers?.Preview ?? [];
+            // Same preview, name-only, for the tooltip that predates SubscriberInfo.
+            user.SubscriberUsernames = subscribers?.Preview.Select(s => s.Username).ToList() ?? [];
             user.UsernameHistory = usernameHistoryDict.TryGetValue(user.UserId, out var history) ? history : [];
         }
     }

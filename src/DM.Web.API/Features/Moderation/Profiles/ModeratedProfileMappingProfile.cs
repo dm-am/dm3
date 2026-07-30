@@ -21,6 +21,17 @@ internal class ModeratedProfileMappingProfile : Profile
     public ModeratedProfileMappingProfile()
     {
         CreateMap<GeneralUser, ModeratedProfile>()
-            .IncludeBase<GeneralUser, UserProfile>();
+            .IncludeBase<GeneralUser, UserProfile>()
+            // Filled by ModeratedProfileApiService after the map: each comes from
+            // a repository of its own, and half of them depend on the caller's
+            // role rather than on the user being read. Declared rather than left
+            // silent so the configuration assertion keeps covering the members
+            // that ARE this map's job.
+            .ForMember(d => d.IpAddresses, o => o.Ignore())
+            .ForMember(d => d.LoginHistory, o => o.Ignore())
+            .ForMember(d => d.LinkedProfiles, o => o.Ignore())
+            .ForMember(d => d.ModeratorNotes, o => o.Ignore())
+            .ForMember(d => d.Violations, o => o.Ignore())
+            .ForMember(d => d.Permissions, o => o.Ignore());
     }
 }

@@ -120,7 +120,8 @@ internal class BlogService : IBlogService
     public async Task<IEnumerable<Blog>> GetPopularBlogs(
         int count = 5, IReadOnlyCollection<Guid>? excludeOwnerIds = null, CancellationToken ct = default)
     {
-        var blogs = (await _repository.GetPopularBlogs(count, excludeOwnerIds, ct)).ToArray();
+        var blogs = (await _repository.GetPopularBlogs(
+            count, _identityProvider.Current.User.UserId, excludeOwnerIds, ct)).ToArray();
         await FillBlogUnreadCounters(blogs);
         return blogs;
     }
@@ -137,7 +138,7 @@ internal class BlogService : IBlogService
         // Premoderation-pending blogs are hidden from other viewers just like
         // games; the owner, assistants, the curator, and senior moderation
         // still see them in the profile list
-        var blogs = (await _repository.GetUserBlogs(user.UserId, ct))
+        var blogs = (await _repository.GetUserBlogs(user.UserId, _identityProvider.Current.User.UserId, ct))
             .Where(b => b.PremoderationStatus == PremoderationStatus.Approved ||
                         _intentionManager.IsAllowed(BlogIntention.ViewPremoderationPending, b))
             .ToArray();
@@ -609,7 +610,7 @@ internal class BlogService : IBlogService
     /// <inheritdoc />
     public async Task<IEnumerable<Blog>> GetSubscribedBlogs(IEnumerable<Guid> blogIds, CancellationToken ct = default)
     {
-        var blogs = (await _repository.GetByIds(blogIds, ct)).ToArray();
+        var blogs = (await _repository.GetByIds(blogIds, _identityProvider.Current.User.UserId, ct)).ToArray();
         await FillBlogUnreadCounters(blogs);
         return blogs;
     }

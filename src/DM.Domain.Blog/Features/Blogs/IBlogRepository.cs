@@ -34,7 +34,14 @@ public interface IBlogRepository
     /// <summary>
     /// Get blogs where user is owner or assistant
     /// </summary>
-    Task<IEnumerable<Blog>> GetUserBlogs(Guid userId, CancellationToken ct = default);
+    /// <param name="ownerId">Whose blogs to list</param>
+    /// <param name="viewerId">
+    /// Who is reading, for <see cref="Blog.IsViewerSubscriber" />
+    /// (<see cref="Guid.Empty" /> for a guest). Not the same person as
+    /// <paramref name="ownerId" /> on any page but the user's own.
+    /// </param>
+    /// <param name="ct">Cancellation token</param>
+    Task<IEnumerable<Blog>> GetUserBlogs(Guid ownerId, Guid viewerId, CancellationToken ct = default);
 
     /// <summary>
     /// Get blog by ID
@@ -89,10 +96,11 @@ public interface IBlogRepository
     /// Get popular blogs ordered by subscriber count
     /// </summary>
     /// <param name="count">Number of blogs to return</param>
+    /// <param name="viewerId">Who is reading, for <see cref="Blog.IsViewerSubscriber" /></param>
     /// <param name="excludeOwnerIds">Optional owner IDs to exclude (for blacklist filtering)</param>
     /// <param name="ct">Cancellation token</param>
     Task<IEnumerable<Blog>> GetPopularBlogs(
-        int count, IReadOnlyCollection<Guid>? excludeOwnerIds = null, CancellationToken ct = default);
+        int count, Guid viewerId, IReadOnlyCollection<Guid>? excludeOwnerIds = null, CancellationToken ct = default);
 
     /// <summary>
     /// Get blog readers (subscribers from Subscriptions table)
@@ -112,10 +120,15 @@ public interface IBlogRepository
     /// <summary>
     /// Get blogs by IDs
     /// </summary>
-    Task<IEnumerable<Blog>> GetByIds(IEnumerable<Guid> blogIds, CancellationToken ct = default);
+    /// <param name="blogIds">Blogs to load</param>
+    /// <param name="viewerId">Who is reading, for <see cref="Blog.IsViewerSubscriber" /></param>
+    /// <param name="ct">Cancellation token</param>
+    Task<IEnumerable<Blog>> GetByIds(IEnumerable<Guid> blogIds, Guid viewerId, CancellationToken ct = default);
 
     /// <summary>
-    /// Get blogs where user is owner, mentor, or assistant
+    /// Get blogs where user is owner, mentor, or assistant.
+    /// The user is the reader here, so they are also who
+    /// <see cref="Blog.IsViewerSubscriber" /> is filled for.
     /// </summary>
     Task<IEnumerable<Blog>> GetOwnBlogs(Guid userId, CancellationToken ct = default);
 

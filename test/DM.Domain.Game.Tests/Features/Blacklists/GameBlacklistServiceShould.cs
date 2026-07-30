@@ -10,6 +10,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
+using DM.Domain.Core.Subscriptions;
 using DM.Domain.Core.Users;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.Blacklists;
@@ -36,6 +37,7 @@ public class GameBlacklistServiceShould : UnitTestBase
     private readonly Mock<IGameBlacklistRepository> _repository;
     private readonly Mock<IGameInvitationRepository> _invitationRepository;
     private readonly Mock<ICharacterRepository> _characterRepository;
+    private readonly Mock<ISubscriptionRepository> _subscriptionRepository;
     private readonly Mock<IEventProducer> _producer;
     private readonly GameBlacklistService _service;
     private readonly Guid _currentUserId;
@@ -58,6 +60,7 @@ public class GameBlacklistServiceShould : UnitTestBase
         _repository = Mock<IGameBlacklistRepository>();
         _invitationRepository = Mock<IGameInvitationRepository>();
         _characterRepository = Mock<ICharacterRepository>();
+        _subscriptionRepository = Mock<ISubscriptionRepository>();
         _producer = Mock<IEventProducer>();
         _producer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
 
@@ -70,6 +73,7 @@ public class GameBlacklistServiceShould : UnitTestBase
             _repository.Object,
             _invitationRepository.Object,
             _characterRepository.Object,
+            _subscriptionRepository.Object,
             _producer.Object);
     }
 
@@ -126,6 +130,33 @@ public class GameBlacklistServiceShould : UnitTestBase
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict);
+    }
+
+    /// <summary>
+    /// The reader check is the one question this service asks about somebody other
+    /// than the caller, so it reads the subscription table rather than the game's
+    /// viewer-scoped flag. Without this guard the check would silently pass for
+    /// every reader — the game DTO here is loaded for the master, and its
+    /// subscriber flag says nothing about the user being blacklisted.
+    /// </summary>
+    [Fact]
+    public async Task RefuseToBlacklistAReaderBeforeTheyAreRemoved()
+    {
+        var gameId = Guid.NewGuid();
+        var username = "reader";
+        var userId = Guid.NewGuid();
+        var game = CreateGame(gameId);
+        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
+        _userLookupService.Setup(u => u.FindUserIdAsync(username, It.IsAny<CancellationToken>())).ReturnsAsync((true, userId));
+        _subscriptionRepository
+            .Setup(r => r.FindAsync(userId, SubscriptionTargetType.Game, gameId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Subscription { Id = Guid.NewGuid(), SubscriberId = userId, TargetId = gameId });
+
+        var act = async () => await _service.Add(new OperateBlacklistLink { GameId = gameId, Username = username });
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Conflict);
+        _repository.Verify(r => r.Add(gameId, userId, _currentUserId), Times.Never);
     }
 
     [Fact]

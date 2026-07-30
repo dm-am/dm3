@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Users;
 
@@ -194,14 +195,15 @@ public class GeneralUser : IUser
     public int SubscribersCount { get; set; }
 
     /// <summary>
-    /// Subscriber usernames for tooltip display (limited to first 20)
+    /// Subscriber usernames for tooltip display, capped and ordered per
+    /// <see cref="SubscriptionPolicy.PreviewCap" />
     /// </summary>
     public IReadOnlyCollection<string> SubscriberUsernames { get; set; } = [];
 
     /// <summary>
     /// Richer subscriber refs (username + last activity) for profile-page
     /// display where the UI styles inactive subscribers differently.
-    /// Limited to first 20 — same budget as <see cref="SubscriberUsernames"/>.
+    /// The same rows as <see cref="SubscriberUsernames" />, in the same order.
     /// </summary>
     public IReadOnlyCollection<SubscriberInfo> Subscribers { get; set; } = [];
 

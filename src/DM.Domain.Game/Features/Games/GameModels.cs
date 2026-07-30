@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using DM.Domain.Core.Comments;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Likes;
@@ -278,9 +279,23 @@ public class Game
     public IEnumerable<GeneralUser> Players { get; set; } = [];
 
     /// <summary>
-    /// Game subscriber ids
+    /// How many subscribers (readers) the game has
     /// </summary>
-    public IEnumerable<Guid> SubscriberIds { get; set; } = [];
+    public int SubscribersCount { get; set; }
+
+    /// <summary>
+    /// Whether the user this game was read for subscribes to it.
+    /// </summary>
+    /// <remarks>
+    /// Viewer-scoped, like <see cref="UnreadPostsCount" /> and
+    /// <see cref="UnreadCommentsCount" />: the repository fills it for the user
+    /// id the read was issued with. This is what makes <see cref="GameRole.Reader" />
+    /// resolvable, so <c>GetRoles</c> and <c>GetRole</c> only answer for that same
+    /// user — asking them about anybody else silently loses the Reader role. It
+    /// replaces a full subscriber id set that existed to answer this one boolean
+    /// and the count above.
+    /// </remarks>
+    public bool IsViewerSubscriber { get; set; }
 
     /// <summary>
     /// User ids with pending invitations (player or reader)
@@ -363,7 +378,8 @@ public class Game
     public int PostReviewsCount { get; set; }
 
     /// <summary>
-    /// Subscriber usernames for tooltip display (limited to first 20)
+    /// Subscriber usernames for tooltip display, capped and ordered per
+    /// <see cref="SubscriptionPolicy.PreviewCap" />
     /// </summary>
     public IEnumerable<string> SubscriberUsernames { get; set; } = [];
 

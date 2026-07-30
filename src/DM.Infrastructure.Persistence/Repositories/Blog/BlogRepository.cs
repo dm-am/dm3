@@ -72,7 +72,7 @@ internal class BlogRepository : IBlogRepository
             .AsSplitQuery()
             .ToListAsync(ct);
 
-        await FillBlogSubscriberIds(blogs, ct);
+        await FillSubscriberSummary(blogs, filter.CurrentUserId, ct);
         return blogs;
     }
 
@@ -230,12 +230,12 @@ internal class BlogRepository : IBlogRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<BlogDto>> GetUserBlogs(Guid userId, CancellationToken ct = default)
+    public async Task<IEnumerable<BlogDto>> GetUserBlogs(Guid ownerId, Guid viewerId, CancellationToken ct = default)
     {
         // Note: Include not needed with ProjectTo - AutoMapper generates SQL subqueries
         var blogs = await _dbContext.Blogs
             .TagWith("DM.Blog.ListByUser")
-            .Where(b => !b.IsRemoved && b.AuthorId == userId)
+            .Where(b => !b.IsRemoved && b.AuthorId == ownerId)
             .OrderByDescending(b => b.ActivatedUtc ?? b.CreatedUtc)
             // BlogDto's Rubrics/Assistants/Tokens collections cartesian-explode
             // on a single query; split them (no row limiting here, so EF orders
@@ -244,7 +244,7 @@ internal class BlogRepository : IBlogRepository
             .AsSplitQuery()
             .ToListAsync(ct);
 
-        await FillBlogSubscriberIds(blogs, ct);
+        await FillSubscriberSummary(blogs, viewerId, ct);
         return blogs;
     }
 
@@ -397,7 +397,7 @@ internal class BlogRepository : IBlogRepository
 
     /// <inheritdoc />
     public async Task<IEnumerable<BlogDto>> GetPopularBlogs(
-        int count, IReadOnlyCollection<Guid>? excludeOwnerIds = null, CancellationToken ct = default)
+        int count, Guid viewerId, IReadOnlyCollection<Guid>? excludeOwnerIds = null, CancellationToken ct = default)
     {
         // Use pre-computed PopularityScore for efficient sorting (updated by PopularityScoreService)
         // Show Active, Closed, and Draft blogs with public visibility (like games)
@@ -421,7 +421,7 @@ internal class BlogRepository : IBlogRepository
             .AsSplitQuery()
             .ToListAsync(ct);
 
-        await FillBlogSubscriberIds(blogs, ct);
+        await FillSubscriberSummary(blogs, viewerId, ct);
         return blogs;
     }
 
@@ -492,7 +492,8 @@ internal class BlogRepository : IBlogRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<BlogDto>> GetByIds(IEnumerable<Guid> blogIds, CancellationToken ct = default)
+    public async Task<IEnumerable<BlogDto>> GetByIds(
+        IEnumerable<Guid> blogIds, Guid viewerId, CancellationToken ct = default)
     {
         var blogIdList = blogIds.ToList();
         if (blogIdList.Count == 0)
@@ -508,7 +509,7 @@ internal class BlogRepository : IBlogRepository
             .AsSplitQuery()
             .ToListAsync(ct);
 
-        await FillBlogSubscriberIds(blogs, ct);
+        await FillSubscriberSummary(blogs, viewerId, ct);
         return blogs;
     }
 
@@ -532,7 +533,8 @@ internal class BlogRepository : IBlogRepository
             .AsSplitQuery()
             .ToListAsync(ct);
 
-        await FillBlogSubscriberIds(blogs, ct);
+        // The user whose blogs these are is the one asking for them.
+        await FillSubscriberSummary(blogs, userId, ct);
         return blogs;
     }
 
@@ -860,32 +862,49 @@ internal class BlogRepository : IBlogRepository
 
     // ═══ HELPERS ═══
 
-    private async Task FillBlogSubscriberIds(IList<BlogDto> blogs, CancellationToken ct)
+    /// <summary>
+    /// Fill the subscriber summary — total, whether this viewer subscribes, the
+    /// capped name preview, and the active-subscriber count — on blogs the
+    /// projection cannot produce it for.
+    /// </summary>
+    /// <param name="blogs">Blogs to hydrate</param>
+    /// <param name="userId">
+    /// The user the read is on behalf of; only
+    /// <see cref="BlogDto.IsViewerSubscriber" /> depends on it.
+    /// <see cref="Guid.Empty" /> for an anonymous read.
+    /// </param>
+    /// <param name="ct">Cancellation token</param>
+    private async Task FillSubscriberSummary(IList<BlogDto> blogs, Guid userId, CancellationToken ct)
     {
         if (blogs.Count == 0) return;
 
         var blogIdSet = blogs.Select(b => b.Id).ToHashSet();
         var activeThreshold = _dateTimeProvider.Now - ActivityPolicy.ActivePeriod;
 
-        // Load subscriber IDs (for participation detection) - same pattern as GameRepository
-        var subscriptionMap = await _dbContext.Subscriptions
+        // Total, viewer flag and name preview in one statement — see the twin
+        // block in GameRepository.EnrichGamesAsync for the SQL this produces and
+        // why the preview needs an explicit order at all.
+        var summaries = await _dbContext.Subscriptions
             .Where(s => s.TargetType == SubscriptionTargetType.Blog && blogIdSet.Contains(s.TargetId))
             .GroupBy(s => s.TargetId)
-            .ToDictionaryAsync(g => g.Key, g => g.Select(s => s.SubscriberId).ToHashSet(), ct);
+            .Select(g => new
+            {
+                BlogId = g.Key,
+                Count = g.Count(),
+                ViewerSubscribed = g.Any(s => s.SubscriberId == userId),
+                Preview = g.OrderByDescending(s => s.Subscriber.LastActivityUtc != null)
+                    .ThenByDescending(s => s.Subscriber.LastActivityUtc)
+                    .ThenBy(s => s.SubscriptionId)
+                    .Take(SubscriptionPolicy.PreviewCap)
+                    .Select(s => s.Subscriber.Username)
+                    .ToList(),
+            })
+            .ToDictionaryAsync(x => x.BlogId, ct);
 
-        // Batch load subscriber usernames for tooltip (limit to first 20)
-        var subscriberData = await _dbContext.Subscriptions
-            .Where(s => s.TargetType == SubscriptionTargetType.Blog && blogIdSet.Contains(s.TargetId))
-            .Select(s => new { s.TargetId, Username = s.Subscriber.Username })
-            .ToListAsync(ct);
-
-        var subscriberUsernamesMap = subscriberData
-            .GroupBy(s => s.TargetId)
-            .ToDictionary(
-                g => g.Key,
-                g => g.Select(s => s.Username).Take(20).ToList());
-
-        // Load active subscribers count (subscribers active in last 30 days)
+        // The active count stays its own GROUP BY. Folded into the group above as
+        // a conditional Count it degenerates: the predicate is on the subscriber's
+        // last activity, so EF emits a correlated subquery that re-joins Users for
+        // every blog on the page instead of the single flat scan below.
         var activeSubscribersData = await _dbContext.Subscriptions
             .Where(s => s.TargetType == SubscriptionTargetType.Blog &&
                        blogIdSet.Contains(s.TargetId) &&
@@ -897,8 +916,10 @@ internal class BlogRepository : IBlogRepository
 
         foreach (var blog in blogs)
         {
-            blog.SubscriberIds = subscriptionMap.GetValueOrDefault(blog.Id, []);
-            blog.SubscriberUsernames = subscriberUsernamesMap.GetValueOrDefault(blog.Id, []);
+            var summary = summaries.GetValueOrDefault(blog.Id);
+            blog.SubscribersCount = summary?.Count ?? 0;
+            blog.IsViewerSubscriber = summary?.ViewerSubscribed ?? false;
+            blog.SubscriberUsernames = summary?.Preview ?? [];
             blog.ActiveSubscribersCount = activeSubscribersData.GetValueOrDefault(blog.Id, 0);
         }
     }

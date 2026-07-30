@@ -68,7 +68,8 @@ public class BlogRef
     public int SubscribersCount { get; set; }
 
     /// <summary>
-    /// Subscriber usernames for tooltip display (first 5)
+    /// Subscriber usernames for tooltip display: at most 20, the most recently
+    /// active first. <see cref="SubscribersCount" /> is the real total.
     /// </summary>
     public IEnumerable<string> SubscriberUsernames { get; set; } = [];
 

@@ -226,7 +226,7 @@ public class GameIntentionResolverShould : UnitTestBase
         var userId = Guid.NewGuid();
         var game = new GameBuilder()
             .WithCommentsAccessMode(CommentsAccessMode.Public)
-            .WithSubscribers(userId)
+            .WithViewerSubscribed()
             .Please();
         var user = Create.User(userId)
             .WithRole(UserRole.RegularUser)
@@ -247,7 +247,7 @@ public class GameIntentionResolverShould : UnitTestBase
         // a subscription behind, which must not stand in for acceptance either.
         var game = new GameBuilder()
             .WithCommentsAccessMode(CommentsAccessMode.Public)
-            .WithSubscribers(applicantId)
+            .WithViewerSubscribed()
             .Please();
         var user = Create.User(applicantId)
             .WithRole(UserRole.RegularUser)
@@ -263,7 +263,7 @@ public class GameIntentionResolverShould : UnitTestBase
         var playerId = Guid.NewGuid();
         var game = new GameBuilder()
             .WithCommentsAccessMode(CommentsAccessMode.Public)
-            .WithSubscribers(playerId)
+            .WithViewerSubscribed()
             .WithPlayers(playerId)
             .Please();
         var user = Create.User(playerId)

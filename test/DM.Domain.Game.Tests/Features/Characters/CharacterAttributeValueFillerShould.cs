@@ -43,8 +43,7 @@ public class CharacterAttributeValueFillerShould : UnitTestBase
         AttributeSchemaId = _schemaId,
         Master = new GeneralUser { UserId = _masterId, Username = "Master" },
         Assistants = [],
-        Players = [],
-        SubscriberIds = []
+        Players = []
     };
 
     private void SetupSchema(params AttributeSpecification[] specifications) =>

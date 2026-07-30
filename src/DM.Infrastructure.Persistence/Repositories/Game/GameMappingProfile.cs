@@ -223,7 +223,8 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.Assistants, s => s.MapFrom(g => g.Assistants))
             .ForMember(d => d.PendingAssistant, s => s.Ignore()) // Populated via batch query in repository
             .ForMember(d => d.Players, s => s.Ignore()) // Populated in repository for efficiency
-            .ForMember(d => d.SubscriberIds, s => s.Ignore())
+            .ForMember(d => d.SubscribersCount, s => s.Ignore()) // Populated via batch query in repository
+            .ForMember(d => d.IsViewerSubscriber, s => s.Ignore()) // Populated via batch query in repository
             .ForMember(d => d.PendingInvitedUserIds, s => s.Ignore()) // Populated via batch query in repository
             .ForMember(d => d.PendingPlayerInvitedUserIds, s => s.Ignore()) // Populated via batch query in repository
             .ForMember(d => d.BlacklistedUsers, s => s.MapFrom(g => g.BlackList))

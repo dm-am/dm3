@@ -87,7 +87,8 @@ public class GameRef
     public int PostReviewsCount { get; set; }
 
     /// <summary>
-    /// Subscriber usernames for tooltip display (limited to first 20)
+    /// Subscriber usernames for tooltip display: at most 20, the most recently
+    /// active first. <see cref="SubscribersCount" /> is the real total.
     /// </summary>
     public IEnumerable<string> SubscriberUsernames { get; set; } = [];
 

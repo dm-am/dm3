@@ -153,14 +153,15 @@ public class User : UserRef
     public int SubscribersCount { get; set; }
 
     /// <summary>
-    /// Subscriber usernames for tooltip display (limited to first 20)
+    /// Subscriber usernames for tooltip display: at most 20, the most recently
+    /// active first. <see cref="SubscribersCount" /> is the real total.
     /// </summary>
     public IReadOnlyCollection<string> SubscriberUsernames { get; set; } = [];
 
     /// <summary>
     /// Richer subscriber refs (username + last activity) — used by the
-    /// profile page to style inactive subscribers in muted gray. Same 20
-    /// budget as <see cref="SubscriberUsernames"/>.
+    /// profile page to style inactive subscribers in muted gray. The same rows as
+    /// <see cref="SubscriberUsernames" />, in the same order.
     /// </summary>
     public IReadOnlyCollection<SubscriberRef> Subscribers { get; set; } = [];
 }

@@ -12,6 +12,7 @@ using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
 using DbPost = DM.Infrastructure.Persistence.Entities.Game.Posts.Post;
 using DbPostReview = DM.Infrastructure.Persistence.Entities.Game.PostReview;
 using DbRoom = DM.Infrastructure.Persistence.Entities.Game.Posts.Room;
+using DbSubscription = DM.Infrastructure.Persistence.Entities.Subscriptions.Subscription;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
@@ -46,7 +47,7 @@ public class PostRepositoryShould : IntegrationTestBase
         {
             Take = 10,
             GameId = context.GameId,
-        });
+        }, Guid.Empty);
 
         var ordered = posts.ToList();
         total.Should().Be(2);
@@ -77,12 +78,80 @@ public class PostRepositoryShould : IntegrationTestBase
             Take = 10,
             SortBy = "lastreview",
             GameId = context.GameId,
-        });
+        }, Guid.Empty);
 
         var ordered = posts.ToList();
         ordered.Should().HaveCount(2);
         ordered[0].Id.Should().Be(lowRatedNewerReview);
         ordered[1].Id.Should().Be(highRatedOlderReview);
+    }
+
+[Fact]
+    public async Task ReportTheViewerAsAReaderOfTheGameTheySubscribeTo()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var context = await AddGameWithRoomAsync(dbContext);
+        await AddRatedPostAsync(dbContext, context, positiveReviews: 1);
+        var subscriberId = await AddSubscriberAsync(dbContext, context.GameId);
+
+        var (forSubscriber, _) = await repository.GetRated(new PostsQuery
+        {
+            Take = 10,
+            GameId = context.GameId,
+        }, subscriberId);
+
+        // The attached game is what GameLink builds its tooltip from, and its
+        // participation list is derived from this flag. The feed itself is public,
+        // so the game is loaded anonymously — filling the flag is the only thing
+        // the viewer's identity is used for here.
+        forSubscriber.Single().Room!.Game!.IsViewerSubscriber.Should().BeTrue();
+
+        var (forStranger, _) = await repository.GetRated(new PostsQuery
+        {
+            Take = 10,
+            GameId = context.GameId,
+        }, Guid.NewGuid());
+
+        forStranger.Single().Room!.Game!.IsViewerSubscriber.Should().BeFalse();
+
+        var (forGuest, _) = await repository.GetRated(new PostsQuery
+        {
+            Take = 10,
+            GameId = context.GameId,
+        }, Guid.Empty);
+
+        // A guest subscribes to nothing, and no lookup is made for them.
+        forGuest.Single().Room!.Game!.IsViewerSubscriber.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// A user subscribed to the game, so the feed has somebody to report as a
+    /// reader.
+    /// </summary>
+    private static async Task<Guid> AddSubscriberAsync(DmDbContext dbContext, Guid gameId)
+    {
+        var subscriberId = Guid.NewGuid();
+        dbContext.Users.Add(new DbUser
+        {
+            UserId = subscriberId,
+            Username = $"sub{subscriberId:N}"[..20],
+            Email = $"{subscriberId:N}@example.com",
+            PasswordHash = "hash",
+            Salt = "salt",
+        });
+        dbContext.Subscriptions.Add(new DbSubscription
+        {
+            SubscriptionId = Guid.NewGuid(),
+            SubscriberId = subscriberId,
+            TargetType = SubscriptionTargetType.Game,
+            TargetId = gameId,
+            CreatedUtc = DateTimeOffset.UtcNow,
+        });
+        await dbContext.SaveChangesAsync();
+        return subscriberId;
     }
 
     private sealed record GameContext(Guid UserId, Guid GameId, Guid RoomId);

@@ -28,7 +28,7 @@ internal class BlogMappingProfile : Profile
         // BlogRef mapping (BASE - for sidebars/menus)
         CreateMap<SvcBlog, BlogRef>()
             .ForMember(d => d.Author, s => s.MapFrom(b => b.Author))
-            .ForMember(d => d.SubscribersCount, s => s.MapFrom(b => b.SubscriberIds.Count))
+            .ForMember(d => d.SubscribersCount, s => s.MapFrom(b => b.SubscribersCount))
             .ForMember(d => d.SubscriberUsernames, s => s.MapFrom(b => b.SubscriberUsernames))
             .ForMember(d => d.ActiveSubscribersCount, s => s.MapFrom(b => b.ActiveSubscribersCount))
             .ForMember(d => d.Assistants, s => s.MapFrom(b => b.Assistants));

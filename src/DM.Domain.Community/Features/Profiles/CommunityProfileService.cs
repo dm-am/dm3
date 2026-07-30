@@ -73,39 +73,18 @@ internal class CommunityProfileService : ICommunityProfileService
 
     /// <inheritdoc />
     public async Task<(IEnumerable<GeneralUser> users, PagingResult paging)> GetUsers(
-        PagingQuery query,
-        UserActivityFilter filter,
-        string? search = null,
-        UserRole? role = null,
-        UserSort sort = UserSort.Name,
-        bool sortAscending = true,
-        bool? isNewbie = null,
-        bool? isOnline = null,
-        int? minRating = null,
-        int? maxRating = null,
-        int? minGamesHosting = null,
-        int? maxGamesHosting = null,
-        int? minGamesPlaying = null,
-        int? maxGamesPlaying = null,
-        int? minBlogsHosting = null,
-        int? maxBlogsHosting = null,
-        DateTimeOffset? registeredFromUtc = null,
-        DateTimeOffset? registeredToUtc = null)
+        PagingQuery query, UserFilter filter)
     {
-        if (filter == UserActivityFilter.Pending)
+        if (filter.Activity == UserActivityFilter.Pending)
         {
             _intentionManager.ThrowIfForbidden(CommunityIntention.ViewPendingUsers);
         }
 
-        var totalCount = await _userRepository.CountUsersAsync(
-            filter, search, role, isNewbie, isOnline, minRating, maxRating,
-            minGamesHosting, maxGamesHosting, minGamesPlaying, maxGamesPlaying, minBlogsHosting, maxBlogsHosting,
-            registeredFromUtc, registeredToUtc);
+        // One filter instance for both reads, so the total and the page cannot
+        // disagree about what was filtered.
+        var totalCount = await _userRepository.CountUsersAsync(filter);
         var paging = new PagingData(query, _identityProvider.Current.Settings.Paging.EntitiesPerPage, totalCount);
-        var users = await _userRepository.GetUsersAsync(
-            paging, filter, search, role, sort, sortAscending, isNewbie, isOnline, minRating, maxRating,
-            minGamesHosting, maxGamesHosting, minGamesPlaying, maxGamesPlaying, minBlogsHosting, maxBlogsHosting,
-            registeredFromUtc, registeredToUtc);
+        var users = await _userRepository.GetUsersAsync(paging, filter);
         return (users, paging.Result);
     }
 

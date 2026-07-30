@@ -52,25 +52,12 @@ internal class CommunityUserApiService : ICommunityUserApiService
             _ => query.Sort == UserSort.Name // Default: asc for Name, desc for others
         };
 
-        var (users, paging) = await _profileService.GetUsers(
-            query,
-            query.Activity,
-            query.Q,
-            query.Role,
-            query.Sort,
-            sortAscending,
-            query.IsNewbie,
-            query.IsOnline,
-            query.MinRating,
-            query.MaxRating,
-            query.MinGamesHosting,
-            query.MaxGamesHosting,
-            query.MinGamesPlaying,
-            query.MaxGamesPlaying,
-            query.MinBlogsHosting,
-            query.MaxBlogsHosting,
-            query.RegisteredFromUtc,
-            query.RegisteredToUtc);
+        // Mapped by name, so a filter added to the query string and the domain
+        // record needs no edit here. The direction is the one thing this layer
+        // decides, above.
+        var filter = _mapper.Map<UserFilter>(query) with { SortAscending = sortAscending };
+
+        var (users, paging) = await _profileService.GetUsers(query, filter);
         return new ListEnvelope<User>(users.Select(_mapper.Map<User>), new PagingInfo(paging));
     }
 

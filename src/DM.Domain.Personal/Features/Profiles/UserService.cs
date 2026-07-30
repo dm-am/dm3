@@ -67,9 +67,19 @@ internal class UserService : IUserService
             _intentionManager.ThrowIfForbidden(UserIntention.ViewPendingUsers);
         }
 
-        var totalCount = await _repository.CountUsersAsync(filter, search, role);
+        // One instance for both reads, so the total and the page describe the
+        // same set.
+        var userFilter = new UserFilter
+        {
+            Activity = filter,
+            Search = search,
+            Role = role,
+            Sort = sort
+        };
+
+        var totalCount = await _repository.CountUsersAsync(userFilter);
         var paging = new PagingData(query, _identityProvider.Current.Settings.Paging.EntitiesPerPage, totalCount);
-        var users = await _repository.GetUsersAsync(paging, filter, search, role, sort);
+        var users = await _repository.GetUsersAsync(paging, userFilter);
         return (users, paging.Result);
     }
 

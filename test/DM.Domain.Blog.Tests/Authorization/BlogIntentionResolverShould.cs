@@ -37,7 +37,7 @@ public class BlogIntentionResolverShould
         DraftVisibility draftVisibility = DraftVisibility.Public,
         bool commentsEnabled = true,
         IEnumerable<BlogAssistantInfo>? assistants = null,
-        IReadOnlySet<Guid>? subscriberIds = null,
+        bool viewerIsSubscriber = false,
         GeneralUser? mentor = null)
     {
         return new BlogDto
@@ -48,7 +48,7 @@ public class BlogIntentionResolverShould
             DraftVisibility = draftVisibility,
             CommentsEnabled = commentsEnabled,
             Assistants = assistants ?? Array.Empty<BlogAssistantInfo>(),
-            SubscriberIds = subscriberIds ?? new HashSet<Guid>(),
+            IsViewerSubscriber = viewerIsSubscriber,
             PendingInvitedUserIds = Array.Empty<Guid>()
         };
     }
@@ -181,7 +181,7 @@ public class BlogIntentionResolverShould
     public void AllowSubscriberToViewPrivateDraftBlog()
     {
         var user = CreateUser(_otherUserId);
-        var blog = CreateBlog(draftVisibility: DraftVisibility.Private, subscriberIds: new HashSet<Guid> { _otherUserId });
+        var blog = CreateBlog(draftVisibility: DraftVisibility.Private, viewerIsSubscriber: true);
 
         var result = _resolver.IsAllowed(user, BlogIntention.ViewDraft, blog);
 
@@ -378,7 +378,7 @@ public class BlogIntentionResolverShould
         var blog = CreateBlog(
             draftVisibility: DraftVisibility.Public,
             commentsEnabled: true,
-            subscriberIds: new HashSet<Guid> { _otherUserId });
+            viewerIsSubscriber: true);
 
         // Reading somebody else's blog is not the same as belonging to it
         _resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeFalse();

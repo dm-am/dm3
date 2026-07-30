@@ -26,25 +26,10 @@ public interface ICommunityProfileService
     /// <summary>
     /// Get community users list (paginated)
     /// </summary>
+    /// <param name="query">Paging query</param>
+    /// <param name="filter">Filter and sort</param>
     Task<(IEnumerable<GeneralUser> users, PagingResult paging)> GetUsers(
-        PagingQuery query,
-        UserActivityFilter filter,
-        string? search = null,
-        UserRole? role = null,
-        UserSort sort = UserSort.Name,
-        bool sortAscending = true,
-        bool? isNewbie = null,
-        bool? isOnline = null,
-        int? minRating = null,
-        int? maxRating = null,
-        int? minGamesHosting = null,
-        int? maxGamesHosting = null,
-        int? minGamesPlaying = null,
-        int? maxGamesPlaying = null,
-        int? minBlogsHosting = null,
-        int? maxBlogsHosting = null,
-        DateTimeOffset? registeredFromUtc = null,
-        DateTimeOffset? registeredToUtc = null);
+        PagingQuery query, UserFilter filter);
 
     /// <summary>
     /// Get users by role (e.g., moderators, administrators)

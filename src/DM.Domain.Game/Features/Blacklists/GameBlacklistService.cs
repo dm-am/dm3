@@ -15,6 +15,7 @@ using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.Invitations;
 using DM.Domain.Game.Features.Characters;
 using DM.Domain.Core.Events;
+using DM.Domain.Core.Subscriptions;
 using FluentValidation;
 
 namespace DM.Domain.Game.Features.Blacklists;
@@ -30,6 +31,7 @@ internal class GameBlacklistService : IGameBlacklistService
     private readonly IGameBlacklistRepository _repository;
     private readonly IGameInvitationRepository _invitationRepository;
     private readonly ICharacterRepository _characterRepository;
+    private readonly ISubscriptionRepository _subscriptionRepository;
     private readonly IEventProducer _producer;
 
     /// <inheritdoc />
@@ -42,6 +44,7 @@ internal class GameBlacklistService : IGameBlacklistService
         IGameBlacklistRepository repository,
         IGameInvitationRepository invitationRepository,
         ICharacterRepository characterRepository,
+        ISubscriptionRepository subscriptionRepository,
         IEventProducer producer)
     {
         _validator = validator;
@@ -52,6 +55,7 @@ internal class GameBlacklistService : IGameBlacklistService
         _repository = repository;
         _invitationRepository = invitationRepository;
         _characterRepository = characterRepository;
+        _subscriptionRepository = subscriptionRepository;
         _producer = producer;
     }
 
@@ -80,11 +84,19 @@ internal class GameBlacklistService : IGameBlacklistService
                 "Game master and game moderator cannot be blacklisted");
         }
 
-        // Cannot blacklist a member (they must be removed first)
-        var roles = game.GetRoles(userId);
-        var isMember = roles.Contains(GameRole.Assistant) ||
-                       roles.Contains(GameRole.Player) ||
-                       roles.Contains(GameRole.Reader);
+        // Cannot blacklist a member (they must be removed first). Membership is
+        // read off the game directly rather than through GetRoles: this is the
+        // only question in the codebase asked about somebody other than the
+        // current viewer, and GetRoles answers Reader from the viewer-scoped
+        // subscriber flag without comparing it to the id it was handed. Calling
+        // it here would put the viewer's own readership in the result set — a
+        // value nothing may read, which is exactly the kind of thing a later
+        // edit reads by accident.
+        var isSubscriber = await _subscriptionRepository.FindAsync(
+            userId, SubscriptionTargetType.Game, game.Id) != null;
+        var isMember = game.Assistants.Any(a => a.UserId == userId) ||
+                       game.Players.Any(p => p.UserId == userId) ||
+                       isSubscriber;
         if (isMember)
         {
             throw new HttpException(HttpStatusCode.Conflict,

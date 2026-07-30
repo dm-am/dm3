@@ -20,7 +20,6 @@ public class GameBuilder
         Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "TestMaster", Role = UserRole.RegularUser },
         Assistants = [],
         Players = [],
-        SubscriberIds = [],
         PendingInvitedUserIds = [],
         PendingPlayerInvitedUserIds = [],
         BlacklistedUsers = []
@@ -71,9 +70,15 @@ public class GameBuilder
         return this;
     }
 
-    public GameBuilder WithSubscribers(params Guid[] userIds)
+    /// <summary>
+    /// The game carries no subscriber roster any more, only the count and a flag
+    /// for the user it was read for — so this says "the viewer subscribes", which
+    /// is the only thing the roster was ever consulted for.
+    /// </summary>
+    public GameBuilder WithViewerSubscribed(int subscribersCount = 1)
     {
-        game.SubscriberIds = userIds;
+        game.IsViewerSubscriber = true;
+        game.SubscribersCount = subscribersCount;
         return this;
     }
 

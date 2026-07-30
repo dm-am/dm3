@@ -176,7 +176,8 @@ internal class PostService : IPostService
 
     public async Task<(IEnumerable<Post> Posts, PagingResult Paging)> GetRatedAsync(PostsQuery query)
     {
-        var (posts, totalCount) = await _repository.GetRated(query);
+        var (posts, totalCount) = await _repository.GetRated(query,
+            _identityProvider.Current.User.UserId);
         var paging = new PagingData(query, query.Take, totalCount);
         return (posts, paging.Result);
     }

@@ -205,7 +205,6 @@ public class CharacterServiceShould : UnitTestBase
             Master = new GeneralUser { UserId = _currentUserId, Username = "Master" },
             Assistants = [],
             Players = [],
-            SubscriberIds = [],
             AttributeSchemaId = Guid.NewGuid()
         };
         _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
@@ -260,7 +259,6 @@ public class CharacterServiceShould : UnitTestBase
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Master" },
             Assistants = [],
             Players = [],
-            SubscriberIds = [],
             AttributeSchemaId = Guid.NewGuid()
         };
         _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);

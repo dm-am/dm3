@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
@@ -82,7 +83,7 @@ internal class GameRepository : IGameRepository
             .AsSplitQuery()
             .ToArrayAsync(ct);
 
-        await EnrichGamesAsync(games, ct);
+        await EnrichGamesAsync(games, userId, ct);
         await EnrichWithFilteredPlayerCharactersAsync(games, query.PlayerUsername, ct);
         return games;
     }
@@ -146,7 +147,7 @@ internal class GameRepository : IGameRepository
     /// <summary>
     /// Populate computed / aggregated fields on Game DTOs that cannot
     /// be produced by the ProjectTo mapping (ActiveCharacters, Players,
-    /// SubscriberIds, Recruitment.PcCount, GameReviewsCount,
+    /// subscriber summary, Recruitment.PcCount, GameReviewsCount,
     /// PostReviewsCount, SubscriberUsernames, Pending* invitations).
     ///
     /// This is the single source of truth for "full game DTO hydration"
@@ -163,8 +164,16 @@ internal class GameRepository : IGameRepository
     /// All queries are batched (GROUP BY / IN(...)) so the cost is
     /// O(1) per table regardless of how many games are in the input.
     /// </summary>
+    /// <param name="games">Games to hydrate</param>
+    /// <param name="userId">
+    /// The user the read is on behalf of. Only <see cref="GameDto.IsViewerSubscriber" />
+    /// depends on it; every other field here is the same for all viewers.
+    /// <see cref="Guid.Empty" /> for an anonymous read.
+    /// </param>
+    /// <param name="ct">Cancellation token</param>
     private async Task EnrichGamesAsync<T>(
         IReadOnlyList<T> games,
+        Guid userId,
         CancellationToken ct) where T : GameDto
     {
         if (games.Count == 0) return;
@@ -216,18 +225,48 @@ internal class GameRepository : IGameRepository
                 g => g.Key,
                 g => g.Select(c => c.Author).DistinctBy(u => u.UserId).ToList());
 
-        // Subscriber ids for participation detection.
-        var subscriptionMap = await _dbContext.Subscriptions
+        // Subscriber summary — the total, whether this viewer is one of them, and
+        // the capped preview of names, all from one statement. The three fields
+        // are everything the consumers ever asked the subscriber list for: two
+        // counts and a Contains(viewerId). Loading the ids to answer them read
+        // every subscription row of every game on the page.
+        //
+        // EF 8 / Npgsql 8 translate this to a single SELECT: a GROUP BY for the
+        // aggregates, LEFT JOIN'ed to a ROW_NUMBER() OVER (PARTITION BY TargetId)
+        // subquery for the preview (the window form rather than LATERAL because
+        // the inner order is by a column of the joined Users row). The viewer
+        // flag becomes an EXISTS over the same (TargetType, TargetId) index with
+        // an equality on SubscriberId — no join, so unlike a conditional count
+        // over the navigation it does not re-scan Users per group.
+        var subscriberSummaries = await _dbContext.Subscriptions
             .Where(s => s.TargetType == SubscriptionTargetType.Game && gameIds.Contains(s.TargetId))
             .GroupBy(s => s.TargetId)
-            .ToDictionaryAsync(g => g.Key, g => g.Select(s => s.SubscriberId).ToHashSet(), ct);
+            .Select(g => new
+            {
+                GameId = g.Key,
+                Count = g.Count(),
+                ViewerSubscribed = g.Any(s => s.SubscriberId == userId),
+                // Subscribers who have never been active must sort last, and a
+                // plain DESC in Postgres puts nulls first.
+                Preview = g.OrderByDescending(s => s.Subscriber.LastActivityUtc != null)
+                    .ThenByDescending(s => s.Subscriber.LastActivityUtc)
+                    .ThenBy(s => s.SubscriptionId)
+                    .Take(SubscriptionPolicy.PreviewCap)
+                    .Select(s => s.Subscriber.Username)
+                    .ToList(),
+            })
+            .ToDictionaryAsync(x => x.GameId, ct);
 
         foreach (var game in games)
         {
             game.Players = playersMap.TryGetValue(game.Id, out var players)
                 ? players.ToList()
                 : [];
-            game.SubscriberIds = subscriptionMap.GetValueOrDefault(game.Id, []);
+
+            var summary = subscriberSummaries.GetValueOrDefault(game.Id);
+            game.SubscribersCount = summary?.Count ?? 0;
+            game.IsViewerSubscriber = summary?.ViewerSubscribed ?? false;
+            game.SubscriberUsernames = summary?.Preview ?? [];
         }
 
         // Invitation tokens — single query instead of N subqueries.
@@ -282,18 +321,6 @@ internal class GameRepository : IGameRepository
             .Select(g => new { GameId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.GameId, x => x.Count, ct);
 
-        // Subscriber usernames for tooltip (cap at 20 per game).
-        var subscriberData = await _dbContext.Subscriptions
-            .Where(s => s.TargetType == SubscriptionTargetType.Game && gameIds.Contains(s.TargetId))
-            .Select(s => new { s.TargetId, Username = s.Subscriber.Username })
-            .ToListAsync(ct);
-
-        var subscriberUsernamesMap = subscriberData
-            .GroupBy(s => s.TargetId)
-            .ToDictionary(
-                g => g.Key,
-                g => g.Select(s => s.Username).Take(20).ToList());
-
         // Active characters for [X/Y] tooltip — feeds game/room tooltips.
         var activeCharacterData = await _dbContext.Characters
             .Where(c => gameIds.Contains(c.GameId) && c.Status == CharacterStatus.Active && !c.IsNpc)
@@ -314,7 +341,6 @@ internal class GameRepository : IGameRepository
         {
             game.GameReviewsCount = gameReviewCounts.GetValueOrDefault(game.Id, 0);
             game.PostReviewsCount = postReviewCounts.GetValueOrDefault(game.Id, 0);
-            game.SubscriberUsernames = subscriberUsernamesMap.GetValueOrDefault(game.Id, []);
             game.ActiveCharacters = activeCharactersMap.GetValueOrDefault(game.Id, []);
         }
     }
@@ -783,7 +809,7 @@ internal class GameRepository : IGameRepository
             // counts, etc. Previously these were silently empty on the
             // details path, which is why game tooltips on featured
             // posts showed no characters.
-            await EnrichGamesAsync(new[] { game }, ct);
+            await EnrichGamesAsync(new[] { game }, userId, ct);
             await EnrichGameDetailsAsync(game, ct);
         }
         return game;
@@ -802,13 +828,15 @@ internal class GameRepository : IGameRepository
 
         if (game is not null)
         {
-            // Players and SubscriberIds are ignored by the projection and filled
-            // only here. This load is the one every authorization decision about
-            // a game is made on — GetRoles cannot see a player at all without it,
-            // so without this call an accepted player is indistinguishable from a
-            // stranger: private-comment access and the ban's own-game exemption
-            // both resolve against an empty player list.
-            await EnrichGamesAsync(new[] { game }, ct);
+            // Players and the subscriber summary are ignored by the projection and
+            // filled only here. This load is the one every authorization decision
+            // about a game is made on — GetRoles cannot see a player at all without
+            // it, so without this call an accepted player is indistinguishable from
+            // a stranger: private-comment access and the ban's own-game exemption
+            // both resolve against an empty player list. The same argument now
+            // covers the Reader role, which reads IsViewerSubscriber: the userId
+            // this method already filters visibility by is the one it is filled for.
+            await EnrichGamesAsync(new[] { game }, userId, ct);
         }
 
         return game;
@@ -852,7 +880,7 @@ internal class GameRepository : IGameRepository
 
         if (game is not null)
         {
-            await EnrichGamesAsync(new[] { game }, ct);
+            await EnrichGamesAsync(new[] { game }, userId, ct);
             await EnrichGameDetailsAsync(game, ct);
         }
         return game;
@@ -894,7 +922,7 @@ internal class GameRepository : IGameRepository
             .AsSplitQuery()
             .ToArrayAsync(ct);
 
-        await EnrichGamesAsync(games, ct);
+        await EnrichGamesAsync(games, userId, ct);
         return games;
     }
 

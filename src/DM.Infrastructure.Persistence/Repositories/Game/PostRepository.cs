@@ -85,7 +85,7 @@ internal class PostRepository : IPostRepository
         return post;
     }
 
-    public async Task<(IEnumerable<Post> Posts, int TotalCount)> GetRated(PostsQuery query)
+    public async Task<(IEnumerable<Post> Posts, int TotalCount)> GetRated(PostsQuery query, Guid viewerId)
     {
         // Read-only query path feeding the home-page widgets (best of week,
         // latest featured, Pulse). AsNoTracking drops EF Core's change
@@ -355,8 +355,40 @@ internal class PostRepository : IPostRepository
             .ToArray();
         if (uniqueGameIds.Length > 0)
         {
+            // Guid.Empty, deliberately: the id handed to GetByIds drives the
+            // accessibility filter as well as the hydration, and this feed has
+            // already fixed its own visibility above — open rooms of approved,
+            // non-draft games. Passing the real viewer here could only narrow
+            // that, dropping a game they are blacklisted from out of the
+            // dictionary and leaving a live post with a null Room.Game.
             var gamesById = (await _gameRepository.GetByIds(uniqueGameIds, Guid.Empty))
                 .ToDictionary(g => g.Id);
+
+            // The one field that does depend on who is asking. An anonymous read
+            // fills it for nobody, so a subscriber lost "reader" from the
+            // attached game's participation — the whole subscriber set used to
+            // travel in the DTO and the resolver found them in it. One query,
+            // covered by IX_Subscriptions_TargetType_TargetId, bounded by the
+            // number of distinct games on the page.
+            if (viewerId != Guid.Empty)
+            {
+                var subscribedGameIds = await _dbContext.Subscriptions
+                    .TagWith("DM.Game.PostsRated.ViewerSubscriptions")
+                    .Where(s => s.TargetType == SubscriptionTargetType.Game &&
+                                uniqueGameIds.Contains(s.TargetId) &&
+                                s.SubscriberId == viewerId)
+                    .Select(s => s.TargetId)
+                    .ToArrayAsync();
+
+                foreach (var gameId in subscribedGameIds)
+                {
+                    if (gamesById.TryGetValue(gameId, out var subscribedGame))
+                    {
+                        subscribedGame.IsViewerSubscriber = true;
+                    }
+                }
+            }
+
             var rawByPostId = rawData.ToDictionary(x => x.PostId);
             foreach (var post in posts)
             {

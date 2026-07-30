@@ -15,7 +15,12 @@ internal class BlogIntentionResolver : IIntentionResolver<BlogIntention, BlogDto
         var isOwner = user.UserId == target.Author.UserId;
         var isMentor = target.Mentor?.UserId == user.UserId;
         var isAssistant = target.Assistants.Any(a => a.UserId == user.UserId);
-        var isSubscriber = target.SubscriberIds.Contains(user.UserId);
+        // Filled by the list-shaped reads only. Every intention below is decided
+        // on a blog that came from a single-blog read, where it is false — so the
+        // branches that mention it have never actually fired. Left as it was:
+        // making them fire is a change of who may read a private draft and who may
+        // comment, not a performance fix.
+        var isSubscriber = target.IsViewerSubscriber;
         var hasPendingInvitation = target.PendingInvitedUserIds.Contains(user.UserId);
 
         return intention switch
