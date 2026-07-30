@@ -46,7 +46,7 @@ const props = withDefaults(
   }>(),
   {
     context: "common",
-    placeholder: "Введите текст…",
+    placeholder: "Введите текст...",
     draftKey: "",
     disabled: false,
     minHeight: 80,
@@ -205,7 +205,7 @@ const isOverLimit = computed(
 
 // Draft status text
 const draftStatusText = computed(() => {
-  if (draftStatus.value === "saving") return "Сохранение…";
+  if (draftStatus.value === "saving") return "Сохранение...";
   if (draftStatus.value === "saved" && draftSavedAt.value) {
     const seconds = Math.floor((Date.now() - draftSavedAt.value) / 1000);
     if (seconds < 5) return "Сохранено";

@@ -252,7 +252,7 @@ function progressLabel(chain: Chain): string {
        whole section, and flashing a "Достижения" heading that then
        disappears would be worse than a bare inline loading hint. -->
   <section v-if="loading && !loaded" class="achievements-section">
-    <SecondaryText>Загрузка…</SecondaryText>
+    <SecondaryText>Загрузка...</SecondaryText>
   </section>
 
   <section v-else-if="error" class="achievements-section">

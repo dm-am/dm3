@@ -107,7 +107,7 @@ async function saveEdit() {
     </div>
     <div class="edit-actions">
       <Button :disabled="isSubmitting" @click="saveEdit">
-        {{ isSubmitting ? "Сохранение…" : "Сохранить" }}
+        {{ isSubmitting ? "Сохранение..." : "Сохранить" }}
       </Button>
       <Button @click="emit('cancel')">Отмена</Button>
       <span v-if="editError" class="edit-error">{{ editError }}</span>

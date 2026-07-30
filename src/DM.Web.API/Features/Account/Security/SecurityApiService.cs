@@ -57,7 +57,7 @@ internal class SecurityApiService : ISecurityApiService
         DomainSecurityEventType.LoginFailure => "Неудачная попытка входа",
         DomainSecurityEventType.Logout => "Выход",
         DomainSecurityEventType.PasswordChange => "Изменение пароля",
-        DomainSecurityEventType.EmailChange => "Изменение email",
+        DomainSecurityEventType.EmailChange => "Изменение почты",
         DomainSecurityEventType.SessionTerminated => "Завершение сессии",
         DomainSecurityEventType.LogoutElsewhere => "Выход со всех устройств",
         DomainSecurityEventType.PasswordResetRequest => "Запрос сброса пароля",

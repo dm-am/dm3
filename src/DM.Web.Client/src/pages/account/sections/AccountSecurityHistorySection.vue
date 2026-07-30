@@ -82,7 +82,7 @@ function eventTitle(type: SecurityEventType): string {
     case "PasswordChange":
       return "Изменение пароля";
     case "EmailChange":
-      return "Изменение email";
+      return "Изменение почты";
     case "SessionTerminated":
       return "Сессия завершена";
     case "LogoutElsewhere":

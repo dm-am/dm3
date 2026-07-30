@@ -252,7 +252,7 @@ onMounted(fetchEntries);
                 <textarea
                   id="entry-content"
                   v-model="editorContent"
-                  placeholder="Текст записи…"
+                  placeholder="Текст записи..."
                   rows="12"
                 ></textarea>
               </div>
@@ -266,7 +266,7 @@ onMounted(fetchEntries);
                   Отмена
                 </button>
                 <button class="save-btn" :disabled="saving" @click="saveEntry">
-                  {{ saving ? "Сохранение…" : "Сохранить" }}
+                  {{ saving ? "Сохранение..." : "Сохранить" }}
                 </button>
               </div>
             </div>

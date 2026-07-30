@@ -33,5 +33,5 @@ onMounted(async () => {
 </script>
 
 <template>
-  <SecondaryText>Открываем тему…</SecondaryText>
+  <SecondaryText>Открываем тему...</SecondaryText>
 </template>

@@ -607,9 +607,7 @@ async function submitReview() {
                 >
                   Сохранить
                 </button>
-                <button class="edit-btn" @click="cancelEditPost">
-                  Отменить
-                </button>
+                <button class="edit-btn" @click="cancelEditPost">Отмена</button>
               </div>
             </div>
 
@@ -722,7 +720,7 @@ async function submitReview() {
     >
       <div class="reviews-overflow">
         <SecondaryText v-if="reviewsLoading" class="reviews-status">
-          Загрузка…
+          Загрузка...
         </SecondaryText>
         <SecondaryText v-else-if="reviewsError" class="reviews-status">
           {{ reviewsError }}
@@ -781,7 +779,7 @@ async function submitReview() {
               <textarea
                 v-model="newReviewText"
                 class="review-input"
-                placeholder="Текст отзыва…"
+                placeholder="Текст отзыва..."
                 rows="2"
               ></textarea>
               <SecondaryText v-if="!canPickSignedReview" class="review-hint">

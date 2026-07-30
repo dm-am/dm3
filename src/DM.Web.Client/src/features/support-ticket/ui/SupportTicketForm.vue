@@ -82,7 +82,7 @@ const isComplaint = computed(() => props.kind === "complaint");
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const contactLabel = computed(() =>
-  isGuest.value ? "Email для ответа" : "Контакт для ответа (необязательно)",
+  isGuest.value ? "Почта для ответа" : "Контакт для ответа (необязательно)",
 );
 const contactHint = computed(() =>
   isGuest.value

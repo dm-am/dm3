@@ -322,7 +322,9 @@ function onCancel() {
         />
       </div>
 
-      <secondary-text v-if="detailLoading">Загрузка персонажа…</secondary-text>
+      <secondary-text v-if="detailLoading"
+        >Загрузка персонажа...</secondary-text
+      >
       <secondary-text v-else-if="detailError" class="error">
         Не удалось загрузить персонажа
       </secondary-text>

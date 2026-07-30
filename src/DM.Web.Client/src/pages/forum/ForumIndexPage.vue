@@ -136,7 +136,7 @@ onMounted(() => store.fetchBoards());
       :disabled="markingAllAsRead || !boards.some((b) => b.unreadCommentsCount)"
       @click="markAllAsRead"
     >
-      {{ markingAllAsRead ? "Отмечаю…" : "Отметить все как прочитанное" }}
+      {{ markingAllAsRead ? "Отмечаю..." : "Отметить все как прочитанное" }}
     </button>
   </div>
   <SecondaryText v-if="markAllError" class="mark-all-error" role="alert">

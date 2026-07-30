@@ -350,7 +350,7 @@ onUnmounted(() => {
             :html="overlayDetails.description"
           />
           <secondary-text v-else-if="!overlayDetails" class="overlay-loading"
-            >Описание загружается…</secondary-text
+            >Описание загружается...</secondary-text
           >
           <secondary-text v-else class="overlay-loading"
             >Без описания</secondary-text

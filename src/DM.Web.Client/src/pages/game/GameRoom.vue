@@ -204,7 +204,7 @@ function formatDicePreview(roll: DiceRollInput): string {
   const count = roll.count && roll.count > 1 ? roll.count : "";
   const bonus = roll.bonus ? ` ${roll.bonus > 0 ? "+" : ""}${roll.bonus}` : "";
   const explode = roll.explosion ? ` (взрыв ${roll.explosion})` : "";
-  const hidden = roll.public === false ? " · скрытый" : "";
+  const hidden = roll.public === false ? " (скрытый)" : "";
   return `${count}d${roll.dice}${bonus}${explode}${hidden}`;
 }
 

@@ -38,7 +38,7 @@ internal class SuspiciousLoginNotificationSender : ISuspiciousLoginNotificationS
         await _mailSender.SendAsync(new EmailLetter
         {
             Address = email,
-            Subject = "Вход в аккаунт с нового устройства — Dungeon Master",
+            Subject = "Dungeon Master: вход в аккаунт с нового устройства",
             Body = emailBody,
             LinkedResources = [_emailAssetsProvider.GetLogo()]
         });

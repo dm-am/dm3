@@ -145,7 +145,7 @@ function commentErrors(): string[] {
       :valid="canSubmit"
       :loading="sending"
       action="Оформить бан"
-      cancel="Отменить"
+      cancel="Отмена"
       @submit="submit"
       @cancel="emit('cancel')"
     >

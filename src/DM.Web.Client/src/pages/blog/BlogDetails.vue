@@ -22,8 +22,8 @@ const blogId = computed(() => blog.value?.publicId ?? blog.value?.id ?? "");
 const assistants = computed(() => blog.value?.assistants ?? []);
 
 const STATUS_LABEL: Record<string, string> = {
-  Draft: "Черновик",
-  Active: "Активен",
+  Draft: "Оформляется",
+  Active: "Открыт",
   Closed: "Закрыт",
 };
 

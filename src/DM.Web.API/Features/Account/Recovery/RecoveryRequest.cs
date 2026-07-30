@@ -11,7 +11,7 @@ public class RecoveryRequest
     /// Email address to recover
     /// </summary>
     /// <example>user@example.com</example>
-    [Required(ErrorMessage = "Email обязателен")]
-    [EmailAddress(ErrorMessage = "Неверный формат email")]
+    [Required(ErrorMessage = "Почта обязательна")]
+    [EmailAddress(ErrorMessage = "Неверный формат почты")]
     public string Email { get; set; } = "";
 }

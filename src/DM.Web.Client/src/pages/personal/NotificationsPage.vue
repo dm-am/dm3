@@ -218,7 +218,7 @@ onMounted(() => fetchNotifications());
     </div>
 
     <secondary-text v-if="loading && notifications.length === 0"
-      >Загрузка…</secondary-text
+      >Загрузка...</secondary-text
     >
 
     <template v-else-if="notifications.length === 0">
@@ -267,7 +267,7 @@ onMounted(() => fetchNotifications());
         :disabled="loading"
         @click="fetchNotifications()"
       >
-        <template v-if="loading">Загрузка…</template>
+        <template v-if="loading">Загрузка...</template>
         <template v-else>Загрузить еще</template>
       </button>
     </div>

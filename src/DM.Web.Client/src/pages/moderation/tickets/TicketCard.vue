@@ -61,7 +61,7 @@ const subtypeLabel = computed(
           {{ ticket.reporterUsername }}
         </router-link>
       </span>
-      <span v-else-if="ticket.guestEmail">Email: {{ ticket.guestEmail }}</span>
+      <span v-else-if="ticket.guestEmail">Почта: {{ ticket.guestEmail }}</span>
       <span v-else class="muted">Аноним</span>
 
       <span v-if="ticket.targetUsername">

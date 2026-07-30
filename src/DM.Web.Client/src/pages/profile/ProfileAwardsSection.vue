@@ -160,7 +160,7 @@ const hasAwards = computed(() => awards.value.length > 0);
 <template>
   <section v-if="loading && !loaded" class="awards-section">
     <BlockTitle>Награды</BlockTitle>
-    <SecondaryText>Загрузка…</SecondaryText>
+    <SecondaryText>Загрузка...</SecondaryText>
   </section>
 
   <section v-else-if="error" class="awards-section">

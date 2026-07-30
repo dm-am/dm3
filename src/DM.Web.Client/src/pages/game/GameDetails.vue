@@ -65,9 +65,9 @@ function statusLabel(c: Character): string {
   if (c.status === "Active") return "В игре";
   if (c.status === "Retired") {
     if (c.isDead) return "Персонаж мертв";
-    if (c.isPlayerExiled) return "Игрок изгнан";
-    if (c.isPlayerLeft) return "Игрок покинул";
-    return "Выбыл";
+    if (c.isPlayerExiled) return "Выведен из игры";
+    if (c.isPlayerLeft) return "Покинул игру";
+    return "Вне игры";
   }
   return c.status;
 }

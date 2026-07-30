@@ -326,7 +326,7 @@ function initMessageBbcode(el: HTMLElement) {
             <BBCodeEditor
               v-model="localEditText"
               context="message"
-              placeholder="Редактирование сообщения…"
+              placeholder="Редактирование сообщения..."
               :min-height="60"
               :max-height="200"
               @submit="handleEditSubmit"
@@ -488,7 +488,7 @@ function initMessageBbcode(el: HTMLElement) {
             <BBCodeEditor
               v-model="localEditText"
               context="message"
-              placeholder="Редактирование сообщения…"
+              placeholder="Редактирование сообщения..."
               :min-height="60"
               :max-height="200"
               @submit="handleEditSubmit"

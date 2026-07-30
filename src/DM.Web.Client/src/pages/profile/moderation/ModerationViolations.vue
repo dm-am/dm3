@@ -157,7 +157,7 @@ const { open: openBanDialog, close: closeBanDialog } = useModal({
         v-bind="warningsZoneBindings"
       >
         <div v-if="showWarnings" class="mod-violations_list">
-          <secondary-text v-if="loadingWarnings">Загрузка…</secondary-text>
+          <secondary-text v-if="loadingWarnings">Загрузка...</secondary-text>
           <template v-else-if="warningsList">
             <secondary-text v-if="warningsList.length === 0">
               Нет предупреждений
@@ -205,7 +205,7 @@ const { open: openBanDialog, close: closeBanDialog } = useModal({
 
       <div ref="bansZoneRef" class="expand-zone" v-bind="bansZoneBindings">
         <div v-if="showBans" class="mod-violations_list">
-          <secondary-text v-if="loadingBans">Загрузка…</secondary-text>
+          <secondary-text v-if="loadingBans">Загрузка...</secondary-text>
           <template v-else-if="bansList">
             <secondary-text v-if="bansList.length === 0">
               Нет банов

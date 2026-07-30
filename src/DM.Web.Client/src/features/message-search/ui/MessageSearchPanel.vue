@@ -389,7 +389,7 @@ onUnmounted(() => {
           </select>
         </label>
         <secondary-text v-if="targetsLoading" class="target-loading"
-          >Загрузка…</secondary-text
+          >Загрузка...</secondary-text
         >
       </div>
     </div>
@@ -412,7 +412,7 @@ onUnmounted(() => {
       </secondary-text>
 
       <secondary-text v-else-if="loading" class="search-state">
-        Идет поиск…
+        Идет поиск...
       </secondary-text>
 
       <div
@@ -462,7 +462,7 @@ onUnmounted(() => {
                 >{{ " | " }}</span
               >
               <span v-if="resolvingId === row.result.id" class="result-time"
-                >переход…</span
+                >переход...</span
               >
             </span>
             <span class="result-snippet">{{ row.result.snippet }}</span>
@@ -480,7 +480,7 @@ onUnmounted(() => {
             :disabled="loadingMore"
             @click="store.loadMore()"
           >
-            {{ loadingMore ? "Загрузка…" : "Показать еще" }}
+            {{ loadingMore ? "Загрузка..." : "Показать еще" }}
           </button>
         </div>
       </template>

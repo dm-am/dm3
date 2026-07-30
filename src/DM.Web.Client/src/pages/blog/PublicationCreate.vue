@@ -3,7 +3,7 @@
  * PublicationCreate — create a new publication in the blog (dev doc
  * 4.2.3.6.7 "Создание публикации"). Form: title (required), rubric (optional
  * select over the blog's rubrics), content (BBCode editor). "Опубликовать"
- * creates and publishes immediately; "Отменить" returns to the blog feed.
+ * creates and publishes immediately; "Отмена" returns to the blog feed.
  * Access is gated to owner + assistant; the backend enforces this too.
  */
 import { computed, ref } from "vue";
@@ -88,7 +88,7 @@ function cancel() {
       :valid="valid"
       :loading="saving"
       action="Опубликовать"
-      cancel-label="Отменить"
+      cancel-label="Отмена"
       :draft-key="`blog_${blogId}_publication_new`"
       @submit="publish"
       @cancel="cancel"

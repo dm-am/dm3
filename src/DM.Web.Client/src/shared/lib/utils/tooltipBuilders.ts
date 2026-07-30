@@ -78,7 +78,7 @@ export function buildStatusLines(
     lines.push(`  Активные: ${byStatus.active} ${wordFor(byStatus.active)}`);
   }
   if (byStatus.closed && byStatus.closed > 0) {
-    lines.push(`  Завершенные: ${byStatus.closed} ${wordFor(byStatus.closed)}`);
+    lines.push(`  Закрытые: ${byStatus.closed} ${wordFor(byStatus.closed)}`);
   }
   return lines;
 }

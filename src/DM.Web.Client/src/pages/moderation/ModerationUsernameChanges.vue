@@ -133,7 +133,7 @@ onMounted(() => fetchRequests());
   <div class="username-changes">
     <h3>Запросы на смену имени пользователя</h3>
 
-    <secondary-text v-if="loading">Загрузка…</secondary-text>
+    <secondary-text v-if="loading">Загрузка...</secondary-text>
 
     <template v-else-if="pendingRequests.length === 0">
       <secondary-text>Нет активных запросов</secondary-text>
@@ -178,7 +178,7 @@ onMounted(() => fetchRequests());
             :disabled="processing === request.id"
             @click="approveTarget = request"
           >
-            {{ processing === request.id ? "…" : "Одобрить" }}
+            {{ processing === request.id ? "..." : "Одобрить" }}
           </button>
           <button
             class="reject-btn"

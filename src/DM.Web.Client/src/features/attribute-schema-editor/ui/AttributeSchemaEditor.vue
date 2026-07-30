@@ -13,7 +13,7 @@
  *  - a full-width "+ Новый атрибут" row-styled add button
  *  - a region that shows either the inline attribute edit form OR the
  *    character-creation preview (the edit form replaces the preview)
- *  - Сохранить / Отменить / Превью actions, with a data-loss confirm modal
+ *  - Сохранить / Отмена / Превью actions, with a data-loss confirm modal
  *    when the game already has characters
  */
 import { ref, computed, watch, nextTick, onMounted } from "vue";
@@ -45,7 +45,7 @@ const props = withDefaults(
      * data-loss confirmation because schema edits can invalidate sheets.
      */
     hasCharacters?: boolean;
-    /** Show the Сохранить/Отменить/Превью action bar (hidden when the host
+    /** Show the Сохранить/Отмена/Превью action bar (hidden when the host
      * page drives persistence, e.g. inline in game creation). */
     showActions?: boolean;
     /** External save-in-flight indicator for the Сохранить button. */
@@ -344,7 +344,7 @@ defineExpose({ validate, requestSave });
       <Button type="button" :loading="saving" @click="requestSave">
         Сохранить
       </Button>
-      <Button type="button" @click="emit('cancel')">Отменить</Button>
+      <Button type="button" @click="emit('cancel')">Отмена</Button>
       <Button type="button" @click="togglePreview">Превью</Button>
     </div>
 

@@ -545,7 +545,9 @@ describe("useBlogDetailsStore", () => {
 
   it("shows the publications of the rubric chosen last", async () => {
     const ofFirst = [{ id: "pub-1", title: "One" }] as unknown as Publication[];
-    const ofSecond = [{ id: "pub-2", title: "Two" }] as unknown as Publication[];
+    const ofSecond = [
+      { id: "pub-2", title: "Two" },
+    ] as unknown as Publication[];
 
     const older = deferred<unknown>();
     const newer = deferred<unknown>();

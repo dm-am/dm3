@@ -25,7 +25,7 @@ const statusLabel = computed<string | null>(() => {
     case "UnderReview":
       return "На рассмотрении";
     case "Retired":
-      if (c.isDead) return "Погиб";
+      if (c.isDead) return "Персонаж мертв";
       if (c.isPlayerLeft) return "Покинул игру";
       if (c.isPlayerExiled) return "Выведен из игры";
       return "Вне игры";

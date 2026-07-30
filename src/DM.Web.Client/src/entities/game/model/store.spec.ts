@@ -807,10 +807,18 @@ describe("useGameDetailsStore", () => {
       ] as unknown as Room[];
 
       const postsOfTwo = [
-        { id: "post-2", gameText: "Room 2", createdUtc: "2024-01-01T00:00:00Z" },
+        {
+          id: "post-2",
+          gameText: "Room 2",
+          createdUtc: "2024-01-01T00:00:00Z",
+        },
       ] as unknown as Post[];
       const postsOfThree = [
-        { id: "post-3", gameText: "Room 3", createdUtc: "2024-01-01T00:00:00Z" },
+        {
+          id: "post-3",
+          gameText: "Room 3",
+          createdUtc: "2024-01-01T00:00:00Z",
+        },
       ] as unknown as Post[];
 
       const older = deferred<unknown>();
@@ -849,7 +857,10 @@ describe("useGameDetailsStore", () => {
       // What GamePage does when the id in the URL changes, and on unmount.
       store.reset();
 
-      pending.resolve({ data: createMockGame("game-a", "Game A"), error: null });
+      pending.resolve({
+        data: createMockGame("game-a", "Game A"),
+        error: null,
+      });
       await load;
 
       expect(store.game).toBeNull();

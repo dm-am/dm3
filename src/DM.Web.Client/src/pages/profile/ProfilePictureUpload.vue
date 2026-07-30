@@ -29,7 +29,7 @@ const avatar = useAvatarUpload(selectedUser);
 
 const stateLabel = computed(() => {
   if (avatar.uploading.value) return `${avatar.progress.value}%`;
-  if (avatar.resetting.value) return "Сброс…";
+  if (avatar.resetting.value) return "Сброс...";
   if (avatar.isDragover.value) return "Отпустите для загрузки";
   return "Загрузить — перетащите или вставьте";
 });

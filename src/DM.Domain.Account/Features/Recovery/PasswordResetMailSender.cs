@@ -38,7 +38,7 @@ internal class PasswordResetMailSender : IPasswordResetMailSender
         await _mailSender.SendAsync(new EmailLetter
         {
             Address = email,
-            Subject = $"Подтверждение сброса пароля на Dungeon Master для {username}",
+            Subject = $"Dungeon Master: подтверждение сброса пароля для {username}",
             Body = emailBody,
             LinkedResources = [_emailAssetsProvider.GetLogo()]
         });

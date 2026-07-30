@@ -38,7 +38,7 @@ internal class RegistrationMailSender : IRegistrationMailSender
         await _mailSender.SendAsync(new EmailLetter
         {
             Address = email,
-            Subject = "Подтвердите email на Dungeon Master",
+            Subject = "Dungeon Master: подтвердите почту",
             Body = emailBody,
             LinkedResources = [_emailAssetsProvider.GetLogo()]
         });

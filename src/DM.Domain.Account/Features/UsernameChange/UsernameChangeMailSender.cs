@@ -37,7 +37,7 @@ internal class UsernameChangeMailSender : IUsernameChangeMailSender
         await _mailSender.SendAsync(new EmailLetter
         {
             Address = email,
-            Subject = "Запрос на смену имени одобрен — Dungeon Master",
+            Subject = "Dungeon Master: запрос на смену имени одобрен",
             Body = body,
             LinkedResources = [_emailAssetsProvider.GetLogo()]
         });
@@ -66,7 +66,7 @@ internal class UsernameChangeMailSender : IUsernameChangeMailSender
         await _mailSender.SendAsync(new EmailLetter
         {
             Address = email,
-            Subject = "Запрос на смену имени отклонен — Dungeon Master",
+            Subject = "Dungeon Master: запрос на смену имени отклонен",
             Body = body,
             LinkedResources = [_emailAssetsProvider.GetLogo()]
         });

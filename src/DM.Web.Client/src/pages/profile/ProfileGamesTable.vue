@@ -270,7 +270,7 @@ const columns = computed<Column[]>(() =>
       ],
 );
 
-// Character status wording — the exact GLOSSARY.md terms (CharacterStatus
+// Character status wording — the captions of the CharacterCard badge (CharacterStatus
 // refined by the "out of game" flags). Standalone cell value, so it is
 // capitalized; no color coding.
 function characterStatusLabel(ch: PlayerCharacterInfo): string {
@@ -279,8 +279,8 @@ function characterStatusLabel(ch: PlayerCharacterInfo): string {
       return "В игре";
     case "Retired":
       if (ch.isDead) return "Персонаж мертв";
-      if (ch.isPlayerExiled) return "Игрок выведен из игры";
-      return "Игрок покинул игру";
+      if (ch.isPlayerExiled) return "Выведен из игры";
+      return "Покинул игру";
     case "UnderReview":
       return "Заявка на рассмотрении";
     default:

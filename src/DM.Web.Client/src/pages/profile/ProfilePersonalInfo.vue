@@ -230,7 +230,7 @@ function onContactChange(
             <input
               type="text"
               class="input contact-type"
-              placeholder="Telegram, Discord, …"
+              placeholder="Telegram, Discord, ..."
               :value="contact.contactType"
               @input="
                 onContactChange(

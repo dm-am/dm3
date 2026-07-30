@@ -80,7 +80,7 @@ internal static class NotificationText
 
         // Security
         [EventType.PasswordChanged] = "Пароль изменен",
-        [EventType.EmailChanged] = "Email изменен",
+        [EventType.EmailChanged] = "Почта изменена",
         [EventType.SuspiciousLoginActivity] = "Подозрительная активность входа",
 
         // Moderation

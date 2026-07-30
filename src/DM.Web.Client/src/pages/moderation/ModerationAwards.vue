@@ -78,7 +78,7 @@ function openSeries(id: string) {
       </div>
     </header>
 
-    <SecondaryText v-if="loading && !series">Загрузка…</SecondaryText>
+    <SecondaryText v-if="loading && !series">Загрузка...</SecondaryText>
     <SecondaryText v-else-if="sortedSeries.length === 0">
       Нет серий конкурсов
     </SecondaryText>

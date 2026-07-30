@@ -2,7 +2,7 @@
 /**
  * PublicationEdit — edit an existing publication (dev doc 4.2.3.6.8
  * "Редактирование публикации"). Form: title, rubric, content; "Сохранить"
- * patches, "Удалить" deletes with a confirmation, "Отменить" returns to
+ * patches, "Удалить" deletes with a confirmation, "Отмена" returns to
  * the blog feed. Access is gated to owner + assistant (backend-enforced).
  *
  * Content round-trip caveat: the API serves publication content as
@@ -153,7 +153,7 @@ function cancel() {
         :valid="valid"
         :loading="saving"
         action="Сохранить"
-        cancel-label="Отменить"
+        cancel-label="Отмена"
         @submit="save"
         @cancel="cancel"
       />

@@ -352,7 +352,7 @@ watch(
                 Сохранить
               </button>
               <button class="action-btn cancel-btn" @click="cancelEdit">
-                Отменить
+                Отмена
               </button>
             </div>
           </div>

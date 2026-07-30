@@ -201,7 +201,7 @@ function saveEdit() {
       >
         Сохранить
       </button>
-      <button class="edit-btn" @click="cancelEdit">Отменить</button>
+      <button class="edit-btn" @click="cancelEdit">Отмена</button>
     </div>
   </div>
 

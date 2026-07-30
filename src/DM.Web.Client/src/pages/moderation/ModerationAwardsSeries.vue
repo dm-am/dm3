@@ -195,7 +195,7 @@ onMounted(async () => {
           :disabled="editSaving"
           @click="saveEdit"
         >
-          {{ editSaving ? "Сохраняем…" : "Сохранить" }}
+          {{ editSaving ? "Сохраняем..." : "Сохранить" }}
         </button>
       </section>
 
@@ -206,7 +206,7 @@ onMounted(async () => {
           <label>Пользователь</label>
           <UserAutocomplete
             v-model="grantForm.username"
-            placeholder="Введите имя…"
+            placeholder="Введите имя..."
           />
         </div>
         <div class="form-row">
@@ -233,14 +233,14 @@ onMounted(async () => {
           :disabled="granting || !grantForm.username || !grantForm.awardTypeId"
           @click="grant"
         >
-          {{ granting ? "Выдаем…" : "Выдать" }}
+          {{ granting ? "Выдаем..." : "Выдать" }}
         </button>
       </section>
 
       <!-- Grants list -->
       <section class="block">
         <h3>Выданные в этой серии</h3>
-        <SecondaryText v-if="grantsLoading">Загрузка…</SecondaryText>
+        <SecondaryText v-if="grantsLoading">Загрузка...</SecondaryText>
         <SecondaryText v-else-if="grants.length === 0">
           Награды в этой серии еще не выдавались
         </SecondaryText>

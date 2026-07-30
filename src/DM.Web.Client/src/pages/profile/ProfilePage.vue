@@ -608,7 +608,7 @@ watch(usernameParam, async () => {
             :disabled="!canSubmitChangeForm"
             @click="submitUsernameChangeRequest"
           >
-            {{ isChangeFormSubmitting ? "Отправка…" : "Отправить" }}
+            {{ isChangeFormSubmitting ? "Отправка..." : "Отправить" }}
           </Button>
         </div>
       </div>
@@ -724,7 +724,7 @@ watch(usernameParam, async () => {
                 :disabled="isSaving"
                 @click="saveChanges"
               >
-                {{ isSaving ? "Сохранение…" : "Сохранить" }}
+                {{ isSaving ? "Сохранение..." : "Сохранить" }}
               </Button>
               <Button :disabled="isSaving" @click="cancelEdit">Отмена</Button>
             </template>
@@ -746,7 +746,7 @@ watch(usernameParam, async () => {
               :disabled="isBlockLoading"
               @click="confirmingUnblock = true"
             >
-              {{ isBlockLoading ? "…" : "Разблокировать" }}
+              {{ isBlockLoading ? "..." : "Разблокировать" }}
             </Button>
             <Button v-else @click="() => openBlockModal()"
               >Заблокировать</Button
@@ -863,13 +863,13 @@ watch(usernameParam, async () => {
             <BBCodeEditor
               v-model="noteEditText"
               context="common"
-              placeholder="Напишите заметку об этом пользователе…"
+              placeholder="Напишите заметку об этом пользователе..."
               :min-height="100"
               :max-height="300"
             />
             <div class="note-actions">
               <Button :disabled="isNoteSaving" @click="saveNote">
-                {{ isNoteSaving ? "Сохранение…" : "Сохранить" }}
+                {{ isNoteSaving ? "Сохранение..." : "Сохранить" }}
               </Button>
               <Button :disabled="isNoteSaving" @click="cancelEditNote">
                 Отмена
@@ -944,7 +944,7 @@ watch(usernameParam, async () => {
           {{ hasChanges ? "Несохраненные изменения" : "Режим редактирования" }}
         </span>
         <Button v-if="hasChanges" :disabled="isSaving" @click="saveChanges">
-          {{ isSaving ? "Сохранение…" : "Сохранить" }}
+          {{ isSaving ? "Сохранение..." : "Сохранить" }}
         </Button>
         <Button :disabled="isSaving" @click="cancelEdit">
           {{ hasChanges ? "Отмена" : "Завершить" }}
