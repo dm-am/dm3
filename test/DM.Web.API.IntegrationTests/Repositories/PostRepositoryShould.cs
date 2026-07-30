@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Posts;
 using DM.Infrastructure.Persistence;
@@ -9,10 +10,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using DbCharacter = DM.Infrastructure.Persistence.Entities.Game.Characters.Character;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
+using DbGameAssistant = DM.Infrastructure.Persistence.Entities.Game.Links.GameAssistant;
 using DbPost = DM.Infrastructure.Persistence.Entities.Game.Posts.Post;
 using DbPostReview = DM.Infrastructure.Persistence.Entities.Game.PostReview;
 using DbRoom = DM.Infrastructure.Persistence.Entities.Game.Posts.Room;
 using DbSubscription = DM.Infrastructure.Persistence.Entities.Subscriptions.Subscription;
+using DbUpload = DM.Infrastructure.Persistence.Entities.Shared.Upload;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
@@ -154,7 +157,166 @@ public class PostRepositoryShould : IntegrationTestBase
         return subscriberId;
     }
 
+    /// <summary>
+    /// Reading a room must not depend on a character having exactly one portrait.
+    /// </summary>
+    /// <remarks>
+    /// The batch load keyed a dictionary on the target character, so a second live
+    /// upload pointing at the same character made ToDictionaryAsync throw on the
+    /// duplicate key — and that read is on all three post paths, so every member of
+    /// the room got a 500 until somebody edited rows by hand. Nothing in the schema
+    /// prevents the second row; the upload path retires the previous portrait now,
+    /// and this asserts the read survives regardless.
+    ///
+    /// The newest wins, which is the same rule the garbage collector applies when
+    /// it picks which upload of an entity is current.
+    /// </remarks>
+    [Fact]
+    public async Task TakeTheNewestPortraitWhenACharacterHasTwoLiveUploads()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var context = await AddGameWithRoomAsync(dbContext);
+        var characterId = await AddPostByNewCharacterAsync(dbContext, context);
+
+        var older = await AddCharacterPortraitAsync(
+            dbContext, context.UserId, characterId, DateTimeOffset.UtcNow.AddHours(-1));
+        var newer = await AddCharacterPortraitAsync(
+            dbContext, context.UserId, characterId, DateTimeOffset.UtcNow);
+
+        var posts = (await repository.Get(
+            context.RoomId,
+            new PagingData(new PagingQuery { Skip = 0, Take = 10 }, 10, 1),
+            context.UserId)).ToList();
+
+        posts.Should().ContainSingle();
+        posts[0].Character.Picture.SourceObjectKey.Should().Be(newer,
+            "the current portrait is the newest upload pointing at the character");
+        posts[0].Character.Picture.SourceObjectKey.Should().NotBe(older);
+    }
+
+    /// <summary>
+    /// Reading a room's posts has to translate to SQL at all.
+    /// </summary>
+    /// <remarks>
+    /// The DbPost projection built the lead list as
+    /// <c>new[] { master }.Concat(assistants.Select(...))</c>. Npgsql cannot
+    /// correlate a collection subquery concatenated onto an in-memory array, and it
+    /// refuses the whole query rather than the one member, so every read that went
+    /// through this projection answered 500 — the room page of every game, and the
+    /// single-post read with it. Nothing covered either path, so it stayed.
+    ///
+    /// The assistant is what makes this a gate rather than a smoke test: with the
+    /// master alone the broken shape and the fixed one agree.
+    /// </remarks>
+    [Fact]
+    public async Task ProjectTheGameLeadsOfEveryPostInARoom()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var context = await AddGameWithRoomAsync(dbContext);
+        await AddPostByNewCharacterAsync(dbContext, context);
+        var assistantId = await AddAssistantAsync(dbContext, context.GameId);
+
+        var posts = (await repository.Get(
+            context.RoomId,
+            new PagingData(new PagingQuery { Skip = 0, Take = 10 }, 10, 1),
+            context.UserId)).ToList();
+
+        posts.Should().ContainSingle();
+        posts[0].GameLeadUserIds.Should().BeEquivalentTo(new[] { context.UserId, assistantId },
+            "the leads are the master and the assistants, and mentors are not leads");
+
+        // The single-post path shares the projection, so it shares the failure.
+        var single = await repository.Get(posts[0].Id, context.UserId);
+        single.Should().NotBeNull();
+        single!.GameLeadUserIds.Should().BeEquivalentTo(new[] { context.UserId, assistantId });
+    }
+
+    /// <summary>An assistant on the game, so the lead list has two entries.</summary>
+    private static async Task<Guid> AddAssistantAsync(DmDbContext dbContext, Guid gameId)
+    {
+        var assistantId = Guid.NewGuid();
+
+        dbContext.Users.Add(new DbUser
+        {
+            UserId = assistantId,
+            Username = $"ast{assistantId:N}"[..20],
+            Email = $"{assistantId:N}@example.com",
+            PasswordHash = "hash",
+            Salt = "salt",
+        });
+        dbContext.GameAssistants.Add(new DbGameAssistant
+        {
+            GameAssistantId = Guid.NewGuid(),
+            GameId = gameId,
+            UserId = assistantId,
+            JoinedUtc = DateTimeOffset.UtcNow,
+        });
+
+        await dbContext.SaveChangesAsync();
+        return assistantId;
+    }
+
     private sealed record GameContext(Guid UserId, Guid GameId, Guid RoomId);
+
+    /// <summary>A character in the game with one post in the room.</summary>
+    private static async Task<Guid> AddPostByNewCharacterAsync(
+        DmDbContext dbContext, GameContext context)
+    {
+        var characterId = Guid.NewGuid();
+
+        dbContext.Characters.Add(new DbCharacter
+        {
+            CharacterId = characterId,
+            GameId = context.GameId,
+            AuthorId = context.UserId,
+            Status = CharacterStatus.Active,
+            Name = "Char " + Guid.NewGuid().ToString("N")[..6],
+            CreatedUtc = DateTimeOffset.UtcNow,
+        });
+        dbContext.Posts.Add(new DbPost
+        {
+            PostId = Guid.NewGuid(),
+            RoomId = context.RoomId,
+            CharacterId = characterId,
+            AuthorId = context.UserId,
+            GameText = "text",
+            CreatedUtc = DateTimeOffset.UtcNow,
+        });
+
+        await dbContext.SaveChangesAsync();
+        return characterId;
+    }
+
+    /// <summary>A live CharacterAvatar upload. Returns its object key.</summary>
+    private static async Task<string> AddCharacterPortraitAsync(
+        DmDbContext dbContext, Guid userId, Guid characterId, DateTimeOffset createdUtc)
+    {
+        var objectKey = $"characters/{Guid.NewGuid():N}.png";
+
+        dbContext.Uploads.Add(new DbUpload
+        {
+            UploadId = Guid.NewGuid(),
+            UserId = userId,
+            TargetCharacterId = characterId,
+            Type = UploadType.CharacterAvatar,
+            Status = UploadStatus.Confirmed,
+            ContentType = "image/png",
+            SizeBytes = 1024,
+            ObjectKey = objectKey,
+            FilePath = $"https://cdn.example/{objectKey}",
+            CreatedUtc = createdUtc,
+            IsRemoved = false,
+        });
+
+        await dbContext.SaveChangesAsync();
+        return objectKey;
+    }
 
     /// <summary>
     /// A fresh master, game and room per test: the fixture's database is shared

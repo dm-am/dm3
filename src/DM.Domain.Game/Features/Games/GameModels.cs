@@ -962,10 +962,29 @@ public class Post
     public bool RoomViewPrivateText { get; set; }
 
     /// <summary>
+    /// Game master at read time.
+    /// </summary>
+    public Guid GameMasterUserId { get; set; }
+
+    /// <summary>
+    /// Game assistants at read time.
+    /// </summary>
+    public IReadOnlyCollection<Guid> GameAssistantUserIds { get; set; } = [];
+
+    /// <summary>
     /// Game leads (master + assistants) at read time. Mentors are NOT
     /// included — a mentor is not a lead.
     /// </summary>
-    public IReadOnlyCollection<Guid> GameLeadUserIds { get; set; } = [];
+    /// <remarks>
+    /// Composed here rather than in the projection. Written as
+    /// <c>new[] { master }.Concat(assistants)</c> in the mapping profile it made
+    /// the whole DbPost projection untranslatable: Npgsql cannot correlate a
+    /// collection subquery concatenated onto an in-memory array, and it refused
+    /// the query rather than one member, so every read of a post answered 500.
+    /// The two parts project on their own; joining them is not database work.
+    /// </remarks>
+    public IReadOnlyCollection<Guid> GameLeadUserIds =>
+        [GameMasterUserId, .. GameAssistantUserIds];
 
     /// <summary>
     /// Raw JSONB snapshot of owner user ids for every [private] block in

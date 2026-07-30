@@ -404,17 +404,30 @@ internal class PostRepository : IPostRepository
 
         if (characterIds.Count == 0) return;
 
-        var pictures = await _dbContext.Uploads
+        // Newest per character rather than a dictionary keyed on the target.
+        // Nothing in the schema stops a second live row from pointing at the same
+        // character, and ToDictionaryAsync answered a duplicate key by throwing —
+        // which turned every read of the room into a 500 for everyone in it, with
+        // no way back that did not involve editing rows by hand. The upload path
+        // retires the previous portrait now, so a duplicate should not arise; the
+        // read no longer depends on that being true.
+        var rows = await _dbContext.Uploads
             .Where(u => u.TargetCharacterId != null
                 && characterIds.Contains(u.TargetCharacterId.Value)
                 && u.Type == UploadType.CharacterAvatar
                 && !u.IsRemoved)
+            .OrderByDescending(u => u.CreatedUtc)
+            .ThenByDescending(u => u.UploadId)
             .Select(u => new
             {
                 CharacterId = u.TargetCharacterId!.Value,
                 Picture = Shared.Users.AvatarProjections.From(u),
             })
-            .ToDictionaryAsync(x => x.CharacterId, x => x.Picture);
+            .ToListAsync();
+
+        var pictures = rows
+            .GroupBy(x => x.CharacterId)
+            .ToDictionary(g => g.Key, g => g.First().Picture);
 
         foreach (var post in posts)
         {
