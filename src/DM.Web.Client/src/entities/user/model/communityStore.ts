@@ -9,6 +9,10 @@ import { UserActivityFilter } from "./types";
 import { unwrapResource } from "@/shared/api";
 import { userApi } from "../api";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import {
+  createKeyedCache,
+  stableCacheKey,
+} from "@/shared/lib/utils/keyedCache";
 
 /**
  * Search parameters for users query (frontend model).
@@ -39,40 +43,7 @@ export interface UsersSearchParams {
   size?: number;
 }
 
-// Cache configuration
-const CACHE_TTL = 30_000; // 30 seconds
-const searchCache = new Map<
-  string,
-  { data: ListEnvelope<User>; timestamp: number }
->();
-
-/**
- * Stable cache key covering every filter param. Also reused by the widget to
- * trigger refetches, so it is exported as the single source of truth.
- */
-export function createCacheKey(params: UsersSearchParams): string {
-  return JSON.stringify({
-    search: params.search || "",
-    activity: params.activity || "active",
-    isOnline: params.isOnline,
-    role: params.role || "",
-    isNewbie: params.isNewbie,
-    minRating: params.minRating,
-    maxRating: params.maxRating,
-    minGamesHosting: params.minGamesHosting,
-    maxGamesHosting: params.maxGamesHosting,
-    minGamesPlaying: params.minGamesPlaying,
-    maxGamesPlaying: params.maxGamesPlaying,
-    minBlogsHosting: params.minBlogsHosting,
-    maxBlogsHosting: params.maxBlogsHosting,
-    registeredFromUtc: params.registeredFromUtc || "",
-    registeredToUtc: params.registeredToUtc || "",
-    sortBy: params.sortBy || "lastActivity",
-    sortOrder: params.sortOrder || "desc",
-    number: params.number || 1,
-    size: params.size || 20,
-  });
-}
+const searchCache = createKeyedCache<ListEnvelope<User>>({ ttlMs: 30_000 });
 
 const SORT_MAP: Record<string, string> = {
   username: "Name",
@@ -168,20 +139,19 @@ export const useCommunityStore = defineStore("community", () => {
     searchError.value = null;
 
     lastSearchParams.value = params;
-    const cacheKey = createCacheKey(params);
-    const cached = searchCache.get(cacheKey);
-    const now = Date.now();
+    const cacheKey = stableCacheKey(params);
+    const fresh = searchCache.get(cacheKey);
 
-    // Return cached data immediately if fresh
-    if (cached && now - cached.timestamp < CACHE_TTL) {
-      searchResult.value = cached.data;
+    if (fresh) {
+      searchResult.value = fresh;
       searchLoading.value = false;
       return;
     }
 
     // Show cached data while revalidating (stale-while-revalidate)
-    if (cached) {
-      searchResult.value = cached.data;
+    const stale = searchCache.getStale(cacheKey);
+    if (stale) {
+      searchResult.value = stale;
     }
 
     searchLoading.value = true;
@@ -202,7 +172,7 @@ export const useCommunityStore = defineStore("community", () => {
 
     if (data) {
       searchResult.value = data;
-      searchCache.set(cacheKey, { data, timestamp: now });
+      searchCache.set(cacheKey, data);
     }
   }
 
@@ -220,14 +190,15 @@ export const useCommunityStore = defineStore("community", () => {
     if (!lastSearchParams.value) return;
 
     const params = { ...lastSearchParams.value, number: page };
-    const cacheKey = createCacheKey(params);
+    const cacheKey = stableCacheKey(params);
 
-    // Skip if already cached
-    if (searchCache.has(cacheKey)) return;
+    // Skip only while the entry is fresh: replacing a stale one is the point of
+    // a prefetch.
+    if (searchCache.get(cacheKey)) return;
 
     const { data } = await userApi.getUsers(buildApiParams(params));
     if (data) {
-      searchCache.set(cacheKey, { data, timestamp: Date.now() });
+      searchCache.set(cacheKey, data);
     }
   }
 

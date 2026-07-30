@@ -32,6 +32,11 @@ import {
 import { unwrapResource } from "@/shared/api";
 import { useAuthStore } from "@/shared/stores";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import {
+  createKeyedCache,
+  stableCacheKey,
+} from "@/shared/lib/utils/keyedCache";
+import { describeFailure } from "@/shared/lib/errors";
 import type { GeneralError } from "@/shared/api/models/common";
 import { requestNotSent } from "@/shared/lib/errors";
 
@@ -75,33 +80,7 @@ export const useGamesStore = defineStore("games", () => {
   const searchError = ref<string | null>(null);
   const lastSearchParams = ref<GamesSearchParams | null>(null);
 
-  // Search cache: key → { data, timestamp }
-  const CACHE_TTL = 30_000; // 30 seconds
-  const searchCache = new Map<
-    string,
-    { data: ListEnvelope<Game>; timestamp: number }
-  >();
-
-  /**
-   * Create stable cache key from search params
-   */
-  function createCacheKey(params: GamesSearchParams): string {
-    // Sort keys for stable ordering
-    const sorted: Record<string, unknown> = {};
-    const keys = Object.keys(params).sort();
-    for (const key of keys) {
-      const value = params[key as keyof GamesSearchParams];
-      if (value !== undefined && value !== null && value !== "") {
-        // Sort arrays for stable keys
-        if (Array.isArray(value)) {
-          sorted[key] = [...value].sort().join(",");
-        } else {
-          sorted[key] = value;
-        }
-      }
-    }
-    return JSON.stringify(sorted);
-  }
+  const searchCache = createKeyedCache<ListEnvelope<Game>>({ ttlMs: 30_000 });
 
   // Request guard to discard stale out-of-order responses
   const requestGuard = createRequestGuard();
@@ -116,21 +95,20 @@ export const useGamesStore = defineStore("games", () => {
     // a cache-hit navigation.
     searchError.value = null;
 
-    const cacheKey = createCacheKey(params);
-    const cached = searchCache.get(cacheKey);
-    const now = Date.now();
+    const cacheKey = stableCacheKey(params);
+    const fresh = searchCache.get(cacheKey);
 
-    // Return cached if fresh
-    if (cached && now - cached.timestamp < CACHE_TTL) {
-      searchResult.value = cached.data;
+    if (fresh) {
+      searchResult.value = fresh;
       lastSearchParams.value = params;
       searchLoading.value = false;
       return;
     }
 
     // Show stale while revalidating
-    if (cached) {
-      searchResult.value = cached.data;
+    const stale = searchCache.getStale(cacheKey);
+    if (stale) {
+      searchResult.value = stale;
     }
 
     searchLoading.value = true;
@@ -144,20 +122,14 @@ export const useGamesStore = defineStore("games", () => {
     }
 
     if (error) {
-      searchError.value = "Не удалось загрузить игры";
+      searchError.value = describeFailure(error, "Не удалось загрузить игры");
       // Keep stale data on error if available
-      if (!cached) {
+      if (!stale) {
         searchResult.value = null;
       }
     } else if (data) {
       searchResult.value = data;
-      // Update cache
-      searchCache.set(cacheKey, { data, timestamp: now });
-      // Clean old entries (keep last 20)
-      if (searchCache.size > 20) {
-        const firstKey = searchCache.keys().next().value;
-        if (firstKey) searchCache.delete(firstKey);
-      }
+      searchCache.set(cacheKey, data);
     }
 
     searchLoading.value = false;
@@ -188,20 +160,16 @@ export const useGamesStore = defineStore("games", () => {
     if (!lastSearchParams.value) return;
 
     const params = { ...lastSearchParams.value, number: page };
-    const cacheKey = createCacheKey(params);
+    const cacheKey = stableCacheKey(params);
 
-    // Skip if already cached
-    if (searchCache.has(cacheKey)) return;
+    // Skip if already cached and still fresh — a stale entry is worth replacing
+    // here, since the point of the prefetch is that the next page is ready.
+    if (searchCache.get(cacheKey)) return;
 
     // Fetch in background without updating UI
     const { data } = await gameApi.searchGames(params);
     if (data) {
-      searchCache.set(cacheKey, { data, timestamp: Date.now() });
-      // Clean old entries (keep last 20)
-      if (searchCache.size > 20) {
-        const firstKey = searchCache.keys().next().value;
-        if (firstKey) searchCache.delete(firstKey);
-      }
+      searchCache.set(cacheKey, data);
     }
   }
 

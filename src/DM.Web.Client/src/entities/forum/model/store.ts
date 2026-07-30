@@ -16,6 +16,10 @@ import { unwrapResource } from "@/shared/api";
 import forumApi from "../api/forumApi";
 import { useAuthStore } from "@/shared/stores";
 import { useApiList } from "@/shared/lib/composables/useApiResource";
+import {
+  createKeyedCache,
+  stableCacheKey,
+} from "@/shared/lib/utils/keyedCache";
 
 export const useBoardsStore = defineStore("boards", () => {
   const { user: currentUser } = storeToRefs(useAuthStore());
@@ -104,19 +108,12 @@ export const useBoardsStore = defineStore("boards", () => {
   const topicsLoading = ref(false);
   const topicsError = ref(false);
 
-  // Topics search cache (30s TTL, max 20 entries, stale-while-revalidate)
-  const TOPICS_CACHE_TTL = 30_000;
-  const topicsCache = new Map<
-    string,
-    { data: ListEnvelope<Topic>; attached: Topic[] | null; timestamp: number }
-  >();
-
-  function createTopicsCacheKey(
-    boardAlias: string,
-    query: TopicsQuery,
-  ): string {
-    return JSON.stringify({ board: boardAlias, ...query });
-  }
+  // The entry holds both lists: the attached topics belong to the same board
+  // page and expire with it.
+  const topicsCache = createKeyedCache<{
+    data: ListEnvelope<Topic>;
+    attached: Topic[] | null;
+  }>({ ttlMs: 30_000 });
 
   // Monotonic token for topics requests: only the latest searchTopics call
   // may commit results/error/loading state. A slower response for a board
@@ -136,21 +133,21 @@ export const useBoardsStore = defineStore("boards", () => {
       query.size ?? currentUser.value?.settings?.paging?.topicsPerPage ?? 20;
     const fullQuery = { ...query, size };
     const boardAlias = selectedBoard.value.alias as BoardId;
-    const cacheKey = createTopicsCacheKey(boardAlias as string, fullQuery);
+    const cacheKey = stableCacheKey({ board: boardAlias, ...fullQuery });
 
     // Return cached if fresh
-    const cached = topicsCache.get(cacheKey);
-    const now = Date.now();
-    if (cached && now - cached.timestamp < TOPICS_CACHE_TTL) {
-      topics.value = cached.data;
-      attachedTopics.value = cached.attached;
+    const fresh = topicsCache.get(cacheKey);
+    if (fresh) {
+      topics.value = fresh.data;
+      attachedTopics.value = fresh.attached;
       return;
     }
 
     // Show stale while revalidating
-    if (cached) {
-      topics.value = cached.data;
-      attachedTopics.value = cached.attached;
+    const stale = topicsCache.getStale(cacheKey);
+    if (stale) {
+      topics.value = stale.data;
+      attachedTopics.value = stale.attached;
     }
 
     topicsLoading.value = true;
@@ -193,12 +190,7 @@ export const useBoardsStore = defineStore("boards", () => {
         topicsCache.set(cacheKey, {
           data: fetchedTopics,
           attached: fetchedAttached,
-          timestamp: now,
         });
-        if (topicsCache.size > 20) {
-          const firstKey = topicsCache.keys().next().value;
-          if (firstKey) topicsCache.delete(firstKey);
-        }
       }
 
       // Stale continuation: a newer searchTopics started while this one was
@@ -329,19 +321,9 @@ export const useBoardsStore = defineStore("boards", () => {
   const commentsLoading = ref(false);
   const commentsError = ref(false);
 
-  // Comments search cache (30s TTL, max 20 entries)
-  const COMMENTS_CACHE_TTL = 30_000;
-  const commentsCache = new Map<
-    string,
-    { data: ListEnvelope<Comment>; timestamp: number }
-  >();
-
-  function createCommentsCacheKey(
-    topicId: string,
-    query: CommentsQuery,
-  ): string {
-    return JSON.stringify({ topic: topicId, ...query });
-  }
+  const commentsCache = createKeyedCache<ListEnvelope<Comment>>({
+    ttlMs: 30_000,
+  });
 
   /**
    * Search comments with filters. Single source of truth for loading comments.
@@ -354,22 +336,17 @@ export const useBoardsStore = defineStore("boards", () => {
       query.size ?? currentUser.value?.settings?.paging?.commentsPerPage ?? 20;
     const fullQuery: CommentsQuery = { ...query, size };
     const topicId = selectedTopic.value.id!;
-    const cacheKey = createCommentsCacheKey(topicId, fullQuery);
+    const cacheKey = stableCacheKey({ topic: topicId, ...fullQuery });
 
     // Return cached if fresh
-    const cached = commentsCache.get(cacheKey);
-    const now = Date.now();
-    if (cached && now - cached.timestamp < COMMENTS_CACHE_TTL) {
-      comments.value = cached.data;
+    const fresh = commentsCache.get(cacheKey);
+    if (fresh) {
+      comments.value = fresh;
       return;
     }
 
     // Show stale while revalidating
-    if (cached) {
-      comments.value = cached.data;
-    } else {
-      comments.value = null;
-    }
+    comments.value = commentsCache.getStale(cacheKey) ?? null;
 
     commentsLoading.value = true;
     commentsError.value = false;
@@ -387,11 +364,7 @@ export const useBoardsStore = defineStore("boards", () => {
 
       // Update cache
       if (data) {
-        commentsCache.set(cacheKey, { data, timestamp: now });
-        if (commentsCache.size > 20) {
-          const firstKey = commentsCache.keys().next().value;
-          if (firstKey) commentsCache.delete(firstKey);
-        }
+        commentsCache.set(cacheKey, data);
       }
     } finally {
       commentsLoading.value = false;

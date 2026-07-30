@@ -12,7 +12,7 @@ import {
   useCommunityStore,
   useUserDisplay,
 } from "@/entities/user";
-import { createCacheKey } from "@/entities/user";
+import { stableCacheKey } from "@/shared/lib/utils/keyedCache";
 import { UsersFilter, useUsersFilter } from "@/features/user-filter";
 import { buildStatusLines } from "@/shared/lib/utils/tooltipBuilders";
 
@@ -119,7 +119,7 @@ const users = computed(() => searchResult.value?.resources ?? []);
 
 // Refetch whenever the cache key (covering every filter param) changes.
 // Shares the store's key builder so the widget and store never diverge.
-const paramsKey = computed(() => createCacheKey(searchParams.value));
+const paramsKey = computed(() => stableCacheKey(searchParams.value));
 
 watch(
   paramsKey,

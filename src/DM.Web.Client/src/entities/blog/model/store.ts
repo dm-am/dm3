@@ -23,6 +23,10 @@ import { useAuthStore } from "@/shared/stores";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 import type { GeneralError } from "@/shared/api/models/common";
 import { requestNotSent } from "@/shared/lib/errors";
+import {
+  createKeyedCache,
+  stableCacheKey,
+} from "@/shared/lib/utils/keyedCache";
 
 /**
  * Search parameters for blogs query (frontend model)
@@ -44,30 +48,7 @@ export interface BlogsSearchParams {
   size?: number;
 }
 
-// Cache configuration
-const CACHE_TTL = 30_000; // 30 seconds
-const searchCache = new Map<
-  string,
-  { data: ListEnvelope<Blog>; timestamp: number }
->();
-
-function createCacheKey(params: BlogsSearchParams): string {
-  return JSON.stringify({
-    search: params.search || "",
-    status: params.status || "",
-    hostUsernames: params.hostUsernames?.slice().sort() || [],
-    createdFromUtc: params.createdFromUtc || "",
-    createdToUtc: params.createdToUtc || "",
-    activatedFromUtc: params.activatedFromUtc || "",
-    activatedToUtc: params.activatedToUtc || "",
-    closedFromUtc: params.closedFromUtc || "",
-    closedToUtc: params.closedToUtc || "",
-    sortBy: params.sortBy || "created",
-    sortOrder: params.sortOrder || "desc",
-    number: params.number || 1,
-    size: params.size || 20,
-  });
-}
+const searchCache = createKeyedCache<ListEnvelope<Blog>>({ ttlMs: 30_000 });
 
 export const useBlogsStore = defineStore("blogs", () => {
   // Sidebar lists with caching (60s TTL by default) - use lightweight BlogRef
@@ -100,20 +81,19 @@ export const useBlogsStore = defineStore("blogs", () => {
     searchError.value = null;
 
     lastSearchParams.value = params;
-    const cacheKey = createCacheKey(params);
-    const cached = searchCache.get(cacheKey);
-    const now = Date.now();
+    const cacheKey = stableCacheKey(params);
+    const fresh = searchCache.get(cacheKey);
 
-    // Return cached data immediately if fresh
-    if (cached && now - cached.timestamp < CACHE_TTL) {
-      searchResult.value = cached.data;
+    if (fresh) {
+      searchResult.value = fresh;
       searchLoading.value = false;
       return;
     }
 
     // Show cached data while revalidating (stale-while-revalidate)
-    if (cached) {
-      searchResult.value = cached.data;
+    const stale = searchCache.getStale(cacheKey);
+    if (stale) {
+      searchResult.value = stale;
     }
 
     searchLoading.value = true;
@@ -194,12 +174,7 @@ export const useBlogsStore = defineStore("blogs", () => {
 
       if (data) {
         searchResult.value = data;
-        searchCache.set(cacheKey, { data, timestamp: now });
-        // Clean old entries (keep last 20)
-        if (searchCache.size > 20) {
-          const firstKey = searchCache.keys().next().value;
-          if (firstKey) searchCache.delete(firstKey);
-        }
+        searchCache.set(cacheKey, data);
       }
     } catch {
       if (requestGuard.isCurrent(requestId)) {
@@ -227,10 +202,11 @@ export const useBlogsStore = defineStore("blogs", () => {
     if (!lastSearchParams.value) return;
 
     const params = { ...lastSearchParams.value, number: page };
-    const cacheKey = createCacheKey(params);
+    const cacheKey = stableCacheKey(params);
 
-    // Skip if already cached
-    if (searchCache.has(cacheKey)) return;
+    // Skip only while the entry is fresh: replacing a stale one is the point of
+    // a prefetch.
+    if (searchCache.get(cacheKey)) return;
 
     // Map params to API params (same as searchBlogs)
     const pageSize = params.size || 20;
@@ -262,12 +238,7 @@ export const useBlogsStore = defineStore("blogs", () => {
 
     const { data } = await Api.get<ListEnvelope<Blog>>("blogs", apiParams);
     if (data) {
-      searchCache.set(cacheKey, { data, timestamp: Date.now() });
-      // Clean old entries (keep last 20)
-      if (searchCache.size > 20) {
-        const firstKey = searchCache.keys().next().value;
-        if (firstKey) searchCache.delete(firstKey);
-      }
+      searchCache.set(cacheKey, data);
     }
   }
 

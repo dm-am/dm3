@@ -3,14 +3,12 @@ export * from "./types";
 // Session store, re-exported from shared — see ./store for why it lives there
 export { useAuthStore } from "./store";
 
-// Community-specific store (stays in entities). createCacheKey and the query
-// shape are part of its contract: the users table and the user filter build
-// cache keys and params for it, and reaching into the module for them was a
-// deep import past this barrel.
+// Community-specific store (stays in entities). The query shape is part of its
+// contract: the users table and the user filter build params for it, and
+// reaching into the module for them was a deep import past this barrel.
 export {
   useCommunityStore,
   UserActivityFilter,
-  createCacheKey,
   type UsersSearchParams,
 } from "./communityStore";
 
