@@ -10,6 +10,7 @@ using DM.Infrastructure.Core.Logging;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Mail;
 using DM.Infrastructure.Messaging;
+using DM.Workers.NotificationDispatcher.Implementation;
 using DM.Workers.NotificationDispatcher.Implementation.Bot;
 using DM.Workers.NotificationDispatcher.Implementation.Email;
 using Jamq.Client.Abstractions.Consuming;
@@ -111,6 +112,17 @@ public class Startup
         // Bot notification sender (Discord/Telegram)
         builder.RegisterType<NotificationBotSender>()
             .As<INotificationBotSender>()
+            .InstancePerLifetimeScope();
+
+        // Продюсер вынесен из процессора отдельным типом. Jamq создает scope на каждое
+        // доставленное сообщение и резолвит процессор в нем, поэтому продюсер, который
+        // строился в конструкторе процессора, брал AMQP-канал на сообщение и не
+        // возвращал его: канал уходит обратно в пул только в Dispose, а процессор
+        // не был IDisposable. Здесь scope живет одно сообщение, так что несущая
+        // половина — именно Dispose, а не время жизни; scope выбран для единообразия
+        // с API, где одного продюсера просят несколько сервисов в одном запросе.
+        builder.RegisterType<RealtimeNotificationProducer>()
+            .As<IRealtimeNotificationProducer>()
             .InstancePerLifetimeScope();
     }
 

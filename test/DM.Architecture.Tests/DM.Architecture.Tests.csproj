@@ -19,9 +19,14 @@
     </ItemGroup>
 
     <!-- The host project drags every Domain.* and Infrastructure.* assembly into
-         the output directory, which is what the loader scans. -->
+         the output directory, which is what the loader scans. The workers and the
+         seeder are referenced on their own: nothing else pulls them in, so every
+         rule was silently blind to three of the five executables. -->
     <ItemGroup>
       <ProjectReference Include="..\..\src\DM.Web.API\DM.Web.API.csproj" />
+      <ProjectReference Include="..\..\src\DM.Workers.Mail\DM.Workers.Mail.csproj" />
+      <ProjectReference Include="..\..\src\DM.Workers.NotificationDispatcher\DM.Workers.NotificationDispatcher.csproj" />
+      <ProjectReference Include="..\..\src\DM.Tools.Seeder\DM.Tools.Seeder.csproj" />
     </ItemGroup>
 
 </Project>

@@ -9,8 +9,6 @@ using DM.Workers.NotificationDispatcher.Implementation.Notifiers;
 using DM.Workers.NotificationDispatcher.Implementation.Email;
 using DM.Workers.NotificationDispatcher.Implementation.Bot;
 using Jamq.Client.Abstractions.Consuming;
-using Jamq.Client.Abstractions.Producing;
-using Jamq.Client.Rabbit.Producing;
 
 namespace DM.Workers.NotificationDispatcher.Implementation;
 
@@ -22,7 +20,7 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
     private readonly INotificationEmailSender _emailSender;
     private readonly INotificationBotSender _botSender;
     private readonly IMapper _mapper;
-    private readonly IProducer<string, RealtimeNotification> _producer;
+    private readonly IRealtimeNotificationProducer _producer;
 
     /// <inheritdoc />
     public NotificationProcessor(
@@ -31,15 +29,14 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
         INotificationEmailSender emailSender,
         INotificationBotSender botSender,
         IMapper mapper,
-        IProducerBuilder producerBuilder)
+        IRealtimeNotificationProducer producer)
     {
         _generators = generators;
         _notificationService = notificationService;
         _emailSender = emailSender;
         _botSender = botSender;
         _mapper = mapper;
-        _producer = producerBuilder.BuildRabbit<RealtimeNotification>(
-            new RabbitProducerParameters("dm.notifications.sent"));
+        _producer = producer;
     }
 
     /// <inheritdoc />
@@ -70,7 +67,7 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
         // Send to SignalR (in-app notifications)
         foreach (var notification in notifications.Select(_mapper.Map<RealtimeNotification>))
         {
-            await _producer.Send(string.Empty, notification, cancellationToken);
+            await _producer.SendAsync(notification, cancellationToken);
         }
 
         // Send email notifications to users who have enabled them

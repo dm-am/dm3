@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
+using DM.Infrastructure.Messaging.GeneralBus;
 using Jamq.Client.Abstractions.Consuming;
 using Jamq.Client.Rabbit.Consuming;
 using Microsoft.Extensions.Hosting;
@@ -38,7 +39,7 @@ internal class RealtimeNotificationConsumer : BackgroundService
 
         var parameters = new RabbitConsumerParameters("dm.api", "dm.notifications.api", ProcessingOrder.Sequential)
         {
-            ExchangeName = "dm.notifications.sent",
+            ExchangeName = RealtimeNotificationsTransport.ExchangeName,
             RoutingKeys = new[] { "#" },
             Exclusive = true
         };
