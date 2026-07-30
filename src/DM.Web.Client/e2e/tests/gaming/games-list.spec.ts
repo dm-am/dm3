@@ -30,6 +30,25 @@ const table = (page: Page): Locator => page.getByRole("table");
 /** The row of active-filter chips. Absent when no filter is applied. */
 const bubbles = (page: Page): Locator => page.locator(".bubbles-row");
 
+/** A data row. The loading skeleton uses .skeleton-row, so this counts none. */
+const rows = (page: Page): Locator => table(page).locator("tr.table-row");
+
+/**
+ * Hold until the table has rendered its data rows.
+ *
+ * Anything that reads text out of the table in bulk — allTextContents,
+ * evaluateAll — resolves against whatever the DOM holds at that instant and
+ * does not retry. While the request is in flight DataTable renders skeleton
+ * rows under a different class, so those reads come back empty, and the caller
+ * then fails on its own emptiness check rather than on a locator timeout: the
+ * message says no value occurs exactly once, which reads like a data problem
+ * and is really a timing one. Only for reads that expect rows; a test asserting
+ * an empty result uses toHaveCount(0), which retries on its own.
+ */
+async function rowsRendered(page: Page): Promise<void> {
+  await expect(rows(page).first()).toBeVisible();
+}
+
 /** The sort trigger. Its label is the active sort, so it has no fixed name. */
 const sortTrigger = (page: Page): Locator =>
   filters(page).locator(".sort-section").getByRole("button");
@@ -75,6 +94,7 @@ function rowOfGame(page: Page, title: string): Locator {
 }
 
 async function anyGameTitle(page: Page): Promise<string> {
+  await rowsRendered(page);
   const titles = await table(page).locator("a.game-link").allTextContents();
   return onlyOccurrence(
     titles.map((title) => title.trim()),
@@ -510,6 +530,7 @@ test.describe("Games List Page", () => {
     test("should click tag in game row to filter by it", async ({ page }) => {
       await page.goto("/games");
 
+      await rowsRendered(page);
       const tagTitles = await table(page)
         .locator("a.tag-link")
         .allTextContents();
@@ -767,7 +788,7 @@ test.describe("Games List Page", () => {
     }) => {
       await page.goto("/games?search=xyznonexistentgame123456789");
 
-      await expect(table(page).locator("tr.table-row")).toHaveCount(0);
+      await expect(rows(page)).toHaveCount(0);
       await expect(table(page)).toContainText(
         "Игр по заданным фильтрам не найдено",
       );
@@ -798,20 +819,19 @@ test.describe("Games List Page", () => {
       // A row whose readers count is not zero, so the tooltip lists readers
       // instead of saying there are none. The tooltip is the site's own
       // component, not a title attribute as the old test assumed.
-      const titles = await table(page)
-        .locator("tr.table-row")
-        .evaluateAll((rows) =>
-          rows
-            .filter(
-              (row) =>
-                (
-                  row.querySelector(".readers-count")?.textContent ?? "0"
-                ).trim() !== "0",
-            )
-            .map((row) =>
-              (row.querySelector("a.game-link")?.textContent ?? "").trim(),
-            ),
-        );
+      await rowsRendered(page);
+      const titles = await rows(page).evaluateAll((rendered) =>
+        rendered
+          .filter(
+            (row) =>
+              (
+                row.querySelector(".readers-count")?.textContent ?? "0"
+              ).trim() !== "0",
+          )
+          .map((row) =>
+            (row.querySelector("a.game-link")?.textContent ?? "").trim(),
+          ),
+      );
       const title = onlyOccurrence(titles, "game with readers");
 
       await rowOfGame(page, title).locator(".readers-count").hover();
@@ -833,7 +853,14 @@ test.describe("Games List Page", () => {
           url.pathname === "/v1/games" &&
           !url.searchParams.has("projection"),
         async (route) => {
-          await new Promise((resolve) => setTimeout(resolve, 1500));
+          // Four seconds, not one and a half. This is the one test here that has
+          // to catch a state on its way past instead of waiting for a settled
+          // one, so the window has to outlast a slow boot: on a loaded machine
+          // the first assertion has been seen starting after a 1500ms window had
+          // already closed, and it then polls for its whole timeout against an
+          // attribute that is never coming back. Four seconds still fits inside
+          // the 5s expect timeout.
+          await new Promise((resolve) => setTimeout(resolve, 4000));
           await route.continue();
         },
       );
@@ -844,7 +871,7 @@ test.describe("Games List Page", () => {
       // marked busy while the request is in flight and unmarked once rows
       // arrive. The old test only checked that the wrapper existed.
       await expect(table(page)).toHaveAttribute("aria-busy", "true");
-      await expect(table(page).locator("tr.table-row")).not.toHaveCount(0);
+      await expect(rows(page)).not.toHaveCount(0);
       await expect(table(page)).not.toHaveAttribute("aria-busy", "true");
     });
   });
