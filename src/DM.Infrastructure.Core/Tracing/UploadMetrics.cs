@@ -6,8 +6,10 @@ namespace DM.Infrastructure.Core.Tracing;
 /// Metrics for the upload pipeline (Prometheus + OTel). Global SSOT —
 /// all upload-related instrumentation lives here.
 ///
-/// Names follow OpenTelemetry semantic conventions: snake_case, units
-/// in the name, dot-separated namespace.
+/// Names follow OpenTelemetry semantic conventions: snake_case, dot-separated
+/// namespace, and the unit only in the unit argument. Repeating it in the name
+/// makes the Prometheus exporter append its own suffix on top, so a histogram
+/// called duration_ms is exported as dm_uploads_duration_ms_milliseconds.
 /// </summary>
 public static class UploadMetrics
 {
@@ -32,22 +34,22 @@ public static class UploadMetrics
 
     /// <summary>
     /// Histogram of the whole upload pipeline duration (first byte to DB commit),
-    /// milliseconds. Attributes: <c>type</c>.
+    /// seconds. Attributes: <c>type</c>.
     /// </summary>
-    public static readonly Histogram<double> DurationMs =
-        Meter.CreateHistogram<double>("dm.uploads.duration_ms", "ms", "End-to-end upload latency");
+    public static readonly Histogram<double> Duration =
+        Meter.CreateHistogram<double>("dm.uploads.duration", "s", "End-to-end upload latency");
 
     /// <summary>
     /// Histogram of the incoming original file size (bytes). Helps anti-DoS
     /// tuning: if most files are under 100 KB, the limit can be tightened.
     /// </summary>
     public static readonly Histogram<long> InputSizeBytes =
-        Meter.CreateHistogram<long>("dm.uploads.input_size_bytes", "By", "Uploaded file size (input)");
+        Meter.CreateHistogram<long>("dm.uploads.input_size", "By", "Uploaded file size (input)");
 
     /// <summary>
     /// Histogram of the size of all 3 variants after processing (byte sum).
     /// The "how much we actually put into S3 per upload" metric.
     /// </summary>
     public static readonly Histogram<long> OutputSizeBytes =
-        Meter.CreateHistogram<long>("dm.uploads.output_size_bytes", "By", "Total bytes written to S3 across 3 variants");
+        Meter.CreateHistogram<long>("dm.uploads.output_size", "By", "Total bytes written to S3 across 3 variants");
 }

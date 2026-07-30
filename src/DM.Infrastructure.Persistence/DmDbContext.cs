@@ -2089,8 +2089,9 @@ public class DmDbContext : DbContext
         // Username and email are looked up case-insensitively everywhere
         // (lower(column) = lower(value)), so the indexes that serve those
         // lookups are expression indexes on lower(...). EF cannot express an
-        // index over an expression, so they are created by raw SQL in the
-        // migration — see the IX_Users_*_Lower statements there. Declaring a
+        // index over an expression, and hand-written SQL in the migration would
+        // be lost silently the next time the migration is regenerated, so
+        // ExpressionIndexInitializer asserts them at startup instead. Declaring a
         // plain HasIndex here instead would build a b-tree over the raw column
         // that no case-insensitive predicate can use, which is exactly the
         // state this replaced: the name said Lower, the index did not.

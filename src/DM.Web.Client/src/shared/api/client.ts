@@ -24,7 +24,10 @@ type RequestBody = object | FormData;
 const defaultHeaders: { [key: string]: string } = {
   "Cache-Control": "no-cache",
   "Content-Type": "application/json",
-  "X-Requested-With": "XMLHttpRequest", // CSRF protection - identifies AJAX requests
+  // Marks the request as XHR. Not a CSRF control: the server never reads this header.
+  // CSRF is covered by the Origin/Referer check in the API and SameSite=Lax on the
+  // session cookie.
+  "X-Requested-With": "XMLHttpRequest",
   [X_DM_AUDIENCE]: RENDER_AUDIENCE.Display,
 };
 

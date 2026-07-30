@@ -107,8 +107,6 @@ public class Character : ISoftDeletable, IHasEditHistory<CharacterEdit>
     [InverseProperty(nameof(CharacterEdit.Character))]
     public virtual ICollection<CharacterEdit> Edits { get; set; } = [];
 
-    // NOTE: Pictures navigation removed - Upload.EntityId is polymorphic without FK constraints
-
     /// <summary>
     /// Attribute values
     /// </summary>

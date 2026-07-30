@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Amazon.S3;
 using Amazon.S3.Model;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Configuration;
 using DM.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -20,8 +21,10 @@ namespace DM.Web.API.HostedServices;
 /// Workflow:
 /// 1. Periodically (every N hours) selects Uploads.IsRemoved=true whose
 ///    DeletedUtc is older than the grace period (24h by default).
-/// 2. For each such record deletes the original + thumbnails (_m.webp / _s.webp)
-///    in S3. Does not fail on 404 (a missing file is fine) or transient errors.
+/// 2. For each such record deletes its single source object in S3 — thumbnail
+///    variants are made on-the-fly by imgproxy and never stored, so there is
+///    nothing else to delete. Does not fail on 404 (a missing file is fine) or
+///    transient errors.
 /// 3. Deletes the Upload record itself from the DB (hard-delete) only after all
 ///    S3 objects were deleted successfully. If the S3 delete failed, the record stays and
 ///    is retried on the next tick.
@@ -88,7 +91,11 @@ internal class UploadOrphanCleanupService : BackgroundService
             var s3 = scope.ServiceProvider.GetRequiredService<IAmazonS3>();
             var cdn = scope.ServiceProvider.GetRequiredService<IOptions<CdnConfiguration>>().Value;
 
-            var cutoff = DateTimeOffset.UtcNow - _gracePeriod;
+            // The grace period decides when a file is physically destroyed, so the
+            // deadline is measured by the injected clock: a test can move that one,
+            // the system clock it cannot.
+            var clock = scope.ServiceProvider.GetRequiredService<IDateTimeProvider>();
+            var cutoff = clock.Now - _gracePeriod;
             var candidates = await db.Uploads
                 // Soft-deleted rows are exactly what this sweeper looks for, and
                 // the global query filter hides them: without IgnoreQueryFilters

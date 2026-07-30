@@ -112,8 +112,9 @@ public class UploadController : ControllerBase
     /// </summary>
     /// <remarks>
     /// Multipart/form-data upload. For images (UserAvatar, CharacterAvatar):
-    /// magic-byte validation, EXIF/IPTC/XMP strip, WebP thumbnail generation
-    /// (medium 400×400, small 100×100), atomic batch S3 PUT.
+    /// magic-byte validation, EXIF/IPTC/XMP strip, downscale to 1024 px, a single
+    /// S3 PUT of the source file. Thumbnail variants are produced on-the-fly at
+    /// serving time and are not stored.
     ///
     /// Allowed formats: JPEG, PNG, WebP. Maximum 10 MB.
     /// </remarks>

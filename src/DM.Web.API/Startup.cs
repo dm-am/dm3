@@ -225,6 +225,11 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             // process — never returned, so the pool runs one lease short forever.
             using var migrationScope = appBuilder.ApplicationServices.CreateScope();
             migrationScope.ServiceProvider.GetRequiredService<DmDbContext>().Database.Migrate();
+
+            // Environment.Exit runs no finally block and stops no host, so the
+            // flush in Main never happens on this path: the migration container
+            // would leave nothing behind about the run it just made.
+            Serilog.Log.CloseAndFlush();
             Environment.Exit(0);
         }
         

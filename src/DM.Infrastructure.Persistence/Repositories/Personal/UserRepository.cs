@@ -477,7 +477,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         foreach (var upload in avatarUploads)
         {
             upload.IsRemoved = true;
-            upload.DeletedUtc = DateTimeOffset.UtcNow;
+            upload.DeletedUtc = _dateTimeProvider.Now;
         }
 
         await _dmDbContext.SaveChangesAsync();

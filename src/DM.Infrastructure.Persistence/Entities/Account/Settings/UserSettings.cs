@@ -1,5 +1,4 @@
 using System;
-using System.ComponentModel.DataAnnotations;
 using DM.Infrastructure.Persistence.MongoIntegration;
 using MongoDB.Bson.Serialization.Attributes;
 using DM.Domain.Core.Enums;
@@ -14,9 +13,10 @@ namespace DM.Infrastructure.Persistence.Entities.Account.Settings;
 public class UserSettings
 {
     /// <summary>
-    /// User identifier
+    /// User identifier. Not the document's _id — the class declares no Id member,
+    /// so the server generates _id, and one settings document per user is held by
+    /// the unique index IX_UserSettings_UserId, not by this property.
     /// </summary>
-    [Key]
     public Guid UserId { get; set; }
 
     /// <summary>

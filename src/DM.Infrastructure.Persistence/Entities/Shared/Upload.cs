@@ -77,10 +77,12 @@ public class Upload : ISoftDeletable
     public long SizeBytes { get; set; }
 
     /// <summary>
-    /// S3 object key. Hash-based, immutable: thumbnail keys are derived
-    /// by replacing the extension and adding a suffix (_m/_s). Used by
-    /// GC and cleanup logic; FilePath/MediumFilePath/SmallFilePath are public URLs
-    /// for rendering.
+    /// S3 object key. Random per upload, not a content hash: the same file
+    /// uploaded twice gets two keys, and nothing deduplicates by content. What
+    /// the key does guarantee is immutability — it is never reused, so the object
+    /// behind it never changes and may be cached forever. Used by GC and cleanup
+    /// logic; FilePath is the public URL for rendering. There are no derived
+    /// keys: thumbnail variants are made on-the-fly by imgproxy at serving time.
     /// </summary>
     [MaxLength(500)]
     public string ObjectKey { get; set; } = null!;
@@ -122,6 +124,7 @@ public class Upload : ISoftDeletable
 
     // Navigation properties for the target columns are intentionally not defined:
     // FK constraints are configured via OnModelCreating, and navigations
-    // on the Upload side are not needed (consumers always come from the owner side
-    // via User.AvatarUploadId / Character.AvatarUploadId).
+    // on the Upload side are not needed. The user avatar is reached from the owner
+    // side via User.AvatarUploadId; a character has no such column, so its portrait
+    // is read by querying Uploads on TargetCharacterId.
 }

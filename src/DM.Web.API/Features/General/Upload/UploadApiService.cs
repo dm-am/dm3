@@ -191,7 +191,7 @@ internal class UploadApiService : IUploadApiService
             stopwatch.Stop();
             UploadMetrics.Success.Add(1, typeTag,
                 new("content_type", result.ContentType));
-            UploadMetrics.DurationMs.Record(stopwatch.Elapsed.TotalMilliseconds, typeTag);
+            UploadMetrics.Duration.Record(stopwatch.Elapsed.TotalSeconds, typeTag);
             UploadMetrics.InputSizeBytes.Record(file.Length, typeTag);
             // OutputSizeBytes is written inside DirectUploadCore via an activity tag —
             // add it here if present.
@@ -396,8 +396,9 @@ internal class UploadApiService : IUploadApiService
             Key = objectKey,
             InputStream = stream,
             ContentType = contentType,
-            // objectKey is hash-based (immutable) → aggressive browser/CDN caching.
-            // Replacing the avatar = a new key, no cache-busting issues.
+            // A key is never rewritten — replacing an avatar allocates a new one —
+            // so a cached object cannot go stale → aggressive browser/CDN caching.
+            // The key is random, not a content hash: see GenerateObjectKey.
             Headers =
             {
                 CacheControl = "public, max-age=31536000, immutable",
@@ -457,7 +458,12 @@ internal class UploadApiService : IUploadApiService
     }
 
     /// <summary>
-    /// Hash-based immutable object key: type folder + scope (userId) + 8-char hex.
+    /// Object key: type folder + scope (userId) + a random 8-hex suffix. Not a
+    /// content hash — the same image uploaded twice occupies two objects, and the
+    /// key says nothing about what stands behind it. Keys are never rewritten (a
+    /// replaced avatar allocates a fresh one), and that, not the shape of the key,
+    /// is what the immutable cache headers on PUT rest on; the 32 bits of
+    /// randomness are the only thing keeping two keys in one user folder apart.
     /// The extension is accepted as a validated, normalized string.
     /// </summary>
     private string GenerateObjectKey(UploadType type, Guid userId, string normalizedExtension)

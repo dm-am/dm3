@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Amazon.S3;
 using Amazon.S3.Model;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Uploads;
 using Microsoft.EntityFrameworkCore;
@@ -19,18 +20,21 @@ internal class UploadGarbageCollector : IUploadGarbageCollector
     private readonly IAmazonS3 _s3;
     private readonly CdnConfiguration _cdn;
     private readonly ILogger<UploadGarbageCollector> _logger;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public UploadGarbageCollector(
         DmDbContext db,
         IAmazonS3 s3,
         IOptions<CdnConfiguration> cdn,
-        ILogger<UploadGarbageCollector> logger)
+        ILogger<UploadGarbageCollector> logger,
+        IDateTimeProvider dateTimeProvider)
     {
         _db = db;
         _s3 = s3;
         _cdn = cdn.Value;
         _logger = logger;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
@@ -65,7 +69,9 @@ internal class UploadGarbageCollector : IUploadGarbageCollector
             }
 
             up.IsRemoved = true;
-            up.DeletedUtc = DateTimeOffset.UtcNow;
+            // Starts the sweeper's grace period, so the value comes from the same
+            // clock the sweeper compares it against.
+            up.DeletedUtc = _dateTimeProvider.Now;
         }
 
         // Persist the soft-delete in the DB before touching S3 — if the S3

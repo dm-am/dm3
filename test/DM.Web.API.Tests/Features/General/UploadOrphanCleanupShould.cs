@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Amazon.S3;
 using Amazon.S3.Model;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Configuration;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Shared;
@@ -31,9 +32,17 @@ public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
 {
     private const string Bucket = "dm-test";
 
+    /// <summary>
+    /// The instant every row here is dated from. Fixed rather than taken from
+    /// DateTimeOffset.UtcNow, so the grace period is checked against a value the
+    /// test owns instead of against the same wall clock the code under test reads.
+    /// </summary>
+    private static readonly DateTimeOffset Now = new(2020, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
     private readonly string _databaseName = Guid.NewGuid().ToString();
     private readonly ServiceProvider _serviceProvider;
     private readonly Mock<IAmazonS3> _s3;
+    private readonly Mock<IDateTimeProvider> _clock;
 
     public UploadOrphanCleanupShould()
     {
@@ -41,11 +50,15 @@ public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
         _s3.Setup(c => c.DeleteObjectAsync(It.IsAny<DeleteObjectRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new DeleteObjectResponse());
 
+        _clock = Mock<IDateTimeProvider>();
+        _clock.SetupGet(c => c.Now).Returns(Now);
+
         var services = new ServiceCollection();
         // Scoped, exactly as in production: the service resolves its context
         // from a scope it creates and disposes itself.
         services.AddDbContext<DmDbContext>(options => options.UseInMemoryDatabase(_databaseName));
         services.AddScoped(_ => _s3.Object);
+        services.AddSingleton(_ => _clock.Object);
         services.AddSingleton<IOptions<CdnConfiguration>>(
             Options.Create(new CdnConfiguration { BucketName = Bucket }));
         _serviceProvider = services.BuildServiceProvider();
@@ -60,7 +73,7 @@ public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
     {
         UploadId = Guid.NewGuid(),
         UserId = Guid.NewGuid(),
-        CreatedUtc = DateTimeOffset.UtcNow.AddDays(-10),
+        CreatedUtc = Now.AddDays(-10),
         ContentType = "image/png",
         SizeBytes = 1024,
         ObjectKey = objectKey,
@@ -89,7 +102,7 @@ public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
     [Fact]
     public async Task CollectUploadRemovedBeyondTheGracePeriod()
     {
-        await GivenUpload(NewUpload(removed: true, DateTimeOffset.UtcNow.AddDays(-2), "uploads/expired.png"));
+        await GivenUpload(NewUpload(removed: true, Now.AddDays(-2), "uploads/expired.png"));
 
         await Sweep();
 
@@ -102,7 +115,7 @@ public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
     [Fact]
     public async Task LeaveUploadStillWithinTheGracePeriod()
     {
-        await GivenUpload(NewUpload(removed: true, DateTimeOffset.UtcNow.AddHours(-1), "uploads/fresh.png"));
+        await GivenUpload(NewUpload(removed: true, Now.AddHours(-1), "uploads/fresh.png"));
 
         await Sweep();
 
@@ -121,6 +134,28 @@ public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
         _s3.Verify(c => c.DeleteObjectAsync(It.IsAny<DeleteObjectRequest>(), It.IsAny<CancellationToken>()),
             Times.Never);
         (await RemainingUploads()).Should().Be(1);
+    }
+
+    /// <summary>
+    /// The grace period is a statement about elapsed time, so the test states it by
+    /// moving the clock: one and the same row is left alone before the deadline and
+    /// collected after it, with nothing but IDateTimeProvider changing in between.
+    /// </summary>
+    [Fact]
+    public async Task CollectUploadOnceTheClockPassesTheGracePeriod()
+    {
+        await GivenUpload(NewUpload(removed: true, Now, "uploads/aging.png"));
+
+        await Sweep();
+        (await RemainingUploads()).Should().Be(1);
+
+        _clock.SetupGet(c => c.Now).Returns(Now.AddHours(25));
+        await Sweep();
+
+        _s3.Verify(c => c.DeleteObjectAsync(
+            It.Is<DeleteObjectRequest>(r => r.Key == "uploads/aging.png"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        (await RemainingUploads()).Should().Be(0);
     }
 
     public void Dispose() => _serviceProvider.Dispose();

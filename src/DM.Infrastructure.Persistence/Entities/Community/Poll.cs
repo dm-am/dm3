@@ -4,7 +4,7 @@ using DM.Infrastructure.Persistence.Entities.Contracts;
 using DM.Infrastructure.Persistence.MongoIntegration;
 using MongoDB.Bson.Serialization.Attributes;
 
-namespace DM.Infrastructure.Persistence.Entities.Forum;
+namespace DM.Infrastructure.Persistence.Entities.Community;
 
 /// <summary>
 /// DAL model for poll

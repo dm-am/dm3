@@ -17,7 +17,8 @@ namespace DM.Web.API.Features.Account.Authentication;
 /// <remarks>
 /// Manages user sessions using cookie-based authentication (BFF pattern).
 /// All endpoints are rate-limited to prevent brute-force attacks.
-/// Session cookies are HttpOnly and SameSite=Strict for security.
+/// Session cookies are HttpOnly and SameSite=Lax: Lax still travels on top-level
+/// navigation, which the activation and password-reset links sent by mail depend on.
 /// </remarks>
 [ApiController]
 [Route("v1/account")]

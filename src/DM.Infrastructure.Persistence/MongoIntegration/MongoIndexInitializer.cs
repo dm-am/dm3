@@ -10,7 +10,7 @@ using DbAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.Characters
 using DbDiceRoll = DM.Infrastructure.Persistence.Entities.Game.Posts.DiceRoll;
 using DbLoginAttempt = DM.Infrastructure.Persistence.Entities.Account.LoginAttempt;
 using DbNotification = DM.Infrastructure.Persistence.Entities.Personal.Notifications.Notification;
-using DbPoll = DM.Infrastructure.Persistence.Entities.Forum.Poll;
+using DbPoll = DM.Infrastructure.Persistence.Entities.Community.Poll;
 using DbSecurityAuditEntry = DM.Infrastructure.Persistence.Entities.Account.SecurityAuditEntry;
 using DbSession = DM.Infrastructure.Persistence.Entities.Account.Session;
 using DbUnreadCounter = DM.Infrastructure.Persistence.Entities.Shared.UnreadCounter;
@@ -149,7 +149,7 @@ public class MongoIndexInitializer : IHostedService
         // AttributeSchemata — AttributeSchemaRepository
         await Assert(client.GetCollection<DbAttributeSchema>(), new[]
         {
-            // GetSchemata: Eq(s => s.Type, Public) | Eq(s => s.UserId, userId)
+            // GetSchemata: Eq(s => s.IsRemoved, false) & (Eq(s => s.Type, Public) | Eq(s => s.UserId, userId))
             Index<DbAttributeSchema>("IX_AttributeSchemata_UserId", keys => keys
                 .Ascending(s => s.UserId)),
         }, cancellationToken);

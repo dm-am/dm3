@@ -44,7 +44,7 @@ public class EntityStorageMarkerShould
         // Inside the UserSessions document
         "DM.Infrastructure.Persistence.Entities.Account.Session",
         // Inside the Polls document
-        "DM.Infrastructure.Persistence.Entities.Forum.PollOption",
+        "DM.Infrastructure.Persistence.Entities.Community.PollOption",
         // Inside the Dice document
         "DM.Infrastructure.Persistence.Entities.Game.Posts.RollResult",
     ];

@@ -1,8 +1,8 @@
 using System;
 using AutoMapper;
 using DM.Domain.Community.Features.Polls;
-using DbPoll = DM.Infrastructure.Persistence.Entities.Forum.Poll;
-using DbPollOption = DM.Infrastructure.Persistence.Entities.Forum.PollOption;
+using DbPoll = DM.Infrastructure.Persistence.Entities.Community.Poll;
+using DbPollOption = DM.Infrastructure.Persistence.Entities.Community.PollOption;
 
 namespace DM.Infrastructure.Persistence.Repositories.Community;
 

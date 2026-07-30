@@ -618,7 +618,7 @@ internal sealed partial class DataSeeder
                 result.CharactersCreated++;
 
                 // Add avatar for the Diopside character — the real pipeline:
-                // EXIF strip + WebP _m/_s thumbnails, everything lands in MinIO.
+                // EXIF strip + downscale, one source object lands in MinIO.
                 if (isDiopsideChar)
                 {
                     var bytes = ReadEmbeddedSeedBytes("DM.Tools.Seeder.Assets.Seed.diopside.jpg");
@@ -816,7 +816,7 @@ internal sealed partial class DataSeeder
                                 DiceCount = 1,
                                 EdgesCount = 20,
                                 Bonus = 7,
-                                comment = "Восприятие",
+                                Comment = "Восприятие",
                                 Result = [new RollResult { Value = 18, IsCritical = false, IsExploded = false }]
                             },
                             new DiceRoll
@@ -827,7 +827,7 @@ internal sealed partial class DataSeeder
                                 DiceCount = 1,
                                 EdgesCount = 20,
                                 Bonus = 5,
-                                comment = "Убеждение",
+                                Comment = "Убеждение",
                                 Result = [new RollResult { Value = 14, IsCritical = false, IsExploded = false }]
                             }
                         };

@@ -14,8 +14,11 @@ namespace DM.Web.API.Middleware;
 /// Middleware for CSRF protection via Origin/Referer validation
 /// </summary>
 /// <remarks>
-/// While the API uses custom auth headers (not cookies), this provides defense-in-depth
-/// by validating that state-changing requests come from allowed origins.
+/// The API authenticates with a session cookie (BFF pattern), so the browser attaches
+/// credentials to a cross-site request by itself: validating the origin of a
+/// state-changing request is a primary CSRF control here, not defence in depth. It
+/// works together with SameSite=Lax on the session cookie, which covers the requests
+/// that carry no origin at all.
 /// </remarks>
 public class CsrfProtectionMiddleware
 {
@@ -59,9 +62,11 @@ public class CsrfProtectionMiddleware
         var origin = context.Request.Headers.Origin.FirstOrDefault()
             ?? ExtractOriginFromReferer(context.Request.Headers.Referer.FirstOrDefault());
 
-        // If no origin/referer, this might be a direct API call (Postman, curl)
-        // We allow these since they can't carry auth cookies anyway
-        // Real browsers always send Origin for cross-origin requests
+        // No Origin and no Referer: a non-browser caller (Postman, curl). Allowed
+        // through because browsers attach Origin to every state-changing request, so a
+        // cross-site form post never reaches this branch. What guards the branch is
+        // SameSite=Lax on the session cookie: a cross-site post arrives without the
+        // cookie and is therefore unauthenticated.
         if (string.IsNullOrEmpty(origin))
         {
             await _next(context);
