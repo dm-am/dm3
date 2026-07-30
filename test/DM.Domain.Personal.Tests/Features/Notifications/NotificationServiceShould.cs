@@ -159,6 +159,51 @@ public class NotificationServiceShould : UnitTestBase
     }
 
     [Fact]
+    public async Task NotStoreRealtimeOnlyNotifications()
+    {
+        var createNotifications = new[]
+        {
+            new CreateNotification
+            {
+                EventType = EventType.LikedMessage,
+                UsersInterested = [Guid.NewGuid()]
+            },
+            // A realtime-only notification is addressed and still not stored: it
+            // nudges an open tab to re-read a counter, while a stored row would
+            // land in the notification list and in the mail queue
+            new CreateNotification
+            {
+                EventType = EventType.NewMessage,
+                UsersInterested = [Guid.NewGuid()],
+                RealtimeOnly = true
+            }
+        };
+
+        _factory.Setup(f => f.Create(It.IsAny<CreateNotification>(), _now))
+            .Returns<CreateNotification, DateTimeOffset>((n, d) =>
+                new CreateNotificationEntity
+                {
+                    NotificationId = Guid.NewGuid(),
+                    UsersInterested = n.UsersInterested,
+                    EventType = n.EventType,
+                    Metadata = n.Metadata
+                });
+
+        CreateNotificationEntity[]? stored = null;
+        _repository.Setup(r => r.Create(It.IsAny<CreateNotificationEntity[]>()))
+            .Callback<IEnumerable<CreateNotificationEntity>>(n => stored = n.ToArray())
+            .Returns(Task.CompletedTask);
+
+        var result = (await _service.CreateAsync(createNotifications)).ToArray();
+
+        stored.Should().NotBeNull();
+        stored!.Should().ContainSingle().Which.EventType.Should().Be(EventType.LikedMessage);
+
+        // Both entities come back: the caller pushes them and needs the ids
+        result.Should().HaveCount(2);
+    }
+
+    [Fact]
     public async Task NotTouchTheRepositoryWhenNoNotificationHasRecipients()
     {
         _factory.Setup(f => f.Create(It.IsAny<CreateNotification>(), _now))

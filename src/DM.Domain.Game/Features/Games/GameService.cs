@@ -556,6 +556,14 @@ internal class GameService : IGameService
         var isOpeningRecruitment = !game.Recruitment.IsOpen &&
                                    updateGame.IsRecruitmentOpen == true;
 
+        // Opening recruitment is not a status transition, so no status event
+        // carries it: this is the only thing that reaches the people who asked to
+        // hear when a game starts looking for players.
+        if (isOpeningRecruitment)
+        {
+            invokedEvents.Add(EventType.GameRecruitmentOpened);
+        }
+
         var updateEntity = new UpdateGameEntity
         {
             GameId = updateGame.GameId,

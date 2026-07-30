@@ -23,4 +23,12 @@
         <ProjectReference Include="..\DM.Infrastructure.Messaging\DM.Infrastructure.Messaging.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+        <!-- The dispatcher has no test project of its own: its tests live with the
+             routing tests in DM.Infrastructure.Messaging.Tests. The blanket grant in
+             Directory.Build.props only covers a project named after this assembly, and
+             the processor together with its collaborators is internal. -->
+        <InternalsVisibleTo Include="DM.Infrastructure.Messaging.Tests" />
+    </ItemGroup>
+
 </Project>

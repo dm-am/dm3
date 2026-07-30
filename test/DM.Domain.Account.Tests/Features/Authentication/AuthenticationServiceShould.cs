@@ -6,6 +6,7 @@ using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Events;
 using DM.Domain.Core.Identity;
 using DM.Testing.Dsl;
 using DM.Testing;
@@ -27,6 +28,7 @@ public class AuthenticationServiceShould : UnitTestBase
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<ILoginAttemptTracker> _loginAttemptTracker;
     private readonly Mock<ISecurityAuditService> _auditService;
+    private readonly Mock<IEventProducer> _eventProducer;
     private readonly AuthenticationService _service;
 
     public AuthenticationServiceShould()
@@ -39,6 +41,7 @@ public class AuthenticationServiceShould : UnitTestBase
         _identityProvider = Mock<IIdentityProvider>();
         _loginAttemptTracker = Mock<ILoginAttemptTracker>();
         _auditService = Mock<ISecurityAuditService>();
+        _eventProducer = Mock<IEventProducer>();
         var logger = Mock<ILogger<AuthenticationService>>();
         var config = Options.Create(new AuthenticationConfiguration
         {
@@ -57,6 +60,7 @@ public class AuthenticationServiceShould : UnitTestBase
             _identityProvider.Object,
             _loginAttemptTracker.Object,
             _auditService.Object,
+            _eventProducer.Object,
             logger.Object,
             config);
     }
@@ -131,6 +135,38 @@ public class AuthenticationServiceShould : UnitTestBase
         _loginAttemptTracker.Verify(t => t.RecordFailedAttempt(new LoginAttemptOrigin(email, null)), Times.Once);
         _auditService.Verify(a => a.LogAsync(user.UserId, SecurityEventType.LoginFailure,
             It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task AnnounceTheLockoutOnTheAttemptThatCausesIt()
+    {
+        var email = "test@example.com";
+        var user = new AuthenticatedUser
+        {
+            UserId = Guid.NewGuid(),
+            Email = email,
+            Salt = "salt",
+            PasswordHash = "hash",
+            IsRemoved = false,
+            AccessPolicy = AccessPolicy.NotSpecified
+        };
+        var origin = new LoginAttemptOrigin(email, null);
+
+        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
+        _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
+        _loginAttemptTracker.Setup(t => t.GetDelayForUser(origin)).ReturnsAsync(0);
+        _securityManager.Setup(s => s.ComparePasswords("wrongpassword", user.Salt, user.PasswordHash))
+            .Returns(false);
+
+        // Unlocked when the attempt starts, locked once it has been counted:
+        // that is the one attempt the notification belongs to.
+        _loginAttemptTracker.SetupSequence(t => t.IsAccountLocked(origin))
+            .ReturnsAsync(false)
+            .ReturnsAsync(true);
+
+        await _service.Authenticate(email, "wrongpassword");
+
+        _eventProducer.Verify(p => p.SendAsync(EventType.AccountLocked, user.UserId), Times.Once);
     }
 
     [Fact]

@@ -17,6 +17,7 @@ volumes:
   mongodata:
   lokidata:
   miniodata:
+  rmqdata:
 
 # Переменные с дефолтами для локальной разработки
 # Для зеркала: переопределить в .env.mirror
@@ -186,6 +187,15 @@ services:
       - '127.0.0.1:5672:5672'
     environment:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    volumes:
+      # The one stateful service that had no volume of its own. The queues here
+      # are declared durable, but the directory holding them lived in the
+      # container layer, so recreating the container - an image update, a changed
+      # limit - took the unsent mail and the dead-letter queue with it. The node
+      # name is pinned by the hostname above: mnesia stores its data under a
+      # directory named after the node, and a generated hostname would leave the
+      # next container looking at an empty one.
+      - rmqdata:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
       interval: 5s

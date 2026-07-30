@@ -6,6 +6,7 @@ using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Events;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
 using DM.Domain.Moderation.Features.Warnings;
@@ -24,6 +25,7 @@ public class WarningServiceShould : UnitTestBase
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<IGuidFactory> _guidFactory;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly Mock<IEventProducer> _eventProducer;
     private readonly WarningService _service;
     private readonly Guid _moderatorUserId = Guid.NewGuid();
     private readonly Guid _targetUserId = Guid.NewGuid();
@@ -38,6 +40,7 @@ public class WarningServiceShould : UnitTestBase
         _identityProvider = Mock<IIdentityProvider>();
         _guidFactory = Mock<IGuidFactory>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
+        _eventProducer = Mock<IEventProducer>();
 
         var moderatorIdentity = Identity.Success(
             new AuthenticatedUser { UserId = _moderatorUserId, Role = UserRole.Moderator, Username = "Moderator" },
@@ -55,7 +58,8 @@ public class WarningServiceShould : UnitTestBase
             _userLookupService.Object,
             _identityProvider.Object,
             _guidFactory.Object,
-            _dateTimeProvider.Object);
+            _dateTimeProvider.Object,
+            _eventProducer.Object);
     }
 
     [Fact]
@@ -142,6 +146,24 @@ public class WarningServiceShould : UnitTestBase
         capturedEntity.Text.Should().Be("Spam");
         capturedEntity.Points.Should().Be(2);
         capturedEntity.CreatedUtc.Should().Be(_now);
+    }
+
+    [Fact]
+    public async Task AnnounceAnIssuedWarning()
+    {
+        var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
+        _userLookupService.Setup(s => s.GetAsync("Target")).ReturnsAsync(targetUser);
+        _warningRepository.Setup(r => r.Create(It.IsAny<CreateWarningEntity>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Warning { WarningId = _warningId });
+
+        await _service.CreateWarning(new CreateWarning
+        {
+            Username = "Target",
+            Reason = "Spam",
+            Points = 2
+        });
+
+        _eventProducer.Verify(p => p.SendAsync(EventType.WarningIssued, _warningId), Times.Once);
     }
 
     [Theory]

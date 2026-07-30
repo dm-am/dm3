@@ -7,6 +7,7 @@ using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
@@ -33,6 +34,7 @@ public class TicketServiceShould : UnitTestBase
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<IGuidFactory> _guidFactory;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly Mock<IEventProducer> _eventProducer;
     private readonly TicketService _service;
     private readonly Guid _currentUserId = Guid.NewGuid();
     private readonly Guid _targetUserId = Guid.NewGuid();
@@ -63,6 +65,7 @@ public class TicketServiceShould : UnitTestBase
         _identityProvider = Mock<IIdentityProvider>();
         _guidFactory = Mock<IGuidFactory>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
+        _eventProducer = Mock<IEventProducer>();
 
         SetCurrentUser(UserRole.Moderator);
         _dateTimeProvider.Setup(d => d.Now).Returns(_now);
@@ -78,7 +81,8 @@ public class TicketServiceShould : UnitTestBase
             _userLookupService.Object,
             _identityProvider.Object,
             _guidFactory.Object,
-            _dateTimeProvider.Object);
+            _dateTimeProvider.Object,
+            _eventProducer.Object);
     }
 
     private void SetCurrentUser(UserRole role)
@@ -134,6 +138,23 @@ public class TicketServiceShould : UnitTestBase
         capturedEntity.EntityId.Should().Be(entityId);
         capturedEntity.Status.Should().Be(TicketStatus.WaitingForModeration);
         capturedEntity.Subtype.Should().Be(TicketSubtype.UserComplaint);
+    }
+
+    [Fact]
+    public async Task AnnounceACreatedTicket()
+    {
+        var targetUser = new GeneralUser { UserId = _targetUserId, Username = "TargetUser" };
+        _userLookupService.Setup(s => s.GetAsync("TargetUser")).ReturnsAsync(targetUser);
+        _ticketRepository.Setup(r => r.Create(It.IsAny<CreateTicketEntity>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Ticket { TicketId = _ticketId });
+
+        await _service.CreateTicket(new CreateTicket
+        {
+            TargetUsername = "TargetUser",
+            Description = "Spam"
+        });
+
+        _eventProducer.Verify(p => p.SendAsync(EventType.TicketCreated, _ticketId), Times.Once);
     }
 
     [Fact]

@@ -6,6 +6,7 @@ using System.Threading;
 using System;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
@@ -21,6 +22,7 @@ internal class BanService : IBanService
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IValidator<CreateBan> _createValidator;
+    private readonly IEventProducer _eventProducer;
 
     /// <inheritdoc />
     public BanService(
@@ -29,7 +31,8 @@ internal class BanService : IBanService
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
-        IValidator<CreateBan> createValidator)
+        IValidator<CreateBan> createValidator,
+        IEventProducer eventProducer)
     {
         _banRepository = banRepository;
         _userLookupService = userLookupService;
@@ -37,6 +40,7 @@ internal class BanService : IBanService
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
         _createValidator = createValidator;
+        _eventProducer = eventProducer;
     }
 
     /// <inheritdoc />
@@ -175,7 +179,13 @@ internal class BanService : IBanService
             AccessRestrictionPolicy = accessPolicy
         };
 
-        return await _banRepository.Create(entity, ct);
+        var ban = await _banRepository.Create(entity, ct);
+
+        // Nothing else tells the target they were banned: the ban surfaces only
+        // as a refusal at the next action they try. Sent after the write, so the
+        // generator that reads the ban back by id finds it.
+        await _eventProducer.SendAsync(EventType.BanIssued, ban.BanId);
+        return ban;
     }
 
     /// <inheritdoc />

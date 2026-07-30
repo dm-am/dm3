@@ -213,10 +213,10 @@ watch(
 function handleNotification(notification: SignalRNotification) {
   switch (notification.eventType) {
     case EventType.NewMessage:
-      // Refresh unread count when new message arrives. Note: the backend
-      // does not emit NewMessage for global chat sends (no notification
-      // generator wires it to recipients) — this only fires for direct
-      // messages that do reach the notification pipeline.
+      // Refresh the unread messages count when a new message arrives. The push
+      // is addressed to the participants of the chat; global chat has its own
+      // broadcast event and never arrives here. Nothing is stored behind this
+      // event, which is why the notification bell is deliberately left alone.
       messagingStore.fetchUnreadCount();
       break;
     case EventType.UserAvatarChanged:

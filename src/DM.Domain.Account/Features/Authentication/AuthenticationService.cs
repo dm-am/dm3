@@ -10,6 +10,7 @@ using DM.Domain.Account.Configuration;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 
@@ -26,6 +27,7 @@ internal class AuthenticationService : IAuthenticationService
     private readonly IIdentityProvider _identityProvider;
     private readonly ILoginAttemptTracker _loginAttemptTracker;
     private readonly ISecurityAuditService _auditService;
+    private readonly IEventProducer _eventProducer;
     private readonly ILogger<AuthenticationService> _logger;
     private readonly AuthenticationConfiguration _config;
 
@@ -42,6 +44,7 @@ internal class AuthenticationService : IAuthenticationService
         IIdentityProvider identityProvider,
         ILoginAttemptTracker loginAttemptTracker,
         ISecurityAuditService auditService,
+        IEventProducer eventProducer,
         ILogger<AuthenticationService> logger,
         IOptions<AuthenticationConfiguration> authConfig)
     {
@@ -53,6 +56,7 @@ internal class AuthenticationService : IAuthenticationService
         _identityProvider = identityProvider;
         _loginAttemptTracker = loginAttemptTracker;
         _auditService = auditService;
+        _eventProducer = eventProducer;
         _logger = logger;
         _config = authConfig.Value;
     }
@@ -120,6 +124,17 @@ internal class AuthenticationService : IAuthenticationService
             case true when user.Role == UserRole.System ||
                            !_securityManager.ComparePasswords(password, user.Salt, user.PasswordHash):
                 await _loginAttemptTracker.RecordFailedAttempt(origin);
+
+                // Only the attempt that crosses the threshold reaches this while
+                // locked: every later one is refused above, before the counter is
+                // touched. So the owner of the account hears about the lockout
+                // once per lockout, through a channel the person guessing the
+                // password does not see.
+                if (await _loginAttemptTracker.IsAccountLocked(origin))
+                {
+                    await _eventProducer.SendAsync(EventType.AccountLocked, user.UserId);
+                }
+
                 await _auditService.LogAsync(user.UserId, SecurityEventType.LoginFailure,
                     context?.IpAddress, context?.UserAgent, "Wrong password");
                 _logger.LogWarning("Login failed: wrong password. UserId={UserId}", user.UserId);

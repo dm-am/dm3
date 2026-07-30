@@ -1,4 +1,8 @@
 using System;
+using Jamq.Client.Abstractions.Consuming;
+using Jamq.Client.Abstractions.Producing;
+using Jamq.Client.DependencyInjection;
+using Jamq.Client.Rabbit.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -38,6 +42,29 @@ public static class MessageQueuingConfigurationExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Registers the message queuing client with the defaults every host shares.
+    /// </summary>
+    /// <remarks>
+    /// The producer side is what this call exists for. Each host used to register
+    /// the client on its own, and a producer default written in one of them would
+    /// have been absent from the other two — persistence has to hold for every
+    /// publisher in the system or the queue it protects is emptied by whichever
+    /// process forgot it. The consumer pipeline stays per host: only the two
+    /// workers consume, and they run different retry middleware.
+    /// </remarks>
+    /// <param name="services">Service collection.</param>
+    /// <param name="consumerBuilderDefaults">Consumer pipeline of this host, if it consumes at all.</param>
+    public static IServiceCollection AddDmJamqClient(
+        this IServiceCollection services,
+        Func<IConsumerBuilder, IConsumerBuilder>? consumerBuilderDefaults = null) =>
+        services
+            .AddTransient<PersistentDeliveryMiddleware>()
+            .AddJamqClient(
+                config => config.UseRabbit(),
+                producerBuilderDefaults: builder => builder.WithMiddleware<PersistentDeliveryMiddleware>(),
+                consumerBuilderDefaults: consumerBuilderDefaults);
 
     /// <summary>
     /// Adds a health check that actually opens a connection to the broker.

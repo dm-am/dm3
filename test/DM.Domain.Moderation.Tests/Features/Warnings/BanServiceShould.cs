@@ -8,6 +8,7 @@ using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
@@ -26,6 +27,7 @@ public class BanServiceShould : UnitTestBase
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<IGuidFactory> _guidFactory;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly Mock<IEventProducer> _eventProducer;
     private readonly BanService _service;
     private readonly Guid _moderatorUserId = Guid.NewGuid();
     private readonly Guid _targetUserId = Guid.NewGuid();
@@ -39,6 +41,7 @@ public class BanServiceShould : UnitTestBase
         _identityProvider = Mock<IIdentityProvider>();
         _guidFactory = Mock<IGuidFactory>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
+        _eventProducer = Mock<IEventProducer>();
 
         // Ban creation and lifting require SeniorModerator, so tests default to it
         SetCurrentUser(UserRole.SeniorModerator);
@@ -56,7 +59,8 @@ public class BanServiceShould : UnitTestBase
             _identityProvider.Object,
             _guidFactory.Object,
             _dateTimeProvider.Object,
-            createValidator.Object);
+            createValidator.Object,
+            _eventProducer.Object);
     }
 
     private void SetCurrentUser(UserRole role)
@@ -194,6 +198,27 @@ public class BanServiceShould : UnitTestBase
         capturedEntity.StartedUtc.Should().Be(_now);
         capturedEntity.EndedUtc.Should().Be(_now.AddHours(24));
         capturedEntity.IsVoluntary.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AnnounceAnIssuedBan()
+    {
+        var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
+        _userLookupService.Setup(s => s.GetAsync("Target")).ReturnsAsync(targetUser);
+        _banRepository.Setup(r => r.GetActiveBan(_targetUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Ban?)null);
+        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Ban { BanId = _banId });
+
+        await _service.CreateBan(new CreateBan
+        {
+            Username = "Target",
+            DurationHours = 24,
+            Comment = "Spam",
+            IsVoluntary = false
+        });
+
+        _eventProducer.Verify(p => p.SendAsync(EventType.BanIssued, _banId), Times.Once);
     }
 
     [Fact]

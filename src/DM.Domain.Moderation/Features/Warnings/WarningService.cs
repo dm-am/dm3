@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Events;
 using DM.Domain.Core.Users;
 using FluentValidation;
 
@@ -21,6 +22,7 @@ internal class WarningService : IWarningService
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IEventProducer _eventProducer;
 
     /// <inheritdoc />
     public WarningService(
@@ -30,7 +32,8 @@ internal class WarningService : IWarningService
         IUserLookupService userLookupService,
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        IEventProducer eventProducer)
     {
         _createValidator = createValidator;
         _warningRepository = warningRepository;
@@ -39,6 +42,7 @@ internal class WarningService : IWarningService
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
+        _eventProducer = eventProducer;
     }
 
     /// <inheritdoc />
@@ -99,7 +103,13 @@ internal class WarningService : IWarningService
             CreatedUtc = _dateTimeProvider.Now
         };
 
-        return await _warningRepository.Create(entity, ct);
+        var warning = await _warningRepository.Create(entity, ct);
+
+        // This event is the only thing that tells the warned user anything at
+        // all: no screen interrupts them, and points accumulate towards a ban in
+        // silence. Sent after the write so the generator finds the warning.
+        await _eventProducer.SendAsync(EventType.WarningIssued, warning.WarningId);
+        return warning;
     }
 
     /// <inheritdoc />

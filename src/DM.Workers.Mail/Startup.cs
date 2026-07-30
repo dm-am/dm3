@@ -8,8 +8,6 @@ using DM.Infrastructure.Core.Logging;
 using DM.Infrastructure.Messaging;
 using DM.Workers.Mail;
 using Jamq.Client.Abstractions.Consuming;
-using Jamq.Client.DependencyInjection;
-using Jamq.Client.Rabbit.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -46,8 +44,7 @@ public class Startup
             .AddDmMailConfiguration(_configuration)
             .AddDmLogging("DM.MailSender.Consumer", _configuration);
 
-        services.AddJamqClient(
-            config => config.UseRabbit(),
+        services.AddDmJamqClient(
             consumerBuilderDefaults: builder => builder.WithMiddleware<ConsumerRetryMiddleware>());
 
         services.AddHostedService<MailConsumer>();

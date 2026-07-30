@@ -14,8 +14,6 @@ using DM.Workers.NotificationDispatcher.Implementation;
 using DM.Workers.NotificationDispatcher.Implementation.Bot;
 using DM.Workers.NotificationDispatcher.Implementation.Email;
 using Jamq.Client.Abstractions.Consuming;
-using Jamq.Client.DependencyInjection;
-using Jamq.Client.Rabbit.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -58,8 +56,7 @@ public class Startup
             .AddDmAccountConfiguration(_configuration)
             .AddDmLogging("DM.Notifications.Consumer", _configuration);
 
-        services.AddJamqClient(
-            config => config.UseRabbit(),
+        services.AddDmJamqClient(
             consumerBuilderDefaults: builder => builder.WithMiddleware<NotificationConsumerRetryMiddleware>());
         services.AddHostedService<NotificationDispatcherConsumer>();
 

@@ -236,6 +236,34 @@ public class DeploymentConfigurationShould
             "attaching a built-in administrative policy puts the root privileges back");
     }
 
+    /// <summary>
+    /// The broker holds work nothing else records, so its state needs a volume like
+    /// every other store.
+    /// </summary>
+    /// <remarks>
+    /// A letter sitting in dm.mail.sending is the only record that a registration
+    /// confirmation is owed, and the dead-letter queue is the only artefact left of
+    /// one that could not be sent. Both queues are declared durable, and the broker
+    /// was the single service with state and no named volume — pg, mongo, loki and
+    /// minio all had one — so every recreation of the container dropped them.
+    ///
+    /// The node name is the other half. Mnesia keeps its data under a directory
+    /// named after the node, so a container with a generated hostname mounts the
+    /// volume and finds an empty directory beside the one holding the data.
+    /// </remarks>
+    [Fact]
+    public void KeepTheBrokerStateInANamedVolume()
+    {
+        var compose = Read(BaseCompose);
+
+        compose.Should().Contain("rmqdata:/var/lib/rabbitmq",
+            "a durable queue whose directory lives in the container layer is durable " +
+            "only until the container is recreated");
+        compose.Should().Contain("hostname: 'dm-rmq'",
+            "mnesia stores its data under a directory named after the node, so a " +
+            "generated hostname makes the volume unreadable to the next container");
+    }
+
     /// <summary>Published ports of every service, as written.</summary>
     private static string[] PublishedPorts(string compose)
     {

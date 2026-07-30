@@ -29,8 +29,6 @@ using DM.Web.API.Middleware;
 using DM.Web.API.Realtime;
 using DM.Web.API.Swagger;
 using DM.Web.API.HostedServices;
-using Jamq.Client.DependencyInjection;
-using Jamq.Client.Rabbit.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -157,7 +155,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             client.Timeout = TimeSpan.FromSeconds(5); // Don't block registration on slow API
         });
 
-        services.AddJamqClient(config => config.UseRabbit());
+        services.AddDmJamqClient();
 
         if (!_migrateOnStart)
         {

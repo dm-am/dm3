@@ -41,6 +41,12 @@ internal class RealtimeNotificationConsumer : BackgroundService
         {
             ExchangeName = RealtimeNotificationsTransport.ExchangeName,
             RoutingKeys = new[] { "#" },
+
+            // No dead-letter exchange here, unlike the queues the workers consume.
+            // This message is a copy of a notification the dispatcher has already
+            // stored, and the client reads that over REST — a push kept past its
+            // moment gives nobody anything to act on. Dropping it is the decision,
+            // not an omission.
             Exclusive = true
         };
 

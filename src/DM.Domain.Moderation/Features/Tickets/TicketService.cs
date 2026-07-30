@@ -8,6 +8,7 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Moderation.Features.Warnings;
 using DM.Domain.Core.Users;
@@ -48,6 +49,7 @@ internal class TicketService : ITicketService
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IEventProducer _eventProducer;
 
     /// <inheritdoc />
     public TicketService(
@@ -60,7 +62,8 @@ internal class TicketService : ITicketService
         IUserLookupService userLookupService,
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        IEventProducer eventProducer)
     {
         _createValidator = createValidator;
         _createIntakeValidator = createIntakeValidator;
@@ -72,6 +75,7 @@ internal class TicketService : ITicketService
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
+        _eventProducer = eventProducer;
     }
 
     /// <summary>
@@ -192,7 +196,7 @@ internal class TicketService : ITicketService
             Comment = ModBlockSanitizer.SanitizeForAuthor(createTicket.Comment, currentUser.Role)
         };
 
-        return await _ticketRepository.Create(entity, ct);
+        return await CreateAndAnnounce(entity, ct);
     }
 
     /// <inheritdoc />
@@ -248,7 +252,7 @@ internal class TicketService : ITicketService
             Comment = createTicketIntake.Subject
         };
 
-        return await _ticketRepository.Create(entity, ct);
+        return await CreateAndAnnounce(entity, ct);
     }
 
     /// <inheritdoc />
@@ -382,6 +386,21 @@ internal class TicketService : ITicketService
     {
         var visibleSubtypes = GetVisibleSubtypes(_identityProvider.Current.User.Role);
         return await _ticketRepository.GetTicketCounts(visibleSubtypes, ct);
+    }
+
+    /// <summary>
+    /// Stores a ticket and announces it.
+    /// </summary>
+    /// <remarks>
+    /// Both intake paths go through here so that a new way of filing a ticket
+    /// cannot be added without the moderators hearing about it. The queue is the
+    /// only other place a ticket shows up, and nobody is asked to watch it.
+    /// </remarks>
+    private async Task<Ticket> CreateAndAnnounce(CreateTicketEntity entity, CancellationToken ct)
+    {
+        var ticket = await _ticketRepository.Create(entity, ct);
+        await _eventProducer.SendAsync(EventType.TicketCreated, ticket.TicketId);
+        return ticket;
     }
 
     private static string? NormalizeOptional(string? value) =>

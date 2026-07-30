@@ -41,15 +41,19 @@ public class MessageProducerOwnershipShould
         .LoadAssembly(typeof(IProducerBuilder).Assembly)
         .Build();
 
-    // Production assemblies only. Naming the builder is enough to match, so
-    // without this the rule flags the class holding the rule and the Jamq
-    // extension class that declares BuildRabbit.
+    // Production assemblies only, and only types that can hold what they build.
+    // Naming the builder is enough to match, so without the first filter the rule
+    // flags the class holding the rule and the Jamq extension class that declares
+    // BuildRabbit; without the second it flags the registration extensions, which
+    // name the builder in a lambda and own nothing — a static class has no
+    // instance to keep a producer in, so it cannot be the one to release it.
     private static readonly IObjectProvider<Class> ProducerOwners = Classes()
         .That().DependOnAny(typeof(IProducerBuilder))
         .And().FollowCustomPredicate(
             c => c.Assembly.Name.StartsWith("DM.", StringComparison.Ordinal)
-                 && !c.Assembly.Name.EndsWith(".Tests", StringComparison.Ordinal),
-            "are declared in a DM production assembly")
+                 && !c.Assembly.Name.EndsWith(".Tests", StringComparison.Ordinal)
+                 && !(c.IsAbstract == true && c.IsSealed == true),
+            "are instantiable types declared in a DM production assembly")
         .As("classes that build a message producer");
 
     /// <summary>

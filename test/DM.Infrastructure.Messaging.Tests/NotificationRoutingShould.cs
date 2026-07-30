@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using DM.Domain.Core.Enums;
 using FluentAssertions;
 using Xunit;
 
@@ -56,5 +58,35 @@ public class NotificationRoutingShould
             .ToArray();
 
         silent.Should().BeEmpty("a generator that answers no event can never produce a notification");
+    }
+
+    /// <summary>
+    /// The unread-messages badge has nothing else behind it: the client refreshes
+    /// it when this event arrives over the hub, and no timer stands in for that.
+    /// The event reaches the hub only while some generator answers it — what no
+    /// generator answers is not in the binding, and the broker drops it without
+    /// a trace. Deleting that generator would switch the live badge off and leave
+    /// every other test green.
+    /// </summary>
+    [Fact]
+    public void BindTheEventTheUnreadBadgeRidesOn()
+    {
+        GeneratorTypes.Any(type => Answers(type, EventType.NewMessage)).Should().BeTrue(
+            "a new message reaches an open tab through this event and no other");
+    }
+
+    /// <summary>
+    /// Asks a generator the question the dispatcher asks it at startup. The
+    /// constructor is not run: it wants a database context, while CanResolve
+    /// reads constants only. The method is reached by name because the interface
+    /// is internal to the worker and this suite is not on its InternalsVisibleTo
+    /// list.
+    /// </summary>
+    private static bool Answers(Type generatorType, EventType eventType)
+    {
+        var canResolve = generatorType.GetMethod("CanResolve", new[] { typeof(EventType) });
+        canResolve.Should().NotBeNull($"{generatorType.Name} is asked this by the dispatcher");
+        var generator = RuntimeHelpers.GetUninitializedObject(generatorType);
+        return (bool)canResolve!.Invoke(generator, new object[] { eventType })!;
     }
 }
