@@ -228,17 +228,23 @@ export interface User extends UserRef {
   publicationsAuthored?: number;
   /** Total likes received across topics+publications+comments+messages — drives the "лайки" chain. */
   likesReceived?: number;
-  /** Number of subscribers following this user */
-  subscribersCount?: number;
-  /** Subscriber usernames for tooltip display (limited to first 20) */
-  subscriberUsernames?: string[];
+  /** How many subscribers each of the three profile categories has. */
+  subscribersByCategory?: SubscriberCounts;
   /**
-   * Richer subscriber refs (username + last activity) for profile-page
-   * display. Same 20 budget as `subscriberUsernames`. Inactive subscribers
-   * (no activity in 30 days) are rendered in muted gray on the profile.
+   * Subscriber refs for profile-page display: at most 20, most recently active
+   * first. A sample of the subscribers and not the members of any one category
+   * — the cap is taken before the categories are considered, so
+   * `subscribersByCategory` is what says how many there are.
    */
   subscribers?: SubscriberRef[];
 }
+
+/** Subscriber totals per profile category. */
+export type SubscriberCounts = {
+  games: number;
+  blogs: number;
+  topics: number;
+};
 
 /**
  * Lightweight subscriber reference: just enough to style + link, PLUS

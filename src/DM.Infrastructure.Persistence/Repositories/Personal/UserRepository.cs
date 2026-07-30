@@ -862,9 +862,22 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             .Select(g => new
             {
                 UserId = g.Key,
-                // Distinct subscribers, not subscription rows — see the same count in
-                // GameRepository.EnrichGamesAsync for why the two differ.
-                Count = g.Select(x => x.SubscriberId).Distinct().Count(),
+                // One count per profile line. The preview below is capped before
+                // anything knows about categories, so a line drawn from it can be
+                // short or empty while the category is full; these are what the
+                // line reports. Npgsql turns each into
+                // count(*) FILTER (WHERE "Settings" & <bit> <> 0) inside the
+                // GROUP BY that is already running over exactly these rows —
+                // verified against the generated SQL, so no extra statement and
+                // no correlated subquery. Not distinct-counted: two rows for one
+                // subscriber is a race artefact, and a category count that
+                // disagreed with a distinct total would be the worse lie.
+                GameSubscribers = g.Count(x =>
+                    (x.Settings & SubscriptionSettings.AuthorGameEvents) != 0),
+                BlogSubscribers = g.Count(x =>
+                    (x.Settings & SubscriptionSettings.AuthorBlogEvents) != 0),
+                TopicSubscribers = g.Count(x =>
+                    (x.Settings & SubscriptionSettings.AuthorTopicEvents) != 0),
                 // Never-active subscribers sort last; a plain DESC in Postgres
                 // would put their nulls first.
                 Preview = g.OrderByDescending(x => x.LastActivityUtc != null)
@@ -957,10 +970,13 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             user.BlogsHosting = user.BlogsHostingByStatus?.Total ?? 0;
 
             var subscribers = subscriberSummaries.GetValueOrDefault(user.UserId);
-            user.SubscribersCount = subscribers?.Count ?? 0;
             user.Subscribers = subscribers?.Preview ?? [];
-            // Same preview, name-only, for the tooltip that predates SubscriberInfo.
-            user.SubscriberUsernames = subscribers?.Preview.Select(s => s.Username).ToList() ?? [];
+            user.SubscribersByCategory = new Domain.Core.Dto.SubscribersByCategory
+            {
+                Games = subscribers?.GameSubscribers ?? 0,
+                Blogs = subscribers?.BlogSubscribers ?? 0,
+                Topics = subscribers?.TopicSubscribers ?? 0,
+            };
             user.UsernameHistory = usernameHistoryDict.TryGetValue(user.UserId, out var history) ? history : [];
         }
     }

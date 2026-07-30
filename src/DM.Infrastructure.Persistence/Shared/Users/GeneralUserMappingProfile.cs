@@ -44,8 +44,7 @@ internal class GeneralUserMappingProfile : Profile
             .ForMember(d => d.GamesPlayingByStatus, s => s.Ignore()) // Set separately after mapping
             .ForMember(d => d.BlogsHosting, s => s.Ignore()) // Set separately after mapping
             .ForMember(d => d.BlogsHostingByStatus, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.SubscribersCount, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.SubscriberUsernames, s => s.Ignore()) // Set separately after mapping
+            .ForMember(d => d.SubscribersByCategory, s => s.Ignore()) // Set separately after mapping
             .ForMember(d => d.Subscribers, s => s.Ignore()); // Set separately after mapping (richer SubscriberInfo list)
 
         // UsernameHistory entity -> UsernameHistoryEntry domain

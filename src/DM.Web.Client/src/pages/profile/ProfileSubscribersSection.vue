@@ -13,9 +13,16 @@
  *   - Active subscribers first, inactive (no activity in 30+ days) last
  *   - Inside each bucket, most-recently-active first
  *
- * If no subscribers carry the requested flag, the section renders
- * nothing — the host page composes content + best-of + subscribers, and
- * a blank subscribers section would just add noise.
+ * The names come out of a preview the server caps at 20 and ranks by activity
+ * BEFORE anything knows about categories, so they are a sample and not the
+ * membership of this line: a category can be well populated and contribute few
+ * names or none. `total` is the category's real count and is what the line
+ * reports — names when it has them, a tail when it has fewer than it counts, and
+ * the count alone when it has none. Same three cases, and the same wording, as
+ * buildSubscribersTooltip in shared/lib/utils/tooltipBuilders.
+ *
+ * A category with no subscribers at all renders nothing: the host page composes
+ * content + best-of + subscribers, and a blank line would just add noise.
  */
 import { computed } from "vue";
 import type { SubscriberRef } from "@/shared/api/models/common";
@@ -26,6 +33,8 @@ const props = defineProps<{
   label: string;
   /** Bit flag from SubscriptionSettings (numeric bitmask). */
   flag: number;
+  /** The category's real subscriber count, independent of the preview. */
+  total: number;
 }>();
 
 const INACTIVITY_DAYS = 30;
@@ -51,20 +60,29 @@ const matching = computed(() => {
     return tb - ta;
   });
 });
+
+/** How many of the category's subscribers the names do not cover. */
+const untold = computed(() => Math.max(0, props.total - matching.value.length));
 </script>
 
 <template>
   <!-- One-line list of the people subscribed to this user's games / blogs /
        topics, with links to their profiles. Rendered below the tab's table;
-       nothing shows when there are none. Style matches the rules page
+       nothing shows when the category has none. Style matches the rules page
        "Полезные ссылки" line — muted label + inline links, secondary size. -->
-  <p v-if="matching.length" class="subscribers-line">
-    <span class="subscribers-label">{{ label }}:</span>{{ " "
-    }}<template v-for="(sub, idx) in matching" :key="sub.username"
-      ><router-link
-        :to="{ name: 'profile', params: { username: sub.username } }"
-        >{{ sub.username }}</router-link
-      ><template v-if="idx < matching.length - 1">, </template></template
+  <p v-if="total > 0" class="subscribers-line">
+    <span class="subscribers-label">{{ label }}:</span>{{ " " }}
+    <!-- No name from the preview carries this category's flag, so the count is
+         all there is to say. Better than the line disappearing while the
+         category has subscribers. -->
+    <template v-if="!matching.length">{{ total }}</template>
+    <template v-else
+      ><template v-for="(sub, idx) in matching" :key="sub.username"
+        ><router-link
+          :to="{ name: 'profile', params: { username: sub.username } }"
+          >{{ sub.username }}</router-link
+        ><template v-if="idx < matching.length - 1">, </template></template
+      ><template v-if="untold > 0">... и еще {{ untold }}</template></template
     >
   </p>
 </template>

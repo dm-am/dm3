@@ -306,6 +306,13 @@ const gamePostsCount = computed<number>(
 // downstream.
 const subscribers = computed(() => user.value?.subscribers ?? []);
 
+// The per-category totals. The preview above is capped and activity-ranked
+// before the categories are considered, so a line drawn from it can be short or
+// empty while the category is full; these say how many there really are.
+const subscriberCounts = computed(
+  () => user.value?.subscribersByCategory ?? { games: 0, blogs: 0, topics: 0 },
+);
+
 // Subscribe / unsubscribe / settings are owned by <UserSubscribeButton>
 // — it reads/writes through the subscriptions store directly.
 
@@ -890,6 +897,7 @@ watch(usernameParam, async () => {
           :subscribers="subscribers"
           label="Подписаны на игры"
           :flag="SubscriptionSettings.AuthorGameEvents"
+          :total="subscriberCounts.games"
         />
       </template>
 
@@ -906,6 +914,7 @@ watch(usernameParam, async () => {
           :subscribers="subscribers"
           label="Подписаны на блоги"
           :flag="SubscriptionSettings.AuthorBlogEvents"
+          :total="subscriberCounts.blogs"
         />
       </template>
 
@@ -918,6 +927,7 @@ watch(usernameParam, async () => {
           :subscribers="subscribers"
           label="Подписаны на топики"
           :flag="SubscriptionSettings.AuthorTopicEvents"
+          :total="subscriberCounts.topics"
         />
       </template>
 

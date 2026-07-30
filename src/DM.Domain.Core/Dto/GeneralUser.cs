@@ -190,21 +190,19 @@ public class GeneralUser : IUser
     public ModuleStatusCounts? BlogsHostingByStatus { get; set; }
 
     /// <summary>
-    /// Number of subscribers following this user
+    /// How many subscribers each of the three profile categories really has.
     /// </summary>
-    public int SubscribersCount { get; set; }
+    public SubscribersByCategory SubscribersByCategory { get; set; } = new();
 
     /// <summary>
-    /// Subscriber usernames for tooltip display, capped and ordered per
-    /// <see cref="SubscriptionPolicy.PreviewCap" />
+    /// Subscriber refs for profile-page display: at most
+    /// <see cref="SubscriptionPolicy.PreviewCap" />, most recently active first.
     /// </summary>
-    public IReadOnlyCollection<string> SubscriberUsernames { get; set; } = [];
-
-    /// <summary>
-    /// Richer subscriber refs (username + last activity) for profile-page
-    /// display where the UI styles inactive subscribers differently.
-    /// The same rows as <see cref="SubscriberUsernames" />, in the same order.
-    /// </summary>
+    /// <remarks>
+    /// The cap is taken before the categories are considered, so this is a sample
+    /// of the subscribers and not the members of any one line —
+    /// <see cref="SubscribersByCategory" /> is what says how many there are.
+    /// </remarks>
     public IReadOnlyCollection<SubscriberInfo> Subscribers { get; set; } = [];
 
     /// <summary>

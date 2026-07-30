@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using FluentAssertions;
 using Xunit;
 
@@ -27,6 +28,32 @@ public class UserControllerShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var content = await response.Content.ReadAsStringAsync();
         content.Should().Contain("resources");
+    }
+
+    /// <summary>
+    /// The per-category subscriber counts reach the wire.
+    /// </summary>
+    /// <remarks>
+    /// The counts themselves are asserted against the database in
+    /// UserSubscriberSummaryShould; what this adds is that they survive the map
+    /// to the API DTO and the serializer, because the profile line reads them and
+    /// a missing object would silently read as three zeroes — which is the exact
+    /// wrong answer the counts were added to stop.
+    /// </remarks>
+    [Fact]
+    public async Task GetUser_CarriesTheSubscriberCountsPerCategory()
+    {
+        var response = await Client.GetAsync($"/v1/users/{TestConstants.TestUserLogin}");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var counts = doc.RootElement
+            .GetProperty("resource")
+            .GetProperty("subscribersByCategory");
+
+        counts.TryGetProperty("games", out _).Should().BeTrue();
+        counts.TryGetProperty("blogs", out _).Should().BeTrue();
+        counts.TryGetProperty("topics", out _).Should().BeTrue();
     }
 
     /// <summary>

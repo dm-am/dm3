@@ -465,6 +465,11 @@
     "postReviewScoreSum",
     "totalPosts"
   ],
+  "DM.Web.API.Features.Community.Users.SubscriberCounts": [
+    "blogs",
+    "games",
+    "topics"
+  ],
   "DM.Web.API.Features.Community.Users.SubscriberRef": [
     "lastActivityUtc",
     "settings",
@@ -494,9 +499,8 @@
     "reviewsGiven",
     "reviewsReceived",
     "role",
-    "subscriberUsernames",
     "subscribers",
-    "subscribersCount",
+    "subscribersByCategory",
     "topicsAuthored",
     "username",
     "usernameHistory"
@@ -541,9 +545,8 @@
     "reviewsReceived",
     "role",
     "status",
-    "subscriberUsernames",
     "subscribers",
-    "subscribersCount",
+    "subscribersByCategory",
     "topicsAuthored",
     "username",
     "usernameHistory"
@@ -1278,9 +1281,8 @@
     "reviewsReceived",
     "role",
     "status",
-    "subscriberUsernames",
     "subscribers",
-    "subscribersCount",
+    "subscribersByCategory",
     "topicsAuthored",
     "username",
     "usernameHistory",
@@ -1630,9 +1632,8 @@
     "reviewsReceived",
     "role",
     "status",
-    "subscriberUsernames",
     "subscribers",
-    "subscribersCount",
+    "subscribersByCategory",
     "topicsAuthored",
     "username",
     "usernameHistory",

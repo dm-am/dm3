@@ -148,22 +148,38 @@ public class User : UserRef
     public int LikesReceived { get; set; }
 
     /// <summary>
-    /// Number of subscribers (users following this user)
+    /// How many subscribers each of the three profile categories has.
     /// </summary>
-    public int SubscribersCount { get; set; }
+    public SubscriberCounts SubscribersByCategory { get; set; } = new();
 
     /// <summary>
-    /// Subscriber usernames for tooltip display: at most 20, the most recently
-    /// active first. <see cref="SubscribersCount" /> is the real total.
-    /// </summary>
-    public IReadOnlyCollection<string> SubscriberUsernames { get; set; } = [];
-
-    /// <summary>
-    /// Richer subscriber refs (username + last activity) — used by the
-    /// profile page to style inactive subscribers in muted gray. The same rows as
-    /// <see cref="SubscriberUsernames" />, in the same order.
+    /// Subscriber refs for profile display: at most 20, most recently active
+    /// first. A sample of the subscribers rather than the members of any one
+    /// category — the cap is taken before the categories are considered, so
+    /// <see cref="SubscribersByCategory" /> is what says how many there are.
     /// </summary>
     public IReadOnlyCollection<SubscriberRef> Subscribers { get; set; } = [];
+}
+
+/// <summary>
+/// Subscriber totals per profile category.
+/// </summary>
+public class SubscriberCounts
+{
+    /// <summary>
+    /// Subscribed to this user's games.
+    /// </summary>
+    public int Games { get; set; }
+
+    /// <summary>
+    /// Subscribed to this user's blogs.
+    /// </summary>
+    public int Blogs { get; set; }
+
+    /// <summary>
+    /// Subscribed to this user's topics.
+    /// </summary>
+    public int Topics { get; set; }
 }
 
 /// <summary>
