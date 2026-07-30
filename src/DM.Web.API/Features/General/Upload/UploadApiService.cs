@@ -36,6 +36,8 @@ internal class UploadApiService : IUploadApiService
     private readonly IImageProcessingService _imageProcessingService;
     private readonly ICache _cache;
     private readonly IHttpContextAccessor _httpContext;
+    private readonly IReadOnlyCollection<IUploadTargetAuthorizer> _targetAuthorizers;
+    private readonly IUploadGarbageCollector _uploadsCleanup;
     private readonly CdnConfiguration _cdnConfig;
 
     /// <summary>Max upload size — 10 MB (in sync with RequestSizeLimit on the controller).</summary>
@@ -60,6 +62,8 @@ internal class UploadApiService : IUploadApiService
         IImageProcessingService imageProcessingService,
         ICache cache,
         IHttpContextAccessor httpContext,
+        IEnumerable<IUploadTargetAuthorizer> targetAuthorizers,
+        IUploadGarbageCollector uploadsCleanup,
         IOptions<CdnConfiguration> cdnOptions)
     {
         _uploadRepository = uploadRepository;
@@ -71,6 +75,8 @@ internal class UploadApiService : IUploadApiService
         _imageProcessingService = imageProcessingService;
         _cache = cache;
         _httpContext = httpContext;
+        _targetAuthorizers = targetAuthorizers.ToList();
+        _uploadsCleanup = uploadsCleanup;
         _cdnConfig = cdnOptions.Value;
     }
 
@@ -243,7 +249,22 @@ internal class UploadApiService : IUploadApiService
             });
         }
 
-        // 1. Buffer + validate + process (in-memory; magic-byte, EXIF strip,
+        // 1. Resolve and check the target before anything else. For UserAvatar an
+        // unset targetId means the uploader themselves; for CharacterAvatar and
+        // PostAttachment it is required. The null check used to sit after the PUT
+        // and outside the rollback, so a valid image with a missing targetId left
+        // an object in the bucket that nothing would ever collect: the orphan
+        // sweeper walks rows, and the failed request never wrote one.
+        //
+        // Ahead of processing, not merely ahead of the PUT: decoding, EXIF
+        // stripping and downscaling up to 10 MB is the expensive part of this
+        // request, and a caller with no right to the target should not be able to
+        // spend it.
+        var effectiveTarget = targetId ?? (type == UploadType.UserAvatar ? userId : (Guid?)null);
+        RequireTarget(type, effectiveTarget);
+        await AuthorizeTargetAsync(type, effectiveTarget!.Value);
+
+        // 2. Buffer + validate + process (in-memory; magic-byte, EXIF strip,
         //    decompression-bomb guard, downscale to 1024 px). A single file —
         //    thumbnails are generated on-the-fly via imgproxy at serving time.
         ProcessedImage processed;
@@ -251,16 +272,6 @@ internal class UploadApiService : IUploadApiService
         {
             processed = await _imageProcessingService.ProcessAsync(fileStream, file.ContentType);
         }
-
-        // 2. Resolve and check the target BEFORE anything reaches the bucket.
-        // For UserAvatar an unset targetId means the uploader themselves; for
-        // CharacterAvatar and PostAttachment it is required. This check used to
-        // sit after the PUT and outside the rollback, so a valid image with a
-        // missing targetId left an object in the bucket that nothing would ever
-        // collect: the orphan sweeper walks rows, and the failed request never
-        // wrote one.
-        var effectiveTarget = targetId ?? (type == UploadType.UserAvatar ? userId : (Guid?)null);
-        RequireTarget(type, effectiveTarget);
 
         // 3. Generate the object key (the extension is NORMALIZED from the validated
         //    content-type, NOT from the user filename — anti-extension-spoofing).
@@ -308,6 +319,17 @@ internal class UploadApiService : IUploadApiService
             throw;
         }
 
+        // A character has no link step. A user avatar becomes current when the
+        // profile is saved, and UserService collects the superseded rows then; a
+        // character portrait is read straight off the newest upload pointing at it,
+        // so the previous one has to be retired here or two live rows exist. Not
+        // done for a post: a post is meant to carry several attachments, and the
+        // collector keeps only the newest row per target.
+        if (type == UploadType.CharacterAvatar)
+        {
+            await _uploadsCleanup.CollectObsoleteAsync(effectiveTarget.Value);
+        }
+
         return MapToDto(stored);
     }
 
@@ -333,6 +355,32 @@ internal class UploadApiService : IUploadApiService
                 ["targetId"] = requirement,
             });
         }
+    }
+
+    /// <summary>
+    /// Refuses an upload whose target the caller has no right to.
+    /// </summary>
+    /// <remarks>
+    /// Until this existed the endpoint checked only that a target was named, so any
+    /// authenticated user could point a CharacterAvatar at any character. Two such
+    /// rows turned every read of that character's room into a 500 for everyone, and
+    /// nothing but a hand-edited row brought it back.
+    ///
+    /// The rule per type comes from the module that owns the entity — see
+    /// IUploadTargetAuthorizer. Fails closed: a type with no authorizer is refused,
+    /// so adding one to the enum without a rule breaks the upload rather than
+    /// opening it. That path is unreachable today and is asserted, not assumed.
+    /// </remarks>
+    private async Task AuthorizeTargetAsync(UploadType type, Guid target)
+    {
+        var authorizer = _targetAuthorizers.FirstOrDefault(a => a.Type == type);
+        if (authorizer == null)
+        {
+            throw new InvalidOperationException(
+                $"No upload target authorizer for {type}");
+        }
+
+        await authorizer.EnsureAllowedAsync(target);
     }
 
     private async Task PutToS3Async(string objectKey, byte[] bytes, string contentType)
