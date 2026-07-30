@@ -1,6 +1,9 @@
 /* eslint-env node */
 require("@rushstack/eslint-patch/modern-module-resolution");
 
+const fs = require("node:fs");
+const path = require("node:path");
+
 /**
  * FSD layers, outermost first. A module may import from any layer below its own
  * and, within its own layer, only through another slice's `@x` door.
@@ -17,6 +20,27 @@ const below = (layer) =>
 
 /** Layers made of slices. `app` is one composition root, `shared` is a kit. */
 const SLICED = LAYERS.slice(1, -1);
+
+/**
+ * Components the app registers globally, read out of the registration itself so
+ * this config cannot drift from it: drop a `.component(...)` line and every
+ * template that leaned on that global becomes a lint error instead of a runtime
+ * console warning nobody reads.
+ */
+const GLOBAL_COMPONENTS = [
+  ...fs
+    .readFileSync(
+      path.resolve(__dirname, "src/app/providers/components.ts"),
+      "utf8",
+    )
+    .matchAll(/\.component\(\s*"([^"]+)"/g),
+].map(([, name]) => name);
+
+if (GLOBAL_COMPONENTS.length === 0) {
+  throw new Error(
+    "src/app/providers/components.ts registers no component by literal name: the vue/no-undef-components whitelist cannot be derived from it, so update this config alongside the registration.",
+  );
+}
 
 module.exports = {
   root: true,
@@ -69,6 +93,21 @@ module.exports = {
     // The design system deliberately uses single-word names for shared UI
     // primitives (Button, Tooltip, Tabs, Form, Paging, Header, Footer, ...).
     "vue/multi-word-component-names": "off",
+
+    // Nothing checked that a template's components resolve. Vue answers an
+    // unregistered tag with a console warning, so lint, type-check and build
+    // all stay green while a page renders without its heading, and a component
+    // copied from a file that leaned on a global fails only at runtime. The
+    // globals above and the router's own two are the only names a template may
+    // use without importing them.
+    "vue/no-undef-components": [
+      "error",
+      {
+        ignorePatterns: [...GLOBAL_COMPONENTS, "RouterLink", "RouterView"].map(
+          (name) => `^${name}$`,
+        ),
+      },
+    ],
 
     // The design system has one confirmation dialog (shared/ui/ConfirmDialog)
     // and one prompt (BBCodeEditor/InputDialog). Native modals ignore the

@@ -88,7 +88,11 @@ public static class GameRoleExtensions
     /// </summary>
     /// <remarks>
     /// Master, assistant, a player with an accepted character, and the mentor
-    /// curating the game. Everything except a plain Reader: a subscription is
+    /// curating the game. The four are listed by name rather than as everything
+    /// that is not a Reader, so that a role added to <see cref="GameRole" />
+    /// later does not widen the ban exemption by itself; the one already in the
+    /// enum and not yet resolved anywhere is <see cref="GameRole.Applicant" />.
+    /// A plain Reader is out because a subscription is
     /// self-service, anyone may subscribe to any public game in one request, so
     /// it would undo the ban by a button press. An application in review is not
     /// here either — it puts nobody into Players, which only holds authors of
@@ -99,7 +103,8 @@ public static class GameRoleExtensions
     /// </remarks>
     public static bool IsOwnGame(this IEnumerable<GameRole> roles)
     {
-        return roles.Any(r => r is not GameRole.Reader);
+        return roles.Any(r =>
+            r is GameRole.Master or GameRole.Assistant or GameRole.Mentor or GameRole.Player);
     }
 
     /// <summary>

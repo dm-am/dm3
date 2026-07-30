@@ -404,33 +404,6 @@ describe("useGamesStore", () => {
       expect(mockSearchGames).not.toHaveBeenCalled();
     });
   });
-
-  // ============================================================================
-  // RESET
-  // ============================================================================
-
-  describe("resetAllGames", () => {
-    it("resets all game data", async () => {
-      const mockGames = [createMockGameRef("1", "Game")];
-      mockGetPopularGames.mockResolvedValue({
-        data: { resources: mockGames },
-        error: null,
-      });
-      mockSearchGames.mockResolvedValue({
-        data: { resources: [], paging: null },
-        error: null,
-      });
-
-      const store = useGamesStore();
-      await store.fetchPopularGames();
-      await store.searchGames({ search: "test" });
-
-      store.resetAllGames();
-
-      expect(store.popularGames).toBeNull();
-      expect(store.searchResult).toBeNull();
-    });
-  });
 });
 
 // ============================================================================

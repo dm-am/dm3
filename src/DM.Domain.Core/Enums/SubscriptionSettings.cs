@@ -6,20 +6,25 @@ namespace DM.Domain.Core.Enums;
 /// Subscription notification settings (flags).
 /// </summary>
 /// <remarks>
-/// The same bit positions carry different semantics depending on the
-/// subscription's <see cref="SubscriptionTargetType"/>:
+/// The three groups occupy disjoint bit ranges: no position ever carries two
+/// meanings, so a stored value is readable without knowing the subscription's
+/// <see cref="SubscriptionTargetType"/>.
 /// <list type="bullet">
-///   <item>For <b>Game</b>/<b>Blog</b>/<b>Topic</b> targets — the
-///   "per-entity" flags (<see cref="NewPosts"/>,
+///   <item>Bits 0-5 — the "per-entity" flags (<see cref="NewPosts"/>,
 ///   <see cref="NewPublications"/>, <see cref="NewComments"/>,
-///   <see cref="StatusChanges"/>, <see cref="CharacterUpdates"/>) apply.</item>
-///   <item>For <b>User</b> targets — the "per-author-category" flags
+///   <see cref="NewTopics"/>, <see cref="StatusChanges"/>,
+///   <see cref="CharacterUpdates"/>), read for <b>Game</b>/<b>Blog</b>/<b>Topic</b>
+///   targets.</item>
+///   <item>Bits 7-8 — the channel flags (<see cref="InApp"/>,
+///   <see cref="Email"/>), orthogonal and read for every target type.</item>
+///   <item>Bits 9-11 — the "per-author-category" flags
 ///   (<see cref="AuthorGameEvents"/>, <see cref="AuthorBlogEvents"/>,
-///   <see cref="AuthorTopicEvents"/>) gate the three customizable
-///   buckets the user can toggle in the subscribe popover.</item>
+///   <see cref="AuthorTopicEvents"/>), read for <b>User</b> targets: they gate
+///   the three customizable buckets the user can toggle in the subscribe
+///   popover.</item>
 /// </list>
-/// Channel flags (<see cref="InApp"/>, <see cref="Email"/>) are
-/// orthogonal and apply to all target types.
+/// A flag added later takes a free high bit. Reusing a low one would make the
+/// value depend on the target type, which is exactly what this layout avoids.
 /// </remarks>
 [Flags]
 public enum SubscriptionSettings
@@ -61,11 +66,11 @@ public enum SubscriptionSettings
     /// </summary>
     CharacterUpdates = 1 << 5,
 
-    // Bit 1 << 6 is intentionally left vacant — the previous
-    // AuthorNewContent catch-all flag has been replaced by the three
-    // category-specific flags below (AuthorGameEvents / AuthorBlogEvents /
-    // AuthorTopicEvents). Any subscription rows that still carry bit 6 must
-    // be migrated to the new flags before this enum drifts further.
+    // Bit 1 << 6 is vacant: it held the AuthorNewContent catch-all, now split
+    // into the three category flags below (AuthorGameEvents / AuthorBlogEvents /
+    // AuthorTopicEvents). It stays vacant instead of being recycled — a bit
+    // that once meant something else is the one way this layout could end up
+    // needing the target type to be read.
 
     #endregion
 

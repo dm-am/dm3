@@ -71,8 +71,11 @@ internal class GameInactivityProcessor : IGameInactivityProcessor
     /// <inheritdoc />
     public async Task WarnInactiveGamesAsync(CancellationToken ct)
     {
-        var gameIds = await _inactivityRepository.GetInactiveGamesToWarn(InactivityThreshold, ct);
+        // One reading of the clock per pass: the cutoff that picks a game as silent
+        // and the timestamp written on it must be the same moment, and a test that
+        // moves the clock has to move the selection with it.
         var now = _dateTimeProvider.Now;
+        var gameIds = await _inactivityRepository.GetInactiveGamesToWarn(InactivityThreshold, now, ct);
 
         foreach (var gameId in gameIds)
         {
@@ -94,8 +97,8 @@ internal class GameInactivityProcessor : IGameInactivityProcessor
     /// <inheritdoc />
     public async Task FreezeWarnedGamesAsync(CancellationToken ct)
     {
-        var gameIds = await _inactivityRepository.GetWarnedGamesToFreeze(WarningGracePeriod, ct);
         var now = _dateTimeProvider.Now;
+        var gameIds = await _inactivityRepository.GetWarnedGamesToFreeze(WarningGracePeriod, now, ct);
 
         foreach (var gameId in gameIds)
         {
@@ -116,8 +119,8 @@ internal class GameInactivityProcessor : IGameInactivityProcessor
     /// <inheritdoc />
     public async Task WarnFrozenGamesAsync(CancellationToken ct)
     {
-        var gameIds = await _inactivityRepository.GetFrozenGamesToWarn(FrozenThreshold, ct);
         var now = _dateTimeProvider.Now;
+        var gameIds = await _inactivityRepository.GetFrozenGamesToWarn(FrozenThreshold, now, ct);
 
         foreach (var gameId in gameIds)
         {
@@ -139,7 +142,8 @@ internal class GameInactivityProcessor : IGameInactivityProcessor
     /// <inheritdoc />
     public async Task CloseFrozenGamesAsync(CancellationToken ct)
     {
-        var gameIds = await _inactivityRepository.GetWarnedFrozenGamesToClose(WarningGracePeriod, ct);
+        var now = _dateTimeProvider.Now;
+        var gameIds = await _inactivityRepository.GetWarnedFrozenGamesToClose(WarningGracePeriod, now, ct);
 
         foreach (var gameId in gameIds)
         {

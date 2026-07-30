@@ -128,7 +128,7 @@ app → pages → widgets → features → entities → shared
 
 ```
 entities/user/@x/game.ts        # что entities/game имеет право взять из entities/user
-entities/user/@x/testimonial.ts # что entities/testimonial имеет право взять из entities/user
+entities/user/@x/moderation.ts  # что entities/moderation имеет право взять из entities/user
 ```
 
 Потребитель импортирует из `@/entities/user/@x/game`, а не из корня чужого слайса. Всякий same-layer импорт вне `@x` — нарушение. `@x` создается точечно и держится узким (реэкспорт только реально нужных символов).

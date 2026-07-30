@@ -20,9 +20,10 @@ internal class InactivityRepository : IInactivityRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Guid>> GetInactiveGamesToWarn(TimeSpan inactivityThreshold, CancellationToken ct = default)
+    public async Task<IEnumerable<Guid>> GetInactiveGamesToWarn(
+        TimeSpan inactivityThreshold, DateTimeOffset now, CancellationToken ct = default)
     {
-        var threshold = DateTimeOffset.UtcNow - inactivityThreshold;
+        var threshold = now - inactivityThreshold;
 
         return await _dbContext.Games
             .Where(g => !g.IsRemoved)
@@ -36,9 +37,10 @@ internal class InactivityRepository : IInactivityRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Guid>> GetWarnedGamesToFreeze(TimeSpan warningGracePeriod, CancellationToken ct = default)
+    public async Task<IEnumerable<Guid>> GetWarnedGamesToFreeze(
+        TimeSpan warningGracePeriod, DateTimeOffset now, CancellationToken ct = default)
     {
-        var threshold = DateTimeOffset.UtcNow - warningGracePeriod;
+        var threshold = now - warningGracePeriod;
 
         return await _dbContext.Games
             .Where(g => !g.IsRemoved)
@@ -52,9 +54,10 @@ internal class InactivityRepository : IInactivityRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Guid>> GetFrozenGamesToWarn(TimeSpan frozenThreshold, CancellationToken ct = default)
+    public async Task<IEnumerable<Guid>> GetFrozenGamesToWarn(
+        TimeSpan frozenThreshold, DateTimeOffset now, CancellationToken ct = default)
     {
-        var threshold = DateTimeOffset.UtcNow - frozenThreshold;
+        var threshold = now - frozenThreshold;
 
         return await _dbContext.Games
             .Where(g => !g.IsRemoved)
@@ -67,9 +70,10 @@ internal class InactivityRepository : IInactivityRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Guid>> GetWarnedFrozenGamesToClose(TimeSpan warningGracePeriod, CancellationToken ct = default)
+    public async Task<IEnumerable<Guid>> GetWarnedFrozenGamesToClose(
+        TimeSpan warningGracePeriod, DateTimeOffset now, CancellationToken ct = default)
     {
-        var threshold = DateTimeOffset.UtcNow - warningGracePeriod;
+        var threshold = now - warningGracePeriod;
 
         return await _dbContext.Games
             .Where(g => !g.IsRemoved)

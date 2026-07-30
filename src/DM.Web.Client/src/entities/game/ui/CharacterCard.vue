@@ -7,9 +7,9 @@
 // (docs/architecture/BBCODE_RENDERING.md).
 import { computed, ref } from "vue";
 import type { Character, CharacterAttribute } from "../model/types";
-import { UserLink, AvatarImg } from "@/entities/user/@x/game";
+import { UserLink } from "@/entities/user/@x/game";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import { ContentText } from "@/shared/ui";
+import { AvatarImg, ContentText } from "@/shared/ui";
 import { SvgIcon } from "@/shared/ui/Icon";
 
 const props = defineProps<{

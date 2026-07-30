@@ -153,7 +153,7 @@ internal class BanService : IBanService
             // Only a voluntary self-ban reaches here: the validator requires a
             // duration or an explicit expiry for every moderator-issued ban, and a
             // permanent one is expressed by the client as a hundred years.
-            endedUtc = now.AddYears(100);
+            endedUtc = now.AddYears(Ban.PermanentYears);
         }
 
         // Only the two ban scopes from the doc (4.2.4.2) exist; an omitted or
@@ -203,7 +203,7 @@ internal class BanService : IBanService
 
         // Permanent bans are stored with a far-future end date (see CreateBan);
         // lifting them is reserved for administrators. Voluntary self-bans are exempt.
-        var isPermanent = !ban.IsVoluntary && ban.EndedUtc > _dateTimeProvider.Now.AddYears(50);
+        var isPermanent = ban.IsPermanentAt(_dateTimeProvider.Now);
         if (isPermanent && currentUser.Role < UserRole.Admin)
         {
             throw new HttpException(HttpStatusCode.Forbidden, "Only administrators can lift permanent bans");

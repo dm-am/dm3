@@ -69,8 +69,11 @@ public class CreateBan
 
     /// <summary>
     /// Ban access restriction scope ("Тип бана", 4.2.4.2):
-    /// <see cref="AccessPolicy.DemocraticBan"/> (read-only) or
-    /// <see cref="AccessPolicy.FullBan"/> (everything blocked). The service
+    /// <see cref="AccessPolicy.DemocraticBan"/> or <see cref="AccessPolicy.FullBan"/>.
+    /// What either scope forbids is stated once — on those members and in
+    /// <see cref="DM.Domain.Core.Authorization.AccessRestrictions"/> — and is not
+    /// retold here: the paraphrase that used to stand in this place had drifted
+    /// into calling the ordinary ban read-only, which it never was. The service
     /// coerces any other value to FullBan. Defaults to FullBan so that
     /// existing callers (e.g. ticket resolution) keep the full restriction.
     /// </summary>

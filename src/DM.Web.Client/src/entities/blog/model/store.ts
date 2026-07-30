@@ -265,18 +265,12 @@ export const useBlogsStore = defineStore("blogs", () => {
 
     // Reset functions (for logout)
     resetParticipatingBlogs: participating.reset,
-    resetAllBlogs: () => {
-      active.reset();
-      popular.reset();
-      participating.reset();
-      clearSearchCache();
-    },
 
     /**
-     * After a mutation changed which blogs exist. Distinct from resetAllBlogs,
-     * which blanks the lists: that is right for logout and wrong here, because
-     * the sidebar blocks fetch on mount and the shell mounts once per session,
-     * so a blanked list stays blank until a reload.
+     * After a mutation changed which blogs exist. Distinct from the reset
+     * above, which blanks the lists: that is right for logout and wrong here,
+     * because the sidebar blocks fetch on mount and the shell mounts once per
+     * session, so a blanked list stays blank until a reload.
      */
     invalidateBlogLists: async () => {
       clearSearchCache();

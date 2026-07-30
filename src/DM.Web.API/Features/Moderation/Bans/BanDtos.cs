@@ -115,8 +115,13 @@ public class CreateBanRequest
 
     /// <summary>
     /// Ban access restriction scope ("Тип бана" in the doc, 4.2.4.2):
-    /// <see cref="AccessPolicy.DemocraticBan"/> keeps read access,
-    /// <see cref="AccessPolicy.FullBan"/> blocks everything. Anything other
+    /// <see cref="AccessPolicy.DemocraticBan"/> silences public speech — the
+    /// global chat, the forum, the discussion of other people's games and blogs —
+    /// while the user's own games and blogs, posts in game rooms and direct
+    /// messages stay open; <see cref="AccessPolicy.FullBan"/> blocks everything
+    /// and fails authentication itself. This text is spelled out rather than
+    /// linked because Swagger renders a cref as a bare type name, and a moderator
+    /// picking the scope reads it here. Anything other
     /// than these two is coerced to FullBan server-side. Defaults to FullBan
     /// for backward compatibility with callers that omit it.
     /// </summary>

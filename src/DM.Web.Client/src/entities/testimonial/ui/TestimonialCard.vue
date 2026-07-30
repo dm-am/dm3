@@ -8,7 +8,7 @@ import {
   onBeforeUnmount,
 } from "vue";
 import type { WebsiteTestimonial } from "@/shared/api/models/community";
-import type { UserRef } from "@/entities/user/@x/testimonial";
+import type { UserRef } from "@/shared/api/models/common";
 import { Tooltip } from "@/shared/ui";
 import SvgIcon from "@/shared/ui/Icon/SvgIcon.vue";
 import {

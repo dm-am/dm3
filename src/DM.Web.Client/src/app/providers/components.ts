@@ -3,7 +3,6 @@ import type { App } from "vue";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import Button from "@/shared/ui/Button/Button.vue";
 import Form from "@/shared/ui/Form/Form.vue";
@@ -20,6 +19,5 @@ export function registerGlobalComponents(app: App) {
     .component("FormField", FormField)
     .component("Button", Button)
     .component("Dialog", Dialog)
-    .component("HumanDate", HumanDate)
     .component("UserLink", UserLink);
 }

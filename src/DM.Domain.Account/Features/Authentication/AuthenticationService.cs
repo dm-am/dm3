@@ -111,7 +111,14 @@ internal class AuthenticationService : IAuthenticationService
             case true when user.AccessPolicy.HasFlag(AccessPolicy.FullBan):
                 _logger.LogWarning("Login failed: account banned. UserId={UserId}", user.UserId);
                 return Identity.Fail(AuthenticationError.Banned);
-            case true when !_securityManager.ComparePasswords(password, user.Salt, user.PasswordHash):
+            // The system actor is refused by its role, not by its credentials. The
+            // seed leaves its salt and hash empty, so today the comparison below is
+            // the only thing stopping it — an invariant living in two string columns.
+            // Folded into this branch rather than answered separately so that the
+            // attempt is counted, audited and reported exactly like a wrong password,
+            // leaving the account indistinguishable from outside.
+            case true when user.Role == UserRole.System ||
+                           !_securityManager.ComparePasswords(password, user.Salt, user.PasswordHash):
                 await _loginAttemptTracker.RecordFailedAttempt(origin);
                 await _auditService.LogAsync(user.UserId, SecurityEventType.LoginFailure,
                     context?.IpAddress, context?.UserAgent, "Wrong password");

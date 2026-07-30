@@ -14,7 +14,11 @@ internal class CharacterIntentionResolver :
     public bool IsAllowed(IAuthorizationSubject user, CharacterIntention intention,
         CharacterToUpdate target)
     {
-        var characterOwned = target.UserId == user.UserId;
+        // An NPC has no author, but the projection into CharacterToUpdate
+        // collapses that null into Guid.Empty — the exact id an anonymous
+        // visitor carries. Without the authentication check every guest would
+        // own every NPC.
+        var characterOwned = user.IsAuthenticated && target.UserId == user.UserId;
         var gameOwned = target.GameMasterId == user.UserId || target.GameAssistantIds.Contains(user.UserId);
         var gameActive = target.GameStatus == ModuleStatus.Active;
 
@@ -26,8 +30,8 @@ internal class CharacterIntentionResolver :
             CharacterIntention.EditPrivacySettings when characterOwned => gameActive,
             CharacterIntention.EditMasterSettings when gameOwned => true,
             CharacterIntention.Delete when characterOwned => gameActive,
-            // NPCs have no author (AuthorId is null), so ownership never
-            // matches — the master and assistants delete them instead.
+            // An NPC has no author, so no authenticated user owns it — the
+            // master and assistants delete them instead.
             CharacterIntention.Delete when gameOwned => target.IsNpc,
             CharacterIntention.Accept when gameOwned => target.Status == CharacterStatus.UnderReview ||
                                                         target.Status == CharacterStatus.Declined,

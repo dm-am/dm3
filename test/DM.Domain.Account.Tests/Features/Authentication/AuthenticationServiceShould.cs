@@ -203,6 +203,40 @@ public class AuthenticationServiceShould : UnitTestBase
     }
 
     [Fact]
+    public async Task RefuseLoginForTheSystemActorEvenWhenItsPasswordMatches()
+    {
+        var email = "system@dm.local";
+        var user = Create.User()
+            .WithRole(UserRole.System)
+            .WithCredentials("salt", "hash")
+            .Please();
+
+        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
+        _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
+        // Everything a successful login needs is stubbed, a matching password
+        // included: what stops the robot in production is the empty salt and hash
+        // the seed writes, and the refusal has to hold without them
+        _securityManager.Setup(s => s.ComparePasswords("password", user.Salt, user.PasswordHash))
+            .Returns(true);
+        _sessionFactory.Setup(f => f.Create(true, false, null))
+            .Returns(new CreateSession { Id = Guid.NewGuid() });
+        _repository.Setup(r => r.FindUserSettings(user.UserId)).ReturnsAsync(UserSettings.Default);
+        _repository.Setup(r => r.AddSession(user.UserId, It.IsAny<CreateSession>()))
+            .ReturnsAsync(new Session { Id = Guid.NewGuid() });
+        _cryptoService.Setup(c => c.Encrypt(It.IsAny<string>())).ReturnsAsync("encrypted-token");
+
+        var result = await _service.Authenticate(email, "password");
+
+        result.User.IsAuthenticated.Should().BeFalse();
+        // Answered as a wrong password on purpose: a distinct error would point at
+        // the one account that exists but can never be logged into
+        result.Error.Should().Be(AuthenticationError.WrongPassword);
+        _repository.Verify(r => r.AddSession(It.IsAny<Guid>(), It.IsAny<CreateSession>()), Times.Never);
+    }
+
+    [Fact]
     public async Task RefuseTokenOfFullyBannedUser()
     {
         var userId = Guid.NewGuid();

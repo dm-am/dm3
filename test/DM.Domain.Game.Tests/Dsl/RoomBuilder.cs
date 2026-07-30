@@ -74,8 +74,9 @@ public class RoomBuilder
     }
 
     /// <summary>
-    /// A reader row that carries no user. Only for pinning down how the two
-    /// overloads differ when they walk the same row.
+    /// A reader row that carries no user. The user is filled by a projection and
+    /// not by a schema constraint, so an empty one is reachable and every overload
+    /// that walks the row has to deny on it.
     /// </summary>
     public RoomBuilder WithReaderAccessMissingItsUser()
     {

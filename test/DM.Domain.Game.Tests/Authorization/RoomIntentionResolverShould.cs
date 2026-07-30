@@ -370,10 +370,10 @@ public class RoomIntentionResolverShould : UnitTestBase
 
     #endregion
 
-    #region Behaviour as found
+    #region Reader rows without a user
 
     [Fact]
-    public void DifferOnAReaderRowWithNoUserDependingOnTheOverload()
+    public void DenyOnAReaderRowWithNoUserFromEitherOverload()
     {
         var room = new RoomBuilder()
             .WithGame(GameLedBy(MasterId))
@@ -382,16 +382,12 @@ public class RoomIntentionResolverShould : UnitTestBase
             .Please();
         var user = Create.User(StrangerId).WithRole(UserRole.RegularUser).Please();
 
-        // Behaviour as found, not a rule that was chosen. Both overloads scan the
-        // same reader rows, but CreatePost dereferences a.User outright while
-        // ViewMessages/SendMessage go through a.User?. — so an access row without
-        // a user throws on one path and denies on the other. Pinned here so that
-        // making the two agree is a deliberate change with a visible failure,
-        // rather than something a refactor flips by accident.
-        var postingOnTheUnguardedPath = () =>
-            resolver.IsAllowed(user, RoomIntention.CreatePost, (room, (Guid?)null));
-
-        postingOnTheUnguardedPath.Should().Throw<NullReferenceException>();
+        // Both overloads scan the same reader rows through one predicate, so they
+        // answer the same way. CreatePost used to dereference a.User outright while
+        // ViewMessages went through a.User?., which made one access row throw on one
+        // path and deny on the other. A row whose user the projection did not fill
+        // names nobody, and grants nobody anything.
+        resolver.IsAllowed(user, RoomIntention.CreatePost, (room, (Guid?)null)).Should().BeFalse();
         resolver.IsAllowed(user, RoomIntention.ViewMessages, room).Should().BeFalse();
     }
 

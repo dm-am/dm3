@@ -242,21 +242,12 @@ export const useGamesStore = defineStore("games", () => {
     // Reset functions (for logout)
     resetParticipatingGames: participating.reset,
     resetModerationGames: moderation.reset,
-    resetAllGames: () => {
-      participating.reset();
-      moderation.reset();
-      popular.reset();
-      activePage.reset();
-      recruitingPage.reset();
-      finishedPage.reset();
-      resetSearch();
-    },
 
     /**
-     * After a mutation changed which games exist. Distinct from resetAllGames,
-     * which blanks the lists: that is right for logout and wrong here, because
-     * the sidebar blocks fetch on mount and the shell mounts once per session,
-     * so a blanked list stays blank until a reload.
+     * After a mutation changed which games exist. Distinct from the resets
+     * above, which blank the lists: that is right for logout and wrong here,
+     * because the sidebar blocks fetch on mount and the shell mounts once per
+     * session, so a blanked list stays blank until a reload.
      */
     invalidateGameLists: async () => {
       searchCache.clear();

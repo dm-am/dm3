@@ -21,7 +21,7 @@ import { storeToRefs } from "pinia";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import type { Game, GameRef, Room } from "../model/types";
 import { useGameDisplay } from "../model/useGameDisplay";
-import { useAuthStore } from "@/entities/user/@x/game";
+import { useAuthStore } from "@/shared/stores/auth";
 
 const props = defineProps<{
   room: Room;

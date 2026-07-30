@@ -82,6 +82,21 @@ public class CharacterIntentionResolverShould : UnitTestBase
         resolver.IsAllowed(admin, intention, Character()).Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(CharacterIntention.Edit)]
+    [InlineData(CharacterIntention.EditPrivacySettings)]
+    [InlineData(CharacterIntention.Delete)]
+    [InlineData(CharacterIntention.Leave)]
+    public void ForbidAGuestOnAnNpc(CharacterIntention intention)
+    {
+        // An NPC has no author, and the projection turns that null into
+        // Guid.Empty — the very id an anonymous visitor carries. Ownership
+        // must not match on it.
+        var guest = Create.User(Guid.Empty).WithRole(UserRole.Guest).Please();
+
+        resolver.IsAllowed(guest, intention, Character(isNpc: true)).Should().BeFalse();
+    }
+
     // --- Ownership by the game ---
 
     [Fact]

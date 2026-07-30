@@ -447,30 +447,6 @@ describe("useBlogsStore", () => {
   // RESET
   // ============================================================================
 
-  describe("resetAllBlogs", () => {
-    it("resets all blog data", async () => {
-      const mockBlogs = [createMockBlogRef("1", "Blog")];
-      mockGetActiveBlogs.mockResolvedValue({
-        data: { resources: mockBlogs },
-        error: null,
-      });
-      mockGetPopularBlogs.mockResolvedValue({
-        data: { resources: mockBlogs },
-        error: null,
-      });
-
-      const store = useBlogsStore();
-      await store.fetchActiveBlogs();
-      await store.fetchPopularBlogs();
-
-      store.resetAllBlogs();
-
-      expect(store.activeBlogs).toBeNull();
-      expect(store.popularBlogs).toBeNull();
-      expect(store.participatingBlogs).toBeNull();
-    });
-  });
-
   describe("resetParticipatingBlogs", () => {
     it("resets only participating blogs", async () => {
       const mockBlogs = [createMockBlogRef("1", "My Blog")];
