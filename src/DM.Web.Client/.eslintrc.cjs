@@ -27,12 +27,6 @@ module.exports = {
     "@vue/eslint-config-prettier",
   ],
   plugins: ["boundaries"],
-  overrides: [
-    {
-      files: ["cypress/e2e/**/*.{cy,spec}.{js,ts,jsx,tsx}"],
-      extends: ["plugin:cypress/recommended"],
-    },
-  ],
   parserOptions: {
     ecmaVersion: "latest",
   },
@@ -103,7 +97,7 @@ module.exports = {
       },
     ],
 
-    // Files outside src/ (config, cypress) are simply not FSD elements.
+    // Files outside src/ (config, e2e) are simply not FSD elements.
     "boundaries/no-unknown-files": "off",
     "boundaries/no-unknown": "off",
     "boundaries/dependencies": [

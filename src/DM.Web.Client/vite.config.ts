@@ -1,6 +1,10 @@
 ﻿import { fileURLToPath, URL } from "node:url";
 
-import { defineConfig } from "vite";
+// From vitest, not from vite: the `test` block below is vitest's, and vite's own
+// defineConfig does not know it. Typed by the wrong one it was an error nothing
+// reported — tsconfig.config.json is the only project that includes this file,
+// and no script type-checks it.
+import { defineConfig } from "vitest/config";
 import vue from "@vitejs/plugin-vue";
 
 // https://vitejs.dev/config/
