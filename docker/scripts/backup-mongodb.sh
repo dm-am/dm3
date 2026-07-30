@@ -1,6 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
+# Cron дает почти пустое окружение: без этого ночной запуск не видел ни пароля
+# MinIO, ни ключей offsite-репликации.
+# shellcheck source=/dev/null
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_env.sh"
+
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/mongodb}"
 RETENTION_DAYS="${RETENTION_DAYS:-30}"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")

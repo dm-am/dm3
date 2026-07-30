@@ -138,6 +138,56 @@ public class DeploymentConfigurationShould
         restore.Should().BeLessThan(list, "restoring after the check helps nobody");
     }
 
+    /// <summary>
+    /// Whatever the installer schedules, the verifier looks at.
+    /// </summary>
+    /// <remarks>
+    /// Three backups ran nightly and one watchman checked two of them. The MinIO
+    /// backup could not have produced anything anyway — cron gives a job no
+    /// environment, so the script exited on its missing password every night — and
+    /// the watchman, blind to that directory, kept printing "All backups OK". A
+    /// backup nobody verifies is not a backup; a verifier that skips one is worse,
+    /// because it says so out loud.
+    /// </remarks>
+    [Fact]
+    public void VerifyEveryBackupTheInstallerSchedules()
+    {
+        var scriptsDirectory = Path.Combine(DockerDirectory, "scripts");
+        var cron = File.ReadAllText(Path.Combine(scriptsDirectory, "install-cron.sh"));
+        var verify = File.ReadAllText(Path.Combine(scriptsDirectory, "verify-backup.sh"));
+
+        var scheduled = new[] { "postgres", "mongodb", "minio" }
+            .Where(store => cron.Contains($"backup-{store}.sh", StringComparison.Ordinal))
+            .ToList();
+
+        scheduled.Should().HaveCount(3, "the parser must find the scheduled backups");
+        foreach (var store in scheduled)
+        {
+            verify.Should().Contain($"/var/backups/{store}",
+                $"{store} is backed up nightly, so the verifier has to look at it");
+        }
+    }
+
+    /// <summary>
+    /// Every backup script loads the environment file. Cron hands a job almost
+    /// nothing, and these scripts need credentials — the MinIO one exits 1 without
+    /// its password, and the offsite replication in all three switches itself off
+    /// silently when the AWS variables are absent.
+    /// </summary>
+    [Theory]
+    [InlineData("backup-postgres.sh")]
+    [InlineData("backup-mongodb.sh")]
+    [InlineData("backup-minio.sh")]
+    [InlineData("verify-backup.sh")]
+    public void LoadTheEnvironmentInEveryScheduledScript(string script)
+    {
+        var path = Path.Combine(DockerDirectory, "scripts", script);
+
+        File.Exists(path).Should().BeTrue($"{script} is scheduled by install-cron.sh");
+        File.ReadAllText(path).Should().Contain("_env.sh",
+            "cron gives the job no environment, and these scripts need credentials");
+    }
+
     /// <summary>Published ports of every service, as written.</summary>
     private static string[] PublishedPorts(string compose)
     {

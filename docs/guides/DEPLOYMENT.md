@@ -145,9 +145,15 @@ Watchtower каждые 5 минут проверяет новые образы 
 | Метод | Команда |
 |-------|---------|
 | Docker образ | `docker compose down && docker compose up -d` с другим тегом |
-| PostgreSQL | `docker exec -i dm-pg psql -U postgres dm3 < backup.sql` |
-| MongoDB | `docker exec dm-mongo mongorestore --archive=/backup.archive --drop` |
+| PostgreSQL | `gunzip -c /var/backups/postgresql/<файл>.sql.gz \| docker exec -i dm-pg psql -U postgres dm3` |
+| MongoDB | `docker exec -i dm-mongo mongorestore --archive --gzip --drop < /var/backups/mongodb/<файл>.archive.gz` |
+| MinIO | `docker run --rm --network host -v /var/backups/minio/<каталог>:/backup --entrypoint sh minio/mc -c 'mc alias set dst "$MINIO_ENDPOINT" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" && mc mirror /backup dst/dm-uploads'` |
 | Git | `git revert HEAD && git push` |
+
+Команды восстановления соответствуют тому, что кладут скрипты бэкапа: PostgreSQL
+и MongoDB сжаты gzip-ом, а MinIO — каталог объектов, а не архив. Прежние команды
+в этой таблице выполниться не могли: psql получал gzip вместо SQL, а mongorestore
+искал архив по пути внутри контейнера, куда он не смонтирован, и без `--gzip`.
 
 ---
 
