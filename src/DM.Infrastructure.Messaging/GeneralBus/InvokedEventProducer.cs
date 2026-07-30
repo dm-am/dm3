@@ -15,10 +15,32 @@ namespace DM.Infrastructure.Messaging.GeneralBus;
 /// Event producer implementation that sends domain events through RabbitMQ.
 /// Implements both <see cref="IEventProducer"/> (new) and <see cref="IInvokedEventProducer"/> (deprecated).
 /// </summary>
-internal class InvokedEventProducer(IProducerBuilder producerBuilder) : IEventProducer, IInvokedEventProducer
+internal class InvokedEventProducer(IProducerBuilder producerBuilder)
+    : IEventProducer, IInvokedEventProducer, IDisposable
 {
     private readonly IProducer<string, InvokedEvent> producer = producerBuilder.BuildRabbit<InvokedEvent>(
         new RabbitProducerParameters(InvokedEventsTransport.ExchangeName));
+
+    /// <summary>
+    /// Returns the AMQP channel this producer took from the pool.
+    /// </summary>
+    /// <remarks>
+    /// BuildRabbit hands back a RabbitProducer that leases a channel on its first
+    /// Send and gives it back only on Dispose — the pool has a Get and no Return.
+    /// This wrapper was not disposable and was registered per dependency by the
+    /// blanket scan, so every resolution that published anything left a channel
+    /// open for the life of the process. With the shipped defaults that is 16
+    /// pools of 256, so after about four thousand published events the pool throws
+    /// and every publish in the API fails until it is restarted: no search
+    /// indexing, no notifications, no mail.
+    ///
+    /// Disposing here rather than making the producer a singleton: a RabbitMQ
+    /// channel is not safe to publish on from several threads at once, and a
+    /// singleton would share one across every concurrent request. Registered per
+    /// lifetime scope instead, so a request opens at most one and returns it when
+    /// the scope ends.
+    /// </remarks>
+    public void Dispose() => (producer as IDisposable)?.Dispose();
 
     public Task SendAsync(EventType eventType, Guid entityId) =>
         producer.Send(GetRoutingKey(eventType), new InvokedEvent
