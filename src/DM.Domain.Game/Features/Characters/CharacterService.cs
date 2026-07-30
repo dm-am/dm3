@@ -28,7 +28,6 @@ internal class CharacterService : ICharacterService
     private readonly IIntentionManager _intentionManager;
     private readonly ICharacterRepository _repository;
     private readonly ICharacterAttributeValueFiller _attributeValueFiller;
-    private readonly ICharacterIntentionConverter _intentionConverter;
     private readonly IUnreadCountersRepository _unreadCountersRepository;
     private readonly IGameSubscriptionService _subscriptionService;
     private readonly IEventProducer _producer;
@@ -43,7 +42,6 @@ internal class CharacterService : ICharacterService
         IIntentionManager intentionManager,
         ICharacterRepository repository,
         ICharacterAttributeValueFiller attributeValueFiller,
-        ICharacterIntentionConverter intentionConverter,
         IUnreadCountersRepository unreadCountersRepository,
         IGameSubscriptionService subscriptionService,
         IEventProducer producer,
@@ -57,7 +55,6 @@ internal class CharacterService : ICharacterService
         _intentionManager = intentionManager;
         _repository = repository;
         _attributeValueFiller = attributeValueFiller;
-        _intentionConverter = intentionConverter;
         _unreadCountersRepository = unreadCountersRepository;
         _subscriptionService = subscriptionService;
         _producer = producer;
@@ -172,47 +169,16 @@ internal class CharacterService : ICharacterService
 
         var invokedEvents = new List<EventType> { EventType.ChangedCharacter };
 
-        CharacterStatus? status = null;
-        bool? isDead = null;
-        bool? isPlayerLeft = null;
-        bool? isPlayerExiled = null;
-
-        // Handle status change with proper authorization
-        if (updateCharacter.Status.HasValue && updateCharacter.Status != characterToUpdate.Status)
-        {
-            var dead = updateCharacter.IsDead ?? characterToUpdate.IsDead;
-            var left = updateCharacter.IsPlayerLeft ?? characterToUpdate.IsPlayerLeft;
-            var (intention, eventType) = _intentionConverter.Convert(
-                characterToUpdate.Status, updateCharacter.Status.Value, dead, left);
-
-            if (_intentionManager.IsAllowed(intention, characterToUpdate))
-            {
-                invokedEvents.Add(eventType);
-                status = updateCharacter.Status;
-                isDead = updateCharacter.IsDead;
-                isPlayerLeft = updateCharacter.IsPlayerLeft;
-                isPlayerExiled = updateCharacter.IsPlayerExiled;
-
-                // Clear flags when returning to active
-                if (updateCharacter.Status == CharacterStatus.Active &&
-                    characterToUpdate.Status == CharacterStatus.Retired)
-                {
-                    isDead = false;
-                    isPlayerLeft = false;
-                    isPlayerExiled = false;
-                }
-            }
-        }
-
         var attributeInputs = await BuildAttributeInputs(characterToUpdate, updateCharacter.Attributes);
 
+        // Никакого статуса: место персонажа в игре меняет ChangeStatusAsync.
+        // Здесь оно менялось по паре "целевой статус плюс три флага", из которой
+        // намерение приходилось угадывать, а при неугаданном сочетании запрос
+        // отвечал 500. И право проверялось через IsAllowed: запрещенное изменение
+        // молча выпадало, а ответ был 200 со старым статусом.
         var entity = new UpdateCharacterEntity
         {
             CharacterId = updateCharacter.CharacterId,
-            Status = status,
-            IsDead = isDead,
-            IsPlayerLeft = isPlayerLeft,
-            IsPlayerExiled = isPlayerExiled,
             Name = updateCharacter.Name?.Trim(),
             IsNpc = isNpc,
             AccessPolicy = accessPolicy,
@@ -223,24 +189,124 @@ internal class CharacterService : ICharacterService
         var character = await _repository.Update(entity);
         await _producer.SendAsync(invokedEvents, updateCharacter.CharacterId);
 
-        // Auto-subscribe as Reader when player loses all active characters
-        if (status.HasValue &&
-            characterToUpdate.Status == CharacterStatus.Active &&
-            status.Value != CharacterStatus.Active &&
-            !characterToUpdate.IsNpc)
+        return character;
+    }
+
+    /// <inheritdoc />
+    public async Task<Character> ChangeStatusAsync(
+        Guid characterId, CharacterStatusTransition transition)
+    {
+        // Существование проверяется отдельно: GetForUpdate материализуется через
+        // FirstAsync и на незнакомом идентификаторе отвечает 500, а эндпоинт
+        // объявляет 404.
+        if (await _repository.FindCharacter(characterId) == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, "Character not found");
+        }
+
+        var character = await _repository.GetForUpdate(characterId);
+        var entity = new UpdateCharacterEntity { CharacterId = characterId };
+        EventType statusEvent;
+
+        switch (transition)
+        {
+            case CharacterStatusTransition.Accept:
+                RequireStatus(character, transition,
+                    CharacterStatus.UnderReview, CharacterStatus.Declined);
+                _intentionManager.ThrowIfForbidden(CharacterIntention.Accept, character);
+                entity.Status = CharacterStatus.Active;
+                statusEvent = EventType.StatusCharacterAccepted;
+                break;
+
+            case CharacterStatusTransition.Decline:
+                RequireStatus(character, transition, CharacterStatus.UnderReview);
+                _intentionManager.ThrowIfForbidden(CharacterIntention.Decline, character);
+                entity.Status = CharacterStatus.Declined;
+                statusEvent = EventType.StatusCharacterDeclined;
+                break;
+
+            case CharacterStatusTransition.Kill:
+                RequireStatus(character, transition, CharacterStatus.Active);
+                _intentionManager.ThrowIfForbidden(CharacterIntention.Kill, character);
+                entity.Status = CharacterStatus.Retired;
+                entity.IsDead = true;
+                statusEvent = EventType.StatusCharacterDied;
+                break;
+
+            case CharacterStatusTransition.Exile:
+                RequireStatus(character, transition, CharacterStatus.Active);
+                _intentionManager.ThrowIfForbidden(CharacterIntention.Exile, character);
+                entity.Status = CharacterStatus.Retired;
+                entity.IsPlayerExiled = true;
+                statusEvent = EventType.StatusCharacterExiled;
+                break;
+
+            case CharacterStatusTransition.Leave:
+                RequireStatus(character, transition, CharacterStatus.Active);
+                _intentionManager.ThrowIfForbidden(CharacterIntention.Leave, character);
+                entity.Status = CharacterStatus.Retired;
+                entity.IsPlayerLeft = true;
+                statusEvent = EventType.StatusCharacterLeft;
+                break;
+
+            case CharacterStatusTransition.Resurrect:
+                RequireStatus(character, transition, CharacterStatus.Retired);
+                _intentionManager.ThrowIfForbidden(CharacterIntention.Resurrect, character);
+                entity.Status = CharacterStatus.Active;
+                statusEvent = EventType.StatusCharacterResurrected;
+                break;
+
+            case CharacterStatusTransition.Return:
+                RequireStatus(character, transition, CharacterStatus.Retired);
+                _intentionManager.ThrowIfForbidden(CharacterIntention.Return, character);
+                entity.Status = CharacterStatus.Active;
+                statusEvent = EventType.StatusCharacterReturned;
+                break;
+
+            default:
+                throw new HttpException(HttpStatusCode.BadRequest, "Unknown status transition");
+        }
+
+        // Возврат в игру снимает все три причины ухода: иначе воскрешенный
+        // персонаж остается помеченным мертвым и второе воскрешение невозможно.
+        if (entity.Status == CharacterStatus.Active && character.Status == CharacterStatus.Retired)
+        {
+            entity.IsDead = false;
+            entity.IsPlayerLeft = false;
+            entity.IsPlayerExiled = false;
+        }
+
+        var updated = await _repository.Update(entity);
+        await _producer.SendAsync(
+            new List<EventType> { EventType.ChangedCharacter, statusEvent }, characterId);
+
+        // Игрок, потерявший последнего активного персонажа, остается у игры
+        // читателем, а не выпадает из нее совсем.
+        if (entity.Status != CharacterStatus.Active &&
+            character.Status == CharacterStatus.Active &&
+            !character.IsNpc)
         {
             var hasOtherActive = await _repository.HasOtherActiveCharacters(
-                characterToUpdate.GameId,
-                characterToUpdate.UserId,
-                updateCharacter.CharacterId);
+                character.GameId, character.UserId, characterId);
 
             if (!hasOtherActive)
             {
-                await _subscriptionService.SubscribeAsync(characterToUpdate.GameId);
+                await _subscriptionService.SubscribeAsync(character.GameId);
             }
         }
 
-        return character;
+        return updated;
+    }
+
+    private static void RequireStatus(
+        CharacterToUpdate character, CharacterStatusTransition transition,
+        params CharacterStatus[] allowed)
+    {
+        if (!allowed.Contains(character.Status))
+        {
+            throw new HttpException(HttpStatusCode.BadRequest,
+                $"Transition '{transition}' is not allowed from status '{character.Status}'");
+        }
     }
 
     /// <summary>

@@ -104,10 +104,7 @@ internal class CharacterMappingProfile : Profile
             // without a privacy block demoted it to a player character.
             .ForMember(c => c.IsNpc, s => s.MapFrom(c => c.Privacy != null ? (bool?)c.Privacy.IsNpc : null))
             .ForMember(c => c.AccessPolicy, s => s.MapFrom<AccessPolicyConverter>())
-            .ForMember(c => c.CharacterId, opt => opt.Ignore())
-            .ForMember(c => c.IsDead, opt => opt.Ignore())
-            .ForMember(c => c.IsPlayerLeft, opt => opt.Ignore())
-            .ForMember(c => c.IsPlayerExiled, opt => opt.Ignore());
+            .ForMember(c => c.CharacterId, opt => opt.Ignore());
     }
 
     private class AccessPolicyConverter :

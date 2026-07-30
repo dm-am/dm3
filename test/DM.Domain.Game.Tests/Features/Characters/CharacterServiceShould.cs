@@ -60,10 +60,6 @@ public class CharacterServiceShould : UnitTestBase
         attributeValueFiller.Setup(f => f.Fill(It.IsAny<IEnumerable<Character>>(), It.IsAny<GameDto>(), It.IsAny<Guid>()))
             .Returns(Task.CompletedTask);
 
-        var intentionConverter = Mock<ICharacterIntentionConverter>();
-        intentionConverter.Setup(c => c.Convert(It.IsAny<CharacterStatus>(), It.IsAny<CharacterStatus>(), It.IsAny<bool>(), It.IsAny<bool>()))
-            .Returns((CharacterIntention.Edit, EventType.ChangedCharacter));
-
         _unreadCountersRepository = Mock<IUnreadCountersRepository>();
         _unreadCountersRepository.Setup(r => r.IncrementAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>()))
             .Returns(Task.CompletedTask);
@@ -91,7 +87,6 @@ public class CharacterServiceShould : UnitTestBase
             _intentionManager.Object,
             _repository.Object,
             attributeValueFiller.Object,
-            intentionConverter.Object,
             _unreadCountersRepository.Object,
             subscriptionService.Object,
             _producer.Object,

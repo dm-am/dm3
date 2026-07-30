@@ -24,7 +24,7 @@ import type {
   Tag,
   Character,
   CharacterInput,
-  ApiCharacterStatus,
+  CharacterStatusTransition,
   Room,
   RoomAccess,
   PendingPost,
@@ -515,24 +515,22 @@ class GameApi {
   }
 
   /**
-   * Change a character's lifecycle status (retire / leave / exile / return to
-   * active) without touching its attributes. Attributes and privacy are
-   * intentionally omitted: the backend treats an absent `attributes` as "leave
-   * unchanged" (an empty array would clear them), and a status-only edit must
-   * never round-trip the server-rendered BbCode attribute values. `name` is
-   * resent from the loaded character to satisfy update validation.
+   * Move a character to another place in the game: accept or decline an
+   * application, retire it by death, exile or departure, or bring it back.
+   *
+   * The caller names the transition rather than a target status, because Retired
+   * is reached three ways and each is a different person's right. The form is not
+   * involved: this used to be a PATCH of the whole character, which meant resending
+   * the name to satisfy validation and taking care not to round-trip the
+   * server-rendered attribute values.
    */
-  public updateCharacterStatus(
+  public changeCharacterStatus(
     characterId: string,
-    status: {
-      name: string;
-      status: ApiCharacterStatus;
-      isDead?: boolean;
-      isPlayerLeft?: boolean;
-      isPlayerExiled?: boolean;
-    },
+    transition: CharacterStatusTransition,
   ) {
-    return Api.patch<Character>(`characters/${characterId}`, status);
+    return Api.post<Character>(`characters/${characterId}/status`, {
+      transition,
+    });
   }
 
   /** Soft-delete a character (master or owner). */

@@ -711,6 +711,9 @@
     "editPostByMaster",
     "isNpc"
   ],
+  "DM.Web.API.Features.Game.Characters.CharacterStatusChangeRequest": [
+    "transition"
+  ],
   "DM.Web.API.Features.Game.ChatRooms.ChatRoom": [
     "accesses",
     "chatId",

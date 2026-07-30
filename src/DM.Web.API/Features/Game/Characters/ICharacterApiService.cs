@@ -40,6 +40,14 @@ public interface ICharacterApiService
     Task<Envelope<CharacterDetails>> Update(Guid characterId, CharacterDetails character);
 
     /// <summary>
+    /// Move a character to another place in the game
+    /// </summary>
+    /// <param name="characterId">Character identifier</param>
+    /// <param name="request">Requested transition</param>
+    /// <returns>Updated character</returns>
+    Task<Envelope<CharacterDetails>> ChangeStatus(Guid characterId, CharacterStatusChangeRequest request);
+
+    /// <summary>
     /// Delete existing character
     /// </summary>
     /// <param name="characterId">Character identifier</param>

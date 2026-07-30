@@ -5,7 +5,7 @@
  *
  * The schema-driven CharacterForm (features/edit-character) handles the field
  * edits and persists via gameApi.updateCharacter. Status transitions and delete
- * are separate actions below the form: they call gameApi.updateCharacterStatus /
+ * are separate actions below the form: they call gameApi.changeCharacterStatus /
  * deleteCharacter and never round-trip the character's (server-rendered) BbCode
  * attribute values.
  *
@@ -24,7 +24,7 @@ import {
   gameApi,
   GameStatus,
   type Character,
-  type ApiCharacterStatus,
+  type CharacterStatusTransition,
 } from "@/entities/game";
 import { useAuthStore } from "@/entities/user";
 import { CharacterForm } from "@/features/edit-character";
@@ -166,20 +166,13 @@ interface CharacterAction {
 const busy = ref(false);
 const pending = ref<CharacterAction | null>(null);
 
-async function applyStatus(
-  next: ApiCharacterStatus,
-  flags: {
-    isDead?: boolean;
-    isPlayerLeft?: boolean;
-    isPlayerExiled?: boolean;
-  } = {},
-) {
+async function applyStatus(transition: CharacterStatusTransition) {
   const c = selected.value;
   if (!c) return;
   busy.value = true;
-  const { error } = await gameApi.updateCharacterStatus(
+  const { error } = await gameApi.changeCharacterStatus(
     c.id as unknown as string,
-    { name: c.name, status: next, ...flags },
+    transition,
   );
   busy.value = false;
   if (error) {
@@ -214,14 +207,14 @@ const actions = computed<CharacterAction[]>(() => {
     list.push({
       key: "accept",
       label: "Принять в игру",
-      run: () => applyStatus("Active"),
+      run: () => applyStatus("Accept"),
     });
     list.push({
       key: "decline",
       label: "Отклонить заявку",
       danger: true,
       confirm: "Отклонить заявку этого персонажа?",
-      run: () => applyStatus("Declined"),
+      run: () => applyStatus("Decline"),
     });
   }
 
@@ -232,14 +225,14 @@ const actions = computed<CharacterAction[]>(() => {
         label: "Отметить погибшим",
         danger: true,
         confirm: "Отметить персонажа погибшим и вывести из игры?",
-        run: () => applyStatus("Retired", { isDead: true }),
+        run: () => applyStatus("Kill"),
       });
       list.push({
         key: "exile",
         label: "Изгнать из игры",
         danger: true,
         confirm: "Изгнать персонажа из игры?",
-        run: () => applyStatus("Retired", { isPlayerExiled: true }),
+        run: () => applyStatus("Exile"),
       });
     }
     if (isOwner.value && !c.isNpc) {
@@ -248,7 +241,7 @@ const actions = computed<CharacterAction[]>(() => {
         label: "Покинуть игру",
         danger: true,
         confirm: "Вывести персонажа и покинуть игру?",
-        run: () => applyStatus("Retired", { isPlayerLeft: true }),
+        run: () => applyStatus("Leave"),
       });
     }
   }
@@ -260,13 +253,13 @@ const actions = computed<CharacterAction[]>(() => {
       list.push({
         key: "resurrect",
         label: "Вернуть в игру",
-        run: () => applyStatus("Active"),
+        run: () => applyStatus("Resurrect"),
       });
     } else if (isOwner.value && c.isPlayerLeft) {
       list.push({
         key: "return",
         label: "Вернуться в игру",
-        run: () => applyStatus("Active"),
+        run: () => applyStatus("Return"),
       });
     }
   }

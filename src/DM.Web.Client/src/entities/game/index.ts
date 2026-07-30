@@ -24,6 +24,7 @@ export type {
   CharacterAttributeInput,
   CharacterPrivacySettings,
   ApiCharacterStatus,
+  CharacterStatusTransition,
   PlayerCharacterInfo,
   Room,
   RoomId,

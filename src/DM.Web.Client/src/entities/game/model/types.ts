@@ -151,6 +151,22 @@ export type ApiCharacterStatus =
   | "Retired";
 
 /**
+ * Requested change to a character's place in the game
+ * (see src/DM.Domain.Game/Features/Characters/CharacterStatusTransition.cs).
+ *
+ * The transition is named rather than the target status: Retired is reached by
+ * dying, by being exiled and by leaving, and each is a different person's right.
+ */
+export type CharacterStatusTransition =
+  | "Accept"
+  | "Decline"
+  | "Kill"
+  | "Exile"
+  | "Leave"
+  | "Resurrect"
+  | "Return";
+
+/**
  * Character of the player targeted by the playerUsername search filter
  * (profile games table, "Игрок" mode)
  */

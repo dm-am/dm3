@@ -65,6 +65,19 @@ internal class CharacterApiService : ICharacterApiService
     }
 
     /// <inheritdoc />
+    public async Task<Envelope<CharacterDetails>> ChangeStatus(
+        Guid characterId, CharacterStatusChangeRequest request)
+    {
+        var changed = await _characterService.ChangeStatusAsync(characterId, request.Transition);
+
+        // Same re-fetch as Update, and for the same reason: the response has to go
+        // through the read path so attribute values come back in the shape a GET
+        // returns them.
+        var filledCharacter = await _characterService.GetAsync(changed.Id);
+        return new Envelope<CharacterDetails>(_mapper.Map<CharacterDetails>(filledCharacter));
+    }
+
+    /// <inheritdoc />
     public Task Delete(Guid characterId) => _characterService.DeleteAsync(characterId);
 
     /// <inheritdoc />
