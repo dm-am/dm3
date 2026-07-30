@@ -37,6 +37,17 @@ services:
     environment:
       DM_CdnConfiguration__PublicUrl: ""
 
+      # Этот overlay — единственное место, где перед API появляется nginx, и
+      # единственное, где forwarded-заголовкам можно верить. Без этих переменных
+      # ReverseProxyExtensions выставляет ForwardedHeaders.None, и RemoteIpAddress
+      # каждого запроса — адрес контейнера nginx, один для всех: лимитер в 100
+      # запросов в минуту становится общим бюджетом сайта, политика Auth — пятью
+      # попытками входа в минуту на всех, а журнал входов пишет всем один адрес.
+      # Доверяется подсеть сети dm-full-app из docker-compose.yml, а не loopback:
+      # фреймворковый дефолт здесь не подходит, nginx приходит из своего контейнера.
+      DM_ReverseProxyConfiguration__TrustedNetworks__0: '172.28.0.0/16'
+      DM_ReverseProxyConfiguration__ProxyCount: '1'
+
   dmfront:
     container_name: 'dm-front'
     # Same shape as dmapi: pull the published image by default, build only when

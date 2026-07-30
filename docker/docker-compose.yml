@@ -1,6 +1,13 @@
 networks:
   default:
     name: 'dm-full-app'
+    # Заданная подсеть, а не выданная Docker из пула. Она — то, что API считает
+    # доверенным источником X-Forwarded-For, поэтому значение должно быть
+    # известно заранее и совпадать с DM_ReverseProxyConfiguration__TrustedNetworks
+    # в docker-compose.preview.yml. Проверяется тестом DeploymentConfigurationShould.
+    ipam:
+      config:
+        - subnet: '172.28.0.0/16'
 
 name: dm
 
