@@ -14,6 +14,25 @@ internal static class ExceptionProblemDetailsFactoryExtensions
         HttpException httpException, HttpContext httpContext) =>
         factory.CreateProblemDetails(httpContext, (int)httpException.StatusCode, httpException.Message);
 
+    /// <summary>
+    /// A refusal says only that it refused.
+    /// </summary>
+    /// <remarks>
+    /// The message of this exception names the user, the intention and the target,
+    /// which is what the log needs and none of what the caller should get: telling
+    /// an anonymous caller which intention was evaluated against which entity
+    /// makes the endpoint an oracle for entities they cannot read. The message is
+    /// written to the log at Warning by the middleware before this runs.
+    ///
+    /// Same shape as the unhandled-exception overload below, and for the same
+    /// reason — the only difference is that there the message is a framework one
+    /// and here it is ours.
+    /// </remarks>
+    public static ProblemDetails CreateFrom(this ProblemDetailsFactory factory,
+        IntentionManagerException intentionException, HttpContext httpContext) =>
+        factory.CreateProblemDetails(httpContext, (int)intentionException.StatusCode,
+            "Недостаточно прав для этого действия");
+
     public static ProblemDetails CreateFrom(this ProblemDetailsFactory factory,
         HttpBadRequestException httpBadRequestException, HttpContext httpContext)
     {
