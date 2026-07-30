@@ -453,6 +453,7 @@ internal class PostRepository : IPostRepository
             CreatedUtc = createPost.CreatedUtc,
             GameText = createPost.GameText,
             MetagameText = createPost.MetagameText,
+            PrivateAddresseeSnapshotJson = createPost.PrivateAddresseeSnapshotJson,
             IsRemoved = false
         };
         // ExecuteUpdate runs and commits immediately while Add is deferred to
@@ -513,6 +514,9 @@ internal class PostRepository : IPostRepository
         // Update text always
         post.GameText = updatePost.GameText;
         post.MetagameText = updatePost.MetagameText;
+        // Travels with the text it describes: a snapshot left behind by an edit
+        // points at blocks the post no longer has.
+        post.PrivateAddresseeSnapshotJson = updatePost.PrivateAddresseeSnapshotJson;
 
         // Update character if requested
         if (updatePost.ShouldChangeCharacter)

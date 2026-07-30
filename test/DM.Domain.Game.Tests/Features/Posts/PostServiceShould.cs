@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
@@ -216,6 +217,132 @@ public class PostServiceShould : UnitTestBase
         _diceRoller.Verify(r => r.Roll(It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(),
             It.IsAny<IEnumerable<CreatePostDiceRoll>>()), Times.Never);
         _diceRollRepository.Verify(r => r.CreateAsync(It.IsAny<IEnumerable<DiceRoll>>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The addressee rule is one of five in BBCODE_RENDERING.md, and it reads a
+    /// field the save path used to leave at its default — so the player a line
+    /// was addressed to was the one reader who could not read it.
+    /// </summary>
+    [Fact]
+    public async Task ResolvePrivateAddresseesOfANewPost()
+    {
+        var roomId = Guid.NewGuid();
+        var annaOwner = Guid.NewGuid();
+        var room = RoomWith(roomId, ("Анна", annaOwner), ("Борис", Guid.NewGuid()));
+        var createPost = new CreatePost
+        {
+            RoomId = roomId,
+            GameText = "всем [private=Анна]только Анне[/private]"
+        };
+
+        CreatePostEntity? written = null;
+        _roomRepository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(room);
+        _repository.Setup(r => r.Create(It.IsAny<CreatePostEntity>()))
+            .Callback<CreatePostEntity>(e => written = e)
+            .ReturnsAsync(new Post { Id = Guid.NewGuid(), RoomId = roomId });
+
+        await _service.CreateAsync(createPost);
+
+        written.Should().NotBeNull();
+        PrivateAddresseeSnapshot.Parse(written!.PrivateAddresseeSnapshotJson)
+            .Should().ContainKey("Анна")
+            .WhoseValue.Should().BeEquivalentTo(new[] { annaOwner });
+    }
+
+    [Fact]
+    public async Task ResolveNoPrivateAddresseeForANameOutsideTheRoom()
+    {
+        var roomId = Guid.NewGuid();
+        var room = RoomWith(roomId, ("Анна", Guid.NewGuid()));
+        var createPost = new CreatePost
+        {
+            RoomId = roomId,
+            GameText = "[private=Виктор]секрет[/private]"
+        };
+
+        CreatePostEntity? written = null;
+        _roomRepository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(room);
+        _repository.Setup(r => r.Create(It.IsAny<CreatePostEntity>()))
+            .Callback<CreatePostEntity>(e => written = e)
+            .ReturnsAsync(new Post { Id = Guid.NewGuid(), RoomId = roomId });
+
+        await _service.CreateAsync(createPost);
+
+        written!.PrivateAddresseeSnapshotJson.Should().Be(PrivateAddresseeSnapshot.Empty);
+    }
+
+    /// <summary>
+    /// Addressee-forever survives an edit: a block resolved by the first save
+    /// keeps its owner even after the character loses access to the room, while
+    /// a block the edit introduced resolves against the roster it is saved with.
+    /// </summary>
+    [Fact]
+    public async Task FreezeResolvedAddresseesAcrossAnEdit()
+    {
+        var roomId = Guid.NewGuid();
+        var postId = Guid.NewGuid();
+        var annaOwner = Guid.NewGuid();
+        var borisOwner = Guid.NewGuid();
+        var post = new Post
+        {
+            Id = postId,
+            RoomId = roomId,
+            Author = new GeneralUser { UserId = Guid.NewGuid() },
+            GameText = "[private=Анна]только Анне[/private]",
+            PrivateAddresseeSnapshotJson =
+                PrivateAddresseeSnapshot.Build(
+                    "[private=Анна]только Анне[/private]",
+                    new[] { new PrivateAddressee("Анна", annaOwner) })
+        };
+        // Anna has left the room by the time the post is edited; Boris has not.
+        var room = RoomWith(roomId, ("Борис", borisOwner));
+
+        UpdatePostEntity? written = null;
+        _repository.Setup(r => r.Get(postId, It.IsAny<Guid>())).ReturnsAsync(post);
+        _roomRepository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(room);
+        _repository.Setup(r => r.Update(It.IsAny<UpdatePostEntity>()))
+            .Callback<UpdatePostEntity>(e => written = e)
+            .ReturnsAsync(post);
+
+        await _service.UpdateAsync(new UpdatePost
+        {
+            PostId = postId,
+            GameText = "[private=Анна]только Анне[/private] и [private=Борис]Борису[/private]"
+        });
+
+        var snapshot = PrivateAddresseeSnapshot.Parse(written!.PrivateAddresseeSnapshotJson);
+        snapshot.Should().ContainKey("Анна").WhoseValue.Should().BeEquivalentTo(new[] { annaOwner });
+        snapshot.Should().ContainKey("Борис").WhoseValue.Should().BeEquivalentTo(new[] { borisOwner });
+    }
+
+    /// <summary>A room whose access list holds the given characters.</summary>
+    private static RoomToUpdate RoomWith(Guid roomId, params (string Name, Guid OwnerId)[] characters)
+    {
+        var accesses = new List<RoomAccess>();
+        foreach (var (name, ownerId) in characters)
+        {
+            accesses.Add(new RoomAccess
+            {
+                Id = Guid.NewGuid(),
+                RoomId = roomId,
+                TargetType = RoomAccessTargetType.Character,
+                Character = new Character
+                {
+                    Id = Guid.NewGuid(),
+                    Name = name,
+                    Author = new GeneralUser { UserId = ownerId }
+                }
+            });
+        }
+
+        return new RoomToUpdate
+        {
+            Id = roomId,
+            Pendencies = new List<PostPendency>(),
+            Accesses = accesses,
+            Game = new GameDto()
+        };
     }
 
     [Fact]

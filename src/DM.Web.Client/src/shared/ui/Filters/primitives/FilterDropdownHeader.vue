@@ -20,7 +20,12 @@ const emit = defineEmits<{
 
 <template>
   <div class="dropdown-nav-header">
-    <button type="button" class="nav-back-btn" @click="emit('back')">
+    <button
+      type="button"
+      class="nav-back-btn"
+      aria-label="Назад"
+      @click="emit('back')"
+    >
       <SvgIcon name="chevronLeft" />
     </button>
     <span class="nav-title">{{ title }}</span>

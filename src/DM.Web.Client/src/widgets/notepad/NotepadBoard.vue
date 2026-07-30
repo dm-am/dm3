@@ -158,6 +158,61 @@ function selectEntry(entry: NotepadEntry) {
   selectedEntry.value = entry;
 }
 
+// The entry list is an ARIA listbox (UI_STANDARDS, "Autocomplete/Listbox
+// Standards"). It used to be a bare div with @click — no role, no tabindex,
+// no keydown — while the reader pane and the per-entry edit/delete buttons
+// exist only under `selectedEntry`: a keyboard user could open nothing at
+// all on any of the three notepad pages.
+//
+// Roving tabindex, same mechanics as shared/ui/Tabs: exactly one option sits
+// in the Tab cycle — the selected entry, or the first one while nothing is
+// selected, so the list is never skipped over. Arrow keys, Home and End move
+// the focus and the selection follows it; Enter and Space take the option the
+// keyboard entered the list on, which is how the first entry gets opened from
+// a cold start.
+const entryList = ref<HTMLElement | null>(null);
+
+const tabbableEntryId = computed(
+  () => selectedEntry.value?.id ?? sortedEntries.value[0]?.id ?? null,
+);
+
+function focusEntry(index: number) {
+  const options =
+    entryList.value?.querySelectorAll<HTMLElement>('[role="option"]');
+  options?.[index]?.focus();
+}
+
+function onEntryKeydown(event: KeyboardEvent, index: number) {
+  const list = sortedEntries.value;
+  const last = list.length - 1;
+  let nextIndex: number | null = null;
+
+  switch (event.key) {
+    case "ArrowDown":
+      nextIndex = index === last ? 0 : index + 1;
+      break;
+    case "ArrowUp":
+      nextIndex = index === 0 ? last : index - 1;
+      break;
+    case "Home":
+      nextIndex = 0;
+      break;
+    case "End":
+      nextIndex = last;
+      break;
+    case "Enter":
+    case " ":
+      nextIndex = index;
+      break;
+    default:
+      return;
+  }
+
+  event.preventDefault();
+  selectEntry(list[nextIndex]);
+  focusEntry(nextIndex);
+}
+
 // Access is resolved from a container store, so it can flip from false to true
 // after the container finishes loading — the first fetch would otherwise be
 // skipped and the notepad would stay empty for everyone.
@@ -207,13 +262,22 @@ onMounted(fetchEntries);
 
       <div v-else class="notepad-layout">
         <!-- Entry list -->
-        <div class="entry-list">
+        <div
+          ref="entryList"
+          class="entry-list"
+          role="listbox"
+          :aria-label="title"
+        >
           <div
-            v-for="entry in sortedEntries"
+            v-for="(entry, index) in sortedEntries"
             :key="entry.id"
             class="entry-item"
             :class="{ selected: selectedEntry?.id === entry.id }"
+            role="option"
+            :aria-selected="selectedEntry?.id === entry.id"
+            :tabindex="entry.id === tabbableEntryId ? 0 : -1"
             @click="selectEntry(entry)"
+            @keydown="onEntryKeydown($event, index)"
           >
             <div class="entry-title">{{ entry.title }}</div>
             <div class="entry-date">
@@ -401,6 +465,13 @@ onMounted(fetchEntries);
   &.selected
     background: $selected-overlay
     border-left: 3px solid $accent-green
+
+  // Keyboard focus ring for a listbox option. Inset, like the expandable
+  // table rows in _Tables.sass: the row sits flush inside the list's scroll
+  // container, where an outset ring would be clipped.
+  &:focus-visible
+    outline: 2px solid $border-focus
+    outline-offset: -2px
 
 .entry-title
   font-weight: 500

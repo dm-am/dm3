@@ -144,12 +144,19 @@ public class PermissionFilteringVisitorShould
     ///
     /// Theory rather than two facts so the pair stays visibly symmetrical: if the
     /// parser ever stops accepting one of them, the row says which.
+    ///
+    /// The one-sided rows are the same leak through the spelling nobody checked:
+    /// a leading quote used to be read as "already quoted" and passed through, so
+    /// the parser refused the unterminated attribute and the block was served as
+    /// plain text to every reader of the room.
     /// </remarks>
     [Theory]
     [InlineData("[private=B]secret[/private]")]
     [InlineData("[private=\"B\"]secret[/private]")]
     [InlineData("[PRIVATE=\"B\"]secret[/PRIVATE]")]
     [InlineData("[Private=B]secret[/Private]")]
+    [InlineData("[private=\"B]secret[/private]")]
+    [InlineData("[private=B\"]secret[/private]")]
     public void StripPrivate_ForNonAddressee_WhicheverWayTheAttributeIsWritten(string input)
     {
         var viewer = Viewer(UserRole.RegularUser, OtherUser);

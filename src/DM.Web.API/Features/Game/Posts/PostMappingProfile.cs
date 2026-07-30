@@ -1,7 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Text.Json;
 using AutoMapper;
+using DM.Domain.Core.Content;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Posts;
 using DM.Infrastructure.Core.Parsing;
@@ -39,7 +37,7 @@ internal class PostMappingProfile : Profile
             {
                 // Populate the render-context envelope on both BbText fields
                 // so the JSON converter can apply permission-aware filtering.
-                var addresseeMap = ParsePrivateAddresseeSnapshot(src.PrivateAddresseeSnapshotJson);
+                var addresseeMap = PrivateAddresseeSnapshot.Parse(src.PrivateAddresseeSnapshotJson);
                 var envelope = new RenderContextEnvelope
                 {
                     Surface = BbSurface.GamePost,
@@ -121,41 +119,5 @@ internal class PostMappingProfile : Profile
         CreateMap<Post, UpdatePost>()
             .ForMember(d => d.PostId, opt => opt.Ignore())
             .ForMember(d => d.IsRemoved, opt => opt.Ignore());
-    }
-
-    /// <summary>
-    /// Parse the JSON snapshot produced at post save time. Shape:
-    /// <c>{ "AddresseeAttrValue": ["guid", ...], ... }</c>. Bad JSON or
-    /// an empty object yields an empty dictionary, which fails closed
-    /// (only author / game leads / per-room override see [private]).
-    /// </summary>
-    private static IReadOnlyDictionary<string, IReadOnlySet<Guid>> ParsePrivateAddresseeSnapshot(string? json)
-    {
-        var empty = new Dictionary<string, IReadOnlySet<Guid>>(StringComparer.Ordinal);
-        if (string.IsNullOrWhiteSpace(json) || json == "{}") return empty;
-
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.ValueKind != JsonValueKind.Object) return empty;
-            var result = new Dictionary<string, IReadOnlySet<Guid>>(StringComparer.Ordinal);
-            foreach (var entry in doc.RootElement.EnumerateObject())
-            {
-                if (entry.Value.ValueKind != JsonValueKind.Array) continue;
-                var set = new HashSet<Guid>();
-                foreach (var item in entry.Value.EnumerateArray())
-                {
-                    if (item.ValueKind == JsonValueKind.String &&
-                        Guid.TryParse(item.GetString(), out var id))
-                        set.Add(id);
-                }
-                result[entry.Name] = set;
-            }
-            return result;
-        }
-        catch (JsonException)
-        {
-            return empty;
-        }
     }
 }

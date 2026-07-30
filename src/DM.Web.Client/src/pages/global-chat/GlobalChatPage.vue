@@ -1187,6 +1187,7 @@ async function confirmDelete() {
         <Tooltip text="Подтвердить удаление">
           <button
             class="toolbar-btn toolbar-btn-delete-confirm"
+            aria-label="Подтвердить удаление"
             @click="confirmDelete"
           >
             <SvgIcon name="trash" />

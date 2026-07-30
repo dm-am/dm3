@@ -146,6 +146,7 @@ onUnmounted(() => {
       type="button"
       class="bubble-expand-btn"
       :class="{ active: showDropdown }"
+      :aria-label="`Показать еще ${remainingCount}`"
       aria-haspopup="menu"
       :aria-expanded="showDropdown"
       @click.stop="toggleDropdown"

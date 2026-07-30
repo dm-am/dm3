@@ -46,7 +46,11 @@ const target = computed(() => ({
       ><span class="post-count">{{ rating.postCount }}</span></Tooltip
     >
   </span>
-  <router-link v-else :to="target" class="user-rating user-rating-na"
+  <router-link
+    v-else
+    :to="target"
+    class="user-rating user-rating-na"
+    aria-label="Полученные оценки: пока нет"
     >—</router-link
   >
 </template>

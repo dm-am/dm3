@@ -98,6 +98,7 @@ internal class PostService : IPostService
             metaText = ModBlockSanitizer.SanitizeForAuthor(metaText, identity.User.Role);
 
         var now = _dateTimeProvider.Now;
+        var gameText = createPost.GameText.Trim();
 
         var entity = new CreatePostEntity
         {
@@ -105,8 +106,9 @@ internal class PostService : IPostService
             RoomId = createPost.RoomId,
             AuthorId = identity.User.UserId,
             CharacterId = createPost.CharacterId,
-            GameText = createPost.GameText.Trim(),
+            GameText = gameText,
             MetagameText = metaText,
+            PrivateAddresseeSnapshotJson = ResolvePrivateAddressees(gameText, room, null),
             CreatedUtc = now
         };
 
@@ -219,6 +221,9 @@ internal class PostService : IPostService
             entity.MetagameText = post.MetagameText;
         }
 
+        entity.PrivateAddresseeSnapshotJson = ResolvePrivateAddressees(
+            entity.GameText, room, post.PrivateAddresseeSnapshotJson);
+
         // Check character change permission
         if (updatePost.CharacterId != null)
         {
@@ -237,6 +242,27 @@ internal class PostService : IPostService
 
         return updatedPost!;
     }
+
+    /// <summary>
+    /// Freeze who each [private=...] block of the post is for. Without this the
+    /// snapshot stayed at its default and the addressee rule — one of the five
+    /// in BBCODE_RENDERING.md — never fired for anyone: the player a line was
+    /// written to was the one reader who could not read it.
+    /// </summary>
+    /// <remarks>
+    /// Names resolve against the characters that have access to the room, so a
+    /// block can only ever name someone who already reads it; a snapshot hands
+    /// out no access that room membership did not. Blocks an earlier save
+    /// resolved keep their ids — the rule is addressee-forever, and re-resolving
+    /// them on edit would revoke a player whose character has left since.
+    /// </remarks>
+    private static string ResolvePrivateAddressees(
+        string gameText, RoomToUpdate? room, string? previousSnapshotJson) =>
+        PrivateAddresseeSnapshot.Build(gameText, previousSnapshotJson,
+            room?.Accesses
+                .Where(a => a.Character is not null && a.Character.Author is not null)
+                .Select(a => new PrivateAddressee(a.Character.Name, a.Character.Author.UserId))
+            ?? []);
 
     private async Task EnrichWithDiceRollsAsync(List<Post> posts)
     {

@@ -130,6 +130,51 @@ describe("Paging", () => {
   });
 
   // ============================================================================
+  // ACCESSIBLE NAMES
+  // ============================================================================
+
+  /**
+   * The strip is punctuation and bare numbers: "<<", "...", ">>", "17". A
+   * reader announces those as "ссылка меньше меньше" and "ссылка семнадцать",
+   * so every link carries its own aria-label, and the tooltip beside it only
+   * describes. accessibleNames.spec.ts catches the punctuation links over the
+   * whole tree; a page number is an expression and is decidable only once
+   * rendered, which is what these tests are for.
+   */
+  describe("Accessible Names", () => {
+    /** Window 16-25 of 40, so both jump pairs are on screen. */
+    const wide = () =>
+      mountPaging({ paging: { ...defaultPaging, pages: 40, current: 20 } });
+
+    /** What a reader announces: the label wins over the content. */
+    const announced = (selector: string): string[] =>
+      wide()
+        .findAll(selector)
+        .map((link) => link.attributes("aria-label") ?? link.text());
+
+    it("names every link in the strip", () => {
+      const names = announced("a");
+      expect(names.length).toBe(14);
+      for (const name of names) expect(name).toMatch(/[\p{L}\p{N}]/u);
+    });
+
+    it("names a page link by its page", () => {
+      expect(announced(".page-number")).toEqual(
+        Array.from({ length: 10 }, (_, i) => `Страница ${16 + i}`),
+      );
+    });
+
+    it("names a jump link by where it goes", () => {
+      expect(announced(".nav-button")).toEqual([
+        "Первая страница",
+        "Назад",
+        "Вперед",
+        "Последняя страница",
+      ]);
+    });
+  });
+
+  // ============================================================================
   // PAGE WINDOW CALCULATION
   // ============================================================================
 

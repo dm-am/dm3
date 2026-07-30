@@ -248,4 +248,128 @@ public class BbParserWrapperShould
 
         html.Should().Contain($"<img src=\"{url}\"");
     }
+
+    /// <summary>
+    /// The placeholder standing in for an extracted [img] used to be spelled
+    /// __IMG_0__ — text anyone can type. Restoration replaced every occurrence
+    /// of it, so a post carrying those characters next to any image got a second
+    /// copy of the image pasted at that spot. Both spellings are checked: the
+    /// old one, which is ordinary text now, and the marker itself, which is
+    /// removed from the input instead of being honoured.
+    /// </summary>
+    [Theory]
+    [InlineData("__IMG_0__")]
+    [InlineData("I0")]
+    public void RestoreImage_OnlyWhereItsTagStood(string typedByAuthor)
+    {
+        var tree = _parserProvider.CurrentCommon
+            .Parse($"{typedByAuthor} [img]https://example.com/a.png[/img]");
+
+        var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
+
+        (html.Split("<img ").Length - 1).Should().Be(1);
+    }
+
+    /// <summary>
+    /// The same substitution reached places where plain text can never become an
+    /// element: a quote author line is built from a tag attribute, so a typed
+    /// placeholder there produced an element inside an attribute value.
+    /// </summary>
+    [Fact]
+    public void KeepPlaceholder_WhenAuthorTypedItInsideTagAttribute()
+    {
+        var tree = _parserProvider.CurrentCommon
+            .Parse("[quote=\"__IMG_0__\"]text[/quote][img]https://example.com/a.png[/img]");
+
+        var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
+
+        html.Should().Contain("<div class=\"quote-author\">__IMG_0__</div>");
+    }
+
+    /// <summary>
+    /// A tag attribute is author text and the parser substitutes it into the
+    /// markup as it stands, so it has to be encoded before it gets there. Every
+    /// surface is listed because they share the [quote] template and the defect
+    /// was live on all of them.
+    /// </summary>
+    [Theory]
+    [InlineData(BbSurface.Comment)]
+    [InlineData(BbSurface.GamePost)]
+    [InlineData(BbSurface.GlobalChatMessage)]
+    [InlineData(BbSurface.Profile)]
+    [InlineData(BbSurface.DirectMessage)]
+    public void EncodeQuoteAuthor_OnEverySurface(BbSurface surface)
+    {
+        var tree = _parserProvider.GetForSurface(surface)
+            .Parse("[quote=\"<img src=x onerror=alert(1)>\"]t[/quote]");
+
+        var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
+
+        html.Should().NotContain("<img src=x onerror=alert(1)>");
+        html.Should().Contain("&lt;img src=x onerror=alert(1)&gt;");
+    }
+
+    /// <summary>
+    /// The author-edit variant puts the same value into an attribute of its own,
+    /// where an unencoded quote closes that attribute and everything after it is
+    /// read as attributes of the div — an event handler among them.
+    /// </summary>
+    [Fact]
+    public void EncodePrivateAddressee_OnAuthorEditAttribute()
+    {
+        var tree = _parserProvider.GetForAuthorEdit(BbSurface.GamePost)
+            .Parse("[private=\"a\"onmouseover=alert(1) x=\"\"]s[/private]");
+
+        var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
+
+        html.Should().Contain("data-bb-addressees=\"a&quot;onmouseover=alert(1) x=&quot;\"");
+    }
+
+    /// <summary>
+    /// The other half of that contract: encoding must not reach what the reader
+    /// sees. An ordinary name stays itself, and an ampersand in it arrives as one
+    /// character in the browser rather than as an entity on the page.
+    /// </summary>
+    [Fact]
+    public void KeepQuoteAuthor_WhenItIsAnOrdinaryName()
+    {
+        var tree = _parserProvider.CurrentCommon.Parse("[quote=\"Вася & Петя\"]t[/quote]");
+
+        var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
+
+        html.Should().Contain("<div class=\"quote-author\">Вася &amp; Петя</div>");
+    }
+
+    /// <summary>
+    /// A URI carries no raw whitespace, and one that does is what turns a quoted
+    /// attribute into two: the second row is the payload that becomes an event
+    /// handler on the element the image ends up nested inside.
+    /// </summary>
+    [Theory]
+    [InlineData("https://example.com/a b.png")]
+    [InlineData("https://example.com/a.png onmouseover=alert(1) x=")]
+    [InlineData("https://example.com/a\tb.png")]
+    [InlineData("https://example.com/a\nb.png")]
+    public void DropImage_WhenUrlCarriesWhitespace(string url)
+    {
+        var tree = _parserProvider.CurrentCommon.Parse($"[img]{url}[/img]");
+
+        var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
+
+        html.Should().NotContain("<img");
+    }
+
+    /// <summary>
+    /// And its counterweight: the newlines an editor leaves around a pasted
+    /// address are still trimmed, so the rule above costs no working image.
+    /// </summary>
+    [Fact]
+    public void KeepImage_WhenUrlIsPaddedWithNewlines()
+    {
+        var tree = _parserProvider.CurrentCommon.Parse("[img]\n  https://example.com/a.png\n[/img]");
+
+        var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
+
+        html.Should().Contain("<img src=\"https://example.com/a.png\"");
+    }
 }

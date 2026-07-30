@@ -58,6 +58,11 @@ const hasContentSlot = computed(() => !!slots.content);
 // element already provides its own focus target otherwise, e.g. a <button>).
 // Tab can continue into interactive tooltip content (links, buttons) without
 // closing it — see handleFocusOut below.
+//
+// The tooltip describes its trigger and never names it: `aria-describedby`
+// lands on the wrapper span, and only while the tooltip is on screen. An
+// icon-only button wrapped here carries its own `aria-label` — a description
+// is announced after a name, not instead of one.
 const props = withDefaults(
   defineProps<{
     /** Tooltip text. If undefined/empty, tooltip won't show */

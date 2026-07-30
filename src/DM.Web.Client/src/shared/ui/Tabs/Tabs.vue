@@ -19,10 +19,14 @@
  * separator cannot be transform-animated anyway without breaking the
  * strip's wrap-at-separator behavior).
  *
- * Accessibility: ARIA tablist/tab pattern. Roving `tabindex` keeps only
- * the active tab in the Tab-key cycle. Arrow / Home / End walk the
- * visual order the DOM renders (= orderedTabs), so keyboard navigation
- * always matches what the user sees. Each tab button gets a stable `id`
+ * Accessibility: ARIA tablist/tab pattern with automatic activation.
+ * Roving `tabindex` keeps only the active tab in the Tab-key cycle.
+ * Arrow / Home / End walk the DECLARED order (the `tabs` prop), never the
+ * rendered active-first one: the selection always re-renders at index 0,
+ * so stepping by rendered position ping-pongs between two tabs and never
+ * reaches the third. `aria-posinset` / `aria-setsize` publish that same
+ * declared order, so the position assistive tech announces is the one the
+ * arrows walk. Each tab button gets a stable `id`
  * and `aria-controls`; use the exposed `tabId`/`panelId` helpers (via a
  * template ref) to wire the matching `role="tabpanel"` element on the
  * caller's side: `id="panelId(active)"` + `aria-labelledby="tabId(active)"`.
@@ -31,7 +35,7 @@
  *   <Tabs ref="tabsRef" v-model="active" :tabs="tabs" />
  *   const tabs = [{ value: 'about', label: 'О себе' }, ...]
  */
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { useFlipReorder } from "@/shared/lib/composables/useFlipReorder";
 
 export interface TabItem<V extends string = string> {
@@ -105,31 +109,46 @@ const orderedTabs = computed(() => {
   return [tabs[i], ...tabs.slice(0, i), ...tabs.slice(i + 1)];
 });
 
-const root = ref<HTMLElement | null>(null);
-const buttonRefs = ref<HTMLButtonElement[]>([]);
+// 1-based position in the DECLARED order, published as `aria-posinset`.
+// The rendered order is active-first, so without it assistive tech reads
+// every selected tab as "1 of N" and the announced sequence contradicts
+// the one the arrow keys walk.
+const declaredPosition = computed(
+  () =>
+    new Map<V, number>(
+      visibleTabs.value.map((t, i): [V, number] => [t.value, i + 1]),
+    ),
+);
 
-function setRef(el: Element | object | null, index: number) {
-  if (el instanceof HTMLButtonElement) buttonRefs.value[index] = el;
-}
+const root = ref<HTMLElement | null>(null);
+
+// The roving-tabindex target is by definition the selected tab, wherever
+// the active-first reorder has just put it. One selector serves both the
+// post-selection focus move and useFlipReorder's focus restoration.
+const SELECTED_TAB_SELECTOR = '[role="tab"][tabindex="0"]';
 
 function selectTab(value: V) {
   if (value !== props.modelValue) emit("update:modelValue", value);
 }
 
-// Keyboard navigation traverses the visual order (= DOM order =
-// orderedTabs). ArrowRight from the active tab (always at index 0)
-// moves to the first non-active tab in declared order.
-function onKeydown(event: KeyboardEvent, currentIndex: number) {
-  const tabs = orderedTabs.value;
+// Keyboard navigation steps through the DECLARED order (visibleTabs) and
+// lets the selection carry the focus with it. Stepping through rendered
+// positions instead is a dead end: the selected tab always re-renders at
+// index 0, so ArrowRight/ArrowLeft would bounce between two tabs forever
+// and Home, aimed at rendered index 0, would reselect the current tab.
+function onKeydown(event: KeyboardEvent) {
+  const tabs = visibleTabs.value;
   const last = tabs.length - 1;
-  let nextIndex: number | null = null;
+  if (last < 0) return;
+  const current = tabs.findIndex((t) => t.value === props.modelValue);
+  let nextIndex: number;
 
   switch (event.key) {
     case "ArrowRight":
-      nextIndex = currentIndex === last ? 0 : currentIndex + 1;
+      nextIndex = current >= last ? 0 : current + 1;
       break;
     case "ArrowLeft":
-      nextIndex = currentIndex === 0 ? last : currentIndex - 1;
+      nextIndex = current <= 0 ? last : current - 1;
       break;
     case "Home":
       nextIndex = 0;
@@ -142,11 +161,14 @@ function onKeydown(event: KeyboardEvent, currentIndex: number) {
   }
 
   event.preventDefault();
-  const nextTab = tabs[nextIndex];
-  if (nextTab) {
-    selectTab(nextTab.value);
-    buttonRefs.value[nextIndex]?.focus();
-  }
+  selectTab(tabs[nextIndex].value);
+  // Focus follows the selection: once the strip has re-rendered, the
+  // chosen tab is the only one left in the Tab cycle.
+  nextTick(() => {
+    root.value
+      ?.querySelector<HTMLElement>(SELECTED_TAB_SELECTOR)
+      ?.focus({ preventScroll: true });
+  });
 }
 
 // FLIP animation on reorder + focus restoration (the browser drops focus
@@ -156,7 +178,7 @@ function onKeydown(event: KeyboardEvent, currentIndex: number) {
 useFlipReorder({
   root,
   itemSelector: '[role="tab"]',
-  focusSelector: '[role="tab"][tabindex="0"]',
+  focusSelector: SELECTED_TAB_SELECTOR,
 });
 </script>
 
@@ -178,7 +200,6 @@ useFlipReorder({
         " | "
       }}</span>
       <button
-        :ref="(el) => setRef(el, index)"
         :id="tabId(tab.value)"
         type="button"
         role="tab"
@@ -186,9 +207,11 @@ useFlipReorder({
         :class="{ active: tab.value === modelValue }"
         :aria-selected="tab.value === modelValue"
         :aria-controls="panelId(tab.value)"
+        :aria-posinset="declaredPosition.get(tab.value)"
+        :aria-setsize="visibleTabs.length"
         :tabindex="tab.value === modelValue ? 0 : -1"
         @click="selectTab(tab.value)"
-        @keydown="onKeydown($event, index)"
+        @keydown="onKeydown"
       >
         {{ tab.label }}
       </button>

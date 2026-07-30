@@ -749,6 +749,7 @@ async function submitReview() {
                   active: newReviewSign === 1,
                   positive: newReviewSign === 1,
                 }"
+                aria-label="Положительная оценка"
                 @click="newReviewSign = 1"
               >
                 +
@@ -759,6 +760,7 @@ async function submitReview() {
                   active: newReviewSign === 0,
                   neutral: newReviewSign === 0,
                 }"
+                aria-label="Нейтральная оценка"
                 @click="newReviewSign = 0"
               >
                 =
@@ -770,6 +772,7 @@ async function submitReview() {
                   active: newReviewSign === -1,
                   negative: newReviewSign === -1,
                 }"
+                aria-label="Отрицательная оценка"
                 @click="newReviewSign = -1"
               >
                 −

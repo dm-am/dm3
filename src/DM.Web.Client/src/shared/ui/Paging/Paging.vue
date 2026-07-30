@@ -18,6 +18,7 @@
         <router-link
           :to="getPageLink(1)"
           class="nav-button"
+          aria-label="Первая страница"
           @click="prematureUpdate(1)"
           >&lt;&lt;</router-link
         ></Tooltip
@@ -30,6 +31,7 @@
         <router-link
           :to="getPageLink(leftEllipsisTarget)"
           class="nav-button"
+          aria-label="Назад"
           @click="prematureUpdate(leftEllipsisTarget)"
           >...</router-link
         ></Tooltip
@@ -41,6 +43,7 @@
       <router-link
         :to="getPageLink(page)"
         :class="['page-number', { active: page === localPaging.current }]"
+        :aria-label="`Страница ${page}`"
         :aria-current="page === localPaging.current ? 'page' : undefined"
         @click="prematureUpdate(page)"
         >{{ page }}</router-link
@@ -53,6 +56,7 @@
         <router-link
           :to="getPageLink(rightEllipsisTarget)"
           class="nav-button"
+          aria-label="Вперед"
           @click="prematureUpdate(rightEllipsisTarget)"
           >...</router-link
         ></Tooltip
@@ -64,6 +68,7 @@
       <router-link
         :to="getPageLink(localPaging.pages)"
         class="nav-button"
+        aria-label="Последняя страница"
         @click="prematureUpdate(localPaging.pages)"
         >&gt;&gt;</router-link
       >

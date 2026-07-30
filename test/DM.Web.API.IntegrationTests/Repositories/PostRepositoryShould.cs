@@ -1,13 +1,17 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Posts;
 using DM.Infrastructure.Persistence;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using CreatePostEntity = DM.Domain.Game.Features.Games.CreatePostEntity;
+using UpdatePostEntity = DM.Domain.Game.Features.Games.UpdatePostEntity;
 using DbCharacter = DM.Infrastructure.Persistence.Entities.Game.Characters.Character;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
 using DbGameAssistant = DM.Infrastructure.Persistence.Entities.Game.Links.GameAssistant;
@@ -236,6 +240,65 @@ public class PostRepositoryShould : IntegrationTestBase
         single.Should().NotBeNull();
         single!.GameLeadUserIds.Should().BeEquivalentTo(new[] { context.UserId, assistantId });
     }
+
+    /// <summary>
+    /// The addressee snapshot has to reach its column and come back from it.
+    /// </summary>
+    /// <remarks>
+    /// The column existed, the render path read it and the save path wrote
+    /// nothing into it, so the addressee rule never fired for anybody. Everything
+    /// upstream of this write can be correct and the rule still dead, which is
+    /// exactly how it stayed unnoticed — hence a gate on the write itself, on
+    /// both paths that perform it.
+    /// </remarks>
+    [Fact]
+    public async Task StoreThePrivateAddresseeSnapshotOnBothWritePaths()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var context = await AddGameWithRoomAsync(dbContext);
+        var annaOwner = Guid.NewGuid();
+        var borisOwner = Guid.NewGuid();
+
+        var created = await repository.Create(new CreatePostEntity
+        {
+            PostId = Guid.NewGuid(),
+            RoomId = context.RoomId,
+            AuthorId = context.UserId,
+            GameText = "[private=Анна]секрет[/private]",
+            PrivateAddresseeSnapshotJson = PrivateAddresseeSnapshot.Build(
+                "[private=Анна]секрет[/private]",
+                new[] { new PrivateAddressee("Анна", annaOwner) }),
+            CreatedUtc = DateTimeOffset.UtcNow,
+        });
+
+        PrivateAddresseeSnapshot.Parse(await ReadSnapshotAsync(dbContext, created.Id))
+            .Should().ContainKey("Анна")
+            .WhoseValue.Should().BeEquivalentTo(new[] { annaOwner });
+
+        await repository.Update(new UpdatePostEntity
+        {
+            PostId = created.Id,
+            GameText = "[private=Борис]секрет[/private]",
+            PrivateAddresseeSnapshotJson = PrivateAddresseeSnapshot.Build(
+                "[private=Борис]секрет[/private]",
+                new[] { new PrivateAddressee("Борис", borisOwner) }),
+        });
+
+        var afterEdit = PrivateAddresseeSnapshot.Parse(await ReadSnapshotAsync(dbContext, created.Id));
+        afterEdit.Should().ContainKey("Борис").WhoseValue.Should().BeEquivalentTo(new[] { borisOwner });
+        afterEdit.Should().NotContainKey("Анна");
+    }
+
+    /// <summary>The stored snapshot of a post, read past the change tracker.</summary>
+    private static Task<string> ReadSnapshotAsync(DmDbContext dbContext, Guid postId) =>
+        dbContext.Posts
+            .AsNoTracking()
+            .Where(p => p.PostId == postId)
+            .Select(p => p.PrivateAddresseeSnapshotJson)
+            .SingleAsync();
 
     /// <summary>An assistant on the game, so the lead list has two entries.</summary>
     private static async Task<Guid> AddAssistantAsync(DmDbContext dbContext, Guid gameId)

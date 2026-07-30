@@ -612,6 +612,7 @@ onUnmounted(() => {
         <button
           v-if="hasMoreAfter"
           class="scroll-to-latest"
+          aria-label="К последним сообщениям"
           @click="jumpToLatest"
         >
           <SvgIcon name="chevronDown" />
@@ -670,6 +671,7 @@ onUnmounted(() => {
             <Tooltip text="Подтвердить удаление">
               <button
                 class="toolbar-btn toolbar-btn-delete-confirm"
+                aria-label="Подтвердить удаление"
                 @click="confirmDelete"
               >
                 <SvgIcon name="trash" />
@@ -693,19 +695,27 @@ onUnmounted(() => {
               <button
                 class="toolbar-btn"
                 :class="{ active: isLikedByMe(hoveredMessage) }"
+                :aria-label="
+                  isLikedByMe(hoveredMessage) ? 'Убрать лайк' : 'Нравится'
+                "
                 @click="toggleLike(hoveredMessage)"
               >
                 <SvgIcon name="heartEmpty" />
               </button>
             </Tooltip>
             <Tooltip v-if="canEditMessage(hoveredMessage)" text="Редактировать">
-              <button class="toolbar-btn" @click="startEdit(hoveredMessage)">
+              <button
+                class="toolbar-btn"
+                aria-label="Редактировать"
+                @click="startEdit(hoveredMessage)"
+              >
                 <SvgIcon name="pencil" />
               </button>
             </Tooltip>
             <Tooltip v-if="canDeleteMessage(hoveredMessage)" text="Удалить">
               <button
                 class="toolbar-btn"
+                aria-label="Удалить"
                 @click="requestDelete(hoveredMessage.id)"
               >
                 <SvgIcon name="trash" />

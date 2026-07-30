@@ -10,15 +10,6 @@ export type RegisterCredentials = {
 };
 
 /**
- * Request to complete activation with username selection (Step 2)
- */
-export type ActivationRequest = {
-  token: string;
-  username: string;
-  expectedEmail?: string; // For idempotent retry detection
-};
-
-/**
  * Response from activation token check
  */
 export type PendingInfo = {
