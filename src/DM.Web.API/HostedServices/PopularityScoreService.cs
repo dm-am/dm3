@@ -38,17 +38,29 @@ internal class PopularityScoreService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("[Popularity Score] Service started. Will run every {Interval} hour(s). Initial calculation done by WarmupService.", _updateInterval.TotalHours);
+        _logger.LogInformation(
+            "[Popularity Score] Service started. Calculating now, then every {Interval} hour(s).",
+            _updateInterval.TotalHours);
 
         using var timer = new PeriodicTimer(_updateInterval);
 
-        // Only periodic updates - initial calculation is done by WarmupService
+        // The first calculation happens here rather than being deferred to the
+        // first tick. It used to be deferred on the strength of a comment saying
+        // WarmupService did it at startup — that phase was deleted with the
+        // duplicated copy of WarmupService it lived in, and nothing noticed,
+        // because a stale score looks exactly like a correct one. The result was
+        // that "популярные игры" and "популярные блоги" served whatever the
+        // previous run had persisted for a full hour after every cold start, and
+        // zeroes for that hour on a freshly reset database.
+        //
+        // The service that owns the calculation owns its first run: the coupling
+        // to a warmup phase in another service is what allowed the gap to open.
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                await timer.WaitForNextTickAsync(stoppingToken);
                 await UpdatePopularityScores(stoppingToken);
+                await timer.WaitForNextTickAsync(stoppingToken);
             }
             catch (OperationCanceledException)
             {
