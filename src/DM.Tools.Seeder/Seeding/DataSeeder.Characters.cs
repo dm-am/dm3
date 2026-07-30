@@ -182,7 +182,10 @@ internal sealed partial class DataSeeder
 
     private void SeedCharactersAndPostsForGames(List<DbGame> games, List<DbUser> users, ComprehensiveSeedResult result)
     {
-        var now = DateTimeOffset.UtcNow;
+        // The one place that read the clock again instead of the run's epoch, so
+        // its timestamps drifted from every other aggregate by the runtime of the
+        // seed and could not be pinned at all.
+        var now = _now;
         var characterNames = new[] { "Арагорн Следопыт", "Эльвира Чародейка", "Горим Железный Кулак", "Лиара Тенебраум", "Кассандра Видящая", "Торин Дубощит" };
         var races = new[] { "Человек", "Эльф", "Дварф", "Полуэльф", "Тифлинг", "Гном" };
         var classes = new[] { "Следопыт", "Маг", "Воин", "Плут", "Жрец", "Паладин" };
@@ -224,7 +227,7 @@ internal sealed partial class DataSeeder
             // Take(2) player characters + the single NPC below = 3 active characters per
             // game/room. Keeps demo tooltips (game.activeCharacters, room participants)
             // concise — earlier Take(3) + NPC = 4 characters felt overloaded in UI.
-            var playersForGame = users.Where(u => u.UserId != game.MasterId && u.Username != "OnlyReader").OrderBy(_ => Random.Shared.Next()).Take(2).ToList();
+            var playersForGame = users.Where(u => u.UserId != game.MasterId && u.Username != "OnlyReader").OrderBy(_ => _random.Next()).Take(2).ToList();
             var createdCharacters = new List<Character>();
 
             // Create characters
@@ -240,7 +243,7 @@ internal sealed partial class DataSeeder
                     IsDead = false,
                     IsPlayerLeft = false,
                     IsPlayerExiled = false,
-                    CreatedUtc = game.CreatedUtc.AddDays(Random.Shared.Next(1, 7)),
+                    CreatedUtc = game.CreatedUtc.AddDays(_random.Next(1, 7)),
                     Name = characterNames[ci % characterNames.Length],
                     IsNpc = false,
                     AccessPolicy = CharacterAccessPolicy.NoAccess,
@@ -294,7 +297,7 @@ internal sealed partial class DataSeeder
                 for (var pi = 0; pi < postsToCreate; pi++)
                 {
                     var character = activeChars[pi % activeChars.Count];
-                    var postOffsetHours = Math.Min(pi * hoursPerPost + Random.Shared.Next(0, hoursPerPost), Math.Max(1, totalHoursAvailable - 1));
+                    var postOffsetHours = Math.Min(pi * hoursPerPost + _random.Next(0, hoursPerPost), Math.Max(1, totalHoursAvailable - 1));
                     var post = new Post
                     {
                         PostId = _guidFactory.Create(),

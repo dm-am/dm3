@@ -119,54 +119,54 @@ internal sealed partial class DataSeeder
             if (template.Status == ModuleStatus.Draft)
             {
                 // Drafts are recent - work in progress
-                blogCreatedUtc = now.AddDays(-Random.Shared.Next(1, 14));
+                blogCreatedUtc = now.AddDays(-_random.Next(1, 14));
                 blogActivatedUtc = null;
             }
             else if (template.Status == ModuleStatus.Closed)
             {
                 // Closed blogs: were active for a while, then closed 30-180 days ago
-                var daysAgoCreated = Random.Shared.Next(180, 540); // Created 6-18 months ago
+                var daysAgoCreated = _random.Next(180, 540); // Created 6-18 months ago
                 blogCreatedUtc = now.AddDays(-daysAgoCreated);
-                var activationDelay = Random.Shared.Next(1, 7);
+                var activationDelay = _random.Next(1, 7);
                 blogActivatedUtc = blogCreatedUtc.AddDays(activationDelay);
                 // Blog was active for 60-180 days before closing
-                var activeDuration = Random.Shared.Next(60, 180);
+                var activeDuration = _random.Next(60, 180);
                 blogClosedUtc = blogActivatedUtc.Value.AddDays(activeDuration);
                 // Make sure closedUtc is in the past (at least 30 days ago)
                 if (blogClosedUtc > now.AddDays(-30))
                 {
-                    blogClosedUtc = now.AddDays(-Random.Shared.Next(30, 90));
+                    blogClosedUtc = now.AddDays(-_random.Next(30, 90));
                 }
             }
             else if (template.IsNew)
             {
                 // "New" blogs: created recently, activated within last week
-                var daysAgoCreated = Random.Shared.Next(7, 14);
+                var daysAgoCreated = _random.Next(7, 14);
                 blogCreatedUtc = now.AddDays(-daysAgoCreated);
-                blogActivatedUtc = now.AddDays(-Random.Shared.Next(1, 5));
+                blogActivatedUtc = now.AddDays(-_random.Next(1, 5));
             }
             else if (template.Readers >= 8)
             {
                 // Popular established blogs: older, been around a while
-                var daysAgoCreated = Random.Shared.Next(180, 365);
+                var daysAgoCreated = _random.Next(180, 365);
                 blogCreatedUtc = now.AddDays(-daysAgoCreated);
-                var activationDelay = Random.Shared.Next(1, 7);
+                var activationDelay = _random.Next(1, 7);
                 blogActivatedUtc = blogCreatedUtc.AddDays(activationDelay);
             }
             else if (template.Readers >= 4)
             {
                 // Medium popularity: medium age
-                var daysAgoCreated = Random.Shared.Next(60, 180);
+                var daysAgoCreated = _random.Next(60, 180);
                 blogCreatedUtc = now.AddDays(-daysAgoCreated);
-                var activationDelay = Random.Shared.Next(1, 5);
+                var activationDelay = _random.Next(1, 5);
                 blogActivatedUtc = blogCreatedUtc.AddDays(activationDelay);
             }
             else
             {
                 // Lower popularity: newer
-                var daysAgoCreated = Random.Shared.Next(30, 90);
+                var daysAgoCreated = _random.Next(30, 90);
                 blogCreatedUtc = now.AddDays(-daysAgoCreated);
-                var activationDelay = Random.Shared.Next(1, 3);
+                var activationDelay = _random.Next(1, 3);
                 blogActivatedUtc = blogCreatedUtc.AddDays(activationDelay);
             }
 
@@ -246,7 +246,7 @@ internal sealed partial class DataSeeder
             {
                 // Spread publications evenly across the blog's lifetime
                 var pubOffsetDays = blogAgeInDays > 3
-                    ? (pubIndex * blogAgeInDays / publicationTemplates.Length) + Random.Shared.Next(1, Math.Max(2, blogAgeInDays / publicationTemplates.Length))
+                    ? (pubIndex * blogAgeInDays / publicationTemplates.Length) + _random.Next(1, Math.Max(2, blogAgeInDays / publicationTemplates.Length))
                     : pubIndex + 1;
                 pubOffsetDays = Math.Min(pubOffsetDays, Math.Max(1, blogAgeInDays - 1));
                 var pubCreatedUtc = (blogActivatedUtc ?? blog.CreatedUtc).AddDays(pubOffsetDays);
@@ -266,7 +266,7 @@ internal sealed partial class DataSeeder
                     IsPublished = true,
                     PublishedUtc = pubCreatedUtc,
                     CommentsEnabled = true,
-                    ViewCount = Random.Shared.Next(10, 500),
+                    ViewCount = _random.Next(10, 500),
                     CommentCount = 0,
                     IsRemoved = false
                 };
@@ -285,7 +285,7 @@ internal sealed partial class DataSeeder
                     "Жду еще статей!",
                 };
 
-                var pubCommentsToCreate = Random.Shared.Next(2, 5);
+                var pubCommentsToCreate = _random.Next(2, 5);
                 // For closed blogs, comments should be before closing; for active - before now
                 var commentsEndDate = blogClosedUtc ?? now;
                 var hoursAvailable = (int)(commentsEndDate - publication.PublishedUtc!.Value).TotalHours;
@@ -293,18 +293,18 @@ internal sealed partial class DataSeeder
                 {
                     // Spread comments evenly within available time
                     var commentOffsetHours = hoursAvailable > pubCommentsToCreate
-                        ? (pc * hoursAvailable / pubCommentsToCreate) + Random.Shared.Next(1, Math.Max(2, hoursAvailable / pubCommentsToCreate))
+                        ? (pc * hoursAvailable / pubCommentsToCreate) + _random.Next(1, Math.Max(2, hoursAvailable / pubCommentsToCreate))
                         : pc + 1;
                     commentOffsetHours = Math.Min(commentOffsetHours, Math.Max(1, hoursAvailable - 1));
 
-                    var commentAuthor = users[Random.Shared.Next(users.Count)];
+                    var commentAuthor = users[_random.Next(users.Count)];
                     var pubComment = new DbComment
                     {
                         CommentId = _guidFactory.Create(),
                         EntityId = publication.PublicationId,
                         AuthorId = commentAuthor.UserId,
                         CreatedUtc = publication.PublishedUtc.Value.AddHours(commentOffsetHours),
-                        Text = pubCommentTexts[Random.Shared.Next(pubCommentTexts.Length)],
+                        Text = pubCommentTexts[_random.Next(pubCommentTexts.Length)],
                         IsRemoved = false
                     };
 
@@ -320,7 +320,7 @@ internal sealed partial class DataSeeder
             {
                 var availableForAssistant = users
                     .Where(u => u.UserId != owner.UserId)
-                    .OrderBy(_ => Random.Shared.Next())
+                    .OrderBy(_ => _random.Next())
                     .Take(template.AssistantCount)
                     .ToList();
 
@@ -331,14 +331,14 @@ internal sealed partial class DataSeeder
                         BlogAssistantId = _guidFactory.Create(),
                         BlogId = blog.BlogId,
                         UserId = availableForAssistant[ai].UserId,
-                        JoinedUtc = blog.CreatedUtc.AddDays(Random.Shared.Next(3, 30))
+                        JoinedUtc = blog.CreatedUtc.AddDays(_random.Next(3, 30))
                     });
                 }
             }
 
             // Add readers based on template
             var readerCount = Math.Min(template.Readers, users.Count - 2); // Don't exceed available users
-            var readers = users.Where(u => u.UserId != owner.UserId).OrderBy(_ => Random.Shared.Next()).Take(readerCount).ToList();
+            var readers = users.Where(u => u.UserId != owner.UserId).OrderBy(_ => _random.Next()).Take(readerCount).ToList();
             foreach (var reader in readers)
             {
                 _dbContext.Set<Subscription>().Add(new Subscription
@@ -348,7 +348,7 @@ internal sealed partial class DataSeeder
                     TargetType = SubscriptionTargetType.Blog,
                     TargetId = blog.BlogId,
                     Settings = SubscriptionSettings.None,
-                    CreatedUtc = blog.CreatedUtc.AddDays(Random.Shared.Next(1, 14))
+                    CreatedUtc = blog.CreatedUtc.AddDays(_random.Next(1, 14))
                 });
             }
 

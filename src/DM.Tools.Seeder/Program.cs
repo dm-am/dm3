@@ -105,6 +105,11 @@ internal static class Program
         Console.WriteLine("  users    base development accounts");
         Console.WriteLine("  content  forums, games, blogs, chats, reviews, polls");
         Console.WriteLine("  all      users, then content (default)");
+        Console.WriteLine();
+        Console.WriteLine("DM_SeedEpochUtc  ISO-8601 instant every seeded date is offset from, e.g.");
+        Console.WriteLine("                 2026-06-15T12:00:00Z. Unset: the real clock, which is what");
+        Console.WriteLine("                 keeps a development site looking alive. Pin it when the same");
+        Console.WriteLine("                 dates have to come out of two different runs.");
     }
 
     private static void PrintUsers(SeedResult result)

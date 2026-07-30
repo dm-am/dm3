@@ -138,7 +138,7 @@ internal sealed partial class DataSeeder
                     GameReviewId = _guidFactory.Create(),
                     AuthorId = reviewer.UserId,
                     GameId = game.GameId,
-                    CreatedUtc = now.AddDays(-Random.Shared.Next(1, 30)),
+                    CreatedUtc = now.AddDays(-_random.Next(1, 30)),
                     Text = "Отличная игра! Мастер ведет интересно, сюжет захватывающий.",
                     IsRemoved = false
                 });
@@ -158,7 +158,7 @@ internal sealed partial class DataSeeder
                 UserEndorsementId = _guidFactory.Create(),
                 AuthorId = endorser.UserId,
                 TargetUserId = target.UserId,
-                CreatedUtc = now.AddDays(-Random.Shared.Next(1, 60)),
+                CreatedUtc = now.AddDays(-_random.Next(1, 60)),
                 Text = "Отличный игрок! Всегда вовремя пишет посты, интересные персонажи.",
                 IsRemoved = false
             });
@@ -328,7 +328,7 @@ internal sealed partial class DataSeeder
                 {
                     var reviewer = reviewersForBest[i];
                     var (sign, text) = reviewData[i % reviewData.Length];
-                    var reviewDate = now.AddHours(-Random.Shared.Next(2, 13));
+                    var reviewDate = now.AddHours(-_random.Next(2, 13));
                     _dbContext.PostReviews.Add(new DM.Infrastructure.Persistence.Entities.Game.PostReview
                     {
                         PostReviewId = _guidFactory.Create(),
@@ -461,7 +461,7 @@ internal sealed partial class DataSeeder
                         PostId = longestUserPost.PostId,
                         PostAuthorId = longestUser.UserId,
                         GameId = longestGameId,
-                        CreatedUtc = now.AddHours(-Random.Shared.Next(1, 5)),
+                        CreatedUtc = now.AddHours(-_random.Next(1, 5)),
                         Text = text,
                         SignValue = (short)sign,
                         IsRemoved = false
@@ -524,20 +524,20 @@ internal sealed partial class DataSeeder
             if (gameId == Guid.Empty) continue;
 
             // 2-4 reviews per post
-            var reviewCount = Random.Shared.Next(2, 5);
+            var reviewCount = _random.Next(2, 5);
             var availableReviewers = experiencedUsers.Where(u => u.UserId != post.AuthorId).ToList();
 
             for (var r = 0; r < reviewCount && r < availableReviewers.Count; r++)
             {
                 var reviewer = availableReviewers[r];
-                var sign = (ReviewSign)Random.Shared.Next(-1, 2);
+                var sign = (ReviewSign)_random.Next(-1, 2);
                 // Within current week: 0-6 days ago
-                var reviewDate = now.AddDays(-Random.Shared.Next(0, 6)).AddHours(-Random.Shared.Next(1, 24));
+                var reviewDate = now.AddDays(-_random.Next(0, 6)).AddHours(-_random.Next(1, 24));
                 var text = sign switch
                 {
-                    ReviewSign.Positive => positiveTexts[Random.Shared.Next(positiveTexts.Length)],
-                    ReviewSign.Negative => negativeTexts[Random.Shared.Next(negativeTexts.Length)],
-                    _ => neutralTexts[Random.Shared.Next(neutralTexts.Length)]
+                    ReviewSign.Positive => positiveTexts[_random.Next(positiveTexts.Length)],
+                    ReviewSign.Negative => negativeTexts[_random.Next(negativeTexts.Length)],
+                    _ => neutralTexts[_random.Next(neutralTexts.Length)]
                 };
 
                 _dbContext.PostReviews.Add(new DM.Infrastructure.Persistence.Entities.Game.PostReview
@@ -567,14 +567,14 @@ internal sealed partial class DataSeeder
             var reviewer = experiencedUsers.FirstOrDefault(u => u.UserId != post.AuthorId);
             if (reviewer != null)
             {
-                var sign = (ReviewSign)Random.Shared.Next(-1, 2);
+                var sign = (ReviewSign)_random.Next(-1, 2);
                 // Older: 2-4 weeks ago
-                var reviewDate = now.AddDays(-Random.Shared.Next(14, 28)).AddHours(-Random.Shared.Next(1, 24));
+                var reviewDate = now.AddDays(-_random.Next(14, 28)).AddHours(-_random.Next(1, 24));
                 var text = sign switch
                 {
-                    ReviewSign.Positive => positiveTexts[Random.Shared.Next(positiveTexts.Length)],
-                    ReviewSign.Negative => negativeTexts[Random.Shared.Next(negativeTexts.Length)],
-                    _ => neutralTexts[Random.Shared.Next(neutralTexts.Length)]
+                    ReviewSign.Positive => positiveTexts[_random.Next(positiveTexts.Length)],
+                    ReviewSign.Negative => negativeTexts[_random.Next(negativeTexts.Length)],
+                    _ => neutralTexts[_random.Next(neutralTexts.Length)]
                 };
 
                 _dbContext.PostReviews.Add(new DM.Infrastructure.Persistence.Entities.Game.PostReview
@@ -713,7 +713,7 @@ internal sealed partial class DataSeeder
                             PostId = chuckPost.PostId,
                             PostAuthorId = chuckPlayer.UserId,
                             GameId = chuckGameId,
-                            CreatedUtc = now.AddHours(-Random.Shared.Next(2, 12)),
+                            CreatedUtc = now.AddHours(-_random.Next(2, 12)),
                             Text = chuckReviewTexts[i],
                             SignValue = (short)ReviewSign.Positive,
                             IsRemoved = false

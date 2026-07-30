@@ -113,7 +113,7 @@ internal sealed partial class DataSeeder
                     cap = reviewWindowEnd;
                 }
                 var minutes = (int)Math.Max(0, (cap - winStart).TotalMinutes);
-                return winStart.AddMinutes(minutes == 0 ? 0 : Random.Shared.Next(0, minutes));
+                return winStart.AddMinutes(minutes == 0 ? 0 : _random.Next(0, minutes));
             }
 
             // ── Rating boards: TopPlayersByRating + TopGamesByRating ────────
@@ -186,7 +186,7 @@ internal sealed partial class DataSeeder
                     var reviewers = users
                         .Where(u => u.UserId != post.AuthorId
                             && !existingPairs.Contains((post.PostId, u.UserId)))
-                        .OrderBy(_ => Random.Shared.Next())
+                        .OrderBy(_ => _random.Next())
                         .Take(score)
                         .ToList();
                     foreach (var reviewer in reviewers)
@@ -242,7 +242,7 @@ internal sealed partial class DataSeeder
                     + "планами и парой историй с недавних игр. Впереди много интересного!";
                 var windowCap = winEnd < now ? winEnd : now;
                 var windowMinutes = (int)Math.Max(1, (windowCap - winStart).TotalMinutes);
-                var createdUtc = winStart.AddMinutes(Random.Shared.Next(0, windowMinutes));
+                var createdUtc = winStart.AddMinutes(_random.Next(0, windowMinutes));
                 var publication = new Publication
                 {
                     PublicationId = _guidFactory.Create(),
@@ -257,7 +257,7 @@ internal sealed partial class DataSeeder
                     IsPublished = true,
                     PublishedUtc = createdUtc,
                     CommentsEnabled = true,
-                    ViewCount = Random.Shared.Next(10, 500),
+                    ViewCount = _random.Next(10, 500),
                     CommentCount = 0,
                     IsRemoved = false
                 };
@@ -268,8 +268,8 @@ internal sealed partial class DataSeeder
                 // At least one like so TopBlogsByRating counts this blog too.
                 var likers = users
                     .Where(u => u.UserId != blog.AuthorId)
-                    .OrderBy(_ => Random.Shared.Next())
-                    .Take(Random.Shared.Next(1, 6))
+                    .OrderBy(_ => _random.Next())
+                    .Take(_random.Next(1, 6))
                     .ToList();
                 foreach (var liker in likers)
                 {
@@ -386,13 +386,13 @@ internal sealed partial class DataSeeder
         void AddLikesForEntity(Guid entityId, LikeEntityType entityType, Guid? authorId)
         {
             // Each entity gets 0-5 likes from random users (excluding author)
-            var likeCount = Random.Shared.Next(0, 6);
+            var likeCount = _random.Next(0, 6);
             var eligibleUsers = authorId.HasValue
                 ? users.Where(u => u.UserId != authorId.Value).ToList()
                 : users;
 
             var likers = eligibleUsers
-                .OrderBy(_ => Random.Shared.Next())
+                .OrderBy(_ => _random.Next())
                 .Take(likeCount)
                 .ToList();
 

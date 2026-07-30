@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -29,6 +30,7 @@ using DM.Infrastructure.Persistence.Entities.Personal.Notepads;
 using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.Entities.Community;
 using DM.Infrastructure.Persistence.Entities.Subscriptions;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
@@ -55,16 +57,57 @@ namespace DM.Tools.Seeder.Seeding;
 /// </summary>
 internal sealed partial class DataSeeder
 {
+    /// <summary>
+    /// Configuration key holding the instant the whole seed is laid out around.
+    /// Environment form: <c>DM_SeedEpochUtc</c>.
+    /// </summary>
+    private const string SeedEpochKey = "SeedEpochUtc";
+
+    /// <summary>
+    /// Seed of <see cref="_random"/>. Arbitrary value, fixed forever: what
+    /// matters is that it never changes, not what it is.
+    /// </summary>
+    private const int RandomSeed = 20260730;
+
     private readonly DmDbContext _dbContext;
     private readonly DmMongoClient _mongoClient;
     private readonly ISecurityManager _securityManager;
     private readonly IGuidFactory _guidFactory;
-    private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IPollRepository _pollRepository;
     private readonly IPublicIdService _publicIdService;
     private readonly IImageProcessingService _imageProcessing;
     private readonly Amazon.S3.IAmazonS3 _s3Client;
     private readonly CdnConfiguration _cdnConfig;
+
+    /// <summary>
+    /// The only source of randomness in the seed, and a seeded one.
+    /// </summary>
+    /// <remarks>
+    /// Every draw here reaches something a reader sees: which accounts play
+    /// which game, who wrote a comment and what it says, view and like counts,
+    /// review verdicts, list order. On <c>Random.Shared</c> that made the
+    /// fixture different on every run, so an assertion about a count or a name
+    /// held or failed by luck and nothing could be measured twice. Seeded, the
+    /// same command produces the same fixture on any machine.
+    ///
+    /// Not thread-safe, and does not need to be: the seed runs one aggregate
+    /// after another on a single scope, because a shared <c>DmDbContext</c>
+    /// cannot be used concurrently either.
+    /// </remarks>
+    private readonly Random _random;
+
+    /// <summary>
+    /// The instant every seeded timestamp is offset from.
+    /// </summary>
+    /// <remarks>
+    /// Resolved once so that a single run is internally consistent, and
+    /// overridable through <see cref="SeedEpochKey"/> so that a run can be
+    /// pinned to a chosen moment. It defaults to the real clock on purpose: a
+    /// hardcoded past epoch would empty every surface built around recency -
+    /// the current-month leaderboards, "activated N days ago", the new-games
+    /// block. Pinning is what a pixel baseline needs, and only it.
+    /// </remarks>
+    private readonly DateTimeOffset _now;
 
     /// <summary>
     /// Creates a new instance of <see cref="DataSeeder"/>
@@ -79,18 +122,43 @@ internal sealed partial class DataSeeder
         IPublicIdService publicIdService,
         IImageProcessingService imageProcessing,
         Amazon.S3.IAmazonS3 s3Client,
-        IOptions<CdnConfiguration> cdnOptions)
+        IOptions<CdnConfiguration> cdnOptions,
+        IConfiguration configuration)
     {
         _dbContext = dbContext;
         _mongoClient = mongoClient;
         _securityManager = securityManager;
         _guidFactory = guidFactory;
-        _dateTimeProvider = dateTimeProvider;
         _pollRepository = pollRepository;
         _publicIdService = publicIdService;
         _imageProcessing = imageProcessing;
         _s3Client = s3Client;
         _cdnConfig = cdnOptions.Value;
+        _random = new Random(RandomSeed);
+        _now = ResolveEpoch(configuration, dateTimeProvider);
+    }
+
+    /// <summary>
+    /// Reads the pinned epoch, falling back to the clock.
+    /// </summary>
+    /// <exception cref="FormatException">
+    /// The key was set to something unparseable. Thrown rather than ignored: a
+    /// typo that silently reverted to the clock would look like a determinism
+    /// bug in whatever consumed the seed.
+    /// </exception>
+    private static DateTimeOffset ResolveEpoch(
+        IConfiguration configuration, IDateTimeProvider dateTimeProvider)
+    {
+        var configured = configuration[SeedEpochKey];
+        if (string.IsNullOrWhiteSpace(configured))
+        {
+            return dateTimeProvider.Now;
+        }
+
+        return DateTimeOffset.Parse(
+            configured,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
     }
 
     /// <summary>
@@ -102,13 +170,22 @@ internal sealed partial class DataSeeder
     public async Task<ComprehensiveSeedResult> SeedComprehensiveData()
     {
         var result = new ComprehensiveSeedResult();
-        var now = _dateTimeProvider.Now;
+        var now = _now;
 
-        // Get all users for seeding
-        var users = await _dbContext.Users
-            .Where(u => !u.IsRemoved && u.Role != UserRole.System)
+        // This list decides who masters which game, who writes which comment and
+        // who plays where, so its order has to be an order. Role alone leaves
+        // ties and Postgres is free to break them differently on every run.
+        //
+        // Sorted here rather than in SQL, over a handful of accounts: ORDER BY
+        // would hand the tiebreak to the database collation, and then the same
+        // seed would lay out differently on a cluster initialised with a
+        // different locale. Ordinal has no such opinion.
+        var users = (await _dbContext.Users
+                .Where(u => !u.IsRemoved && u.Role != UserRole.System)
+                .ToListAsync())
             .OrderByDescending(u => u.Role)
-            .ToListAsync();
+            .ThenBy(u => u.Username, StringComparer.Ordinal)
+            .ToList();
 
         if (users.Count < 5)
         {

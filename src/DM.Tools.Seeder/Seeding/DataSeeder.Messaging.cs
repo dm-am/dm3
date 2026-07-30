@@ -95,13 +95,13 @@ internal sealed partial class DataSeeder
         Message? lastMessage = null;
         foreach (var text in messageTemplates)
         {
-            var author = users[Random.Shared.Next(users.Count)];
+            var author = users[_random.Next(users.Count)];
             var message = new Message
             {
                 MessageId = _guidFactory.Create(),
                 UserId = author.UserId,
                 ChatId = globalChatId,
-                CreatedUtc = now.AddHours(-Random.Shared.Next(1, 168)),
+                CreatedUtc = now.AddHours(-_random.Next(1, 168)),
                 Text = text,
                 IsRemoved = false
             };

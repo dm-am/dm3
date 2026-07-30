@@ -221,15 +221,15 @@ internal sealed partial class DataSeeder
             {
                 var template = topics[i];
                 var author = canPost
-                    ? users[Random.Shared.Next(users.Count)]
+                    ? users[_random.Next(users.Count)]
                     : users.First(u => u.Role >= UserRole.Mentor);
 
                 var topicId = _guidFactory.Create();
 
                 // News topics: first 2 are recent (within last week), rest are older
                 var topicAge = board.Title == "Новости проекта" && i < 2
-                    ? Random.Shared.Next(1, 7) // 1-6 days ago for recent news
-                    : Random.Shared.Next(7, 30); // 7-29 days ago for older content
+                    ? _random.Next(1, 7) // 1-6 days ago for recent news
+                    : _random.Next(7, 30); // 7-29 days ago for older content
 
                 var topic = new Topic
                 {
@@ -250,7 +250,7 @@ internal sealed partial class DataSeeder
 
                 // Add comments (track them to update LastCommentId later)
                 // FAQ topic gets 50 comments for pagination testing
-                var commentsToCreate = template.Title == "FAQ для новых пользователей" ? 50 : Random.Shared.Next(3, 8);
+                var commentsToCreate = template.Title == "FAQ для новых пользователей" ? 50 : _random.Next(3, 8);
                 DbComment? lastComment = null;
 
                 // Extended comment templates for FAQ topic
@@ -310,17 +310,17 @@ internal sealed partial class DataSeeder
 
                 for (var j = 0; j < commentsToCreate; j++)
                 {
-                    var commentAuthor = users[Random.Shared.Next(users.Count)];
+                    var commentAuthor = users[_random.Next(users.Count)];
                     var commentText = template.Title == "FAQ для новых пользователей"
                         ? faqCommentTemplates[j % faqCommentTemplates.Length]
-                        : commentTemplates[Random.Shared.Next(commentTemplates.Length)];
+                        : commentTemplates[_random.Next(commentTemplates.Length)];
 
                     var comment = new DbComment
                     {
                         CommentId = _guidFactory.Create(),
                         EntityId = topic.TopicId,
                         AuthorId = commentAuthor.UserId,
-                        CreatedUtc = topic.CreatedUtc.AddHours(j * 12 + Random.Shared.Next(1, 12)),
+                        CreatedUtc = topic.CreatedUtc.AddHours(j * 12 + _random.Next(1, 12)),
                         Text = commentText,
                         IsRemoved = false
                     };

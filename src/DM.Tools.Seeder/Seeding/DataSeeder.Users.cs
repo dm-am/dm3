@@ -111,7 +111,7 @@ internal sealed partial class DataSeeder
             .Select(u => u.Username.ToLower())
             .ToListAsync();
 
-        var now = _dateTimeProvider.Now;
+        var now = _now;
 
         foreach (var account in testAccounts)
         {
@@ -147,14 +147,14 @@ internal sealed partial class DataSeeder
             // Vary registration dates for realistic testing (staff registered earlier, newbies later)
             var registeredUtc = account.Login switch
             {
-                "SolohinLex" => now.AddYears(-11).AddDays(-Random.Shared.Next(0, 180)), // 11+ years (enough for platinum of "Выслуга лет", T4 = 3650 days)
-                "TestSeniorMod" => now.AddYears(-4).AddDays(-Random.Shared.Next(0, 180)), // 4+ years ago
-                "TestModerator" => now.AddYears(-3).AddDays(-Random.Shared.Next(0, 180)), // 3+ years ago
-                "TestMentor" => now.AddYears(-2).AddDays(-Random.Shared.Next(0, 180)), // 2+ years ago
-                "TestHonorary" => now.AddYears(-6).AddDays(-Random.Shared.Next(0, 180)), // 6+ years ago (veteran)
-                "Experienced" => now.AddYears(-2).AddDays(-Random.Shared.Next(0, 365)), // 2+ years ago
-                "OnlyReader" => now.AddMonths(-2).AddDays(-Random.Shared.Next(0, 30)), // Recent
-                _ => now.AddMonths(-Random.Shared.Next(1, 24)).AddDays(-Random.Shared.Next(0, 30)) // 1-24 months ago
+                "SolohinLex" => now.AddYears(-11).AddDays(-_random.Next(0, 180)), // 11+ years (enough for platinum of "Выслуга лет", T4 = 3650 days)
+                "TestSeniorMod" => now.AddYears(-4).AddDays(-_random.Next(0, 180)), // 4+ years ago
+                "TestModerator" => now.AddYears(-3).AddDays(-_random.Next(0, 180)), // 3+ years ago
+                "TestMentor" => now.AddYears(-2).AddDays(-_random.Next(0, 180)), // 2+ years ago
+                "TestHonorary" => now.AddYears(-6).AddDays(-_random.Next(0, 180)), // 6+ years ago (veteran)
+                "Experienced" => now.AddYears(-2).AddDays(-_random.Next(0, 365)), // 2+ years ago
+                "OnlyReader" => now.AddMonths(-2).AddDays(-_random.Next(0, 30)), // Recent
+                _ => now.AddMonths(-_random.Next(1, 24)).AddDays(-_random.Next(0, 30)) // 1-24 months ago
             };
 
             var user = new DbUser
@@ -255,7 +255,7 @@ internal sealed partial class DataSeeder
                 user.Gender = profile.Gender;
                 user.QualityRating = profile.QualityRating;
                 user.QuantityRating = profile.QuantityRating;
-                user.LastActivityUtc = now.AddMinutes(-Random.Shared.Next(1, 1440));
+                user.LastActivityUtc = now.AddMinutes(-_random.Next(1, 1440));
             }
         }
 

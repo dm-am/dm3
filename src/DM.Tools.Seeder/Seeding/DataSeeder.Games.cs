@@ -287,7 +287,7 @@ internal sealed partial class DataSeeder
             var variation = gameVariations[gi % gameVariations.Length];
             var isNewbieMaster = template.Premod == PremoderationStatus.AwaitingApproval;
             var master = isNewbieMaster && newbieUsers.Count > 0
-                ? newbieUsers[Random.Shared.Next(newbieUsers.Count)]
+                ? newbieUsers[_random.Next(newbieUsers.Count)]
                 : experiencedUsers[gi % experiencedUsers.Count];
 
             // First game carries the game-zone UI test fixtures (archived room,
@@ -311,7 +311,7 @@ internal sealed partial class DataSeeder
             if (template.Status == ModuleStatus.Draft)
             {
                 // Drafts are recent - people working on them
-                gameCreatedUtc = now.AddDays(-Random.Shared.Next(1, 30));
+                gameCreatedUtc = now.AddDays(-_random.Next(1, 30));
                 gameActivatedUtc = null;
                 gameClosedUtc = null;
             }
@@ -320,24 +320,24 @@ internal sealed partial class DataSeeder
                 if (gi < 4)
                 {
                     // First 4 active games are "new" (activated within 7 days)
-                    var daysAgoCreated = Random.Shared.Next(7, 30);
+                    var daysAgoCreated = _random.Next(7, 30);
                     gameCreatedUtc = now.AddDays(-daysAgoCreated);
                     gameActivatedUtc = now.AddDays(-(gi + 1)); // 1-4 days ago
                 }
                 else if (template.IsRecruitmentOpen)
                 {
                     // Recruiting games: recently started, looking for players
-                    var daysAgoCreated = Random.Shared.Next(30, 90);
+                    var daysAgoCreated = _random.Next(30, 90);
                     gameCreatedUtc = now.AddDays(-daysAgoCreated);
-                    var activationDelay = Random.Shared.Next(3, Math.Min(15, daysAgoCreated - 1));
+                    var activationDelay = _random.Next(3, Math.Min(15, daysAgoCreated - 1));
                     gameActivatedUtc = gameCreatedUtc.AddDays(activationDelay);
                 }
                 else
                 {
                     // Established games: running for a while
-                    var daysAgoCreated = Random.Shared.Next(60, 180);
+                    var daysAgoCreated = _random.Next(60, 180);
                     gameCreatedUtc = now.AddDays(-daysAgoCreated);
-                    var activationDelay = Random.Shared.Next(5, Math.Min(30, daysAgoCreated - 1));
+                    var activationDelay = _random.Next(5, Math.Min(30, daysAgoCreated - 1));
                     gameActivatedUtc = gameCreatedUtc.AddDays(activationDelay);
                 }
                 gameClosedUtc = null;
@@ -347,26 +347,26 @@ internal sealed partial class DataSeeder
                 if (template.ClosedReason == ClosedReason.Finished)
                 {
                     // Finished games: old, ran their full course
-                    var daysAgoCreated = Random.Shared.Next(180, 365);
+                    var daysAgoCreated = _random.Next(180, 365);
                     gameCreatedUtc = now.AddDays(-daysAgoCreated);
-                    var activationDelay = Random.Shared.Next(5, 20);
+                    var activationDelay = _random.Next(5, 20);
                     gameActivatedUtc = gameCreatedUtc.AddDays(activationDelay);
                     // Closed recently (within last 90 days)
                     var daysAgoSinceActivated = (int)(now - gameActivatedUtc.Value).TotalDays;
                     var minDaysRunning = Math.Min(60, daysAgoSinceActivated - 1);
-                    var closedDaysAgo = Random.Shared.Next(1, Math.Max(2, Math.Min(90, daysAgoSinceActivated - minDaysRunning)));
+                    var closedDaysAgo = _random.Next(1, Math.Max(2, Math.Min(90, daysAgoSinceActivated - minDaysRunning)));
                     gameClosedUtc = now.AddDays(-closedDaysAgo);
                 }
                 else // Frozen
                 {
                     // Frozen games: abandoned mid-way
-                    var daysAgoCreated = Random.Shared.Next(90, 300);
+                    var daysAgoCreated = _random.Next(90, 300);
                     gameCreatedUtc = now.AddDays(-daysAgoCreated);
-                    var activationDelay = Random.Shared.Next(3, 15);
+                    var activationDelay = _random.Next(3, 15);
                     gameActivatedUtc = gameCreatedUtc.AddDays(activationDelay);
                     // Frozen some time ago (30-180 days)
                     var daysAgoSinceActivated = (int)(now - gameActivatedUtc.Value).TotalDays;
-                    var closedDaysAgo = Random.Shared.Next(30, Math.Max(31, Math.Min(180, daysAgoSinceActivated - 10)));
+                    var closedDaysAgo = _random.Next(30, Math.Max(31, Math.Min(180, daysAgoSinceActivated - 10)));
                     gameClosedUtc = now.AddDays(-closedDaysAgo);
                 }
             }
@@ -376,7 +376,7 @@ internal sealed partial class DataSeeder
             if (template.IsRecruitmentOpen && gameActivatedUtc.HasValue)
             {
                 var daysSinceActivation = (int)(now - gameActivatedUtc.Value).TotalDays;
-                var recruitmentStartDaysAgo = Random.Shared.Next(1, Math.Max(2, Math.Min(30, daysSinceActivation)));
+                var recruitmentStartDaysAgo = _random.Next(1, Math.Max(2, Math.Min(30, daysSinceActivation)));
                 recruitmentStartedUtc = now.AddDays(-recruitmentStartDaysAgo);
             }
 
@@ -438,7 +438,7 @@ internal sealed partial class DataSeeder
                 : 0;
             if (assistantCount > 0)
             {
-                var selectedAssistants = availableForAssistant.OrderBy(_ => Random.Shared.Next()).Take(assistantCount).ToList();
+                var selectedAssistants = availableForAssistant.OrderBy(_ => _random.Next()).Take(assistantCount).ToList();
                 foreach (var assistant in selectedAssistants)
                 {
                     _dbContext.Set<GameAssistant>().Add(new GameAssistant
@@ -565,7 +565,7 @@ internal sealed partial class DataSeeder
             var races = new[] { "Человек", "Эльф", "Дварф", "Полуэльф", "Тифлинг", "Гном", "Полуорк", "Драконорожденный" };
             var classes = new[] { "Следопыт", "Маг", "Воин", "Плут", "Жрец", "Паладин", "Бард", "Варвар" };
 
-            var playersForGame = users.Where(u => u.UserId != master.UserId).OrderBy(_ => Random.Shared.Next()).Take(variation.activeChars + 2).ToList();
+            var playersForGame = users.Where(u => u.UserId != master.UserId).OrderBy(_ => _random.Next()).Take(variation.activeChars + 2).ToList();
             var createdCharacters = new List<Character>();
 
             // Create active characters based on variation
@@ -587,7 +587,7 @@ internal sealed partial class DataSeeder
                     IsDead = false,
                     IsPlayerLeft = false,
                     IsPlayerExiled = false,
-                    CreatedUtc = game.CreatedUtc.AddDays(Random.Shared.Next(1, 7)),
+                    CreatedUtc = game.CreatedUtc.AddDays(_random.Next(1, 7)),
                     Name = isDiopsideChar ? "Диопсид" : characterNames[ci % characterNames.Length],
                     IsNpc = false,
                     AccessPolicy = CharacterAccessPolicy.NoAccess,
@@ -667,7 +667,7 @@ internal sealed partial class DataSeeder
                     IsDead = status == CharacterStatus.Retired,
                     IsPlayerLeft = false,
                     IsPlayerExiled = false,
-                    CreatedUtc = game.CreatedUtc.AddDays(Random.Shared.Next(1, 7)),
+                    CreatedUtc = game.CreatedUtc.AddDays(_random.Next(1, 7)),
                     Name = characterNames[ci % characterNames.Length],
                     IsNpc = false,
                     AccessPolicy = CharacterAccessPolicy.NoAccess,
@@ -776,7 +776,7 @@ internal sealed partial class DataSeeder
                     var character = allCharactersForPosts[pi % allCharactersForPosts.Count];
                     var isMasterPost = character.IsNpc;
                     // Calculate post time, ensuring it doesn't exceed end time
-                    var postOffsetHours = Math.Min(pi * hoursPerPost + Random.Shared.Next(0, hoursPerPost), totalHoursAvailable - 1);
+                    var postOffsetHours = Math.Min(pi * hoursPerPost + _random.Next(0, hoursPerPost), totalHoursAvailable - 1);
                     // Use large Diopside post for first post of first finished game
                     var useLargePost = !createdLargePost && pi == 0
                         && template.ClosedReason == ClosedReason.Finished && !isMasterPost;
@@ -792,11 +792,11 @@ internal sealed partial class DataSeeder
                         GameText = useLargePost
                             ? largePostText
                             : isMasterPost
-                                ? masterTexts[Random.Shared.Next(masterTexts.Length)]
-                                : postTexts[Random.Shared.Next(postTexts.Length)],
+                                ? masterTexts[_random.Next(masterTexts.Length)]
+                                : postTexts[_random.Next(postTexts.Length)],
                         MetagameText = useLargePost
                             ? "Пробный пост для тестирования отображения на главной. Вроде норм получилось!"
-                            : Random.Shared.Next(4) == 0 ? "Интересный поворот!" : null,
+                            : _random.Next(4) == 0 ? "Интересный поворот!" : null,
                         IsRemoved = false
                     };
                     _dbContext.Set<Post>().Add(post);
@@ -835,14 +835,14 @@ internal sealed partial class DataSeeder
                     }
 
                     // Add edit history for ~10% of posts (including the large Diopside post)
-                    if (useLargePost || Random.Shared.Next(10) == 0)
+                    if (useLargePost || _random.Next(10) == 0)
                     {
                         _dbContext.Set<PostEdit>().Add(new PostEdit
                         {
                             PostEditId = _guidFactory.Create(),
                             PostId = post.PostId,
                             EditorUserId = post.AuthorId,
-                            ModifiedUtc = post.CreatedUtc.AddMinutes(Random.Shared.Next(5, 60))
+                            ModifiedUtc = post.CreatedUtc.AddMinutes(_random.Next(5, 60))
                         });
                     }
 
@@ -1002,7 +1002,7 @@ internal sealed partial class DataSeeder
             // Add readers (subscriptions) - use variation count
             var potentialReaders = users.Where(u => u.UserId != master.UserId && !playersForGame.Contains(u)).ToList();
             var readersToAdd = Math.Min(variation.readers, potentialReaders.Count);
-            var readers = potentialReaders.OrderBy(_ => Random.Shared.Next()).Take(readersToAdd).ToList();
+            var readers = potentialReaders.OrderBy(_ => _random.Next()).Take(readersToAdd).ToList();
             foreach (var reader in readers)
             {
                 _dbContext.Set<Subscription>().Add(new Subscription
@@ -1012,7 +1012,7 @@ internal sealed partial class DataSeeder
                     TargetType = SubscriptionTargetType.Game,
                     TargetId = game.GameId,
                     Settings = SubscriptionSettings.None,
-                    CreatedUtc = game.CreatedUtc.AddDays(Random.Shared.Next(1, 14))
+                    CreatedUtc = game.CreatedUtc.AddDays(_random.Next(1, 14))
                 });
             }
 
@@ -1035,15 +1035,15 @@ internal sealed partial class DataSeeder
 
             for (var j = 0; j < gameCommentsToCreate; j++)
             {
-                var commentOffsetHours = Math.Min(j * hoursPerComment + Random.Shared.Next(0, hoursPerComment), Math.Max(1, commentHoursAvailable - 1));
-                var commentAuthor = users[Random.Shared.Next(users.Count)];
+                var commentOffsetHours = Math.Min(j * hoursPerComment + _random.Next(0, hoursPerComment), Math.Max(1, commentHoursAvailable - 1));
+                var commentAuthor = users[_random.Next(users.Count)];
                 var gameComment = new DbComment
                 {
                     CommentId = _guidFactory.Create(),
                     EntityId = game.GameId,
                     AuthorId = commentAuthor.UserId,
                     CreatedUtc = commentBaseTime.AddHours(commentOffsetHours),
-                    Text = gameCommentTexts[Random.Shared.Next(gameCommentTexts.Length)],
+                    Text = gameCommentTexts[_random.Next(gameCommentTexts.Length)],
                     IsRemoved = false
                 };
 
