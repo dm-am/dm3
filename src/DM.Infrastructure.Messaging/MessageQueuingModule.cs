@@ -38,7 +38,6 @@ public class MessageQueuingModule : Module
         // а singleton разделил бы его между всеми одновременными запросами.
         builder.RegisterType<InvokedEventProducer>()
             .As<IEventProducer>()
-            .As<IInvokedEventProducer>()
             .InstancePerLifetimeScope();
 
         base.Load(builder);

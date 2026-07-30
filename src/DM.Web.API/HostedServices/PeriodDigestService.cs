@@ -3,11 +3,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Events;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Forum.Features.Topics;
 using DM.Domain.Core.Identity;
 using DM.Infrastructure.Core;
-using DM.Infrastructure.Messaging.GeneralBus;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Community;
 using TopicEntity = DM.Infrastructure.Persistence.Entities.Forum.Topic;
@@ -112,7 +112,7 @@ internal class PeriodDigestService : BackgroundService
         var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
         var topicRepository = scope.ServiceProvider.GetRequiredService<ITopicRepository>();
         var unreadCountersRepository = scope.ServiceProvider.GetRequiredService<IUnreadCountersRepository>();
-        var eventProducer = scope.ServiceProvider.GetRequiredService<IInvokedEventProducer>();
+        var eventProducer = scope.ServiceProvider.GetRequiredService<IEventProducer>();
         var now = DateTimeOffset.UtcNow;
 
         // Last closed calendar month.
@@ -132,7 +132,7 @@ internal class PeriodDigestService : BackgroundService
         DmDbContext dbContext,
         ITopicRepository topicRepository,
         IUnreadCountersRepository unreadCountersRepository,
-        IInvokedEventProducer eventProducer,
+        IEventProducer eventProducer,
         int year,
         int? month,
         CancellationToken cancellationToken)

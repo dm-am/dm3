@@ -62,20 +62,6 @@ public abstract class IntegrationTestBase : IDisposable
         return CreateAuthenticatedRequest(method, url, CustomWebApplicationFactory.CreateAdminUser());
     }
 
-    /// <summary>
-    /// Create a new factory with an authenticated user.
-    /// Note: This creates a separate factory that must be disposed.
-    /// @deprecated Use CreateAuthenticatedRequest instead - it's simpler and doesn't require factory disposal.
-    /// </summary>
-    [Obsolete("Use CreateAuthenticatedRequest instead - it's simpler and doesn't require factory disposal.")]
-    protected CustomWebApplicationFactory CreateAuthenticatedFactory(GeneralUser user)
-    {
-        return new CustomWebApplicationFactory(DatabaseFixture)
-        {
-            TestUser = user
-        };
-    }
-
     public void Dispose()
     {
         // Only dispose the client, not the shared factory

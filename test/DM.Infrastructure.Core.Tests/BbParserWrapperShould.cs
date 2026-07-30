@@ -173,4 +173,79 @@ public class BbParserWrapperShould
         result.Should().NotContain("<b>bold</b>");
         result.Should().Contain("&lt;b&gt;bold&lt;/b&gt;");
     }
+
+    /// <summary>
+    /// Every address here names the machine the post is being read on, or the
+    /// network around it, and the request would be issued by the reader's browser.
+    /// Four spellings of 127.0.0.1 are listed on purpose: `new Uri` normalises
+    /// three of them and leaves the IPv4-mapped one alone, which is precisely
+    /// where comparing the host as a string stopped working. The IPv6 rows are
+    /// here for the same reason — fd12:: and fe81:: are inside the blocked ranges
+    /// while matching none of their common prefixes.
+    /// </summary>
+    [Theory]
+    [InlineData("http://127.0.0.1/x.png")]
+    [InlineData("http://127.1/x.png")]
+    [InlineData("http://2130706433/x.png")]
+    [InlineData("http://[::ffff:127.0.0.1]/x.png")]
+    [InlineData("http://[::1]/x.png")]
+    [InlineData("http://[fd12:3456::1]/x.png")]
+    [InlineData("http://[fe81::1]/x.png")]
+    [InlineData("http://[::ffff:192.168.0.1]/x.png")]
+    [InlineData("http://[::]/x.png")]
+    [InlineData("http://10.0.0.1/x.png")]
+    [InlineData("http://172.20.0.1/x.png")]
+    [InlineData("http://192.168.0.1/x.png")]
+    [InlineData("http://169.254.169.254/x.png")]
+    [InlineData("http://100.64.0.1/x.png")]
+    [InlineData("http://0.0.0.0/x.png")]
+    [InlineData("http://localhost/x.png")]
+    [InlineData("http://LOCALHOST/x.png")]
+    [InlineData("http://api.localhost/x.png")]
+    public void DropImage_WhenUrlPointsIntoReaderNetwork(string url)
+    {
+        var tree = _parserProvider.CurrentCommon.Parse($"[img]{url}[/img]");
+
+        var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
+
+        html.Should().NotContain("<img");
+    }
+
+    /// <summary>
+    /// The same guard on the [link] path, where a rejected URL costs the anchor
+    /// but keeps its text.
+    /// </summary>
+    [Theory]
+    [InlineData("http://[::ffff:127.0.0.1]/probe")]
+    [InlineData("http://169.254.169.254/latest/meta-data")]
+    public void DropAnchor_WhenLinkPointsIntoReaderNetwork(string url)
+    {
+        var tree = _parserProvider.CurrentCommon.Parse($"[link=tap]{url}[/link]");
+
+        var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
+
+        html.Should().NotContain("<a href");
+        html.Should().Contain("tap");
+    }
+
+    /// <summary>
+    /// The other half of the contract: a check that only ever says "no" would
+    /// satisfy the theories above while breaking every image in the product. The
+    /// last row is a host NAME that merely starts like a private address — the
+    /// browser resolves it like any other name, and it was the string comparison,
+    /// not the risk, that used to reject it.
+    /// </summary>
+    [Theory]
+    [InlineData("https://example.com/x.png")]
+    [InlineData("http://93.184.216.34/x.png")]
+    [InlineData("http://[2001:db8::1]/x.png")]
+    [InlineData("http://10.example.com/x.png")]
+    public void KeepImage_WhenUrlIsPublic(string url)
+    {
+        var tree = _parserProvider.CurrentCommon.Parse($"[img]{url}[/img]");
+
+        var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
+
+        html.Should().Contain($"<img src=\"{url}\"");
+    }
 }

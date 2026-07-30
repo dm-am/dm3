@@ -3,8 +3,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Events;
 using DM.Infrastructure.Persistence;
-using DM.Infrastructure.Messaging.GeneralBus;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -84,7 +84,7 @@ internal class PendencyReminderService : BackgroundService
 
             using var scope = _serviceProvider.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-            var producer = scope.ServiceProvider.GetRequiredService<IInvokedEventProducer>();
+            var producer = scope.ServiceProvider.GetRequiredService<IEventProducer>();
 
             var now = DateTimeOffset.UtcNow;
             var oldestAllowed = now - _firstReminderAfter;

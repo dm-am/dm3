@@ -6,7 +6,6 @@ using DM.Domain.Core.Events;
 using DM.Domain.Core.Mail;
 using DM.Infrastructure.Mail;
 using DM.Infrastructure.Messaging;
-using DM.Infrastructure.Messaging.GeneralBus;
 using DM.Testing;
 using FluentAssertions;
 using Xunit;
@@ -54,7 +53,6 @@ public class ProducerScopeResolutionShould : UnitTestBase, IDisposable
 
     [Theory]
     [InlineData(typeof(IEventProducer))]
-    [InlineData(typeof(IInvokedEventProducer))]
     [InlineData(typeof(IMailSender))]
     public void RegisterProducersAsDisposableAndScopedToTheLifetimeScope(Type service)
     {

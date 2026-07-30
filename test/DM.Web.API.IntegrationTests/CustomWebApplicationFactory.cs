@@ -1,10 +1,5 @@
-using System.Security.Claims;
-using System.Text.Encodings.Web;
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
-using DM.Domain.Account.Features.Authentication;
-using DM.Domain.Account.Features.Identity;
-using DM.Domain.Core.Identity;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
@@ -12,18 +7,14 @@ using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.MongoIntegration;
 using DM.Web.API.HostedServices;
 using DM.Web.API.Realtime;
-using Microsoft.AspNetCore.Authentication;
 using MongoDB.Driver;
 using MongoDB.Driver.Core.Extensions.DiagnosticSources;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 // ReSharper disable once RedundantUsingDirective - used by TestAuthenticationStartupFilter
 using IStartupFilter = Microsoft.AspNetCore.Hosting.IStartupFilter;
@@ -40,69 +31,6 @@ internal class TestCompromisedPasswordChecker : ICompromisedPasswordChecker
 }
 
 /// <summary>
-/// Test identity provider that returns a pre-configured identity
-/// </summary>
-internal class TestIdentityProvider : IIdentityProvider, IIdentitySetter
-{
-    private IIdentity _identity;
-
-    public TestIdentityProvider(IIdentity identity)
-    {
-        _identity = identity;
-    }
-
-    public IIdentity Current
-    {
-        get => _identity;
-        set => _identity = value;
-    }
-}
-
-/// <summary>
-/// Options for test authentication handler
-/// </summary>
-internal class TestAuthOptions : AuthenticationSchemeOptions
-{
-    public GeneralUser? TestUser { get; set; }
-}
-
-/// <summary>
-/// Test authentication handler that creates claims from TestUser
-/// </summary>
-internal class TestAuthHandler : AuthenticationHandler<TestAuthOptions>
-{
-    public TestAuthHandler(
-        IOptionsMonitor<TestAuthOptions> options,
-        ILoggerFactory logger,
-        UrlEncoder encoder)
-        : base(options, logger, encoder)
-    {
-    }
-
-    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
-    {
-        var testUser = Options.TestUser;
-        if (testUser == null)
-        {
-            return Task.FromResult(AuthenticateResult.Fail("No test user configured"));
-        }
-
-        var claims = new[]
-        {
-            new Claim(ClaimTypes.NameIdentifier, testUser.UserId.ToString()),
-            new Claim(ClaimTypes.Name, testUser.Username),
-            new Claim(ClaimTypes.Role, testUser.Role.ToString())
-        };
-
-        var identity = new ClaimsIdentity(claims, "Test");
-        var principal = new ClaimsPrincipal(identity);
-        var ticket = new AuthenticationTicket(principal, "Test");
-
-        return Task.FromResult(AuthenticateResult.Success(ticket));
-    }
-}
-
-/// <summary>
 /// Custom WebApplicationFactory for integration tests.
 ///
 /// Uses PostgreSQL via Testcontainers for 100% compatibility with production.
@@ -111,17 +39,6 @@ internal class TestAuthHandler : AuthenticationHandler<TestAuthOptions>
 public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
     private readonly DatabaseFixture _databaseFixture;
-
-    /// <summary>
-    /// Test authentication token - used to authenticate test requests (when infrastructure is working)
-    /// </summary>
-    internal const string TestAuthToken = "test-auth-token-for-integration-tests";
-
-    /// <summary>
-    /// Optional: Test user to authenticate as.
-    /// Note: Due to Autofac registration order issues, authenticated tests are currently skipped.
-    /// </summary>
-    public GeneralUser? TestUser { get; set; }
 
     public CustomWebApplicationFactory(DatabaseFixture databaseFixture)
     {
@@ -221,25 +138,6 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                     .EnableDetailedErrors();
             }, ServiceLifetime.Scoped, ServiceLifetime.Scoped);
         });
-
-        // This overrides the authentication scheme for authenticated tests
-        if (TestUser != null)
-        {
-            var testUser = TestUser; // Capture for closure
-            builder.ConfigureTestServices(services =>
-            {
-                services.AddAuthentication(options =>
-                    {
-                        options.DefaultAuthenticateScheme = "Test";
-                        options.DefaultChallengeScheme = "Test";
-                        options.DefaultScheme = "Test";
-                    })
-                    .AddScheme<TestAuthOptions, TestAuthHandler>("Test", opts =>
-                    {
-                        opts.TestUser = testUser;
-                    });
-            });
-        }
     }
 
     /// <inheritdoc />
@@ -259,55 +157,18 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
     private void ConfigureTestContainer(ContainerBuilder containerBuilder)
     {
         // Override DmMongoClient to use the test container connection string
-            var mongoConnectionString = _databaseFixture.MongoConnectionString;
-            var mongoUrl = MongoUrl.Create(mongoConnectionString);
-            var mongoSettings = MongoClientSettings.FromUrl(mongoUrl);
-            mongoSettings.ServerSelectionTimeout = TimeSpan.FromSeconds(5);
-            mongoSettings.ConnectTimeout = TimeSpan.FromSeconds(10);
-            mongoSettings.RetryWrites = true;
-            mongoSettings.RetryReads = true;
-            mongoSettings.ClusterConfigurator = cb => cb.Subscribe(
-                new DiagnosticsActivityEventSubscriber(new InstrumentationOptions { CaptureCommandText = true }));
-            containerBuilder.RegisterInstance(new DmMongoClient(mongoSettings, mongoUrl))
-                .AsSelf()
-                .AsImplementedInterfaces();
-
-            // If TestUser is set, override authentication services in Autofac
-            // TODO: This approach doesn't work reliably due to Autofac registration order issues.
-            // The production IdentityProvider registration from AuthenticationModule runs AFTER
-            // this ConfigureContainer callback, overwriting our test registration.
-            // Consider implementing one of these alternatives:
-            // 1. Use real login flow: create test user in DB, call login endpoint, use returned session
-            // 2. Add a test-only middleware that bypasses authentication for tests
-            // 3. Use Microsoft DI overrides instead of Autofac
-            if (TestUser != null)
-            {
-                var authenticatedUser = new AuthenticatedUser
-                {
-                    UserId = TestUser.UserId,
-                    Username = TestUser.Username,
-                    Role = TestUser.Role,
-                    AccessPolicy = TestUser.AccessPolicy,
-                    Salt = "fakesalt",
-                    PasswordHash = "fakehash",
-                    PasswordHashVersion = 2
-                };
-
-                var identity = Identity.Success(
-                    authenticatedUser,
-                    new Session { Id = Guid.NewGuid() },
-                    UserSettings.Default,
-                    TestAuthToken);
-
-                var testIdentityProvider = new TestIdentityProvider(identity);
-
-                // This registration is overwritten by AuthenticationModule.
-                // Keeping for documentation purposes.
-                containerBuilder.RegisterInstance(testIdentityProvider)
-                    .As<IIdentityProvider>()
-                    .As<IIdentitySetter>()
-                    .SingleInstance();
-            }
+        var mongoConnectionString = _databaseFixture.MongoConnectionString;
+        var mongoUrl = MongoUrl.Create(mongoConnectionString);
+        var mongoSettings = MongoClientSettings.FromUrl(mongoUrl);
+        mongoSettings.ServerSelectionTimeout = TimeSpan.FromSeconds(5);
+        mongoSettings.ConnectTimeout = TimeSpan.FromSeconds(10);
+        mongoSettings.RetryWrites = true;
+        mongoSettings.RetryReads = true;
+        mongoSettings.ClusterConfigurator = cb => cb.Subscribe(
+            new DiagnosticsActivityEventSubscriber(new InstrumentationOptions { CaptureCommandText = true }));
+        containerBuilder.RegisterInstance(new DmMongoClient(mongoSettings, mongoUrl))
+            .AsSelf()
+            .AsImplementedInterfaces();
     }
 
     /// <summary>

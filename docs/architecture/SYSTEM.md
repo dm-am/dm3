@@ -154,14 +154,17 @@ HTTP Request → Middleware Pipeline → Controller → Service → Repository �
 ## Система событий
 
 ```
-Business Service → producer.Send(EventType, entityId) → Exchange (dm.events)
+Business Service → producer.Send(EventType, entityId) → exchange событий
                                                               ↓
-                                            ┌──────────────┬──────────────┐
-                                            │ dm.notif     │ dm.mail      │
-                                            └──────────────┴──────────────┘
+                                                 очередь воркера уведомлений
 ```
 
-Workers подписываются на события и обрабатывают асинхронно.
+Workers подписываются на события и обрабатывают асинхронно. Почта в этот поток
+не входит: письмо публикуется в отдельный exchange, который слушает только
+почтовый воркер.
+
+Имена exchange и очередей заданы в коде транспорта и консьюмеров и здесь не
+дублируются: копия имен в документе расходится с кодом молча.
 
 ---
 

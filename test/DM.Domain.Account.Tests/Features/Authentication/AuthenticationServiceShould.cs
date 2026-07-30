@@ -189,14 +189,16 @@ public class AuthenticationServiceShould : UnitTestBase
         _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
         _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
         _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
-        _securityManager.Setup(s => s.ComparePasswords("password", "salt", "hash")).Returns(true);
-
         var result = await _service.Authenticate(email, "password");
 
         result.User.IsAuthenticated.Should().BeFalse();
         result.Error.Should().Be(AuthenticationError.Banned);
-        // The ban decides before the password is even consulted, and no session
-        // is minted
+        // ComparePasswords is left unstubbed on purpose: the ban has to decide
+        // before the password is consulted, so with the branches swapped this
+        // call happens and the answer turns into WrongPassword
+        _securityManager.Verify(s => s.ComparePasswords(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        // No session is minted for a banned account
         _repository.Verify(r => r.AddSession(It.IsAny<Guid>(), It.IsAny<CreateSession>()), Times.Never);
     }
 
@@ -347,12 +349,13 @@ public class AuthenticationServiceShould : UnitTestBase
         _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
         _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
         _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
-        _securityManager.Setup(s => s.ComparePasswords("password", "salt", "hash")).Returns(true);
-
         var result = await _service.Authenticate(email, "password");
 
         result.User.IsAuthenticated.Should().BeFalse();
         result.Error.Should().Be(AuthenticationError.Banned);
+        // A ban that comes from a row decides as early as the flag does
+        _securityManager.Verify(s => s.ComparePasswords(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Fact]

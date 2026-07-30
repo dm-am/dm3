@@ -18,9 +18,11 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// banned user — so every one of them answered 500 while its own
 /// <c>[ProducesResponseType]</c> promised 400 or 404.
 ///
-/// These cases are cheap to drive over HTTP and are the ones a user reaches by
-/// clicking. The pattern is what is being guarded, not the endpoints: a new
-/// plain exception on any input path shows up here as a 500.
+/// Three of the five are cheap to drive over HTTP and are pinned here by URL;
+/// the direct chat with oneself and the second ban are pinned by unit tests over
+/// the domain services that raise them. The guard is those endpoints, not the
+/// pattern: a plain exception on an input path no test names still answers 500
+/// unnoticed.
 /// </summary>
 public class CallerMistakesShould : IntegrationTestBase
 {

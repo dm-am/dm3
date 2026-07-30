@@ -13,10 +13,9 @@ namespace DM.Infrastructure.Messaging.GeneralBus;
 
 /// <summary>
 /// Event producer implementation that sends domain events through RabbitMQ.
-/// Implements both <see cref="IEventProducer"/> (new) and <see cref="IInvokedEventProducer"/> (deprecated).
 /// </summary>
 internal class InvokedEventProducer(IProducerBuilder producerBuilder)
-    : IEventProducer, IInvokedEventProducer, IDisposable
+    : IEventProducer, IDisposable
 {
     private readonly IProducer<string, InvokedEvent> producer = producerBuilder.BuildRabbit<InvokedEvent>(
         new RabbitProducerParameters(InvokedEventsTransport.ExchangeName));

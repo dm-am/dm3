@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using BBCodeParser;
 using BBCodeParser.Nodes;
@@ -39,25 +41,10 @@ public partial class BbParserWrapper : IBbParser
     private static readonly string[] DangerousProtocols = { "javascript:", "data:", "vbscript:" };
 
     /// <summary>
-    /// Blocked hostname patterns for SSRF protection.
-    /// Prevents links/images to internal networks.
+    /// Host names that name the reader's own machine by definition — RFC 6761
+    /// reserves them for exactly that, so no lookup is needed to know it.
     /// </summary>
-    private static readonly string[] BlockedHostPatterns =
-    {
-        "localhost",
-        "127.",
-        "10.",
-        "172.16.", "172.17.", "172.18.", "172.19.",
-        "172.20.", "172.21.", "172.22.", "172.23.",
-        "172.24.", "172.25.", "172.26.", "172.27.",
-        "172.28.", "172.29.", "172.30.", "172.31.",
-        "192.168.",
-        "169.254.",  // Link-local
-        "[::1]",     // IPv6 localhost
-        "[fe80:",    // IPv6 link-local
-        "[fc00:",    // IPv6 unique local
-        "[fd00:",    // IPv6 unique local
-    };
+    private static readonly string[] BlockedHostNames = { "localhost" };
 
     /// <summary>
     /// Allowed URL schemes for links and images.
@@ -65,7 +52,7 @@ public partial class BbParserWrapper : IBbParser
     private static readonly string[] AllowedSchemes = { "http://", "https://" };
 
     /// <summary>
-    /// Sanitize URL to prevent XSS attacks and SSRF attacks.
+    /// Sanitize URL to prevent XSS and requests into the reader's own network.
     /// Returns sanitized URL or "#" if dangerous protocol or blocked host detected.
     /// </summary>
     private static string SanitizeUrl(string url)
@@ -86,18 +73,10 @@ public partial class BbParserWrapper : IBbParser
         if (!AllowedSchemes.Any(s => lower.StartsWith(s)))
             return "#";
 
-        // Extract hostname for SSRF check
         try
         {
-            var uri = new Uri(trimmed);
-            var host = uri.Host.ToLowerInvariant();
-
-            // Block internal/private network addresses
-            foreach (var pattern in BlockedHostPatterns)
-            {
-                if (host.StartsWith(pattern) || host == pattern.TrimEnd('.'))
-                    return "#";
-            }
+            if (IsBlockedHost(new Uri(trimmed).Host.ToLowerInvariant()))
+                return "#";
         }
         catch
         {
@@ -106,6 +85,63 @@ public partial class BbParserWrapper : IBbParser
         }
 
         return trimmed;
+    }
+
+    /// <summary>
+    /// Whether the host names the reader's own machine or private network.
+    /// </summary>
+    /// <remarks>
+    /// Naming the risk right matters here, because it was recorded wrong: the
+    /// server never requests these addresses — the reader's browser does, when it
+    /// renders the src/href — so this is not SSRF protection. What it prevents is
+    /// someone else's post reaching services the reader happens to run on loopback
+    /// or on their LAN. A server-side fetch of a user-supplied URL is a separate
+    /// threat and needs its own check, made after DNS resolution against the
+    /// address the connection actually goes to.
+    ///
+    /// The address has to be compared parsed rather than as a string prefix.
+    /// `new Uri` folds 127.1, 2130706433 and 0177.0.0.1 into the same four bytes,
+    /// so those spellings used to be covered by accident, but it leaves an
+    /// IPv4-mapped literal such as [::ffff:127.0.0.1] exactly as written, and no
+    /// list of prefixes covers the IPv6 ranges — fd00: is one address block out of
+    /// the whole of fc00::/7. A host NAME that resolves to a private address
+    /// (wildcard-DNS services point any name at 127.0.0.1) still passes: only a
+    /// lookup would catch it, and this runs on the render path.
+    /// </remarks>
+    private static bool IsBlockedHost(string host)
+    {
+        // Uri.Host keeps the brackets around an IPv6 literal; IPAddress rejects them.
+        var literal = host.Length > 1 && host[0] == '[' && host[^1] == ']'
+            ? host[1..^1]
+            : host;
+
+        if (!IPAddress.TryParse(literal, out var address))
+            return BlockedHostNames.Any(name =>
+                host == name || host.EndsWith($".{name}", StringComparison.Ordinal));
+
+        if (address.IsIPv4MappedToIPv6)
+            address = address.MapToIPv4();
+
+        if (IPAddress.IsLoopback(address))
+            return true;
+
+        if (address.AddressFamily == AddressFamily.InterNetworkV6)
+            return address.IsIPv6LinkLocal
+                || address.IsIPv6SiteLocal
+                || address.IsIPv6UniqueLocal
+                || address.Equals(IPAddress.IPv6Any);
+
+        var octets = address.GetAddressBytes();
+        return octets[0] switch
+        {
+            0 => true,                                  // "this network" — resolves to loopback on some stacks
+            10 => true,                                 // RFC 1918
+            100 => octets[1] >= 64 && octets[1] <= 127, // RFC 6598 shared address space
+            169 => octets[1] == 254,                    // link-local, where cloud metadata lives
+            172 => octets[1] >= 16 && octets[1] <= 31,  // RFC 1918
+            192 => octets[1] == 168,                    // RFC 1918
+            _ => false,
+        };
     }
 
     // ═══════════════════════════════════════════════════════════════════════

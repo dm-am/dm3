@@ -121,14 +121,19 @@ public class OpenApiContractShould : IntegrationTestBase
 
         schemas.Should().NotBeEmpty("the API publishes response schemas");
 
+        // Utf8JsonWriter indents with the platform newline while .gitattributes
+        // stores this file with LF, so on Windows a freshly cloned snapshot and
+        // a freshly serialised one differ on every line — a failure the clean
+        // filter then hides from the diff the message tells you to review.
+        // Both sides are compared in LF, and LF is what gets written.
         var serialised = JsonSerializer.Serialize(schemas, new JsonSerializerOptions
         {
             WriteIndented = true,
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-        }) + Environment.NewLine;
+        }).Replace("\r\n", "\n") + "\n";
 
         var existing = File.Exists(ContractSnapshotPath)
-            ? await File.ReadAllTextAsync(ContractSnapshotPath)
+            ? (await File.ReadAllTextAsync(ContractSnapshotPath)).Replace("\r\n", "\n")
             : null;
 
         if (existing == serialised)

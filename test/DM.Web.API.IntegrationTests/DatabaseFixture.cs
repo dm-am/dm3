@@ -98,6 +98,11 @@ public class DatabaseFixture : IAsyncLifetime
 
     #region Seeding
 
+    // Every guard below keys on a row this fixture owns, never on a bare Any():
+    // InitialCreate ships rows of its own (see MigrateAsync above), and a bare
+    // Any() would silently skip the whole seeder the moment the migration grows a
+    // row of the same kind, taking every test that depends on it down with an
+    // error that names no cause.
     private static async Task SeedAllAsync(DmDbContext db)
     {
         // Order matters: FK constraints
@@ -189,9 +194,6 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedTopics(DmDbContext db)
     {
-        // Keyed on this fixture's own row, not on "any topic exists": the
-        // migration ships topics of its own, and a bare Any() would silently skip
-        // the whole seeder and take every forum test down with it.
         if (db.Set<Topic>().Any(t => t.TopicId == TestConstants.TestTopicId)) return;
 
         var topics = new (Guid Id, Guid AuthorId, string Title, string Text, int HoursAgo, int TopicNumber)[]
@@ -217,7 +219,7 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedGames(DmDbContext db)
     {
-        if (db.Set<Game>().Any()) return;
+        if (db.Set<Game>().Any(g => g.GameId == TestConstants.TestGameId)) return;
 
         // (Id, AuthorId, Title, System, Setting, Info, DaysAgo, ActivatedDaysAgo, IsOpen, Count, Comments)
         var games = new (Guid Id, Guid AuthorId, string Title, string System, string Setting, string Info,
@@ -268,7 +270,7 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedGameTags(DmDbContext db)
     {
-        if (db.Set<GameTag>().Any()) return;
+        if (db.Set<GameTag>().Any(t => t.GameId == TestConstants.TestGameId)) return;
 
         static Guid T(string hex) => Guid.Parse($"00000000-0000-0000-0000-0000000000{hex}");
 
@@ -320,7 +322,7 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedRooms(DmDbContext db)
     {
-        if (db.Set<Room>().Any()) return;
+        if (db.Set<Room>().Any(r => r.RoomId == TestConstants.TestRoomId)) return;
 
         db.Set<Room>().Add(new Room
         {
@@ -350,7 +352,7 @@ public class DatabaseFixture : IAsyncLifetime
     /// </summary>
     private static void SeedGamePosts(DmDbContext db)
     {
-        if (db.Set<Post>().Any()) return;
+        if (db.Set<Post>().Any(p => p.PostId == TestConstants.TestGamePostId)) return;
 
         db.Set<Post>().Add(new Post
         {
@@ -389,7 +391,7 @@ public class DatabaseFixture : IAsyncLifetime
     /// </summary>
     private static void SeedCharacters(DmDbContext db)
     {
-        if (db.Set<Character>().Any()) return;
+        if (db.Set<Character>().Any(c => c.CharacterId == TestConstants.TestCharacterId)) return;
 
         db.Set<Character>().AddRange(
             new Character
@@ -479,7 +481,8 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedBoardModerators(DmDbContext db)
     {
-        if (db.Set<BoardModerator>().Any()) return;
+        if (db.Set<BoardModerator>().Any(m =>
+                m.BoardId == TestConstants.TestBoardId && m.UserId == TestConstants.ModeratorUserId)) return;
 
         // Assign Moderator as the board moderator for Test Board
         db.Set<BoardModerator>().Add(new BoardModerator
@@ -492,7 +495,7 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedSubscriptions(DmDbContext db)
     {
-        if (db.Subscriptions.Any()) return;
+        if (db.Subscriptions.Any(s => s.SubscriberId == TestConstants.InactiveUser1Id)) return;
 
         // Inactive users subscribed to games and blogs
         var subscriptions = new (Guid SubscriberId, SubscriptionTargetType TargetType, Guid TargetId, int DaysAgo)[]
@@ -521,7 +524,7 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedTestimonials(DmDbContext db)
     {
-        if (db.WebsiteTestimonials.Any()) return;
+        if (db.WebsiteTestimonials.Any(t => t.WebsiteTestimonialId == TestConstants.TestTestimonialId)) return;
 
         // (TestimonialId, UserId, Text, DaysAgo)
         var testimonials = new (Guid TestimonialId, Guid UserId, string Text, int DaysAgo)[]

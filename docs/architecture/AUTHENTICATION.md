@@ -112,16 +112,7 @@ NIST SP 800-63B-4 (2024): composition rules не требуются при си�
 
 ## Защита от атак
 
-| Атака | Защита |
-|-------|--------|
-| XSS | HttpOnly cookies, CSP headers |
-| CSRF | SameSite=Lax, CSRF middleware |
-| Brute-force | Progressive delay + **блокировка** (15 попыток → 30 мин) |
-| Timing | FixedTimeEquals |
-| Token forgery | AES-GCM auth tag |
-| Clickjacking | X-Frame-Options: DENY |
-| MIME sniffing | X-Content-Type-Options: nosniff |
-| SSRF | Блокировка private IP в BBCode URL |
+Чеклист — в [SECURITY.md](../conventions/SECURITY.md#защита-от-атак-чеклист).
 
 ---
 
