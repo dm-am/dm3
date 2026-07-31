@@ -89,6 +89,42 @@ public class CompilerPolicyShould
             "nothing and reads as a claim that the rest of the tree is not annotated");
     }
 
+    /// <summary>
+    /// The image build compiles the same sources under the same policy, so it needs
+    /// the same policy files.
+    /// </summary>
+    /// <remarks>
+    /// The props travel with the solution and were copied from the start;
+    /// .editorconfig was not, and the day the CS1591 exemption moved into it the
+    /// image build began failing on warnings no developer could see. The failure
+    /// named a source file and a missing XML comment, which is the one thing that
+    /// was not wrong — and it took every image down at once, so a green solution
+    /// still shipped nothing.
+    /// </remarks>
+    [Fact]
+    public void GiveTheImageBuildTheSamePolicyFiles()
+    {
+        var root = RepositoryRoot;
+        var copyLines = File
+            .ReadAllLines(Path.Combine(root, "docker", "app.Dockerfile"))
+            .Where(line => line.TrimStart().StartsWith("COPY ", StringComparison.Ordinal))
+            .ToList();
+
+        foreach (var policyFile in new[]
+                 {
+                     "Directory.Build.props",
+                     "Directory.Packages.props",
+                     ".editorconfig",
+                 })
+        {
+            File.Exists(Path.Combine(root, policyFile)).Should()
+                .BeTrue($"{policyFile} is part of the compiler policy");
+            copyLines.Should().Contain(line => line.Contains(policyFile, StringComparison.Ordinal),
+                $"the image build compiles under {policyFile} too, and a file left outside " +
+                "the build context is simply absent rather than reported");
+        }
+    }
+
     private static bool IsAuthored(string path) =>
         !path
             .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)

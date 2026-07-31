@@ -55,6 +55,38 @@ public class DeploymentConfigurationShould
     }
 
     /// <summary>
+    /// The management script drains a redirected pipe while the process it started
+    /// is still running.
+    /// </summary>
+    /// <remarks>
+    /// A redirected pipe holds tens of kilobytes and the writer blocks once it is
+    /// full, so a wait loop that reads nothing until the process exits hangs on any
+    /// command that prints more than that — which is every "docker compose --build".
+    /// Both animated wrappers were written that way, and the symptom was the worst
+    /// kind: no output, no error, no exit, on the two commands a developer reaches
+    /// for first.
+    ///
+    /// Asserted on the text because the deadlock is in the order of two statements
+    /// and nothing executes this file under test.
+    /// </remarks>
+    [Fact]
+    public void DrainTheOutputOfEveryProcessTheManagementScriptStarts()
+    {
+        var root = Directory.GetParent(DockerDirectory)!.FullName;
+        var script = File.ReadAllText(Path.Combine(root, "scripts", "dm.ps1"));
+
+        script.Should().NotContain(".ReadToEnd()",
+            "a synchronous read that runs after the wait loop deadlocks the moment the " +
+            "child fills the pipe; ReadToEndAsync started before the loop keeps it drained");
+
+        var waits = script.Split("while (-not $process.HasExited)").Length - 1;
+        var drains = script.Split("ReadToEndAsync()").Length - 1;
+        drains.Should().Be(waits * 2,
+            "each wait loop covers one process with two redirected pipes, and a pipe " +
+            "nobody reads is the one that blocks");
+    }
+
+    /// <summary>
     /// The subnet is pinned rather than handed out by Docker, because it is the
     /// value the API trusts. A generated one cannot be named in configuration.
     /// </summary>

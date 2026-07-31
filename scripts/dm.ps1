@@ -33,6 +33,47 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+# Environment check: docker compose refuses to do anything at all when a
+# required variable has no value, and the message it prints names the first
+# service it failed to interpolate rather than the file to edit. Worse, the
+# animated wrappers below cut a failure down to sixty characters, so the reason
+# does not survive to the screen. The list of names comes from .env.example
+# rather than from a copy here: a variable added to the stack is added there in
+# the same commit, and a second list would be one more thing to forget.
+function Assert-Environment {
+    $envFile = Join-Path $DockerDir ".env"
+    $exampleFile = Join-Path $DockerDir ".env.example"
+
+    if (-not (Test-Path $envFile)) {
+        Write-Host "  docker/.env missing. Copy it from docker/.env.example and fill in the values." -ForegroundColor Red
+        Write-Host ""
+        exit 1
+    }
+    if (-not (Test-Path $exampleFile)) { return }
+
+    $names = { param($path)
+        Get-Content $path |
+            Where-Object { $_ -match '^[A-Z][A-Z0-9_]*=' } |
+            ForEach-Object { ($_ -split '=', 2)[0] }
+    }
+
+    $declared = & $names $envFile
+    $expected = & $names $exampleFile
+    $missing = $expected | Where-Object { $declared -notcontains $_ }
+
+    if ($missing.Count -gt 0) {
+        Write-Host "  docker/.env is missing $($missing.Count) variable(s) the stack needs:" -ForegroundColor Red
+        foreach ($name in $missing) {
+            $sample = (Get-Content $exampleFile | Where-Object { $_ -match "^$name=" } | Select-Object -First 1)
+            Write-Host "    $sample" -ForegroundColor DarkGray
+        }
+        Write-Host ""
+        Write-Host "  They are documented in docker/.env.example. Copy the lines above and set your own values." -ForegroundColor DarkGray
+        Write-Host ""
+        exit 1
+    }
+}
+
 function Show-Help {
     Write-Host @"
 DM3 Management Script
@@ -203,6 +244,14 @@ function Invoke-WithAnimation {
         return $false
     }
 
+    # Both pipes are drained while the process is still running, not after it.
+    # A redirected pipe holds tens of kilobytes; the writer blocks once it is
+    # full, and a wait loop that reads nothing until HasExited turns that into a
+    # hang with no output and no exit — which is what "docker compose --build"
+    # did every time, because a build writes more than the buffer holds.
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+
     $frame = 0
     while (-not $process.HasExited) {
         Write-AnimatedStep -Label $Label -Current 0 -Total 1 -DotFrame $frame
@@ -210,8 +259,8 @@ function Invoke-WithAnimation {
         $frame++
     }
 
-    $stderr = $process.StandardError.ReadToEnd()
     $process.WaitForExit()
+    $stderr = $stdoutTask.Result + "`n" + $stderrTask.Result
 
     if ($process.ExitCode -eq 0) {
         Write-CompletedStep -Label $Label -Total 1
@@ -401,6 +450,14 @@ function Invoke-WithAnimationAndOutput {
         return $null
     }
 
+    # Both pipes are drained while the process is still running, not after it.
+    # A redirected pipe holds tens of kilobytes; the writer blocks once it is
+    # full, and a wait loop that reads nothing until HasExited turns that into a
+    # hang with no output and no exit — which is what "docker compose --build"
+    # did every time, because a build writes more than the buffer holds.
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+
     $frame = 0
     while (-not $process.HasExited) {
         Write-AnimatedStep -Label $Label -Current 0 -Total 1 -DotFrame $frame
@@ -408,9 +465,9 @@ function Invoke-WithAnimationAndOutput {
         $frame++
     }
 
-    $output = $process.StandardOutput.ReadToEnd()
-    $stderr = $process.StandardError.ReadToEnd()
     $process.WaitForExit()
+    $output = $stdoutTask.Result
+    $stderr = $stderrTask.Result
 
     if ($process.ExitCode -eq 0) {
         return $output
@@ -567,6 +624,8 @@ function Show-Logs {
 }
 
 # Main
+if ($Command -ne 'help') { Assert-Environment }
+
 switch ($Command) {
     'start'  { Start-Services }
     'stop'   { Stop-Services }

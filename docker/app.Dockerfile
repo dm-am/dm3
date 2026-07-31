@@ -5,7 +5,12 @@ ARG PROJECT_NAME
 WORKDIR /app
 
 # 1. Copy solution and project files FIRST (for restore caching)
-COPY DM.sln Directory.Build.props Directory.Packages.props ./
+# The compiler policy the local build reads has to reach this one too: the
+# props carry TreatWarningsAsErrors and .editorconfig carries the exemptions it
+# is calibrated against. Without the latter the image build fails on warnings a
+# developer never sees, and the failure names a source file rather than a
+# missing file.
+COPY DM.sln Directory.Build.props Directory.Packages.props .editorconfig ./
 
 # Domain projects
 COPY src/DM.Domain.Core/DM.Domain.Core.csproj src/DM.Domain.Core/
