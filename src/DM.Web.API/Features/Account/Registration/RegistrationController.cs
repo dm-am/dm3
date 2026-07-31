@@ -1,10 +1,10 @@
-using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.Http;
 using DM.Web.API.Shared.RateLimiting;
 using System.Net;
 using DM.Domain.Core.Exceptions;
@@ -18,8 +18,10 @@ namespace DM.Web.API.Features.Account.Registration;
 /// Registration flow:
 /// 1. POST /v1/account/register - Submit email + password (creates pending registration)
 /// 2. User receives activation email
-/// 3. GET /v1/account/activation/{token} - Check token status and get email for UI
-/// 4. POST /v1/account/activation/{token} - Complete activation with chosen username
+/// 3. GET /v1/account/activation - Check token status and get email for UI
+///    (token in the X-Dm-Account-Token header)
+/// 4. POST /v1/account/activation - Complete activation with chosen username
+///    (token in the X-Dm-Account-Token header)
 ///
 /// For availability checks, use AvailabilityController:
 /// - GET /v1/account/check-email - Check email availability
@@ -89,15 +91,16 @@ public class RegistrationController : ControllerBase
     /// - "ready": Token is valid, show Login selection form
     /// - "expired": Token expired (>48h), offer to resend activation email
     /// </remarks>
-    /// <param name="token">Activation token from email link</param>
+    /// <param name="token">Activation token from the mailed link, in the X-Dm-Account-Token header</param>
     /// <response code="200">Token info (status and email)</response>
-    /// <response code="404">Token not found (already used or invalid)</response>
-    [HttpGet("activation/{token:guid}", Name = nameof(GetActivationInfo))]
+    /// <response code="404">Token missing, malformed or not found (already used or invalid)</response>
+    [HttpGet("activation", Name = nameof(GetActivationInfo))]
     [ProducesResponseType(typeof(PendingInfoResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetActivationInfo(Guid token)
+    public async Task<IActionResult> GetActivationInfo(
+        [FromHeader(Name = TokenHeaders.Account)] string? token)
     {
-        var info = await _activationApiService.GetPendingInfo(token);
+        var info = await _activationApiService.GetPendingInfo(TokenHeaders.ParseAccountToken(token));
         if (info == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.LinkInvalidOrUsed);
@@ -122,17 +125,21 @@ public class RegistrationController : ControllerBase
     /// The activation is idempotent: if ExpectedEmail matches an existing user
     /// with the same Login, returns success without error.
     /// </remarks>
-    /// <param name="token">Activation token from email link</param>
+    /// <param name="token">Activation token from the mailed link, in the X-Dm-Account-Token header</param>
     /// <param name="request">Chosen Login</param>
     /// <response code="200">User created and authenticated</response>
     /// <response code="400">Login validation failed (invalid format, already taken, etc.)</response>
-    /// <response code="404">Token expired or not found</response>
-    [HttpPost("activation/{token:guid}", Name = nameof(Activate))]
+    /// <response code="404">Token missing or malformed</response>
+    /// <response code="410">Token expired or not found</response>
+    [HttpPost("activation", Name = nameof(Activate))]
     [ProducesResponseType(typeof(Envelope<DM.Web.API.Features.Community.Users.User>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status410Gone)]
-    public async Task<IActionResult> Activate(Guid token, [FromBody] ActivationRequest request) =>
-        Ok(await _activationApiService.Activate(token, request, HttpContext));
+    public async Task<IActionResult> Activate(
+        [FromHeader(Name = TokenHeaders.Account)] string? token,
+        [FromBody] ActivationRequest request) =>
+        Ok(await _activationApiService.Activate(TokenHeaders.ParseAccountToken(token), request, HttpContext));
 
     /// <summary>
     /// Resend activation email

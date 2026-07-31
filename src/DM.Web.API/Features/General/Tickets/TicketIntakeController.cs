@@ -4,6 +4,7 @@ using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.Http;
 using DM.Web.API.Shared.RateLimiting;
 using DM.Domain.Core.Exceptions;
 
@@ -72,21 +73,25 @@ public class TicketIntakeController : ControllerBase
     /// <remarks>
     /// Public, token-gated view of a guest ticket: its status and conversation
     /// thread. No authentication — possession of the tracking token returned at
-    /// submission time is the credential. Returns 404 for an empty or unknown
-    /// token.
+    /// submission time is the credential, which is exactly why it travels in the
+    /// X-Dm-Ticket-Token header and not in the path: a path is written verbatim
+    /// into the proxy access log and into the trace, so a token placed there is
+    /// readable by everyone who can read either. Returns 404 for a missing, empty
+    /// or unknown token.
     /// </remarks>
-    /// <param name="token">Tracking token issued at submission time</param>
+    /// <param name="token">Tracking token issued at submission time, in the X-Dm-Ticket-Token header</param>
     /// <response code="200">Ticket status and thread</response>
     /// <response code="404">No ticket for this token</response>
     /// <response code="429">Too many requests. Try again later.</response>
-    [HttpGet("track/{token}", Name = nameof(TrackTicketIntake))]
+    [HttpGet("track", Name = nameof(TrackTicketIntake))]
     [EnableRateLimiting(RateLimitPolicies.Auth)]
     [ProducesResponseType(typeof(Envelope<TrackedTicket>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
-    public async Task<IActionResult> TrackTicketIntake(string token)
+    public async Task<IActionResult> TrackTicketIntake(
+        [FromHeader(Name = TokenHeaders.Ticket)] string? token)
     {
-        var ticket = await _ticketIntakeApiService.TrackTicket(token);
+        var ticket = await _ticketIntakeApiService.TrackTicket(token ?? string.Empty);
         return ticket != null ? Ok(new Envelope<TrackedTicket>(ticket)) : NotFound();
     }
 }

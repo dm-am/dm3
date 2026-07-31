@@ -43,9 +43,9 @@ public class CreateGameRequest
     public bool Draft { get; set; }
 
     /// <summary>
-    /// Game tag identifiers
+    /// Game tag short identifiers, the ones GET /games/tags serves
     /// </summary>
-    public IEnumerable<Guid>? Tags { get; set; }
+    public IEnumerable<int>? Tags { get; set; }
 
     /// <summary>
     /// Attribute schema identifier (for character attributes)

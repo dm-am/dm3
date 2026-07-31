@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import dayjs from "dayjs";
 import { usePollsStore } from "@/entities/poll";
+import { describeFailure } from "@/shared/lib/errors";
 
 export function useCreatePoll() {
   const pollsStore = usePollsStore();
@@ -81,10 +82,10 @@ export function useCreatePoll() {
       if (error.status === 400) {
         errorMessage.value =
           "Некорректные данные. Начало должно быть раньше окончания.";
-      } else if (error.status === 403) {
-        errorMessage.value = "Недостаточно прав";
       } else {
-        errorMessage.value = "Не удалось создать опрос";
+        // The server names which refusal a 403 was; this sentence is for a
+        // failure that named nothing.
+        errorMessage.value = describeFailure(error, "Не удалось создать опрос");
       }
     } else {
       resetForm();

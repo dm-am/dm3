@@ -4,19 +4,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 
-const { mockGetMessages, mockGetMessagesBefore, mockGetChat } = vi.hoisted(
-  () => ({
+const { mockGetMessages, mockGetMessagesBefore, mockGetChat, mockSendMessage } =
+  vi.hoisted(() => ({
     mockGetMessages: vi.fn(),
     mockGetMessagesBefore: vi.fn(),
     mockGetChat: vi.fn(),
-  }),
-);
+    mockSendMessage: vi.fn(),
+  }));
 
 vi.mock("../api/messagingApi", () => ({
   default: {
     getMessages: mockGetMessages,
     getMessagesBefore: mockGetMessagesBefore,
     getChat: mockGetChat,
+    sendMessage: mockSendMessage,
   },
 }));
 
@@ -133,5 +134,39 @@ describe("useMessagingStore, loading older messages", () => {
     await store.fetchMessages("c1" as never);
 
     expect(store.errorBefore).toBeNull();
+  });
+});
+
+describe("useMessagingStore, sending a message", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+  });
+
+  it("hands the refusal back and adds nothing to the list", async () => {
+    const store = await openChatWithHistory();
+    mockSendMessage.mockResolvedValue({
+      data: null,
+      error: { type: "", title: "", status: 400, traceId: "t" },
+    });
+
+    const { error } = await store.sendMessage("c1" as never, "письмо");
+
+    // The page restores what was typed from this. While the answer was the
+    // created message or null, a refusal and a success were the same value,
+    // and the page emptied the composer either way.
+    expect(error?.status).toBe(400);
+    expect(store.messagesList.map((m) => m.id)).toEqual(["m2", "m3"]);
+  });
+
+  it("appends the sent message and points the chat at it", async () => {
+    const store = await openChatWithHistory();
+    mockSendMessage.mockResolvedValue({ data: message(4), error: null });
+
+    const { error } = await store.sendMessage("c1" as never, "письмо");
+
+    expect(error).toBeNull();
+    expect(store.messagesList.map((m) => m.id)).toEqual(["m2", "m3", "m4"]);
+    expect(store.selectedChat?.lastMessage?.id).toBe("m4");
   });
 });

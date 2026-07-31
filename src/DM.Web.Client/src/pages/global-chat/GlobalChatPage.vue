@@ -31,6 +31,7 @@ import { WarningDialog } from "@/features/moderation-actions";
 import { LoginPrompt } from "@/features/auth";
 import { DashSeparator } from "@/shared/ui/DashSeparator";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
+import { notifyFailure } from "@/shared/lib/errors";
 import {
   groupMessagesWithSeparators,
   isDateSeparator,
@@ -712,7 +713,13 @@ function cancelEdit() {
 // (its own local editor state) — the page never reads back a stale copy.
 async function saveEditWithText(msgId: string, text: string) {
   if (text.trim()) {
-    await globalChatStore.updateMessage(msgId, text);
+    const { error } = await globalChatStore.updateMessage(msgId, text);
+    // The editor stays open with the text still in it: a closed editor over
+    // the unchanged message says the edit went through.
+    if (error) {
+      notifyFailure(error, "Не удалось сохранить сообщение");
+      return;
+    }
   }
   cancelEdit();
 }
@@ -919,18 +926,19 @@ async function handleSend() {
   if (!newMessage.value.trim() || sending.value) return;
   const text = newMessage.value;
   newMessage.value = "";
-  editorRef.value?.clear();
-  const result = await globalChatStore.sendMessage(text);
-  const failed = Boolean(result?.error);
-  // Give the text back on failure. Clearing before the request is what makes
-  // sending feel instant; losing what was written when it fails is not part
-  // of that bargain.
-  if (failed) {
+  const { error } = await globalChatStore.sendMessage(text);
+  // Give the text back on failure. Emptying the field before the request is
+  // what makes sending feel instant; losing what was written when it fails is
+  // not part of that bargain. The editor's own clear() waits for the send to
+  // land — it also drops the saved draft, and that copy is the one that
+  // outlives the tab.
+  if (error) {
     newMessage.value = text;
+    notifyFailure(error, "Не удалось отправить сообщение");
+    return;
   }
-  if (!failed) {
-    scrollToBottom();
-  }
+  editorRef.value?.clear();
+  scrollToBottom();
 }
 
 function requestDelete(id: string) {
@@ -942,10 +950,12 @@ function cancelDelete() {
 }
 
 async function confirmDelete() {
-  if (confirmingDeleteId.value) {
-    await globalChatStore.deleteMessage(confirmingDeleteId.value);
-    confirmingDeleteId.value = null;
-  }
+  if (!confirmingDeleteId.value) return;
+  const { error } = await globalChatStore.deleteMessage(
+    confirmingDeleteId.value,
+  );
+  confirmingDeleteId.value = null;
+  if (error) notifyFailure(error, "Не удалось удалить сообщение");
 }
 </script>
 

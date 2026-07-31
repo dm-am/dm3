@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Account;
+using DM.Web.API.Shared.Http;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Web.API.IntegrationTests.Helpers;
@@ -55,9 +56,14 @@ public static class UserTestHelper
                 $"PendingRegistration not found for email '{email}'");
         }
 
-        // 3. Activate with chosen login (token in URL, username in body)
+        // 3. Activate with chosen login (token in the header, username in body)
         var activateRequest = new { username = login };
-        var activateResponse = await client.PostAsJsonAsync($"/v1/account/activation/{pending.TokenId}", activateRequest);
+        var activate = new HttpRequestMessage(HttpMethod.Post, "/v1/account/activation")
+        {
+            Content = JsonContent.Create(activateRequest)
+        };
+        activate.Headers.Add(TokenHeaders.Account, pending.TokenId.ToString());
+        var activateResponse = await client.SendAsync(activate);
         if (activateResponse.StatusCode != HttpStatusCode.OK)
         {
             var body = await activateResponse.Content.ReadAsStringAsync();

@@ -1,4 +1,3 @@
-using System;
 using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Exceptions;
@@ -7,6 +6,7 @@ using DM.Web.API.Features.Community.Users;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.Http;
 using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Account.Recovery;
@@ -87,15 +87,16 @@ public class RecoveryController : ControllerBase
     /// - `ready`: Token valid, can proceed with password reset
     /// - `expired`: Token expired, user should request a new one
     /// </remarks>
-    /// <param name="token">Password reset token from email</param>
+    /// <param name="token">Password reset token from the mailed link, in the X-Dm-Account-Token header</param>
     /// <response code="200">Token info with status</response>
-    /// <response code="404">Token not found</response>
-    [HttpGet("password-reset/{token:guid}", Name = nameof(GetPasswordResetStatus))]
+    /// <response code="404">Token missing, malformed or unknown</response>
+    [HttpGet("password-reset", Name = nameof(GetPasswordResetStatus))]
     [ProducesResponseType(typeof(PasswordResetTokenInfo), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetPasswordResetStatus(Guid token)
+    public async Task<IActionResult> GetPasswordResetStatus(
+        [FromHeader(Name = TokenHeaders.Account)] string? token)
     {
-        var tokenInfo = await _recoveryService.GetTokenInfo(token);
+        var tokenInfo = await _recoveryService.GetTokenInfo(TokenHeaders.ParseAccountToken(token));
         if (tokenInfo == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.LinkInvalidOrUsed);
@@ -112,17 +113,21 @@ public class RecoveryController : ControllerBase
     ///
     /// After successful reset, user can login with new password.
     /// </remarks>
-    /// <param name="token">Password reset token from email</param>
+    /// <param name="token">Password reset token from the mailed link, in the X-Dm-Account-Token header</param>
     /// <param name="request">New password</param>
     /// <response code="200">Password reset successfully</response>
     /// <response code="400">Weak password (too short, etc.)</response>
+    /// <response code="404">Token missing or malformed</response>
     /// <response code="410">Token invalid or expired</response>
     /// <response code="429">Too many requests</response>
-    [HttpPost("password-reset/{token:guid}", Name = nameof(CompletePasswordReset))]
+    [HttpPost("password-reset", Name = nameof(CompletePasswordReset))]
     [ProducesResponseType(typeof(User), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status410Gone)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
-    public async Task<IActionResult> CompletePasswordReset(Guid token, [FromBody] PasswordResetCompletion request) =>
-        Ok(await _recoveryService.ResetPassword(token, request));
+    public async Task<IActionResult> CompletePasswordReset(
+        [FromHeader(Name = TokenHeaders.Account)] string? token,
+        [FromBody] PasswordResetCompletion request) =>
+        Ok(await _recoveryService.ResetPassword(TokenHeaders.ParseAccountToken(token), request));
 }

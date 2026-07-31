@@ -14,12 +14,43 @@ import {
   type RenderAudience,
 } from "./audience";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { describeFailure } from "@/shared/lib/errors";
 
 type QueryParams = Record<
   string,
   string | number | boolean | string[] | number[] | undefined
 >;
 type RequestBody = object | FormData;
+
+/**
+ * Options this client understands beyond the ones axios has. They ride on the
+ * request config, which is where the response interceptor finds them again on
+ * the request that failed.
+ */
+type RequestOptions = {
+  /**
+   * The caller shows the refusal itself, so the interceptor says nothing about
+   * a 403 on this request.
+   *
+   * The interceptor speaks for the statuses it knows more about than the call
+   * site does, and a 403 is one of them nearly everywhere: the caller knows
+   * which button was pressed, not why the server said no. Signing in is the
+   * exception. There the refusal is the whole answer to the submit — the
+   * account is banned, removed, or locked out after too many attempts — it
+   * belongs under the field with the rest of the answer, and the generic
+   * "Недостаточно прав для этого действия" replaced a reason with a sentence
+   * that names nothing.
+   */
+  ownsRefusal?: boolean;
+};
+
+/** An axios config with this client's own options riding along on it. */
+type TaggedRequest = AxiosRequestConfig & RequestOptions;
+
+/** Whether the request that failed said it would show the refusal itself. */
+function ownsRefusal(request?: AxiosRequestConfig): boolean {
+  return Boolean((request as TaggedRequest | undefined)?.ownsRefusal);
+}
 
 const defaultHeaders: { [key: string]: string } = {
   "Cache-Control": "no-cache",
@@ -112,10 +143,23 @@ class Api {
           onSessionExpired?.();
         }
 
-        // Handle 403 Forbidden
-        if (error.response?.status === 403) {
+        // Handle 403 Forbidden — say which refusal it was.
+        // The API names the reason: 68 throw sites answer 403 with a sentence
+        // of their own ("Вы в черном списке этого блога", "Аккаунт
+        // заблокирован"), and an authorization refusal is answered with one
+        // constant title, so the title is always safe to relay as it stands.
+        // Showing the general sentence over all of them left a blacklisted
+        // reader in front of a working comment box with nothing to learn from:
+        // the text comes back, the toast says the rights are missing, and the
+        // reason it will never be accepted was on the wire and thrown away.
+        // The fallback is for a 403 the error middleware never saw — the
+        // framework answers those with no body at all.
+        if (error.response?.status === 403 && !ownsRefusal(error.config)) {
           const { error: showError } = useToast();
-          showError("Недостаточно прав для этого действия");
+          const refusal = asProblem(error.response);
+          showError(
+            describeFailure(refusal, "Недостаточно прав для этого действия"),
+          );
         }
 
         // Handle 429 Too Many Requests
@@ -150,9 +194,15 @@ class Api {
     url: string,
     params?: QueryParams,
     audience: RenderAudience = RENDER_AUDIENCE.Display,
-    options?: { skipAuth?: boolean },
+    options?: { skipAuth?: boolean; headers?: Record<string, string> },
   ): Promise<ApiResult<T>> {
-    const headers: Record<string, string> = { [X_DM_AUDIENCE]: audience };
+    // A token-gated endpoint reads its credential from a header. A URL is written
+    // verbatim into the proxy access log and into the trace; a header is written
+    // to neither.
+    const headers: Record<string, string> = {
+      [X_DM_AUDIENCE]: audience,
+      ...options?.headers,
+    };
 
     // For public endpoints, explicitly remove credentials
     // This prevents activity tracking from background polling
@@ -169,8 +219,16 @@ class Api {
     return this.send(() => this.axios.get(url, { params, headers }));
   }
 
-  public post<T>(url: string, body?: RequestBody): Promise<ApiResult<T>> {
-    return this.send(() => this.axios.post(url, body));
+  public post<T>(
+    url: string,
+    body?: RequestBody,
+    options?: RequestOptions & { headers?: Record<string, string> },
+  ): Promise<ApiResult<T>> {
+    const request: TaggedRequest = {
+      ownsRefusal: options?.ownsRefusal,
+      headers: options?.headers,
+    };
+    return this.send(() => this.axios.post(url, body, request));
   }
 
   /*

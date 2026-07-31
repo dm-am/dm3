@@ -288,12 +288,8 @@ export interface CreateGameInput {
   info: string;
   /** Create the game as a draft (not visible to others) */
   draft?: boolean;
-  /**
-   * Game tag identifiers — backend Guids, NOT the numeric short ids served
-   * by /games/tags. The public tag list does not expose the Guids, so this
-   * field currently cannot be populated from TagSelector output.
-   */
-  tags?: string[];
+  /** Game tag short identifiers, the ones /games/tags serves */
+  tags?: number[];
   /** Attribute schema identifier */
   schemaId?: string;
   /** Assistant username */

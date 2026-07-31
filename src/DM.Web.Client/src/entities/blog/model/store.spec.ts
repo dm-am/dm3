@@ -14,6 +14,8 @@ const {
   mockGetParticipatingBlogs,
   mockGetBlog,
   mockGetPublications,
+  mockUpdateBlogComment,
+  mockDeleteBlogComment,
   mockApiGet,
 } = vi.hoisted(() => ({
   mockGetPublicBlogs: vi.fn(),
@@ -22,6 +24,8 @@ const {
   mockGetParticipatingBlogs: vi.fn(),
   mockGetBlog: vi.fn(),
   mockGetPublications: vi.fn(),
+  mockUpdateBlogComment: vi.fn(),
+  mockDeleteBlogComment: vi.fn(),
   mockApiGet: vi.fn(),
 }));
 
@@ -33,6 +37,8 @@ vi.mock("../api/blogApi", () => ({
     getParticipatingBlogs: mockGetParticipatingBlogs,
     getBlog: mockGetBlog,
     getPublications: mockGetPublications,
+    updateBlogComment: mockUpdateBlogComment,
+    deleteBlogComment: mockDeleteBlogComment,
   },
 }));
 
@@ -583,5 +589,38 @@ describe("useBlogDetailsStore", () => {
     await load;
 
     expect(store.blog).toBeNull();
+  });
+
+  describe("comment mutations", () => {
+    const refusal = {
+      type: "",
+      title: "Недостаточно прав",
+      status: 403,
+      traceId: "t",
+    };
+
+    it("leaves the comment untouched when the delete is refused", async () => {
+      mockDeleteBlogComment.mockResolvedValue({ data: null, error: refusal });
+
+      const store = useBlogDetailsStore();
+      store.comments = [{ id: "c-1", text: "Текст" }] as never;
+
+      const { error } = await store.deleteComment("c-1");
+
+      expect(error).toBe(refusal);
+      expect(store.comments[0].isRemoved).toBeFalsy();
+    });
+
+    it("keeps the old text when the edit is refused", async () => {
+      mockUpdateBlogComment.mockResolvedValue({ data: null, error: refusal });
+
+      const store = useBlogDetailsStore();
+      store.comments = [{ id: "c-1", text: "Текст" }] as never;
+
+      const { error } = await store.updateComment("c-1", "Новый текст");
+
+      expect(error).toBe(refusal);
+      expect(store.comments[0].text).toBe("Текст");
+    });
   });
 });

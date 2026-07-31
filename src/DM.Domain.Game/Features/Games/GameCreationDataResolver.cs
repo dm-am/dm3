@@ -31,10 +31,18 @@ internal class GameCreationDataResolver : IGameCreationDataResolver
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Guid>> GetAvailableTagIds()
+    public async Task<IReadOnlyCollection<Guid>> ResolveTagIds(IEnumerable<int>? shortIds)
     {
+        var requested = shortIds?.ToHashSet();
+        if (requested is not { Count: > 0 })
+        {
+            return [];
+        }
+
+        // Filtering the catalog rather than the request also settles duplicates:
+        // the same tag twice would otherwise become two rows in the link table.
         var tags = await _gameRepository.GetTags();
-        return tags.Select(t => t.Id);
+        return tags.Where(t => requested.Contains(t.ShortId)).Select(t => t.Id).ToList();
     }
 
     /// <inheritdoc />

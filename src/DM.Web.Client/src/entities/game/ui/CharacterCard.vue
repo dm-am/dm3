@@ -5,6 +5,11 @@
 // server-rendered HTML in `valueBbText` and are bound through ContentText;
 // the raw `value` string is NEVER piped to v-html or interpolated as markup
 // (docs/architecture/BBCODE_RENDERING.md).
+//
+// The card draws no action of its own: what a viewer may do with a character
+// depends on their role in the game, and that rule belongs to the feature that
+// owns it rather than to the entity. Whatever the consumer puts into the
+// `controls` slot is rendered under the character's name.
 import { computed, ref } from "vue";
 import type { Character, CharacterAttribute } from "../model/types";
 import { UserLink } from "@/entities/user/@x/game";
@@ -81,6 +86,11 @@ function toggleExpand() {
         <secondary-text v-else-if="character.isNpc" class="character-author">
           НПС
         </secondary-text>
+        <!-- The header toggles the card, so a click on a control has to stop
+             before it gets there. -->
+        <div v-if="$slots.controls" class="character-controls" @click.stop>
+          <slot name="controls" />
+        </div>
       </div>
       <SvgIcon
         v-if="hasDetails"
@@ -156,6 +166,11 @@ function toggleExpand() {
 .character-author
   font-size: $secondary-font-size
   margin-top: $tiny
+
+// Typography only: a slot that renders nothing must not add a box to the card,
+// so the spacing above the control lives on the control itself.
+.character-controls
+  font-size: $secondary-font-size
 
 .expand-icon
   color: $text-muted

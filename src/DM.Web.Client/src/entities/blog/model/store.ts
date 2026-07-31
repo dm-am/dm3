@@ -473,24 +473,31 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
   }
 
   // --- Single discussion-comment mutations (edit / delete / likes) ---
-  // Mirror the forum boardsStore idiom: optimistic in-place list patches
-  // from the server response, no full reload.
+  // Mirror the forum boardsStore idiom: in-place list patches from the server
+  // response, no full reload, and nothing patched when the server refused —
+  // the error goes up to the page instead.
 
   async function updateComment(id: string, text: string) {
-    const { data } = await blogApi.updateBlogComment(id, { text });
-    const updated = unwrapResource<Comment>(data);
-    if (updated) {
-      const index = comments.value.findIndex((c) => c.id === id);
-      if (index !== -1) comments.value[index] = updated;
+    const { data, error } = await blogApi.updateBlogComment(id, { text });
+    if (!error) {
+      const updated = unwrapResource<Comment>(data);
+      if (updated) {
+        const index = comments.value.findIndex((c) => c.id === id);
+        if (index !== -1) comments.value[index] = updated;
+      }
     }
+    return { error };
   }
 
   async function deleteComment(id: string) {
-    await blogApi.deleteBlogComment(id);
-    const index = comments.value.findIndex((c) => c.id === id);
-    if (index !== -1) {
-      comments.value[index] = markRemoved(comments.value[index]);
+    const { error } = await blogApi.deleteBlogComment(id);
+    if (!error) {
+      const index = comments.value.findIndex((c) => c.id === id);
+      if (index !== -1) {
+        comments.value[index] = markRemoved(comments.value[index]);
+      }
     }
+    return { error };
   }
 
   async function likeComment(id: string) {
@@ -509,7 +516,8 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
   }
 
   async function unlikeComment(id: string) {
-    await blogApi.unlikeBlogComment(id);
+    const { error } = await blogApi.unlikeBlogComment(id);
+    if (error) return;
     const index = comments.value.findIndex((c) => c.id === id);
     if (index === -1) return;
     const comment = comments.value[index];

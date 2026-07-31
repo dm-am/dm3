@@ -61,16 +61,19 @@ async function handleSend() {
   if (!newComment.value.trim() || sending.value) return;
   const text = newComment.value;
   newComment.value = "";
-  editorRef.value?.clear();
   sending.value = true;
   const result = await createComment(text);
   sending.value = false;
   const failed = Boolean(result?.error);
-  // Give the text back on failure. Clearing before the request is what makes
-  // sending feel instant; losing what was written when it fails is not part
-  // of that bargain.
+  // Give the text back on failure. Emptying the field before the request is
+  // what makes sending feel instant; losing what was written when it fails is
+  // not part of that bargain. The editor's own clear() waits for the send to
+  // land — it also drops the saved draft, and that copy is the one that
+  // outlives the tab.
   if (failed) {
     newComment.value = text;
+  } else {
+    editorRef.value?.clear();
   }
 }
 

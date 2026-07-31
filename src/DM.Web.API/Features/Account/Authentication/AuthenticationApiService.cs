@@ -96,9 +96,13 @@ internal class AuthenticationApiService : IAuthenticationApiService
                 {
                     ["password"] = "Неверная почта или пароль"
                 });
+            // "Забанен", not "заблокирован": the security history captions the
+            // lockout after failed attempts "Аккаунт заблокирован", and that is
+            // the AccountLocked branch of this very switch. One word, one
+            // meaning — the rest of the product calls this a ban.
             case AuthenticationError.Banned:
                 throw new HttpException(HttpStatusCode.Forbidden,
-                    "Аккаунт заблокирован.");
+                    "Аккаунт забанен");
             case AuthenticationError.PendingRegistration:
                 throw new HttpBadRequestException(new Dictionary<string, string>
                 {
@@ -107,7 +111,7 @@ internal class AuthenticationApiService : IAuthenticationApiService
                 });
             case AuthenticationError.Removed:
                 throw new HttpException(HttpStatusCode.Forbidden,
-                    "Аккаунт удален.");
+                    "Аккаунт удален");
             case AuthenticationError.Forbidden:
                 throw new HttpException(HttpStatusCode.Forbidden,
                     "Ошибка авторизации.");

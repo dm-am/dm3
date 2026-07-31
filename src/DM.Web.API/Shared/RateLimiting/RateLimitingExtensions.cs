@@ -1,5 +1,7 @@
 using System;
 using System.Threading.RateLimiting;
+using DM.Web.API.Middleware;
+using DM.Web.API.Shared.Http;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
@@ -28,14 +30,18 @@ internal static class RateLimitingExtensions
     private const int GlobalPermitLimit = 100;
 
     /// <summary>What a limiter counts separately.</summary>
-    private enum Partition
+    internal enum Partition
     {
         /// <summary>By peer address. For endpoints reachable without a session.</summary>
         Address,
 
         /// <summary>
         /// By account, falling back to the address for guests. Keeps one noisy
-        /// account from consuming the budget of everyone behind a shared address.
+        /// account from consuming the budget of everyone behind a shared address,
+        /// and keeps one account from multiplying its budget by moving between
+        /// addresses. The account is the one the session cookie names, put on the
+        /// request by <see cref="RateLimitAccountMiddleware" /> — see it for why
+        /// it cannot be read here.
         /// </summary>
         AccountThenAddress,
     }
@@ -176,12 +182,25 @@ internal static class RateLimitingExtensions
             });
     }
 
-    private static string PartitionKey(HttpContext context, Partition partition)
+    /// <summary>Whose budget one request spends.</summary>
+    /// <remarks>
+    /// HttpContext.User is empty in this project — no authentication scheme is
+    /// registered and the identity lives in IIdentityProvider — so the account
+    /// asked of it was always null and every "per account" policy counted per
+    /// address instead. The address comes from the shared helper rather than
+    /// straight off the connection, so that a dual-stack peer is one caller here
+    /// in one spelling, the same as it is in the login journal. The two answers
+    /// share a namespace and are therefore spelled apart: nothing about an
+    /// address may name an account by coincidence.
+    /// </remarks>
+    internal static string PartitionKey(HttpContext context, Partition partition)
     {
-        var address = context.Connection.RemoteIpAddress?.ToString();
+        var account = partition == Partition.AccountThenAddress
+            ? RateLimitAccountMiddleware.Account(context)
+            : null;
 
-        return partition == Partition.AccountThenAddress
-            ? context.User.Identity?.Name ?? address ?? "anon"
-            : address ?? "unknown";
+        return account.HasValue
+            ? $"account:{account.Value}"
+            : $"address:{context.GetClientAddress()}";
     }
 }

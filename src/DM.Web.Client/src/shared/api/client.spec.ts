@@ -1,7 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// One instance, so what the interceptor said can be read back. A factory that
+// returns a fresh object per call hands every assertion a spy nobody called.
+const toast = vi.hoisted(() => ({
+  error: vi.fn(),
+  warning: vi.fn(),
+  success: vi.fn(),
+}));
+
 vi.mock("@/shared/lib/composables/useToast", () => ({
-  useToast: () => ({ error: vi.fn(), warning: vi.fn(), success: vi.fn() }),
+  useToast: () => toast,
 }));
 
 /**
@@ -101,6 +109,23 @@ describe("Api.send", () => {
   });
 });
 
+/** Loads the client with a captured interceptor, for the two describes below. */
+async function loadClientWithInterceptor() {
+  const axios = (await import("axios")).default;
+  const use = vi.fn();
+
+  vi.spyOn(axios, "create").mockReturnValue({
+    interceptors: { response: { use } },
+  } as never);
+
+  const module = await import("./client");
+  const onRejected = use.mock.calls[0][1] as (
+    error: unknown,
+  ) => Promise<unknown>;
+
+  return { module, onRejected };
+}
+
 /**
  * A 401 means the session is gone, and exactly one module owns "who the viewer
  * is": the auth store. The interceptor used to clear the persisted copy behind
@@ -113,22 +138,6 @@ describe("Api on 401", () => {
     vi.resetModules();
     localStorage.clear();
   });
-
-  async function loadClientWithInterceptor() {
-    const axios = (await import("axios")).default;
-    const use = vi.fn();
-
-    vi.spyOn(axios, "create").mockReturnValue({
-      interceptors: { response: { use } },
-    } as never);
-
-    const module = await import("./client");
-    const onRejected = use.mock.calls[0][1] as (
-      error: unknown,
-    ) => Promise<unknown>;
-
-    return { module, onRejected };
-  }
 
   it("hands the expired session to the app instead of clearing storage", async () => {
     const { module, onRejected } = await loadClientWithInterceptor();
@@ -144,5 +153,68 @@ describe("Api on 401", () => {
     // The persisted copy has exactly one writer, the auth store. A second one
     // here is how the store and localStorage drifted apart in the first place.
     expect(localStorage.getItem("user")).not.toBeNull();
+  });
+});
+
+/**
+ * A 403 is not one event, and the server says which one it is: 68 throw sites
+ * answer a refusal with a sentence of their own, and an authorization refusal
+ * is answered with one constant title — so the title is the answer, whole.
+ *
+ * Saying "Недостаточно прав для этого действия" over all of them told a
+ * blacklisted reader nothing: the comment box is open, the text comes back, and
+ * the one sentence that would explain it was on the wire and thrown away. This
+ * is the only place that reads it, because notifyFailure stays quiet on 403 to
+ * keep a failure to one toast.
+ */
+describe("Api on 403", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    toast.error.mockClear();
+  });
+
+  async function refuse(body: unknown) {
+    const { onRejected } = await loadClientWithInterceptor();
+
+    await expect(
+      onRejected({ response: { status: 403, data: body, headers: {} } }),
+    ).rejects.toBeDefined();
+  }
+
+  it("says the reason the server named", async () => {
+    await refuse({
+      type: "",
+      title: "Вы в черном списке этого блога",
+      status: 403,
+      traceId: "00-abc",
+    });
+
+    expect(toast.error).toHaveBeenCalledWith("Вы в черном списке этого блога");
+  });
+
+  it("stays quiet for a request that shows the refusal itself", async () => {
+    // Signing in owns its refusal: the server names the state of the account and
+    // the form puts that under the field. A second, weaker sentence in a toast
+    // would contradict it.
+    const { onRejected } = await loadClientWithInterceptor();
+
+    await expect(
+      onRejected({
+        response: { status: 403, headers: {} },
+        config: { ownsRefusal: true },
+      }),
+    ).rejects.toBeDefined();
+
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("says the general sentence when the refusal named nothing", async () => {
+    // A 403 the error middleware never saw — a rejected preflight, a path the
+    // framework refuses before routing — comes back with a zero-length body.
+    await refuse("");
+
+    expect(toast.error).toHaveBeenCalledWith(
+      "Недостаточно прав для этого действия",
+    );
   });
 });

@@ -61,8 +61,8 @@ public class CreateTicketIntakeResponse
     /// <summary>
     /// Public tracking token for guest submissions. Present only for guests —
     /// null for authenticated authors, who track their tickets from
-    /// "Мои обращения". Used to build the guest tracking URL
-    /// (GET /v1/tickets/track/{token}).
+    /// "Мои обращения". Sent back on the guest tracking call in the
+    /// X-Dm-Ticket-Token header (GET /v1/tickets/track).
     /// </summary>
     public string? TrackingToken { get; set; }
 }

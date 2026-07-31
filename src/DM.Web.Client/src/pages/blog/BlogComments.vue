@@ -45,12 +45,14 @@ function getCommentNumber(index: number): number {
 }
 
 // --- Single-comment actions (edit / delete / likes / warn) ---
-async function handleEdit(id: string, text: string) {
-  await blogStore.updateComment(id, text);
+// The item shows the refusal and keeps its editor open, so these hand the
+// store's answer straight back to it.
+function handleEdit(id: string, text: string) {
+  return blogStore.updateComment(id, text);
 }
 
-async function handleDelete(id: string) {
-  await blogStore.deleteComment(id);
+function handleDelete(id: string) {
+  return blogStore.deleteComment(id);
 }
 
 async function handleLike(id: string) {
@@ -115,7 +117,6 @@ async function handleSend() {
 
   const text = newComment.value;
   newComment.value = "";
-  editorRef.value?.clear();
   sending.value = true;
 
   let failed = false;
@@ -131,11 +132,15 @@ async function handleSend() {
   } finally {
     sending.value = false;
   }
-  // Give the text back on failure. Clearing before the request is what makes
-  // sending feel instant; losing what was written when it fails is not part
-  // of that bargain.
+  // Give the text back on failure. Emptying the field before the request is
+  // what makes sending feel instant; losing what was written when it fails is
+  // not part of that bargain. The editor's own clear() waits for the send to
+  // land — it also drops the saved draft, and that copy is the one that
+  // outlives the tab.
   if (failed) {
     newComment.value = text;
+  } else {
+    editorRef.value?.clear();
   }
 }
 
@@ -184,8 +189,8 @@ useFetchData(
             :number="getCommentNumber(index)"
             :data-id="comment.id"
             :fetch-edit-source="fetchEditSource"
-            @edit="handleEdit"
-            @delete="handleDelete"
+            :submit-edit="handleEdit"
+            :submit-delete="handleDelete"
             @like="handleLike"
             @unlike="handleUnlike"
             @warn="handleWarn"

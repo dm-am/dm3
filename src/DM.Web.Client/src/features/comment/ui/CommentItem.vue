@@ -2,7 +2,11 @@
 import { ref, computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
-import type { ApiResult, Envelope } from "@/shared/api/models/common";
+import type {
+  ApiResult,
+  Envelope,
+  GeneralError,
+} from "@/shared/api/models/common";
 import type { Comment } from "@/shared/api/models/common/comment";
 import { unwrapResource } from "@/shared/api";
 import { useAuthStore, AvatarImg, userIsModerator } from "@/entities/user";
@@ -19,8 +23,12 @@ import { highlightDom, clearDomHighlight } from "@/shared/lib/utils/highlight";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { notifyFailure } from "@/shared/lib/errors";
 import { getLikesTooltip } from "@/shared/lib/utils/chat";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+
+/** What a mutation answers with: null when the server took the change. */
+type SubmitResult = { error: GeneralError | null };
 
 const props = withDefaults(
   defineProps<{
@@ -37,6 +45,19 @@ const props = withDefaults(
      * way to edit.
      */
     fetchEditSource: (id: string) => Promise<ApiResult<Envelope<Comment>>>;
+    /**
+     * Saves the edited BBCode and answers whether the server took it. A
+     * function rather than an event, because only the answer may close the
+     * editor: an event has no result to wait for, and closing on the emit is
+     * what threw a rejected edit away and left the reader in front of the old
+     * text with nothing said.
+     */
+    submitEdit: (id: string, text: string) => Promise<SubmitResult>;
+    /**
+     * Deletes the comment. A function for the same reason: only the answer
+     * tells this item whether the deleted-comment placeholder is true.
+     */
+    submitDelete: (id: string) => Promise<SubmitResult>;
   }>(),
   {
     compact: true,
@@ -44,8 +65,6 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  edit: [id: string, text: string];
-  delete: [id: string];
   like: [id: string];
   unlike: [id: string];
   warn: [id: string];
@@ -175,11 +194,19 @@ function cancelEdit() {
   editText.value = "";
 }
 
-function saveEdit() {
-  if (editText.value.trim()) {
-    emit("edit", props.comment.id, editText.value);
+const saving = ref(false);
+
+async function saveEdit() {
+  if (!editText.value.trim() || saving.value) return;
+  saving.value = true;
+  const { error } = await props.submitEdit(props.comment.id, editText.value);
+  saving.value = false;
+  if (error) {
+    notifyFailure(error, "Не удалось сохранить комментарий");
+    return;
   }
   isEditing.value = false;
+  editText.value = "";
 }
 
 function handleEditKeydown(e: KeyboardEvent) {
@@ -198,8 +225,14 @@ function toggleLike() {
   }
 }
 
-function handleDelete() {
-  emit("delete", props.comment.id);
+const deleting = ref(false);
+
+async function handleDelete() {
+  if (deleting.value) return;
+  deleting.value = true;
+  const { error } = await props.submitDelete(props.comment.id);
+  deleting.value = false;
+  if (error) notifyFailure(error, "Не удалось удалить комментарий");
 }
 
 function handleWarn() {

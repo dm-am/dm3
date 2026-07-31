@@ -66,12 +66,14 @@ function getCommentNumber(index: number): number {
   return offset + index + 1;
 }
 
-async function handleEdit(id: string, text: string) {
-  await boardsStore.updateComment(id, text);
+// The item shows the refusal and keeps its editor open, so these hand the
+// store's answer straight back to it.
+function handleEdit(id: string, text: string) {
+  return boardsStore.updateComment(id, text);
 }
 
-async function handleDelete(id: string) {
-  await boardsStore.deleteComment(id);
+function handleDelete(id: string) {
+  return boardsStore.deleteComment(id);
 }
 
 async function handleLike(id: string) {
@@ -160,8 +162,8 @@ function pagingAnchor(): HTMLElement | null {
         :number="getCommentNumber(index)"
         :search-query="filterState.search"
         :fetch-edit-source="fetchEditSource"
-        @edit="handleEdit"
-        @delete="handleDelete"
+        :submit-edit="handleEdit"
+        :submit-delete="handleDelete"
         @like="handleLike"
         @unlike="handleUnlike"
         @warn="handleWarn"

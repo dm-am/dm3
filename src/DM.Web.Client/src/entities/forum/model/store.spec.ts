@@ -36,6 +36,8 @@ const {
   mockPostTopicLike,
   mockDeleteTopicLike,
   mockGetNews,
+  mockUpdateTopic,
+  mockReorderPinnedTopics,
 } = vi.hoisted(() => ({
   mockGetBoards: vi.fn(),
   mockGetBoard: vi.fn(),
@@ -51,6 +53,8 @@ const {
   mockPostTopicLike: vi.fn(),
   mockDeleteTopicLike: vi.fn(),
   mockGetNews: vi.fn(),
+  mockUpdateTopic: vi.fn(),
+  mockReorderPinnedTopics: vi.fn(),
 }));
 
 vi.mock("../api/forumApi", () => ({
@@ -69,6 +73,8 @@ vi.mock("../api/forumApi", () => ({
     postTopicLike: mockPostTopicLike,
     deleteTopicLike: mockDeleteTopicLike,
     getNews: mockGetNews,
+    updateTopic: mockUpdateTopic,
+    reorderPinnedTopics: mockReorderPinnedTopics,
   },
 }));
 
@@ -103,6 +109,7 @@ vi.mock("pinia", async (importOriginal) => {
 });
 
 import { useBoardsStore } from "./store";
+import { requestNotSent } from "@/shared/lib/errors";
 
 const createMockUser = (id: string, username: string): User =>
   ({
@@ -556,6 +563,26 @@ describe("useBoardsStore", () => {
 
       expect(store.comments?.resources[0].text).toBe("Updated");
     });
+
+    it("keeps the old text and returns the refusal when the server rejects the edit", async () => {
+      const original = createMockComment("comment-1", "Original");
+      const refusal = {
+        type: "",
+        title: "Комментарий не найден",
+        status: 404,
+        traceId: "t",
+      };
+
+      mockUpdateComment.mockResolvedValue({ data: null, error: refusal });
+
+      const store = useBoardsStore();
+      store.comments = { resources: [original], paging: null } as any;
+
+      const { error } = await store.updateComment("comment-1", "Updated");
+
+      expect(error).toBe(refusal);
+      expect(store.comments?.resources[0].text).toBe("Original");
+    });
   });
 
   // ============================================================================
@@ -574,6 +601,26 @@ describe("useBoardsStore", () => {
       await store.deleteComment("comment-1");
 
       expect(store.comments?.resources[0].isRemoved).toBe(true);
+    });
+
+    it("leaves the comment in place and returns the refusal when the delete fails", async () => {
+      const comment = createMockComment("comment-1", "To delete");
+      const refusal = {
+        type: "",
+        title: "Недостаточно прав",
+        status: 403,
+        traceId: "t",
+      };
+
+      mockDeleteComment.mockResolvedValue({ data: null, error: refusal });
+
+      const store = useBoardsStore();
+      store.comments = { resources: [comment], paging: null } as any;
+
+      const { error } = await store.deleteComment("comment-1");
+
+      expect(error).toBe(refusal);
+      expect(store.comments?.resources[0].isRemoved).toBeFalsy();
     });
   });
 
@@ -688,6 +735,65 @@ describe("useBoardsStore", () => {
       await store.fetchNews();
 
       expect(store.news).toBeNull();
+    });
+  });
+
+  // ============================================================================
+  // PINNED TOPICS (moderator actions)
+  // ============================================================================
+
+  describe("Pinned topics", () => {
+    it("hands the caller the problem document when the pin request fails", async () => {
+      const store = useBoardsStore();
+      store.selectedBoard = createMockBoard("board-1", "Board");
+      store.topics = {
+        resources: [createMockTopic("topic-1", "Topic", "board-1")],
+        paging: null,
+      } as any;
+
+      mockUpdateTopic.mockResolvedValue({
+        data: null,
+        error: { type: "", title: "", status: 409, traceId: "trace" },
+      });
+
+      const result = await store.togglePinTopic("topic-1");
+
+      expect(result.error?.status).toBe(409);
+      // Nothing changed, so nothing is refetched.
+      expect(mockGetTopics).not.toHaveBeenCalled();
+    });
+
+    it("reports a mutation it never sent as a problem document, not as a JS error", async () => {
+      const store = useBoardsStore();
+
+      const result = await store.reorderPinnedTopics(["topic-1"]);
+
+      // The page reads this out with notifyFailure, which needs a status.
+      expect(result.error).toBe(requestNotSent);
+    });
+
+    it("keeps the listing when the refresh after a successful pin fails", async () => {
+      const store = useBoardsStore();
+      store.selectedBoard = createMockBoard("board-1", "Board");
+      store.attachedTopics = [] as any;
+      store.topics = {
+        resources: [createMockTopic("topic-1", "Topic", "board-1")],
+        paging: null,
+      } as any;
+
+      mockUpdateTopic.mockResolvedValue({ data: null, error: null });
+      mockGetTopics.mockResolvedValue({
+        data: null,
+        error: { type: "", title: "", status: 500, traceId: "trace" },
+      });
+
+      const result = await store.togglePinTopic("topic-1");
+
+      // The pin landed; a failed refresh must not turn the board into
+      // "Топиков пока нет".
+      expect(result.error).toBeUndefined();
+      expect(store.topics?.resources).toHaveLength(1);
+      expect(store.attachedTopics).toEqual([]);
     });
   });
 });

@@ -39,6 +39,8 @@ const {
   mockGetPosts,
   mockGetCharacters,
   mockGetGameComments,
+  mockUpdateGameComment,
+  mockDeleteGameComment,
   mockSubscribe,
   mockUnsubscribe,
 } = vi.hoisted(() => ({
@@ -55,6 +57,8 @@ const {
   mockGetPosts: vi.fn(),
   mockGetCharacters: vi.fn(),
   mockGetGameComments: vi.fn(),
+  mockUpdateGameComment: vi.fn(),
+  mockDeleteGameComment: vi.fn(),
   mockSubscribe: vi.fn(),
   mockUnsubscribe: vi.fn(),
 }));
@@ -74,6 +78,8 @@ vi.mock("../api/gameApi", () => ({
     getPosts: mockGetPosts,
     getCharacters: mockGetCharacters,
     getGameComments: mockGetGameComments,
+    updateGameComment: mockUpdateGameComment,
+    deleteGameComment: mockDeleteGameComment,
     subscribe: mockSubscribe,
     unsubscribe: mockUnsubscribe,
   },
@@ -864,6 +870,43 @@ describe("useGameDetailsStore", () => {
       await load;
 
       expect(store.game).toBeNull();
+    });
+  });
+
+  // ============================================================================
+  // COMMENT MUTATIONS
+  // ============================================================================
+
+  describe("comment mutations", () => {
+    const refusal = {
+      type: "",
+      title: "Недостаточно прав",
+      status: 403,
+      traceId: "t",
+    };
+
+    it("leaves the comment untouched when the delete is refused", async () => {
+      mockDeleteGameComment.mockResolvedValue({ data: null, error: refusal });
+
+      const store = useGameDetailsStore();
+      store.comments = [{ id: "c-1", text: "Текст" }] as never;
+
+      const { error } = await store.deleteComment("c-1");
+
+      expect(error).toBe(refusal);
+      expect(store.comments[0].isRemoved).toBeFalsy();
+    });
+
+    it("keeps the old text when the edit is refused", async () => {
+      mockUpdateGameComment.mockResolvedValue({ data: null, error: refusal });
+
+      const store = useGameDetailsStore();
+      store.comments = [{ id: "c-1", text: "Текст" }] as never;
+
+      const { error } = await store.updateComment("c-1", "Новый текст");
+
+      expect(error).toBe(refusal);
+      expect(store.comments[0].text).toBe("Текст");
     });
   });
 });

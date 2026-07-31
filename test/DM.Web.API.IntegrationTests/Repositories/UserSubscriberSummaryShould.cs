@@ -71,9 +71,9 @@ public class UserSubscriberSummaryShould : IntegrationTestBase
 
         // The point: the blog line has a subscriber and the preview cannot show
         // it, so the count is what tells the reader it exists.
-        user.SubscribersByCategory.Games.Should().Be(SubscriptionPolicy.PreviewCap);
-        user.SubscribersByCategory.Blogs.Should().Be(1);
-        user.SubscribersByCategory.Topics.Should().Be(0);
+        user.SubscribersByCategory!.Games.Should().Be(SubscriptionPolicy.PreviewCap);
+        user.SubscribersByCategory!.Blogs.Should().Be(1);
+        user.SubscribersByCategory!.Topics.Should().Be(0);
     }
 
     [Fact]
@@ -97,9 +97,9 @@ public class UserSubscriberSummaryShould : IntegrationTestBase
 
         var user = (await repository.GetUsersAsync(new[] { target })).Single();
 
-        user.SubscribersByCategory.Games.Should().Be(1);
-        user.SubscribersByCategory.Blogs.Should().Be(1);
-        user.SubscribersByCategory.Topics.Should().Be(1);
+        user.SubscribersByCategory!.Games.Should().Be(1);
+        user.SubscribersByCategory!.Blogs.Should().Be(1);
+        user.SubscribersByCategory!.Topics.Should().Be(1);
     }
 
     [Fact]
@@ -116,9 +116,9 @@ public class UserSubscriberSummaryShould : IntegrationTestBase
 
         // No summary row at all for this user, which is a different path through
         // the assignment than a row of zeroes.
-        user.SubscribersByCategory.Games.Should().Be(0);
-        user.SubscribersByCategory.Blogs.Should().Be(0);
-        user.SubscribersByCategory.Topics.Should().Be(0);
+        user.SubscribersByCategory!.Games.Should().Be(0);
+        user.SubscribersByCategory!.Blogs.Should().Be(0);
+        user.SubscribersByCategory!.Topics.Should().Be(0);
         user.Subscribers.Should().BeEmpty();
     }
 

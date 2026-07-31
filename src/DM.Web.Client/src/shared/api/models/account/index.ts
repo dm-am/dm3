@@ -119,7 +119,7 @@ export type SessionInfo = {
 
 /**
  * Username change request (requires moderation)
- * Note: requestedUsername is only set after approval via POST /username-change/{token}
+ * Note: requestedUsername is only set after approval via POST /username-change/complete
  */
 export type UsernameChangeRequest = {
   id: string;
@@ -136,7 +136,7 @@ export type UsernameChangeRequest = {
  * Request to create username change request.
  * Note: User does NOT specify desired username here.
  * This is a request for permission to change username.
- * The new username is chosen later via POST /username-change/{token}.
+ * The new username is chosen later via POST /username-change/complete.
  */
 export type CreateUsernameChangeRequest = {
   reason: string;

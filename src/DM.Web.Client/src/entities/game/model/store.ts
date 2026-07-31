@@ -554,24 +554,31 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   }
 
   // --- Single comment mutations (edit / delete / likes) ---
-  // Mirror the forum boardsStore idiom: optimistic in-place list patches
-  // from the server response, no full reload.
+  // Mirror the forum boardsStore idiom: in-place list patches from the server
+  // response, no full reload, and nothing patched when the server refused —
+  // the error goes up to the page instead.
 
   async function updateComment(id: string, text: string) {
-    const { data } = await gameApi.updateGameComment(id, { text });
-    const updated = unwrapResource<Comment>(data);
-    if (updated) {
-      const index = comments.value.findIndex((c) => c.id === id);
-      if (index !== -1) comments.value[index] = updated;
+    const { data, error } = await gameApi.updateGameComment(id, { text });
+    if (!error) {
+      const updated = unwrapResource<Comment>(data);
+      if (updated) {
+        const index = comments.value.findIndex((c) => c.id === id);
+        if (index !== -1) comments.value[index] = updated;
+      }
     }
+    return { error };
   }
 
   async function deleteComment(id: string) {
-    await gameApi.deleteGameComment(id);
-    const index = comments.value.findIndex((c) => c.id === id);
-    if (index !== -1) {
-      comments.value[index] = markRemoved(comments.value[index]);
+    const { error } = await gameApi.deleteGameComment(id);
+    if (!error) {
+      const index = comments.value.findIndex((c) => c.id === id);
+      if (index !== -1) {
+        comments.value[index] = markRemoved(comments.value[index]);
+      }
     }
+    return { error };
   }
 
   async function likeComment(id: string) {
@@ -590,7 +597,8 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   }
 
   async function unlikeComment(id: string) {
-    await gameApi.unlikeGameComment(id);
+    const { error } = await gameApi.unlikeGameComment(id);
+    if (error) return;
     const index = comments.value.findIndex((c) => c.id === id);
     if (index === -1) return;
     const comment = comments.value[index];

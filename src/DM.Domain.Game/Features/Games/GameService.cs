@@ -112,16 +112,10 @@ internal class GameService : IGameService
         await _creationValidator.ValidateAndAuthorize(createGame);
         var userId = _identityProvider.Current.User.UserId;
 
-        IEnumerable<Guid> validTagIds;
-        if (createGame.Tags != null && createGame.Tags.Any())
-        {
-            var availableTags = (await _dataResolver.GetAvailableTagIds()).ToHashSet();
-            validTagIds = createGame.Tags.Where(availableTags.Contains).ToList();
-        }
-        else
-        {
-            validTagIds = Enumerable.Empty<Guid>();
-        }
+        // The master picks tags by short id — the alias the tag list serves and
+        // the game filters take. The link table keys on the tags' own
+        // identifiers, so the translation happens where the catalog is read.
+        var validTagIds = await _dataResolver.ResolveTagIds(createGame.Tags);
 
         if (createGame.AttributeSchemaId.HasValue)
         {

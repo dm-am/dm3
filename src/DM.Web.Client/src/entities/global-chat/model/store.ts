@@ -320,30 +320,41 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     messagesById.set(message.id, message);
   }
 
+  /** Returns the error when the edit failed, so the editor can stay open. */
   async function updateMessage(id: string, text: string) {
-    const { data } = await globalChatApi.updateMessage(id, text);
-    if (data) {
+    const { data, error } = await globalChatApi.updateMessage(id, text);
+    if (!error && data) {
       const index = messages.value.findIndex((m) => m.id === id);
       if (index !== -1) {
         messages.value[index] = data;
         messagesById.set(id, data);
       }
     }
+    return { error };
   }
 
+  /**
+   * Returns the error when the delete failed. Striking the message through on
+   * a refusal is the worst of both: the moderator reads the deleted-message
+   * placeholder beside the toast that says it was not deleted, and leaves
+   * believing the text is gone for everyone else.
+   */
   async function deleteMessage(id: string) {
-    await globalChatApi.deleteMessage(id);
-    const index = messages.value.findIndex((m) => m.id === id);
-    if (index !== -1) {
-      const updated = {
-        ...messages.value[index],
-        isRemoved: true,
-        deletedBy: currentUser.value ?? null,
-        deletedUtc: new Date().toISOString(),
-      };
-      messages.value[index] = updated;
-      messagesById.set(id, updated);
+    const { error } = await globalChatApi.deleteMessage(id);
+    if (!error) {
+      const index = messages.value.findIndex((m) => m.id === id);
+      if (index !== -1) {
+        const updated = {
+          ...messages.value[index],
+          isRemoved: true,
+          deletedBy: currentUser.value ?? null,
+          deletedUtc: new Date().toISOString(),
+        };
+        messages.value[index] = updated;
+        messagesById.set(id, updated);
+      }
     }
+    return { error };
   }
 
   async function likeMessage(id: string) {
@@ -406,9 +417,9 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
   }
 
   async function unlikeMessage(id: string) {
-    await globalChatApi.unlikeMessage(id);
+    const { error } = await globalChatApi.unlikeMessage(id);
     // Backend returns 204 No Content, so update likes locally
-    if (currentUser.value) {
+    if (!error && currentUser.value) {
       const index = messages.value.findIndex((m) => m.id === id);
       if (index !== -1) {
         const msg = messages.value[index];

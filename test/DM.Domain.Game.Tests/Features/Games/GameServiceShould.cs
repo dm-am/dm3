@@ -58,7 +58,7 @@ public class GameServiceShould : UnitTestBase
             .Returns(Task.CompletedTask);
 
         var dataResolver = Mock<IGameCreationDataResolver>();
-        dataResolver.Setup(r => r.GetAvailableTagIds())
+        dataResolver.Setup(r => r.ResolveTagIds(It.IsAny<IEnumerable<int>?>()))
             .ReturnsAsync(Array.Empty<Guid>());
 
         _intentionManager = Mock<IIntentionManager>();

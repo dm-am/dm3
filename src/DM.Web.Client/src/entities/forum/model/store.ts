@@ -13,6 +13,7 @@ import type {
 import type { ListEnvelope, User } from "@/shared/api/models/common";
 import { markRemoved } from "@/shared/api/models/common";
 import { unwrapResource } from "@/shared/api";
+import { requestNotSent } from "@/shared/lib/errors";
 import forumApi from "../api/forumApi";
 import { useAuthStore } from "@/shared/stores";
 import { useApiList } from "@/shared/lib/composables/useApiResource";
@@ -218,7 +219,9 @@ export const useBoardsStore = defineStore("boards", () => {
    * Reorder pinned topics (moderator action)
    */
   async function reorderPinnedTopics(topicIds: string[]) {
-    if (!selectedBoard.value) return { error: new Error("No board selected") };
+    // A problem document, not a JS Error: the caller reads this out with
+    // notifyFailure exactly as it reads a refusal that came from the API.
+    if (!selectedBoard.value) return { error: requestNotSent };
 
     const { error } = await forumApi.reorderPinnedTopics(
       selectedBoard.value.alias as BoardId,
@@ -226,12 +229,14 @@ export const useBoardsStore = defineStore("boards", () => {
     );
     if (error) return { error };
 
-    // Refresh attached topics to reflect new order
+    // Refresh attached topics to reflect new order. A failed refresh keeps the
+    // rows already on screen — the same rule searchTopics states above: the
+    // reorder itself landed, and blanking the block would say the opposite.
     const { data } = await forumApi.getTopics(
       selectedBoard.value.alias as BoardId,
       { isAttached: true },
     );
-    attachedTopics.value = data?.resources ?? null;
+    if (data) attachedTopics.value = data.resources;
 
     return { data: true };
   }
@@ -240,7 +245,7 @@ export const useBoardsStore = defineStore("boards", () => {
    * Toggle topic pin status (moderator action)
    */
   async function togglePinTopic(topicId: string) {
-    if (!selectedBoard.value) return { error: new Error("No board selected") };
+    if (!selectedBoard.value) return { error: requestNotSent };
 
     // Find topic to get current pin status
     const topic = [
@@ -248,7 +253,7 @@ export const useBoardsStore = defineStore("boards", () => {
       ...(topics.value?.resources ?? []),
     ].find((t) => t.id === topicId);
 
-    if (!topic) return { error: new Error("Topic not found") };
+    if (!topic) return { error: requestNotSent };
 
     const newStatus = !topic.isAttached;
     const { error } = await forumApi.updateTopic(
@@ -267,8 +272,11 @@ export const useBoardsStore = defineStore("boards", () => {
       }),
     ]);
 
-    attachedTopics.value = fetchedAttached.data?.resources ?? null;
-    topics.value = fetchedRegular.data ?? null;
+    // A failed refresh keeps what is on screen instead of emptying the board:
+    // the pin itself landed, and "Топиков пока нет" would be a lie about it.
+    if (fetchedAttached.data)
+      attachedTopics.value = fetchedAttached.data.resources;
+    if (fetchedRegular.data) topics.value = fetchedRegular.data;
 
     return { data: newStatus };
   }
@@ -397,20 +405,31 @@ export const useBoardsStore = defineStore("boards", () => {
     return { data };
   }
 
+  /**
+   * Edit and delete patch the list from the server's answer, never from the
+   * request having been sent: `Api` resolves on a refusal too, so an unread
+   * `error` is a comment struck through on screen and untouched on the
+   * server. The error is handed back so the page that asked can name it.
+   */
   async function updateComment(id: string, text: string) {
-    const { data } = await forumApi.updateComment(id as CommentId, { text });
-    const updated = unwrapResource<Comment>(data);
-    if (updated && comments.value) {
-      const index = comments.value.resources.findIndex((c) => c.id === id);
-      if (index !== -1) {
-        comments.value.resources[index] = updated;
+    const { data, error } = await forumApi.updateComment(id as CommentId, {
+      text,
+    });
+    if (!error) {
+      const updated = unwrapResource<Comment>(data);
+      if (updated && comments.value) {
+        const index = comments.value.resources.findIndex((c) => c.id === id);
+        if (index !== -1) {
+          comments.value.resources[index] = updated;
+        }
       }
     }
+    return { error };
   }
 
   async function deleteComment(id: string) {
-    await forumApi.deleteComment(id as CommentId);
-    if (comments.value) {
+    const { error } = await forumApi.deleteComment(id as CommentId);
+    if (!error && comments.value) {
       const index = comments.value.resources.findIndex((c) => c.id === id);
       if (index !== -1) {
         comments.value.resources[index] = markRemoved(
@@ -418,6 +437,7 @@ export const useBoardsStore = defineStore("boards", () => {
         );
       }
     }
+    return { error };
   }
 
   async function likeComment(id: string) {
@@ -438,8 +458,8 @@ export const useBoardsStore = defineStore("boards", () => {
   }
 
   async function unlikeComment(id: string) {
-    await forumApi.deleteCommentLike(id as CommentId);
-    if (comments.value && currentUser.value) {
+    const { error } = await forumApi.deleteCommentLike(id as CommentId);
+    if (!error && comments.value && currentUser.value) {
       const index = comments.value.resources.findIndex((c) => c.id === id);
       if (index !== -1) {
         const comment = comments.value.resources[index];
@@ -468,8 +488,9 @@ export const useBoardsStore = defineStore("boards", () => {
   }
 
   async function unlikeTopic(id: string) {
-    await forumApi.deleteTopicLike(id as TopicId);
+    const { error } = await forumApi.deleteTopicLike(id as TopicId);
     if (
+      !error &&
       selectedTopic.value &&
       selectedTopic.value.id === id &&
       currentUser.value

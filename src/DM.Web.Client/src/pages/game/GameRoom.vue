@@ -16,6 +16,7 @@ import { Select, type SelectOption } from "@/shared/ui/Select";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { GamePost } from "@/widgets/game-post";
 import { GamePostSkeleton } from "@/shared/ui/Skeleton";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
@@ -277,19 +278,33 @@ async function addPendency() {
   if (!newPendencyCharacterId.value || pendencyBusy.value || !room.value?.id)
     return;
   pendencyBusy.value = true;
-  const { error } = await gameApi.createPendency(room.value.id as string, {
-    characterId: newPendencyCharacterId.value,
-  });
-  if (!error) await gameStore.loadRooms(gameId.value);
-  pendencyBusy.value = false;
+  try {
+    const { error } = await gameApi.createPendency(room.value.id as string, {
+      characterId: newPendencyCharacterId.value,
+    });
+    if (error) {
+      notifyFailure(error, "Не удалось добавить ожидание хода");
+      return;
+    }
+    await gameStore.loadRooms(gameId.value);
+  } finally {
+    pendencyBusy.value = false;
+  }
 }
 
 async function dismissPendency(pendencyId: string) {
   if (pendencyBusy.value) return;
   pendencyBusy.value = true;
-  const { error } = await gameApi.deletePendency(pendencyId);
-  if (!error) await gameStore.loadRooms(gameId.value);
-  pendencyBusy.value = false;
+  try {
+    const { error } = await gameApi.deletePendency(pendencyId);
+    if (error) {
+      notifyFailure(error, "Не удалось снять ожидание хода");
+      return;
+    }
+    await gameStore.loadRooms(gameId.value);
+  } finally {
+    pendencyBusy.value = false;
+  }
 }
 </script>
 

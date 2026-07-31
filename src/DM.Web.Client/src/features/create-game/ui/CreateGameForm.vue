@@ -50,6 +50,7 @@ const titleError = ref("");
 const systemError = ref("");
 const settingError = ref("");
 const infoError = ref("");
+const assistantError = ref("");
 
 const canCreate = computed(() => {
   return user.value && title.value.trim().length > 0;
@@ -60,6 +61,7 @@ function clearErrors() {
   systemError.value = "";
   settingError.value = "";
   infoError.value = "";
+  assistantError.value = "";
 }
 
 async function handleSubmit() {
@@ -86,13 +88,12 @@ async function handleSubmit() {
       schemaId = schemaData.resource.id ?? undefined;
     }
 
-    // Note: selected tags are not submitted — CreateGameRequest.Tags expects
-    // backend Guids, but /games/tags exposes only numeric short ids.
     const gameData: CreateGameInput = {
       title: title.value.trim(),
       system: systemName.value.trim() || undefined,
       setting: settingName.value.trim() || undefined,
       info: information.value,
+      tags: selectedTags.value.length > 0 ? [...selectedTags.value] : undefined,
       schemaId,
       assistantUsername: assistantUsername.value || undefined,
       privacySettings: {
@@ -111,12 +112,14 @@ async function handleSubmit() {
       systemError.value = getFieldError(errors, "system") || "";
       settingError.value = getFieldError(errors, "setting") || "";
       infoError.value = getFieldError(errors, "info") || "";
+      assistantError.value = getFieldError(errors, "assistantUsername") || "";
 
       if (
         !titleError.value &&
         !systemError.value &&
         !settingError.value &&
-        !infoError.value
+        !infoError.value &&
+        !assistantError.value
       ) {
         toast.error(apiError.title || "Не удалось создать игру");
       }
@@ -220,7 +223,15 @@ async function handleSubmit() {
     <!-- Assistant -->
     <section class="form-section">
       <block-title>Ассистент</block-title>
-      <assistant-selector v-model="assistantUsername" />
+      <form-field
+        name="assistantUsername"
+        :errors="assistantError ? [assistantError] : []"
+      >
+        <assistant-selector
+          v-model="assistantUsername"
+          @update:model-value="assistantError = ''"
+        />
+      </form-field>
     </section>
 
     <!-- Privacy settings -->

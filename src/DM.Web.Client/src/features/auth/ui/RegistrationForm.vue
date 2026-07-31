@@ -16,6 +16,7 @@ import {
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { accountApi, register } from "@/entities/user";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
+import { announcedByInterceptor, describeFailure } from "@/shared/lib/errors";
 
 const router = useRouter();
 
@@ -133,23 +134,40 @@ const submitPassword = async () => {
     website: honeypot.value,
   };
 
-  const badRequest = await register(credentials);
+  const failure = await register(credentials);
   loading.value = false;
 
-  if (badRequest) {
-    const errors = parseApiErrors(badRequest);
-    const emailErr = getFieldError(errors, "email");
-    const passErr = getFieldError(errors, "password");
-
-    if (emailErr) {
-      emailField.setError(emailErr);
-      step.value = "email";
-    } else if (passErr) {
-      passwordError.value = passErr;
-    }
-  } else {
+  if (!failure) {
     sessionStorage.setItem("dm_pending_email", emailField.value.value.trim());
     emit("success", emailField.value.value.trim());
+    return;
+  }
+
+  const errors = parseApiErrors(failure);
+  const emailErr = getFieldError(errors, "email");
+  const passErr = getFieldError(errors, "password");
+
+  if (emailErr) {
+    emailField.setError(emailErr);
+    step.value = "email";
+    return;
+  }
+
+  if (passErr) {
+    passwordError.value = passErr;
+    return;
+  }
+
+  // Nothing named a field: the address is already registered, the letter was
+  // not accepted, the attempt hit the rate limit. The next screen is
+  // "Проверьте почту", so every one of them has to stop here — that screen
+  // promises a letter, and the reader waits for it. A failure the interceptor
+  // announced is already on screen as a toast.
+  if (!announcedByInterceptor(failure.status)) {
+    passwordError.value = describeFailure(
+      failure,
+      "Не удалось зарегистрироваться",
+    );
   }
 };
 

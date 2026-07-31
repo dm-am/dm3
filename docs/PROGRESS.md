@@ -34,7 +34,7 @@ Backend: `dotnet build DM.sln` 0/0; `dotnet test` — **14 проектов, 169
 - ✅ Raw-source для инлайн-редактирования описания блога/инфо игры (author_edit envelope).
 - ✅ Ментор блога в DTO + гейт заметок (owner+assistant+mentor).
 - ✅ Статистика: период "все время" (year=0) + 8 топ-десяток (вкл. блоговые) + publicId игр/блогов в топах; позже (2026-07-17): positive-фильтр и competition-ранги на сервере, валидация year/month (400), удалены мертвые reports/compare/legacy-stats эндпоинты.
-- ✅ `tickets/mine` серверные фильтры (status+subtype); гостевой email обязателен + трекинг-эндпоинт `/v1/tickets/track/{token}`.
+- ✅ `tickets/mine` серверные фильтры (status+subtype); гостевой email обязателен + трекинг-эндпоинт `/v1/tickets/track` (токен в заголовке).
 - ✅ `GetUpload` → Moderator+.
 
 **Остаточные (минорные):** 3 сид-блога с placeholder-publicId (`t...`, из внешнего сид-пути; работают, но неканонично — фикс реседом); Discord inbound-webhook контракт — подтвердить при подключении реального бота.

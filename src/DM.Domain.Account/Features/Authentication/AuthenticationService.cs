@@ -2,8 +2,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Collections.Generic;
 using System.Net;
-using System.Security.Cryptography;
-using System.Text.Json;
 using System.Threading.Tasks;
 using System;
 using DM.Domain.Account.Configuration;
@@ -30,9 +28,6 @@ internal class AuthenticationService : IAuthenticationService
     private readonly IEventProducer _eventProducer;
     private readonly ILogger<AuthenticationService> _logger;
     private readonly AuthenticationConfiguration _config;
-
-    private const string UserIdKey = "userId";
-    private const string SessionIdKey = "sessionId";
 
     /// <inheritdoc />
     public AuthenticationService(
@@ -163,21 +158,14 @@ internal class AuthenticationService : IAuthenticationService
     /// <inheritdoc />
     public async Task<IIdentity> Authenticate(string authToken)
     {
-        Guid userId;
-        Guid sessionId;
-
-        try
+        var token = await SessionToken.Read(_cryptoService, authToken);
+        if (token == null)
         {
-            var decryptedString = await _cryptoService.Decrypt(authToken);
-            var authData = JsonSerializer.Deserialize<Dictionary<string, Guid>>(decryptedString);
-            userId = authData![UserIdKey];
-            sessionId = authData[SessionIdKey];
-        }
-        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or FormatException or CryptographicException)
-        {
-            _logger.LogWarning(ex, "Token authentication failed: forged or corrupted token");
+            _logger.LogWarning("Token authentication failed: forged or corrupted token");
             return Identity.Fail(AuthenticationError.ForgedToken);
         }
+
+        var (userId, sessionId) = token;
 
         var fetchUser = _repository.FindUser(userId);
         var fetchSession = _repository.FindUserSession(userId, sessionId);
@@ -349,12 +337,7 @@ internal class AuthenticationService : IAuthenticationService
         AuthenticatedUser user, CreateSession session, UserSettings settings)
     {
         var newSession = await _repository.AddSession(user.UserId, session);
-        var authData = new Dictionary<string, Guid>
-        {
-            [UserIdKey] = user.UserId,
-            [SessionIdKey] = session.Id
-        };
-        var token = await _cryptoService.Encrypt(JsonSerializer.Serialize(authData));
+        var token = await new SessionToken(user.UserId, session.Id).Write(_cryptoService);
         return Identity.Success(user, newSession, settings, token);
     }
 

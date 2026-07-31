@@ -21,6 +21,7 @@ import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
 import { useAnimatedHeightToggle } from "@/shared/lib/composables";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const route = useRoute();
 const router = useRouter();
@@ -234,9 +235,18 @@ async function handleTogglePin(row: DisplayTopic) {
   if (pinningTopicId.value) return;
 
   const topicId = String(row.id);
+  // Read the direction BEFORE the request: on success the row is replaced by
+  // the refreshed listing, and the refusal has to name what was attempted.
+  const wasPinned = row.isPinned;
   pinningTopicId.value = topicId;
   try {
-    await store.togglePinTopic(topicId);
+    const { error } = await store.togglePinTopic(topicId);
+    if (error) {
+      notifyFailure(
+        error,
+        wasPinned ? "Не удалось открепить топик" : "Не удалось закрепить топик",
+      );
+    }
   } finally {
     pinningTopicId.value = null;
   }
@@ -246,7 +256,13 @@ async function handleTogglePin(row: DisplayTopic) {
 async function handleSavePinnedOrder(topicIds: string[]) {
   savingPinnedOrder.value = true;
   try {
-    await store.reorderPinnedTopics(topicIds);
+    const { error } = await store.reorderPinnedTopics(topicIds);
+    // The dialog closes only on success: closing it over a rejected save shows
+    // the new order on screen while the server keeps the old one.
+    if (error) {
+      notifyFailure(error, "Не удалось сохранить порядок закрепленных топиков");
+      return;
+    }
     showPinnedManager.value = false;
   } finally {
     savingPinnedOrder.value = false;

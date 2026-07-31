@@ -25,6 +25,7 @@ import { SvgIcon } from "@/shared/ui/Icon";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { messagingApi } from "@/entities/message";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
+import { notifyFailure } from "@/shared/lib/errors";
 import { useMessageToolbar } from "@/shared/lib/composables/useMessageToolbar";
 import {
   useAnchoredInfiniteScroll,
@@ -302,7 +303,13 @@ function cancelEdit() {
 // must not read back its own stale editText seed.
 async function saveEditWithText(msgId: string, text: string) {
   if (text.trim()) {
-    await messagingStore.updateMessage(msgId, text);
+    const { error } = await messagingStore.updateMessage(msgId, text);
+    // The editor stays open with the text still in it: a closed editor over
+    // the unchanged message says the edit went through.
+    if (error) {
+      notifyFailure(error, "Не удалось сохранить сообщение");
+      return;
+    }
   }
   cancelEdit();
 }
@@ -345,8 +352,21 @@ async function handleSend() {
   if (!newMessage.value.trim() || sending.value || !selectedChat.value) return;
   const text = newMessage.value;
   newMessage.value = "";
+  const { error } = await messagingStore.sendMessage(
+    selectedChat.value.id,
+    text,
+  );
+  // Give the text back on failure. Emptying the field before the request is
+  // what makes sending feel instant; losing what was written when it fails is
+  // not part of that bargain. The editor's own clear() waits for the send to
+  // land — it also drops the saved draft, and that copy is the one that
+  // outlives the tab.
+  if (error) {
+    newMessage.value = text;
+    notifyFailure(error, "Не удалось отправить сообщение");
+    return;
+  }
   editorRef.value?.clear();
-  await messagingStore.sendMessage(selectedChat.value.id, text);
   scrollToBottom();
 }
 
@@ -359,10 +379,12 @@ function cancelDelete() {
 }
 
 async function confirmDelete() {
-  if (confirmingDeleteId.value) {
-    await messagingStore.deleteMessage(confirmingDeleteId.value);
-    confirmingDeleteId.value = null;
-  }
+  if (!confirmingDeleteId.value) return;
+  const { error } = await messagingStore.deleteMessage(
+    confirmingDeleteId.value,
+  );
+  confirmingDeleteId.value = null;
+  if (error) notifyFailure(error, "Не удалось удалить сообщение");
 }
 
 function goBack() {

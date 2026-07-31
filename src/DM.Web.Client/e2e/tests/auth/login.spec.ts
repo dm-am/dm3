@@ -64,8 +64,10 @@ test.describe("Login Flow", () => {
       timeout: 10000,
     });
 
-    // The logout control is directly visible, not inside a dropdown.
+    // "Выйти" opens a menu — the local sign-out and the sign-out-everywhere
+    // action sit inside it, and the first of the two is what this test drives.
     await page.click('[data-testid="logout-button"]');
+    await page.click('[data-testid="logout-current"]');
 
     await expect(page.locator('[data-testid="login-button"]')).toBeVisible({
       timeout: 10000,

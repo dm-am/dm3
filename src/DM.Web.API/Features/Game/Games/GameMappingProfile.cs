@@ -147,7 +147,10 @@ internal class GameMappingProfile : Profile
             // API exposes only the `Draft` bool, not draft visibility; the
             // enum defaults to Private server-side until the API surfaces it.
             .ForMember(g => g.DraftVisibility, opt => opt.Ignore())
-            .ForMember(g => g.AssistantUsername, opt => opt.Ignore())
+            // Tags and AssistantUsername map by convention. An Ignore on either
+            // is not a mapping detail: both are the master's input on the
+            // creation form, and dropping them leaves a working control that
+            // changes nothing and says nothing.
             .ForMember(g => g.CopyBlacklist, opt => opt.Ignore());
 
         // For game update, use GameDetails (has PrivacySettings)

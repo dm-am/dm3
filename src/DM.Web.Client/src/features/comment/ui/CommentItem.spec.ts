@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia } from "pinia";
+import { useToast } from "@/shared/lib/composables/useToast";
 import CommentItem from "./CommentItem.vue";
 import type { Comment } from "@/shared/api/models/common/comment";
 
@@ -42,10 +43,18 @@ const comment = (over: Partial<Comment> = {}): Comment =>
   }) as unknown as Comment;
 
 describe("CommentItem edit seeding", () => {
+  let submitEdit: ReturnType<typeof vi.fn>;
+  let submitDelete: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     localStorage.clear();
     // The signed-in author (auth store seeds itself from localStorage).
     localStorage.setItem("user", JSON.stringify({ username: "SolohinLex" }));
+    submitEdit = vi.fn().mockResolvedValue({ error: null });
+    submitDelete = vi.fn().mockResolvedValue({ error: null });
+    // Error toasts never auto-dismiss and deduplicate by text.
+    const { toasts, dismiss } = useToast();
+    [...toasts.value].forEach((t) => dismiss(t.id));
   });
 
   const mountComponent = (
@@ -60,6 +69,8 @@ describe("CommentItem edit seeding", () => {
       props: {
         comment: comment(over),
         fetchEditSource: fetchEditSource as never,
+        submitEdit: submitEdit as never,
+        submitDelete: submitDelete as never,
       },
     });
 
@@ -94,7 +105,7 @@ describe("CommentItem edit seeding", () => {
     expect(wrapper.find(".editor-stub").exists()).toBe(false);
   });
 
-  it("emits the edited raw BBCode on save", async () => {
+  it("hands the edited raw BBCode to the save function", async () => {
     const fetch = vi.fn().mockResolvedValue({
       data: { resource: comment({ text: "[b]Правила[/b]" }) },
       error: undefined,
@@ -104,7 +115,49 @@ describe("CommentItem edit seeding", () => {
     await wrapper.find(".action-btn").trigger("click");
     await flushPromises();
     await wrapper.find(".save-btn").trigger("click");
+    await flushPromises();
 
-    expect(wrapper.emitted("edit")).toEqual([["c-1", "[b]Правила[/b]"]]);
+    expect(submitEdit).toHaveBeenCalledWith("c-1", "[b]Правила[/b]");
+    expect(wrapper.find(".editor-stub").exists()).toBe(false);
+  });
+
+  /**
+   * The editor used to close on the emit, whatever the server answered: the
+   * rejected text was gone, the old text was back, and nothing was said.
+   */
+  it("keeps the editor open and names the refusal when the save fails", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      data: { resource: comment({ text: "[b]Правила[/b]" }) },
+      error: undefined,
+    });
+    submitEdit.mockResolvedValue({
+      error: { type: "", title: "", status: 404, traceId: "t" },
+    });
+    const wrapper = mountComponent(fetch);
+
+    await wrapper.find(".action-btn").trigger("click");
+    await flushPromises();
+    await wrapper.find(".save-btn").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.find(".editor-stub").exists()).toBe(true);
+    expect(useToast().toasts.value.map((t) => t.message)).toEqual([
+      "Не удалось сохранить комментарий",
+    ]);
+  });
+
+  it("names the refusal when the delete fails", async () => {
+    submitDelete.mockResolvedValue({
+      error: { type: "", title: "", status: 404, traceId: "t" },
+    });
+    const wrapper = mountComponent(vi.fn());
+
+    await wrapper.find(".delete-btn").trigger("click");
+    await flushPromises();
+
+    expect(submitDelete).toHaveBeenCalledWith("c-1");
+    expect(useToast().toasts.value.map((t) => t.message)).toEqual([
+      "Не удалось удалить комментарий",
+    ]);
   });
 });

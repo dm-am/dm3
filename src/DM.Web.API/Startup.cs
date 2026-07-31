@@ -24,6 +24,7 @@ using DM.Infrastructure.Messaging;
 using DM.Infrastructure.Persistence;
 using DM.Web.API.Shared.Binding;
 using DM.Web.API.Shared.Configuration;
+using DM.Web.API.Shared.Http;
 using DM.Web.API.Shared.RateLimiting;
 using DM.Web.API.Middleware;
 using DM.Web.API.Realtime;
@@ -279,16 +280,40 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .UseMiddleware<ErrorHandlingMiddleware>()
             .UseCors(b => b
                 .WithOrigins(integrationOptions.Value.CorsUrls)
-                .WithHeaders("Content-Type", "Authorization", "X-Requested-With", "X-Dm-Correlation-Token", "Cache-Control", "X-Dm-Audience", "x-signalr-user-agent")
+                // Two hand kept lists, both silent when wrong. A request header
+                // absent from the first never reaches the server at all: the
+                // preflight is answered without it and the browser drops the
+                // request, which is what Idempotency-Key hit on every
+                // cross-origin upload. A response header absent from the second
+                // does arrive and stays unreadable to the page, Location on 201
+                // and Retry-After on 429 among them. Same-origin proxying hides
+                // both faults; the published contract puts the API on its own
+                // host.
+                .WithHeaders("Content-Type", "Authorization", "X-Requested-With",
+                    "X-Dm-Correlation-Token", "Cache-Control", "X-Dm-Audience",
+                    "Idempotency-Key", "x-signalr-user-agent",
+                    // A token-gated endpoint reads its credential from a header, and a
+                    // custom request header forces a preflight: unnamed here, the browser
+                    // never sends the call at all in a cross-origin topology.
+                    TokenHeaders.Account, TokenHeaders.Ticket)
+                .WithExposedHeaders("Location", "Retry-After")
                 .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .AllowCredentials()
                 .SetPreflightMaxAge(TimeSpan.FromHours(1)))
             .UseMiddleware<CsrfProtectionMiddleware>()
             .UseRouting()
+            // Names the account the limiter counts by, which the limiter cannot
+            // do for itself: its partitioner is called synchronously and runs
+            // before any identity exists. Reads the session cookie and nothing
+            // else — no query, and no decision about the request.
+            .UseMiddleware<RateLimitAccountMiddleware>()
             // After UseRouting on purpose: the limiter resolves its policy from
             // endpoint metadata, which routing is what populates. Registered
             // before it, every [EnableRateLimiting] attribute was inert and only
-            // the global limiter ever ran.
+            // the global limiter ever ran. Above authentication just as
+            // deliberately: a flood is refused before it costs a session lookup,
+            // which is exactly why the account it is counted by comes from the
+            // cookie read above and not from the identity built below.
             .UseRateLimiter()
             .UseAuthentication()
             .UseMiddleware<AuthenticationMiddleware>()

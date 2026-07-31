@@ -15,6 +15,9 @@ export {
   type RenderAudience,
 } from "./audience";
 
+// Token-gated endpoints: the credential travels in a header, never in the URL
+export { X_DM_ACCOUNT_TOKEN, X_DM_TICKET_TOKEN } from "./tokenHeaders";
+
 // Envelope unwrap helper (single-resource responses)
 export { unwrapResource } from "./envelope";
 

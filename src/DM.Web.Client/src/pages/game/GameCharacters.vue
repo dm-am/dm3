@@ -5,6 +5,7 @@ import { storeToRefs } from "pinia";
 import { useGameDetailsStore, CharacterCard } from "@/entities/game";
 import type { Character } from "@/entities/game";
 import { useAuthStore } from "@/entities/user";
+import { CharacterManageLink } from "@/features/game-actions";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 
 const route = useRoute();
@@ -78,7 +79,11 @@ onMounted(() => {
             v-for="character in playerCharacters"
             :key="character.id"
             :character="character"
-          />
+          >
+            <template #controls>
+              <CharacterManageLink :character="character" />
+            </template>
+          </character-card>
         </div>
       </section>
 
@@ -90,7 +95,11 @@ onMounted(() => {
             v-for="character in npcCharacters"
             :key="character.id"
             :character="character"
-          />
+          >
+            <template #controls>
+              <CharacterManageLink :character="character" />
+            </template>
+          </character-card>
         </div>
       </section>
 
@@ -102,7 +111,11 @@ onMounted(() => {
             v-for="character in underReviewCharacters"
             :key="character.id"
             :character="character"
-          />
+          >
+            <template #controls>
+              <CharacterManageLink :character="character" />
+            </template>
+          </character-card>
         </div>
       </section>
     </div>
