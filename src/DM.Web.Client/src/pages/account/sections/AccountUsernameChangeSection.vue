@@ -204,7 +204,6 @@ async function submitRequest() {
 
 .loading-state
   color: $text-muted
-  text-align: center
   padding: $medium
 
 // Status cards

@@ -60,5 +60,4 @@ const unreadComments = computed(() => props.rubric.unreadCommentsCount ?? 0);
 
 .muted
   color: $text-muted
-  user-select: none
 </style>

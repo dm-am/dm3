@@ -5,6 +5,10 @@ import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
 import { useAuthStore } from "@/entities/user";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
+import {
+  joinTitleSegments,
+  useDocumentTitle,
+} from "@/shared/lib/composables/useDocumentTitle";
 import { useScrollToElement } from "@/shared/lib/composables/useScrollToElement";
 import { gameApi, type DiceRollInput } from "@/entities/game";
 import Paging from "@/shared/ui/Paging/Paging.vue";
@@ -51,6 +55,11 @@ const room = computed(
     rooms.value.find((r) => r.roomNumber === roomNum.value) ??
     currentRoom.value,
 );
+
+// The room IS the section here, and its name is data — meta.section cannot
+// spell it, so the page composes the zone title itself, in the zone's order:
+// the game first, the room second.
+useDocumentTitle(() => joinTitleSegments(game.value?.title, room.value?.title));
 
 // Scroll to target element when posts are loaded
 const postsLoaded = computed(
@@ -253,7 +262,7 @@ async function submitPost() {
 // ───────────────────────────────────────────────────────────────────────────
 // Master / assistant turn tracking (pendencies)
 // ───────────────────────────────────────────────────────────────────────────
-const pendings = computed(() => room.value?.pendings ?? []);
+const pendencies = computed(() => room.value?.pendencies ?? []);
 const newPendencyCharacterId = ref("");
 const pendencyBusy = ref(false);
 
@@ -369,8 +378,8 @@ async function dismissPendency(pendencyId: string) {
     <!-- Master / assistant turn tracking -->
     <section v-if="canManageTurns" class="turns">
       <div class="turns-title">Ожидание хода</div>
-      <ul v-if="pendings.length" class="pending-list">
-        <li v-for="p in pendings" :key="p.id" class="pending-item">
+      <ul v-if="pendencies.length" class="pending-list">
+        <li v-for="p in pendencies" :key="p.id" class="pending-item">
           <span class="pending-name">{{ p.characterName }}</span>
           <button
             type="button"
@@ -550,7 +559,6 @@ async function dismissPendency(pendencyId: string) {
 .posts-error,
 .posts-empty
   padding: $big
-  text-align: center
 
 .posts-error
   color: $accent-red

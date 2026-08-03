@@ -483,11 +483,6 @@ export enum RoomAccessType {
   Private = "Private",
 }
 
-export interface RoomClaim {
-  character: Character;
-  claimedAt: string;
-}
-
 /**
  * Per-room access grant policy.
  *  - ReadOnly: can view the room but cannot post
@@ -512,12 +507,22 @@ export interface RoomAccess {
   user?: UserRef | null;
 }
 
-export interface PendingPost {
+/**
+ * An expectation that some character's player writes the next post in a room
+ * (DM.Web.API.Features.Game.Rooms.PostPendency). It stays in the payload once
+ * answered, with fulfilledUtc set, so every reader has to filter for itself.
+ * characterName is declared non-optional: the read path always carries it,
+ * and the DTO is nullable only because the same shape is a create body.
+ */
+export interface PostPendency {
   id: string;
+  roomId: string;
   characterId: string;
   characterName: string;
+  createdBy?: UserRef;
+  waitingFor?: UserRef | null;
   createdUtc: string;
-  awaitingUser: UserRef;
+  fulfilledUtc?: string | null;
 }
 
 export interface RoomSettings {
@@ -538,18 +543,24 @@ export type Room = {
    * Absent on older payloads — treat missing as not archived.
    */
   isArchived?: boolean;
-  claims?: RoomClaim[];
+  /**
+   * Viewer may open the room. The rooms listing names every room of the game,
+   * closed ones included, and answers false for a private room the viewer may
+   * not enter; a read that returns a room at all returns one they may, and
+   * leaves this out.
+   */
+  canView?: boolean;
   /** Explicit per-room access grants (characters and/or readers) */
   accesses?: RoomAccess[];
-  pendings?: PendingPost[];
+  pendencies?: PostPendency[];
   unreadPostsCount: number;
   settings?: RoomSettings;
   /**
    * Parent game reference for this room. Post-listing endpoints
    * (rated posts, pulse) populate this with a full sidebar-tier
    * GameRef — master, assistants, active characters, recruitment,
-   * counts — so downstream GameLink / RoomLink components can
-   * render tooltips without a second network round-trip per post.
+   * counts — so GameLink renders its tooltip and RoomLink builds its
+   * route without a second network round-trip per post.
    * Mirrors the sidebar's data-flow (ActiveGames, RecruitingGames,
    * OwnedGames all pass full GameRef objects straight into GameLink).
    */

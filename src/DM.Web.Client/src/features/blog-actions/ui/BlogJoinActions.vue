@@ -79,7 +79,6 @@ async function toggleSubscribe() {
 
 .muted
   color: $text-muted
-  user-select: none
 
 .strip-action
   padding: 0

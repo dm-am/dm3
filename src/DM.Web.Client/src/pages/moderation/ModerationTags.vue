@@ -347,7 +347,6 @@ onMounted(() => {
 .error
   grid-column: 1 / -1
   padding: $large
-  text-align: center
 
 .error
   color: $accent-red

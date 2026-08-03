@@ -88,7 +88,6 @@ const blogTooltip = computed(() => buildTooltip(props.blog));
 
 .muted
   color: $text-muted
-  user-select: none
 
 .new-item
   color: $accent-green

@@ -139,7 +139,6 @@ const logoutFromAll = () => {
 
 .loading-state
   color: $text-muted
-  text-align: center
   padding: $medium
 
 .sessions-list

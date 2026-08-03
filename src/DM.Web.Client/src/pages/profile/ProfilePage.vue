@@ -28,7 +28,10 @@ import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useExpandableSection } from "@/shared/lib/composables";
 import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
-import { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
+import {
+  ONLINE_THRESHOLD_MINUTES,
+  RATING_UNAVAILABLE,
+} from "@/shared/lib/constants/user";
 import { ROLE_INFO, STAFF_ROLES } from "@/shared/config/roles";
 
 import Button from "@/shared/ui/Button/Button.vue";
@@ -285,7 +288,7 @@ const ratingSum = computed<number | null>(() => {
 
 const ratingSumDisplay = computed<string>(() => {
   const v = ratingSum.value;
-  if (v === null) return "n/a";
+  if (v === null) return RATING_UNAVAILABLE;
   return v > 0 ? `+${v}` : String(v);
 });
 
@@ -885,13 +888,10 @@ watch(usernameParam, async () => {
         />
       </template>
       <template v-else-if="activeTab === 'games'">
+        <ProfileGamesTable :username="usernameParam" />
         <section v-if="hasBestPost" class="featured-section">
           <BlockTitle>Лучший игровой пост</BlockTitle>
           <ProfileBestPostSection :username="usernameParam as Username" />
-        </section>
-        <section class="list-section">
-          <BlockTitle>Игры пользователя</BlockTitle>
-          <ProfileGamesTable :username="usernameParam" />
         </section>
         <ProfileSubscribersSection
           :subscribers="subscribers"
@@ -902,13 +902,10 @@ watch(usernameParam, async () => {
       </template>
 
       <template v-else-if="activeTab === 'blogs'">
+        <ProfileBlogsTable :username="usernameParam" />
         <section class="featured-section">
           <BlockTitle>Самая популярная публикация</BlockTitle>
           <ProfileBestPublicationSection :username="usernameParam" />
-        </section>
-        <section class="list-section">
-          <BlockTitle>Блоги пользователя</BlockTitle>
-          <ProfileBlogsTable :username="usernameParam" />
         </section>
         <ProfileSubscribersSection
           :subscribers="subscribers"
@@ -919,10 +916,7 @@ watch(usernameParam, async () => {
       </template>
 
       <template v-else-if="activeTab === 'topics'">
-        <section class="list-section">
-          <BlockTitle>Топики пользователя</BlockTitle>
-          <ProfileTopicsList :username="usernameParam" />
-        </section>
+        <ProfileTopicsList :username="usernameParam" />
         <ProfileSubscribersSection
           :subscribers="subscribers"
           label="Подписаны на топики"
@@ -1299,18 +1293,18 @@ watch(usernameParam, async () => {
   gap: $medium
   min-height: 100px
 
-// The subscribers caption belongs to the table above it, so it sits at
+// The subscribers caption belongs to the block above it, so it sits at
 // $small (8px) from it instead of the tab-content's base $medium gap —
-// the negative margin eats the difference for this one pair only; the
-// gap below the line (to the "best of" section) stays $medium.
+// the negative margin eats the difference for this one pair only.
 .tab-content > :deep(.subscribers-line)
   margin-top: -$small
 
 // Featured "best of" block (best post / best publication): a full
 // BlockTitle heading labels the spotlight, same rank as the other profile
-// section headings ("Контакты", "Личная заметка").
-.featured-section,
-.list-section
+// section headings ("Контакты", "Личная заметка"). The category listings
+// carry no heading of their own — the active tab already names them — so
+// they sit in .tab-content directly and need no wrapper section.
+.featured-section
   display: flex
   flex-direction: column
   gap: $small

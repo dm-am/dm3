@@ -24,10 +24,9 @@ defineProps<{
 .empty-state
   display: flex
   flex-direction: column
-  align-items: center
+  align-items: flex-start
   justify-content: center
   padding: $big * 2
-  text-align: center
 
 .empty-icon
   width: 64px

@@ -116,8 +116,8 @@ async function loadPendencies(games: GameRef[]) {
       const { data } = await gameApi.getRooms(game.id);
       if (!data) return;
       const names = data.resources
-        .flatMap((room) => room.pendings ?? [])
-        .filter((p) => p.awaitingUser?.username === username)
+        .flatMap((room) => room.pendencies ?? [])
+        .filter((p) => !p.fulfilledUtc && p.waitingFor?.username === username)
         .map((p) => p.characterName);
       if (names.length) results[game.id] = names;
     }),
@@ -304,10 +304,6 @@ const visible = computed(
 
 .muted
   color: $text-muted
-
-// Only the decorative "- " prefix (aria-hidden) is excluded from selection.
-.muted[aria-hidden="true"]
-  user-select: none
 
 .star
   color: $accent-red

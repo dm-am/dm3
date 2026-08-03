@@ -1376,9 +1376,8 @@ async function confirmDelete() {
 .globalChat-empty
   display: flex
   align-items: center
-  justify-content: center
+  justify-content: flex-start
   height: 100%
-  text-align: center
   padding: $big
 
 .globalChat-error
@@ -1545,7 +1544,6 @@ async function confirmDelete() {
 // Quiet single-line notice above the editor (mirrors the guest CTA styling)
 .globalChat-event-hint
   display: block
-  text-align: center
   padding-bottom: $tiny
 
 // CHAT-10: same control idiom as the fixed scroll-nav buttons (24px square,

@@ -327,21 +327,27 @@ internal class BlogRepository : IBlogRepository
             query = query.Where(p => p.RubricId == rubricId);
         }
 
-        return await query
+        var publications = await query
             .OrderByDescending(p => p.PublishedUtc ?? p.CreatedUtc)
             .Page(paging)
             .ProjectTo<Publication>(_mapper.ConfigurationProvider)
             .ToListAsync(ct);
+
+        await FillLikes(publications, ct);
+        return publications;
     }
 
     /// <inheritdoc />
     public async Task<Publication?> GetPublication(Guid publicationId, CancellationToken ct = default)
     {
-        return await _dbContext.Publications
+        var publication = await _dbContext.Publications
             .TagWith("DM.Blog.GetPublication")
             .Where(p => p.PublicationId == publicationId)
             .ProjectTo<Publication>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
+
+        await FillLikes(publication, ct);
+        return publication;
     }
 
     /// <inheritdoc />
@@ -351,7 +357,7 @@ internal class BlogRepository : IBlogRepository
         // pattern used by topics/comments, take the top row, project to
         // the API DTO. Soft-deleted + unpublished entries are filtered
         // out so the profile widget can never surface drafts.
-        return await _dbContext.Publications
+        var publication = await _dbContext.Publications
             .TagWith("DM.Blog.GetBestUserPublication")
             .Where(p => !p.IsRemoved && p.IsPublished && p.AuthorId == authorId)
             .OrderByDescending(p => _dbContext.Likes.Count(l =>
@@ -364,6 +370,81 @@ internal class BlogRepository : IBlogRepository
             .ThenByDescending(p => p.PublishedUtc ?? p.CreatedUtc)
             .ProjectTo<Publication>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
+
+        await FillLikes(publication, ct);
+        return publication;
+    }
+
+    /// <summary>
+    /// Single-publication overload of the backfill below.
+    /// </summary>
+    private Task FillLikes(Publication? publication, CancellationToken ct) =>
+        publication is null
+            ? Task.CompletedTask
+            : FillLikes(new[] { publication }, ct);
+
+    /// <summary>
+    /// Backfill <see cref="Publication.Likes"/> for a page of publications.
+    ///
+    /// The mapping profile ignores Likes — they live in the polymorphic Likes
+    /// table (EntityType + EntityId) with no navigation to project through —
+    /// and nothing filled them afterwards, so every read answered with an
+    /// empty list. That cost more than a zero on a card: the like/unlike path
+    /// asks the very same list whether the viewer has already liked, so a
+    /// repeat like was accepted and an unlike was always refused.
+    ///
+    /// Two batched queries for the whole page instead of a correlated
+    /// subquery per row (PERFORMANCE.md → "Avoid inline aggregations"): the
+    /// (publication, liker) pairs first, then one projection of the distinct
+    /// likers. publicationIds is a List&lt;Guid&gt;, NOT Guid[] — EF Core's
+    /// translator has a Guid[] edge case that throws TypeLoadException on the
+    /// ReadOnlySpan&lt;Guid&gt; interpreter path (see TopicRepository).
+    /// </summary>
+    private async Task FillLikes(IReadOnlyCollection<Publication> publications, CancellationToken ct)
+    {
+        if (publications.Count == 0)
+        {
+            return;
+        }
+
+        var publicationIds = publications.Select(p => p.Id).ToList();
+        var pairs = await _dbContext.Likes
+            .TagWith("DM.Blog.PublicationLikes")
+            .AsNoTracking()
+            .Where(l =>
+                !l.IsRemoved &&
+                l.EntityType == Domain.Core.Enums.LikeEntityType.Publication &&
+                publicationIds.Contains(l.EntityId))
+            .Select(l => new { l.EntityId, l.UserId })
+            .ToListAsync(ct);
+
+        if (pairs.Count == 0)
+        {
+            return;
+        }
+
+        var likerIds = pairs.Select(p => p.UserId).Distinct().ToList();
+        var likers = await _dbContext.Users
+            .TagWith("DM.Blog.PublicationLikers")
+            .AsNoTracking()
+            .Where(u => likerIds.Contains(u.UserId))
+            .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
+            .ToDictionaryAsync(u => u.UserId, ct);
+
+        // A liker filtered out by the soft-delete filter has no projection;
+        // their like is dropped rather than crashing the page.
+        var byPublication = pairs
+            .Where(p => likers.ContainsKey(p.UserId))
+            .GroupBy(p => p.EntityId)
+            .ToDictionary(g => g.Key, g => g.Select(p => likers[p.UserId]).ToArray());
+
+        foreach (var publication in publications)
+        {
+            if (byPublication.TryGetValue(publication.Id, out var likes))
+            {
+                publication.Likes = likes;
+            }
+        }
     }
 
     /// <inheritdoc />

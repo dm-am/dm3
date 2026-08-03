@@ -93,10 +93,21 @@ internal class RoomService : IRoomService
     {
         await _gameService.GetAsync(gameId);
         var currentUserId = _identityProvider.Current.User.UserId;
-        var rooms = (await _repository.GetAllAvailable(gameId, currentUserId)).ToArray();
+        var rooms = (await _repository.GetAllVisible(gameId, currentUserId)).ToArray();
 
         await _unreadCountersRepository.FillEntityCounters(rooms, currentUserId,
             r => r.Id, r => r.UnreadPostsCount);
+
+        // A room the reader may not open is listed by its name and nothing
+        // else: who has access to it, whose turn it is inside and how much of
+        // it is unread are all things only its readers get to know.
+        foreach (var room in rooms.Where(r => !r.CanView))
+        {
+            room.Accesses = [];
+            room.Pendencies = [];
+            room.TotalPostsCount = 0;
+            room.UnreadPostsCount = 0;
+        }
 
         return rooms;
     }

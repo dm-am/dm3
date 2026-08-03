@@ -8,6 +8,10 @@ import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useBlogDetailsStore, BlogStatusBadge } from "@/entities/blog";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
+import {
+  joinTitleSegments,
+  useDocumentTitle,
+} from "@/shared/lib/composables/useDocumentTitle";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { UserLink } from "@/entities/user";
@@ -17,6 +21,12 @@ const blogStore = useBlogDetailsStore();
 const { blog, blogError } = storeToRefs(blogStore);
 
 const blogId = computed(() => route.params.id as string);
+
+// Same rule as the game shell: the blog name first, the section of the active
+// sub-route (meta.section) second.
+useDocumentTitle(() =>
+  joinTitleSegments(blog.value?.title, route.meta.section),
+);
 
 const statusClass = computed(() => {
   if (!blog.value) return "";
@@ -150,7 +160,6 @@ onUnmounted(() => {
 
 .blog-error
   padding: $big
-  text-align: center
   color: $accent-red
 
   a

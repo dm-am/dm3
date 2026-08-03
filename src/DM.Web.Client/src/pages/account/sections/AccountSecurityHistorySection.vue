@@ -130,7 +130,6 @@ function eventClass(type: SecurityEventType): string {
 
 .loading-state
   color: $text-muted
-  text-align: center
   padding: $medium
 
 .events-list

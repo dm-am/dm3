@@ -15,6 +15,7 @@ import { Paging } from "@/shared/ui/Paging";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { formatDate } from "@/shared/lib/utils/datetime";
+import { RATING_UNAVAILABLE } from "@/shared/lib/constants/user";
 import { UserLink } from "@/entities/user";
 import { useRoleGate } from "./lib/useRoleGate";
 
@@ -98,7 +99,7 @@ const rows = computed(() => users.value.map((u) => ({ ...u, id: u.id })));
           {{ formatDate(row.registeredUtc ?? row.registrationUtc) }}
         </template>
         <template #cell-posts="{ row }">
-          {{ row.rating?.totalPosts ?? "—" }}
+          {{ row.rating?.totalPosts ?? RATING_UNAVAILABLE }}
         </template>
       </DataTable>
 

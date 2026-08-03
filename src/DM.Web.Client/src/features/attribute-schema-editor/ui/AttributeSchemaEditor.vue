@@ -433,7 +433,6 @@ input[type="radio"]
 
 .empty-cell
   padding: $big
-  text-align: center
   color: $text-muted
 
 .icon-btn

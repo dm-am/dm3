@@ -67,7 +67,7 @@ export interface AwardType {
   id: string;
   code: string;
   title: string;
-  /** Full phrase ("Победитель конкурса", "Лучшая работа по голосованию"). */
+  /** What the award is granted for. Shown in the popover. */
   description: string;
   iconName: string;
   /** Visual tier: 1=gold, 2=silver, 3=bronze. */

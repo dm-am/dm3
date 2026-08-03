@@ -73,7 +73,12 @@ export { useToast } from "./useToast";
 export type { ToastType, Toast } from "./useToast";
 
 // Document title (per-route + dynamic page titles)
-export { useDocumentTitle, formatDocumentTitle } from "./useDocumentTitle";
+export {
+  useDocumentTitle,
+  formatDocumentTitle,
+  joinTitleSegments,
+  TITLE_SEPARATOR,
+} from "./useDocumentTitle";
 
 // Expandable content section — THE building block: unified reveal animation
 // + "Развернуть/Свернуть все" registry + manual-toggle semantics in one call.

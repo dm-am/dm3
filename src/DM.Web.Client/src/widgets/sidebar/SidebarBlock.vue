@@ -5,7 +5,8 @@
       @mouseenter="hovered = true"
       @mouseleave="hovered = false"
     >
-      <span ref="titleSlot"><slot name="title" /></span
+      <span ref="titleSlot"
+        ><slot name="title">{{ title }}</slot></span
       ><button
         :id="toggleId"
         type="button"
@@ -38,9 +39,11 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from "vue";
 
-// `title` is optional — most callers already render the block heading via
-// the #title slot, so when the prop is omitted the slot's own text content
-// is read once on mount and used for the aria-label instead.
+// One heading, two ways in. A block whose title is a constant passes the
+// prop alone: it renders as the slot's fallback and names the toggle. A block
+// that builds its heading out of loaded data fills the slot instead, and then
+// the slot's own text is read once on mount for the aria-label — which is why
+// a data-driven heading is better off passing the prop too.
 const props = defineProps<{ token: string; title?: string }>();
 const storageKey = computed(() => `__HideMenuModule_${props.token}__`);
 const listId = computed(() => `sidebar-list-${props.token}`);

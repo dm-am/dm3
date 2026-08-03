@@ -285,7 +285,6 @@ useFetchData(
 .comments-error,
 .comments-empty
   padding: $big
-  text-align: center
 
 .comments-error
   color: $accent-red
@@ -311,6 +310,5 @@ useFetchData(
     width: 100%
 
 .comment-hint
-  text-align: center
   padding: $small
 </style>

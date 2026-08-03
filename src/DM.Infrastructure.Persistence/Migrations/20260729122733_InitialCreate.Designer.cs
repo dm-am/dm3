@@ -842,7 +842,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000001"),
                             Code = "days_since_registration",
-                            Description = "Время с момента регистрации на сайте.",
+                            Description = "Время с момента регистрации на сайте",
                             IconName = "hourglass",
                             IsActive = true,
                             Metric = 2,
@@ -853,7 +853,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000002"),
                             Code = "game_posts_authored",
-                            Description = "Игровые посты в активных играх. Считаются все, включая удаленные игры.",
+                            Description = "Игровые посты во всех играх, включая удаленные",
                             IconName = "scroll-quill",
                             IsActive = true,
                             Metric = 1,
@@ -864,7 +864,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000003"),
                             Code = "post_review_score_sum",
-                            Description = "Сумма положительных оценок твоих игровых постов. Отрицательные оценки рейтинг не уменьшают.",
+                            Description = "Сумма оценок игровых постов с учетом минусов",
                             IconName = "laurels",
                             IsActive = true,
                             Metric = 3,
@@ -875,7 +875,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000004"),
                             Code = "games_hosted",
-                            Description = "Игры, где ты мастер или ассистент.",
+                            Description = "Игры в роли мастера или ассистента",
                             IconName = "scepter",
                             IsActive = true,
                             Metric = 4,
@@ -886,7 +886,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000005"),
                             Code = "games_played",
-                            Description = "Игры, где у тебя есть активный или бывший персонаж.",
+                            Description = "Игры с активным или бывшим персонажем",
                             IconName = "sword",
                             IsActive = true,
                             Metric = 5,
@@ -897,7 +897,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000006"),
                             Code = "blogs_hosted",
-                            Description = "Блоги, где ты автор или ассистент.",
+                            Description = "Блоги в роли автора или ассистента",
                             IconName = "book",
                             IsActive = true,
                             Metric = 6,
@@ -908,7 +908,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000007"),
                             Code = "publications_authored",
-                            Description = "Статьи в блогах. Черновики тоже считаются.",
+                            Description = "Статьи в блогах, включая черновики",
                             IconName = "papers",
                             IsActive = true,
                             Metric = 12,
@@ -919,7 +919,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000008"),
                             Code = "topics_authored",
-                            Description = "Форумные топики, которые ты создал.",
+                            Description = "Топики, созданные на форуме",
                             IconName = "stabbed-note",
                             IsActive = true,
                             Metric = 7,
@@ -930,7 +930,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000009"),
                             Code = "comments_authored",
-                            Description = "Все комментарии: форум, блоги, игры, публикации.",
+                            Description = "Комментарии на форуме, в блогах, играх и публикациях",
                             IconName = "discussion",
                             IsActive = true,
                             Metric = 8,
@@ -941,7 +941,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000a"),
                             Code = "global_chat_messages",
-                            Description = "Сообщения в глобальном чате сайта.",
+                            Description = "Сообщения в глобальном чате",
                             IconName = "talk",
                             IsActive = true,
                             Metric = 9,
@@ -952,7 +952,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000b"),
                             Code = "likes_received",
-                            Description = "Лайки на топиках, публикациях, комментариях и сообщениях чата. Игровые посты учитываются через \"Рейтинг\".",
+                            Description = "Лайки на топиках, публикациях, комментариях и сообщениях чата",
                             IconName = "heart-organ",
                             IsActive = true,
                             Metric = 13,
@@ -963,7 +963,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000c"),
                             Code = "game_drops",
-                            Description = "Игры, которые ты покинул добровольно. Смерть персонажа и изгнание мастером не считаются.",
+                            Description = "Игры, покинутые добровольно (смерть персонажа и изгнание мастером не считаются)",
                             IconName = "walking-boot",
                             IsActive = true,
                             Metric = 11,
@@ -974,7 +974,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000d"),
                             Code = "bans_received",
-                            Description = "Баны, полученные от модерации.",
+                            Description = "Баны, полученные от модерации",
                             IconName = "plastic-duck",
                             IsActive = true,
                             Metric = 10,
@@ -1106,7 +1106,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             Code = "RATING_250",
                             Threshold = 250,
                             Tier = 2,
-                            Title = "Видный талант"
+                            Title = "Самобытный талант"
                         },
                         new
                         {
@@ -1124,7 +1124,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             Code = "RATING_1000",
                             Threshold = 1000,
                             Tier = 4,
-                            Title = "Мастодонт-аксакал"
+                            Title = "Мастодонт ремесла"
                         },
                         new
                         {
@@ -1421,7 +1421,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             Code = "DROPS_1",
                             Threshold = 1,
                             Tier = 1,
-                            Title = "Перекати-поле"
+                            Title = "Покинувший строй"
                         },
                         new
                         {
@@ -1457,7 +1457,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             Code = "BANS_1",
                             Threshold = 1,
                             Tier = 1,
-                            Title = "Яйцо с характером"
+                            Title = "Выпавший из гнезда"
                         },
                         new
                         {
@@ -1466,7 +1466,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             Code = "BANS_3",
                             Threshold = 3,
                             Tier = 2,
-                            Title = "Выпавший из гнезда"
+                            Title = "Крякнувший лишнего"
                         },
                         new
                         {
@@ -1535,7 +1535,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AwardTypeId = new Guid("00000000-0000-0000-0001-000000000001"),
                             Code = "contest_first",
-                            Description = "Победитель конкурса",
+                            Description = "Первое место в конкурсе",
                             IconName = "trophy-cup",
                             IsActive = true,
                             SortOrder = 1,
@@ -1546,7 +1546,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AwardTypeId = new Guid("00000000-0000-0000-0001-000000000002"),
                             Code = "contest_second",
-                            Description = "Серебряный призер конкурса",
+                            Description = "Второе место в конкурсе",
                             IconName = "trophy-cup",
                             IsActive = true,
                             SortOrder = 2,
@@ -1557,7 +1557,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AwardTypeId = new Guid("00000000-0000-0000-0001-000000000003"),
                             Code = "contest_third",
-                            Description = "Бронзовый призер конкурса",
+                            Description = "Третье место в конкурсе",
                             IconName = "trophy-cup",
                             IsActive = true,
                             SortOrder = 3,
@@ -1568,7 +1568,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AwardTypeId = new Guid("00000000-0000-0000-0001-000000000004"),
                             Code = "popular_vote",
-                            Description = "Лучшая работа конкурса по голосованию участников",
+                            Description = "Лучшая работа по голосованию участников",
                             IconName = "ribbon-medal",
                             IsActive = true,
                             SortOrder = 4,
@@ -1579,7 +1579,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AwardTypeId = new Guid("00000000-0000-0000-0001-000000000005"),
                             Code = "best_critic",
-                            Description = "Лучшие рецензии сезона по решению жюри",
+                            Description = "Лучшие рецензии конкурса по решению жюри",
                             IconName = "quill-ink",
                             IsActive = true,
                             SortOrder = 5,
@@ -1590,7 +1590,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AwardTypeId = new Guid("00000000-0000-0000-0001-000000000006"),
                             Code = "guesser",
-                            Description = "Угадал больше всех авторов конкурсных работ",
+                            Description = "Больше всех угаданных авторов конкурсных работ",
                             IconName = "magnifying-glass",
                             IsActive = true,
                             SortOrder = 6,
@@ -1601,7 +1601,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             AwardTypeId = new Guid("00000000-0000-0000-0001-000000000007"),
                             Code = "honorary_goblin",
-                            Description = "Бывший гоблин, отдавший сообществу годы службы",
+                            Description = "Годы службы сообществу в команде гоблинов",
                             IconName = "goblin",
                             IsActive = true,
                             SortOrder = 7,

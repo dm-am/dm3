@@ -493,10 +493,10 @@ async function submitReview() {
     :class="{ featured: hasNavigation }"
   >
     <!-- Navigation breadcrumb (featured post only). `post.room.game`
-         is a full sidebar-tier GameRef so GameLink / RoomLink render
-         the same tooltip UX as the sidebar without a second fetch.
-         Plain link colors (no green/gray status tinting) — the sidebar
-         coloring is a sidebar affordance, not a post one. -->
+         is a full sidebar-tier GameRef so GameLink shows the same
+         tooltip as the sidebar without a second fetch, and RoomLink
+         resolves its route. Plain link colors (no green/gray status
+         tinting) — the sidebar coloring is a sidebar affordance. -->
     <div v-if="hasNavigation" class="post-nav">
       <GameLink :game="post.room!.game!" />
       <span class="nav-separator" aria-hidden="true"> > </span>

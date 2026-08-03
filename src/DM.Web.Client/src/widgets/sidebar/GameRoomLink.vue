@@ -10,14 +10,14 @@
 //     current user has a matching room.accesses entry (character owner or
 //     explicit reader).
 //   - unread: "(N)" muted counter, only when unreadPostsCount > 0.
-//   - star: red, only when a pendency in this room awaits the current user;
-//     its tooltip names the character(s) whose turn it is.
+//   - star: red, only when a pendency in this room awaits the current user.
+//     Rooms carry no tooltip, the star's aria-label is the whole affordance.
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
 import { RoomType, RoomAccessType, type Room } from "@/entities/game";
 import { useAuthStore } from "@/entities/user";
 import { SvgIcon } from "@/shared/ui/Icon";
-import { Tooltip } from "@/shared/ui/Tooltip";
+import SidebarCounter from "./SidebarCounter.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -38,29 +38,25 @@ const to = computed(() => ({
 
 const isPrivate = computed(() => props.room.access === RoomAccessType.Private);
 
-// Green lock only when THIS viewer has an explicit access grant; otherwise
-// grey. Never inspects other members' grants beyond the current user.
-const hasAccess = computed(() => {
-  const me = user.value?.username;
-  if (!me) return false;
-  return (
-    props.room.accesses?.some(
-      (a) => a.user?.username === me || a.character?.author?.username === me,
-    ) ?? false
-  );
-});
+// Whether this viewer may open the room is the server's answer, given by the
+// same filter that guards the room page itself, so the row and the page
+// behind it cannot disagree. Reads that return a room at all return one the
+// viewer may open, and those omit the flag.
+const canView = computed(() => props.room.canView !== false);
 
 const unread = computed(() => props.room.unreadPostsCount ?? 0);
 
-const myPendings = computed(() =>
-  (props.room.pendings ?? []).filter(
-    (p) => p.awaitingUser?.username === user.value?.username,
+// Only unfulfilled expectations count: a pendency stays in the payload after
+// the post that answered it has landed.
+const myPendencies = computed(() =>
+  (props.room.pendencies ?? []).filter(
+    (p) => !p.fulfilledUtc && p.waitingFor?.username === user.value?.username,
   ),
 );
-const awaitsMe = computed(() => myPendings.value.length > 0);
-const starTooltip = computed(
+const awaitsMe = computed(() => myPendencies.value.length > 0);
+const starLabel = computed(
   () =>
-    `Вашего хода ждут: ${myPendings.value
+    `Вашего хода ждут: ${myPendencies.value
       .map((p) => p.characterName)
       .join(", ")}`,
 );
@@ -70,18 +66,19 @@ const STAR = "★";
 
 <template>
   <li class="link">
-    <span class="muted" aria-hidden="true">{{ prefix }}</span>
+    <span v-if="prefix" class="muted" aria-hidden="true">{{ prefix }}</span>
     <SvgIcon
       v-if="isPrivate"
       name="locked"
       class="lock"
-      :class="{ granted: hasAccess }"
+      :class="{ granted: canView }"
     />
-    <router-link class="title" :to="to">{{ room.title }}</router-link>
-    <span v-if="unread > 0" class="unread">&nbsp;({{ unread }})</span>
-    <Tooltip v-if="awaitsMe" :text="starTooltip">
-      <span class="star" aria-label="Ожидается ваш ход">{{ STAR }}</span>
-    </Tooltip>
+    <router-link v-if="canView" class="title" :to="to">{{
+      room.title
+    }}</router-link>
+    <span v-else class="title no-access">{{ room.title }}</span>
+    <SidebarCounter :value="unread" />
+    <span v-if="awaitsMe" class="star" :aria-label="starLabel">{{ STAR }}</span>
   </li>
 </template>
 
@@ -91,7 +88,6 @@ const STAR = "★";
 
 .muted
   color: $text-muted
-  user-select: none
 
 .lock
   color: $text-muted
@@ -101,7 +97,8 @@ const STAR = "★";
   &.granted
     color: $accent-green
 
-.unread
+// A room the viewer may not open is not a link and must not look like one.
+.no-access
   color: $text-muted
 
 .star

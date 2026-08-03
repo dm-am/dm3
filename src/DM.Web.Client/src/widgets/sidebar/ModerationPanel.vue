@@ -49,8 +49,4 @@ const links: PanelLink[] = [
 
 .muted
   color: $text-muted
-
-// Only the decorative "- " prefix (aria-hidden) is excluded from selection.
-.muted[aria-hidden="true"]
-  user-select: none
 </style>

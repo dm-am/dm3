@@ -63,6 +63,7 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.TotalPostsCount, s => s.MapFrom(r => r.Posts
                 .Count(p => !p.IsRemoved)))
             .ForMember(d => d.UnreadPostsCount, opt => opt.Ignore())
+            .ForMember(d => d.CanView, opt => opt.Ignore()) // Set in repository
             .ForMember(d => d.Description, opt => opt.Ignore()) // Set in repository
             .ForMember(d => d.Settings, s => s.MapFrom(r => new RoomSettings
             {
@@ -94,6 +95,7 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.Id, s => s.MapFrom(p => p.PendencyId))
             .ForMember(d => d.RoomId, s => s.MapFrom(p => p.RoomId))
             .ForMember(d => d.CharacterId, s => s.MapFrom(p => p.CharacterId))
+            .ForMember(d => d.CharacterName, s => s.MapFrom(p => p.Character.Name))
             .ForMember(d => d.CreatedBy, s => s.MapFrom(p => p.CreatedBy))
             .ForMember(d => d.WaitingForUser, s => s.MapFrom(p => p.WaitingForUser))
             .ForMember(d => d.CreatedUtc, s => s.MapFrom(p => p.CreatedUtc))

@@ -24,6 +24,13 @@ public class PostPendency
     public Guid CharacterId { get; set; }
 
     /// <summary>
+    /// Character name (whose turn it is to post). Always set on read; nullable
+    /// because the same shape is the create body, and a non-nullable string
+    /// there would fail implicit-required model validation.
+    /// </summary>
+    public string? CharacterName { get; set; }
+
+    /// <summary>
     /// User who created this expectation
     /// </summary>
     public User CreatedBy { get; set; } = null!;

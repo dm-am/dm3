@@ -82,7 +82,7 @@ onMounted(() => {
             Если не согласны с решением конкретного модератора — его можно
             обжаловать, заполнив соответствующую
             <router-link to="/complaint"
-              ><strong>форму обращения</strong></router-link
+              ><strong>форму жалоб</strong></router-link
             >.
           </li>
           <li>

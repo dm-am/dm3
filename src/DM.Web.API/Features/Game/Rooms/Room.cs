@@ -56,6 +56,13 @@ public class Room
     public bool? IsArchived { get; set; }
 
     /// <summary>
+    /// Reader may open the room. The rooms listing names every room of the
+    /// game and answers false for a private one the reader may not enter; a
+    /// read that returns a room at all returns one they may.
+    /// </summary>
+    public bool CanView { get; set; } = true;
+
+    /// <summary>
     /// Room accesses
     /// </summary>
     public IEnumerable<RoomAccess> Accesses { get; set; } = [];

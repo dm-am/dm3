@@ -227,7 +227,6 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
 .table-empty-row
   td
     padding: $big
-    text-align: center
     background-color: $bg-element
 
 .table-footer

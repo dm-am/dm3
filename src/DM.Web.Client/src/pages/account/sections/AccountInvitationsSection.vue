@@ -140,7 +140,6 @@ async function reject(invitationId: string) {
 
 .loading-state
   color: $text-muted
-  text-align: center
   padding: $medium
 
 .invitations-list

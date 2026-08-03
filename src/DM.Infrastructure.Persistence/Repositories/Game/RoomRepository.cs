@@ -29,14 +29,32 @@ internal class RoomRepository : IRoomRepository
 
     #region Read Operations
 
-    public async Task<IEnumerable<Room>> GetAllAvailable(Guid gameId, Guid userId)
+    public async Task<IEnumerable<Room>> GetAllVisible(Guid gameId, Guid userId)
     {
-        return await _dbContext.Rooms
+        var visible = _dbContext.Rooms
             .Where(r => r.GameId == gameId)
+            .Where(GameAccessibilityFilters.RoomAvailable(userId, listingOnly: true));
+
+        // Which of them the reader may actually open, asked with the very
+        // filter every point read uses: a row in the menu and the page behind
+        // it can then never disagree about who gets in.
+        var enterable = (await visible
             .Where(GameAccessibilityFilters.RoomAvailable(userId))
+            .Select(r => r.RoomId)
+            .ToArrayAsync())
+            .ToHashSet();
+
+        var rooms = await visible
             .OrderBy(r => r.OrderNumber)
             .ProjectTo<Room>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
+
+        foreach (var room in rooms)
+        {
+            room.CanView = enterable.Contains(room.Id);
+        }
+
+        return rooms;
     }
 
     public Task<Room?> GetAvailable(Guid roomId, Guid userId)

@@ -26,14 +26,16 @@ const props = withDefaults(
     /** Search query for highlighting */
     searchQuery?: string;
     /**
-     * Who the testimonial is ABOUT — set only by the profile "written
-     * recommendations" list, where each card targets a different user.
-     * Extends the footer to "<author> о <recipient>": the author keeps
-     * the regular footer link treatment (the person "speaking" in the
-     * bubble stays primary), the recipient renders as a muted link.
-     * When unset, the footer names only the author
-     * (received-recommendations pages, /about/testimonials gallery,
-     * home page testimonials).
+     * Who the testimonial is ABOUT — set by both profile recommendation
+     * lists, received and written. Extends the footer to
+     * "<author> о <recipient>": the author keeps the regular footer link
+     * treatment (the person "speaking" in the bubble stays primary), the
+     * recipient renders as a muted link. The line is composed here and
+     * nowhere else: a caller says whether there is a recipient at all,
+     * never how the two names are joined.
+     * When unset, the footer names only the author — the
+     * /about/testimonials gallery and the home page show reviews of the
+     * site itself, which have no recipient.
      */
     about?: UserRef;
   }>(),
@@ -268,7 +270,7 @@ onBeforeUnmount(() => unregister?.());
     </div>
     <div class="testimonial-footer">
       <!-- The author — the person "speaking" in the bubble — always leads.
-           With `about` set (written-recommendations page) the line extends
+           With `about` set (both profile recommendation lists) the line extends
            to "<author> о <recipient>", recipient as a muted link. Spaces
            around "о" are real text nodes ({{ " " }}) so the whole line
            copies as plain text (same pattern as Tabs.vue).
@@ -483,8 +485,8 @@ onBeforeUnmount(() => unregister?.());
   white-space: pre
   font-size: 0
 
-// Recipient link in the "<author> о <recipient>" footer line (written-
-// recommendations page only): recedes to the muted treatment so the
+// Recipient link in the "<author> о <recipient>" footer line (both profile
+// recommendation lists): recedes to the muted treatment so the
 // author — the person "speaking" in the bubble — stays the visually
 // primary link. :deep is required for the <a>: UserLink's root <span>
 // receives this component's scope attribute via class fallthrough, but

@@ -16,6 +16,14 @@ import type { Patch, Post } from "@/shared/api/models";
 // Well-known board aliases
 const NEWS_BOARD_ALIAS = "news";
 
+/**
+ * How many news cards the homepage block shows at once. Owner's rule: having
+ * more than two at a time is too many. It caps the request and the render
+ * alike — the block's freshness window (last seven days) decides WHICH news
+ * qualify, never HOW MANY are shown.
+ */
+export const NEWS_WIDGET_LIMIT = 2;
+
 export default new (class ForumApi {
   public getBoards() {
     return Api.get<ListEnvelope<Board>>("boards");
@@ -26,9 +34,15 @@ export default new (class ForumApi {
   }
 
   public getNews() {
-    // Fetch recent news for homepage filtering by date
+    // Homepage news block. The sort key is explicit because the server's
+    // default is last activity (TopicRepository), which floats an older topic
+    // above a newer one the moment somebody comments on it — news are ordered
+    // by publication, not by discussion. `take` here is the block's hard cap,
+    // not a page size.
     return Api.get<ListEnvelope<Topic>>(`boards/${NEWS_BOARD_ALIAS}/topics`, {
-      take: 5,
+      take: NEWS_WIDGET_LIMIT,
+      sortBy: "created",
+      sortOrder: "desc",
     });
   }
 

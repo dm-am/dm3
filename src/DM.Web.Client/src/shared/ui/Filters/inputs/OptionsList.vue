@@ -65,5 +65,4 @@ function handleSelect(option: ListOption) {
   padding: $medium
   font-size: $secondary-font-size
   color: $text-muted
-  text-align: center
 </style>

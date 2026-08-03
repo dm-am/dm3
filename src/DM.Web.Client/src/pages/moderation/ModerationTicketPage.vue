@@ -24,6 +24,10 @@ import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { useToast } from "@/shared/lib/composables/useToast";
+import {
+  joinTitleSegments,
+  useDocumentTitle,
+} from "@/shared/lib/composables/useDocumentTitle";
 import TicketCard from "./tickets/TicketCard.vue";
 import { useRoleGate } from "./lib/useRoleGate";
 import { notifyFailure } from "@/shared/lib/errors";
@@ -37,6 +41,10 @@ const ticketId = computed(() => String(route.params.ticketId ?? ""));
 const ticket = ref<Ticket | null>(null);
 const loading = ref(false);
 const loadError = ref<string | null>(null);
+
+// The subject first: the model carries no ticket number (the URL holds a
+// guid), so the subject line is all that tells two ticket tabs apart.
+useDocumentTitle(() => joinTitleSegments(ticket.value?.comment, "Обращение"));
 
 async function fetch() {
   if (!ticketId.value) return;

@@ -162,6 +162,23 @@ internal sealed partial class DataSeeder
     }
 
     /// <summary>
+    /// Monday 00:00 UTC of the week the given moment falls in.
+    /// </summary>
+    /// <remarks>
+    /// The homepage "лучший пост недели" block filters posts by exactly this
+    /// boundary (getWeekStartUtc on the client), and two parts of the seed have
+    /// to agree with it: the showcase post must land inside the window, and
+    /// leaderboard coverage must stay out of it. One implementation, so the two
+    /// cannot drift apart.
+    /// </remarks>
+    private static DateTimeOffset WeekStartUtc(DateTimeOffset moment)
+    {
+        var daysSinceMonday = ((int)moment.DayOfWeek + 6) % 7; // Monday=0, Sunday=6
+        return new DateTimeOffset(moment.Year, moment.Month, moment.Day, 0, 0, 0, TimeSpan.Zero)
+            .AddDays(-daysSinceMonday);
+    }
+
+    /// <summary>
     /// Seed the content set: forum topics and comments, games, characters, posts,
     /// blogs, publications, chat messages, reviews, polls and ratings.
     /// Requires the base users, so run <see cref="SeedTestUsers"/> first.

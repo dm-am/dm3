@@ -50,8 +50,3 @@ watch(
     <GamePostSkeleton v-else />
   </section>
 </template>
-
-<style scoped lang="sass">
-.profile-best-post
-  margin-bottom: $medium
-</style>

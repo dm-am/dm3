@@ -24,6 +24,10 @@ internal class PostReviewMappingProfile : Profile
             .ForMember(d => d.Text, s => s.MapFrom(r => r.Text))
             .ForMember(d => d.Sign, s => s.MapFrom(r => r.Sign))
             .ForMember(d => d.LikeEntityType, s => s.MapFrom(r => LikeEntityType.PostReview))
-            .ForMember(d => d.Likes, opt => opt.Ignore()); // Populated by like repository
+            // Likes are polymorphic (EntityType + EntityId), so there is no
+            // navigation to project through. PostReviewRepository fills the
+            // collection in a batched second pass on every read path; the
+            // "like repository" this comment used to promise never existed.
+            .ForMember(d => d.Likes, opt => opt.Ignore());
     }
 }

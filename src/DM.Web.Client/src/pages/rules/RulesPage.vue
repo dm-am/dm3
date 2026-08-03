@@ -117,7 +117,9 @@ onMounted(() => {
       <template #item-hacking>
         Взлом, DDoS, эксплуатация уязвимостей, шантаж и угрозы — перманентный
         бан. Хотите помочь найти уязвимость — сначала согласуйте с
-        администрацией. На критические обращения отвечаем в течение 7 дней.
+        администрацией через
+        <router-link to="/support"><strong>форму поддержки</strong></router-link
+        >. На критические обращения отвечаем в течение 7 дней.
       </template>
 
       <template #item-insult>
@@ -136,7 +138,7 @@ onMounted(() => {
         основной получает 6 баллов (0 баллов — если сразу сообщить об ошибке
         через
         <router-link to="/support"
-          ><strong>форму обращения</strong></router-link
+          ><strong>форму поддержки</strong></router-link
         >
         или
         <a :href="DISCORD_INVITE_URL" target="_blank" rel="noopener noreferrer"

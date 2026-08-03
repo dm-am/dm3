@@ -7,7 +7,10 @@
  */
 import { computed } from "vue";
 import { useRoute } from "vue-router";
-import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
+import {
+  joinTitleSegments,
+  useDocumentTitle,
+} from "@/shared/lib/composables/useDocumentTitle";
 import { ErrorPage } from "@/shared/ui/ErrorPage";
 import ProfileSubpageHeader from "./ProfileSubpageHeader.vue";
 import ProfileRatedPostsList from "./ProfileRatedPostsList.vue";
@@ -23,7 +26,9 @@ const profileLink = computed(() => ({
   params: { username: username.value },
 }));
 
-useDocumentTitle(() => `Полученные оценки постов — ${canonicalUsername.value}`);
+useDocumentTitle(() =>
+  joinTitleSegments(canonicalUsername.value, "Полученные оценки постов"),
+);
 </script>
 
 <template>

@@ -89,7 +89,6 @@ onMounted(load);
 .loading,
 .error
   padding: $large
-  text-align: center
 
 .error
   color: $accent-red

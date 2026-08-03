@@ -251,7 +251,6 @@ function clearSearch() {
 
 .search-empty
   padding: $medium
-  text-align: center
   color: $text-muted
 
 .chats-list

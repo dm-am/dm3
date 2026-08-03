@@ -10,16 +10,32 @@ import {
 import { scrollContentToTop } from "@/shared/lib/scroll";
 import { useAuthStore } from "@/shared/stores";
 
+// Tab-title contract: every named route declares exactly one of `title`,
+// `section` and `dynamicTitle`, and declares it in its OWN meta. A title
+// inherited from a parent record is one tab name shared by every child — that
+// is how eight moderation pages and three messenger pages became
+// indistinguishable. `router.spec.ts` holds both halves of the rule.
 declare module "vue-router" {
   interface RouteMeta {
     /** Whether the route requires an authenticated user. */
     requiresAuth?: boolean;
     /**
      * Static document title for the route. The brand suffix is appended by the
-     * `afterEach` handler. Dynamic pages omit this and call `useDocumentTitle`
-     * after their entity loads.
+     * `afterEach` handler.
      */
     title?: string;
+    /**
+     * Section of a route inside a zone (game, blog). The zone shell composes
+     * "{сущность} | {секция}" once the entity loads, entity first: it is what
+     * tells two tabs apart when the browser truncates the title.
+     */
+    section?: string;
+    /**
+     * The title is composed at runtime by the route's component chain — the
+     * page itself or the zone shell above it — out of data that exists only
+     * after a fetch (the interlocutor, the room, the error code).
+     */
+    dynamicTitle?: true;
     /**
      * Marks a route as living inside a game (any /game/:id sub-route). The
      * LeftSidebar keys the per-game GamePanel on this flag.
@@ -87,22 +103,25 @@ const router = createRouter({
         },
         {
           path: "/messenger",
-          meta: { requiresAuth: true, title: "Личные сообщения" },
+          meta: { requiresAuth: true },
           component: () => import("@/pages/messenger/MessengerPage.vue"),
           children: [
             {
               name: "messenger",
               path: "",
+              meta: { title: "Личные сообщения" },
               component: () => import("@/pages/messenger/ChatsList.vue"),
             },
             {
               name: "chat",
               path: "c/:id",
+              meta: { dynamicTitle: true },
               component: () => import("@/pages/messenger/ChatView.vue"),
             },
             {
               name: "direct-message",
               path: "user/:username",
+              meta: { title: "Переход к переписке" },
               component: () =>
                 import("@/pages/messenger/DirectChatRedirect.vue"),
             },
@@ -147,6 +166,7 @@ const router = createRouter({
         {
           name: "profile",
           path: "/users/:username",
+          meta: { dynamicTitle: true },
           component: () => import("@/pages/profile/ProfilePage.vue"),
         },
         // Legacy tab-in-URL profile links (/users/X/games etc.). Tabs are pure
@@ -163,27 +183,32 @@ const router = createRouter({
         {
           name: "received-reviews",
           path: "/users/:username/received-reviews",
+          meta: { dynamicTitle: true },
           component: () => import("@/pages/profile/ReceivedReviewsPage.vue"),
         },
         {
           name: "given-reviews",
           path: "/users/:username/given-reviews",
+          meta: { dynamicTitle: true },
           component: () => import("@/pages/profile/GivenReviewsPage.vue"),
         },
         {
           name: "received-endorsements",
           path: "/users/:username/received-endorsements",
+          meta: { dynamicTitle: true },
           component: () =>
             import("@/pages/profile/ReceivedEndorsementsPage.vue"),
         },
         {
           name: "given-endorsements",
           path: "/users/:username/given-endorsements",
+          meta: { dynamicTitle: true },
           component: () => import("@/pages/profile/GivenEndorsementsPage.vue"),
         },
         {
           name: "profile-uploads",
           path: "/users/:username/uploads",
+          meta: { dynamicTitle: true },
           // Owner-or-admin gating is done in-page (the router has no role
           // mechanism); the page renders its own access notice otherwise.
           component: () => import("@/pages/profile/ProfileUploadsPage.vue"),
@@ -206,6 +231,7 @@ const router = createRouter({
             {
               name: "forum",
               path: ":alias",
+              meta: { dynamicTitle: true },
               component: () => import("@/pages/forum/TopicsList.vue"),
             },
             {
@@ -215,6 +241,7 @@ const router = createRouter({
                 {
                   name: "topic",
                   path: "",
+                  meta: { dynamicTitle: true },
                   component: () => import("@/pages/forum/CommentsList.vue"),
                 },
               ],
@@ -245,6 +272,10 @@ const router = createRouter({
           // owning the blog header + store load; sub-pages render in its
           // <router-view>. Paths follow URL_STRUCTURE.md: /blogs/{publicId}/feed
           // is the publication feed, publications nest under it.
+          //
+          // The shell owns the tab title for the whole zone: the blog name,
+          // then `section` of the active sub-route. The blog root adds no
+          // section, which is why it declares `dynamicTitle` instead.
           path: "/blogs/:id",
           meta: { blogZone: true },
           component: () => import("@/pages/blog/BlogPage.vue"),
@@ -252,95 +283,107 @@ const router = createRouter({
             {
               name: "blog",
               path: "",
+              meta: { dynamicTitle: true },
               component: () => import("@/pages/blog/BlogDetails.vue"),
             },
             {
               name: "blog-feed",
               path: "feed",
+              meta: { section: "Лента публикаций" },
               component: () => import("@/pages/blog/BlogFeed.vue"),
             },
             {
               name: "blog-publication-create",
               path: "feed/create",
-              meta: { requiresAuth: true },
+              meta: { requiresAuth: true, section: "Создание публикации" },
               component: () => import("@/pages/blog/PublicationCreate.vue"),
             },
             {
               name: "blog-publication-edit",
               path: "feed/:pubId/edit",
-              meta: { requiresAuth: true },
+              meta: {
+                requiresAuth: true,
+                section: "Редактирование публикации",
+              },
               component: () => import("@/pages/blog/PublicationEdit.vue"),
             },
             {
               name: "blog-comments",
               path: "comments",
+              meta: { section: "Обсуждение" },
               component: () => import("@/pages/blog/BlogComments.vue"),
             },
             {
               name: "blog-settings",
               path: "settings",
+              meta: { section: "Настройки блога" },
               component: () => import("@/pages/blog/BlogSettings.vue"),
             },
             {
               name: "blog-notepad",
               path: "notes",
+              meta: { section: "Заметки блога" },
               component: () => import("@/pages/blog/BlogNotepad.vue"),
             },
           ],
         },
         {
           path: "/moderation",
-          meta: {
-            requiresAuth: true,
-            moderationZone: true,
-            title: "Модерация",
-          },
+          meta: { requiresAuth: true, moderationZone: true },
           component: () => import("@/pages/moderation/ModerationPage.vue"),
           children: [
             {
               name: "moderation",
               path: "",
+              meta: { title: "Модерация" },
               component: () =>
                 import("@/pages/moderation/ModerationOverview.vue"),
             },
             {
               name: "moderation-username-changes",
               path: "username-changes",
+              meta: { title: "Запросы на смену имени пользователя" },
               component: () =>
                 import("@/pages/moderation/ModerationUsernameChanges.vue"),
             },
             {
               name: "moderation-tags",
               path: "tags",
+              meta: { title: "Теги игр" },
               component: () => import("@/pages/moderation/ModerationTags.vue"),
             },
             {
               name: "moderation-awards",
               path: "awards",
+              meta: { title: "Награды" },
               component: () =>
                 import("@/pages/moderation/ModerationAwards.vue"),
             },
             {
               name: "moderation-awards-series",
               path: "awards/series/:id",
+              meta: { title: "Серия конкурсов" },
               component: () =>
                 import("@/pages/moderation/ModerationAwardsSeries.vue"),
             },
             {
               name: "moderation-award-types",
               path: "award-types",
+              meta: { title: "Каталог типов наград" },
               component: () =>
                 import("@/pages/moderation/ModerationAwardTypes.vue"),
             },
             {
               name: "moderation-achievements",
               path: "achievements",
+              meta: { title: "Достижения" },
               component: () =>
                 import("@/pages/moderation/ModerationAchievements.vue"),
             },
             {
               name: "moderation-fundraising",
               path: "fundraising",
+              meta: { title: "Сбор средств" },
               component: () => import("@/pages/moderation/FundraisingPage.vue"),
             },
           ],
@@ -457,7 +500,7 @@ const router = createRouter({
           meta: {
             requiresAuth: true,
             moderationZone: true,
-            title: "Обращение",
+            dynamicTitle: true,
           },
           component: () =>
             import("@/pages/moderation/ModerationTicketPage.vue"),
@@ -480,6 +523,11 @@ const router = createRouter({
           component: () => import("@/pages/create-game/CreateGamePage.vue"),
         },
         {
+          // GamePage (the zone shell) owns the tab title for every route
+          // below: the game name first, then `section` of the active
+          // sub-route. The two room routes name a room instead of a fixed
+          // section — the shell cannot spell that, so they declare
+          // `dynamicTitle` and compose the title themselves.
           path: "/game/:id",
           meta: { gameZone: true },
           component: () => import("@/pages/game/GamePage.vue"),
@@ -487,16 +535,19 @@ const router = createRouter({
             {
               name: "game",
               path: "",
+              meta: { dynamicTitle: true },
               component: () => import("@/pages/game/GameDetails.vue"),
             },
             {
               name: "game-rooms",
               path: "rooms",
+              meta: { section: "Комнаты" },
               component: () => import("@/pages/game/GameRooms.vue"),
             },
             {
               name: "game-room",
               path: "rooms/:num",
+              meta: { dynamicTitle: true },
               component: () => import("@/pages/game/GameRoom.vue"),
             },
             {
@@ -504,48 +555,55 @@ const router = createRouter({
               // cursor-paginated OOC room, distinct from the post room view.
               name: "game-chat-room",
               path: "chat-rooms/:num",
+              meta: { dynamicTitle: true },
               component: () => import("@/pages/game/GameChatRoom.vue"),
             },
             {
               name: "game-characters",
               path: "characters",
+              meta: { section: "Персонажи" },
               component: () => import("@/pages/game/GameCharacters.vue"),
             },
             {
               name: "game-character-create",
               path: "characters/create",
-              meta: { requiresAuth: true },
+              meta: { requiresAuth: true, section: "Новый персонаж" },
               component: () => import("@/pages/game/CharacterCreate.vue"),
             },
             {
               name: "game-character-edit",
               path: "characters/:characterId/edit",
-              meta: { requiresAuth: true },
+              meta: { requiresAuth: true, section: "Редактирование персонажа" },
               component: () => import("@/pages/game/CharacterEdit.vue"),
             },
             {
               name: "game-settings",
               path: "settings",
+              meta: { section: "Настройки" },
               component: () => import("@/pages/game/GameSettings.vue"),
             },
             {
               name: "game-comments",
               path: "comments",
+              meta: { section: "Обсуждение" },
               component: () => import("@/pages/game/GameComments.vue"),
             },
             {
               name: "game-reviews",
               path: "reviews",
+              meta: { section: "Рецензии" },
               component: () => import("@/pages/game/GameReviews.vue"),
             },
             {
               name: "game-post-reviews",
               path: "post-reviews",
+              meta: { section: "Оцененные посты" },
               component: () => import("@/pages/game/GamePostReviews.vue"),
             },
             {
               name: "game-notepad",
               path: "notes",
+              meta: { section: "Блокнот мастера" },
               component: () => import("@/pages/game/GameNotepad.vue"),
             },
           ],
@@ -553,11 +611,15 @@ const router = createRouter({
         {
           name: "game-first-unread-post",
           path: "/game/:id/posts/unread",
+          // Outside the game shell (a top-level record), so the zone title does
+          // not reach it: a resolver page with a title of its own.
+          meta: { title: "Переход к непрочитанному посту" },
           component: () => import("@/pages/game/GameFirstUnreadPost.vue"),
         },
         {
           name: "game-first-unread-comment",
           path: "/game/:id/comments/unread",
+          meta: { title: "Переход к непрочитанному комментарию" },
           component: () => import("@/pages/game/GameFirstUnreadComment.vue"),
         },
         {
@@ -633,6 +695,7 @@ const router = createRouter({
         {
           name: "forum-topic-redirect",
           path: "/forum-topic/:topicId",
+          meta: { title: "Переход к теме" },
           component: () => import("@/pages/redirect/TopicRedirect.vue"),
         },
         // Mockup catalogs under /dev are registered in development builds only. Vite
@@ -654,14 +717,16 @@ const router = createRouter({
         {
           name: "error",
           path: "/error/:code?",
-          meta: { title: "Ошибка" },
+          // The page names the error from the code in the URL (getErrorConfig);
+          // a static title here would be a second source going stale.
+          meta: { dynamicTitle: true },
           component: () => import("@/pages/error/ErrorPageRoute.vue"),
         },
         // Catch-all 404 — must be the last route
         {
           name: "not-found",
           path: "/:pathMatch(.*)*",
-          meta: { title: "Страница не найдена" },
+          meta: { dynamicTitle: true },
           component: () => import("@/pages/error/ErrorPageRoute.vue"),
         },
       ],
@@ -672,6 +737,7 @@ const router = createRouter({
     {
       name: "auth-callback",
       path: "/auth/callback",
+      meta: { title: "Внешняя авторизация" },
       component: () => import("@/pages/account/AuthCallbackPage.vue"),
     },
   ],

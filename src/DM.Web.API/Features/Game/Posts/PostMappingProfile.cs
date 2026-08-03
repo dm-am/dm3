@@ -102,6 +102,10 @@ internal class PostMappingProfile : Profile
             .ForMember(d => d.IsArchived, opt => opt.Ignore())
             .ForMember(d => d.Pendencies, opt => opt.Ignore())
             .ForMember(d => d.UnreadPostsCount, opt => opt.Ignore())
+            // A room reached through a post is a room the reader already reads,
+            // so the flag keeps its default of true rather than being computed
+            // a second way here.
+            .ForMember(d => d.CanView, opt => opt.Ignore())
             .ForMember(d => d.Settings, opt => opt.Ignore());
 
         CreateMap<CreatePostRequest, CreatePost>()

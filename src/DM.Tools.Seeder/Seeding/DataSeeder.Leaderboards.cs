@@ -77,14 +77,16 @@ internal sealed partial class DataSeeder
 
         // The homepage widgets must stay on the organic showcase posts (Chuck's
         // grapefruit post for "лучший пост недели", the fireplace post for
-        // "последний оцененный"). Only the CURRENT-month window can collide
-        // with them, so only it takes the week-start constraints:
-        //  - coverage reviews go only on posts CREATED BEFORE the current week;
-        //  - coverage review DATES stay before the week start and >=6h before
-        //    `now`, so the freshest review remains the organic one.
-        var daysSinceMonday = ((int)now.DayOfWeek + 6) % 7; // Monday=0 … Sunday=6
-        var weekStart = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero)
-            .AddDays(-daysSinceMonday);
+        // "последний оцененный"). The weekly widget ranks by the POST's creation
+        // date, so EVERY window can collide with it, not only the current month:
+        // the tail of a closed month (27.07 to 31.07 of a July window) lies
+        // inside the current week. Hence:
+        //  - coverage reviews go only on posts CREATED BEFORE the current week,
+        //    in every window;
+        //  - in the current-month window coverage review DATES also stay before
+        //    the week start and >=6h before `now`, so the freshest review on the
+        //    site remains the organic one.
+        var weekStart = WeekStartUtc(now);
 
         var nonDraftGameIds = await _dbContext.Set<DbGame>()
             .Where(g => !g.IsRemoved && g.Status != ModuleStatus.Draft)
@@ -129,16 +131,21 @@ internal sealed partial class DataSeeder
 
             if (positiveGames < LeaderboardBoards.BoardSize || positiveAuthors < LeaderboardBoards.BoardSize)
             {
-                // Current month: any pre-week post (keeps topped-up posts out of
-                // the weekly-best widget). Closed windows: the window's own
-                // posts, so the reviews sit next to the activity they praise.
+                // Every window stops at the week start: a topped-up post created
+                // this week would outrank the showcase post in the weekly-best
+                // widget, and a closed month's last days fall inside this week.
+                // On top of that a closed window takes its own posts, so the
+                // reviews sit next to the activity they praise.
                 var candidatesQuery = _dbContext.Posts
                     .Where(po => !po.IsRemoved
                         && po.Room.AccessType == RoomAccessType.Open
-                        && nonDraftGameIds.Contains(po.Room.GameId));
-                candidatesQuery = isCurrentMonth
-                    ? candidatesQuery.Where(po => po.CreatedUtc < weekStart)
-                    : candidatesQuery.Where(po => po.CreatedUtc >= winStart && po.CreatedUtc < winEnd);
+                        && nonDraftGameIds.Contains(po.Room.GameId)
+                        && po.CreatedUtc < weekStart);
+                if (!isCurrentMonth)
+                {
+                    candidatesQuery = candidatesQuery
+                        .Where(po => po.CreatedUtc >= winStart && po.CreatedUtc < winEnd);
+                }
                 var candidates = (await candidatesQuery
                         .Select(po => new { po.PostId, po.AuthorId, GameId = po.Room.GameId })
                         .ToListAsync())

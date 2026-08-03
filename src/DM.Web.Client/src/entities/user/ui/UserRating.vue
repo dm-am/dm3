@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import type { User, UserRef } from "../model/types";
 import { Tooltip } from "@/shared/ui/Tooltip";
+import { RATING_UNAVAILABLE } from "@/shared/lib/constants/user";
 
 const props = defineProps<{
   user: User | UserRef;
@@ -51,7 +52,7 @@ const target = computed(() => ({
     :to="target"
     class="user-rating user-rating-na"
     aria-label="Полученные оценки: пока нет"
-    >—</router-link
+    >{{ RATING_UNAVAILABLE }}</router-link
   >
 </template>
 

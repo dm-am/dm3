@@ -406,7 +406,6 @@ onMounted(fetchEntries);
 
 .notepad-denied
   padding: $big
-  text-align: center
 
 .page-header
   display: flex

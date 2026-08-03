@@ -414,7 +414,6 @@ onMounted(async () => {
 
 .muted
   color: $text-muted
-  user-select: none
 
 // LeftSidebar's own scoped styles handle .blocks/list-item presentation —
 // this wrapper is just a grouping hook for the drawer layout.

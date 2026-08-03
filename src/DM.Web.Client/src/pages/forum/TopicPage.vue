@@ -380,6 +380,5 @@ function handleWarn(id: string) {
   +button
 
 .comment-closed-hint
-  text-align: center
   padding: $small
 </style>

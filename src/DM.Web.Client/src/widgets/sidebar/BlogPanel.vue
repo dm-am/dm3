@@ -205,17 +205,15 @@ async function confirmMod() {
             <span class="muted" aria-hidden="true">- </span>
             <router-link
               :to="{ name: 'blog-settings', params: { id: routeId } }"
+              >Настройки блога</router-link
             >
-              Настройки блога
-            </router-link>
           </li>
           <li class="link">
             <span class="muted" aria-hidden="true">- </span>
             <router-link
               :to="{ name: 'blog-publication-create', params: { id: routeId } }"
+              >Создать публикацию</router-link
             >
-              Создать публикацию
-            </router-link>
           </li>
           <!-- Status transition buttons (owner/assistant); placed between the
                edit items and the notepad link to mirror GamePanel's order. -->
@@ -223,9 +221,9 @@ async function confirmMod() {
         </template>
         <li v-if="canUseNotepad" class="link">
           <span class="muted" aria-hidden="true">- </span>
-          <router-link :to="{ name: 'blog-notepad', params: { id: routeId } }">
-            Заметки блога
-          </router-link>
+          <router-link :to="{ name: 'blog-notepad', params: { id: routeId } }"
+            >Заметки блога</router-link
+          >
         </li>
       </template>
 
@@ -324,11 +322,6 @@ async function confirmMod() {
 
 .muted
   color: $text-muted
-
-// Only the decorative "- " prefix (aria-hidden) is excluded from selection;
-// informative muted text must stay selectable.
-.muted[aria-hidden="true"]
-  user-select: none
 
 .error
   color: $accent-red

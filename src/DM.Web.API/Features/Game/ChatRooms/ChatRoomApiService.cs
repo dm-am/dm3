@@ -54,8 +54,11 @@ internal class ChatRoomApiService : IChatRoomApiService
     public async Task<ListEnvelope<ChatRoom>> GetChatRoomsAsync(Guid gameId)
     {
         var rooms = await _roomService.GetAllAsync(gameId);
+        // The rooms listing now names private rooms the caller may not open,
+        // for the menu's closed-lock row. This endpoint has no such row: it
+        // lists chats to enter, so it keeps to the ones GetChatRoomAsync opens.
         var chatRooms = rooms
-            .Where(r => r.Type == RoomType.Chat)
+            .Where(r => r.Type == RoomType.Chat && r.CanView)
             .Select(_mapper.Map<ChatRoom>);
         return new ListEnvelope<ChatRoom>(chatRooms);
     }

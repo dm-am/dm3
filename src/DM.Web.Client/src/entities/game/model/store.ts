@@ -9,7 +9,6 @@ import type {
   Room,
   Post,
   Tag,
-  ChatRoom,
   GameUser,
   CreateRoomInput,
   GameStatusTransition,
@@ -304,11 +303,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   const commentsLoading = ref(false);
   const commentsError = ref<string | null>(null);
 
-  // Chat rooms (discussion) data
-  const chatRooms = ref<ChatRoom[]>([]);
-  const chatRoomsLoading = ref(false);
-  const chatRoomsError = ref<string | null>(null);
-
   // Blacklist data
   const blacklist = ref<User[]>([]);
   const blacklistLoading = ref(false);
@@ -330,7 +324,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   const postsGuard = createRequestGuard();
   const charactersGuard = createRequestGuard();
   const commentsGuard = createRequestGuard();
-  const chatRoomsGuard = createRequestGuard();
   const blacklistGuard = createRequestGuard();
   const usersGuard = createRequestGuard();
   const detailGuards = [
@@ -339,7 +332,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     postsGuard,
     charactersGuard,
     commentsGuard,
-    chatRoomsGuard,
     blacklistGuard,
     usersGuard,
   ];
@@ -613,27 +605,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     }
   }
 
-  // Load chat rooms (discussion)
-  async function loadChatRooms(gameId: string): Promise<void> {
-    const requestId = chatRoomsGuard.next();
-    chatRoomsLoading.value = true;
-    chatRoomsError.value = null;
-
-    const { data, error } = await gameApi.getChatRooms(gameId);
-
-    // Stale continuation — the newer request owns the visible state.
-    if (!chatRoomsGuard.isCurrent(requestId)) return;
-
-    if (error) {
-      chatRoomsError.value = "Не удалось загрузить обсуждения";
-      chatRooms.value = [];
-    } else if (data) {
-      chatRooms.value = data.resources;
-    }
-
-    chatRoomsLoading.value = false;
-  }
-
   // Load blacklist
   async function loadBlacklist(gameId: string): Promise<void> {
     const requestId = blacklistGuard.next();
@@ -772,10 +743,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     commentsLoading.value = false;
     commentsError.value = null;
 
-    chatRooms.value = [];
-    chatRoomsLoading.value = false;
-    chatRoomsError.value = null;
-
     blacklist.value = [];
     blacklistLoading.value = false;
     blacklistError.value = null;
@@ -831,9 +798,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     commentsPaging,
     commentsLoading,
     commentsError,
-    chatRooms,
-    chatRoomsLoading,
-    chatRoomsError,
     blacklist,
     blacklistLoading,
     blacklistError,
@@ -864,7 +828,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     deleteComment,
     likeComment,
     unlikeComment,
-    loadChatRooms,
     loadBlacklist,
     loadUsers,
     transitionStatus,

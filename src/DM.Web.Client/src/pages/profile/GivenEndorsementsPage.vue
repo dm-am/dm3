@@ -6,7 +6,10 @@
  */
 import { computed } from "vue";
 import { useRoute } from "vue-router";
-import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
+import {
+  joinTitleSegments,
+  useDocumentTitle,
+} from "@/shared/lib/composables/useDocumentTitle";
 import { ErrorPage } from "@/shared/ui/ErrorPage";
 import ProfileSubpageHeader from "./ProfileSubpageHeader.vue";
 import ProfileEndorsementsList from "./ProfileEndorsementsList.vue";
@@ -22,7 +25,9 @@ const profileLink = computed(() => ({
   params: { username: username.value },
 }));
 
-useDocumentTitle(() => `Написанные рекомендации — ${canonicalUsername.value}`);
+useDocumentTitle(() =>
+  joinTitleSegments(canonicalUsername.value, "Написанные рекомендации"),
+);
 </script>
 
 <template>

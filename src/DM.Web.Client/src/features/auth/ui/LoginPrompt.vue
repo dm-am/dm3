@@ -2,10 +2,10 @@
 /**
  * LoginPrompt — the site-wide guest CTA: "Войдите, чтобы <do X>".
  * Single source of truth for every login gate (chat footers, comment
- * forms, create pages, ...): centered secondary text with the "Войдите"
- * link in the regular $link color, opening the login dialog via the
- * ?action=login query (handled globally by the header's GuestActions;
- * the current route and query are preserved).
+ * forms, create pages, ...): left-aligned secondary text with the
+ * "Войдите" link in the regular $link color, opening the login dialog
+ * via the ?action=login query (handled globally by the header's
+ * GuestActions; the current route and query are preserved).
  */
 import { useRoute } from "vue-router";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
@@ -28,7 +28,6 @@ const route = useRoute();
 
 <style scoped lang="sass">
 .login-prompt
-  text-align: center
   padding: $small
 
   a

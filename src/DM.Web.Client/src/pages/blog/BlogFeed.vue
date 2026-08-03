@@ -162,7 +162,6 @@ useFetchData(
 
 .feed-empty
   padding: $big
-  text-align: center
 
 .feed-list
   display: flex

@@ -15,7 +15,11 @@ import {
   isUserOnline,
   type MessageOrSeparator,
 } from "@/shared/lib/utils/chat";
-import { useVirtualScroll } from "@/shared/lib/composables";
+import {
+  joinTitleSegments,
+  useDocumentTitle,
+  useVirtualScroll,
+} from "@/shared/lib/composables";
 import { ChatMessage } from "@/widgets/chat-message";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import type { ChatId, Message, MessageId } from "@/entities/message";
@@ -46,6 +50,12 @@ const {
   hasMoreAfter,
   errorBefore,
 } = storeToRefs(messagingStore);
+
+// The interlocutor first: three messenger routes shared one tab name, and the
+// name of the person is the only thing that tells two correspondences apart.
+useDocumentTitle(() =>
+  joinTitleSegments(interlocutor.value?.username, "Личные сообщения"),
+);
 
 const MAX_MESSAGE_HEIGHT = 200;
 
@@ -822,7 +832,6 @@ onUnmounted(() => {
 
 .empty-messages,
 .not-found
-  text-align: center
   padding: $big
 
 .scroll-sentinel

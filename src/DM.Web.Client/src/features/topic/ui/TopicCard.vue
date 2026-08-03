@@ -173,8 +173,11 @@ function initCardBbcode(el: HTMLElement) {
         {{ title }}
       </router-link>
       <template v-else>{{ title }}</template>
-      <span v-if="isClosed" class="closed-badge">
-        <SvgIcon name="locked" class="closed-icon" />Тема закрыта</span
+      <template v-if="isClosed"
+        >{{ " "
+        }}<span class="closed-badge">
+          <SvgIcon name="locked" class="closed-icon" />Тема закрыта</span
+        ></template
       >
       <!-- Optional owner-injected title tail (e.g. the digest topics'
            all-statistics link). -->
@@ -454,19 +457,19 @@ function initCardBbcode(el: HTMLElement) {
   &.delete-btn:hover
     color: $accent-red
 
-// Closed-topic badge (lock + "Тема закрыта"), sits next to the heading.
+// Closed-topic badge (lock + "Тема закрыта"), sits next to the heading. The gap
+// in front of it is the " " text node in the title, not a margin: a margin is
+// drawn but not copied, and the title used to reach the clipboard glued.
 .closed-badge
   display: inline-flex
   align-items: center
   gap: $tiny
-  margin-left: $small
   color: $accent-red
   font-size: $secondary-font-size
   font-weight: normal
   vertical-align: middle
 
 .closed-badge-standalone
-  margin-left: 0
   margin-bottom: $small
 
 .closed-icon

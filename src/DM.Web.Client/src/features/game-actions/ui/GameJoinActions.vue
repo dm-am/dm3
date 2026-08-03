@@ -85,9 +85,8 @@ function applyToJoin() {
           name: 'game-character-edit',
           params: { id: publicId, characterId: myCharacter.id },
         }"
+        >Редактировать персонажа</router-link
       >
-        Редактировать персонажа
-      </router-link>
     </li>
   </template>
 
@@ -130,7 +129,6 @@ function applyToJoin() {
 
 .muted
   color: $text-muted
-  user-select: none
 
 .strip-action
   padding: 0

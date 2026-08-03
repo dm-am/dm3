@@ -27,13 +27,12 @@ import type {
   CharacterStatusTransition,
   Room,
   RoomAccess,
-  PendingPost,
+  PostPendency,
   Post,
   Invitation,
   PostReview,
   FirstUnreadPostResult,
   FirstUnreadCommentResult,
-  ChatRoom,
   CreateRoomInput,
   PostPendencyInput,
   CreatePostInput,
@@ -591,10 +590,6 @@ class GameApi {
 
   // === Chat rooms (message-based OOC rooms, cursor pagination) ===
 
-  public getChatRooms(gameId: string) {
-    return Api.get<ListEnvelope<ChatRoom>>(`games/${gameId}/chat-rooms`);
-  }
-
   /**
    * Get chat room messages with CURSOR pagination (not skip/take).
    * Pass the CursorPaging.nextCursor/prevCursor from a prior page to walk.
@@ -691,7 +686,7 @@ class GameApi {
   // === Post pendencies (turn-tracking) ===
 
   public createPendency(roomId: string, pendency: PostPendencyInput) {
-    return Api.post<Envelope<PendingPost>>(
+    return Api.post<Envelope<PostPendency>>(
       `rooms/${roomId}/pendencies`,
       pendency,
     );

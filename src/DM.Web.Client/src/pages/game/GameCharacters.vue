@@ -129,7 +129,6 @@ onMounted(() => {
 .characters-error,
 .characters-empty
   padding: $big
-  text-align: center
 
 .characters-error
   color: $accent-red

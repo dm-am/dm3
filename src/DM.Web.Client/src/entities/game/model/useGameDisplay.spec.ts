@@ -5,8 +5,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import { useGameDisplay } from "./useGameDisplay";
-import type { GameRef, Room } from "./types";
-import { GameStatus, RoomAccessType, RoomType } from "./types";
+import type { GameRef } from "./types";
+import { GameStatus } from "./types";
 import type { Served } from "@/shared/api/models";
 import type { UserRef } from "@/shared/api/models/common";
 
@@ -64,17 +64,6 @@ function makeGame(overrides: Partial<GameRef> = {}): GameRef {
   return base;
 }
 
-function makeRoom(overrides: Partial<Room> = {}): Room {
-  const base: Room = {
-    id: asServed("00000000-0000-0000-0000-000000000041"),
-    roomNumber: asServed(1),
-    title: "Main Room",
-    unreadPostsCount: 0,
-    ...overrides,
-  };
-  return base;
-}
-
 describe("useGameDisplay.buildTooltip — game tooltip (sidebar + post unified)", () => {
   it("produces the exact same tooltip string when the same GameRef is passed in, regardless of context (sidebar vs featured post)", () => {
     const { buildTooltip } = useGameDisplay();
@@ -108,74 +97,6 @@ describe("useGameDisplay.buildTooltip — game tooltip (sidebar + post unified)"
       }),
     });
     expect(buildTooltip(game)).toContain("Персонажи: 2/5");
-  });
-});
-
-describe("useGameDisplay.buildRoomTooltip — room tooltip for featured / Pulse posts", () => {
-  it("for an open room with active characters, renders the exact user-requested format", () => {
-    const { buildRoomTooltip } = useGameDisplay();
-    const game = makeGame();
-    const room = makeRoom();
-
-    const expected = [
-      "Персонажи:",
-      "- Арагорн Следопыт (testuser)",
-      "- Горим Железный Кулак (seconduser)",
-      "",
-      "Доступ: открытый",
-    ].join("\n");
-
-    expect(buildRoomTooltip(room, game)).toBe(expected);
-  });
-
-  it("still renders the tooltip when room.access is undefined (post.room from the rated endpoint does not carry it)", () => {
-    const { buildRoomTooltip } = useGameDisplay();
-    const game = makeGame();
-    const room = makeRoom();
-    const result = buildRoomTooltip(room, game);
-    expect(result).toContain("Персонажи:");
-    expect(result).toContain("- Арагорн Следопыт (testuser)");
-    expect(result).toContain("Доступ: открытый");
-  });
-
-  it("explicit Open access and undefined access produce identical output", () => {
-    const { buildRoomTooltip } = useGameDisplay();
-    const game = makeGame();
-    const openRoom = makeRoom({
-      access: RoomAccessType.Open,
-      type: RoomType.Chat,
-    });
-    const undefRoom = makeRoom();
-    expect(buildRoomTooltip(openRoom, game)).toBe(
-      buildRoomTooltip(undefRoom, game),
-    );
-  });
-
-  it("lists characters in the same order as game.activeCharacters", () => {
-    const { buildRoomTooltip } = useGameDisplay();
-    const game = makeGame({
-      activeCharacters: [
-        { name: "Эльвира Чародейка", ownerUsername: "RatingNegative" },
-        { name: "Арагорн Следопыт", ownerUsername: "testuser" },
-      ],
-    });
-    const room = makeRoom();
-    const result = buildRoomTooltip(room, game);
-    const elviraIdx = result.indexOf("Эльвира");
-    const aragornIdx = result.indexOf("Арагорн");
-    expect(elviraIdx).toBeGreaterThan(-1);
-    expect(aragornIdx).toBeGreaterThan(-1);
-    expect(elviraIdx).toBeLessThan(aragornIdx);
-  });
-
-  it("returns an empty string for a private room the viewer cannot see — callers skip the Tooltip wrapper", () => {
-    const { buildRoomTooltip } = useGameDisplay();
-    const game = makeGame();
-    const privateRoom = makeRoom({
-      access: RoomAccessType.Private,
-      accesses: [],
-    });
-    expect(buildRoomTooltip(privateRoom, game, undefined)).toBe("");
   });
 });
 

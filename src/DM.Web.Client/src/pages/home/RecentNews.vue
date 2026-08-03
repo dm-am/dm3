@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
 import { storeToRefs } from "pinia";
-import { useBoardsStore } from "@/entities/forum";
+import { NEWS_WIDGET_LIMIT, useBoardsStore } from "@/entities/forum";
 import { TopicView } from "@/features/topic";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { ErrorState } from "@/shared/ui/ErrorState";
@@ -12,7 +12,12 @@ const NEWS_AGE_DAYS = 7;
 const store = useBoardsStore();
 const { news: allNews, newsError } = storeToRefs(store);
 
-// Show news from last week, or just the latest one if none are recent
+// Show news from last week, or just the latest one if none are recent.
+// The age window decides which news qualify, NEWS_WIDGET_LIMIT decides how many
+// are shown: without the cap the block grew a card for every fresh topic and
+// its height moved with the calendar. The cap is applied here as well as in the
+// request because the block's shape must not depend on the server honouring a
+// page size.
 const news = computed(() => {
   if (!allNews.value?.length) return allNews.value;
 
@@ -26,7 +31,7 @@ const news = computed(() => {
     return [allNews.value[0]];
   }
 
-  return recentNews;
+  return recentNews.slice(0, NEWS_WIDGET_LIMIT);
 });
 
 onMounted(() => {
@@ -81,7 +86,7 @@ onMounted(() => {
     С остальными новостями можно ознакомиться
     <router-link to="/forum/news"
       ><strong>в новостном разделе форума</strong></router-link
-    >. А с полной статистикой сайта —
+    >, а с полной статистикой сайта
     <router-link :to="{ name: 'site-statistics' }"
       ><strong>на отдельной странице</strong></router-link
     >.

@@ -13,9 +13,11 @@ public interface IRoomRepository
     #region Read
 
     /// <summary>
-    /// Get all available rooms for a game
+    /// Get every room of a game the user may SEE, each flagged with whether
+    /// they may open it (Room.CanView). A private room they have no access to
+    /// comes back by name, so the menu can show it closed.
     /// </summary>
-    Task<IEnumerable<Room>> GetAllAvailable(Guid gameId, Guid userId);
+    Task<IEnumerable<Room>> GetAllVisible(Guid gameId, Guid userId);
 
     /// <summary>
     /// Get single available room

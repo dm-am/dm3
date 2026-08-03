@@ -82,10 +82,10 @@ const sections = computed(() => [
                 {{ accessTypeLabels[room.access] }}
               </span>
             </div>
-            <div v-if="room.pendings?.length" class="room-pendings">
+            <div v-if="room.pendencies?.length" class="room-pendings">
               <secondary-text>
                 Ожидают ответа:
-                {{ room.pendings.map((p) => p.characterName).join(", ") }}
+                {{ room.pendencies.map((p) => p.characterName).join(", ") }}
               </secondary-text>
             </div>
           </router-link>
@@ -102,7 +102,6 @@ const sections = computed(() => [
 .rooms-error,
 .rooms-empty
   padding: $big
-  text-align: center
 
 .rooms-error
   color: $accent-red

@@ -17,6 +17,7 @@ import { DataTable, type Column } from "@/shared/ui/DataTable";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import { DashSeparator } from "@/shared/ui/DashSeparator";
 import { formatDate, formatDateFull } from "@/shared/lib/utils/datetime";
+import { RATING_UNAVAILABLE } from "@/shared/lib/constants/user";
 
 const gameStore = useGameDetailsStore();
 const { game, characters } = storeToRefs(gameStore);
@@ -262,7 +263,7 @@ const npcColumns = computed<Column[]>(() => [
               >{{ row.authorRating.postReviewScoreSum }}</span
             >/{{ row.authorRating.totalPosts }}</template
           >
-          <span v-else>n/a</span>
+          <span v-else>{{ RATING_UNAVAILABLE }}</span>
         </template>
         <template #cell-presence="{ row }">
           <span

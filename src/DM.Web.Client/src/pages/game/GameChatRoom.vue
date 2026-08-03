@@ -238,8 +238,8 @@ onUnmounted(cleanupObserver);
 
     <block-title v-if="room"
       >Чат: {{ room.title
-      }}<span v-if="room.isArchived" class="archived-tag"
-        >архив</span
+      }}<template v-if="room.isArchived"
+        >{{ " " }}<span class="archived-tag">архив</span></template
       ></block-title
     >
 
@@ -338,9 +338,10 @@ onUnmounted(cleanupObserver);
   min-height: $grid-step * 50
 
 // Muted "архив" tag beside an archived room's title — archive is conveyed by
-// this marker + muted colour, never by a suffix inside the room name.
+// this marker + muted colour, never by a suffix inside the room name. The gap
+// in front of it is the " " text node in the title, not a margin: a margin is
+// drawn but not copied, and the title used to reach the clipboard glued.
 .archived-tag
-  margin-left: $small
   font-size: $secondary-font-size
   font-weight: normal
   color: $text-muted
@@ -407,15 +408,13 @@ onUnmounted(cleanupObserver);
 .chat-error
   display: flex
   flex-direction: column
-  align-items: center
+  align-items: flex-start
   gap: $small
   padding: $big
-  text-align: center
 
 .chat-empty-inline
   display: block
   padding: $big
-  text-align: center
 
 .chat-retry
   +button

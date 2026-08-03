@@ -72,7 +72,6 @@ const commentsTooltip = computed(() =>
 
 .muted
   color: $text-muted
-  user-select: none
 
 .counters
   transition: opacity 0.15s ease

@@ -1,3 +1,3 @@
 // Public API for forum entity
 export * from "./model";
-export { forumApi } from "./api";
+export { forumApi, NEWS_WIDGET_LIMIT } from "./api";

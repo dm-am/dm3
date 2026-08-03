@@ -4,7 +4,12 @@ import type { PostReview } from "../model/types";
 import { ReviewSign } from "@/shared/api/models/game/reviews";
 import { UserLink } from "@/entities/user/@x/game";
 import { ContentText } from "@/shared/ui";
+import { Tooltip } from "@/shared/ui/Tooltip";
+import { SvgIcon } from "@/shared/ui/Icon";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
+import { getLikesTooltip } from "@/shared/lib/utils/chat";
+import { useToast } from "@/shared/lib/composables/useToast";
+import type { User } from "@/shared/api/models/common";
 
 const props = withDefaults(
   defineProps<{
@@ -17,12 +22,25 @@ const props = withDefaults(
   { highlight: false },
 );
 
+const { success: toastSuccess, error: toastError } = useToast();
+
 const reviewAnchor = computed(() => `#review-${props.review.id}`);
 
-function copyAnchorLink() {
-  navigator.clipboard.writeText(
-    window.location.origin + window.location.pathname + reviewAnchor.value,
-  );
+// One sentence for both the name of the control and the tooltip that describes
+// it, the way the comment permalink does it (CommentItem.vue).
+const anchorHint = computed(
+  () => `Скопировать ссылку на отзыв ${props.number}`,
+);
+
+async function copyAnchorLink() {
+  const url =
+    window.location.origin + window.location.pathname + reviewAnchor.value;
+  try {
+    await navigator.clipboard.writeText(url);
+    toastSuccess("Ссылка скопирована");
+  } catch {
+    toastError("Не удалось скопировать ссылку");
+  }
 }
 
 // API returns string values: "Positive", "Negative", "Neutral"
@@ -42,9 +60,16 @@ function getSignText(sign?: ReviewSign | string): string {
 
 const formattedDate = computed(() => formatDateFull(props.review.createdUtc));
 
-// Full meta line built in script — "+1 от Username, DD.MM.YYYY в HH:mm" —
-// avoids whitespace-condense gluing the sign/от/date fragments together.
 const signText = computed(() => getSignText(props.review.sign));
+
+// Likes on a review are read-only here: post reviews have no like/unlike
+// endpoint, so this is the static badge CommentItem shows a viewer who cannot
+// like (Tooltip with the likers' names, heart, count), not the button.
+const likes = computed(() => props.review.likes ?? []);
+const likesCount = computed(() => likes.value.length);
+// getLikesTooltip only reads usernames; its declared User[] parameter is wider
+// than what it consumes, hence the cast from the structural subset.
+const likersTooltip = computed(() => getLikesTooltip(likes.value as User[]));
 </script>
 
 <template>
@@ -57,23 +82,36 @@ const signText = computed(() => getSignText(props.review.sign));
     <div class="review-meta">
       <span class="review-sign" :class="getSignClass(review.sign)">{{
         signText
-      }}</span>
-      {{ " от "
+      }}</span
+      >{{ " от "
       }}<UserLink
         :user="review.author!"
         :hide-badge="true"
         :class="{ 'author-highlight': highlight }"
       />{{ `, ${formattedDate}`
-      }}<template v-if="number">
-        <button
-          type="button"
-          class="review-anchor"
-          :aria-label="`Скопировать ссылку на отзыв ${number}`"
-          title="Скопировать ссылку на отзыв"
-          @click="copyAnchorLink"
-        >
-          #{{ number }}
-        </button></template
+      }}<template v-if="number"
+        >{{ ", "
+        }}<Tooltip :text="anchorHint"
+          ><button
+            type="button"
+            class="review-anchor"
+            :aria-label="anchorHint"
+            v-text="`#${number}`"
+            @click="copyAnchorLink"
+          ></button></Tooltip
+      ></template>
+      <span v-if="likesCount" class="review-likes"
+        >{{ " "
+        }}<Tooltip
+          :text="likersTooltip"
+          focusable
+          class="like-static"
+          :aria-label="`Нравится: ${likesCount}`"
+          ><SvgIcon name="heartEmpty" class="like-icon" /><span
+            class="likes-count"
+            >{{ likesCount }}</span
+          ></Tooltip
+        ></span
       >
     </div>
   </li>
@@ -96,13 +134,13 @@ const signText = computed(() => getSignText(props.review.sign));
   font-weight: 500
   margin-bottom: $small
 
-// Meta line: "+1 от Username, дата"
+// Meta line: "+1 от Username, дата, #N"
 .review-meta
   font-size: $tertiary-font-size
   color: $text-muted
 
+// No margin: the space before the number is the ", " text node above.
 .review-anchor
-  margin-left: $tiny
   padding: 0
   border: none
   background: none
@@ -122,6 +160,19 @@ const signText = computed(() => getSignText(props.review.sign));
 
   &.neutral
     color: $text-muted
+
+// Read-only like badge, the same idiom CommentItem uses for a viewer who
+// cannot like: heart plus count, names in the tooltip. Sized to the meta line
+// it trails, not to the comment footer, so it does not outweigh the text.
+.like-static
+  display: inline-flex
+  align-items: center
+  gap: 2px
+  color: $text-muted
+  font-size: $tertiary-font-size
+
+.likes-count
+  font-weight: bold
 
 :deep(.author-highlight .user-link)
   font-weight: bold

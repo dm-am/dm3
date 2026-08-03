@@ -651,14 +651,23 @@ internal sealed partial class DataSeeder
                         now: chuckChar.CreatedUtc);
                     _dbContext.Set<DM.Infrastructure.Persistence.Entities.Shared.Upload>().Add(chuckUpload);
 
-                    // Chuck's magnum opus about grapefruit
+                    // Chuck's magnum opus about grapefruit.
+                    // Clamped to the start of the current week: the homepage
+                    // "лучший пост недели" block keeps posts created since
+                    // Monday, and a seed run in the first hours of Monday would
+                    // put `now` minus eight hours in the week that just ended,
+                    // leaving the block empty from the very first page view.
+                    var chuckWeekStart = WeekStartUtc(now);
+                    var chuckPostCreatedUtc = now.AddHours(-8) < chuckWeekStart
+                        ? chuckWeekStart
+                        : now.AddHours(-8);
                     var chuckPost = new Post
                     {
                         PostId = _guidFactory.Create(),
                         RoomId = chuckRoom.RoomId,
                         CharacterId = chuckChar.CharacterId,
                         AuthorId = chuckPlayer.UserId,
-                        CreatedUtc = now.AddHours(-8),
+                        CreatedUtc = chuckPostCreatedUtc,
                         GameText = """
                             Чак сел на поваленное бревно, достал из мешка грейпфрут и некоторое время просто держал его в руках. Тяжелый. Теплый от солнца. Идеальный.
 
@@ -689,7 +698,10 @@ internal sealed partial class DataSeeder
                     result.PostsCreated++;
                     chuckPlayer.QuantityRating++;
 
-                    // 7 positive reviews — net +7, guarantees "Best of week" (> Elvira +5)
+                    // 7 positive reviews, net +7. That is the top of the week by
+                    // construction: the bulk of seeded posts gets at most +4,
+                    // Elvira's master post +5, and leaderboard coverage never
+                    // touches a post created this week (EnsureLeaderboardCoverage).
                     var chuckReviewers = experiencedUsers
                         .Where(u => u.UserId != chuckPlayer.UserId)
                         .Take(7)
@@ -704,6 +716,12 @@ internal sealed partial class DataSeeder
                         "Отыгрыш уровня бог. Сцена с трактирщиком — шедевр.",
                         "Жду продолжения грейпфрутовой саги. Это лучше 'Властелина Колец'.",
                     };
+                    // Reviews land strictly between the post and `now`: dating
+                    // them 2..11 hours back could put them BEFORE a post placed
+                    // eight hours back, and the fireplace review at `now` has to
+                    // stay the freshest one on the site ("последний оцененный").
+                    var chuckReviewSpanMinutes =
+                        (int)Math.Max(2, (now - chuckPostCreatedUtc).TotalMinutes);
                     for (var i = 0; i < chuckReviewers.Count; i++)
                     {
                         _dbContext.PostReviews.Add(new DM.Infrastructure.Persistence.Entities.Game.PostReview
@@ -713,7 +731,7 @@ internal sealed partial class DataSeeder
                             PostId = chuckPost.PostId,
                             PostAuthorId = chuckPlayer.UserId,
                             GameId = chuckGameId,
-                            CreatedUtc = now.AddHours(-_random.Next(2, 12)),
+                            CreatedUtc = chuckPostCreatedUtc.AddMinutes(_random.Next(1, chuckReviewSpanMinutes)),
                             Text = chuckReviewTexts[i],
                             SignValue = (short)ReviewSign.Positive,
                             IsRemoved = false

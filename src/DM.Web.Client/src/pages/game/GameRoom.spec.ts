@@ -66,13 +66,14 @@ const room = {
   title: "Таверна",
   unreadPostsCount: 0,
   settings: { diceEnabled: false },
-  pendings: [
+  pendencies: [
     {
       id: "p-1",
+      roomId: "r-1",
       characterId: "c-1",
       characterName: "Гоблин",
       createdUtc: "2026-07-01T10:00:00Z",
-      awaitingUser: { username: "player" },
+      waitingFor: { username: "player" },
     },
   ],
 };

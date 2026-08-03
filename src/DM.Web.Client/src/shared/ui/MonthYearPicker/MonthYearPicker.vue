@@ -242,41 +242,47 @@ onUnmounted(() => {
     class="month-year-picker"
     :class="{ 'with-stepper': stepper }"
   >
-    <template v-if="stepper"
+    <!-- The bordered box is this inner span, never the root: the root is
+         the popover's containing block, and clipping it (the stepper pill
+         clips its sections by radius) sliced the popover down to the height
+         of the field. Same split as DateInput: root positions, field draws. -->
+    <span class="myp-field">
+      <template v-if="stepper"
+        ><button
+          type="button"
+          class="myp-step"
+          :aria-label="mode === 'year' ? 'Предыдущий год' : 'Предыдущий месяц'"
+          :disabled="!canStepPrev"
+          @click.stop="stepPrev"
+        >
+          ‹</button
+        ><span class="copy-space">{{ " " }}</span></template
       ><button
+        ref="triggerRef"
         type="button"
-        class="myp-step"
-        :aria-label="mode === 'year' ? 'Предыдущий год' : 'Предыдущий месяц'"
-        :disabled="!canStepPrev"
-        @click.stop="stepPrev"
+        :class="stepper ? 'myp-trigger-section' : 'myp-trigger'"
+        :data-sizer="sizerLabel"
+        aria-haspopup="dialog"
+        :aria-expanded="isOpen"
+        @click.stop="toggle"
       >
-        ‹</button
-      ><span class="copy-space">{{ " " }}</span></template
-    ><button
-      ref="triggerRef"
-      type="button"
-      :class="stepper ? 'myp-trigger-section' : 'myp-trigger'"
-      :data-sizer="sizerLabel"
-      aria-haspopup="dialog"
-      :aria-expanded="isOpen"
-      @click.stop="toggle"
-    >
-      <!-- Width is reserved by an invisible ::before reading data-sizer
-           (pseudo-content never enters a selection copy); the visible
-           label centers over it. -->
-      <span class="myp-label">{{ label }}</span></button
-    ><template v-if="stepper"
-      ><span class="copy-space">{{ " " }}</span
-      ><button
-        type="button"
-        class="myp-step"
-        :aria-label="mode === 'year' ? 'Следующий год' : 'Следующий месяц'"
-        :disabled="!canStepNext"
-        @click.stop="stepNext"
+        <!-- Width is reserved by an invisible ::before reading data-sizer
+             (pseudo-content never enters a selection copy); the visible
+             label centers over it. -->
+        <span class="myp-label">{{ label }}</span></button
+      ><template v-if="stepper"
+        ><span class="copy-space">{{ " " }}</span
+        ><button
+          type="button"
+          class="myp-step"
+          :aria-label="mode === 'year' ? 'Следующий год' : 'Следующий месяц'"
+          :disabled="!canStepNext"
+          @click.stop="stepNext"
+        >
+          ›
+        </button></template
       >
-        ›
-      </button></template
-    >
+    </span>
 
     <div
       v-if="isOpen"
@@ -377,7 +383,8 @@ onUnmounted(() => {
 @import "@/assets/styles/Inputs"
 
 // Inline-block (not flex): a selection then copies in one line.
-// position: relative stays — the popover anchors to this box.
+// position: relative stays — the popover anchors to this box. Nothing that
+// clips may be declared here: this box is the popover's containing block.
 .month-year-picker
   position: relative
   display: inline-block
@@ -387,8 +394,18 @@ onUnmounted(() => {
   // Stepper mode: ONE bordered pill of three sections — ‹ | label | › —
   // the same pill anatomy as the segmented control ($control-height,
   // hairline dividers, rounded corners clipping the sections), so the
-  // arrows read as parts of the control, not floating beside it.
-  &.with-stepper
+  // arrows read as parts of the control, not floating beside it. The pill
+  // is an inner box (like DateInput's .di-field under .date-input-control)
+  // because its overflow: hidden used to cut the popover, and focus moving
+  // into a cell then scrolled the clipped box, showing a strip of the month
+  // grid inside the field. Without the stepper there is no pill: the span
+  // stays an unstyled inline box and the trigger keeps its own button look.
+  &.with-stepper .myp-field
+    display: inline-block
+    // Top-aligned, not baseline-aligned: the pill's baseline is its bottom
+    // edge (overflow: hidden), so the line strut's descender would add a
+    // few px under it and the control strip would grow.
+    vertical-align: top
     height: $control-height
     box-sizing: border-box
     border: 1px solid $border

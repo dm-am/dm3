@@ -10,8 +10,8 @@
 // `post.room.game` already arrives as a full sidebar-tier GameRef
 // (master, assistants, activeCharacters, recruitment, subscribers)
 // hydrated by PostRepository.GetRated's batched EnrichGamesAsync step,
-// so GameLink / RoomLink render tooltips directly without a second
-// network round-trip.
+// so GameLink renders its tooltip and RoomLink builds its route without
+// a second network round-trip.
 
 import { defineStore } from "pinia";
 import { ref } from "vue";

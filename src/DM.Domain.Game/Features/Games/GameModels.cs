@@ -162,6 +162,13 @@ public class PostPendency
     public Guid CharacterId { get; set; }
 
     /// <summary>
+    /// Character name (whose turn it is to post). Sent with the pendency
+    /// because every screen that shows one names the character, and three of
+    /// them have no character list of their own to resolve the id against.
+    /// </summary>
+    public string CharacterName { get; set; } = null!;
+
+    /// <summary>
     /// Who created this expectation
     /// </summary>
     public GeneralUser CreatedBy { get; set; } = null!;
@@ -554,6 +561,13 @@ public class Room
     /// Room is archived (hidden from the active rooms list, kept for history)
     /// </summary>
     public bool IsArchived { get; set; }
+
+    /// <summary>
+    /// Reader may open the room. Only the rooms listing ever answers false —
+    /// it names private rooms the reader may not enter — so every other read,
+    /// which returns a room only to those who may open it, leaves it true.
+    /// </summary>
+    public bool CanView { get; set; } = true;
 
     /// <summary>
     /// Room access links (characters and readers)

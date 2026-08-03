@@ -84,7 +84,6 @@ function commentsTooltip(count: number): string {
 
 .muted
   color: $text-muted
-  user-select: none
 
 .counters
   // Container only, no color

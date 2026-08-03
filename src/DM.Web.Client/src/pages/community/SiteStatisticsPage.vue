@@ -227,7 +227,9 @@ const allEmpty = computed(
 <template>
   <div class="site-statistics-page">
     <PageTitle>Статистика сайта</PageTitle>
-    <LeadText>Найдите себя, свою игру или любимый блог в топ-десятках</LeadText>
+    <LeadText
+      >Найдите себя, свою игру или любимый блог в топах вебсайта</LeadText
+    >
 
     <!-- Period: granularity toggle + the month/year picker. Block container
          with inline children + a zero-width space (not flex) so a selection

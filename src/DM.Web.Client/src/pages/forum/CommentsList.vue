@@ -199,6 +199,5 @@ function pagingAnchor(): HTMLElement | null {
   gap: $small
 
 .comments-none
-  text-align: center
   padding: $medium 0
 </style>

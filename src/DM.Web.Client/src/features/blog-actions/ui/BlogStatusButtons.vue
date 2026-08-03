@@ -122,7 +122,6 @@ async function confirm() {
 
 .muted
   color: $text-muted
-  user-select: none
 
 .strip-action
   padding: 0

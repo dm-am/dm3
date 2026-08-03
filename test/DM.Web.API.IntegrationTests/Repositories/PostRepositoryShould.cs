@@ -93,6 +93,55 @@ public class PostRepositoryShould : IntegrationTestBase
         ordered[1].Id.Should().Be(highRatedOlderReview);
     }
 
+    /// <summary>
+    /// "Лучший пост недели" is the rating board of ONE week, not of all time.
+    /// </summary>
+    /// <remarks>
+    /// The homepage block sends sortBy=rating together with createdAfter=Monday,
+    /// and the window has to cut on the POST's creation date. The seed used to
+    /// place its top-rated filler on posts written days before that boundary and
+    /// the block showed the filler instead of the showcase post — a failure the
+    /// sort tests above cannot see, because the sort was never wrong.
+    /// </remarks>
+    [Fact]
+    public async Task KeepPostsCreatedBeforeTheWeekOutOfTheWeeklyRating()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        // The same boundary the client (getWeekStartUtc) and the seeder
+        // (DataSeeder.WeekStartUtc) compute: Monday 00:00 UTC.
+        var now = DateTimeOffset.UtcNow;
+        var weekStart = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero)
+            .AddDays(-(((int)now.DayOfWeek + 6) % 7));
+
+        var context = await AddGameWithRoomAsync(dbContext);
+        // Higher rated, but written before the week started.
+        var lastWeek = await AddRatedPostAsync(
+            dbContext, context, positiveReviews: 12,
+            postCreatedUtc: weekStart.AddSeconds(-1));
+        // The showcase post: fewer reviews, written inside the window.
+        var thisWeek = await AddRatedPostAsync(
+            dbContext, context, positiveReviews: 7,
+            postCreatedUtc: weekStart);
+
+        var (posts, total) = await repository.GetRated(new PostsQuery
+        {
+            Take = 10,
+            SortBy = "rating",
+            HasReviews = true,
+            CreatedAfter = weekStart,
+            GameId = context.GameId,
+        }, Guid.Empty);
+
+        var ordered = posts.ToList();
+        total.Should().Be(1);
+        ordered.Should().ContainSingle()
+            .Which.Id.Should().Be(thisWeek, "the week's best is the best OF THE WEEK");
+        ordered.Should().NotContain(p => p.Id == lastWeek);
+    }
+
 [Fact]
     public async Task ReportTheViewerAsAReaderOfTheGameTheySubscribeTo()
     {
@@ -429,7 +478,8 @@ public class PostRepositoryShould : IntegrationTestBase
     /// post's rating is the sum of the review sign values.
     /// </summary>
     private static async Task<Guid> AddRatedPostAsync(
-        DmDbContext dbContext, GameContext context, int positiveReviews, DateTimeOffset? reviewTime = null)
+        DmDbContext dbContext, GameContext context, int positiveReviews,
+        DateTimeOffset? reviewTime = null, DateTimeOffset? postCreatedUtc = null)
     {
         var characterId = Guid.NewGuid();
         var postId = Guid.NewGuid();
@@ -451,7 +501,7 @@ public class PostRepositoryShould : IntegrationTestBase
             CharacterId = characterId,
             AuthorId = context.UserId,
             GameText = "text",
-            CreatedUtc = DateTimeOffset.UtcNow,
+            CreatedUtc = postCreatedUtc ?? DateTimeOffset.UtcNow,
         });
 
         // One reviewer per review. PostReviews is uniquely indexed on

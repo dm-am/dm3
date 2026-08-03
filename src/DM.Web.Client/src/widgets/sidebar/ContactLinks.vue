@@ -2,9 +2,9 @@
   <SidebarBlock token="ContactForms">
     <template #title>Обратная связь</template>
     <!-- The "- " prefix is decorative (same idiom as SidebarForwardLink):
-         aria-hidden + user-select: none keep it out of copied text, and
-         the block/inline flow (not flex) keeps the line copying as one
-         line instead of "- \n<link text>". -->
+         aria-hidden keeps it out of the accessibility tree, and the
+         block/inline flow (not flex) keeps the line copying as one line
+         instead of "- \n<link text>". The prefix itself is selectable. -->
     <div v-once class="contact-links">
       <div class="contact-item">
         <span class="muted" aria-hidden="true">-&nbsp;</span>
@@ -38,5 +38,4 @@ import SidebarBlock from "./SidebarBlock.vue";
 
 .muted
   color: $text-muted
-  user-select: none
 </style>

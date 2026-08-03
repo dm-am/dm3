@@ -983,6 +983,7 @@
   ],
   "DM.Web.API.Features.Game.Rooms.PostPendency": [
     "characterId",
+    "characterName",
     "createdBy",
     "createdUtc",
     "fulfilledUtc",
@@ -993,6 +994,7 @@
   "DM.Web.API.Features.Game.Rooms.Room": [
     "access",
     "accesses",
+    "canView",
     "game",
     "id",
     "isArchived",

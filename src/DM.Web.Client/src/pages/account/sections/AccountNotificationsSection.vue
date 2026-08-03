@@ -333,7 +333,6 @@ defineExpose({ loadPreferences });
 
 .loading-state
   color: $text-muted
-  text-align: center
   padding: $medium
 
 .channel-card

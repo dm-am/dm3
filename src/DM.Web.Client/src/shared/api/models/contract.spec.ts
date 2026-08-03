@@ -110,12 +110,6 @@ const CLIENT_ONLY: Record<string, string[]> = {
  * the server has started sending.
  */
 const UNSERVED: Record<string, string[]> = {
-  // The wire has `accesses` and `pendencies`. Renaming is not the whole fix:
-  // the pendency payload differs field for field too (PendingPost declares
-  // characterName and awaitingUser, PostPendency sends waitingFor, createdBy,
-  // roomId and fulfilledUtc), so the room list shows no pending turn at all.
-  Room: ["claims", "pendings"],
-
   // A roll on the wire is `rolls` dice of `edges` sides with a `results`
   // array; the mirror describes one die and one number, and the post renders
   // "dundefined: undefined = NaN".

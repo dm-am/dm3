@@ -616,10 +616,9 @@ onUnmounted(() => {
 .search-state
   display: flex
   flex-direction: column
-  align-items: center
+  align-items: flex-start
   justify-content: center
   gap: $small
-  text-align: center
   padding: $big $medium
 
 .search-error

@@ -42,7 +42,16 @@ public static class GameAccessibilityFilters
     /// <summary>
     /// Room is accessible for user
     /// </summary>
-    public static Expression<Func<DbRoom, bool>> RoomAvailable(Guid userId) => room =>
+    /// <param name="userId">Reader</param>
+    /// <param name="listingOnly">
+    /// Answer only whether the room may be NAMED in the game's room list,
+    /// skipping the room's own access type. The rooms menu shows private rooms
+    /// the reader may not enter (closed lock, plain text instead of a link), so
+    /// "listed" and "may be opened" are two questions over one rule; every
+    /// point read keeps the default and stays closed.
+    /// </param>
+    public static Expression<Func<DbRoom, bool>> RoomAvailable(
+        Guid userId, bool listingOnly = false) => room =>
         !room.IsRemoved &&
         !room.Game.IsRemoved &&
         !(
@@ -59,6 +68,7 @@ public static class GameAccessibilityFilters
               room.Game.DraftVisibility == DraftVisibility.Public))
         ) &&
         (
+            listingOnly ||
             room.AccessType == RoomAccessType.Open ||
             room.AccessType == RoomAccessType.Private &&
             (

@@ -19,7 +19,10 @@ import type { Upload } from "@/shared/api/models/common/upload";
 import type { Paging as PagingModel } from "@/shared/api/models/common";
 import { UserRole } from "@/shared/api/models/common";
 import { useAuthStore } from "@/shared/stores/auth";
-import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
+import {
+  joinTitleSegments,
+  useDocumentTitle,
+} from "@/shared/lib/composables/useDocumentTitle";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { formatDate } from "@/shared/lib/utils/datetime";
 import { formatFileSize } from "@/shared/lib/utils/fileSize";
@@ -53,7 +56,9 @@ const profileLink = computed(() => ({
   params: { username: username.value },
 }));
 
-useDocumentTitle(() => `Загруженные файлы — ${canonicalUsername.value}`);
+useDocumentTitle(() =>
+  joinTitleSegments(canonicalUsername.value, "Загруженные файлы"),
+);
 
 // --- Access gate: owner or admin (doc: "доступна владельцу файлов") ---
 const isOwner = computed(

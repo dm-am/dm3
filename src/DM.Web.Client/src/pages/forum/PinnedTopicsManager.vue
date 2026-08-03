@@ -297,7 +297,6 @@ function handleClose() {
   +button
 
 .empty-message
-  text-align: center
   color: $text-muted
   padding: $large
 
