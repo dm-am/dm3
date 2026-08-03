@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.UsernameChange;
 using DM.Domain.Core.Enums;
+using DM.Infrastructure.Persistence.Shared.Users;
 using Microsoft.EntityFrameworkCore;
 using DbUsernameChangeRequest = DM.Infrastructure.Persistence.Entities.Account.UsernameChangeRequest;
 
@@ -193,15 +194,8 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
     }
 
     /// <inheritdoc />
-    public async Task<bool> IsUsernameAvailable(string username, Guid? excludeUserId = null, CancellationToken ct = default)
-    {
-        var query = _dbContext.Users.AsQueryable();
-        if (excludeUserId.HasValue)
-        {
-            query = query.Where(u => u.UserId != excludeUserId.Value);
-        }
-        return !await query.AnyAsync(u => u.Username.ToLower() == username.ToLower(), ct);
-    }
+    public async Task<bool> IsUsernameAvailable(string username, Guid? excludeUserId = null, CancellationToken ct = default) =>
+        !await AccountReservation.UsernameTaken(_dbContext.Users, username, excludeUserId, ct);
 
     /// <inheritdoc />
     public Task SaveChanges(CancellationToken ct = default) =>

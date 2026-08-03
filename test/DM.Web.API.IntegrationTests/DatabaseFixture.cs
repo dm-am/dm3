@@ -12,6 +12,7 @@ using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.Entities.Community;
 using DM.Infrastructure.Persistence.Entities.Subscriptions;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Testcontainers.MongoDb;
 using Testcontainers.PostgreSql;
 using Testcontainers.RabbitMq;
@@ -95,6 +96,22 @@ public class DatabaseFixture : IAsyncLifetime
         .EnableSensitiveDataLogging()
         .EnableDetailedErrors()
         .Options);
+
+    /// <summary>
+    /// Context for another database on the same container, for tests that need a schema
+    /// built by the migration itself and untouched by the seed. The caller creates the
+    /// database with MigrateAsync and drops it in a finally.
+    /// </summary>
+    public DmDbContext CreateDbContextFor(string databaseName)
+    {
+        var connection = new NpgsqlConnectionStringBuilder(ConnectionString)
+        {
+            Database = databaseName,
+        };
+        return new DmDbContext(new DbContextOptionsBuilder<DmDbContext>()
+            .UseNpgsql(connection.ConnectionString)
+            .Options);
+    }
 
     #region Seeding
 

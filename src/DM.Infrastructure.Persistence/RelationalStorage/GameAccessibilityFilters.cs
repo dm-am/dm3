@@ -33,7 +33,10 @@ public static class GameAccessibilityFilters
                 (t.Type == TokenType.GamePlayerInvitation ||
                  t.Type == TokenType.GameReaderInvitation ||
                  t.Type == TokenType.GameAssistantInvitation)) ||
-            // Public games (non-draft with approved premoderation, or public draft with approved premoderation)
+            // The same rule as ModuleVisibility.IsPubliclyVisible, restated as an
+            // expression tree because EF Core translates trees and not method
+            // calls. GameAccessibilityFiltersShould compares the two over every
+            // combination of the three fields, so the copies cannot drift.
             (game.PremoderationStatus == PremoderationStatus.Approved &&
              (game.Status != ModuleStatus.Draft ||
               game.DraftVisibility == DraftVisibility.Public))
@@ -62,7 +65,9 @@ public static class GameAccessibilityFilters
             room.Game.MasterId == userId ||
             room.Game.Assistants.Any(a => a.UserId == userId) ||
             room.Game.MentorId == userId ||
-            // Public games (non-draft with approved premoderation, or public draft with approved premoderation)
+            // Visibility of the game the room belongs to: the same rule as
+            // ModuleVisibility.IsPubliclyVisible, restated as an expression tree
+            // for the same reason as in GameAvailable and pinned by the same test.
             (room.Game.PremoderationStatus == PremoderationStatus.Approved &&
              (room.Game.Status != ModuleStatus.Draft ||
               room.Game.DraftVisibility == DraftVisibility.Public))

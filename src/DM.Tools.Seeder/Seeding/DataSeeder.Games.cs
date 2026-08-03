@@ -682,7 +682,11 @@ internal sealed partial class DataSeeder
                             AccessId = _guidFactory.Create(),
                             RoomId = restrictedRoom.RoomId,
                             CharacterId = character.CharacterId,
-                            ReaderUserId = null
+                            ReaderUserId = null,
+                            // The enum defaults to NoAccess and the policy is what
+                            // admits writing: without it the members of the closed
+                            // rooms read them and cannot post in them.
+                            Policy = RoomAccessPolicy.Full
                         });
                     }
 

@@ -24,6 +24,18 @@ internal class UpdateCharacterValidator : AbstractValidator<UpdateCharacter>
                 .NotEmpty().WithMessage(ValidationError.Empty)
                 .MaximumLength(50).WithMessage(ValidationError.Long));
 
+        // Same invariant as on create: one value per specification. Without it
+        // a repeated identifier became a second insert and, since the unique
+        // index exists, a failed save.
+        RuleFor(c => c.Attributes)
+            .Custom((attributes, context) =>
+            {
+                foreach (var error in CharacterAttributeRules.Collect(attributes))
+                {
+                    context.AddFailure(error);
+                }
+            });
+
         When(c => c.Attributes != null && c.Attributes.Any(), () =>
             RuleForEach(c => c.Attributes)
                 .MustAsync(async (c, attribute, context, _) =>

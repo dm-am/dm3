@@ -70,8 +70,36 @@ public class GameIntentionResolverShould : UnitTestBase
     {
         var game = new GameBuilder()
             .WithStatus(ModuleStatus.Draft)
+            .WithDraftVisibility(DraftVisibility.Private)
             .Please();
 
+        resolver.IsAllowed(AuthenticatedUser.Guest, GameIntention.Read, game).Should().BeFalse();
+    }
+
+    [Fact]
+    public void AllowReadDraftGameWithPublicPreviewForGuest()
+    {
+        var game = new GameBuilder()
+            .WithStatus(ModuleStatus.Draft)
+            .WithDraftVisibility(DraftVisibility.Public)
+            .Please();
+
+        // The game list is filtered by the same rule and shows this game to
+        // everyone, so opening it must not answer with a refusal
+        resolver.IsAllowed(AuthenticatedUser.Guest, GameIntention.Read, game).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ForbidReadDraftGameWithPublicPreviewAwaitingPremoderation()
+    {
+        var game = new GameBuilder()
+            .WithStatus(ModuleStatus.Draft)
+            .WithDraftVisibility(DraftVisibility.Public)
+            .WithPremoderationStatus(PremoderationStatus.AwaitingApproval)
+            .Please();
+
+        // The preview setting does not outrank premoderation: a newbie master
+        // cannot publish a game around the curator by opening the preview
         resolver.IsAllowed(AuthenticatedUser.Guest, GameIntention.Read, game).Should().BeFalse();
     }
 
@@ -86,6 +114,40 @@ public class GameIntentionResolverShould : UnitTestBase
         var user = Create.User(masterId).WithRole(UserRole.RegularUser).Please();
 
         resolver.IsAllowed(user, GameIntention.Read, game).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AllowReadOfAPremoderatedGameForTheMentorCuratingIt()
+    {
+        var mentorId = Guid.NewGuid();
+        // A newbie's game while it waits for review: hidden as a draft and hidden
+        // by premoderation, with the curator already assigned to it.
+        var game = new GameBuilder()
+            .WithStatus(ModuleStatus.Draft)
+            .WithPremoderationStatus(PremoderationStatus.AwaitingApproval)
+            .WithMentor(mentorId)
+            .Please();
+        var user = Create.User(mentorId).WithRole(UserRole.Mentor).Please();
+
+        // The moderation queue links straight to the game page and the SQL scope
+        // already hands the row to the assigned mentor, so refusing here answered
+        // 403 on the one game the link exists for.
+        resolver.IsAllowed(user, GameIntention.Read, game).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ForbidReadOfAPremoderatedGameForAMentorWhoDoesNotCurateIt()
+    {
+        var game = new GameBuilder()
+            .WithStatus(ModuleStatus.Draft)
+            .WithPremoderationStatus(PremoderationStatus.AwaitingApproval)
+            .WithMentor(Guid.NewGuid())
+            .Please();
+        var user = Create.User().WithRole(UserRole.Mentor).Please();
+
+        // The site role staffs the review queue, it does not open every hidden
+        // game: what admits a mentor is the assignment, not the rank.
+        resolver.IsAllowed(user, GameIntention.Read, game).Should().BeFalse();
     }
 
     [Fact]

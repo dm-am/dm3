@@ -97,7 +97,7 @@ internal class ActivationRepository : IActivationRepository
     public async Task<AuthenticatedUser?> FindUserByEmail(string email, CancellationToken cancellationToken = default)
     {
         return await _dbContext.Users
-            .Where(u => EF.Functions.ILike(u.Email, email))
+            .Where(u => u.Email.ToLower() == email.ToLower())
             .ProjectTo<AuthenticatedUser>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(cancellationToken);
     }

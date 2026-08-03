@@ -50,14 +50,20 @@ Internet → Nginx → Frontend (Vue.js)
 curl -sSL https://raw.githubusercontent.com/dm-am/dm3/dev/docker/setup-server.sh | bash
 ```
 
-Результат: http://<IP> за Basic Auth. Учетные данные лежат в [`docker/nginx/.htpasswd`](../../docker/nginx/.htpasswd) и в документации не публикуются — задать свои командой из [Смена пароля](#preview-окружение).
+Результат: http://<IP> за Basic Auth. Логин `preview`, пароль задает оператор: перед установкой `export DM_PREVIEW_PASSWORD=ваш_пароль`, иначе установщик остановится. Файл `docker/nginx/.htpasswd` в репозитории не хранится, его создает [`docker/scripts/init-htpasswd.sh`](../../docker/scripts/init-htpasswd.sh) на сервере. Сменить пароль: [Смена пароля](#preview-окружение).
 
 ### Ручная установка
 
 ```bash
 git clone https://github.com/dm-am/dm3.git && cd dm3/docker
-docker compose up -d --build                    # Dev режим
-docker compose -f docker-compose.yml -f docker-compose.preview.yml up -d  # Preview
+
+# Dev режим
+bash scripts/init-env.sh local
+docker compose up -d --build
+
+# Preview
+bash scripts/init-env.sh server
+docker compose --profile production -f docker-compose.yml -f docker-compose.preview.yml up -d
 ```
 
 ### Preview окружение
@@ -68,19 +74,32 @@ docker compose -f docker-compose.yml -f docker-compose.preview.yml up -d  # Prev
 и юнит systemd. Расхождение между ними означает, что перезапуск подменяет сайт
 голым API, и его ловит отдельный гейт в CI.
 
-**Образы, а не сборка на сервере.** И API, и фронтенд по умолчанию тянутся из
-реестра; сборка на месте включается только переменной `API_IMAGE` / `FRONT_IMAGE`
-с локальным тегом. Образ, который CI публикует, но никто не тянет, — это то же
-самое, что отсутствие доставки.
+**Образы, а не сборка на сервере.** Инсталлятор и юнит поднимают стенд без
+`--build`: миграция, API, оба воркера и фронтенд берут образы, собранные и
+опубликованные CI. Тег у всех четырех один, `IMAGE_TAG` в `docker/.env`
+(`latest` с main, имя ветки с ветки, короткий sha с каждого прогона), потому что
+собраны они одним прогоном из одного коммита. Сборка на сервере остается
+аварийным путем: compose собирает сам, только если реестр недоступен. Образ,
+который CI публикует, но никто не тянет, это то же самое, что отсутствие
+доставки.
+
+**Обновление.** Профиль `production` в командах инсталлятора и юнита поднимает
+watchtower: раз в пять минут он перечитывает тег и перезапускает контейнеры с
+меткой `com.centurylinklabs.watchtower.enable=true`. Пин на конкретный sha
+обновления останавливает, тег неподвижен. Миграции watchtower не прогоняет,
+контейнер `migration` одноразовый, поэтому релиз со схемой требует
+`systemctl restart dm3`.
 
 **Файлы:**
 - [`docker/docker-compose.preview.yml`](../../docker/docker-compose.preview.yml)
 - [`docker/nginx/nginx.conf`](../../docker/nginx/nginx.conf)
+- [`docker/scripts/init-htpasswd.sh`](../../docker/scripts/init-htpasswd.sh)
 
 **Смена пароля:**
 ```bash
-docker run --rm httpd htpasswd -nb preview НОВЫЙ_ПАРОЛЬ > docker/nginx/.htpasswd
-docker compose restart nginx
+cd /opt/dm3/docker
+bash scripts/init-htpasswd.sh                                              # спросит пароль
+docker compose -f docker-compose.yml -f docker-compose.preview.yml restart nginx
 ```
 
 **SSL:** Раскомментировать HTTPS блок в nginx.conf + `certbot --nginx -d yourdomain.com`
@@ -136,7 +155,7 @@ Watchtower каждые 5 минут проверяет новые образы 
 | imgproxy (transform layer) | `DM_ImageProxyConfiguration__Endpoint/Key/Salt/SourceUrlPrefix` |
 | Email | `DM_EmailConfiguration__*` |
 
-**Production:** `docker/.env` (создать из `docker/.env.example`). Secrets: `POSTGRES_PASSWORD`, `RABBITMQ_DEFAULT_PASS`, `MINIO_ROOT_PASSWORD`, `IMGPROXY_KEY`, `IMGPROXY_SALT`, `GF_SECURITY_ADMIN_PASSWORD`.
+**Production:** `docker/.env` создает `docker/scripts/init-env.sh server` — копирует пример, генерирует крипто-ключ и все секреты (`POSTGRES_PASSWORD`, `RABBITMQ_DEFAULT_PASS`, `MINIO_ROOT_PASSWORD`, `MONGO_*_PASSWORD`, `MINIO_APP_PASSWORD`, `MINIO_IMGPROXY_PASSWORD`, `IMGPROXY_KEY`, `IMGPROXY_SALT`, `GF_SECURITY_ADMIN_PASSWORD`), ставит `ASPNETCORE_ENVIRONMENT=Production` и пинит `IMAGE_TAG`. Копия `.env.example` руками оставляет пароли из репозитория и пустой ключ, на котором compose останавливается до старта контейнеров.
 
 ---
 
@@ -144,7 +163,7 @@ Watchtower каждые 5 минут проверяет новые образы 
 
 | Метод | Команда |
 |-------|---------|
-| Docker образ | `docker compose down && docker compose up -d` с другим тегом |
+| Docker образ | `IMAGE_TAG=<sha>` в `docker/.env`, затем `sudo systemctl restart dm3` |
 | PostgreSQL | `gunzip -c /var/backups/postgresql/<файл>.sql.gz \| docker exec -i dm-pg psql -U postgres dm3` |
 | MongoDB | `docker exec -i dm-mongo mongorestore --archive --gzip --drop < /var/backups/mongodb/<файл>.archive.gz` |
 | MinIO | `docker run --rm --network host -v /var/backups/minio/<каталог>:/backup --entrypoint sh minio/mc -c 'mc alias set dst "$MINIO_ENDPOINT" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" && mc mirror /backup dst/dm-uploads'` |

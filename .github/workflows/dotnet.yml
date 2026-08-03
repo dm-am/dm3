@@ -146,12 +146,16 @@ jobs:
               DM_RateLimiting__Enabled: "false"
         YAML
 
+    # --build on the migration line too. Its image is the API image, and the API
+    # image is now the tag the registry publishes: compose pulls a missing image
+    # before it considers building one, so a plain "up" here would migrate the
+    # database with the published build and test a commit that is not this one.
     - name: Start the stack
       working-directory: docker
       run: |
         docker compose config --quiet
         docker compose up -d postgres mongo rabbitmq minio mailhog jaeger
-        docker compose up -d --wait migration
+        docker compose up -d --build --wait migration
         docker compose up -d --build --wait dmapi
 
     - name: Wait for API health
@@ -376,10 +380,14 @@ jobs:
               test -d "$ctx" || { echo "::error::build context does not exist: $ctx"; exit 1; }
             done
 
-    - name: The unit systemd runs must name the same files as the installer
+    - name: The unit systemd runs must name the same files and profiles as the installer
       run: |
-        installer=$(grep -oE '\-f [a-z.-]+\.yml' docker/setup-server.sh | sort -u)
-        unit=$(grep -oE '\-f [a-z.-]+\.yml' docker/dm3.service | sort -u)
+        # Profiles as well as files: watchtower lives behind the production
+        # profile, and a unit that drops it stops updating the stand at the first
+        # reboot with nothing in the logs to say so.
+        pattern='(\-f [a-z.-]+\.yml|--profile [a-z]+)'
+        installer=$(grep -oE "$pattern" docker/setup-server.sh | sort -u)
+        unit=$(grep -oE "$pattern" docker/dm3.service | sort -u)
         echo "installer: $installer"
         echo "unit:      $unit"
-        test "$installer" = "$unit" || { echo "::error::dm3.service and setup-server.sh disagree on the compose files"; exit 1; }
+        test "$installer" = "$unit" || { echo "::error::dm3.service and setup-server.sh disagree on the compose files or profiles"; exit 1; }

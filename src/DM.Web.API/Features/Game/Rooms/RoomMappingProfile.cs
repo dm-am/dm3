@@ -55,9 +55,11 @@ internal class RoomMappingProfile : Profile
                 s => s.MapFrom(r => r.Settings != null ? (bool?)r.Settings.DiceEnabled : null))
             .ForMember(d => d.IsRemoved, opt => opt.Ignore());
 
+        // Policy used to be ignored here, so every access of every response
+        // answered null: the screen that grants access could not show which grant
+        // it had just made, and the same value now decides who may write.
         CreateMap<DomainRoomAccess, RoomAccess>()
-            .ForMember(d => d.Character, s => s.MapFrom(a => a.Character))
-            .ForMember(d => d.Policy, opt => opt.Ignore());
+            .ForMember(d => d.Character, s => s.MapFrom(a => a.Character));
 
         CreateMap<RoomAccess, CreateRoomAccess>()
             .ForMember(d => d.CharacterId, s => s.MapFrom(r => r.Character != null ? r.Character.Id : (Guid?)null))

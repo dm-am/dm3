@@ -2278,7 +2278,8 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("CharacterAttributeId");
 
-                    b.HasIndex("CharacterId");
+                    b.HasIndex("CharacterId", "AttributeId")
+                        .IsUnique();
 
                     b.ToTable("CharacterAttributes");
                 });
@@ -2910,11 +2911,12 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("DeletedByUserId");
 
-                    b.HasIndex("GameId");
-
                     b.HasIndex("NextRoomId");
 
                     b.HasIndex("PreviousRoomId");
+
+                    b.HasIndex("GameId", "RoomNumber")
+                        .IsUnique();
 
                     b.ToTable("Rooms");
                 });

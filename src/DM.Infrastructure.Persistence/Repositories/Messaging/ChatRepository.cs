@@ -86,7 +86,12 @@ internal class ChatRepository : IChatRepository
 
     /// <inheritdoc />
     public async Task<Guid?> FindUser(string username) => (await _dbContext.Users
-        .Where(u => EF.Functions.ILike(u.Username, username) && !u.IsRemoved)
+        // Equality over lower(), not ILIKE. This resolves the person a direct chat
+        // is opened with, and "_" is a legal login character that ILIKE reads as
+        // "any character": the caller would be handed a private chat with whoever
+        // the plan reached first and would write into it. The form also reaches
+        // IX_Users_Username_Lower, which ILIKE cannot use at all.
+        .Where(u => u.Username.ToLower() == username.ToLower() && !u.IsRemoved)
         .Select(u => new { u.UserId })
         .FirstOrDefaultAsync())?.UserId;
 

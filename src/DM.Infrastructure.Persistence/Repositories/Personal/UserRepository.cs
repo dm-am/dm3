@@ -233,7 +233,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     public async Task<UserDetails?> GetUserDetailsByEmail(string email)
     {
         var userDetails = await _dmDbContext.Users
-            .Where(u => !u.IsRemoved && EF.Functions.ILike(u.Email, email))
+            .Where(u => !u.IsRemoved && u.Email.ToLower() == email.ToLower())
             .ProjectTo<UserDetails>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
 

@@ -3,9 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
+using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Authorization;
-using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.Rooms;
@@ -129,14 +129,6 @@ internal class RoomAccessService : IRoomAccessService
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
-
-        if (oldAccess.User != null && updateRoomAccess.Policy == RoomAccessPolicy.Full)
-        {
-            throw new HttpBadRequestException(new Dictionary<string, string>
-            {
-                ["Policy"] = ValidationError.Invalid
-            });
-        }
 
         var updateEntity = new UpdateRoomAccessEntity
         {

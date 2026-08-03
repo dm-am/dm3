@@ -58,6 +58,11 @@ public class SeededRoomExamplesShould
 
     private static readonly Regex PostInitialiser = Initialiser("Post");
 
+    private static readonly Regex RoomAccessInitialiser = Initialiser("RoomAccess");
+
+    private static readonly Regex PolicyAssignment = new(
+        @"\bPolicy\s*=\s*RoomAccessPolicy\.\w+", RegexOptions.Compiled);
+
     /// <summary>
     /// "Type" alone: the word inside "AccessType" is not preceded by a word
     /// boundary, so the two assignments cannot be read for each other.
@@ -131,6 +136,25 @@ public class SeededRoomExamplesShould
 
         parsed.Should().Be(written, "every room the seeder builds has to be readable by this rule");
         parsed.Should().BeGreaterOrEqualTo(Required.Length, "the four rooms the menu is read against are seeded");
+    }
+
+    /// <summary>
+    /// Every access row the seeder writes names the policy it grants. The enum
+    /// defaults to NoAccess and the policy is what admits writing, so a row written
+    /// without one puts a member behind the lock of a closed room and leaves them
+    /// unable to post in it - the one state of that screen the seed exists to show.
+    /// </summary>
+    [Fact]
+    public void GrantAPolicyOnEverySeededRoomAccess()
+    {
+        var rows = SeederSources()
+            .SelectMany(source => RoomAccessInitialiser.Matches(File.ReadAllText(source)).Cast<Match>())
+            .Select(row => row.Groups["body"].Value)
+            .ToList();
+
+        rows.Should().NotBeEmpty("the closed rooms of the seed are reached through access rows");
+        rows.Should().OnlyContain(body => PolicyAssignment.IsMatch(body),
+            "the enum defaults to NoAccess, and a row that names no policy grants no writing");
     }
 
     /// <summary>The rooms the seeder builds, in the order they are written.</summary>

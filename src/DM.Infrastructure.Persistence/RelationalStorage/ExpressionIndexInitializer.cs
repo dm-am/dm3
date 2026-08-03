@@ -50,6 +50,11 @@ public class ExpressionIndexInitializer : IHostedService
         // raw column cannot serve that predicate and the lookup seq-scans Users on every
         // attempt. Unique over the expression also carries the invariant the product needs:
         // two accounts must not differ by letter case alone.
+        //
+        // Deliberately without an IsRemoved predicate: an account holds its address and its
+        // login for as long as its row exists, deactivation included. Shared.Users.
+        // AccountReservation says why, and every check that answers "is this free" reads the
+        // table the same way. A predicate here would free the pair in the schema alone.
         await Assert(dbContext,
             """CREATE UNIQUE INDEX IF NOT EXISTS "IX_Users_Email_Lower" ON "Users" (lower("Email"))""",
             "IX_Users_Email_Lower", cancellationToken);

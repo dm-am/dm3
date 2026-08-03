@@ -194,10 +194,10 @@ public class GameController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostGamePremoderation(string id, [FromBody] GamePremoderationChangeRequest request)
     {
-        // Pass the raw id through: the domain resolves the public id via the
-        // repository (ungated) after the Mentor gate. Resolving here through the
-        // read-gated GetByPublicId would hide a premoderation-pending game from
-        // the non-curator mentor this endpoint exists for.
+        // Pass the raw id through: the domain takes either id form and reads the
+        // game in one query, where the neighbouring actions resolve the public id
+        // first. Both paths apply the same accessibility scope, so this is one
+        // query saved, not a wider door.
         return Ok(await _gameApiService.ChangePremoderation(id, request));
     }
 

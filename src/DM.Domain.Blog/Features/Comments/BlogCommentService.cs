@@ -113,11 +113,24 @@ internal class BlogCommentService : IBlogCommentService
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Edit, comment);
 
+        // Rewriting a comment publishes text exactly as writing one does, so the
+        // ban is asked here too, on the terms BlogIntention.CreateComment sets:
+        // the user's own blog stays open. Only the author is asked, a moderator
+        // editing somebody else's comment is moderating and a ban takes no
+        // moderator tool away. The blog is read inside the condition because
+        // whose blog it is only matters to somebody the ban actually restricts.
+        var currentUser = _identityProvider.Current.User;
+        if (comment.Author?.UserId == currentUser.UserId && !currentUser.MaySpeak())
+        {
+            var blog = await _blogService.GetBlogAsync(comment.EntityId);
+            currentUser.ThrowIfMayNotComment(inOwnSpace: blog.IsOwnBlog(currentUser.UserId));
+        }
+
         var text = updateComment.Text?.Trim();
         if (!string.IsNullOrEmpty(text))
         {
             // Strip [mod] authored by a non-moderator before comparing/saving.
-            text = ModBlockSanitizer.SanitizeForAuthor(text, _identityProvider.Current.User.Role);
+            text = ModBlockSanitizer.SanitizeForAuthor(text, currentUser.Role);
         }
         if (string.IsNullOrEmpty(text) || text == comment.Text)
         {

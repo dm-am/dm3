@@ -11,7 +11,6 @@ namespace DM.Domain.Account.Features.Availability;
 /// </summary>
 internal partial class AvailabilityService : IAvailabilityService
 {
-    private readonly IEmailLookupRepository _emailLookupRepository;
     private readonly IRegistrationRepository _registrationRepository;
     private readonly IUsernameChangeRepository _usernameChangeRepository;
     private readonly IUsernameHistoryRepository _usernameHistoryRepository;
@@ -23,12 +22,10 @@ internal partial class AvailabilityService : IAvailabilityService
     private static partial Regex UsernameValidationRegex();
 
     public AvailabilityService(
-        IEmailLookupRepository emailLookupRepository,
         IRegistrationRepository registrationRepository,
         IUsernameChangeRepository usernameChangeRepository,
         IUsernameHistoryRepository usernameHistoryRepository)
     {
-        _emailLookupRepository = emailLookupRepository;
         _registrationRepository = registrationRepository;
         _usernameChangeRepository = usernameChangeRepository;
         _usernameHistoryRepository = usernameHistoryRepository;
@@ -39,9 +36,11 @@ internal partial class AvailabilityService : IAvailabilityService
     {
         var normalizedEmail = email.Trim().ToLowerInvariant();
 
-        // Check if email is taken by active user
-        var user = await _emailLookupRepository.GetUserByEmail(normalizedEmail);
-        if (user != null)
+        // The same answer the registration validator gives, for the same reason: an account
+        // holds its address until its row is gone, deactivation included. Answered separately
+        // here, the form showed the address as free and the person spent a confirmation letter
+        // on an address the insert then refused.
+        if (!await _registrationRepository.EmailFreeForNewRegistration(normalizedEmail, cancellationToken))
         {
             return EmailAvailabilityResult.Unavailable(EmailUnavailableReason.Taken);
         }

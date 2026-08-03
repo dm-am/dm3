@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Linq;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
@@ -21,11 +20,6 @@ internal class GameIntentionResolver :
         _ => false
     };
 
-    private static readonly IEnumerable<ModuleStatus> HiddenStates = new HashSet<ModuleStatus>
-    {
-        ModuleStatus.Draft
-    };
-
     public bool IsAllowed(IAuthorizationSubject user, GameIntention intention, GameDto target)
     {
         if (intention != GameIntention.Read && intention != GameIntention.ReadComments && !user.IsAuthenticated)
@@ -37,16 +31,26 @@ internal class GameIntentionResolver :
         var userIsMentor = user.Role >= UserRole.Mentor;
         var roles = target.GetRoles(user.UserId);
 
-        // Also check premoderation - game is hidden if awaiting approval
-        var isHiddenByPremoderation = target.PremoderationStatus != PremoderationStatus.Approved;
-
         return intention switch
         {
-            // Allow read if: site admin/moderator, master/assistant, pending invitation, or game is public
+            // Allow read if: site admin/moderator, master/assistant, the mentor
+            // curating the game, pending invitation, or the game is publicly
+            // visible. The last one is the rule the storage filter answers the
+            // game list with, so a game the user was just shown cannot refuse to
+            // open: a draft is public when its master opened the preview, and
+            // premoderation hides it anyway.
+            //
+            // The curator is on the list because premoderation is what hides a
+            // newbie's game and the mentor assigned to it is the one who has to
+            // open it. The SQL scope already hands them the row, so without this
+            // line the moderation queue links to a 403 on the very game the link
+            // exists for.
             GameIntention.Read => userIsSeniorModerator ||
                                   roles.HasEditAccess() ||
+                                  roles.Contains(GameRole.Mentor) ||
                                   target.HasPendingInvitation(user.UserId) ||
-                                  (!HiddenStates.Contains(target.Status) && !isHiddenByPremoderation),
+                                  ModuleVisibility.IsPubliclyVisible(
+                                      target.Status, target.PremoderationStatus, target.DraftVisibility),
             GameIntention.Subscribe when user.IsAuthenticated => !roles.HasAnyRole(),
             GameIntention.Unsubscribe when user.IsAuthenticated => roles.Contains(GameRole.Reader),
 

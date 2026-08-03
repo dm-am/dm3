@@ -323,6 +323,18 @@ public class DmDbContext : DbContext
             .HasIndex(t => new { t.BoardId, t.TopicNumber })
             .IsUnique();
 
+        // RoomNumber is the same key one level down: a room is addressed as
+        // /games/{game}/rooms/{number}, and the number is what the address
+        // resolves by. It is allocated as MAX+1 within the game, so two rooms
+        // created at once read the same maximum, and two rooms sharing a number
+        // means one of them can never be opened by its own link. A removed room
+        // keeps its number for the reason a removed topic does. The pair also
+        // replaces the plain GameId index: every room read filters by the game
+        // first, so the composite serves those reads unchanged.
+        modelBuilder.Entity<Room>()
+            .HasIndex(r => new { r.GameId, r.RoomNumber })
+            .IsUnique();
+
         #endregion
 
         // Configure both DeletedBy and ModifiedBy for editable entities (no inverse collections)
@@ -2205,6 +2217,16 @@ public class DmDbContext : DbContext
                 "(\"CharacterId\" IS NOT NULL AND \"ReaderUserId\" IS NULL) OR " +
                 "(\"CharacterId\" IS NULL AND \"ReaderUserId\" IS NOT NULL)"));
         });
+
+        // A character holds one value per attribute specification. The update
+        // path reads the stored rows into a dictionary keyed by AttributeId and
+        // writes them as check-then-insert, so a second row for the same pair
+        // both loses one of the two values and makes every later edit of that
+        // character fail on the duplicate key. The composite replaces the
+        // conventional CharacterId index: it is the leading column, so the
+        // per-character lookups keep their index.
+        modelBuilder.Entity<CharacterAttribute>()
+            .HasIndex(a => new { a.CharacterId, a.AttributeId }).IsUnique();
 
         // Global Query Filter: automatically exclude soft-deleted entities
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())

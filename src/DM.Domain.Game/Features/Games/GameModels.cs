@@ -492,6 +492,12 @@ public class RoomAccess
     public RoomAccessTargetType TargetType { get; set; }
 
     /// <summary>
+    /// What the grant admits: the row itself opens the room for reading,
+    /// Full is what admits writing in it
+    /// </summary>
+    public RoomAccessPolicy Policy { get; set; }
+
+    /// <summary>
     /// Character (when TargetType = Character)
     /// </summary>
     public Character Character { get; set; } = null!;

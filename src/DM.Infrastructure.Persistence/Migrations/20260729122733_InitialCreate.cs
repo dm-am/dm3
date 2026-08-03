@@ -987,9 +987,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                     // navigations, which real queries use, so they cannot simply be dropped
                     // from the model. Referential integrity is application logic here.
                     //
-                    // This is the one thing regenerating this migration reintroduces, and it
-                    // is guarded: InvitationTokenPersistenceShould fails loudly if either
-                    // constraint comes back. See DATA_STORAGE.md.
+                    // Regenerating this migration brings both back, and both are guarded:
+                    // InvitationTokenPersistenceShould fails loudly if either constraint
+                    // comes back. FK_Comments_Topics_EntityId is the same case with its own
+                    // comment and its own test, further down. See DATA_STORAGE.md.
                 });
 
             migrationBuilder.CreateTable(
@@ -1838,9 +1839,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "LastTopicId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_CharacterAttributes_CharacterId",
+                name: "IX_CharacterAttributes_CharacterId_AttributeId",
                 table: "CharacterAttributes",
-                column: "CharacterId");
+                columns: new[] { "CharacterId", "AttributeId" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_CharacterEdits_CharacterId",
@@ -2284,9 +2286,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "DeletedByUserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Rooms_GameId",
+                name: "IX_Rooms_GameId_RoomNumber",
                 table: "Rooms",
-                column: "GameId");
+                columns: new[] { "GameId", "RoomNumber" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Rooms_NextRoomId",
@@ -2817,9 +2820,9 @@ namespace DM.Infrastructure.Persistence.Migrations
             // FK_Comments_Topics_EntityId is deliberately absent, for the same reason as the
             // two token constraints above: Comment.EntityId is polymorphic and points at a
             // topic, a game, a blog or a publication. The constraint would reject every
-            // comment that is not on a topic. Unlike the token constraints, no schema test
-            // covers this one: it surfaces only in seeding, which inserts comments on games
-            // and publications.
+            // comment that is not on a topic, which is three of the four kinds. Guarded like
+            // the token ones: PolymorphicCommentPersistenceShould reads the migrated schema
+            // and fails loudly if the constraint comes back. See DATA_STORAGE.md.
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Comments_Users_AuthorId",

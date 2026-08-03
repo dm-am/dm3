@@ -1,6 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Registration;
+using DM.Infrastructure.Persistence.Shared.Users;
 using Microsoft.EntityFrameworkCore;
 using DbPendingRegistration = DM.Infrastructure.Persistence.Entities.Account.PendingRegistration;
 
@@ -21,10 +22,8 @@ internal class RegistrationRepository : IRegistrationRepository
     /// <inheritdoc />
     public async Task<bool> EmailFreeForNewRegistration(string email, CancellationToken cancellationToken)
     {
-        // Email must not exist in Users table
-        var existsInUsers = await _dbContext.Users
-            .AnyAsync(u => EF.Functions.ILike(u.Email, email), cancellationToken);
-        if (existsInUsers)
+        // Email must not be held by any account, deactivated ones included
+        if (await AccountReservation.EmailTaken(_dbContext.Users, email, cancellationToken))
             return false;
 
         // Email in PendingRegistrations is OK - we'll replace it
@@ -33,13 +32,13 @@ internal class RegistrationRepository : IRegistrationRepository
 
     /// <inheritdoc />
     public async Task<bool> UsernameFree(string username, CancellationToken cancellationToken) =>
-        !await _dbContext.Users.AnyAsync(u => u.Username.ToLower() == username.ToLower(), cancellationToken) &&
+        !await AccountReservation.UsernameTaken(_dbContext.Users, username, ct: cancellationToken) &&
         !await _dbContext.UsernameHistories.AnyAsync(h => h.OldUsername.ToLower() == username.ToLower(), cancellationToken);
 
     /// <inheritdoc />
     public async Task<bool> PendingExists(string email, CancellationToken cancellationToken) =>
         await _dbContext.PendingRegistrations
-            .AnyAsync(p => EF.Functions.ILike(p.Email, email), cancellationToken);
+            .AnyAsync(p => p.Email.ToLower() == email.ToLower(), cancellationToken);
 
     /// <inheritdoc />
     public async Task AddPending(PendingRegistration pending)
@@ -63,8 +62,12 @@ internal class RegistrationRepository : IRegistrationRepository
     /// <inheritdoc />
     public async Task ReplacePending(PendingRegistration pending)
     {
+        // Equality over lower(), not ILIKE. The row found here is overwritten with
+        // a new token and a new password hash and keeps its own address, while the
+        // confirmation letter goes to the address the caller typed: a pattern match
+        // would hand the caller a link that activates somebody else's registration.
         var existing = await _dbContext.PendingRegistrations
-            .FirstOrDefaultAsync(p => EF.Functions.ILike(p.Email, pending.Email));
+            .FirstOrDefaultAsync(p => p.Email.ToLower() == pending.Email.ToLower());
 
         if (existing != null)
         {
@@ -102,7 +105,7 @@ internal class RegistrationRepository : IRegistrationRepository
     public async Task<PendingRegistration?> FindPendingByEmail(string email, CancellationToken cancellationToken)
     {
         var entity = await _dbContext.PendingRegistrations
-            .FirstOrDefaultAsync(p => EF.Functions.ILike(p.Email, email), cancellationToken);
+            .FirstOrDefaultAsync(p => p.Email.ToLower() == email.ToLower(), cancellationToken);
 
         if (entity == null)
             return null;

@@ -104,8 +104,14 @@ public class CreateRoomAccessValidatorShould : UnitTestBase
             .WithErrorMessage(ValidationError.Invalid);
     }
 
+    /// <summary>
+    /// A reader row takes both policies. Pinning it to ReadOnly left the column with
+    /// no decision to carry for half the rows in the table, and once the policy
+    /// decides who writes, a room the master opened to a reader would have no way of
+    /// letting that reader speak in its chat.
+    /// </summary>
     [Fact]
-    public async Task FailWhenReaderAccessPolicyIsNotReadOnly()
+    public async Task PassForAReaderGrantedWriting()
     {
         userLookupServiceMock
             .Setup(s => s.UserExistsAsync("reader", It.IsAny<CancellationToken>()))
@@ -119,7 +125,6 @@ public class CreateRoomAccessValidatorShould : UnitTestBase
         };
 
         var result = await validator.TestValidateAsync(input);
-        result.ShouldHaveValidationErrorFor(c => c.Policy)
-            .WithErrorMessage(ValidationError.Invalid);
+        result.ShouldNotHaveAnyValidationErrors();
     }
 }

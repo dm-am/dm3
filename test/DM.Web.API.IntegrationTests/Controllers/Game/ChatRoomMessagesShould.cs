@@ -107,7 +107,9 @@ public class ChatRoomMessagesShould : IntegrationTestBase
         {
             RoomId = roomId,
             GameId = TestConstants.TestGameId,
-            RoomNumber = 0,
+            // Room numbers start at one and are unique within their game; the
+            // fixture's own room of TestGame holds 1.
+            RoomNumber = 2,
             Title = "OOC chat room",
             AccessType = RoomAccessType.Private,
             Type = RoomType.Chat,

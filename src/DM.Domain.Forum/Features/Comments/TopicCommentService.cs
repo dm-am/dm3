@@ -121,6 +121,17 @@ internal class TopicCommentService : ITopicCommentService
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Edit, comment);
 
+        // Rewriting a comment publishes text exactly as writing one does, so the
+        // ban is asked here too. Only the author is asked: a moderator editing
+        // somebody else's comment is moderating, and a ban takes no moderator
+        // tool away. The forum has no own-space exemption, the same answer
+        // TopicIntention.CreateComment gives.
+        var currentUser = _identityProvider.Current.User;
+        if (comment.Author?.UserId == currentUser.UserId)
+        {
+            currentUser.ThrowIfMayNotComment();
+        }
+
         var text = updateComment.Text?.Trim();
         if (!string.IsNullOrEmpty(text))
         {

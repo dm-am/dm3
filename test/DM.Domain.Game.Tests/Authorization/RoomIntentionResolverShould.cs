@@ -120,6 +120,22 @@ public class RoomIntentionResolverShould : UnitTestBase
         resolver.IsAllowed(user, RoomIntention.CreatePost, (room, (Guid?)Guid.NewGuid())).Should().BeFalse();
     }
 
+    [Fact]
+    public void NotLetAPlayerPostAsACharacterGrantedReadOnly()
+    {
+        var characterId = Guid.NewGuid();
+        var room = new RoomBuilder()
+            .WithGame(GameLedBy(MasterId))
+            .WithCharacterAccess(characterId, PlayerId, policy: RoomAccessPolicy.ReadOnly)
+            .Please();
+        var user = Create.User(PlayerId).WithRole(UserRole.RegularUser).Please();
+
+        // The row admits the character to the room, the policy on it says whether
+        // the character may write there. ReadOnly is a seat in the audience, and it
+        // used to hand out a voice along with the seat.
+        resolver.IsAllowed(user, RoomIntention.CreatePost, (room, (Guid?)characterId)).Should().BeFalse();
+    }
+
     #endregion
 
     #region Posting without a character
@@ -237,6 +253,24 @@ public class RoomIntentionResolverShould : UnitTestBase
         var user = Create.User(PlayerId).WithRole(UserRole.RegularUser).Please();
 
         resolver.IsAllowed(user, intention, room).Should().BeTrue();
+    }
+
+    [Fact]
+    public void LetAReaderGrantedReadOnlyReadAChatRoomAndNotWriteInIt()
+    {
+        var room = new RoomBuilder()
+            .WithGame(GameLedBy(MasterId))
+            .WithType(RoomType.Chat)
+            .WithReaderAccess(PlayerId, RoomAccessPolicy.ReadOnly)
+            .Please();
+        var user = Create.User(PlayerId).WithRole(UserRole.RegularUser).Please();
+
+        // Admission to the room and a voice in it are two grants, and the policy on
+        // the row is the whole of what separates them. Both ways of writing into a
+        // chat room are held to it: the message and the unattributed post.
+        resolver.IsAllowed(user, RoomIntention.ViewMessages, room).Should().BeTrue();
+        resolver.IsAllowed(user, RoomIntention.SendMessage, room).Should().BeFalse();
+        resolver.IsAllowed(user, RoomIntention.CreatePost, (room, (Guid?)null)).Should().BeFalse();
     }
 
     [Theory]

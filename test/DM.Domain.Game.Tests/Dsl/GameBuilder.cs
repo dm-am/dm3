@@ -43,6 +43,12 @@ public class GameBuilder
         return this;
     }
 
+    public GameBuilder WithDraftVisibility(DraftVisibility visibility)
+    {
+        game.DraftVisibility = visibility;
+        return this;
+    }
+
     public GameBuilder WithAssistants(params Guid[] userIds)
     {
         var assistants = new List<GameAssistantInfo>();

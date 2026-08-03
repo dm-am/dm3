@@ -662,12 +662,13 @@ internal class GameService : IGameService
 
     public async Task<GameDetails> ChangePremoderationAsync(string id, GamePremoderationTransition transition)
     {
-        // Site-wide Mentor+ gate (parameterless intention). The per-game read
-        // path hides premoderation-pending games from non-curators, so resolve
-        // the id and fetch via the repository (which admits the assigned mentor)
-        // rather than the Read-gated GetDetailsAsync / GetDetailsByPublicIdAsync
-        // — otherwise the very game this endpoint exists to moderate would be
-        // hidden from the mentor.
+        // Site-wide Mentor+ gate (parameterless intention): the role decides who
+        // may move a game through premoderation, not the per-game read gate. The
+        // fetch goes straight to the repository, which takes either id form and
+        // skips the schema, subscriber and unread-counter reads GetDetailsAsync
+        // adds and this write never uses. Admission is the same either way: the
+        // repository applies the accessibility scope, so a mentor who is not the
+        // assigned curator is refused here exactly as on the read path.
         _intentionManager.ThrowIfForbidden(GameIntention.SetStatusModeration);
 
         var currentUserId = _identityProvider.Current.User.UserId;

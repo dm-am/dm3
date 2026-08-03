@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.Identity;
@@ -156,6 +157,42 @@ public class RoomAccessServiceShould : UnitTestBase
 
         _repository.Verify(r => r.Update(It.IsAny<UpdateRoomAccessEntity>()), Times.Once);
         _producer.Verify(p => p.SendAsync(EventType.ChangedRoom, roomId), Times.Once);
+    }
+
+    /// <summary>
+    /// Raising a character to writing is the point of the policy, and it was the one
+    /// thing the endpoint refused. The guard read User to mean "this is a reader",
+    /// but the projection fills User for a character row too, from the character's
+    /// author, so PATCH Full answered 400 for every row in the table. The fixture
+    /// omitted User, which is why nothing caught it.
+    /// </summary>
+    [Fact]
+    public async Task RaiseACharacterAccessToWriting()
+    {
+        var accessId = Guid.NewGuid();
+        var roomId = Guid.NewGuid();
+        var updateAccess = new UpdateRoomAccess { AccessId = accessId, Policy = RoomAccessPolicy.Full };
+        var room = new RoomToUpdate { Id = roomId, Game = new GameDto() };
+        var access = new RoomAccess
+        {
+            Id = accessId,
+            RoomId = roomId,
+            TargetType = RoomAccessTargetType.Character,
+            Policy = RoomAccessPolicy.ReadOnly,
+            Character = new Character(),
+            User = new GeneralUser { UserId = Guid.NewGuid() }
+        };
+
+        _repository.Setup(r => r.GetAccess(accessId, It.IsAny<Guid>())).ReturnsAsync(access);
+        _roomRepository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(room);
+        _repository.Setup(r => r.Update(It.IsAny<UpdateRoomAccessEntity>()))
+            .ReturnsAsync(new RoomAccess { RoomId = roomId });
+
+        await _service.UpdateAsync(updateAccess);
+
+        _repository.Verify(
+            r => r.Update(It.Is<UpdateRoomAccessEntity>(e => e.Policy == RoomAccessPolicy.Full)),
+            Times.Once);
     }
 
     [Fact]

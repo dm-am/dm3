@@ -69,6 +69,24 @@ public class ReverseProxySupportShould : UnitTestBase
         context.GetClientAddress().Should().Be(ProxyAddress);
     }
 
+    /// <summary>
+    /// The session cookie is marked Secure exactly when the request is https, and
+    /// behind nginx this header is the only thing that says so: dropped from the
+    /// flags, a stand on TLS looks like plain http to the API.
+    /// </summary>
+    [Fact]
+    public async Task TakeForwardedSchemeAppendedByTrustedProxy()
+    {
+        var context = CreateContext(peerAddress: ProxyAddress, forwardedFor: ClientAddress);
+        context.Request.Scheme = "http";
+        context.Request.Headers["X-Forwarded-Proto"] = "https";
+
+        await Handle(context, "172.16.0.0/12");
+
+        context.Request.IsHttps.Should().BeTrue(
+            "the cookie the login writes is Secure or not by this, and nothing else");
+    }
+
     [Fact]
     public async Task ReportAnIPv4PeerOfADualStackSocketInIPv4Notation()
     {

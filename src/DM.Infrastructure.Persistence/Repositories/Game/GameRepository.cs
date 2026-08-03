@@ -980,6 +980,11 @@ internal class GameRepository : IGameRepository
         {
             RoomId = room.RoomId,
             GameId = room.GameId,
+            // The game itself is inserted by this call, so nobody else can hold
+            // a room in it yet and its first room is number 1 by construction.
+            // Every later room takes MAX+1 under the game row lock, in
+            // RoomRepository.Create.
+            RoomNumber = 1,
             Title = room.Title.Trim(),
             Type = room.Type,
             AccessType = room.AccessType,

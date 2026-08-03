@@ -17,7 +17,10 @@ appsettings.Local.json
 appsettings.*.local.json
 secrets/
 
-# Nginx credentials
+# Nginx credentials for the preview stand. Generated on the host by
+# docker/scripts/init-htpasswd.sh and never committed: git keeps every version
+# of what it once tracked, and an ignore entry does nothing for a path already
+# in the index, so a hash committed once is public from then on.
 docker/nginx/.htpasswd
 
 # Docker environment secrets

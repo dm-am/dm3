@@ -8,6 +8,7 @@ using DM.Domain.Account.Features.EmailChange;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Tokens;
+using DM.Infrastructure.Persistence.Shared.Users;
 using Microsoft.EntityFrameworkCore;
 using TokenEntity = DM.Infrastructure.Persistence.Entities.Account.Token;
 
@@ -35,7 +36,7 @@ internal class EmailChangeRepository : IEmailChangeRepository
 
     /// <inheritdoc />
     public async Task<bool> IsEmailFree(string email, CancellationToken ct) =>
-        !await _dbContext.Users.AnyAsync(u => EF.Functions.ILike(u.Email, email) && !u.IsRemoved, ct);
+        !await AccountReservation.EmailTaken(_dbContext.Users, email, ct);
 
     /// <inheritdoc />
     public async Task Update(Guid userId, string newEmail, CreateToken tokenDto)

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 using Xunit;
 
@@ -26,6 +28,7 @@ public class DeploymentConfigurationShould
 {
     private const string BaseCompose = "docker-compose.yml";
     private const string PreviewCompose = "docker-compose.preview.yml";
+    private const string NginxConfiguration = "nginx/nginx.conf";
 
     /// <summary>
     /// Walks up from the test binary to the repository root. The compose files are
@@ -46,6 +49,9 @@ public class DeploymentConfigurationShould
             return Path.Combine(directory!.FullName, "docker");
         }
     }
+
+    /// <summary>The checkout the docker directory belongs to.</summary>
+    private static string RepositoryRoot => Directory.GetParent(DockerDirectory)!.FullName;
 
     private static string Read(string fileName)
     {
@@ -72,7 +78,7 @@ public class DeploymentConfigurationShould
     [Fact]
     public void DrainTheOutputOfEveryProcessTheManagementScriptStarts()
     {
-        var root = Directory.GetParent(DockerDirectory)!.FullName;
+        var root = RepositoryRoot;
         var script = File.ReadAllText(Path.Combine(root, "scripts", "dm.ps1"));
 
         script.Should().NotContain(".ReadToEnd()",
@@ -117,6 +123,58 @@ public class DeploymentConfigurationShould
         FindTrustedNetwork(preview).Should().Be(subnet,
             "trusting a network other than the one the proxy runs on trusts nobody, " +
             "and trusting a wider one trusts more than our own containers");
+    }
+
+    /// <summary>
+    /// Every image URL the API hands out has to be reachable from the browser it
+    /// is handed to.
+    /// </summary>
+    /// <remarks>
+    /// Thumbnail URLs are built by the API and loaded by the visitor, and the base
+    /// default named localhost:8080 — in that browser, the visitor's own machine.
+    /// Naming the stand's own domain instead would not have helped: the container
+    /// publishes on loopback and the proxy had no location for it, so nothing
+    /// outside the host could reach the transform layer at all, and avatars were
+    /// blank on every page. Nothing failed, because every gate serves the SPA from
+    /// a preview server and the overlay that puts nginx in front is started
+    /// nowhere.
+    ///
+    /// So the endpoint is asserted to be same-origin and the route asserted to
+    /// exist — in the server that runs and in the template that replaces it.
+    /// </remarks>
+    [Fact]
+    public void RouteThumbnailUrlsThroughTheProxyThatFrontsTheStand()
+    {
+        var preview = Read(PreviewCompose);
+        var nginx = Read(NginxConfiguration);
+
+        var endpoint = FindValue(preview, "DM_ImageProxyConfiguration__Endpoint:");
+
+        endpoint.Should().NotBeNullOrEmpty(
+            "the overlay is the only topology where a proxy fronts the API, and the " +
+            "base default points every visitor's browser at its own machine");
+        endpoint.Should().StartWith("/",
+            "a same-origin path is reachable at whatever host the stand answers on, " +
+            "while an absolute endpoint has to name that host and nothing keeps the " +
+            "two in step");
+
+        var location = $"location {endpoint!.TrimEnd('/')}/";
+        const string upstream = "proxy_pass http://imgproxy:8080/";
+
+        var running = ActiveDirectives(nginx);
+        running.Should().Contain(location,
+            $"the API hands out {endpoint}/... and nginx routes by prefix");
+        running.Should().Contain(upstream,
+            "the container publishes on loopback, so the application network is the " +
+            "only way in, and the trailing slash strips the prefix the signature " +
+            "does not cover");
+
+        var template = CommentedDirectives(nginx);
+        template.Should().Contain(location,
+            "the commented server is what gets switched on the day certificates " +
+            "arrive, and a route missing from it comes back as a blank avatar");
+        template.Should().Contain(upstream,
+            "the same route to the same upstream");
     }
 
     /// <summary>
@@ -296,6 +354,245 @@ public class DeploymentConfigurationShould
             "generated hostname makes the volume unreadable to the next container");
     }
 
+    /// <summary>
+    /// Nothing the ignore list names may also be tracked.
+    /// </summary>
+    /// <remarks>
+    /// .gitignore has no effect on a path git already holds in the index, so an
+    /// entry added after the first commit reads as protection and is none. The
+    /// basic-auth hash of the preview stand sat in the repository, and in the
+    /// history of every clone, while .gitignore listed it — and the next password
+    /// change would have been committed just as quietly.
+    ///
+    /// Asserted over the whole ignore list rather than that one path: the mistake
+    /// belongs to the mechanism, not to the file it happened to catch.
+    /// </remarks>
+    [Fact]
+    public void TrackNoFileTheIgnoreListClaimsToIgnore()
+    {
+        var tracked = Git("ls-files --cached --ignored --exclude-standard");
+
+        tracked.Should().BeEmpty(
+            "a tracked file that .gitignore names is in every clone and stays in the " +
+            "history, while the entry tells the next author that it is not");
+    }
+
+    /// <summary>
+    /// The preview credentials are generated on the host, by one script, with a
+    /// hash that survives being leaked.
+    /// </summary>
+    /// <remarks>
+    /// The command lived in four places at once: the installer, the overlay
+    /// header, the deployment guide and the closing hint of the installer. All
+    /// four wrote apr1 — a thousand rounds of md5, minutes of offline guessing
+    /// once the file is out — and the file they produced was committed.
+    /// </remarks>
+    [Fact]
+    public void GenerateThePreviewCredentialsFromOnePlace()
+    {
+        var generator = Path.Combine(DockerDirectory, "scripts", "init-htpasswd.sh");
+        File.Exists(generator).Should().BeTrue(
+            "the installer and the operator changing the password call the same script");
+
+        File.ReadAllText(generator).Should().Contain("htpasswd -niB",
+            "bcrypt rather than the apr1 default, and the password over stdin rather " +
+            "than in an argument every process listing shows");
+
+        File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh"))
+            .Should().Contain("init-htpasswd.sh",
+                "a clone carries no credentials, so the installer has to create them");
+
+        File.ReadAllText(Path.Combine(RepositoryRoot, ".gitignore"))
+            .Should().Contain("docker/nginx/.htpasswd",
+                "the generated file lands inside the tree compose mounts it from");
+
+        var generatorPath = Path.GetFullPath(generator);
+        var duplicates = Directory
+            .EnumerateFiles(DockerDirectory, "*", SearchOption.AllDirectories)
+            .Concat(Directory.EnumerateFiles(
+                Path.Combine(RepositoryRoot, "docs"), "*.md", SearchOption.AllDirectories))
+            .Where(path => !string.Equals(
+                Path.GetFullPath(path), generatorPath, StringComparison.OrdinalIgnoreCase))
+            .Where(path => File.ReadAllText(path).Contains("htpasswd -", StringComparison.Ordinal))
+            .Select(path => Path.GetRelativePath(RepositoryRoot, path))
+            .ToList();
+
+        duplicates.Should().BeEmpty(
+            "a second copy of the command is how the installer and the guide both kept " +
+            "generating apr1 long after the choice had been made once");
+    }
+
+    /// <summary>Runs git at the repository root and returns its trimmed output.</summary>
+    private static string Git(string arguments)
+    {
+        var start = new ProcessStartInfo("git", arguments)
+        {
+            WorkingDirectory = RepositoryRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+
+        using var process = Process.Start(start);
+        process.Should().NotBeNull("the assertion can only be made inside a checkout");
+
+        // Drained before the wait for the same reason the management script has to:
+        // a full pipe blocks the child that nobody is reading.
+        var output = process!.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        process.WaitForExit();
+
+        process.ExitCode.Should().Be(0, $"git {arguments} failed: {error.Result}");
+        return output.Result.Trim();
+    }
+
+    /// <summary>
+    /// The installer has to produce docker/.env before it starts anything.
+    /// </summary>
+    /// <remarks>
+    /// The file is not in the repository, and compose declares the encryption
+    /// key, both Mongo passwords and both MinIO accounts through ${...:?}, which
+    /// rejects an empty value as hard as a missing one. So the last line of the
+    /// installer stopped on interpolation, after it had already enabled the
+    /// systemd unit and four nightly backup jobs, and what the operator saw was a
+    /// message about a variable rather than about a step nobody wrote.
+    /// </remarks>
+    [Fact]
+    public void CreateTheEnvironmentFileBeforeTheInstallerStartsTheStack()
+    {
+        var installer = File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh"));
+        var generator = File.ReadAllText(Path.Combine(DockerDirectory, "scripts", "init-env.sh"));
+
+        var creation = installer.IndexOf("init-env.sh", StringComparison.Ordinal);
+        var start = installer.IndexOf("docker compose", StringComparison.Ordinal);
+
+        creation.Should().BeGreaterThan(-1, "nothing else creates docker/.env on a clean server");
+        start.Should().BeGreaterThan(-1, "the installer is still the thing that starts the stack");
+        creation.Should().BeLessThan(start, "compose stops on interpolation before it starts anything");
+
+        generator.Should().Contain("DM_CryptoConfiguration__KeyBase64",
+            "the one value the template leaves empty is the one compose refuses to start without");
+        generator.Should().Contain("openssl rand",
+            "a key inherited from the repository is not a secret");
+    }
+
+    /// <summary>
+    /// The server runs what CI published, it does not build.
+    /// </summary>
+    /// <remarks>
+    /// A --build on the installer line compiles the whole solution on a
+    /// preview-class VPS and, worse, tags the result with the name the registry
+    /// publishes: every later "up" finds that image locally and never pulls
+    /// again, so the images CI pushes are consumed by nobody and there is no
+    /// version to roll back to. Compose still builds when the registry cannot be
+    /// reached, and that fallback is the whole of the build story on a server.
+    /// </remarks>
+    [Fact]
+    public void PullThePublishedImagesInsteadOfBuildingOnTheServer()
+    {
+        var installer = File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh"));
+        var compose = Read(BaseCompose) + Read(PreviewCompose);
+
+        var start = installer.Split('\n')
+            .First(line => line.Contains("docker compose", StringComparison.Ordinal)
+                           && line.Contains("up -d", StringComparison.Ordinal));
+
+        start.Should().NotContain("--build",
+            "the deployment pulls the published image, and building it here replaces it " +
+            "with a local one under the same tag");
+
+        var localTags = compose.Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.StartsWith("image:", StringComparison.Ordinal)
+                           && line.Contains(":local", StringComparison.Ordinal))
+            .ToList();
+
+        foreach (var tag in localTags)
+        {
+            tag.Should().Contain("dm-seeder", StringComparison.Ordinal switch
+            {
+                _ => "a local tag cannot be pulled, so every service holding one is built on " +
+                     "the server; the seeder is the exception, the tools profile never starts " +
+                     "it there"
+            });
+        }
+    }
+
+    /// <summary>
+    /// Everything the delivery workflow publishes has to be something the
+    /// deployment pulls.
+    /// </summary>
+    /// <remarks>
+    /// Four images are built and pushed on every merge. Two of them — both
+    /// consumers — were named in no compose file at all, which the server made up
+    /// for by building them from source. An image nobody pulls is not delivery.
+    /// </remarks>
+    [Fact]
+    public void PullEveryImageTheDeliveryWorkflowPublishes()
+    {
+        var workflow = File.ReadAllText(
+            Path.Combine(DockerDirectory, "..", ".github", "workflows", "dotnet.yml"));
+        var compose = Read(BaseCompose) + Read(PreviewCompose);
+
+        var published = Regex.Matches(workflow, @"image_suffix:\s*(\S+)")
+            .Select(match => match.Groups[1].Value)
+            .Concat(Regex.Matches(workflow, @"IMAGE_PREFIX\s*\}\}-([a-z-]+)")
+                .Select(match => match.Groups[1].Value))
+            .Distinct()
+            .ToList();
+
+        published.Should().HaveCountGreaterThan(1, "the parser must find the published images");
+        foreach (var image in published)
+        {
+            compose.Should().Contain($"/dm-{image}:",
+                $"dm-{image} is pushed on every merge, so a deployment has to name it");
+        }
+    }
+
+    /// <summary>
+    /// The updater the guides call the update mechanism has to be started by the
+    /// commands that deploy.
+    /// </summary>
+    /// <remarks>
+    /// watchtower sits behind a profile, and neither the installer nor the unit
+    /// enabled one, so the container never started: "updates arrive
+    /// automatically" described a service that was declared and never run, and
+    /// the only way to move a stand forward was to build on it by hand.
+    /// </remarks>
+    [Fact]
+    public void StartTheUpdaterTheDeploymentUpdatesItselfWith()
+    {
+        var compose = Read(BaseCompose);
+        var installer = File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh"));
+        var unit = File.ReadAllText(Path.Combine(DockerDirectory, "dm3.service"));
+
+        ServiceBlock(compose, "watchtower").Should().Contain("production",
+            "the profile the deployment enables is the one the service has to declare");
+        installer.Should().Contain("--profile production",
+            "a service behind a profile nobody enables never starts");
+        unit.Should().Contain("--profile production",
+            "a reboot must bring up the set the installer deployed");
+
+        foreach (var service in new[] { "dmapi", "dm-mail-worker", "dm-notification-worker" })
+        {
+            ServiceBlock(compose, service).Should().Contain("watchtower.enable=true",
+                $"{service} runs a published image, and only labelled containers are updated");
+        }
+
+        ServiceBlock(Read(PreviewCompose), "dmfront").Should().Contain("watchtower.enable=true",
+            "the SPA image is published by the same run and has to move with it");
+    }
+
+    /// <summary>The body of one service, up to the next key at the same indent.</summary>
+    private static string ServiceBlock(string compose, string name)
+    {
+        var lines = compose.Split('\n');
+        var start = Array.FindIndex(lines, line => line.StartsWith($"  {name}:", StringComparison.Ordinal));
+
+        start.Should().BeGreaterThan(-1, $"the compose file must declare {name}");
+        return string.Join('\n', lines.Skip(start + 1).TakeWhile(line => !Regex.IsMatch(line, @"^  \S")));
+    }
+
     /// <summary>Published ports of every service, as written.</summary>
     private static string[] PublishedPorts(string compose)
     {
@@ -335,4 +632,18 @@ public class DeploymentConfigurationShould
             return marker < 0 ? null : line[(marker + key.Length)..].Trim().Trim('\'', '"', '-', ' ');
         })
         .FirstOrDefault(value => !string.IsNullOrEmpty(value));
+
+    /// <summary>Directives of the server that runs, without the commented template.</summary>
+    private static string ActiveDirectives(string configuration) =>
+        Directives(configuration, commented: false);
+
+    /// <summary>The commented template, with the comment markers taken off.</summary>
+    private static string CommentedDirectives(string configuration) =>
+        Directives(configuration, commented: true);
+
+    private static string Directives(string configuration, bool commented) => string.Join('\n', configuration
+        .Split('\n')
+        .Select(line => line.Trim())
+        .Where(line => line.StartsWith('#') == commented)
+        .Select(line => line.TrimStart('#').Trim()));
 }

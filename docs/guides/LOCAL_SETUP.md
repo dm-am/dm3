@@ -258,10 +258,11 @@ IMGPROXY_SALT=...  # 64 hex chars (32 bytes), HMAC-SHA256 salt
 
 ```bash
 cd docker
+bash scripts/init-htpasswd.sh                                             # спросит пароль
 docker compose -f docker-compose.yml -f docker-compose.preview.yml up -d --build
 ```
 
-URL: http://localhost:80 за Basic Auth. Пароль в документации не публикуется: он лежит в `docker/nginx/.htpasswd`, задать свой — [DEPLOYMENT.md](./DEPLOYMENT.md#preview-окружение).
+URL: http://localhost:80 за Basic Auth, логин `preview`. Пароля в репозитории нет: `docker/nginx/.htpasswd` создается первой командой, без него docker сделает на месте файла каталог и nginx не поднимется. Подробности: [DEPLOYMENT.md](./DEPLOYMENT.md#preview-окружение).
 
 ---
 

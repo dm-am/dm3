@@ -89,6 +89,13 @@ x-workload-env: &workload-env
   # === Зеркало ===
   DM_MirrorConfiguration__CurrentMirrorId: ${MIRROR_ID:-main}
 
+# Build context shared by every image this repository produces. CI builds them
+# and pushes them under one tag per run, which is why all four image references
+# below read IMAGE_TAG: they come from a single commit and there is nothing to
+# pin apart. Nothing in the deployment path passes --build, so the server pulls
+# what was published and compose falls back to building only when the registry
+# cannot be reached. Rolling a stand back is IMAGE_TAG in .env set to the short
+# sha of an earlier run.
 x-docker-context: &docker-context
   context: ./..
   dockerfile: ./docker/app.Dockerfile
@@ -441,7 +448,7 @@ services:
 
   migration:
     container_name: 'dm-migration'
-    image: 'dm-api:local'
+    image: ghcr.io/dm-am/dm-api:${IMAGE_TAG:-latest}
     build:
       <<: *docker-context
       args:
@@ -462,7 +469,9 @@ services:
 
   dm-mail-worker:
     container_name: 'dm-mail-worker'
-    image: 'dm-worker-mail:local'
+    image: ghcr.io/dm-am/dm-worker-mail:${IMAGE_TAG:-latest}
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     build:
       <<: *docker-context
       args:
@@ -490,7 +499,9 @@ services:
 
   dm-notification-worker:
     container_name: 'dm-notification-worker'
-    image: 'dm-worker-notification:local'
+    image: ghcr.io/dm-am/dm-worker-notification:${IMAGE_TAG:-latest}
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     build:
       <<: *docker-context
       args:
@@ -520,7 +531,7 @@ services:
 
   dmapi:
     container_name: 'dm-api'
-    image: ${API_IMAGE:-ghcr.io/dm-am/dm-api:latest}
+    image: ghcr.io/dm-am/dm-api:${IMAGE_TAG:-latest}
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
     build:
@@ -587,6 +598,12 @@ services:
 
   # --- Infrastructure: Auto-update ---
 
+  # Started by the profile setup-server.sh and dm3.service pass, and by the
+  # mirror command for a mirror. Nothing passed a profile before, so the service
+  # the guides call the update mechanism was declared and never run. It restarts
+  # only containers carrying the watchtower label, and the one-shot migration
+  # deliberately has none: a release that changes the schema is a restart of the
+  # unit, not a container swap.
   watchtower:
     container_name: 'dm-watchtower'
     image: containrrr/watchtower

@@ -122,11 +122,25 @@ internal class GameCommentService : IGameCommentService
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Edit, comment);
 
+        // Rewriting a comment publishes text exactly as writing one does, so the
+        // ban is asked here too, on the terms GameIntention.CreateComment sets:
+        // a game the user leads or was accepted into stays open. Only the author
+        // is asked, a moderator editing somebody else's comment is moderating
+        // and a ban takes no moderator tool away. The game is read inside the
+        // condition because whose game it is only matters to somebody the ban
+        // actually restricts.
+        var currentUser = _identityProvider.Current.User;
+        if (comment.Author?.UserId == currentUser.UserId && !currentUser.MaySpeak())
+        {
+            var game = await _gameService.GetAsync(comment.EntityId);
+            currentUser.ThrowIfMayNotComment(inOwnSpace: game.GetRoles(currentUser.UserId).IsOwnGame());
+        }
+
         var text = updateComment.Text?.Trim();
         if (!string.IsNullOrEmpty(text))
         {
             // Strip [mod] authored by a non-moderator before comparing/saving.
-            text = ModBlockSanitizer.SanitizeForAuthor(text, _identityProvider.Current.User.Role);
+            text = ModBlockSanitizer.SanitizeForAuthor(text, currentUser.Role);
         }
         if (string.IsNullOrWhiteSpace(text) || text == comment.Text)
         {
