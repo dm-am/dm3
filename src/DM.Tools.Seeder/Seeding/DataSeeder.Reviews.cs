@@ -656,16 +656,11 @@ internal sealed partial class DataSeeder
                         now: chuckChar.CreatedUtc);
                     _dbContext.Set<DM.Infrastructure.Persistence.Entities.Shared.Upload>().Add(chuckUpload);
 
-                    // Chuck's magnum opus about grapefruit.
-                    // Clamped to the start of the current week: the homepage
-                    // "лучший пост недели" block keeps posts created since
-                    // Monday, and a seed run in the first hours of Monday would
-                    // put `now` minus eight hours in the week that just ended,
-                    // leaving the block empty from the very first page view.
-                    var chuckWeekStart = WeekStartUtc(now);
-                    var chuckPostCreatedUtc = now.AddHours(-8) < chuckWeekStart
-                        ? chuckWeekStart
-                        : now.AddHours(-8);
+                    // Chuck's magnum opus about grapefruit. Eight hours back, which is
+                    // inside the seven-day window the homepage block reads. No clamping:
+                    // the window is rolling, so there is no boundary to land on the
+                    // wrong side of.
+                    var chuckPostCreatedUtc = now.AddHours(-8);
                     var chuckPost = new Post
                     {
                         PostId = _guidFactory.Create(),

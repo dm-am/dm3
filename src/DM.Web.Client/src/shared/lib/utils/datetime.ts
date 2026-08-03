@@ -32,16 +32,16 @@ export function formatDateFull(dateStr: string | null | undefined): string {
 }
 
 /**
- * Get the start of the current calendar week (Monday 00:00:00 UTC)
- * as an ISO string. Week runs Monday to Sunday.
+ * Start of the week the site means by "за неделю", as an ISO string.
+ *
+ * Seven days back from now, not the calendar Monday. The calendar boundary
+ * emptied every block built on it for the first hours of every Monday: the best
+ * post of the week and the pulse both went blank while the site had a week of
+ * posts behind them, and the seed had to clamp its own data to the boundary to
+ * hide it. A reader who asks for the week means the last seven days, and this
+ * window never has a hole in it.
  */
 export function getWeekStartUtc(): string {
-  const now = new Date();
-  const dayOfWeek = now.getUTCDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-  // Days since Monday: Sunday goes back 6 days, Monday = 0, Tuesday = 1, etc.
-  const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  const monday = new Date(now);
-  monday.setUTCDate(now.getUTCDate() - daysSinceMonday);
-  monday.setUTCHours(0, 0, 0, 0);
-  return monday.toISOString();
+  const start = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  return start.toISOString();
 }

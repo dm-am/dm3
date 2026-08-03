@@ -11,9 +11,11 @@
  * best post of all time. "Последний оцененный пост" ranks by the freshest
  * review, not by rating, and takes no window at all.
  *
- * The week boundary is pinned to Monday 00:00 UTC, the same boundary the seeder
- * uses when it places the showcase post (DataSeeder.WeekStartUtc). If the two
- * disagree, the block is empty.
+ * The window is seven days back from now, the same window the seeder uses when
+ * it places the showcase post (DataSeeder.WeekStartUtc). If the two disagree,
+ * the block is empty. It is rolling rather than pinned to Monday because a
+ * calendar boundary empties the block for the first hours of every Monday, and
+ * empties it for good once a fixture is a week old.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
@@ -42,9 +44,8 @@ describe("useRatedPostsStore", () => {
     vi.useRealTimers();
   });
 
-  it("ranks the best of the week by rating inside the week that started on Monday", async () => {
+  it("ranks the best of the week by rating inside the last seven days", async () => {
     vi.useFakeTimers();
-    // Wednesday. The window opens on the Monday before it, not seven days back.
     vi.setSystemTime(new Date("2026-08-05T09:30:00.000Z"));
 
     await useRatedPostsStore().fetchBestOfWeek();
@@ -52,19 +53,21 @@ describe("useRatedPostsStore", () => {
     expect(mockGetRatedPosts).toHaveBeenCalledWith({
       sortBy: "rating",
       hasReviews: true,
-      createdAfter: "2026-08-03T00:00:00.000Z",
+      createdAfter: "2026-07-29T09:30:00.000Z",
       take: 1,
     });
   });
 
-  it("opens the week on Monday itself, not on the Sunday before it", async () => {
+  it("keeps a week behind it on a Monday morning, when a calendar week has none", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-08-09T23:59:00.000Z")); // Sunday
+    // Monday, half an hour in. A calendar window would ask for half an hour of
+    // posts and show nothing, which is exactly what the homepage did.
+    vi.setSystemTime(new Date("2026-08-03T00:30:00.000Z"));
 
     await useRatedPostsStore().fetchBestOfWeek();
 
     expect(mockGetRatedPosts).toHaveBeenCalledWith(
-      expect.objectContaining({ createdAfter: "2026-08-03T00:00:00.000Z" }),
+      expect.objectContaining({ createdAfter: "2026-07-27T00:30:00.000Z" }),
     );
   });
 

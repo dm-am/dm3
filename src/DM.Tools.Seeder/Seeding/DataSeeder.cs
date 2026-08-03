@@ -108,7 +108,7 @@ internal sealed partial class DataSeeder
     }
 
     /// <summary>
-    /// Monday 00:00 UTC of the week the given moment falls in.
+    /// Start of the window the site means by "за неделю": seven days back.
     /// </summary>
     /// <remarks>
     /// The homepage "лучший пост недели" block filters posts by exactly this
@@ -116,13 +116,13 @@ internal sealed partial class DataSeeder
     /// to agree with it: the showcase post must land inside the window, and
     /// leaderboard coverage must stay out of it. One implementation, so the two
     /// cannot drift apart.
+    ///
+    /// Rolling, not the calendar Monday. A calendar boundary empties the block
+    /// for the first hours of every Monday, and it empties it for good once the
+    /// seed is a week old, which is what a fixture on a developer machine
+    /// always is.
     /// </remarks>
-    private static DateTimeOffset WeekStartUtc(DateTimeOffset moment)
-    {
-        var daysSinceMonday = ((int)moment.DayOfWeek + 6) % 7; // Monday=0, Sunday=6
-        return new DateTimeOffset(moment.Year, moment.Month, moment.Day, 0, 0, 0, TimeSpan.Zero)
-            .AddDays(-daysSinceMonday);
-    }
+    private static DateTimeOffset WeekStartUtc(DateTimeOffset moment) => moment.AddDays(-7);
 
     /// <summary>
     /// Seed the content set: forum topics and comments, games, characters, posts,
