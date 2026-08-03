@@ -35,7 +35,7 @@ const MAX_MESSAGE_HEIGHT = 300;
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
-const { game, rooms } = storeToRefs(gameStore);
+const { game, rooms, roomsLoading } = storeToRefs(gameStore);
 const { user } = storeToRefs(useAuthStore());
 const { isCompactLayout } = storeToRefs(useUiStore());
 
@@ -112,7 +112,16 @@ async function loadInitial() {
   paging.value = null;
 
   await ensureRooms();
+  // Not found means the list is in and the room is not in it. The shell loads
+  // the same list, and the store keeps only the newest request: a page that
+  // decides on its own await sees an empty list whenever the shell's request
+  // arrived second, and says the room does not exist while it is on the screen
+  // behind the message.
   if (!chatRoomId.value) {
+    if (roomsLoading.value) {
+      loading.value = false;
+      return;
+    }
     notFound.value = true;
     loading.value = false;
     return;
@@ -134,6 +143,12 @@ async function loadInitial() {
   nextTick(() => initBbcodeInteractive(messagesContainer.value));
   markRead();
 }
+
+// The list can arrive after this page has already asked for it, so the load is
+// retried the moment the room resolves.
+watch(chatRoomId, (id) => {
+  if (id && !messages.value.length && !loading.value) loadInitial();
+});
 
 async function loadOlder() {
   if (

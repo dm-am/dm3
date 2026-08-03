@@ -127,6 +127,18 @@ internal class RoomService : IRoomService
         return room;
     }
 
+    /// <inheritdoc />
+    public async Task<RoomToUpdate> GetWithGameAsync(Guid roomId)
+    {
+        var room = await _repository.GetForUpdate(roomId, _identityProvider.Current.User.UserId);
+        if (room == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomNotFound);
+        }
+
+        return room;
+    }
+
     #endregion
 
     #region Update

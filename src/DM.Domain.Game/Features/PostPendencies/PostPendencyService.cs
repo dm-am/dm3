@@ -55,7 +55,10 @@ internal class PostPendencyService : IPostPendencyService
     public async Task<PostPendency> CreateAsync(CreatePostPendency createPostPendency)
     {
         await _validator.ValidateAndThrowAsync(createPostPendency);
-        var room = await _roomService.GetAsync(createPostPendency.RoomId);
+        // With the game, not without: the rule reads the roles of the game the
+        // room belongs to, and asked with the plain projection the check finds no
+        // resolver and refuses everybody.
+        var room = await _roomService.GetWithGameAsync(createPostPendency.RoomId);
         _intentionManager.ThrowIfForbidden(RoomIntention.CreatePostPendency, room);
 
         var (_, waitingForUserId) = await _userLookupService.FindUserIdAsync(createPostPendency.WaitingForUsername);

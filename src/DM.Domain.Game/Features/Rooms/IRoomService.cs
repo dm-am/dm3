@@ -35,6 +35,17 @@ public interface IRoomService
     /// <param name="roomId">Room identifier</param>
     Task<Room> GetAsync(Guid roomId);
 
+    /// <summary>
+    /// Get single existing room together with the game it belongs to
+    /// </summary>
+    /// <remarks>
+    /// Every RoomIntention rule reads the roles of the game, and the plain
+    /// projection does not carry it. Asked with that one the check finds no
+    /// resolver and refuses everybody, which is a refusal nobody can act on.
+    /// </remarks>
+    /// <param name="roomId">Room identifier</param>
+    Task<RoomToUpdate> GetWithGameAsync(Guid roomId);
+
     #endregion
 
     #region Update

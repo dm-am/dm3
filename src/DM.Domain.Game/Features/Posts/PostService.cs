@@ -141,8 +141,16 @@ internal class PostService : IPostService
 
     public async Task<(IEnumerable<Post> posts, PagingResult paging)> GetAllAsync(Guid roomId, PagingQuery query)
     {
+        // Reading is gated by the scope the room was fetched through:
+        // GameAccessibilityFilters.RoomAvailable admits an open room to anyone
+        // who may see the game, and a private one only to its leads and to the
+        // characters and readers the room was opened to. A room outside that
+        // scope is not refused, it is absent, and GetAsync answers 404 for it.
+        //
+        // What stood here asked whether the reader may CREATE a post, against a
+        // target type no resolver handles, so every read of every room answered
+        // 403 and the room page said it could not load its posts.
         var room = await _roomService.GetAsync(roomId);
-        _intentionManager.ThrowIfForbidden(RoomIntention.CreatePost, room);
 
         var identity = _identityProvider.Current;
         var totalCount = await _repository.Count(roomId, identity.User.UserId);

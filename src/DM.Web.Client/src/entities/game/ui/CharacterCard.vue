@@ -45,8 +45,11 @@ function hasValue(attr: CharacterAttribute): boolean {
   return !!attr.valueBbText || !!(attr.value && attr.value.trim().length);
 }
 
+// The roster endpoint answers characters without their attributes: the sheet is
+// read one character at a time. A card there shows the name and the portrait and
+// no details, rather than throwing and taking the whole page with it.
 const visibleAttributes = computed(() =>
-  props.character.attributes.filter(hasValue),
+  (props.character.attributes ?? []).filter(hasValue),
 );
 
 const hasDetails = computed(() => visibleAttributes.value.length > 0);

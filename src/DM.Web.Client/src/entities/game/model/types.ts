@@ -440,7 +440,11 @@ export type Character = {
   /** Character is NPC (controlled by game master) */
   isNpc: Served<boolean>;
   privacy: CharacterPrivacySettings;
-  attributes: Served<CharacterAttribute[]>;
+  /**
+   * The filled-in sheet. Absent from the roster listing, which answers names
+   * and portraits: the sheet is read one character at a time.
+   */
+  attributes?: Served<CharacterAttribute[]>;
   totalPostsCount: Served<number>;
   /**
    * Timestamp of the character's most recent post ("Последний ход" column).
