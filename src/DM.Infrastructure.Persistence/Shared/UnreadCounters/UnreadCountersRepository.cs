@@ -107,10 +107,19 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     /// <inheritdoc />
     public Task DeleteAsync(Guid entityId, UnreadEntryType entryType)
     {
+        // Stamped, not only flagged. The tombstone keeps a deleted entity from
+        // coming back through "mark as read" — both flush paths look for a live
+        // marker to copy the parent from — and that job is over in minutes, while
+        // the document used to stay forever: every topic, room and conversation
+        // ever deleted kept one marker per user who had opened it, and nothing
+        // collected them. The moment of removal is what the collection's TTL index
+        // reads, so the tombstone now expires on its own.
         return Collection.UpdateManyAsync(
             Filter.Eq(c => c.EntityId, entityId) &
             Filter.Eq(c => c.EntryType, entryType),
-            Update.Set(c => c.IsRemoved, true));
+            Update
+                .Set(c => c.IsRemoved, true)
+                .Set(c => c.RemovedUtc, _dateTimeProvider.Now.UtcDateTime));
     }
 
     /// <inheritdoc />

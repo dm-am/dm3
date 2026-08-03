@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Dto;
 
 
@@ -9,7 +8,7 @@ namespace DM.Domain.Game.Features.Blacklists;
 /// <summary>
 /// Service for game blacklist management
 /// </summary>
-public interface IGameBlacklistService : IContentBlacklistService
+public interface IGameBlacklistService
 {
     /// <summary>
     /// Get list of blacklisted users for a game

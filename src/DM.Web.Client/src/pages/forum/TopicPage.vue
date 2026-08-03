@@ -93,8 +93,8 @@ async function markAsReadIfNeeded() {
  * Consumes the "?unread=1" deep link (from the topic's unread-comments
  * counter): computes the page holding the first unread comment and
  * replace-navigates to it before the mark-as-read call zeroes the counter.
- * Guests never see the link that produces this query param (Topic.vue only
- * renders it for authenticated users), so no guest branch is needed here.
+ * Guests never see the link that produces this query param (TopicView.vue
+ * builds it only for authenticated users), so no guest branch is needed here.
  *
  * Returns whether the caller can skip its own searchComments call. That's
  * only safe when this function actually changes the "?number=" page —
@@ -204,13 +204,13 @@ async function handleSaveEdit(
   patch: { title: string; description: string },
 ) {
   const { error } = await boardsStore.updateTopicContent(id, patch);
-  if (error) notifyFailure(error, "Не удалось сохранить тему");
+  if (error) notifyFailure(error, "Не удалось сохранить топик");
 }
 
 async function handleToggleClose(id: string) {
   const closing = !topic.value?.isClosed;
   const { error } = await boardsStore.setTopicClosed(id, closing);
-  if (error) notifyFailure(error, "Не удалось изменить статус темы");
+  if (error) notifyFailure(error, "Не удалось изменить статус топика");
 }
 
 const showDeleteConfirm = ref(false);
@@ -228,10 +228,10 @@ async function confirmDeleteTopic() {
   deletingTopic.value = false;
   showDeleteConfirm.value = false;
   if (error) {
-    notifyFailure(error, "Не удалось удалить тему");
+    notifyFailure(error, "Не удалось удалить топик");
     return;
   }
-  toast.success("Тема удалена");
+  toast.success("Топик удален");
   router.push({ name: "forum", params: { alias: route.params.alias } });
 }
 
@@ -345,8 +345,8 @@ function handleWarn(id: string) {
   <!-- Topic delete confirmation -->
   <ConfirmDialog
     :show="showDeleteConfirm"
-    title="Удалить тему?"
-    message="Тема и все ее комментарии будут удалены. Это действие необратимо."
+    title="Удалить топик?"
+    message="Топик и все его комментарии будут удалены. Это действие необратимо."
     confirm-label="Удалить"
     danger
     :loading="deletingTopic"

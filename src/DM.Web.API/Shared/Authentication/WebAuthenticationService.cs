@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Authentication;
+using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Identity;
 using DM.Web.API.Shared.Authentication.Credentials;
 using DM.Web.API.Shared.Http;
@@ -17,6 +18,7 @@ internal class WebAuthenticationService : IWebAuthenticationService
     private readonly IIdentitySetter identitySetter;
     private readonly ISuspiciousLoginDetector suspiciousLoginDetector;
     private readonly ISuspiciousLoginNotificationSender suspiciousLoginNotificationSender;
+    private readonly ISecurityAuditService securityAuditService;
     private readonly ILogger<WebAuthenticationService> logger;
 
     /// <inheritdoc />
@@ -26,6 +28,7 @@ internal class WebAuthenticationService : IWebAuthenticationService
         IIdentitySetter identitySetter,
         ISuspiciousLoginDetector suspiciousLoginDetector,
         ISuspiciousLoginNotificationSender suspiciousLoginNotificationSender,
+        ISecurityAuditService securityAuditService,
         ILogger<WebAuthenticationService> logger)
     {
         this.authenticationService = authenticationService;
@@ -33,6 +36,7 @@ internal class WebAuthenticationService : IWebAuthenticationService
         this.identitySetter = identitySetter;
         this.suspiciousLoginDetector = suspiciousLoginDetector;
         this.suspiciousLoginNotificationSender = suspiciousLoginNotificationSender;
+        this.securityAuditService = securityAuditService;
         this.logger = logger;
     }
 
@@ -75,6 +79,15 @@ internal class WebAuthenticationService : IWebAuthenticationService
                     identity.User.UserId,
                     sessionContext?.IpAddress,
                     sessionContext?.UserAgent);
+
+                // The journal first, and without the address check below it: a
+                // letter needs somewhere to go, a record does not, and the record
+                // is what the owner of the account reads afterwards.
+                if (isSuspicious)
+                {
+                    await securityAuditService.LogAsync(identity.User.UserId, SecurityEventType.SuspiciousLogin,
+                        sessionContext?.IpAddress, sessionContext?.UserAgent);
+                }
 
                 if (isSuspicious && !string.IsNullOrEmpty(identity.User.Email))
                 {

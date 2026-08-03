@@ -12,9 +12,12 @@ import { EmptyState } from "@/shared/ui";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { describeFailure, notifyFailure } from "@/shared/lib/errors";
+import { pluralize } from "@/shared/lib/utils/pluralize";
 import TagGroupDialog from "./dialogs/TagGroupDialog.vue";
 import TagDialog from "./dialogs/TagDialog.vue";
+import { useRoleGate } from "./lib/useRoleGate";
 
+const { hasAccess, deniedText } = useRoleGate("SeniorModerator");
 const toast = useToast();
 
 // State
@@ -31,6 +34,11 @@ const filteredTags = computed(() => {
   if (!selectedGroupId.value) return tags.value;
   return tags.value.filter((t) => t.groupId === selectedGroupId.value);
 });
+
+/** "1 игра" / "2 игры" / "5 игр". */
+function gamesLabel(count: number): string {
+  return `${count} ${pluralize(count, "игра", "игры", "игр")}`;
+}
 
 const selectedGroupTitle = computed(() => {
   if (!selectedGroupId.value) return "Все теги";
@@ -160,8 +168,9 @@ const deletingTag = ref(false);
 
 function deleteTag(tag: ModerationTag) {
   if (tag.gamesCount > 0) {
+    const games = pluralize(tag.gamesCount, "игре", "играх", "играх");
     toast.error(
-      `Нельзя удалить тег, который используется в ${tag.gamesCount} играх`,
+      `Нельзя удалить тег, который используется в ${tag.gamesCount} ${games}`,
     );
     return;
   }
@@ -190,7 +199,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="moderation-tags">
+  <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
+
+  <div v-else class="moderation-tags">
     <div v-if="loading" class="loading">Загрузка...</div>
     <div v-else-if="error" class="error">{{ error }}</div>
     <template v-else>
@@ -279,7 +290,7 @@ onMounted(() => {
               </div>
               <div class="tag-meta">
                 <span class="tag-group">{{ tag.groupTitle }}</span>
-                <span class="tag-games">{{ tag.gamesCount }} игр</span>
+                <span class="tag-games">{{ gamesLabel(tag.gamesCount) }}</span>
                 <span class="tag-sort">Порядок: {{ tag.sortOrder }}</span>
               </div>
             </div>

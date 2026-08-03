@@ -8,6 +8,7 @@ using DM.Domain.Messaging.Features.Messages;
 using DM.Domain.Messaging.Features.Likes;
 using DM.Domain.Personal.Features.Profiles;
 using DM.Domain.Personal.Features.Blacklists;
+using DM.Domain.Core.Chats;
 using DM.Domain.Core.Dto;
 using DM.Web.API.Shared.Dto;
 using ServiceCreateChat = DM.Domain.Messaging.Features.Chats.CreateChat;
@@ -20,7 +21,6 @@ using ApiCreateChat = DM.Web.API.Features.Messaging.Chats.CreateChat;
 using ApiUpdateChat = DM.Web.API.Features.Messaging.Chats.UpdateChat;
 using ApiChatAvailability = DM.Web.API.Features.Messaging.Chats.ChatAvailability;
 using ApiMessage = DM.Web.API.Features.Messaging.Messages.Message;
-using DbChat = DM.Infrastructure.Persistence.Entities.Messaging.Chat;
 
 namespace DM.Web.API.Features.Messaging;
 
@@ -236,20 +236,21 @@ internal class MessagingApiService : IMessagingApiService
         Guid? aroundMessageId = null,
         DateTimeOffset? nearTimestampUtc = null,
         int limit = 50) =>
-        GetMessagesWithCursorAsync(DbChat.GlobalChatId, cursor, aroundMessageId, nearTimestampUtc, limit);
+        GetMessagesWithCursorAsync(
+            WellKnownChats.GlobalChatId, cursor, aroundMessageId, nearTimestampUtc, limit);
 
     /// <inheritdoc />
     public Task<Envelope<ApiMessage>> CreateGlobalChatMessageAsync(ApiMessage message) =>
-        CreateMessageAsync(DbChat.GlobalChatId, message);
+        CreateMessageAsync(WellKnownChats.GlobalChatId, message);
 
     /// <inheritdoc />
     public Task MarkGlobalChatAsReadAsync() =>
-        MarkAsReadAsync(DbChat.GlobalChatId);
+        MarkAsReadAsync(WellKnownChats.GlobalChatId);
 
     /// <inheritdoc />
     public async Task<int> GetGlobalChatUnreadCountAsync()
     {
-        var chat = await _chatService.GetAsync(DbChat.GlobalChatId);
+        var chat = await _chatService.GetAsync(WellKnownChats.GlobalChatId);
         return chat.UnreadMessagesCount;
     }
 }

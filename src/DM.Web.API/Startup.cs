@@ -183,11 +183,6 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
 
         services.AddDmSignalR();
 
-        // Notification settings repository (for user notification preferences)
-        services.AddSingleton<DM.Web.API.Notifications.UserSettingsRepository>();
-        services.AddSingleton<DM.Web.API.Notifications.INotificationSettingsRepository>(sp =>
-            sp.GetRequiredService<DM.Web.API.Notifications.UserSettingsRepository>());
-
         services
             .AddSwaggerGen(c => c.ConfigureGen())
             .AddMvc(config => config.ModelBinderProviders.Insert(0, new ReadableGuidBinderProvider()))
@@ -351,17 +346,23 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
     /// </summary>
     private static void RegisterDomainServices(ContainerBuilder builder)
     {
-        // Domain assemblies to scan for services and AutoMapper profiles
+        // Domain assemblies to scan for services and AutoMapper profiles.
         // Any public type works as an assembly marker; the Intention enums are
         // the one every Domain.* project is guaranteed to have.
+        //
+        // Written out in full rather than through a using, so that the list names
+        // every module it composes and can be read against the tree. A module left
+        // out compiles, starts, and answers ComponentNotRegisteredException on the
+        // first request to one of its endpoints, which the compiler cannot report
+        // and only an integration test of that endpoint would catch.
         var accountAssembly = typeof(DM.Domain.Account.Authorization.AccountIntention).Assembly;
-        var personalAssembly = typeof(UserIntention).Assembly;
-        var communityAssembly = typeof(PollIntention).Assembly;
-        var moderationAssembly = typeof(ModerationIntention).Assembly;
-        var messagingAssembly = typeof(ChatIntention).Assembly;
-        var forumAssembly = typeof(ForumIntention).Assembly;
-        var blogAssembly = typeof(BlogIntention).Assembly;
-        var gameAssembly = typeof(GameIntention).Assembly;
+        var personalAssembly = typeof(DM.Domain.Personal.Authorization.UserIntention).Assembly;
+        var communityAssembly = typeof(DM.Domain.Community.Authorization.PollIntention).Assembly;
+        var moderationAssembly = typeof(DM.Domain.Moderation.Authorization.ModerationIntention).Assembly;
+        var messagingAssembly = typeof(DM.Domain.Messaging.Authorization.ChatIntention).Assembly;
+        var forumAssembly = typeof(DM.Domain.Forum.Authorization.ForumIntention).Assembly;
+        var blogAssembly = typeof(DM.Domain.Blog.Authorization.BlogIntention).Assembly;
+        var gameAssembly = typeof(DM.Domain.Game.Authorization.GameIntention).Assembly;
 
         var domainAssemblies = new[]
         {

@@ -77,11 +77,43 @@ public class BanServiceShould : UnitTestBase
     public async Task ReturnEmptyListWhenGettingBansForNonexistentUser()
     {
         _userLookupService.Setup(s => s.GetAsync("Unknown"))
-            .ThrowsAsync(new Exception());
+            .ThrowsAsync(new HttpException(HttpStatusCode.Gone, "Пользователь не найден"));
 
         var result = await _service.GetUserBans("Unknown");
 
         result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task LetAStorageFailureThroughInsteadOfReportingACleanRecord()
+    {
+        // The catch in GetUserBans answers one question - does this user exist
+        // - and an empty list is the answer to it. A dropped connection is not
+        // that answer: it used to reach the moderator's page as "no bans",
+        // which is exactly what an unblemished profile looks like.
+        _userLookupService.Setup(s => s.GetAsync("Target"))
+            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _banRepository.Setup(r => r.GetUserBans(_targetUserId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("connection reset"));
+
+        var act = () => _service.GetUserBans("Target");
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task LetAStorageFailureThroughWhenReadingTheActiveBan()
+    {
+        // Same rule on the public route: "we could not check" must not leave
+        // the service as "not banned".
+        _userLookupService.Setup(s => s.GetAsync("Target"))
+            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _banRepository.Setup(r => r.GetActiveBan(_targetUserId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("connection reset"));
+
+        var act = () => _service.GetActiveBan("Target");
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Fact]

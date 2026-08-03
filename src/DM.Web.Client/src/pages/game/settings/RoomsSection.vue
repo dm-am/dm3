@@ -30,6 +30,7 @@ import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { notifyFailure } from "@/shared/lib/errors";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 const store = useGameDetailsStore();
 const { game, rooms, activeRooms, archivedRooms, characters } =
@@ -232,7 +233,7 @@ async function removeAccess(access: RoomAccess) {
 function accessLabel(access: RoomAccess): string {
   if (access.character) return access.character.name;
   if (access.user) return access.user.username;
-  return "—";
+  return VALUE_UNAVAILABLE;
 }
 </script>
 

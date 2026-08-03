@@ -17,7 +17,7 @@ import { DataTable, type Column } from "@/shared/ui/DataTable";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import { DashSeparator } from "@/shared/ui/DashSeparator";
 import { formatDate, formatDateFull } from "@/shared/lib/utils/datetime";
-import { RATING_UNAVAILABLE } from "@/shared/lib/constants/user";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 const gameStore = useGameDetailsStore();
 const { game, characters } = storeToRefs(gameStore);
@@ -54,11 +54,11 @@ const descriptorTitle = computed(
     "Класс",
 );
 function descriptorOf(c: Character): string {
-  return c.descriptor?.trim() || "—";
+  return c.descriptor?.trim() || VALUE_UNAVAILABLE;
 }
 
 function lastPostOf(c: Character): string {
-  return c.lastPostUtc ? formatDateFull(c.lastPostUtc) : "n/a";
+  return c.lastPostUtc ? formatDateFull(c.lastPostUtc) : VALUE_UNAVAILABLE;
 }
 
 // Character status, refined from the Retired flags.
@@ -254,7 +254,7 @@ const npcColumns = computed<Column[]>(() => [
       >
         <template #cell-player="{ row }">
           <UserLink v-if="row.author" :user="row.author" hide-badge />
-          <span v-else class="muted">—</span>
+          <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
         </template>
         <template #cell-rating="{ row }">
           <template v-if="row.authorRating"
@@ -263,7 +263,7 @@ const npcColumns = computed<Column[]>(() => [
               >{{ row.authorRating.postReviewScoreSum }}</span
             >/{{ row.authorRating.totalPosts }}</template
           >
-          <span v-else>{{ RATING_UNAVAILABLE }}</span>
+          <span v-else>{{ VALUE_UNAVAILABLE }}</span>
         </template>
         <template #cell-presence="{ row }">
           <span
@@ -318,30 +318,15 @@ const npcColumns = computed<Column[]>(() => [
 </template>
 
 <style scoped lang="sass">
+@import "@/assets/styles/Tables"
+
 .game-details
   display: flex
   flex-direction: column
   gap: $big
 
-// Compact key-value fact table — borderless information block (no card/rounding).
 .info-table
-  border-collapse: collapse
-  width: 100%
-
-  th,
-  td
-    padding: 2px $small 2px 0
-    text-align: left
-    vertical-align: top
-    font-weight: normal
-
-  th
-    width: 1%
-    white-space: nowrap
-    padding-right: $big
-    // Labels use the same #333 body colour as the values (matches the old
-    // site's module-info table — label and value are not colour-differentiated).
-    color: $text
+  +info-table
 
 .tag-link
   color: $link

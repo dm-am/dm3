@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Users;
 using FluentValidation;
 
@@ -53,8 +55,10 @@ internal class WarningService : IWarningService
             var user = await _userLookupService.GetAsync(username);
             return await _warningRepository.GetUserWarnings(user.UserId, ct);
         }
-        catch
+        catch (HttpException e) when (e.StatusCode == HttpStatusCode.Gone)
         {
+            // See BanService: an empty list answers "no such user" and nothing
+            // else. Every other failure belongs to ErrorHandlingMiddleware.
             return [];
         }
     }
@@ -132,8 +136,10 @@ internal class WarningService : IWarningService
             var user = await _userLookupService.GetAsync(username);
             return await _warningRepository.GetUserWarningPoints(user.UserId, ct);
         }
-        catch
+        catch (HttpException e) when (e.StatusCode == HttpStatusCode.Gone)
         {
+            // Zero points is what an unblemished profile looks like, so this
+            // catch may only stand for a user who does not exist.
             return 0;
         }
     }

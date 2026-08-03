@@ -17,4 +17,9 @@ export {
 export { useGamesStore, useGameDetailsStore } from "./store";
 export { useRatedPostsStore } from "./ratedPostsStore";
 export { usePulseStore, getWeekStartUtc } from "./pulseStore";
-export type { PulseSearchParams } from "./pulseStore";
+export { buildRatedPostsParams } from "./ratedPostsParams";
+export type {
+  PulseSearchParams,
+  RatedPostsApiParams,
+  RatedPostsScope,
+} from "./ratedPostsParams";

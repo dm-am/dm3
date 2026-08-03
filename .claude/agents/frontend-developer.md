@@ -47,12 +47,22 @@ The short version, because these are the rules broken most often:
 cd src/DM.Web.Client
 
 npm install          # Install dependencies
-npm run dev          # Dev server (localhost:5173)
 npm run build        # Production build (type-check + build-only)
 npm run type-check   # TypeScript check
 npm run test:unit    # Vitest
 npm run lint         # ESLint — note it is configured with --fix, it mutates
+
+# Your preview server on 5174, with the /v1 and /whatsup proxies.
+# The same line .claude/launch.json runs.
+npx vite --config vite.preview.config.ts --mode preview --port 5174
 ```
+
+`npm run dev` is missing from that list on purpose. It binds 5173, and 5173 is
+the owner's server, pinned with `strictPort`. With his server up the script dies
+on a busy port, with it down the script takes the port, and the tab he has open
+starts being served by your build. Anything measured there gets reported as a
+fact about his stand and is not one. The API on 5000 is his as well: read from
+both, start, restart, reseed or rebuild neither.
 
 ## Best practices
 

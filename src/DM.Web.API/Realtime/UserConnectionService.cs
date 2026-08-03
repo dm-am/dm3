@@ -38,10 +38,27 @@ internal class UserConnectionService : IUserConnectionService
 
         var userId = identity.User.UserId;
         _connectionOwners[connectionId] = userId;
-        var connectionIds = _connections.GetOrAdd(userId, _ => new HashSet<string>());
-        lock (connectionIds)
+
+        // Retried until the set the connection lands in is still the one the map
+        // holds. GetOrAdd hands back a set that a disconnect of the last
+        // connection of the same user drops from the map a moment later, and the
+        // connection then sits in an object nothing can reach: present in the
+        // owners map, absent from GetConnectedUsers, and skipped by every per-user
+        // push until the client reconnects. Removal happens under this same lock,
+        // so a set that is still the map's while the lock is held cannot be
+        // dropped, and the addition makes it non-empty for good.
+        while (true)
         {
-            connectionIds.Add(connectionId);
+            var connectionIds = _connections.GetOrAdd(userId, _ => new HashSet<string>());
+            lock (connectionIds)
+            {
+                if (_connections.TryGetValue(userId, out var current) &&
+                    ReferenceEquals(current, connectionIds))
+                {
+                    connectionIds.Add(connectionId);
+                    return;
+                }
+            }
         }
     }
 
@@ -58,7 +75,13 @@ internal class UserConnectionService : IUserConnectionService
             connectionIds.Remove(connectionId);
             if (connectionIds.Count == 0)
             {
-                _connections.TryRemove(userId, out _);
+                // Only while the map still holds this very set. An unconditional
+                // removal by key drops whatever took its place: a second
+                // disconnect that read the set before it was emptied would
+                // otherwise take out the set a fresh connection had just been
+                // registered in.
+                ((ICollection<KeyValuePair<Guid, HashSet<string>>>)_connections)
+                    .Remove(new KeyValuePair<Guid, HashSet<string>>(userId, connectionIds));
             }
         }
 

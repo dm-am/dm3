@@ -160,7 +160,7 @@ internal class BotLinkRepository : MongoCollectionRepository<UserSettings>, IBot
         }
         else
         {
-            var update = channelType.ToLowerInvariant() switch
+            UpdateDefinition<UserSettings> update = channelType.ToLowerInvariant() switch
             {
                 "discord" => Update.Set(s => s.DiscordPreferences, defaultPreferences),
                 "telegram" => Update.Set(s => s.TelegramPreferences, defaultPreferences),
@@ -184,4 +184,60 @@ internal class BotLinkRepository : MongoCollectionRepository<UserSettings>, IBot
 
         await Collection.UpdateOneAsync(filter, update, cancellationToken: ct);
     }
+
+    /// <inheritdoc />
+    public async Task<BotChannelPreferences> GetChannelPreferences(
+        Guid userId, CancellationToken ct = default)
+    {
+        var settings = await Collection
+            .Find(Filter.Eq(u => u.UserId, userId))
+            .FirstOrDefaultAsync(ct);
+
+        return new BotChannelPreferences(
+            ToDomain(settings?.DiscordPreferences),
+            ToDomain(settings?.TelegramPreferences));
+    }
+
+    /// <inheritdoc />
+    public async Task SetChannelPreferences(
+        Guid userId,
+        string channelType,
+        ChannelPreferences preferences,
+        CancellationToken ct = default)
+    {
+        var stored = new NotificationChannelPreference
+        {
+            Enabled = preferences.Enabled,
+            EnabledCategories = new HashSet<NotificationCategory>(preferences.EnabledCategories)
+        };
+
+        var update = channelType.ToLowerInvariant() switch
+        {
+            "discord" => Update.Set(s => s.DiscordPreferences, stored),
+            "telegram" => Update.Set(s => s.TelegramPreferences, stored),
+            _ => throw new ArgumentException($"Invalid channel type: {channelType}")
+        };
+
+        // Upsert with the defaults: a reader who never opened the settings page has
+        // no document, and an update that matches nothing writes nothing, so the
+        // preference was silently dropped. The rest of the document has to be the
+        // default rather than empty, because a document without paging answers 500
+        // on the next read of any list.
+        var defaults = UserSettings.CreateDefault(userId);
+        update = Update.Combine(
+            update,
+            Update.SetOnInsert(s => s.Theme, defaults.Theme),
+            Update.SetOnInsert(s => s.Paging, defaults.Paging));
+
+        await Collection.UpdateOneAsync(
+            Filter.Eq(u => u.UserId, userId),
+            update,
+            new UpdateOptions { IsUpsert = true },
+            ct);
+    }
+
+    private static ChannelPreferences? ToDomain(NotificationChannelPreference? preference) =>
+        preference == null
+            ? null
+            : new ChannelPreferences(preference.Enabled, preference.EnabledCategories);
 }

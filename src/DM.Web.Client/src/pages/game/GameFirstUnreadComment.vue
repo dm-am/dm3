@@ -2,12 +2,13 @@
 import { onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { gameApi } from "@/entities/game";
-
-// Comments page shows 20 comments (gameApi.getGameComments default page size)
-const COMMENTS_PAGE_SIZE = 20;
+import { usePaging } from "@/shared/lib/composables/usePaging";
 
 const route = useRoute();
 const router = useRouter();
+// The discussion asks the API for the reader's own page size, so the page
+// holding a given comment has to be computed with that same size.
+const { commentsPerPage } = usePaging();
 
 onMounted(async () => {
   // Must be the game Guid (links pass game.id): the first-unread endpoint
@@ -28,17 +29,18 @@ onMounted(async () => {
       return;
     }
 
-    // Land on the page that contains the comment, then scroll to it
-    // (game-comments route has no extra params - paging goes via query)
-    const page = Math.ceil(result.commentNumber / COMMENTS_PAGE_SIZE);
+    // Land on the page holding the comment and let the discussion scroll to
+    // it. The page is "?number=", the site-wide paging key — this used to
+    // spell it "page", which the discussion never read, so every jump landed
+    // on page one — and the comment is the same "#comment-{id}" permalink the
+    // comment itself copies.
+    const page = Math.ceil(result.commentNumber / commentsPerPage.value);
 
     router.replace({
       name: "game-comments",
       params: { id: gameId },
-      query: {
-        ...(page > 1 ? { page: String(page) } : {}),
-        scrollTo: result.commentId,
-      },
+      query: page > 1 ? { number: String(page) } : {},
+      hash: `#comment-${result.commentId}`,
     });
   } catch {
     // On unexpected error, just go to comments page

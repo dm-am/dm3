@@ -25,7 +25,9 @@ import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { UserLink } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { notifyFailure } from "@/shared/lib/errors";
+import { useRoleGate } from "./lib/useRoleGate";
 
+const { hasAccess, deniedText } = useRoleGate("SeniorModerator");
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
@@ -154,7 +156,9 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="series-detail">
+  <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
+
+  <section v-else class="series-detail">
     <header class="series-detail__header">
       <button
         type="button"
@@ -212,9 +216,9 @@ onMounted(async () => {
         <div class="form-row">
           <label>Тип награды</label>
           <select v-model="grantForm.awardTypeId">
-            <option value="" disabled>— выберите —</option>
+            <option value="" disabled>Не выбрано</option>
             <option v-for="t in awardTypes ?? []" :key="t.id" :value="t.id">
-              {{ t.title }} — {{ t.description }}
+              {{ t.title }} ({{ t.description }})
             </option>
           </select>
         </div>

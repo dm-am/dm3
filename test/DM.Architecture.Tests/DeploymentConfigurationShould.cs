@@ -477,6 +477,34 @@ public class DeploymentConfigurationShould
     }
 
     /// <summary>
+    /// The developer script prepares the environment before it starts anything.
+    /// </summary>
+    /// <remarks>
+    /// The same hole as on the server, on the other platform. dm.sh copied
+    /// .env.example and went straight to "docker compose up", and the template
+    /// ships the encryption key empty, so the documented Linux and macOS first
+    /// run stopped on interpolation with a message about a variable rather than
+    /// about a step nobody wrote. The PowerShell path generated the key itself,
+    /// which is exactly why nobody saw it: the platform the owner develops on
+    /// worked.
+    /// </remarks>
+    [Fact]
+    public void CreateTheEnvironmentFileBeforeTheDeveloperScriptStartsTheStack()
+    {
+        var script = File.ReadAllText(Path.Combine(RepositoryRoot, "scripts", "dm.sh"));
+
+        var creation = script.IndexOf("init-env.sh", StringComparison.Ordinal);
+        var start = script.IndexOf("docker compose up", StringComparison.Ordinal);
+
+        creation.Should().BeGreaterThan(-1,
+            "the generator is the one place that creates docker/.env, and a second copy of that " +
+            "step is how the two platforms drifted apart in the first place");
+        start.Should().BeGreaterThan(-1, "the script is still the thing that starts the stack");
+        creation.Should().BeLessThan(start,
+            "compose stops on interpolation before it starts anything");
+    }
+
+    /// <summary>
     /// The server runs what CI published, it does not build.
     /// </summary>
     /// <remarks>

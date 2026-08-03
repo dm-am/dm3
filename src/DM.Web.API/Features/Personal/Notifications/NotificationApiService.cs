@@ -3,11 +3,8 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
-using DM.Domain.Core.Identity;
 using DM.Domain.Core.Dto;
-using DM.Infrastructure.Persistence.Entities.Account.Settings;
-using DM.Web.API.Notifications;
-using DbUserSettings = DM.Infrastructure.Persistence.Entities.Account.Settings.UserSettings;
+using DM.Domain.Core.Enums;
 
 namespace DM.Web.API.Features.Personal.Notifications;
 
@@ -15,23 +12,14 @@ namespace DM.Web.API.Features.Personal.Notifications;
 internal class NotificationApiService : INotificationApiService
 {
     private readonly INotificationService _notificationService;
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IBotLinkRepository _botLinkRepository;
-    private readonly INotificationSettingsRepository _settingsRepository;
     private readonly IBotLinkService _botLinkService;
 
     /// <inheritdoc />
     public NotificationApiService(
         INotificationService notificationService,
-        IIdentityProvider identityProvider,
-        IBotLinkRepository botLinkRepository,
-        INotificationSettingsRepository settingsRepository,
         IBotLinkService botLinkService)
     {
         _notificationService = notificationService;
-        _identityProvider = identityProvider;
-        _botLinkRepository = botLinkRepository;
-        _settingsRepository = settingsRepository;
         _botLinkService = botLinkService;
     }
 
@@ -66,79 +54,42 @@ internal class NotificationApiService : INotificationApiService
         _notificationService.MarkAllAsReadAsync();
 
     /// <inheritdoc />
-    public async Task<NotificationSettings> GetNotificationSettings()
-    {
-        var userId = _identityProvider.Current.User.UserId;
-
-        var channels = await _botLinkRepository.GetChannelIds(userId);
-
-        var settings = await _settingsRepository.GetByUserId(userId);
-
-        var dto = new NotificationSettings
-        {
-            Discord = MapBotConnection(channels.DiscordId, settings?.DiscordPreferences),
-            Telegram = MapBotConnection(channels.TelegramId, settings?.TelegramPreferences)
-        };
-
-        return dto;
-    }
+    public async Task<NotificationSettings> GetNotificationSettings() =>
+        Map(await _botLinkService.GetChannels());
 
     /// <inheritdoc />
     public async Task<NotificationSettings> UpdateNotificationSettings(UpdateNotificationSettingsRequest request)
     {
-        var userId = _identityProvider.Current.User.UserId;
-
-        var settings = await _settingsRepository.GetByUserId(userId);
-        if (settings == null)
+        if (request.Discord != null)
         {
-            settings = DbUserSettings.CreateDefault(userId);
+            await _botLinkService.UpdateChannelPreferences(
+                "discord", request.Discord.Enabled, request.Discord.EnabledCategories);
         }
 
-        if (request.Discord != null && settings.DiscordPreferences != null)
+        if (request.Telegram != null)
         {
-            if (request.Discord.Enabled.HasValue)
-                settings.DiscordPreferences.Enabled = request.Discord.Enabled.Value;
-            if (request.Discord.EnabledCategories != null)
-                settings.DiscordPreferences.EnabledCategories = request.Discord.EnabledCategories;
+            await _botLinkService.UpdateChannelPreferences(
+                "telegram", request.Telegram.Enabled, request.Telegram.EnabledCategories);
         }
 
-        if (request.Telegram != null && settings.TelegramPreferences != null)
-        {
-            if (request.Telegram.Enabled.HasValue)
-                settings.TelegramPreferences.Enabled = request.Telegram.Enabled.Value;
-            if (request.Telegram.EnabledCategories != null)
-                settings.TelegramPreferences.EnabledCategories = request.Telegram.EnabledCategories;
-        }
-
-        await _settingsRepository.Upsert(settings);
-
-        var channels = await _botLinkRepository.GetChannelIds(userId);
-
-        var dto = new NotificationSettings
-        {
-            Discord = MapBotConnection(channels.DiscordId, settings.DiscordPreferences),
-            Telegram = MapBotConnection(channels.TelegramId, settings.TelegramPreferences)
-        };
-
-        return dto;
+        return Map(await _botLinkService.GetChannels());
     }
 
-    private static BotConnection? MapBotConnection(
-        string? externalId,
-        NotificationChannelPreference? prefs)
+    private static NotificationSettings Map(BotChannels channels) => new()
     {
-        var connected = !string.IsNullOrEmpty(externalId);
-        if (!connected && prefs == null) return null;
+        Discord = MapBotConnection(channels.Discord),
+        Telegram = MapBotConnection(channels.Telegram)
+    };
 
-        return new BotConnection
-        {
-            Connected = connected,
-            Enabled = prefs?.Enabled ?? false,
-            EnabledCategories = prefs?.EnabledCategories ?? new()
-        };
-    }
-
-    #region Bot Integration
+    private static BotConnection? MapBotConnection(BotChannel? channel) =>
+        channel == null
+            ? null
+            : new BotConnection
+            {
+                Connected = channel.Connected,
+                Enabled = channel.Enabled,
+                EnabledCategories = new HashSet<NotificationCategory>(channel.EnabledCategories)
+            };
 
     /// <inheritdoc />
     public async Task<BotLinkResult> ConnectBot(string type)
@@ -154,6 +105,4 @@ internal class NotificationApiService : INotificationApiService
     /// <inheritdoc />
     public Task DisconnectBot(string type) =>
         _botLinkService.Disconnect(type);
-
-    #endregion
 }

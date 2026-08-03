@@ -105,16 +105,8 @@ export type TopicsQuery = {
   sortOrder?: string;
 };
 
-// Query parameters for comments list
-export type CommentsQuery = {
-  number?: number;
-  size?: number;
-  search?: string;
-  authors?: string[];
-  createdFromUtc?: string;
-  createdToUtc?: string;
-  sortBy?: string;
-  sortOrder?: string;
-};
+// Query parameters for comments list. Shared with the game and the blog: the
+// four discussions read the same query, so it is declared once in shared/api.
+export type { CommentsQuery } from "@/shared/api";
 
 // Comment type is now imported from shared and re-exported above

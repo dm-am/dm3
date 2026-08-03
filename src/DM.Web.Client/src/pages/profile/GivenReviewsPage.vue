@@ -1,34 +1,29 @@
 <script setup lang="ts">
 /**
  * GivenReviewsPage — a user's "Поставленные оценки" page.
- * A thin wrapper over `ProfileRatedPostsList` in `given` mode: other users' posts
- * where this user left at least one review
- * (see the `reviewerUsername` backend filter in PostsQuery).
+ * A thin wrapper over the shared `RatedPostsList` scoped to this user as the
+ * REVIEWER: other users' posts where they left at least one review (see the
+ * `reviewerUsername` backend filter in PostsQuery).
  */
 import { computed } from "vue";
-import { useRoute } from "vue-router";
-import {
-  joinTitleSegments,
-  useDocumentTitle,
-} from "@/shared/lib/composables/useDocumentTitle";
 import { ErrorPage } from "@/shared/ui/ErrorPage";
+import type { RatedPostsScope } from "@/entities/game";
+import { RatedPostsList } from "@/widgets/rated-posts";
 import ProfileSubpageHeader from "./ProfileSubpageHeader.vue";
-import ProfileRatedPostsList from "./ProfileRatedPostsList.vue";
-import { useProfileSubpageUser } from "./useProfileSubpageUser";
+import { useProfileSubpage } from "./useProfileSubpage";
 
-const route = useRoute();
-const username = computed(() => route.params.username as string);
+const { username, canonicalUsername, notFound, profileLink } =
+  useProfileSubpage("Поставленные оценки постов");
 
-const { notFound, canonicalUsername } = useProfileSubpageUser(username);
-
-const profileLink = computed(() => ({
-  name: "profile" as const,
-  params: { username: username.value },
+const scope = computed<RatedPostsScope>(() => ({
+  kind: "reviewer",
+  username: username.value,
 }));
 
-useDocumentTitle(() =>
-  joinTitleSegments(canonicalUsername.value, "Поставленные оценки постов"),
-);
+const pagingTo = computed(() => ({
+  name: "given-reviews" as const,
+  params: { username: username.value },
+}));
 </script>
 
 <template>
@@ -42,10 +37,11 @@ useDocumentTitle(() =>
       <router-link :to="profileLink">{{ canonicalUsername }}</router-link>
     </ProfileSubpageHeader>
 
-    <ProfileRatedPostsList
-      :username="username"
-      mode="given"
-      route-name="given-reviews"
+    <RatedPostsList
+      :scope="scope"
+      :paging-to="pagingTo"
+      empty-text="Пользователь пока никого не оценивал"
+      hide-author-filter
     />
   </div>
 </template>

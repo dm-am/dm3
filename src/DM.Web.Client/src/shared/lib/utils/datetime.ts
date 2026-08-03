@@ -1,14 +1,16 @@
 // Shared date/time helpers (SSOT for sitewide date formatting)
 
 import dayjs from "dayjs";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 /**
- * Format a date string as "DD.MM.YYYY" (local time) — date only, no time.
+ * Format a date string as "DD.MM.YYYY" (local time), date only, no time.
  *
  * The empty token is a parameter so that exactly one place owns the format
  * string while a caller that needs a falsy placeholder can ask for one: a filter
- * chip renders "" where a table cell renders "—", and that is the only thing
- * the four separate implementations this replaced actually disagreed about.
+ * chip renders "" where a table cell renders the sitewide missing-value token,
+ * and that is the only thing the four separate implementations this replaced
+ * actually disagreed about.
  *
  * Parsing goes through dayjs on purpose. A bare "YYYY-MM-DD" is local midnight
  * to dayjs and UTC midnight to `new Date`, so the naive route shifts the day by
@@ -16,7 +18,7 @@ import dayjs from "dayjs";
  */
 export function formatDate(
   dateStr: string | null | undefined,
-  emptyToken = "—",
+  emptyToken = VALUE_UNAVAILABLE,
 ): string {
   if (!dateStr) return emptyToken;
   return dayjs(dateStr).format("DD.MM.YYYY");
@@ -24,10 +26,10 @@ export function formatDate(
 
 /**
  * Format a date string as "DD.MM.YYYY в HH:mm" (local time).
- * Returns "—" for null/undefined/empty input.
+ * Returns the sitewide missing-value token for null/undefined/empty input.
  */
 export function formatDateFull(dateStr: string | null | undefined): string {
-  if (!dateStr) return "—";
+  if (!dateStr) return VALUE_UNAVAILABLE;
   return dayjs(dateStr).format("DD.MM.YYYY [в] HH:mm");
 }
 

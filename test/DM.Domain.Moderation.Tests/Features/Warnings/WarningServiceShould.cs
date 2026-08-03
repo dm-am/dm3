@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Authentication;
@@ -7,6 +8,7 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
 using DM.Domain.Moderation.Features.Warnings;
@@ -66,11 +68,40 @@ public class WarningServiceShould : UnitTestBase
     public async Task ReturnEmptyListWhenGettingWarningsForNonexistentUser()
     {
         _userLookupService.Setup(s => s.GetAsync("Unknown"))
-            .ThrowsAsync(new Exception());
+            .ThrowsAsync(new HttpException(HttpStatusCode.Gone, "Пользователь не найден"));
 
         var result = await _service.GetUserWarnings("Unknown");
 
         result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task LetAStorageFailureThroughInsteadOfReportingNoViolations()
+    {
+        // "No warnings" and "we could not read them" look the same to the
+        // moderator and the same in the log, because there is no log.
+        _userLookupService.Setup(s => s.GetAsync("Target"))
+            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _warningRepository.Setup(r => r.GetUserWarnings(_targetUserId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("connection reset"));
+
+        var act = () => _service.GetUserWarnings("Target");
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task LetAStorageFailureThroughInsteadOfReportingZeroPoints()
+    {
+        _userLookupService.Setup(s => s.GetAsync("Target"))
+            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _warningRepository
+            .Setup(r => r.GetUserWarningPoints(_targetUserId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("connection reset"));
+
+        var act = () => _service.GetUserWarningPoints("Target");
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Fact]

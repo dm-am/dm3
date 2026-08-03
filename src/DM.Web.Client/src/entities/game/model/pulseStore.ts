@@ -7,69 +7,27 @@ import type { ListEnvelope, Paging } from "@/shared/api/models/common";
 import gameApi from "../api/gameApi";
 import { getWeekStartUtc } from "@/shared/lib/utils/datetime";
 import { createKeyedCache } from "@/shared/lib/utils/keyedCache";
+import {
+  buildRatedPostsParams,
+  type PulseSearchParams,
+  type RatedPostsApiParams,
+} from "./ratedPostsParams";
 
 // Re-export for entities/game public API consumers — the implementation
 // moved to the shared datetime utils (SSOT).
 export { getWeekStartUtc };
 
-export interface PulseSearchParams {
-  sortBy?: "rating" | "lastreview" | "reviewcount" | "created";
-  sortOrder?: "asc" | "desc";
-  search?: string;
-  minRating?: number;
-  maxRating?: number;
-  authorUsernames?: string;
-  createdFrom?: string;
-  createdTo?: string;
-  gameId?: string;
-  number?: number;
-  size?: number;
-}
-
-type RatedPostsApiParams = NonNullable<
-  Parameters<typeof gameApi.getRatedPosts>[0]
->;
-
 /**
- * Build API params for the rated-posts request.
- * Invalid date strings (e.g. hand-edited URL params) are ignored
- * instead of producing an Invalid Date that throws on toISOString().
+ * The pulse is one week's slice of the shared rated-posts list: the request
+ * every rated-posts surface builds, narrowed to the reviews of the last seven
+ * days. The narrowing is the only thing this page adds, so it is the only
+ * thing spelled here.
  */
 function buildApiParams(params: PulseSearchParams): RatedPostsApiParams {
-  const apiParams: RatedPostsApiParams = {
-    sortBy: params.sortBy || "lastreview",
-    sortOrder: params.sortOrder || "desc",
-    hasReviews: true,
+  return {
+    ...buildRatedPostsParams(params),
     lastReviewedAfter: getWeekStartUtc(),
   };
-
-  if (params.search) apiParams.search = params.search;
-  if (params.minRating !== undefined && params.minRating !== null)
-    apiParams.minRating = params.minRating;
-  if (params.maxRating !== undefined && params.maxRating !== null)
-    apiParams.maxRating = params.maxRating;
-  if (params.authorUsernames)
-    apiParams.authorUsernames = params.authorUsernames;
-  if (params.createdFrom) {
-    const createdAfter = new Date(params.createdFrom + "T00:00:00Z");
-    if (!isNaN(createdAfter.getTime()))
-      apiParams.createdAfter = createdAfter.toISOString();
-  }
-  if (params.createdTo) {
-    const createdBefore = new Date(params.createdTo + "T23:59:59.999Z");
-    if (!isNaN(createdBefore.getTime()))
-      apiParams.createdBefore = createdBefore.toISOString();
-  }
-  if (params.gameId) apiParams.gameId = params.gameId;
-
-  // Pagination
-  const pageSize = params.size || 20;
-  apiParams.take = pageSize;
-  if (params.number && params.number > 1) {
-    apiParams.skip = (params.number - 1) * pageSize;
-  }
-
-  return apiParams;
 }
 
 export const usePulseStore = defineStore("pulse", () => {

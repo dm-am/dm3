@@ -71,6 +71,13 @@ db.UnreadCounters.createIndex(
     { name: "IX_UnreadCounters_Parent_Type", background: true }
 );
 
+// Retention: a tombstone only has to outlive the request that deleted the
+// entity, and a live marker carries no RemovedUtc element for the TTL to read
+db.UnreadCounters.createIndex(
+    { RemovedUtc: 1 },
+    { name: "IX_UnreadCounters_Expiry", background: true, expireAfterSeconds: 604800 }
+);
+
 print('UnreadCounters indexes created');
 
 // ============================================================================
@@ -119,6 +126,13 @@ db.RealtimeNotifications.createIndex(
 db.RealtimeNotifications.createIndex(
     { NotificationId: 1 },
     { name: "IX_RealtimeNotifications_NotificationId", background: true }
+);
+
+// Retention: nothing deletes a notification, and the documents carry user
+// identifiers along with game and character names
+db.RealtimeNotifications.createIndex(
+    { CreatedUtc: 1 },
+    { name: "IX_RealtimeNotifications_Expiry", background: true, expireAfterSeconds: 15552000 }
 );
 
 print('RealtimeNotifications indexes created');
@@ -215,15 +229,15 @@ print('SecurityAuditLog indexes created');
 print('');
 print('=== MongoDB Indexes Created Successfully ===');
 print('Collections indexed:');
-print('  - UnreadCounters (5 indexes, one unique) - CRITICAL for sidebar performance');
+print('  - UnreadCounters (6 indexes, one unique, one TTL) - CRITICAL for sidebar performance');
 print('  - UserSessions (1 index) - CRITICAL for every authenticated request');
 print('  - UserSettings (1 index)');
 print('  - LoginAttempts (2 indexes, one TTL)');
 print('  - SecurityAuditLog (2 indexes, one TTL)');
-print('  - RealtimeNotifications (2 indexes)');
+print('  - RealtimeNotifications (3 indexes, one TTL)');
 print('  - Polls (2 indexes)');
 print('  - AttributeSchemata (1 index)');
 print('  - Dice (1 index)');
 print('');
-print('Total: 15 indexes');
+print('Total: 19 indexes');
 print('==========================================');

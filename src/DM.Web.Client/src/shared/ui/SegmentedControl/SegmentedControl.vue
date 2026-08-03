@@ -3,7 +3,7 @@
  * SegmentedControl — the site's canonical mode/period toggle: a bordered
  * $control-height pill of mutually exclusive options, active = accent fill +
  * bold. SSOT for the idiom previously duplicated per page (statistics
- * granularity, profile role toggle, message-search scope/sort).
+ * granularity, profile role toggle).
  *
  * Copy-safe: the pill is an inline-block with inline-block buttons and
  * zero-width .copy-space text nodes between them, so a selection copies as

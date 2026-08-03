@@ -37,6 +37,7 @@ import type { ListEnvelope } from "@/shared/api/models/common";
 import { buildReadersTooltip } from "@/shared/lib/utils/tooltipBuilders";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 const props = defineProps<{
   /** Profile owner whose games we list. */
@@ -391,7 +392,7 @@ function pagingAnchor(): HTMLElement | null {
             >{{ " " }}[+{{ row.playerCharacters.length - 1 }}]</span
           >
         </template>
-        <span v-else class="character-none">—</span>
+        <span v-else class="character-none">{{ VALUE_UNAVAILABLE }}</span>
       </template>
 
       <template #cell-status="{ row }">

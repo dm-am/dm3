@@ -1,6 +1,6 @@
 // Pure helpers and constants for the attribute-schema editor.
-// Kept framework-free so they can be unit-tested and reused across the
-// three embed sites (create-game, game schema page, game settings page).
+// Kept framework-free so they can be unit-tested without mounting a component,
+// and shared by the screens that embed the editor instead of copied into each.
 
 import {
   AttributeSchemaType,

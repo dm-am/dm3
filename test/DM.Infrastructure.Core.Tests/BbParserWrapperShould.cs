@@ -372,4 +372,113 @@ public class BbParserWrapperShould
 
         html.Should().Contain("<img src=\"https://example.com/a.png\"");
     }
+
+    /// <summary>
+    /// The public surfaces put an image behind a spoiler, the rest embed it.
+    /// </summary>
+    /// <remarks>
+    /// The gate used to be declared as a tag: the "safe" tag sets swapped the img
+    /// template for one wrapping the picture in a spoiler. This wrapper renders
+    /// [img] itself, before the inner parser is ever handed the text, so the
+    /// declaration decided nothing and the guest-readable global chat auto-loaded
+    /// whatever address a message named. The decision lives on the wrapper now,
+    /// and nothing but a test says which surfaces asked for it.
+    /// </remarks>
+    [Theory]
+    [InlineData(BbSurface.GlobalChatMessage, true)]
+    [InlineData(BbSurface.GamePost, false)]
+    [InlineData(BbSurface.Comment, false)]
+    [InlineData(BbSurface.Profile, false)]
+    [InlineData(BbSurface.DirectMessage, false)]
+    public void GateImages_OnlyWhereTheSurfaceAsksForIt(BbSurface surface, bool gated)
+    {
+        var tree = _parserProvider.GetForSurface(surface)
+            .Parse("[img]https://example.com/a.png[/img]");
+
+        var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
+
+        html.Should().Contain("<img ");
+        html.Contains("spoiler-head").Should().Be(gated);
+    }
+
+    /// <summary>
+    /// And the audience that exists to be embeddable safely gets it everywhere.
+    /// </summary>
+    [Theory]
+    [InlineData(BbSurface.GamePost)]
+    [InlineData(BbSurface.Comment)]
+    [InlineData(BbSurface.Profile)]
+    public void GateImages_OnEverySafeParser(BbSurface surface)
+    {
+        var tree = _parserProvider.GetSafeForSurface(surface)
+            .Parse("[img]https://example.com/a.png[/img]");
+
+        var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
+
+        html.Should().Contain("<img ").And.Contain("spoiler-head");
+    }
+
+    /// <summary>
+    /// [code] and [noparse] show markup, they do not run it.
+    /// </summary>
+    /// <remarks>
+    /// [img] and [link] are extracted before the parser, which knows nothing of
+    /// tags at that point, so a code sample containing one rendered the picture
+    /// instead of printing the tag: showing an example of the markup was
+    /// impossible, and a moderator quoting somebody's markup re-embedded their
+    /// image. [b] inside [noparse] always worked, which is what made the hole
+    /// look like it could not exist.
+    /// </remarks>
+    [Theory]
+    [InlineData("[code][img]https://example.com/a.png[/img][/code]")]
+    [InlineData("[noparse][img]https://example.com/a.png[/img][/noparse]")]
+    [InlineData("[code][link=text]https://example.com[/link][/code]")]
+    [InlineData("[noparse][mention=\"Вася\"][/noparse]")]
+    public void ShowMarkupInsideVerbatimBlocks_RatherThanRenderIt(string input)
+    {
+        var tree = _parserProvider.CurrentCommon.Parse(input);
+
+        var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
+
+        html.Should().NotContain("<img").And.NotContain("<a ");
+    }
+
+    /// <summary>
+    /// The counterweight: outside the block the same tags still render.
+    /// </summary>
+    [Fact]
+    public void KeepRenderingTheSameTagsOutsideAVerbatimBlock()
+    {
+        var tree = _parserProvider.CurrentCommon
+            .Parse("[code][img]https://example.com/a.png[/img][/code][img]https://example.com/b.png[/img]");
+
+        var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
+
+        html.Should().Contain("<img src=\"https://example.com/b.png\"");
+        html.Should().NotContain("<img src=\"https://example.com/a.png\"");
+    }
+
+    /// <summary>
+    /// No javascript: URL leaves this renderer.
+    /// </summary>
+    /// <remarks>
+    /// A javascript: href is inline script as far as CSP is concerned, and two
+    /// decorative ones were the entire reason script-src carried 'unsafe-inline'
+    /// on a site that binds server-rendered user HTML through v-html on every
+    /// page. The client preventDefaults both toggles, so the href never had a job.
+    /// </remarks>
+    [Theory]
+    [InlineData("[spoiler]hidden[/spoiler]")]
+    [InlineData("[nsfw]shocking[/nsfw]")]
+    [InlineData("[img]https://example.com/a.png[/img]")]
+    public void EmitNoJavascriptUrl(string input)
+    {
+        var chat = ((BbParserWrapper.WrappedNodeTree)_parserProvider
+            .GetForSurface(BbSurface.GlobalChatMessage).Parse(input)).ToHtml();
+        var common = ((BbParserWrapper.WrappedNodeTree)_parserProvider
+            .CurrentCommon.Parse(input)).ToHtml();
+
+        chat.Should().NotContain("javascript:");
+        common.Should().NotContain("javascript:");
+    }
 }

@@ -1,11 +1,11 @@
+/**
+ * How long after their last visit a user is still shown as online.
+ *
+ * The server keeps the same rule in ActivityPolicy.cs, as OnlinePeriod, and
+ * orders user lists and the "active" filters by it. This copy exists because
+ * the browser recomputes the dot on its own clock and has nobody to ask. The
+ * spec next to this file holds the two numbers equal: raising one alone is how
+ * the server comes to sort by ten minutes while the dot goes out after five.
+ */
 export const ONLINE_THRESHOLD_MINUTES = 5;
 export const ONLINE_THRESHOLD_MS = ONLINE_THRESHOLD_MINUTES * 60 * 1000;
-
-/**
- * Printed in place of a rating (and of the counters that come inside the
- * rating object) when there is no value: the user has no rating yet, keeps it
- * hidden, or the object is absent altogether. Four screens spelled this token
- * themselves and one of them printed a dash instead, which reads as "zero" in
- * a column of numbers; the rule is one token everywhere, and this is it.
- */
-export const RATING_UNAVAILABLE = "n/a";

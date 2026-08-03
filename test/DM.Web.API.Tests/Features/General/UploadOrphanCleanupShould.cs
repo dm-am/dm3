@@ -1,10 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Amazon.S3;
-using Amazon.S3.Model;
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Configuration;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Testing;
@@ -13,9 +10,9 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
+using IObjectStorage = DM.Domain.Core.Uploads.IObjectStorage;
 
 namespace DM.Web.API.Tests.Features.General;
 
@@ -30,8 +27,6 @@ namespace DM.Web.API.Tests.Features.General;
 /// </summary>
 public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
 {
-    private const string Bucket = "dm-test";
-
     /// <summary>
     /// The instant every row here is dated from. Fixed rather than taken from
     /// DateTimeOffset.UtcNow, so the grace period is checked against a value the
@@ -41,14 +36,14 @@ public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
 
     private readonly string _databaseName = Guid.NewGuid().ToString();
     private readonly ServiceProvider _serviceProvider;
-    private readonly Mock<IAmazonS3> _s3;
+    private readonly Mock<IObjectStorage> _objectStorage;
     private readonly Mock<IDateTimeProvider> _clock;
 
     public UploadOrphanCleanupShould()
     {
-        _s3 = Mock<IAmazonS3>();
-        _s3.Setup(c => c.DeleteObjectAsync(It.IsAny<DeleteObjectRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new DeleteObjectResponse());
+        _objectStorage = Mock<IObjectStorage>();
+        _objectStorage.Setup(s => s.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
 
         _clock = Mock<IDateTimeProvider>();
         _clock.SetupGet(c => c.Now).Returns(Now);
@@ -57,10 +52,8 @@ public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
         // Scoped, exactly as in production: the service resolves its context
         // from a scope it creates and disposes itself.
         services.AddDbContext<DmDbContext>(options => options.UseInMemoryDatabase(_databaseName));
-        services.AddScoped(_ => _s3.Object);
+        services.AddScoped(_ => _objectStorage.Object);
         services.AddSingleton(_ => _clock.Object);
-        services.AddSingleton<IOptions<CdnConfiguration>>(
-            Options.Create(new CdnConfiguration { BucketName = Bucket }));
         _serviceProvider = services.BuildServiceProvider();
     }
 
@@ -106,9 +99,8 @@ public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
 
         await Sweep();
 
-        _s3.Verify(c => c.DeleteObjectAsync(
-            It.Is<DeleteObjectRequest>(r => r.BucketName == Bucket && r.Key == "uploads/expired.png"),
-            It.IsAny<CancellationToken>()), Times.Once);
+        _objectStorage.Verify(s => s.DeleteAsync("uploads/expired.png", It.IsAny<CancellationToken>()),
+            Times.Once);
         (await RemainingUploads()).Should().Be(0);
     }
 
@@ -119,7 +111,7 @@ public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
 
         await Sweep();
 
-        _s3.Verify(c => c.DeleteObjectAsync(It.IsAny<DeleteObjectRequest>(), It.IsAny<CancellationToken>()),
+        _objectStorage.Verify(s => s.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
         (await RemainingUploads()).Should().Be(1);
     }
@@ -131,7 +123,7 @@ public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
 
         await Sweep();
 
-        _s3.Verify(c => c.DeleteObjectAsync(It.IsAny<DeleteObjectRequest>(), It.IsAny<CancellationToken>()),
+        _objectStorage.Verify(s => s.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
         (await RemainingUploads()).Should().Be(1);
     }
@@ -152,9 +144,8 @@ public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
         _clock.SetupGet(c => c.Now).Returns(Now.AddHours(25));
         await Sweep();
 
-        _s3.Verify(c => c.DeleteObjectAsync(
-            It.Is<DeleteObjectRequest>(r => r.Key == "uploads/aging.png"),
-            It.IsAny<CancellationToken>()), Times.Once);
+        _objectStorage.Verify(s => s.DeleteAsync("uploads/aging.png", It.IsAny<CancellationToken>()),
+            Times.Once);
         (await RemainingUploads()).Should().Be(0);
     }
 

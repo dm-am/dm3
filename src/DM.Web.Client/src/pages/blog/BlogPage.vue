@@ -1,20 +1,20 @@
 <script setup lang="ts">
-// Thin blog layout (mirrors GamePage): blog header (H1 + status + meta) and
-// a <router-view> for the active sub-page. All per-blog navigation and
-// actions live in the left-sidebar BlogPanel; role flags are lifted into
-// the shared useBlogDetailsStore (SSOT).
+// Thin blog layout (mirrors GamePage): the blog title (H1) and a
+// <router-view> for the active sub-page. Status, author, assistants and the
+// subscriber count live in the info table (BlogDetails), not duplicated in a
+// header strip. All per-blog navigation and actions live in the left-sidebar
+// BlogPanel; role flags are lifted into the shared useBlogDetailsStore (SSOT).
 import { computed, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
-import { useBlogDetailsStore, BlogStatusBadge } from "@/entities/blog";
+import { useBlogDetailsStore } from "@/entities/blog";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import {
   joinTitleSegments,
   useDocumentTitle,
 } from "@/shared/lib/composables/useDocumentTitle";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
-import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import { UserLink } from "@/entities/user";
+import { PageTitleSkeleton } from "@/shared/ui/Skeleton";
 
 const route = useRoute();
 const blogStore = useBlogDetailsStore();
@@ -27,33 +27,6 @@ const blogId = computed(() => route.params.id as string);
 useDocumentTitle(() =>
   joinTitleSegments(blog.value?.title, route.meta.section),
 );
-
-const statusClass = computed(() => {
-  if (!blog.value) return "";
-  switch (blog.value.status) {
-    case "Active":
-      return "status-active";
-    case "Closed":
-      return "status-finished";
-    default:
-      return "";
-  }
-});
-
-const assistants = computed(() => blog.value?.assistants ?? []);
-
-// Premoderation status (newbie blogs) — hidden when "Approved" / absent
-// (the blog does not require premoderation). Doc 4.2.2.15.
-const premodLabel = computed(() => {
-  switch (blog.value?.premoderationStatus) {
-    case "AwaitingApproval":
-      return "Ожидает проверки";
-    case "AwaitingEdits":
-      return "Требует правок";
-    default:
-      return null;
-  }
-});
 
 useFetchData(
   () => blogStore.loadBlog(blogId.value),
@@ -79,31 +52,7 @@ onUnmounted(() => {
 <template>
   <template v-if="blog">
     <div class="blog-header">
-      <div class="blog-title-row">
-        <page-title>{{ blog.title }}</page-title>
-        <span :class="['blog-status', statusClass]">
-          <BlogStatusBadge :status="blog.status" />
-        </span>
-        <span v-if="premodLabel" class="blog-premod">{{ premodLabel }}</span>
-      </div>
-      <secondary-text class="blog-meta">
-        <span class="blog-author">
-          Автор: <user-link :user="blog.author" />
-        </span>
-        <span v-if="assistants.length" class="blog-assistant">
-          {{ assistants.length === 1 ? "Ассистент" : "Ассистенты" }}:
-          <template
-            v-for="(assistant, index) in assistants"
-            :key="assistant.id"
-          >
-            <user-link :user="assistant" /><span
-              v-if="index < assistants.length - 1"
-              >,
-            </span>
-          </template>
-        </span>
-        <span class="blog-readers">Читатели: {{ blog.subscribersCount }}</span>
-      </secondary-text>
+      <page-title>{{ blog.title }}</page-title>
     </div>
 
     <router-view />
@@ -113,50 +62,17 @@ onUnmounted(() => {
     <p>{{ blogError }}</p>
     <router-link :to="{ name: 'blogs' }">Вернуться к списку блогов</router-link>
   </div>
+
+  <!-- Loading: twin of the loaded header (skeleton-parity). Reuses
+       .blog-header so the margins match; the twin itself owns its geometry. -->
+  <div v-else class="blog-header">
+    <PageTitleSkeleton />
+  </div>
 </template>
 
 <style scoped lang="sass">
 .blog-header
   margin-bottom: $medium
-
-.blog-title-row
-  display: flex
-  align-items: baseline
-  gap: $medium
-  flex-wrap: wrap
-
-.blog-status
-  font-size: $secondary-font-size
-  padding: 2px $small
-  border-radius: $border-radius
-  background-color: $bg-element
-  color: $text-muted
-
-  &.status-active
-    +tint($accent-green, 20%)
-    color: $accent-green
-
-  &.status-finished
-    +tint($text-muted, 20%)
-    color: $text-muted
-
-.blog-premod
-  font-size: $secondary-font-size
-  padding: 2px $small
-  border-radius: $border-radius
-  +tint($accent-red, 15%)
-  color: $accent-red
-
-.blog-meta
-  display: flex
-  flex-wrap: wrap
-  gap: $small
-  margin-top: $tiny
-
-.blog-author,
-.blog-assistant,
-.blog-readers
-  margin-right: $medium
 
 .blog-error
   padding: $big

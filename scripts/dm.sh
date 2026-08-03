@@ -42,12 +42,13 @@ EOF
 start_services() {
     echo -e "\033[36mStarting DM3 services...\033[0m"
 
-    # Check .env file
-    if [ ! -f "$DOCKER_DIR/.env" ]; then
-        echo -e "\033[33mCreating .env file from template...\033[0m"
-        cp "$DOCKER_DIR/.env.example" "$DOCKER_DIR/.env"
-        echo -e "\033[33mPlease edit docker/.env and set secure passwords!\033[0m"
-    fi
+    # docker/.env is created by the one script that also generates the
+    # encryption key. Copying the template alone is half the job: it ships that
+    # key empty on purpose, and compose declares it through ${...:?}, which
+    # rejects an empty value as hard as a missing one. So the documented first
+    # run on Linux and macOS died on interpolation before a single container
+    # started, on a file this script had just created.
+    bash "$DOCKER_DIR/scripts/init-env.sh" local
 
     cd "$DOCKER_DIR"
     docker compose up -d --build

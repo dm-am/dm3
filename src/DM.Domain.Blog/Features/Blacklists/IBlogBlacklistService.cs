@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Dto;
 
 namespace DM.Domain.Blog.Features.Blacklists;
@@ -10,7 +9,7 @@ namespace DM.Domain.Blog.Features.Blacklists;
 /// <summary>
 /// Service for blog blacklist management
 /// </summary>
-public interface IBlogBlacklistService : IContentBlacklistService
+public interface IBlogBlacklistService
 {
     /// <summary>
     /// Get list of blacklisted users for the blog

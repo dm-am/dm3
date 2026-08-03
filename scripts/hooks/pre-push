@@ -60,6 +60,9 @@ say "Зависимости: пакеты npm"
 say "Зависимости: пакеты .NET"
 bash "$ROOT/scripts/check-vulnerable-packages.sh"
 
+say "Бэкенд: форматирование"
+dotnet format "$ROOT/DM.sln" whitespace --verify-no-changes
+
 say "Бэкенд: сборка Release"
 dotnet build "$ROOT/DM.sln" -c Release --nologo -v q
 

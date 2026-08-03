@@ -29,12 +29,13 @@ import {
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useRoleGate } from "./lib/useRoleGate";
 import { notifyFailure } from "@/shared/lib/errors";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 const PAGE_SIZE = 25;
 
 const route = useRoute();
 const toast = useToast();
-const { hasAccess } = useRoleGate("Moderator");
+const { hasAccess, deniedText } = useRoleGate("Moderator");
 
 const uploads = ref<Upload[]>([]);
 const paging = ref<PagingModel | null>(null);
@@ -106,9 +107,7 @@ async function confirmDelete() {
   <div class="moderation-uploads">
     <page-title>Все загруженные файлы</page-title>
 
-    <SecondaryText v-if="!hasAccess">
-      Страница доступна только модераторам
-    </SecondaryText>
+    <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
 
     <template v-else>
       <form class="filters" @submit.prevent="applyFilter">
@@ -165,7 +164,9 @@ async function confirmDelete() {
             >
               {{ row.uploaderUsername || usernameFilter }}
             </router-link>
-            <span v-else class="muted" :title="row.userId">—</span>
+            <span v-else class="muted" :title="row.userId">{{
+              VALUE_UNAVAILABLE
+            }}</span>
           </template>
           <template #cell-date="{ row }">
             {{ formatDate(row.createdUtc) }}

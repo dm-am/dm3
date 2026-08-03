@@ -15,14 +15,14 @@ import { Paging } from "@/shared/ui/Paging";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { formatDate } from "@/shared/lib/utils/datetime";
-import { RATING_UNAVAILABLE } from "@/shared/lib/constants/user";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 import { UserLink } from "@/entities/user";
 import { useRoleGate } from "./lib/useRoleGate";
 
 const PAGE_SIZE = 25;
 
 const route = useRoute();
-const { hasAccess } = useRoleGate("Moderator");
+const { hasAccess, deniedText } = useRoleGate("Moderator");
 
 const users = ref<User[]>([]);
 const paging = ref<PagingModel | null>(null);
@@ -78,9 +78,7 @@ const rows = computed(() => users.value.map((u) => ({ ...u, id: u.id })));
   <div class="moderation-new-users">
     <page-title>Новые пользователи</page-title>
 
-    <SecondaryText v-if="!hasAccess">
-      Страница доступна только модераторам
-    </SecondaryText>
+    <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
 
     <ErrorState v-else-if="loadError" :message="loadError" :retry="fetch" />
 
@@ -99,7 +97,7 @@ const rows = computed(() => users.value.map((u) => ({ ...u, id: u.id })));
           {{ formatDate(row.registeredUtc ?? row.registrationUtc) }}
         </template>
         <template #cell-posts="{ row }">
-          {{ row.rating?.totalPosts ?? RATING_UNAVAILABLE }}
+          {{ row.rating?.totalPosts ?? VALUE_UNAVAILABLE }}
         </template>
       </DataTable>
 

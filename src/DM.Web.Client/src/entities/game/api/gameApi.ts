@@ -41,7 +41,7 @@ import type {
   GamePremoderationTransition,
 } from "../model/types";
 import type { GameReview } from "@/shared/api/models/game/reviews";
-import { Api } from "@/shared/api";
+import { Api, toCommentsQueryParams, type CommentsQuery } from "@/shared/api";
 import { RENDER_AUDIENCE } from "@/shared/api/audience";
 
 /**
@@ -382,21 +382,10 @@ class GameApi {
   }
 
   // Game comments
-  public getGameComments(gameId: string, paging?: PagingQuery) {
-    // Convert page number to skip/take for backend
-    const queryParams: Record<string, number | undefined> = {};
-    const pageSize = paging?.take ?? 20;
-    queryParams.take = pageSize;
-
-    if (paging?.number && paging.number > 1) {
-      queryParams.skip = (paging.number - 1) * pageSize;
-    } else if (paging?.skip) {
-      queryParams.skip = paging.skip;
-    }
-
+  public getGameComments(gameId: string, query?: CommentsQuery) {
     return Api.get<ListEnvelope<Comment>>(
       `games/${gameId}/comments`,
-      queryParams,
+      toCommentsQueryParams(query),
     );
   }
 

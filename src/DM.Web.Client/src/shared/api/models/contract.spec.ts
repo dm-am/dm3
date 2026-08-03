@@ -135,10 +135,6 @@ const UNSERVED: Record<string, string[]> = {
   // PostBbText on this side already documents; the object with `source` and
   // `html` describes nothing that is ever sent.
   InfoBbText: ["source", "html"],
-
-  // Declared, and commented as declared, against the day the search endpoint
-  // starts returning an author. Until then the card's author line is dead.
-  MessageSearchResult: ["author"],
 };
 
 /** A named object type declared somewhere in the client. */

@@ -29,6 +29,24 @@ internal class AuthenticationService : IAuthenticationService
     private readonly ILogger<AuthenticationService> _logger;
     private readonly AuthenticationConfiguration _config;
 
+    /// <summary>
+    /// Credentials of nobody, hashed so that a login for an account that does not
+    /// exist costs what a login for one that does costs.
+    /// </summary>
+    /// <remarks>
+    /// The two answers are required to be indistinguishable, and in text they
+    /// are: both come back as "wrong email or password". In time they were not. A
+    /// missing account skipped Argon2id entirely and answered tens of
+    /// milliseconds sooner, which says the address carries no account without any
+    /// password having been tried. The salt has to be well formed because the
+    /// hasher decodes it; neither value is ever stored or compared against
+    /// anything real.
+    /// </remarks>
+    private static readonly string DecoySalt = Convert.ToBase64String(new byte[75]);
+
+    /// <inheritdoc cref="DecoySalt" />
+    private static readonly string DecoyHash = Convert.ToBase64String(new byte[32]);
+
     /// <inheritdoc />
     public AuthenticationService(
         ISecurityManager securityManager,
@@ -101,6 +119,9 @@ internal class AuthenticationService : IAuthenticationService
         switch (userFound)
         {
             case false:
+                // Paid so that this answer takes as long as a wrong password does,
+                // and not only reads the same: see DecoySalt.
+                _securityManager.ComparePasswords(password, DecoySalt, DecoyHash);
                 await _loginAttemptTracker.RecordFailedAttempt(origin);
                 _logger.LogWarning("Login failed: user not found");
                 return Identity.Fail(AuthenticationError.WrongLogin);

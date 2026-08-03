@@ -25,6 +25,7 @@ import { Select } from "@/shared/ui/Select";
 import Button from "@/shared/ui/Button/Button.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { SvgIcon } from "@/shared/ui/Icon";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 import AttributeEditForm from "./AttributeEditForm.vue";
 import CharacterFormPreview from "./CharacterFormPreview.vue";
 import {
@@ -300,7 +301,9 @@ defineExpose({ validate, requestSave });
                 :aria-label="`Дескриптор: ${spec.title || 'атрибут'}`"
                 @change="setDescriptor(spec.id)"
               />
-              <span v-else class="dash" aria-hidden="true">—</span>
+              <span v-else class="dash" aria-hidden="true">{{
+                VALUE_UNAVAILABLE
+              }}</span>
             </td>
             <td class="col-actions">
               <button

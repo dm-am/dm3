@@ -39,7 +39,7 @@ const unreadComments = computed(() => props.rubric.unreadCommentsCount ?? 0);
 
 <template>
   <li class="link">
-    <span class="muted" aria-hidden="true">{{ prefix }}</span>
+    <span v-if="prefix" class="muted" aria-hidden="true">{{ prefix }}</span>
     <router-link class="title" :to="to">{{ rubric.title }}</router-link
     >{{ " "
     }}<CounterPair

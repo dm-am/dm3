@@ -1,15 +1,10 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Amazon.S3;
-using Amazon.S3.Model;
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Configuration;
+using DM.Domain.Core.Enums;
 using DM.Domain.Core.Uploads;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace DM.Infrastructure.Persistence.Repositories.General;
 
@@ -17,38 +12,38 @@ namespace DM.Infrastructure.Persistence.Repositories.General;
 internal class UploadGarbageCollector : IUploadGarbageCollector
 {
     private readonly DmDbContext _db;
-    private readonly IAmazonS3 _s3;
-    private readonly CdnConfiguration _cdn;
-    private readonly ILogger<UploadGarbageCollector> _logger;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public UploadGarbageCollector(
         DmDbContext db,
-        IAmazonS3 s3,
-        IOptions<CdnConfiguration> cdn,
-        ILogger<UploadGarbageCollector> logger,
         IDateTimeProvider dateTimeProvider)
     {
         _db = db;
-        _s3 = s3;
-        _cdn = cdn.Value;
-        _logger = logger;
         _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
-    public async Task CollectObsoleteAsync(Guid entityId)
+    public async Task CollectObsoleteAsync(Guid entityId, UploadType type)
     {
-        // Take all active uploads of the entity, sorted by date;
-        // the most recent (HEAD) is the current avatar, the rest are obsolete.
-        // The filter covers all typed target columns: if
-        // entityId is a user, we find UserAvatar; if a character — CharacterAvatar.
+        // A post carries as many attachments as its author put there, so "the
+        // newest one wins" would delete all but the last of them. The caller
+        // names the slot it replaced and a multi-slot type is refused here,
+        // rather than at the first attachment flow that reaches this method.
+        if (type is not (UploadType.UserAvatar or UploadType.CharacterAvatar))
+        {
+            throw new ArgumentOutOfRangeException(nameof(type), type,
+                "Only single-slot upload types have obsolete predecessors");
+        }
+
+        // Both avatar types keep one live upload per target, and the type is what
+        // separates them: an identifier belongs either to a user or to a
+        // character, and matching on the type as well keeps a row of the other
+        // kind out even if the identifiers ever collide.
         var uploads = await _db.Uploads
-            .Where(u => !u.IsRemoved &&
-                (u.TargetUserId == entityId
-                    || u.TargetCharacterId == entityId
-                    || u.TargetPostId == entityId))
+            .Where(u => !u.IsRemoved
+                && u.Type == type
+                && (u.TargetUserId == entityId || u.TargetCharacterId == entityId))
             .OrderByDescending(u => u.CreatedUtc)
             .ToListAsync();
 
@@ -57,48 +52,16 @@ internal class UploadGarbageCollector : IUploadGarbageCollector
             return;
         }
 
-        var obsolete = uploads.Skip(1).ToList();
-        var s3Keys = new List<string>();
-        foreach (var up in obsolete)
+        foreach (var obsolete in uploads.Skip(1))
         {
-            // One file per upload (imgproxy makes thumbnails on-the-fly,
-            // no pre-generated _m/_s files).
-            if (!string.IsNullOrEmpty(up.ObjectKey))
-            {
-                s3Keys.Add(up.ObjectKey);
-            }
-
-            up.IsRemoved = true;
+            obsolete.IsRemoved = true;
             // Starts the sweeper's grace period, so the value comes from the same
-            // clock the sweeper compares it against.
-            up.DeletedUtc = _dateTimeProvider.Now;
+            // clock the sweeper compares it against. The object itself stays in
+            // the bucket until that period is over: destroying it here would
+            // leave a row that still says it is restorable pointing at nothing.
+            obsolete.DeletedUtc = _dateTimeProvider.Now;
         }
 
-        // Persist the soft-delete in the DB before touching S3 — if the S3
-        // delete fails, the DB is still consistent (the orphan file is swept
-        // by the background worker later).
         await _db.SaveChangesAsync();
-
-        foreach (var key in s3Keys)
-        {
-            try
-            {
-                await _s3.DeleteObjectAsync(new DeleteObjectRequest
-                {
-                    BucketName = _cdn.BucketName,
-                    Key = key,
-                });
-            }
-            catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-            {
-                // The file is already deleted or does not exist — that is fine.
-            }
-            catch (Exception ex)
-            {
-                // Log but do not fail — the corresponding Upload is marked
-                // IsRemoved, the GC worker picks the file up on the next pass.
-                _logger.LogWarning(ex, "Failed to delete obsolete S3 object {Key}", key);
-            }
-        }
     }
 }

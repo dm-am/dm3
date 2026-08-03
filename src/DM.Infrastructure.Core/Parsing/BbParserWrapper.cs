@@ -24,6 +24,7 @@ public partial class BbParserWrapper : IBbParser
 {
     private readonly IBbParser _inner;
     private readonly Regex? _attributeTagPattern;
+    private readonly bool _spoilerGatedImages;
 
     /// <summary>
     /// Default text for spoiler toggle when no title is provided (Russian: "Показать содержимое")
@@ -190,6 +191,9 @@ public partial class BbParserWrapper : IBbParser
     /// <inheritdoc cref="ImageKind"/>
     private const char MentionKind = 'M';
 
+    /// <inheritdoc cref="ImageKind"/>
+    private const char VerbatimKind = 'V';
+
     /// <summary>Build the placeholder standing in for an extracted tag.</summary>
     private static string Placeholder(char kind, int index) =>
         $"{PlaceholderMarker}{kind}{index}{PlaceholderMarker}";
@@ -242,6 +246,13 @@ public partial class BbParserWrapper : IBbParser
     /// <summary>Match [mention="username"] - standalone tag, no closing tag</summary>
     [GeneratedRegex(@"\[mention=""([^""]+)""\]", RegexOptions.IgnoreCase)]
     private static partial Regex MentionRegex();
+
+    /// <summary>Match a [code] or [noparse] block, whose content is shown as written</summary>
+    [GeneratedRegex(@"\[(code|noparse)\][\s\S]*?\[/\1\]", RegexOptions.IgnoreCase)]
+    private static partial Regex VerbatimBlockRegex();
+
+    /// <inheritdoc cref="VerbatimBlockRegex"/>
+    private static readonly Regex VerbatimPlaceholder = PlaceholderPattern(VerbatimKind);
 
     /// <summary>Match empty spoiler-head anchor (no title text) for post-processing</summary>
     [GeneratedRegex(@"<a href=""#"" class=""spoiler-head""></a>", RegexOptions.IgnoreCase)]
@@ -313,10 +324,19 @@ public partial class BbParserWrapper : IBbParser
     /// <summary>
     /// Create wrapper around existing parser
     /// </summary>
-    public BbParserWrapper(IBbParser inner)
+    /// <param name="inner">Parser handling every tag this wrapper does not</param>
+    /// <param name="spoilerGatedImages">
+    /// Whether an image is put behind a spoiler instead of embedding on sight.
+    /// It is decided here and not by the tag set because this class renders [img]
+    /// itself, before the inner parser ever sees the text: a "safe" tag set that
+    /// swapped the img template decided nothing at all, and the guest-readable
+    /// global chat auto-loaded whatever address a message named.
+    /// </param>
+    public BbParserWrapper(IBbParser inner, bool spoilerGatedImages = false)
     {
         _inner = inner;
         _attributeTagPattern = BuildAttributeTagPattern(inner);
+        _spoilerGatedImages = spoilerGatedImages;
     }
 
     /// <inheritdoc />
@@ -331,17 +351,29 @@ public partial class BbParserWrapper : IBbParser
         var linkList = new List<(string? text, string url)>();
         var mentionList = new List<string>();
 
-        // Before anything else, three passes over the raw text, in this order.
+        // Before anything else, four passes over the raw text, in this order.
         // The marker goes first: nothing the author typed may be mistaken for a
-        // placeholder written below (see PlaceholderMarker). Then the privacy
-        // tag has to be spelled the way the tag set recognises, or the visitor
-        // gets no node to filter and private text is served to everyone (see
-        // PrivateBlockMarkup, whose rules the save path keys its addressee
-        // snapshot by, so the two ends cannot drift apart). Encoding comes last,
-        // because normalisation is what turns [private=Name] into the quoted
-        // form it looks for (see EncodeAttributeValues).
-        var processed = EncodeAttributeValues(
-            PrivateBlockMarkup.Normalise(StripPlaceholderMarkers(input)));
+        // placeholder written below (see PlaceholderMarker). Then [code] and
+        // [noparse] are lifted out whole, because everything after this line
+        // rewrites markup while those two exist to show it as written — which is
+        // how [code][img]url[/img][/code] embedded the picture instead of
+        // printing the tag, and how a [private=Name] inside a code sample got
+        // rewritten in front of the reader. Then the privacy tag has to be
+        // spelled the way the tag set recognises, or the visitor gets no node to
+        // filter and private text is served to everyone (see PrivateBlockMarkup,
+        // whose rules the save path keys its addressee snapshot by, so the two
+        // ends cannot drift apart). Encoding comes last, because normalisation is
+        // what turns [private=Name] into the quoted form it looks for (see
+        // EncodeAttributeValues).
+        var verbatimList = new List<string>();
+        var processed = VerbatimBlockRegex().Replace(StripPlaceholderMarkers(input), match =>
+        {
+            var index = verbatimList.Count;
+            verbatimList.Add(match.Value);
+            return Placeholder(VerbatimKind, index);
+        });
+
+        processed = EncodeAttributeValues(PrivateBlockMarkup.Normalise(processed));
 
         // Extract [img=WxH alt="text"]URL[/img] or [img=W alt="text"]URL[/img] (MUST be first)
         processed = ImgWithSizeAndAltRegex().Replace(processed, match =>
@@ -413,11 +445,16 @@ public partial class BbParserWrapper : IBbParser
             return Placeholder(MentionKind, index);
         });
 
+        // Put [code] and [noparse] back before the parser: they are its tags, and
+        // it is what renders them, verbatim content and all.
+        processed = VerbatimPlaceholder.Replace(processed, match =>
+            verbatimList[int.Parse(match.Groups[1].Value)]);
+
         // Parse the rest with BBCodeParser
         var innerTree = _inner.Parse(processed);
 
         // Return wrapped tree that restores placeholders
-        return new WrappedNodeTree(innerTree, imgList, linkList, mentionList);
+        return new WrappedNodeTree(innerTree, imgList, linkList, mentionList, _spoilerGatedImages);
     }
 
     /// <inheritdoc />
@@ -439,6 +476,7 @@ public partial class BbParserWrapper : IBbParser
         private readonly List<(string url, int? width, int? height, string? alt)> _imgList;
         private readonly List<(string? text, string url)> _linkList;
         private readonly List<string> _mentionList;
+        private readonly bool _spoilerGatedImages;
 
         private static readonly Regex ImgPlaceholder = PlaceholderPattern(ImageKind);
         private static readonly Regex LinkPlaceholder = PlaceholderPattern(LinkKind);
@@ -447,14 +485,28 @@ public partial class BbParserWrapper : IBbParser
         /// <summary>
         /// Create wrapped node tree
         /// </summary>
-        public WrappedNodeTree(NodeTree inner, List<(string url, int? width, int? height, string? alt)> imgList, List<(string? text, string url)> linkList, List<string> mentionList)
+        public WrappedNodeTree(NodeTree inner, List<(string url, int? width, int? height, string? alt)> imgList, List<(string? text, string url)> linkList, List<string> mentionList, bool spoilerGatedImages = false)
             : base(BbParser.SecuritySubstitutions, new Dictionary<string, string>())
         {
             _inner = inner;
             _imgList = imgList;
             _linkList = linkList;
             _mentionList = mentionList;
+            _spoilerGatedImages = spoilerGatedImages;
         }
+
+        /// <summary>
+        /// Put an image behind a spoiler on the surfaces that ask for it.
+        /// </summary>
+        /// <remarks>
+        /// The same markup an ordinary [spoiler] emits, because the client wires
+        /// one behaviour to a .spoiler-head plus the .spoiler next to it, and a
+        /// second shape would need a second implementation of the same toggle.
+        /// </remarks>
+        private string Gate(string image) => _spoilerGatedImages
+            ? $"<a href=\"#\" class=\"spoiler-head\">{DefaultSpoilerText}</a>" +
+              $"<div class=\"spoiler\">{image}</div>"
+            : image;
 
         /// <summary>
         /// Convert to HTML with permission filter + transform applied during
@@ -523,7 +575,7 @@ public partial class BbParserWrapper : IBbParser
                     if (!width.HasValue && !height.HasValue)
                     {
                         // Default size — no wrapper, CSS defaults on .bb-image take over
-                        return imgTag;
+                        return Gate(imgTag);
                     }
 
                     // Custom size — wrap in .bb-image-frame span carrying the CSS vars
@@ -539,8 +591,8 @@ public partial class BbParserWrapper : IBbParser
                         cssVars.Add($"--bb-image-max-height:{height.Value}px");
                         dataAttrs.Add($"data-bb-height=\"{height.Value}\"");
                     }
-                    return $"<span class=\"bb-image-frame\" {string.Join(" ", dataAttrs)} " +
-                           $"style=\"{string.Join(";", cssVars)}\">{imgTag}</span>";
+                    return Gate($"<span class=\"bb-image-frame\" {string.Join(" ", dataAttrs)} " +
+                                $"style=\"{string.Join(";", cssVars)}\">{imgTag}</span>");
                 }
                 return match.Value;
             });

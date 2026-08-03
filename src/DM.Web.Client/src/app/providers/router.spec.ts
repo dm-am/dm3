@@ -355,3 +355,18 @@ describe("room titles", () => {
     }
   });
 });
+
+/**
+ * Каталог вариантов доступен только в dev-сборке: роут лежит внутри ветки
+ * import.meta.env.DEV, которую rollup выбрасывает вместе с динамическим
+ * импортом. Проверка живет здесь, потому что страница по правилам FSD не
+ * импортирует роутер сама.
+ */
+describe("the mockup catalogs", () => {
+  it("answer at their own routes in a development build", () => {
+    const route = router.resolve("/dev/chat-events");
+
+    expect(route.name).toBe("dev-chat-events-variants");
+    expect(route.meta.title).toBe("Мокапы: эвенты чата");
+  });
+});

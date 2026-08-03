@@ -27,7 +27,7 @@ import {
   useApiList,
   useApiResource,
 } from "@/shared/lib/composables/useApiResource";
-import { unwrapResource } from "@/shared/api";
+import { unwrapResource, type CommentsQuery } from "@/shared/api";
 import { useAuthStore } from "@/shared/stores";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 import {
@@ -297,11 +297,12 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   const charactersLoading = ref(false);
   const charactersError = ref<string | null>(null);
 
-  // Comments data
+  // Comments data. The failure is a flag and not a sentence: the discussion
+  // section spells one wording for a failed load, wherever it fails.
   const comments = ref<Comment[]>([]);
   const commentsPaging = ref<Paging | null>(null);
   const commentsLoading = ref(false);
-  const commentsError = ref<string | null>(null);
+  const commentsError = ref(false);
 
   // Blacklist data
   const blacklist = ref<User[]>([]);
@@ -520,21 +521,23 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     charactersLoading.value = false;
   }
 
-  // Load comments
-  async function loadComments(gameId: string, page: number = 1): Promise<void> {
+  // Load comments. Filter, sort and page all come from the URL through the
+  // discussion section; this forwards the query it is handed.
+  async function loadComments(
+    gameId: string,
+    query: CommentsQuery = {},
+  ): Promise<void> {
     const requestId = commentsGuard.next();
     commentsLoading.value = true;
-    commentsError.value = null;
+    commentsError.value = false;
 
-    const { data, error } = await gameApi.getGameComments(gameId, {
-      number: page,
-    });
+    const { data, error } = await gameApi.getGameComments(gameId, query);
 
     // Stale continuation — the newer request owns the visible state.
     if (!commentsGuard.isCurrent(requestId)) return;
 
     if (error) {
-      commentsError.value = "Не удалось загрузить комментарии";
+      commentsError.value = true;
       comments.value = [];
       commentsPaging.value = null;
     } else if (data) {
@@ -741,7 +744,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     comments.value = [];
     commentsPaging.value = null;
     commentsLoading.value = false;
-    commentsError.value = null;
+    commentsError.value = false;
 
     blacklist.value = [];
     blacklistLoading.value = false;

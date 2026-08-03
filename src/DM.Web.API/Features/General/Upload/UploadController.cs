@@ -124,6 +124,7 @@ public class UploadController : ControllerBase
     /// <response code="200">File uploaded, processed, and confirmed</response>
     /// <response code="400">Invalid file (wrong format, too large, not an image)</response>
     /// <response code="401">User not authenticated</response>
+    /// <response code="429">Too many requests</response>
     [HttpPost(Name = nameof(DirectUpload))]
     [AuthenticationRequired]
     [EnableRateLimiting(RateLimitPolicies.Uploads)]

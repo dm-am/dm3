@@ -38,17 +38,18 @@
       </div>
 
       <div v-if="!loading && events.length > 0" class="events-footer">
-        Показаны последние {{ events.length }} событий
+        Показано {{ events.length }} {{ eventsNoun }}
       </div>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { computed, ref, onMounted } from "vue";
 import { accountApi } from "@/entities/user";
 import { EmptyState } from "@/shared/ui";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
+import { pluralize } from "@/shared/lib/utils/pluralize";
 import type {
   SecurityEvent,
   SecurityEventType,
@@ -56,6 +57,17 @@ import type {
 
 const events = ref<SecurityEvent[]>([]);
 const loading = ref(true);
+
+// The footer counted with one noun form, so it read "последние 3 событий" on a
+// screen a person opens when something already worried them.
+const eventsNoun = computed(() =>
+  pluralize(
+    events.value.length,
+    "последнее событие",
+    "последних события",
+    "последних событий",
+  ),
+);
 
 onMounted(async () => {
   await loadEvents();

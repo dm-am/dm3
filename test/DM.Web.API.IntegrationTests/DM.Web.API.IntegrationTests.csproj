@@ -13,10 +13,10 @@
         <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" />
         <PackageReference Include="Moq" />
-        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" VersionOverride="8.0.4" />
-        <PackageReference Include="Testcontainers.MongoDb" VersionOverride="4.3.0" />
-        <PackageReference Include="Testcontainers.PostgreSql" VersionOverride="4.3.0" />
-        <PackageReference Include="Testcontainers.RabbitMq" VersionOverride="4.3.0" />
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+        <PackageReference Include="Testcontainers.MongoDb" />
+        <PackageReference Include="Testcontainers.PostgreSql" />
+        <PackageReference Include="Testcontainers.RabbitMq" />
         <PackageReference Include="xunit" />
         <PackageReference Include="xunit.runner.visualstudio">
             <PrivateAssets>all</PrivateAssets>

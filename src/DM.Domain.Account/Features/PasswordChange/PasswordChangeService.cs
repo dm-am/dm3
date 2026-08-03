@@ -26,6 +26,7 @@ internal class PasswordChangeService : IPasswordChangeService
     private readonly ICompromisedPasswordChecker _compromisedPasswordChecker;
     private readonly IEventProducer _eventProducer;
     private readonly IPasswordChangeMailSender _notificationSender;
+    private readonly ISecurityAuditService _auditService;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly TokenConfiguration _tokenConfig;
 
@@ -39,6 +40,7 @@ internal class PasswordChangeService : IPasswordChangeService
         IIdentityProvider identityProvider,
         IEventProducer eventProducer,
         IPasswordChangeMailSender notificationSender,
+        ISecurityAuditService auditService,
         IDateTimeProvider dateTimeProvider,
         IOptions<TokenConfiguration> tokenOptions)
     {
@@ -50,6 +52,7 @@ internal class PasswordChangeService : IPasswordChangeService
         _compromisedPasswordChecker = compromisedPasswordChecker;
         _eventProducer = eventProducer;
         _notificationSender = notificationSender;
+        _auditService = auditService;
         _dateTimeProvider = dateTimeProvider;
         _tokenConfig = tokenOptions.Value;
     }
@@ -122,13 +125,21 @@ internal class PasswordChangeService : IPasswordChangeService
 
         // When changing via token, user is not authenticated - logout all sessions
         // When changing via old password, user is authenticated - keep current session
+        //
+        // The security journal is written in the same two branches, with two
+        // types, because "changed from inside a session" and "reset through a
+        // link out of the mailbox" are different events to the person working out
+        // afterwards whether it was him. Nothing wrote either of them, so the
+        // journal answered "nothing happened" to the one question it exists for.
         if (passwordChange.Token.HasValue)
         {
             await _authenticationService.LogoutAll(user.UserId);
+            await _auditService.LogAsync(user.UserId, SecurityEventType.PasswordResetComplete);
         }
         else
         {
             await _authenticationService.LogoutElsewhere();
+            await _auditService.LogAsync(user.UserId, SecurityEventType.PasswordChange);
         }
 
         // Audit logging: record password change event

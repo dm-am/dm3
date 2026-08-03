@@ -68,7 +68,12 @@ export {
 export { useGamesStore, useGameDetailsStore } from "./model/store";
 export { useRatedPostsStore } from "./model/ratedPostsStore";
 export { usePulseStore, getWeekStartUtc } from "./model/pulseStore";
-export type { PulseSearchParams } from "./model/pulseStore";
+export { buildRatedPostsParams } from "./model/ratedPostsParams";
+export type {
+  PulseSearchParams,
+  RatedPostsApiParams,
+  RatedPostsScope,
+} from "./model/ratedPostsParams";
 
 // Composables
 export { useGameDisplay } from "./model/useGameDisplay";

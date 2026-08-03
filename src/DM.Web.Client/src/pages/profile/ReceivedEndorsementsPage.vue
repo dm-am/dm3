@@ -4,30 +4,13 @@
  * A thin wrapper over `ProfileEndorsementsList` in `received` mode:
  * endorsements other members wrote about this user.
  */
-import { computed } from "vue";
-import { useRoute } from "vue-router";
-import {
-  joinTitleSegments,
-  useDocumentTitle,
-} from "@/shared/lib/composables/useDocumentTitle";
 import { ErrorPage } from "@/shared/ui/ErrorPage";
 import ProfileSubpageHeader from "./ProfileSubpageHeader.vue";
 import ProfileEndorsementsList from "./ProfileEndorsementsList.vue";
-import { useProfileSubpageUser } from "./useProfileSubpageUser";
+import { useProfileSubpage } from "./useProfileSubpage";
 
-const route = useRoute();
-const username = computed(() => route.params.username as string);
-
-const { notFound, canonicalUsername } = useProfileSubpageUser(username);
-
-const profileLink = computed(() => ({
-  name: "profile" as const,
-  params: { username: username.value },
-}));
-
-useDocumentTitle(() =>
-  joinTitleSegments(canonicalUsername.value, "Полученные рекомендации"),
-);
+const { username, canonicalUsername, notFound, profileLink } =
+  useProfileSubpage("Полученные рекомендации");
 </script>
 
 <template>

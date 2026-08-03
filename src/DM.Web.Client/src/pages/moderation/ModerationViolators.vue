@@ -20,8 +20,9 @@ import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { UserLink } from "@/entities/user";
 import { useRoleGate } from "./lib/useRoleGate";
 import { banTermLabel } from "./lib/labels";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
-const { hasAccess } = useRoleGate("Moderator");
+const { hasAccess, deniedText } = useRoleGate("Moderator");
 
 const violators = ref<Violator[]>([]);
 const loading = ref(false);
@@ -71,9 +72,7 @@ const rows = computed(() =>
   <div class="moderation-violators">
     <page-title>Нарушители</page-title>
 
-    <SecondaryText v-if="!hasAccess">
-      Страница доступна только модераторам
-    </SecondaryText>
+    <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
 
     <template v-else>
       <div class="filters">
@@ -111,7 +110,7 @@ const rows = computed(() =>
           <span v-if="row.lastWarningUtc">
             {{ formatDateFull(row.lastWarningUtc) }}
           </span>
-          <span v-else class="muted">—</span>
+          <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
         </template>
         <template #cell-ban="{ row }">
           <span v-if="row.activeBan" class="ban-info">
@@ -120,7 +119,7 @@ const rows = computed(() =>
               (до {{ formatDateFull(row.activeBan.expiresUtc) }})
             </template>
           </span>
-          <span v-else class="muted">—</span>
+          <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
         </template>
       </DataTable>
     </template>

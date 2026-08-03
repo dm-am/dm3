@@ -3,10 +3,13 @@
  * TopicCard — the presentational "topic bubble" card.
  *
  * Single source of the topic-card markup and styles, shared by:
- *   - Topic.vue (forum topics: full navigation + viewer-dependent actions)
- *   - ProfileBestPublicationSection.vue (a blog publication rendered in the exact
- *     same visual shell, with non-applicable navigation and actions
- *     degraded to plain text / static indicators)
+ *   - TopicView.vue (forum topics: full navigation + viewer-dependent actions)
+ *   - PublicationCard.vue, which reaches it through the @x/publication door
+ *     (a blog publication rendered in the exact same visual shell, with
+ *     non-applicable navigation and actions degraded to plain text / static
+ *     indicators). That reuse is temporary and PublicationCard owns it: when
+ *     the publication gets a design of its own the change happens there, and
+ *     this card stays a forum concern.
  *
  * The component takes only display-ready values (no domain DTOs) because
  * the forum Topic type is built from Served<...> branded fields that cannot
@@ -72,7 +75,7 @@ const props = withDefaults(
     isLikedByMe?: boolean;
     /** Whether the moderator warn action is available. */
     canWarn?: boolean;
-    /** Topic is closed — renders the lock + "Тема закрыта" badge (doc 4.2.2.17). */
+    /** Topic is closed — renders the lock + "Топик закрыт" badge (doc 4.2.2.17). */
     isClosed?: boolean;
     /** Author/moderator lifecycle affordances (forum topic only). */
     canEdit?: boolean;
@@ -176,7 +179,7 @@ function initCardBbcode(el: HTMLElement) {
       <template v-if="isClosed"
         >{{ " "
         }}<span class="closed-badge">
-          <SvgIcon name="locked" class="closed-icon" />Тема закрыта</span
+          <SvgIcon name="locked" class="closed-icon" />Топик закрыт</span
         ></template
       >
       <!-- Optional owner-injected title tail (e.g. the digest topics'
@@ -186,7 +189,7 @@ function initCardBbcode(el: HTMLElement) {
 
     <!-- Standalone closed badge when the card renders without a title. -->
     <div v-else-if="isClosed" class="closed-badge closed-badge-standalone">
-      <SvgIcon name="locked" class="closed-icon" />Тема закрыта
+      <SvgIcon name="locked" class="closed-icon" />Топик закрыт
     </div>
 
     <!-- Content. Skipped entirely for topics with no text (legal per the
@@ -457,7 +460,7 @@ function initCardBbcode(el: HTMLElement) {
   &.delete-btn:hover
     color: $accent-red
 
-// Closed-topic badge (lock + "Тема закрыта"), sits next to the heading. The gap
+// Closed-topic badge (lock + "Топик закрыт"), sits next to the heading. The gap
 // in front of it is the " " text node in the title, not a margin: a margin is
 // drawn but not copied, and the title used to reach the clipboard glued.
 .closed-badge

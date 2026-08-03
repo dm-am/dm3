@@ -124,7 +124,7 @@ function contestContextLabel(a: UserAward): string | null {
   const kind =
     a.contestSeries.contestType === ContestType.Literary
       ? "Литературный конкурс"
-      : "Арт конкурс";
+      : "Арт-конкурс";
   return `${kind} #${a.contestSeries.number} (${a.contestSeries.year})`;
 }
 

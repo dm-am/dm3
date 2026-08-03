@@ -5,7 +5,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <InternalsVisibleTo Include="DM.Domain.Forum.Tests" />
         <InternalsVisibleTo Include="DM.Infrastructure.Persistence" />
     </ItemGroup>
 

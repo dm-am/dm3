@@ -46,8 +46,7 @@ internal class BlogBlacklistService : IBlogBlacklistService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
-    public async Task<IEnumerable<GeneralUser>> GetBlacklistAsync(Guid blogId, CancellationToken ct = default)
+    private async Task<IEnumerable<GeneralUser>> GetBlacklistAsync(Guid blogId, CancellationToken ct = default)
     {
         var blog = await _blogService.GetBlogAsync(blogId, ct);
         _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
@@ -55,8 +54,7 @@ internal class BlogBlacklistService : IBlogBlacklistService
         return await _repository.GetBlacklist(blogId, ct);
     }
 
-    /// <inheritdoc />
-    public async Task<GeneralUser> AddToBlacklistAsync(Guid blogId, string username, CancellationToken ct = default)
+    private async Task<GeneralUser> AddToBlacklistAsync(Guid blogId, string username, CancellationToken ct = default)
     {
         var blog = await _blogService.GetBlogAsync(blogId, ct);
         _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
@@ -107,8 +105,7 @@ internal class BlogBlacklistService : IBlogBlacklistService
         return _mapper.Map<GeneralUser>(user);
     }
 
-    /// <inheritdoc />
-    public async Task RemoveFromBlacklistAsync(Guid blogId, string username, CancellationToken ct = default)
+    private async Task RemoveFromBlacklistAsync(Guid blogId, string username, CancellationToken ct = default)
     {
         var blog = await _blogService.GetBlogAsync(blogId, ct);
         _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
@@ -126,32 +123,6 @@ internal class BlogBlacklistService : IBlogBlacklistService
 
         await _repository.Remove(blogId, user.UserId, ct);
     }
-
-    /// <inheritdoc />
-    public async Task<bool> IsBlockedAsync(Guid blogId, Guid userId, CancellationToken ct = default)
-    {
-        return await _repository.IsBlocked(blogId, userId, ct);
-    }
-
-    #region IContentBlacklistService implementation
-
-    /// <inheritdoc />
-    Task<IEnumerable<GeneralUser>> DM.Domain.Core.Blacklists.IContentBlacklistService.GetBlacklistAsync(
-        Guid entityId, CancellationToken ct) => GetBlacklistAsync(entityId, ct);
-
-    /// <inheritdoc />
-    Task<GeneralUser> DM.Domain.Core.Blacklists.IContentBlacklistService.AddToBlacklistAsync(
-        Guid entityId, string username, CancellationToken ct) => AddToBlacklistAsync(entityId, username, ct);
-
-    /// <inheritdoc />
-    Task DM.Domain.Core.Blacklists.IContentBlacklistService.RemoveFromBlacklistAsync(
-        Guid entityId, string username, CancellationToken ct) => RemoveFromBlacklistAsync(entityId, username, ct);
-
-    /// <inheritdoc />
-    Task<bool> DM.Domain.Core.Blacklists.IContentBlacklistService.IsBlockedAsync(
-        Guid entityId, Guid userId, CancellationToken ct) => IsBlockedAsync(entityId, userId, ct);
-
-    #endregion
 
     #region IBlogBlacklistService domain-specific methods
 

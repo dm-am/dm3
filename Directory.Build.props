@@ -16,6 +16,16 @@
              .github/vulnerability-allowlist.txt — putting the same policy in MSBuild too
              would give it two sources of truth. -->
         <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
+        <!-- CS8524 is the half of switch-expression exhaustiveness that cannot be
+             satisfied. It fires on the cast of an undeclared integer, so a switch
+             covering every member of an enum still warns, and under
+             TreatWarningsAsErrors the only way to compile one was a `_ =>` arm.
+             That arm also swallows CS8509 — the half that matters, the one that
+             names the member nobody handled — so a member added to a domain enum
+             reached the client as a null reason instead of stopping the build.
+             Silencing CS8524 once, here, is what lets those arms go. CS8509 is
+             deliberately not silenced. -->
+        <NoWarn>$(NoWarn);CS8524</NoWarn>
         <!-- Pinned, not "preview". The accepted language used to be whatever SDK
              happened to be installed: CI pins 8.0.x and the images use sdk:8.0, so a
              developer on a newer SDK could write a feature that compiles locally and

@@ -153,7 +153,7 @@ sum(rate(http_server_request_duration_seconds_count{job="dm-api",http_response_s
 |-----------|----------------|
 | API Overview | Requests, latency, errors |
 | Infrastructure | CPU, memory, disk |
-| Consumers | Message rates, processing time |
+| Consumers | Очереди: глубина, dead-letter, наличие потребителя |
 
 Dashboards настроены автоматически (auto-provisioned).
 

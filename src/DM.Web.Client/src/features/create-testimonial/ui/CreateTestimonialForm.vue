@@ -42,7 +42,7 @@ const {
             :errors="errorMessage ? [errorMessage] : []"
           >
             <template #hint
-              >Опишите впечатления от игры — что понравилось, что можно
+              >Опишите впечатления от игры: что понравилось, что можно
               улучшить</template
             >
             <text-area

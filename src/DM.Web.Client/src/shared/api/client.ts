@@ -6,7 +6,7 @@ import type {
   AxiosResponse,
   AxiosProgressEvent,
 } from "axios";
-import type { HubConnection } from "@microsoft/signalr";
+import type { HubConnection, IRetryPolicy } from "@microsoft/signalr";
 import type { ApiResult, GeneralError } from "./models/common";
 import {
   RENDER_AUDIENCE,
@@ -122,6 +122,23 @@ const configuration: AxiosRequestConfig = {
   },
 };
 
+/**
+ * Reconnection policy of the realtime hub.
+ *
+ * The default is four attempts — 0, 2, 10 and 30 seconds — and then the
+ * connection is closed for good, with nothing on the client side trying again.
+ * An API restart longer than that, which an ordinary deploy with a warm-up is,
+ * left every open tab without realtime until the reader happened to reload the
+ * page: the global chat survived on its own polling fallback, while the
+ * messenger badge and the notification bell, which have none, froze on the
+ * number the page had loaded with. So the retries never stop and the delay is
+ * capped instead.
+ */
+const hubRetryPolicy: IRetryPolicy = {
+  nextRetryDelayInMilliseconds: (context) =>
+    Math.min(30000, 1000 * 2 ** context.previousRetryCount),
+};
+
 class Api {
   private axios: AxiosInstance;
 
@@ -139,7 +156,7 @@ class Api {
         // rendering as signed in while the route guard bounced the same viewer.
         if (error.response?.status === 401) {
           const { warning } = useToast();
-          warning("Сессия истекла. Пожалуйста, войдите снова.");
+          warning("Сессия истекла. Войдите снова.");
           onSessionExpired?.();
         }
 
@@ -319,7 +336,7 @@ class Api {
   public async establishHubConnection(path: string): Promise<HubConnection> {
     const { HubConnectionBuilder } = await import("@microsoft/signalr");
     return new HubConnectionBuilder()
-      .withAutomaticReconnect()
+      .withAutomaticReconnect(hubRetryPolicy)
       .withUrl(`${apiHost}/${path}`, {
         withCredentials: true,
       })

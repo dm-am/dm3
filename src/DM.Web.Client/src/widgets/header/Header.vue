@@ -74,7 +74,7 @@ async function handleSignOutAll() {
       <router-link
         class="logo mobile-logo"
         :to="{ name: 'home' }"
-        aria-label="Dungeon Master — на главную"
+        aria-label="Dungeon Master, на главную"
       />
 
       <div v-if="user && user.username" class="mobile-right">
@@ -112,7 +112,7 @@ async function handleSignOutAll() {
       <router-link
         class="logo"
         :to="{ name: 'home' }"
-        aria-label="Dungeon Master — на главную"
+        aria-label="Dungeon Master, на главную"
       />
       <div class="user-actions">
         <template v-if="user && user.username">

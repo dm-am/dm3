@@ -38,6 +38,13 @@ const props = withDefaults(
     number?: number;
     /** Featured post mode — shows navigation breadcrumb, anchor icon instead of number */
     showNavigation?: boolean;
+    /**
+     * How far the breadcrumb reaches. "game" names the game and the room, for
+     * the cross-game surfaces (pulse, profile, moderation, home). "room" names
+     * the room alone, for a page that already is the game: repeating the game
+     * title above every post of its own sub-page says nothing.
+     */
+    navigationLevel?: "game" | "room";
     /** Enable content truncation */
     truncatable?: boolean;
     /** Fallback max height before truncation (px) */
@@ -55,6 +62,7 @@ const props = withDefaults(
   }>(),
   {
     showNavigation: false,
+    navigationLevel: "game",
     truncatable: false,
     maxHeight: 150,
     editable: false,
@@ -498,8 +506,10 @@ async function submitReview() {
          resolves its route. Plain link colors (no green/gray status
          tinting) — the sidebar coloring is a sidebar affordance. -->
     <div v-if="hasNavigation" class="post-nav">
-      <GameLink :game="post.room!.game!" />
-      <span class="nav-separator" aria-hidden="true"> > </span>
+      <template v-if="navigationLevel === 'game'">
+        <GameLink :game="post.room!.game!" />
+        <span class="nav-separator" aria-hidden="true"> > </span>
+      </template>
       <RoomLink :room="post.room!" :game="post.room!.game!" />
     </div>
 

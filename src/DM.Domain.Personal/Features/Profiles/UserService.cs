@@ -208,7 +208,7 @@ internal class UserService : IUserService
 
             // Link upload to user entity and mark old uploads as obsolete
             await _repository.LinkAvatarUpload(user.UserId, confirmedUploadId.Value);
-            await _uploadsCleanup.CollectObsoleteAsync(user.UserId);
+            await _uploadsCleanup.CollectObsoleteAsync(user.UserId, UploadType.UserAvatar);
 
             // Broadcast to open tabs so avatars in chats/comments
             // refresh without a reload. Best-effort, do not fail if SignalR is down.
@@ -269,7 +269,7 @@ internal class UserService : IUserService
         await _repository.UnlinkAvatarUpload(userId);
 
         // Best-effort cleanup (S3 + DB cleanup is done by the background GC worker).
-        await _uploadsCleanup.CollectObsoleteAsync(userId);
+        await _uploadsCleanup.CollectObsoleteAsync(userId, UploadType.UserAvatar);
 
         await _cache.InvalidateAsync($"user_details_{userId}");
         await _cache.InvalidateAsync($"user_{user.Username}");

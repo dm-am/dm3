@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Authorization;
@@ -145,27 +144,4 @@ internal class GameBlacklistService : IGameBlacklistService
         await _repository.Remove(game.Id, userId);
     }
 
-    #region IContentBlacklistService implementation
-
-    Task<IEnumerable<GeneralUser>> DM.Domain.Core.Blacklists.IContentBlacklistService.GetBlacklistAsync(
-        Guid entityId, CancellationToken ct) => Get(entityId);
-
-    async Task<GeneralUser> DM.Domain.Core.Blacklists.IContentBlacklistService.AddToBlacklistAsync(
-        Guid entityId, string username, CancellationToken ct)
-    {
-        return await Add(new OperateBlacklistLink { GameId = entityId, Username = username });
-    }
-
-    async Task DM.Domain.Core.Blacklists.IContentBlacklistService.RemoveFromBlacklistAsync(
-        Guid entityId, string username, CancellationToken ct)
-    {
-        await Remove(new OperateBlacklistLink { GameId = entityId, Username = username });
-    }
-
-    public async Task<bool> IsBlockedAsync(Guid gameId, Guid userId, CancellationToken ct = default)
-    {
-        return await _repository.IsBlocked(gameId, userId, ct);
-    }
-
-    #endregion
 }

@@ -12,6 +12,26 @@ vi.mock("@/shared/lib/composables/useToast", () => ({
   useToast: () => toast,
 }));
 
+// The signalr client is loaded by a dynamic import inside the method under
+// test, so the builder is replaced module-wide and whatever it is handed is
+// read back from here.
+const hub = vi.hoisted(() => ({ policy: undefined as unknown }));
+
+vi.mock("@microsoft/signalr", () => ({
+  HubConnectionBuilder: class {
+    withAutomaticReconnect(policy: unknown) {
+      hub.policy = policy;
+      return this;
+    }
+    withUrl() {
+      return this;
+    }
+    build() {
+      return {};
+    }
+  },
+}));
+
 /**
  * A request that failed must come back as an error, and the check every caller
  * writes is `if (error)`.
@@ -216,5 +236,60 @@ describe("Api on 403", () => {
     expect(toast.error).toHaveBeenCalledWith(
       "Недостаточно прав для этого действия",
     );
+  });
+});
+
+/**
+ * The realtime socket has to come back on its own.
+ *
+ * withAutomaticReconnect() with no argument is four attempts — 0, 2, 10 and 30
+ * seconds — and then the connection is closed for good, with nothing on the
+ * client side trying again. An API restart longer than that, which an ordinary
+ * deploy with a warm-up is, left every open tab without realtime until the
+ * reader happened to reload the page: the global chat survived on its own
+ * polling fallback, while the messenger badge and the notification bell, which
+ * have none, froze on the number the page had loaded with.
+ */
+describe("Api.establishHubConnection", () => {
+  type RetryPolicy = {
+    nextRetryDelayInMilliseconds: (context: {
+      previousRetryCount: number;
+    }) => number | null;
+  };
+
+  beforeEach(() => {
+    vi.resetModules();
+    hub.policy = undefined;
+  });
+
+  async function connect(): Promise<RetryPolicy | undefined> {
+    const axios = (await import("axios")).default;
+
+    vi.spyOn(axios, "create").mockReturnValue({
+      interceptors: { response: { use: vi.fn() } },
+    } as never);
+
+    const { default: api } = await import("./client");
+    await api.establishHubConnection("whatsup");
+
+    return hub.policy as RetryPolicy | undefined;
+  }
+
+  it("keeps retrying, and never waits longer than half a minute", async () => {
+    const policy = await connect();
+
+    expect(typeof policy?.nextRetryDelayInMilliseconds).toBe("function");
+
+    for (const previousRetryCount of [0, 1, 4, 10, 1000]) {
+      // null is how the client says "give up", and the default policy says it
+      // on the fifth attempt — about 42 seconds after the connection dropped.
+      const delay = policy!.nextRetryDelayInMilliseconds({
+        previousRetryCount,
+      });
+
+      expect(delay).not.toBeNull();
+      expect(delay!).toBeGreaterThan(0);
+      expect(delay!).toBeLessThanOrEqual(30000);
+    }
   });
 });

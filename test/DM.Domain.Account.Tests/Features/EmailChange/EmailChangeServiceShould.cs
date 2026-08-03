@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Account.Configuration;
 using DM.Domain.Account.Features.EmailChange;
+using DM.Domain.Account.Features.Security;
 using DM.Domain.Account.Features.Tokens;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Tokens;
@@ -31,6 +32,7 @@ public class EmailChangeServiceShould : UnitTestBase
     private readonly Mock<IEmailChangeMailSender> _mailSender;
     private readonly Mock<IEmailChangeWarningMailSender> _warningMailSender;
     private readonly Mock<IEventProducer> _eventProducer;
+    private readonly Mock<ISecurityAuditService> _auditService;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
     private readonly EmailChangeService _service;
 
@@ -43,6 +45,7 @@ public class EmailChangeServiceShould : UnitTestBase
         _mailSender = Mock<IEmailChangeMailSender>();
         _warningMailSender = Mock<IEmailChangeWarningMailSender>();
         _eventProducer = Mock<IEventProducer>();
+        _auditService = Mock<ISecurityAuditService>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
         var config = Options.Create(new TokenConfiguration
         {
@@ -64,6 +67,7 @@ public class EmailChangeServiceShould : UnitTestBase
             _mailSender.Object,
             _warningMailSender.Object,
             _eventProducer.Object,
+            _auditService.Object,
             _dateTimeProvider.Object,
             config);
     }

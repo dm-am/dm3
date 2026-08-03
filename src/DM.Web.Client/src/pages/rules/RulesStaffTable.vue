@@ -13,6 +13,7 @@ import { UserRole, type User } from "@/shared/api/models/community";
 import { userApi } from "@/entities/user";
 import { ROLE_INFO, STAFF_ROLES } from "@/shared/config/roles";
 import { ADMIN_LINKS } from "@/shared/config/helpLinks";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 interface RoleGroup {
   role: UserRole;
@@ -88,7 +89,7 @@ onMounted(loadRoleGroups);
               <UserLink :user="user" hide-badge />
             </span>
           </template>
-          <span v-else class="no-users">—</span>
+          <span v-else class="no-users">{{ VALUE_UNAVAILABLE }}</span>
         </span>
       </div>
     </div>

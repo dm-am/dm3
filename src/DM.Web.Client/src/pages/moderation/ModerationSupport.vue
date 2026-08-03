@@ -10,16 +10,14 @@ import TicketList from "./tickets/TicketList.vue";
 import { SUPPORT_SUBTYPES } from "./lib/labels";
 import { useRoleGate } from "./lib/useRoleGate";
 
-const { hasAccess } = useRoleGate("Admin");
+const { hasAccess, deniedText } = useRoleGate("Admin");
 </script>
 
 <template>
   <div class="moderation-support">
     <page-title>Поддержка</page-title>
 
-    <SecondaryText v-if="!hasAccess">
-      Страница доступна только администраторам
-    </SecondaryText>
+    <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
 
     <TicketList
       v-else

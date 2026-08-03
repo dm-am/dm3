@@ -73,7 +73,7 @@ export function formatThreshold(
 
 /**
  * Contest series label for the tile and popover:
- *   "23-й литературный конкурс", "1-й арт конкурс".
+ *   "23-й литературный конкурс", "1-й арт-конкурс".
  * Used as the tile title of a placement award (contest_first/second/third)
  * — the placement is read from the tier color, and the "which contest" context is here.
  */
@@ -86,5 +86,5 @@ export function formatContestSeriesTitle(
     return `${ordinal} литературный конкурс`;
   }
   // Art and future types.
-  return `${ordinal} арт конкурс`;
+  return `${ordinal} арт-конкурс`;
 }

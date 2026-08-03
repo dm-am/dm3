@@ -36,5 +36,8 @@ export {
 // with nothing, and both halves accumulated real consumers.
 export { default as uploadApi } from "./uploadApi";
 
+// Comments query — one shape and one wire conversion for every discussion
+export { toCommentsQueryParams, type CommentsQuery } from "./commentsQuery";
+
 // Re-export models
 export * from "./models";

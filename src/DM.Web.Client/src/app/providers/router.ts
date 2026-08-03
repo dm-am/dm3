@@ -693,7 +693,7 @@ const router = createRouter({
         {
           name: "forum-topic-redirect",
           path: "/forum-topic/:topicId",
-          meta: { title: "Переход к теме" },
+          meta: { title: "Переход к топику" },
           component: () => import("@/pages/redirect/TopicRedirect.vue"),
         },
         // Mockup catalogs under /dev are registered in development builds only. Vite
@@ -707,6 +707,13 @@ const router = createRouter({
                 path: "/dev/style-variants",
                 meta: { title: "Мокапы: стиль" },
                 component: () => import("@/pages/dev/StyleVariantsPage.vue"),
+              },
+              {
+                name: "dev-chat-events-variants",
+                path: "/dev/chat-events",
+                meta: { title: "Мокапы: эвенты чата" },
+                component: () =>
+                  import("@/pages/dev/ChatEventsVariantsPage.vue"),
               },
             ]
           : []),

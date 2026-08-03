@@ -26,8 +26,12 @@ public class BbParserProvider : IBbParserProvider
     private static readonly Tag StrikeAlias = new("strike", "<s>", "</s>");
 
     // NSFW - same structure as spoiler, but with nsfw-head toggle and nsfw-spoiler content
+    // href="#" and not javascript:void(0): a javascript: URL is inline script to
+    // CSP, and two decorative ones were the whole reason script-src carried
+    // 'unsafe-inline' on a site that binds user HTML through v-html. The client
+    // preventDefaults the click on both heads, so the href never navigates.
     private static readonly Tag Nsfw = new("nsfw",
-        "<a href=\"javascript:void(0)\" class=\"nsfw-head\" data-swaptext=\"Скрыть шокирующий контент\">Показать шокирующий контент</a><div class=\"nsfw-spoiler\">",
+        "<a href=\"#\" class=\"nsfw-head\" data-swaptext=\"Скрыть шокирующий контент\">Показать шокирующий контент</a><div class=\"nsfw-spoiler\">",
         "</div>");
 
     // Warning block - red highlighted block for important warnings
@@ -47,8 +51,9 @@ public class BbParserProvider : IBbParserProvider
 
     private static readonly Tag Head = new("head", $"<h4 class=\"{HeaderClassName}\">", "</h4>");
 
+    /// <inheritdoc cref="Nsfw" />
     private static readonly Tag Spoiler = new("spoiler",
-        $"<a href=\"javascript:void(0)\" class=\"{SpoilerHeadClassName}\" data-swaptext=\"Скрыть содержимое\">Показать содержимое</a><div class=\"{SpoilerClassName}\">",
+        $"<a href=\"#\" class=\"{SpoilerHeadClassName}\" data-swaptext=\"Скрыть содержимое\">Показать содержимое</a><div class=\"{SpoilerClassName}\">",
         "</div>");
 
     private static readonly Tag Quote = new("quote",
@@ -59,10 +64,6 @@ public class BbParserProvider : IBbParserProvider
         $"<a href=\"{{value}}\" target=\"_blank\"><img src=\"{{value}}\" class=\"{ImageClassName}\" /></a>", true);
 
     private static readonly Tag Link = new("link", "<a href=\"{value}\">", "</a>", true);
-
-    private static readonly Tag SafeImage = new("img",
-        $"<a href=\"javascript:void(0)\" class=\"{SpoilerHeadClassName}\" data-swaptext=\"Скрыть изображение\">Показать изображение</a><div class=\"{SpoilerClassName}\"><a href=\"{{value}}\" target=\"_blank\"><img src=\"{{value}}\" class=\"{ImageClassName}\" /></a></div>",
-        true);
 
     private static readonly Tag Tab = new("tab", "&nbsp;&nbsp;&nbsp;");
 
@@ -121,7 +122,11 @@ public class BbParserProvider : IBbParserProvider
         Link, Tab, Code, Noparse, Nsfw, Warning
     });
 
-    private static TagSetBuilder DefaultSafeTags => DefaultTags.Without(Preformatted, Image).With(SafeImage);
+    // "Safe" is two things: no preformatted block, and images behind a spoiler.
+    // Only the first is expressible as a tag set. The second is a wrapper flag,
+    // because [img] is extracted before the inner parser sees the text, so a tag
+    // set that swapped the img template changed nothing at all.
+    private static TagSetBuilder DefaultSafeTags => DefaultTags.Without(Preformatted);
 
     // Common context: base tags + mod
     private static readonly Lazy<IBbParser> CommonParser = new(() =>
@@ -148,15 +153,15 @@ public class BbParserProvider : IBbParserProvider
     // General chat context: safe tags + preformatted + mod
     private static readonly Lazy<IBbParser> GeneralChatMessageParser = new(() =>
         new BbParserWrapper(new BbParser(DefaultSafeTags.With(Preformatted, Mod).Build(),
-            BbParser.SecuritySubstitutions, CommonSubstitutions)));
+            BbParser.SecuritySubstitutions, CommonSubstitutions), spoilerGatedImages: true));
 
     private static readonly Lazy<IBbParser> SafePostParser = new(() =>
         new BbParserWrapper(new BbParser(DefaultSafeTags.With(Private).Build(),
-            BbParser.SecuritySubstitutions, SafeSubstitutions)));
+            BbParser.SecuritySubstitutions, SafeSubstitutions), spoilerGatedImages: true));
 
     private static readonly Lazy<IBbParser> SafeRatingParser = new(() =>
         new BbParserWrapper(new BbParser(DefaultSafeTags.Build(),
-            BbParser.SecuritySubstitutions, SafeSubstitutions)));
+            BbParser.SecuritySubstitutions, SafeSubstitutions), spoilerGatedImages: true));
 
     // ═════════════════════════════════════════════════════════════════════
     // AuthorEdit parsers — same tag sets as their Display counterparts
@@ -174,7 +179,7 @@ public class BbParserProvider : IBbParserProvider
 
     private static readonly Lazy<IBbParser> GeneralChatAuthorEditParser = new(() =>
         new BbParserWrapper(new BbParser(DefaultSafeTags.With(Preformatted, ModAuthorEdit).Build(),
-            BbParser.SecuritySubstitutions, CommonSubstitutions)));
+            BbParser.SecuritySubstitutions, CommonSubstitutions), spoilerGatedImages: true));
 
     /// <inheritdoc />
     public IBbParser CurrentCommon => CommonParser.Value;

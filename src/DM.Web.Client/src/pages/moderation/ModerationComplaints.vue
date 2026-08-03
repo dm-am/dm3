@@ -12,16 +12,14 @@ import TicketList from "./tickets/TicketList.vue";
 import { COMPLAINT_SUBTYPES } from "./lib/labels";
 import { useRoleGate } from "./lib/useRoleGate";
 
-const { hasAccess } = useRoleGate("Moderator");
+const { hasAccess, deniedText } = useRoleGate("Moderator");
 </script>
 
 <template>
   <div class="moderation-complaints">
     <page-title>Жалобы</page-title>
 
-    <SecondaryText v-if="!hasAccess">
-      Страница доступна только модераторам
-    </SecondaryText>
+    <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
 
     <TicketList
       v-else

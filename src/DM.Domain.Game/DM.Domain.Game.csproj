@@ -2,14 +2,7 @@
 
     <PropertyGroup>
         <TargetFramework>net8.0</TargetFramework>
-        <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-        <LangVersion>preview</LangVersion>
     </PropertyGroup>
-
-    <ItemGroup>
-        <InternalsVisibleTo Include="DM.Domain.Game.Tests" />
-    </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\DM.Domain.Core\DM.Domain.Core.csproj" />

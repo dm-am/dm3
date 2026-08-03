@@ -42,6 +42,7 @@ import { UserRole } from "@/shared/api/models/common";
 import { useExpandableSection } from "@/shared/lib/composables";
 import SidebarBlock from "./SidebarBlock.vue";
 import SidebarCounter from "./SidebarCounter.vue";
+import SidebarSectionTitle from "./SidebarSectionTitle.vue";
 import SidebarSkeleton from "./SidebarSkeleton.vue";
 import GameRoomLink from "./GameRoomLink.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
@@ -317,7 +318,7 @@ async function confirmMod() {
 
       <!-- "Управление игрой" section (Master / Assistant edit items) -->
       <template v-if="canEdit || canUseNotepad">
-        <div class="section-title">Управление игрой</div>
+        <SidebarSectionTitle>Управление игрой</SidebarSectionTitle>
         <template v-if="canEdit">
           <li class="link">
             <span class="muted" aria-hidden="true">- </span>
@@ -362,13 +363,13 @@ async function confirmMod() {
 
       <!-- "Действия с игрой" section (any authed except master) -->
       <template v-if="canActOnGame">
-        <div class="section-title">Действия с игрой</div>
+        <SidebarSectionTitle>Действия с игрой</SidebarSectionTitle>
         <GameJoinActions variant="strip" />
       </template>
 
       <!-- "Модерация игры" section (global roles) -->
       <template v-if="showModeration">
-        <div class="section-title">Модерация игры</div>
+        <SidebarSectionTitle>Модерация игры</SidebarSectionTitle>
         <template v-if="isGlobalMentor">
           <li class="link">
             <span class="muted" aria-hidden="true">- </span>
@@ -430,14 +431,6 @@ async function confirmMod() {
 </template>
 
 <style scoped lang="sass">
-// Section headings read as content titles (bold, normal body colour + size,
-// no uppercase, no leading dash) — the same look as a poll's title.
-.section-title
-  margin: $small 0 $tiny
-  font-size: $font-size
-  font-weight: bold
-  color: $text
-
 // Rooms nest under their group row: the indent is the nesting, which is why
 // the room rows carry no "- " prefix of their own.
 .room-list

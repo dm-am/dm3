@@ -192,9 +192,20 @@ services:
     ports:
       - '127.0.0.1:15672:15672'
       - '127.0.0.1:5672:5672'
+      # Metrics endpoint of rabbitmq_prometheus. Everything that says whether the
+      # bus is moving - depth of a queue, a dead-letter queue that stopped being
+      # empty, a queue left with no consumer - is visible only here: the workers
+      # publish nothing about the broker, and a consumer that silently stopped
+      # looks from their side exactly like an idle one.
+      - '127.0.0.1:15692:15692'
     environment:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
     volumes:
+      # The metrics plugin is not on by default, and the default endpoint
+      # aggregates across every queue - an aggregate cannot name the queue that
+      # is backing up, which is the whole point of scraping it.
+      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - ./rabbitmq/dm.conf:/etc/rabbitmq/conf.d/10-dm.conf:ro
       # The one stateful service that had no volume of its own. The queues here
       # are declared durable, but the directory holding them lived in the
       # container layer, so recreating the container - an image update, a changed

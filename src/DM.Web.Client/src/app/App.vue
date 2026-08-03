@@ -175,6 +175,7 @@ const {
   connect: connectSignalR,
   disconnect: disconnectSignalR,
   onNotification,
+  isConnected: isSignalRConnected,
 } = useGlobalSignalR();
 
 // Map Theme to CSS theme class (now 1:1 mapping)
@@ -247,6 +248,17 @@ function handleAvatarChanged(payload: Record<string, unknown>) {
     fetchUser();
   }
 }
+
+// Every push addressed to this tab while the socket was down is gone: the hub
+// keeps no backlog. The global chat page catches up on its own, the two badges
+// have no polling fallback at all, so they are re-read here on every transition
+// into the connected state. Both stores debounce, so the first connect of the
+// page costs one request and no more.
+watch(isSignalRConnected, (connected) => {
+  if (!connected) return;
+  messagingStore.fetchUnreadCount();
+  notificationStore.fetchUnreadCount();
+});
 
 // Connect/disconnect SignalR based on authentication state
 watch(

@@ -1,6 +1,6 @@
 /**
  * Statistics API types
- * Matches backend LiveStats DTO from CommunityStats.cs
+ * Matches the API DTOs in StatisticsDtos.cs
  */
 
 /** Statistical value with today's delta */

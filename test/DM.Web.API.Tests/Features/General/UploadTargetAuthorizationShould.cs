@@ -7,8 +7,6 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Amazon.S3;
-using Amazon.S3.Model;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Caching;
@@ -46,15 +44,13 @@ namespace DM.Web.API.Tests.Features.General;
 public class UploadTargetAuthorizationShould : UnitTestBase
 {
     private readonly Guid _userId = Guid.NewGuid();
-    private readonly Mock<IAmazonS3> _s3;
+    private readonly Mock<IObjectStorage> _objectStorage;
     private readonly Mock<IImageProcessingService> _imageProcessing;
     private readonly Mock<IUploadRepository> _repository;
 
     public UploadTargetAuthorizationShould()
     {
-        _s3 = Mock<IAmazonS3>();
-        _s3.Setup(c => c.PutObjectAsync(It.IsAny<PutObjectRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new PutObjectResponse());
+        _objectStorage = Mock<IObjectStorage>();
 
         _imageProcessing = Mock<IImageProcessingService>();
         _imageProcessing
@@ -139,9 +135,32 @@ public class UploadTargetAuthorizationShould : UnitTestBase
         }
 
         _imageProcessing.Verify(s => s.ProcessAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
-        _s3.Verify(c => c.PutObjectAsync(It.IsAny<PutObjectRequest>(), It.IsAny<CancellationToken>()),
+        _objectStorage.Verify(s => s.PutAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
         _repository.Verify(r => r.AddAsync(It.IsAny<NewUpload>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The object key is all that stands between a private room's attachment and
+    /// anyone handed its address: the bucket answers anonymously, by design, for
+    /// avatars, and attachments live under the same policy.
+    /// </summary>
+    [Fact]
+    public async Task NameTheObjectWithEnoughRandomnessForTheUrlToBeTheAccessControl()
+    {
+        var written = new List<NewUpload>();
+        _repository.Setup(r => r.AddAsync(Capture.In(written)))
+            .ReturnsAsync(new StoredUpload());
+
+        var service = Service(new AllowingAuthorizer(UploadType.PostAttachment));
+
+        await service.DirectUpload(File(), UploadType.PostAttachment, Guid.NewGuid());
+
+        written.Should().ContainSingle();
+        var suffix = written[0].ObjectKey.Split('_')[^1].Split('.')[0];
+        // Eight hex is 32 bits, next to a user id anybody can read off the page
+        suffix.Should().HaveLength(32).And.MatchRegex("^[0-9a-f]+$");
     }
 
     [Fact]
@@ -170,7 +189,7 @@ public class UploadTargetAuthorizationShould : UnitTestBase
             Mock<IIntentionManager>().Object,
             Mock<IUserService>().Object,
             dateTimeProvider.Object,
-            _s3.Object,
+            _objectStorage.Object,
             _imageProcessing.Object,
             cache.Object,
             Mock<IHttpContextAccessor>().Object,

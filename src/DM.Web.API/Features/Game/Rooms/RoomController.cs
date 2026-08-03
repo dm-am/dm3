@@ -93,6 +93,7 @@ public class RoomController : ControllerBase
     /// <response code="404">Room not found</response>
     [HttpGet("{id}", Name = nameof(GetRoom))]
     [ProducesResponseType(typeof(Envelope<Room>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetRoom(Guid id) => Ok(await _roomApiService.Get(id));
 
     /// <summary>

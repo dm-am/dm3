@@ -16,6 +16,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { nextTick } from "vue";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 import CharacterForm from "./CharacterForm.vue";
 import {
   gameApi,
@@ -347,7 +348,7 @@ describe("CharacterForm", () => {
   // ============================================================================
 
   describe("Hidden attributes absent from the payload", () => {
-    it("renders an empty dash in view mode instead of fabricating a value", () => {
+    it("renders the missing-value token in view mode instead of fabricating a value", () => {
       const schema = makeSchema([
         makeSpec({
           id: "text-spec",
@@ -376,9 +377,9 @@ describe("CharacterForm", () => {
       expect(rows.length).toBe(2);
       // Visible attribute keeps its server value
       expect(rows[0].find(".view-value").text()).toBe("Следопыт");
-      // Hidden attribute row shows the empty dash, no fabricated value
+      // Hidden attribute row shows the missing-value token, no fabricated value
       expect(rows[1].find(".view-value__empty").exists()).toBe(true);
-      expect(rows[1].find(".view-value").text()).toBe("—");
+      expect(rows[1].find(".view-value").text()).toBe(VALUE_UNAVAILABLE);
     });
 
     it("omits untouched (empty) attributes from the submit payload", async () => {

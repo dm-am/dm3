@@ -13,6 +13,7 @@ import {
   useDocumentTitle,
 } from "@/shared/lib/composables/useDocumentTitle";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
+import { PageTitleSkeleton } from "@/shared/ui/Skeleton";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
@@ -69,16 +70,13 @@ onUnmounted(() => {
   </div>
 
   <!-- Loading: twin of the loaded header (skeleton-parity). Reuses
-       .game-header so margins match; the bar height mirrors the h1 line box
-       (20px font x 1.3 line-height = 26px). -->
-  <div v-else class="game-header" aria-hidden="true">
-    <div class="skeleton-title" />
+       .game-header so the margins match; the twin itself owns its geometry. -->
+  <div v-else class="game-header">
+    <PageTitleSkeleton />
   </div>
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Skeleton"
-
 .game-header
   margin-bottom: $medium
 
@@ -90,14 +88,4 @@ onUnmounted(() => {
     color: $link
     margin-top: $small
     display: inline-block
-
-// --- Loading skeleton (twin of the loaded header) ---
-
-// Twin of the PageTitle h1: same margins ($medium 0 $small), height equals
-// the h1 line box (20px font x 1.3 line-height = 26px).
-.skeleton-title
-  width: 260px
-  height: 26px
-  margin: $medium 0 $small
-  +skeleton-shimmer
 </style>

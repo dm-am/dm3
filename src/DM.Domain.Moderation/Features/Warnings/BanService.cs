@@ -51,8 +51,12 @@ internal class BanService : IBanService
             var user = await _userLookupService.GetAsync(username);
             return await _banRepository.GetUserBans(user.UserId, ct);
         }
-        catch
+        catch (HttpException e) when (e.StatusCode == HttpStatusCode.Gone)
         {
+            // The one failure an empty list is the answer to: no such user.
+            // A dropped connection, a cancelled request or a mapping error is
+            // not that answer, and returning [] for it showed the moderator a
+            // clean record he could not tell from a real one.
             return [];
         }
     }
@@ -65,8 +69,10 @@ internal class BanService : IBanService
             var user = await _userLookupService.GetAsync(username);
             return await _banRepository.GetActiveBan(user.UserId, ct);
         }
-        catch
+        catch (HttpException e) when (e.StatusCode == HttpStatusCode.Gone)
         {
+            // Reached from the public /v1/users/{username}/bans/active route,
+            // so "we could not check" used to leave as "not banned".
             return null;
         }
     }

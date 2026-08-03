@@ -2,7 +2,9 @@
 import { ref, onMounted } from "vue";
 import { fundraisingApi } from "@/entities/fundraising";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { useRoleGate } from "./lib/useRoleGate";
 
+const { hasAccess, deniedText } = useRoleGate("Admin");
 const loading = ref(true);
 const loadError = ref<string | null>(null);
 const saving = ref(false);
@@ -45,7 +47,9 @@ onMounted(load);
 </script>
 
 <template>
-  <div class="moderation-fundraising">
+  <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
+
+  <div v-else class="moderation-fundraising">
     <div v-if="loading" class="loading">Загрузка...</div>
     <div v-else-if="loadError" class="error">{{ loadError }}</div>
     <form v-else class="fundraising-form" @submit.prevent="save">

@@ -22,6 +22,7 @@ import { useAnimatedHeightToggle } from "@/shared/lib/composables";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
 import { notifyFailure } from "@/shared/lib/errors";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 const route = useRoute();
 const router = useRouter();
@@ -464,7 +465,7 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
               </router-link>
             </Tooltip>
           </template>
-          <span v-else class="muted">—</span>
+          <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
         </template>
 
         <template v-if="canModerate" #cell-actions="{ row }">

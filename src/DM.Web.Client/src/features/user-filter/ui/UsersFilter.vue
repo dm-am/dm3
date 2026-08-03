@@ -7,6 +7,7 @@ import {
   ROLE_OPTIONS,
   EXPERIENCE_OPTIONS,
   SORT_OPTIONS,
+  optionsHint,
 } from "../model";
 import type { ActivityFilter, RoleFilter, ExperienceFilter } from "../model";
 import { formatDateForDisplay } from "@/shared/lib/filters";
@@ -73,9 +74,13 @@ function navigateBack() {
 
 // Root level filter options
 const filterOptions = [
-  { key: "activity", label: "Активность", hint: "Онлайн, Активные, Все" },
-  { key: "role", label: "Роль", hint: "Админ, Модератор, Наставник" },
-  { key: "experience", label: "Опыт", hint: "Новички, Опытные" },
+  {
+    key: "activity",
+    label: "Активность",
+    hint: optionsHint(ACTIVITY_OPTIONS),
+  },
+  { key: "role", label: "Роль", hint: optionsHint(ROLE_OPTIONS) },
+  { key: "experience", label: "Опыт", hint: optionsHint(EXPERIENCE_OPTIONS) },
   { key: "rating", label: "Рейтинг", hint: "Диапазон значений" },
   { key: "gamesHosting", label: "Игры (ведущий)", hint: "Диапазон значений" },
   { key: "gamesPlaying", label: "Игры (игрок)", hint: "Диапазон значений" },

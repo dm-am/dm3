@@ -18,7 +18,7 @@ import type {
 } from "./types";
 import blogApi from "../api/blogApi";
 import { useApiList } from "@/shared/lib/composables/useApiResource";
-import { Api, unwrapResource } from "@/shared/api";
+import { Api, unwrapResource, type CommentsQuery } from "@/shared/api";
 import { useAuthStore } from "@/shared/stores";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 import type { GeneralError } from "@/shared/api/models/common";
@@ -309,11 +309,12 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
   const publicationsLoading = ref(false);
   const publicationsError = ref<string | null>(null);
 
-  // Discussion comments data
+  // Discussion comments data. The failure is a flag and not a sentence: the
+  // discussion section spells one wording for a failed load, wherever it fails.
   const comments = ref<Comment[]>([]);
   const commentsPaging = ref<Paging | null>(null);
   const commentsLoading = ref(false);
-  const commentsError = ref<string | null>(null);
+  const commentsError = ref(false);
 
   // Blacklist data
   const blacklist = ref<User[]>([]);
@@ -447,21 +448,23 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     publicationsLoading.value = false;
   }
 
-  // Load discussion comments
-  async function loadComments(blogId: string, page: number = 1): Promise<void> {
+  // Load discussion comments. Filter, sort and page all come from the URL
+  // through the discussion section; this forwards the query it is handed.
+  async function loadComments(
+    blogId: string,
+    query: CommentsQuery = {},
+  ): Promise<void> {
     const requestId = commentsGuard.next();
     commentsLoading.value = true;
-    commentsError.value = null;
+    commentsError.value = false;
 
-    const { data, error } = await blogApi.getBlogComments(blogId, {
-      number: page,
-    });
+    const { data, error } = await blogApi.getBlogComments(blogId, query);
 
     // Stale continuation — the newer request owns the visible state.
     if (!commentsGuard.isCurrent(requestId)) return;
 
     if (error) {
-      commentsError.value = "Не удалось загрузить комментарии";
+      commentsError.value = true;
       comments.value = [];
       commentsPaging.value = null;
     } else if (data) {
@@ -690,7 +693,7 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     comments.value = [];
     commentsPaging.value = null;
     commentsLoading.value = false;
-    commentsError.value = null;
+    commentsError.value = false;
 
     blacklist.value = [];
     blacklistLoading.value = false;

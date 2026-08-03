@@ -116,11 +116,16 @@ internal class BbConverterFactory : JsonConverterFactory
             {
                 return provider.GetService<IAuthorizationContextProvider>()?.CurrentSubject;
             }
-            catch
+            catch (ObjectDisposedException)
             {
-                // Some endpoints render BbText before the authorization
-                // context is fully materialized. Fall back to an anonymous
-                // render rather than leaking provider internals.
+                // Serialization outliving its request: the accessor still hands
+                // out an HttpContext whose scope has been disposed, and
+                // resolving anything from it throws. Render as an anonymous
+                // viewer rather than fail the response.
+                //
+                // The service being absent is not this case and never was: an
+                // unregistered IAuthorizationContextProvider comes back as null
+                // from GetService, and the ?. above already handles that.
                 return null;
             }
         }

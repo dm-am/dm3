@@ -61,6 +61,27 @@ public interface IBotLinkRepository
     /// Clear channel notification preferences in MongoDB
     /// </summary>
     Task ClearChannelPreferences(Guid userId, string channelType, CancellationToken ct = default);
+
+    /// <summary>
+    /// Notification preferences of both bot channels. A channel that was never
+    /// connected has none.
+    /// </summary>
+    Task<BotChannelPreferences> GetChannelPreferences(Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Replace the notification preferences of one channel.
+    /// </summary>
+    /// <remarks>
+    /// Writes the one sub-document and nothing else. The settings document also
+    /// carries the theme and the paging, which another repository writes field by
+    /// field, so a whole-document write here loses whichever of them landed between
+    /// the read and the write.
+    /// </remarks>
+    Task SetChannelPreferences(
+        Guid userId,
+        string channelType,
+        ChannelPreferences preferences,
+        CancellationToken ct = default);
 }
 
 /// <summary>

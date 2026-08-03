@@ -4,7 +4,7 @@
  *
  * The profile owner's uploaded files (avatars, post images), newest first,
  * paged, with a ConfirmDialog-gated delete. Mirrors the profile subpage
- * pattern (useProfileSubpageUser + ProfileSubpageHeader).
+ * pattern (useProfileSubpage + ProfileSubpageHeader).
  *
  * Access: the page is for the file owner (doc), and admins can view any
  * user's uploads (GET /v1/uploads?username= is Admin-gated server-side).
@@ -19,10 +19,6 @@ import type { Upload } from "@/shared/api/models/common/upload";
 import type { Paging as PagingModel } from "@/shared/api/models/common";
 import { UserRole } from "@/shared/api/models/common";
 import { useAuthStore } from "@/shared/stores/auth";
-import {
-  joinTitleSegments,
-  useDocumentTitle,
-} from "@/shared/lib/composables/useDocumentTitle";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { formatDate } from "@/shared/lib/utils/datetime";
 import { formatFileSize } from "@/shared/lib/utils/fileSize";
@@ -39,7 +35,7 @@ import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { SecondaryText } from "@/shared/ui/Layout";
 import { ErrorPage } from "@/shared/ui/ErrorPage";
 import ProfileSubpageHeader from "./ProfileSubpageHeader.vue";
-import { useProfileSubpageUser } from "./useProfileSubpageUser";
+import { useProfileSubpage } from "./useProfileSubpage";
 import { notifyFailure } from "@/shared/lib/errors";
 
 const PAGE_SIZE = 20;
@@ -48,17 +44,8 @@ const route = useRoute();
 const toast = useToast();
 const authStore = useAuthStore();
 
-const username = computed(() => route.params.username as string);
-const { notFound, canonicalUsername } = useProfileSubpageUser(username);
-
-const profileLink = computed(() => ({
-  name: "profile" as const,
-  params: { username: username.value },
-}));
-
-useDocumentTitle(() =>
-  joinTitleSegments(canonicalUsername.value, "Загруженные файлы"),
-);
+const { username, canonicalUsername, notFound, profileLink } =
+  useProfileSubpage("Загруженные файлы");
 
 // --- Access gate: owner or admin (doc: "доступна владельцу файлов") ---
 const isOwner = computed(
@@ -138,7 +125,7 @@ async function confirmDelete() {
     >
       Все файлы, загруженные игроком
       <router-link :to="profileLink">{{ canonicalUsername }}</router-link
-      >, — аватары и изображения из постов
+      >: аватары и изображения из постов
     </ProfileSubpageHeader>
 
     <SecondaryText v-if="!canView">

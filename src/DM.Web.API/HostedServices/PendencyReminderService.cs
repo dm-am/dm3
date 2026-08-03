@@ -112,10 +112,20 @@ internal class PendencyReminderService : BackgroundService
             foreach (var pendency in stalePendencies)
             {
                 pendency.LastReminderUtc = now;
-                await producer.SendAsync(EventType.RoomPendencyReminder, pendency.PendencyId);
             }
 
+            // Committed before anything is published. The marker is the only thing
+            // that stops the same reminder going out on every pass, and until this
+            // line it exists in the change tracker and nowhere else: a failure here
+            // with the events already gone means letters and bot messages the
+            // database holds no record of, sent again twelve hours later, and again
+            // until one save finally lands.
             await dbContext.SaveChangesAsync(cancellationToken);
+
+            foreach (var pendency in stalePendencies)
+            {
+                await producer.SendAsync(EventType.RoomPendencyReminder, pendency.PendencyId);
+            }
 
             _logger.LogInformation("[Pendency Reminder] Sent {Count} reminders", stalePendencies.Count);
         }

@@ -13,16 +13,16 @@
  * is derived (live ?? nearest), so there is no index to desync when an event
  * starts or ends in realtime.
  *
- * The right edge carries two quiet controls: "описание" toggles the description
- * overlay for the focal event, and "К дате" opens the archive-date calendar
- * (chat-history navigation, independent of events).
+ * The strip carries no controls of its own beyond the chevron that discloses
+ * the focal event's description: search and the archive date live on the
+ * search row above the chat frame, in the site's filter-bar idiom.
  *
- * Three floating layers hang below the strip — the upcoming list, the
- * description overlay, and the calendar — mutually exclusive, each kept mounted
- * and toggled by an ".open" class so they animate open/closed with the site's
- * one reveal idiom ($expand-duration/$expand-easing), and marked `inert` while
- * closed so their content is out of the tab order and the a11y tree. They float
- * over the feed (absolute, below the strip), so the message list never shifts.
+ * Two floating layers hang below the strip — the upcoming list and the
+ * description overlay — mutually exclusive, each kept mounted and toggled by an
+ * ".open" class so they animate open/closed with the site's one reveal idiom
+ * ($expand-duration/$expand-easing), and marked `inert` while closed so their
+ * content is out of the tab order and the a11y tree. They float over the feed
+ * (absolute, below the strip), so the message list never shifts.
  *
  * Copy-friendly: the focal composite is one inline-flow run with real spaces,
  * so selecting the line copies exactly "Идет: Title, до 22:48" as one string.
@@ -32,23 +32,7 @@ import dayjs from "dayjs";
 import { storeToRefs } from "pinia";
 import { useGlobalChatStore } from "@/entities/global-chat";
 import { SvgIcon } from "@/shared/ui/Icon";
-import { CalendarGrid } from "@/shared/ui/DatePicker";
 import { ContentText } from "@/shared/ui";
-
-const props = withDefaults(
-  defineProps<{
-    /** Currently selected archive date, YYYY-MM-DD (highlights in the calendar). */
-    selectedDate?: string;
-    /** Latest selectable date, YYYY-MM-DD. */
-    maxDate?: string;
-  }>(),
-  { selectedDate: "", maxDate: "" },
-);
-
-const emit = defineEmits<{
-  "date-picked": [value: string];
-  "open-search": [];
-}>();
 
 const store = useGlobalChatStore();
 const { liveEvent, upcomingEvents, eventDetails } = storeToRefs(store);
@@ -127,22 +111,15 @@ const primaryMeta = computed(() => {
 // ─────────────────────────────────────────────────────────────
 const overlayOpen = ref(false);
 const listOpen = ref(false);
-const calendarOpen = ref(false);
 let lastTrigger: HTMLElement | null = null;
 
 function closeAll() {
   overlayOpen.value = false;
   listOpen.value = false;
-  calendarOpen.value = false;
 }
 
-function toggle(which: "overlay" | "list" | "calendar", e: MouseEvent) {
-  const flag =
-    which === "overlay"
-      ? overlayOpen
-      : which === "list"
-        ? listOpen
-        : calendarOpen;
+function toggle(which: "overlay" | "list", e: MouseEvent) {
+  const flag = which === "overlay" ? overlayOpen : listOpen;
   const willOpen = !flag.value;
   closeAll();
   flag.value = willOpen;
@@ -188,16 +165,8 @@ watch(restCount, (n) => {
   if (n === 0) listOpen.value = false;
 });
 watch(primaryEvent, (ev) => {
-  if (!ev) {
-    overlayOpen.value = false;
-    calendarOpen.value = false;
-  }
+  if (!ev) overlayOpen.value = false;
 });
-
-function onDatePicked(value: string) {
-  calendarOpen.value = false;
-  emit("date-picked", value);
-}
 
 // ─────────────────────────────────────────────────────────────
 // Dismissal: Escape and click outside close whatever is open; Escape returns
@@ -210,7 +179,7 @@ function onDocClick(e: MouseEvent) {
 
 function onKeydown(e: KeyboardEvent) {
   if (e.key !== "Escape") return;
-  const wasOpen = overlayOpen.value || listOpen.value || calendarOpen.value;
+  const wasOpen = overlayOpen.value || listOpen.value;
   closeAll();
   if (wasOpen && lastTrigger) {
     lastTrigger.focus();
@@ -269,30 +238,6 @@ onUnmounted(() => {
           >
         </template>
         <span v-else class="row-none">Нет запланированных эвентов</span>
-      </div>
-
-      <!-- Right control: archive date only. The description is disclosed from
-           the event line itself (the chevron), not a text link here. -->
-      <div class="row-aside">
-        <button
-          type="button"
-          class="panel-link search-toggle"
-          aria-label="Поиск по сообщениям"
-          title="Поиск (Ctrl+F)"
-          @click="emit('open-search')"
-        >
-          <SvgIcon name="search" class="calendar-icon" />Поиск
-        </button>
-        <span class="aside-sep" aria-hidden="true">|</span>
-        <button
-          type="button"
-          class="panel-link calendar-toggle"
-          :class="{ act: calendarOpen }"
-          :aria-expanded="calendarOpen"
-          @click="toggle('calendar', $event)"
-        >
-          <SvgIcon name="calendar" class="calendar-icon" />К дате
-        </button>
       </div>
     </div>
 
@@ -357,19 +302,6 @@ onUnmounted(() => {
           >
         </div>
       </div>
-    </div>
-
-    <!-- Archive-date calendar for "К дате" (fixed-size: fades/settles in). -->
-    <div
-      class="calendar-popover"
-      :class="{ open: calendarOpen }"
-      :inert="!calendarOpen"
-    >
-      <CalendarGrid
-        :model-value="props.selectedDate"
-        :max="props.maxDate"
-        @update:model-value="onDatePicked"
-      />
     </div>
   </div>
 </template>
@@ -495,45 +427,6 @@ onUnmounted(() => {
 .row-none
   color: $text-muted
 
-// Right-side control cluster: never wraps the text.
-.row-aside
-  flex: none
-  display: flex
-  align-items: center
-  gap: $small
-
-// "К дате" archive-date control — same calm treatment as the count: muted at
-// rest, link-blue + underline on hover, $link while its calendar is open.
-.panel-link
-  +inline-link-button
-  &
-    font-size: $secondary-font-size
-    white-space: nowrap
-    color: $text-muted
-  &:hover:not(:disabled)
-    color: $link
-  &.act
-    color: $link
-  &:focus:not(:focus-visible)
-    outline: none
-  &:focus-visible
-    outline: 2px solid $border-focus
-    outline-offset: 2px
-
-.calendar-toggle,
-.search-toggle
-  display: inline-flex
-  align-items: center
-  gap: $minor
-
-.aside-sep
-  color: $text-muted
-
-.calendar-icon
-  width: 14px
-  height: 14px
-  flex-shrink: 0
-
 // ─────────────────────────────────────────────────────────────
 // Floating reveals — the upcoming list and the description overlay float over
 // the feed (absolute below the strip), so opening one never shifts the message
@@ -601,21 +494,4 @@ onUnmounted(() => {
 .overlay-loading
   display: block
   margin-top: $small
-
-// Calendar popover ("К дате"): same floating-overlay reveal as the description
-// and list layers — opacity + a small drop on the $expand tokens — so all three
-// layers settle in identically.
-.calendar-popover
-  position: absolute
-  top: calc(100% + #{$tiny})
-  right: $small
-  z-index: $z-dropdown
-  opacity: 0
-  transform: translateY(-$small)
-  pointer-events: none
-  transition: opacity $expand-duration $expand-easing, transform $expand-duration $expand-easing
-  &.open
-    opacity: 1
-    transform: translateY(0)
-    pointer-events: auto
 </style>

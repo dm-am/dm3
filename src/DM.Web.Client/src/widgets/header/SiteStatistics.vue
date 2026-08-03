@@ -10,7 +10,9 @@
       <span class="bracket" aria-hidden="true">[</span
       ><span class="delta">{{ deltaValue(users.todayDelta) }}</span
       ><span class="bracket" aria-hidden="true">]</span>, online:
-      <span class="online">{{ statsUnavailable ? "n/a" : online }}</span>
+      <span class="online">{{
+        statsUnavailable ? VALUE_UNAVAILABLE : online
+      }}</span>
     </div>
     <div class="stat-row">
       Персонажей: {{ statValue(characters.value) }}
@@ -59,6 +61,7 @@
 import { computed, onMounted, onUnmounted } from "vue";
 import { storeToRefs } from "pinia";
 import { useStatisticsStore } from "@/entities/statistics";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 const store = useStatisticsStore();
 const {
@@ -73,9 +76,9 @@ const {
   publications,
 } = storeToRefs(store);
 
-// Stats failed to load and there is no previously fetched data to show.
-// The block stays visible with "n/a" per value instead of fake zeros;
-// stale numbers from an earlier successful poll keep showing as is.
+// Stats failed to load and there is no previously fetched data to show. The
+// block stays visible with the missing-value token per value instead of fake
+// zeros; stale numbers from an earlier successful poll keep showing as is.
 const statsUnavailable = computed(() => stats.value === null);
 
 function formatNumber(value: number): string {
@@ -83,11 +86,11 @@ function formatNumber(value: number): string {
 }
 
 function statValue(value: number): string {
-  return statsUnavailable.value ? "n/a" : formatNumber(value);
+  return statsUnavailable.value ? VALUE_UNAVAILABLE : formatNumber(value);
 }
 
 function deltaValue(value: number): string {
-  return statsUnavailable.value ? "n/a" : `+${value}`;
+  return statsUnavailable.value ? VALUE_UNAVAILABLE : `+${value}`;
 }
 
 // Handle tab visibility changes - stop polling when tab is not visible

@@ -26,8 +26,9 @@ import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import { globalChatApi } from "@/entities/global-chat";
 import { ChatMessage } from "@/widgets/chat-message";
 import ChatEventsPanel from "./ChatEventsPanel.vue";
+import ChatDateJump from "./ChatDateJump.vue";
 import { ChatMessageSkeleton } from "@/shared/ui/Skeleton";
-import { MessageSearchPanel } from "@/features/message-search";
+import { MessageSearchBar } from "@/features/message-search";
 import { WarningDialog } from "@/features/moderation-actions";
 import { LoginPrompt } from "@/features/auth";
 import { DashSeparator } from "@/shared/ui/DashSeparator";
@@ -503,37 +504,36 @@ function stopPolling() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Message search (overlay panel opened from the events strip or Ctrl+F)
+// Message search (the row above the chat frame)
 // ─────────────────────────────────────────────────────────────
-const searchOpen = ref(false);
+const searchBarRef = ref<InstanceType<typeof MessageSearchBar> | null>(null);
 
-function openSearch() {
-  searchOpen.value = true;
-}
-
-function closeSearch() {
-  searchOpen.value = false;
-}
-
-// Ctrl+F (Cmd+F on macOS) opens the in-chat search instead of the browser find.
+// Ctrl+F (Cmd+F on macOS) goes to the chat's own field instead of the browser
+// find. The field is on screen at all times now, so there is nothing to open —
+// only somewhere to put the caret. A guest has no field (the endpoint refuses
+// him), and then the key is left to the browser rather than swallowed.
 function handleSearchHotkey(event: KeyboardEvent) {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
-    event.preventDefault();
-    openSearch();
+  if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "f") {
+    return;
   }
+  if (!searchBarRef.value?.focus()) return;
+  event.preventDefault();
 }
 
-// A global-chat search result jumps to the message in the live feed: leave
-// any archive date, then load the window around it (highlightedMessageId
-// watcher scrolls/flashes it).
-function handleJumpToGlobalMessage(messageId: string) {
-  searchOpen.value = false;
+// A search hit jumps to the message in the live feed: leave any archive date,
+// then load the window around it (the highlightedMessageId watcher scrolls and
+// flashes it). The landing scroll crosses the whole loaded window, so the
+// sentinels are suspended for its duration — exactly as on the #msg- landing,
+// which they would otherwise read as a request for another page.
+async function handleJumpToGlobalMessage(messageId: string) {
   selectedDate.value = "";
   if (route.query.date) {
     suppressNextDateWatch = true;
     router.replace({ name: "global-chat", query: {} });
   }
-  globalChatStore.navigateToMessage(messageId);
+  suspendInfiniteScroll();
+  await globalChatStore.navigateToMessage(messageId);
+  nextTick(() => setTimeout(resumeInfiniteScroll, LANDING_SCROLL_MS));
 }
 
 onMounted(async () => {
@@ -846,7 +846,7 @@ async function loadArchiveDate(date: string) {
       router.replace({ name: "global-chat", query: {} });
     }
     if (messages.value?.length) {
-      toast.error("Сообщений за эту дату не найдено — показаны последние");
+      toast.error("Сообщений за эту дату не найдено, показаны последние");
       scrollToBottom();
     }
     return;
@@ -963,27 +963,25 @@ async function confirmDelete() {
 <template>
   <page-title v-once>Глобальный чат</page-title>
 
+  <!-- Search row: above the chat frame, never inside it. The field and the
+       archive-date button share the site's one filter-bar line, and the hits
+       unroll from the row as a layer over the feed. -->
+  <MessageSearchBar ref="searchBarRef" @jump="handleJumpToGlobalMessage">
+    <ChatDateJump
+      :selected-date="selectedDate"
+      :max-date="todayValue"
+      @date-picked="onDatePicked"
+    />
+  </MessageSearchBar>
+
   <div
     ref="globalChatContainer"
     class="globalChat-container"
     :class="{ 'layout-compact': isCompactLayout }"
   >
-    <!-- Events panel pinned inside the chat frame, above the scrolling
-         feed: the live-event row, the arrow-flipped upcoming event and the
-         compact "К дате" calendar control in one block. -->
-    <ChatEventsPanel
-      :selected-date="selectedDate"
-      :max-date="todayValue"
-      @date-picked="onDatePicked"
-      @open-search="openSearch"
-    />
-
-    <!-- Search overlay: layered over the feed, which stays mounted beneath. -->
-    <MessageSearchPanel
-      v-if="searchOpen"
-      @close="closeSearch"
-      @jump-global="handleJumpToGlobalMessage"
-    />
+    <!-- Events panel pinned inside the chat frame, above the scrolling feed:
+         the focal event line and its floating layers. -->
+    <ChatEventsPanel />
     <div
       ref="messagesContainer"
       class="globalChat-messages"
@@ -1290,7 +1288,7 @@ async function confirmDelete() {
     <!-- Quiet notice for non-participants while a closed event is live:
          the backend rejects their messages, so warn before they type. -->
     <secondary-text v-if="showClosedEventHint" class="globalChat-event-hint">
-      Идет закрытый эвент — писать могут только участники
+      Идет закрытый эвент: писать могут только участники
     </secondary-text>
     <div class="globalChat-input-container">
       <template v-if="canSendMessages">
@@ -1349,7 +1347,9 @@ async function confirmDelete() {
         margin-top: 0
 
 .globalChat-messages
-  height: calc(100vh - 350px)
+  // Everything the page spends around the feed, the search row above the frame
+  // included ($control-height plus the $small gap under it).
+  height: calc(100vh - 400px)
   min-height: 200px
   overflow-y: auto
   overflow-x: hidden

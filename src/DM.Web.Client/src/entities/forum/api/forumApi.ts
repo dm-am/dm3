@@ -9,7 +9,7 @@ import type {
   TopicsQuery,
   CommentsQuery,
 } from "../model/types";
-import { Api } from "@/shared/api";
+import { Api, toCommentsQueryParams } from "@/shared/api";
 import { RENDER_AUDIENCE } from "@/shared/api";
 import type { Patch, Post } from "@/shared/api/models";
 
@@ -171,41 +171,10 @@ export default new (class ForumApi {
   }
 
   public getComments(id: TopicId, q: CommentsQuery) {
-    // Convert page number to skip/take for backend
-    const pageSize = q.size ?? 20;
-    const queryParams: Record<string, string | number | string[] | undefined> =
-      {
-        take: pageSize,
-      };
-
-    // Paging
-    if (q.number && q.number > 1) {
-      queryParams.skip = (q.number - 1) * pageSize;
-    }
-
-    // Filtering
-    if (q.search) {
-      queryParams.search = q.search;
-    }
-    if (q.authors && q.authors.length > 0) {
-      queryParams.authors = q.authors;
-    }
-    if (q.createdFromUtc) {
-      queryParams.createdFromUtc = q.createdFromUtc;
-    }
-    if (q.createdToUtc) {
-      queryParams.createdToUtc = q.createdToUtc;
-    }
-
-    // Sorting
-    if (q.sortBy) {
-      queryParams.sortBy = q.sortBy;
-    }
-    if (q.sortOrder) {
-      queryParams.sortOrder = q.sortOrder;
-    }
-
-    return Api.get<ListEnvelope<Comment>>(`topics/${id}/comments`, queryParams);
+    return Api.get<ListEnvelope<Comment>>(
+      `topics/${id}/comments`,
+      toCommentsQueryParams(q),
+    );
   }
 
   public createComment(id: TopicId, comment: Post<Comment>) {

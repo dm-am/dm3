@@ -21,7 +21,9 @@ import { GameIcon } from "@/shared/ui/Icon";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import AchievementCategoryDialog from "./dialogs/AchievementCategoryDialog.vue";
 import AchievementTierDialog from "./dialogs/AchievementTierDialog.vue";
+import { useRoleGate } from "./lib/useRoleGate";
 
+const { hasAccess, deniedText } = useRoleGate("SeniorModerator");
 const { categories, types, load, reload } = useAchievementCatalog();
 
 onMounted(() => load());
@@ -110,10 +112,12 @@ async function confirmDeleteTier() {
 </script>
 
 <template>
-  <section class="achievements-admin">
+  <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
+
+  <section v-else class="achievements-admin">
     <BlockTitle>Каталог достижений</BlockTitle>
     <SecondaryText>
-      Категории привязаны к серверной метрике — название и описание можно
+      Категории привязаны к серверной метрике: название и описание можно
       править, метрику нельзя. Тиры в категории добавляются/удаляются без
       ограничений.
     </SecondaryText>

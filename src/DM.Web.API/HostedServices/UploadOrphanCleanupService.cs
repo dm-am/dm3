@@ -2,16 +2,13 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Amazon.S3;
-using Amazon.S3.Model;
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Configuration;
+using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace DM.Web.API.HostedServices;
 
@@ -21,13 +18,12 @@ namespace DM.Web.API.HostedServices;
 /// Workflow:
 /// 1. Periodically (every N hours) selects Uploads.IsRemoved=true whose
 ///    DeletedUtc is older than the grace period (24h by default).
-/// 2. For each such record deletes its single source object in S3 — thumbnail
+/// 2. For each such record deletes its single stored object — thumbnail
 ///    variants are made on-the-fly by imgproxy and never stored, so there is
-///    nothing else to delete. Does not fail on 404 (a missing file is fine) or
-///    transient errors.
-/// 3. Deletes the Upload record itself from the DB (hard-delete) only after all
-///    S3 objects were deleted successfully. If the S3 delete failed, the record stays and
-///    is retried on the next tick.
+///    nothing else to delete. A key that is already gone counts as removed.
+/// 3. Deletes the Upload record itself from the DB (hard-delete) only after every
+///    object was removed. If the store refused, the record stays and is retried
+///    on the next tick.
 ///
 /// The grace period allows short-term recovery: the user clicked "удалить
 /// аватар", changed their mind — restore works within the first 24h.
@@ -88,8 +84,7 @@ internal class UploadOrphanCleanupService : BackgroundService
         {
             using var scope = _serviceProvider.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-            var s3 = scope.ServiceProvider.GetRequiredService<IAmazonS3>();
-            var cdn = scope.ServiceProvider.GetRequiredService<IOptions<CdnConfiguration>>().Value;
+            var objectStorage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
 
             // The grace period decides when a file is physically destroyed, so the
             // deadline is measured by the injected clock: a test can move that one,
@@ -114,37 +109,29 @@ internal class UploadOrphanCleanupService : BackgroundService
             }
 
             var deletedDbRows = 0;
-            var deletedS3Objects = 0;
+            var removedObjects = 0;
 
             foreach (var upload in candidates)
             {
-                var allS3Removed = true;
+                var allObjectsRemoved = true;
 
                 foreach (var key in EnumerateKeys(upload.ObjectKey))
                 {
-                    try
+                    // The store answers whether the key holds anything now, and it
+                    // owns both the "already gone is fine" rule and the log line
+                    // for a refusal. What is left here is the decision only this
+                    // sweeper can make: keep the row for the next tick.
+                    if (await objectStorage.DeleteAsync(key, ct))
                     {
-                        await s3.DeleteObjectAsync(new DeleteObjectRequest
-                        {
-                            BucketName = cdn.BucketName,
-                            Key = key,
-                        }, ct);
-                        deletedS3Objects++;
+                        removedObjects++;
                     }
-                    catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    else
                     {
-                        // The object is already deleted — normal for an idempotent retry.
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex,
-                            "[Upload Orphan Cleanup] Failed to delete S3 object {Key} (will retry next tick)",
-                            key);
-                        allS3Removed = false;
+                        allObjectsRemoved = false;
                     }
                 }
 
-                if (allS3Removed)
+                if (allObjectsRemoved)
                 {
                     db.Uploads.Remove(upload);
                     deletedDbRows++;
@@ -157,8 +144,8 @@ internal class UploadOrphanCleanupService : BackgroundService
             }
 
             _logger.LogInformation(
-                "[Upload Orphan Cleanup] Swept {Candidates} candidate(s): deleted {S3Count} S3 objects + {DbCount} DB rows",
-                candidates.Count, deletedS3Objects, deletedDbRows);
+                "[Upload Orphan Cleanup] Swept {Candidates} candidate(s): removed {ObjectCount} objects + {DbCount} DB rows",
+                candidates.Count, removedObjects, deletedDbRows);
         }
         catch (OperationCanceledException)
         {

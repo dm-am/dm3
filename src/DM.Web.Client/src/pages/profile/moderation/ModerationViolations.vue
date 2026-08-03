@@ -16,6 +16,18 @@ import { WarningDialog, BanDialog } from "@/features/moderation-actions";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import Button from "@/shared/ui/Button/Button.vue";
 import { formatDate, formatDateFull } from "@/shared/lib/utils/datetime";
+import { pluralize } from "@/shared/lib/utils/pluralize";
+
+/** "1 активный балл" / "3 активных балла" / "5 активных баллов". */
+function activePointsLabel(points: number): string {
+  const noun = pluralize(
+    points,
+    "активный балл",
+    "активных балла",
+    "активных баллов",
+  );
+  return `${points} ${noun}`;
+}
 
 // NOTE: moderationApi.getWarnings/getBans hit the PUBLIC endpoints
 // (GET users/{username}/warnings|bans), which only return aggregate
@@ -143,7 +155,7 @@ const { open: openBanDialog, close: closeBanDialog } = useModal({
           v-if="violations.activeWarningPoints > 0"
           class="mod-warning-points"
         >
-          ({{ violations.activeWarningPoints }} активных баллов)
+          ({{ activePointsLabel(violations.activeWarningPoints) }})
         </span>
         <span
           class="mod-expand-icon expand-marker"
@@ -196,7 +208,7 @@ const { open: openBanDialog, close: closeBanDialog } = useModal({
           (активный бан{{
             violations.currentBanEndUtc
               ? " до " + formatDate(violations.currentBanEndUtc)
-              : " — перманентный"
+              : ", перманентный"
           }})
         </span>
         <span

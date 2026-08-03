@@ -86,9 +86,9 @@ function pagingAnchor(): HTMLElement | null {
   <!-- Out-of-range page: paging exists but this page has no resources -->
   <div v-else-if="currentPageOutOfRange" class="empty-state">
     <secondary-text>
-      На этой странице опросов нет —
+      На этой странице опросов нет.
       <router-link :to="{ name: 'polls' }"
-        >вернуться на первую страницу</router-link
+        >Вернуться на первую страницу</router-link
       >
     </secondary-text>
   </div>

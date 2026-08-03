@@ -314,7 +314,10 @@ internal sealed partial class DataSeeder
 
     private async Task UpdatePopularityScores(DateTimeOffset now, ComprehensiveSeedResult result)
     {
-        var activeThreshold = now - TimeSpan.FromDays(30);
+        // The threshold is the product's definition of "active", not the seeder's.
+        // A literal here is a second definition of it, and the day the product rule
+        // moves the fixture disagrees with the screens that read what it wrote.
+        var activeThreshold = now - ActivityPolicy.ActivePeriod;
 
         // Update game popularity scores (active players + readers)
         var gameIds = await _dbContext.Set<DbGame>()

@@ -75,6 +75,10 @@ internal class LoginAttemptRepository : MongoCollectionRepository<LoginAttempt>,
     }
 
     /// <inheritdoc />
+    public Task ResetAttempts(LoginAttemptOrigin origin) =>
+        Collection.DeleteOneAsync(Filter.Eq(x => x.Id, origin.Key));
+
+    /// <inheritdoc />
     public Task ResetAttempts(string email)
     {
         // Every address, not only the one that succeeded: proving you know the

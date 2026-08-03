@@ -3,7 +3,7 @@
  */
 
 /**
- * Three rules about interface copy. Each can only be broken in the source, so
+ * The rules about interface copy. Each can only be broken in the source, so
  * each is checked by reading the source.
  *
  * 1. UI_STANDARDS forbids the middle dot as a separator in interface copy:
@@ -15,9 +15,16 @@
  * 2. A wording the owner replaced by hand does not come back (RETIRED_COPY),
  *    and where his edit added text instead of swapping it, the text stays
  *    (REQUIRED_COPY).
- * 3. A rating with no value prints RATING_UNAVAILABLE — never a dash, which in
+ * 3. A rating with no value prints VALUE_UNAVAILABLE — never a dash, which in
  *    a column of numbers reads as a zero, and never a second hand-written copy
- *    of the token.
+ *    of the token, which is why the token itself is written in two files only.
+ * 4. CODE_STYLE spells the letter at U+0451 without its dots and reserves the
+ *    typographic quotes for the motto. Both rules were manual, and the
+ *    convention said so in as many words.
+ * 5. The forum entity is a "топик". A viewer created a топик, opened its edit
+ *    form and edited a тема, then deleted a тема. The word "тема" means other
+ *    things on the site (the colour theme, the subject of a ticket), so this
+ *    one is checked where the forum lives rather than everywhere.
  *
  * This test is deliberately narrow:
  *   - only .vue and .ts under the client source tree — not docs, not styles;
@@ -35,7 +42,7 @@ import { dirname, join, relative, resolve } from "path";
 import { fileURLToPath } from "url";
 import ts from "typescript";
 import { parse as parseSfc } from "vue/compiler-sfc";
-import { RATING_UNAVAILABLE } from "./constants/user";
+import { VALUE_UNAVAILABLE } from "./constants/copy";
 
 /** U+00B7 MIDDLE DOT, spelled by code point so this file stays clean itself. */
 const MIDDOT = "\u00B7";
@@ -44,11 +51,44 @@ const MIDDOT = "\u00B7";
 const EM_DASH = "\u2014";
 
 /**
- * A name about a rating: the word itself, or the tail of a camelCase name such
- * as authorRating. Case-sensitive on purpose, because generatingCode carries
- * the same letters and none of the meaning.
+ * The BBCode help dialog is a dictionary: a tag on the left, what it does on
+ * the right, and between them the separator a dictionary has always used. It is
+ * the one file where a dash may be the whole of a text node.
  */
-const RATING_NAME = /\brating|Rating/;
+/** U+0451 and U+0401, by code point so this file stays clean of them itself. */
+const E_WITH_DOTS = ["\u0451", "\u0401"];
+
+/** U+00AB and U+00BB, the quotes CODE_STYLE reserves for one place. */
+const GUILLEMETS = ["\u00AB", "\u00BB"];
+
+/** That place, and the one file where the pair is not a quote at all. */
+const GUILLEMETS_ALLOWED: Record<string, string> = {
+  "pages/about/AboutPage.vue": "the motto, the exception the convention names",
+  "pages/dev/StyleVariantsPage.vue":
+    "prev/next arrows of a calendar in a development-only mockup",
+};
+
+/**
+ * Where the missing-value token may be written out. The constant declares it;
+ * the header statistics block prints it for a whole row of numbers that failed
+ * to load, which is not the "no value" case the constant is named for.
+ */
+const TOKEN_ALLOWED = new Set([
+  "shared/lib/constants/copy.ts",
+  "widgets/header/SiteStatistics.vue",
+]);
+
+/** Where the forum entity is named, and therefore where its name is checked. */
+const FORUM_SURFACE = ["pages/forum", "features/topic", "entities/forum"];
+
+/** "\u0442\u0435\u043C\u0430" as a whole word: other words merely start with it. */
+const TEMA =
+  /(?<![\u0410-\u044F])[\u0422\u0442]\u0435\u043C(?:\u0430|\u044B|\u0435|\u0443|\u043E\u0439|\u0430\u043C|\u0430\u0445|\u0430\u043C\u0438)(?![\u0410-\u044F])/;
+
+const GLOSSARY = "shared/ui/BBCodeEditor/BBCodeEditor.vue";
+
+/** The module that declares the token is the one place that may spell it. */
+const TOKEN_HOME = "shared/lib/constants/copy.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // lib -> shared -> src
@@ -200,6 +240,42 @@ const RETIRED_COPY: { text: string; instead: string }[] = [
     text: "А с полной статистикой сайта",
     instead: 'one sentence: "..., а с полной статистикой сайта ..."',
   },
+  {
+    text: "Ментор",
+    instead:
+      '"Наставник" — the badge, the roles table, the notepad hint and the user filter all say so',
+  },
+  {
+    text: "Переход к теме",
+    instead: '"Переход к топику" — the forum entity has one name',
+  },
+  {
+    text: "арт конкурс",
+    instead: '"арт-конкурс" with the hyphen Russian puts there',
+  },
+  {
+    text: "Арт конкурс",
+    instead: '"Арт-конкурс" with the hyphen Russian puts there',
+  },
+  {
+    text: 'с тегом "без мата"',
+    instead:
+      'the tag as it is named: "Без мата" — a reader searches the filter for the form the rules quoted',
+  },
+  {
+    text: "Загрузить еще",
+    instead: '"Показать еще" — one action, one word for it',
+  },
+  {
+    text: "Пожалуйста, войдите снова",
+    instead:
+      'the direct form its neighbours use: "Сессия истекла. Войдите снова."',
+  },
+  {
+    text: "тысячи игроков создают",
+    instead:
+      '"тысячи участников" — "игрок" is a role inside a game, and the masters are not one',
+  },
 ];
 
 /**
@@ -237,32 +313,12 @@ const REQUIRED_COPY: { file: string; what: string; pattern: RegExp }[] = [
   },
 ];
 
-/** Where a rating is rendered, and therefore where the token belongs. */
-function ratingContexts(template: string, file: string): string[] {
-  const out: string[] = [];
-  // A component that IS the rating: all of its template.
-  if (/Rating\.vue$/.test(file)) out.push(template);
-  // A table's rating cell. The cell nests templates of its own, so the block
-  // runs to the next cell slot rather than to the next closing tag.
-  const slot = /<template\s+#cell-rating\b/g;
-  for (let m = slot.exec(template); m !== null; m = slot.exec(template)) {
-    const next = template.indexOf("<template #cell-", m.index + 1);
-    out.push(template.slice(m.index, next === -1 ? undefined : next));
-  }
-  // Anything interpolated out of a rating.
-  for (const [expr] of template.matchAll(/\{\{[^}]*\}\}/g)) {
-    if (RATING_NAME.test(expr)) out.push(expr);
-  }
-  return out;
-}
-
 /**
- * Placeholder literals inside a declaration named about a rating. Only a
- * literal that IS the placeholder counts: the users filter builds a range
- * label `${ratingMin} — ${ratingMax}`, where the dash is punctuation between
- * two numbers rather than a missing value.
+ * Complete string literals only. A template literal's fragments are not whole
+ * strings, so the range label `${min} — ${max}` a filter chip builds stays a
+ * range instead of reading as a missing value.
  */
-function ratingPlaceholders(code: string, fileName: string): string[] {
+function wholeLiterals(code: string, fileName: string): string[] {
   const source = ts.createSourceFile(
     fileName,
     code,
@@ -270,27 +326,103 @@ function ratingPlaceholders(code: string, fileName: string): string[] {
     true,
   );
   const found: string[] = [];
-  const visit = (node: ts.Node, inRating: boolean): void => {
-    const named =
-      (ts.isVariableDeclaration(node) ||
-        ts.isFunctionDeclaration(node) ||
-        ts.isMethodDeclaration(node) ||
-        ts.isPropertyAssignment(node)) &&
-      node.name !== undefined &&
-      RATING_NAME.test(node.name.getText(source));
-    const scope = inRating || named;
-    const text =
-      ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)
-        ? node.text
-        : null;
-    if (scope && (text === EM_DASH || text === RATING_UNAVAILABLE)) {
-      found.push(text);
+  const visit = (node: ts.Node): void => {
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+      found.push(node.text);
     }
-    ts.forEachChild(node, (child) => visit(child, scope));
+    ts.forEachChild(node, visit);
   };
-  ts.forEachChild(source, (node) => visit(node, false));
+  ts.forEachChild(source, visit);
   return found;
 }
+
+/** Script bodies: the whole file for a .ts, the blocks of an SFC. */
+function scriptsOf(file: string, raw: string): string[] {
+  return file.endsWith(".ts") ? [raw] : sfcParts(raw, file).scripts;
+}
+
+/** Text between tags. An attribute value lives inside a tag and is not text. */
+function textNodes(template: string): string[] {
+  return template.split(/<[^>]*>/);
+}
+
+/**
+ * Every way a file can spell a token out itself: as the whole of a text node,
+ * as a quoted literal inside an interpolation or a binding, as a complete
+ * literal in script. `home` is the module allowed to declare it.
+ */
+function spelledOut(
+  file: string,
+  raw: string,
+  token: string,
+  home: string,
+): string[] {
+  const rel = where(file);
+  if (rel === home) return [];
+
+  const hits: string[] = [];
+  for (const script of scriptsOf(file, raw)) {
+    if (wholeLiterals(script, file).some((text) => text.trim() === token)) {
+      hits.push(`${rel}: a literal that is only "${token}"`);
+    }
+  }
+  if (!file.endsWith(".vue")) return hits;
+
+  const { template } = sfcParts(raw, file);
+  if (textNodes(template).some((text) => text.trim() === token)) {
+    hits.push(`${rel}: markup printing "${token}" and nothing else`);
+  }
+  const quoted = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp(`["']\\s*${quoted}\\s*["']`).test(template)) {
+    hits.push(`${rel}: "${token}" written into an expression`);
+  }
+  return hits;
+}
+
+/** Every em dash a reader of one file can see. */
+function emDashCount(file: string, raw: string): number {
+  const dashes = (text: string): number => text.split(EM_DASH).length - 1;
+  const inScripts = scriptsOf(file, raw)
+    .flatMap((script) => stringLiterals(script, file))
+    .reduce((total, text) => total + dashes(text), 0);
+  if (file.endsWith(".ts")) return inScripts;
+  return inScripts + dashes(sfcParts(raw, file).template);
+}
+
+/**
+ * Where the em dash stays, and how many of it. Nothing here is a matter of
+ * taste: every entry is either grammar or a separator between two values.
+ */
+const EM_DASH_BUDGET: { file: string; count: number }[] = [
+  // A dictionary of BBCode tags: lemma, separator, gloss.
+  { file: "shared/ui/BBCodeEditor/BBCodeEditor.vue", count: 19 },
+  // Filter chips: the dash sits between the two ends of a range.
+  { file: "features/user-filter/ui/UsersFilter.vue", count: 5 },
+  { file: "features/game-filter/ui/GamesFilter.vue", count: 4 },
+  { file: "features/blog-filter/ui/BlogsFilter.vue", count: 3 },
+  { file: "shared/lib/filters/utils.ts", count: 1 },
+  // Credits: a role, the omitted copula, the name that holds it.
+  { file: "widgets/footer/Footer.vue", count: 4 },
+  // Definitions in the legal pages and in the rules. Russian writes the
+  // omitted copula between two noun phrases as a dash, so these are grammar.
+  { file: "pages/rules/RulesBans.vue", count: 11 },
+  { file: "pages/legal/PrivacyPolicyPage.vue", count: 10 },
+  { file: "pages/legal/UserAgreementPage.vue", count: 8 },
+  { file: "pages/rules/RulesAuthors.vue", count: 3 },
+  { file: "pages/rules/RulesExternalLinks.vue", count: 3 },
+  { file: "pages/rules/RulesPage.vue", count: 3 },
+  { file: "pages/rules/RulesIntro.vue", count: 1 },
+  // The brand lockup, the one index.html also carries in og:title.
+  { file: "pages/about/AboutPage.vue", count: 1 },
+  { file: "pages/home/HomePage.vue", count: 1 },
+];
+
+/**
+ * The sum of the budget: 19 glosses, 13 range separators, 4 credit lines and
+ * 41 definitions. Spelled out so the number stays a claim someone argued for
+ * rather than whatever the tree happens to hold today.
+ */
+const EM_DASH_TOTAL = 77;
 
 describe("interface copy", () => {
   it("never uses the middle dot in a user-visible string", () => {
@@ -326,34 +458,42 @@ describe("interface copy", () => {
     expect(missing).toEqual([]);
   });
 
-  it("prints RATING_UNAVAILABLE where a rating has no value", () => {
-    // The single token every site below is measured against.
-    expect(RATING_UNAVAILABLE).toBe("n/a");
+  it("never spells the letter with the two dots", () => {
+    const offenders = collectFiles(CLIENT_SRC).flatMap((file) =>
+      E_WITH_DOTS.flatMap((letter) => offendersIn(file, letter)),
+    );
+    expect(offenders).toEqual([]);
+  });
 
+  it("keeps the typographic quotes at the motto", () => {
+    const offenders = collectFiles(CLIENT_SRC)
+      .filter((file) => !(where(file) in GUILLEMETS_ALLOWED))
+      .flatMap((file) => GUILLEMETS.flatMap((mark) => offendersIn(file, mark)));
+    expect(offenders).toEqual([]);
+  });
+
+  it("calls the forum entity a топик", () => {
     const offenders: string[] = [];
     for (const file of collectFiles(CLIENT_SRC)) {
+      const rel = where(file);
+      if (!FORUM_SURFACE.some((dir) => rel.startsWith(`${dir}/`))) continue;
       const raw = readFileSync(file, "utf8");
-      if (!RATING_NAME.test(raw)) continue;
-      if (!raw.includes(EM_DASH) && !raw.includes(RATING_UNAVAILABLE)) continue;
-
-      const { template, scripts } = file.endsWith(".vue")
-        ? sfcParts(raw, file)
-        : { template: "", scripts: [raw] };
-
-      for (const script of scripts) {
-        for (const hit of ratingPlaceholders(script, file)) {
-          offenders.push(`${where(file)}: rating code spells "${hit}" itself`);
-        }
+      if (copyOf(file, raw).some((part) => TEMA.test(part))) {
+        offenders.push(`${rel}: the forum entity is a "топик"`);
       }
-      for (const context of ratingContexts(template, file)) {
-        if (context.includes(EM_DASH)) {
-          offenders.push(`${where(file)}: dash in a rating position`);
-        }
-        if (context.includes(RATING_UNAVAILABLE)) {
-          offenders.push(
-            `${where(file)}: "${RATING_UNAVAILABLE}" written out instead of RATING_UNAVAILABLE`,
-          );
-        }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("writes the missing-value token in one place", () => {
+    const offenders: string[] = [];
+    for (const file of collectFiles(CLIENT_SRC)) {
+      const rel = where(file);
+      if (TOKEN_ALLOWED.has(rel)) continue;
+      const raw = readFileSync(file, "utf8");
+      if (!raw.includes(VALUE_UNAVAILABLE)) continue;
+      if (copyOf(file, raw).some((part) => part === VALUE_UNAVAILABLE)) {
+        offenders.push(`${rel}: spells the token instead of importing it`);
       }
     }
     expect(offenders).toEqual([]);

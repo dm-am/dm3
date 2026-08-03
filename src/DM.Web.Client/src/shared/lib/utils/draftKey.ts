@@ -37,7 +37,8 @@ export type DraftPurpose =
   | "comment"
   | "message"
   | "publication"
-  | "ticket";
+  | "ticket"
+  | "review";
 
 /** Stands where the identifier would be for a subject that has none. */
 const NO_ENTITY = "-";

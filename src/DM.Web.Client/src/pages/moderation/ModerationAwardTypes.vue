@@ -11,7 +11,9 @@ import type { AwardType } from "@/shared/api/models/achievements";
 import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import { GameIcon } from "@/shared/ui/Icon";
 import AwardTypeEditDialog from "./dialogs/AwardTypeEditDialog.vue";
+import { useRoleGate } from "./lib/useRoleGate";
 
+const { hasAccess, deniedText } = useRoleGate("SeniorModerator");
 const { awardTypes, load, reload } = useContestSeries();
 
 onMounted(() => load());
@@ -45,12 +47,14 @@ async function toggleActive(t: AwardType) {
 </script>
 
 <template>
-  <section class="award-types-admin">
+  <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
+
+  <section v-else class="award-types-admin">
     <BlockTitle>Каталог типов наград</BlockTitle>
     <SecondaryText>
-      Timeless каталог — 6 типов, переиспользуются между всеми сериями
-      конкурсов. Деактивация скрывает тип из dropdown при выдаче, исторические
-      награды сохраняются.
+      Timeless каталог: 6 типов, переиспользуются между всеми сериями конкурсов.
+      Деактивация скрывает тип из dropdown при выдаче, исторические награды
+      сохраняются.
     </SecondaryText>
 
     <ul class="types-list">

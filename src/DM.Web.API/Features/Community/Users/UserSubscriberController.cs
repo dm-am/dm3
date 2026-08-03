@@ -92,6 +92,7 @@ public class UserSubscriberController : ControllerBase
     /// </remarks>
     /// <param name="username">Username to check</param>
     /// <response code="200">Subscription status with details if subscribed</response>
+    /// <response code="204">Current user is not subscribed</response>
     /// <response code="404">User not found</response>
     [HttpGet("{username}/subscribers/me", Name = nameof(GetMySubscriptionStatus))]
     [AuthenticationRequired]

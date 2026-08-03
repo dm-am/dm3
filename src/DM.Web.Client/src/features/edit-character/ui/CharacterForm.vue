@@ -30,6 +30,7 @@ import {
 import { Form, FormField } from "@/shared/ui/Form";
 import { ContentText } from "@/shared/ui";
 import { SvgIcon } from "@/shared/ui/Icon";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 const props = withDefaults(
   defineProps<{
@@ -211,7 +212,9 @@ const actionLabel = computed(() =>
       <span v-else-if="viewPlainValue(spec)" class="view-value">{{
         viewPlainValue(spec)
       }}</span>
-      <span v-else class="view-value view-value__empty">—</span>
+      <span v-else class="view-value view-value__empty">{{
+        VALUE_UNAVAILABLE
+      }}</span>
     </div>
   </div>
 

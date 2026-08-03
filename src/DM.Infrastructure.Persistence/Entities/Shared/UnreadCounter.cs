@@ -53,4 +53,18 @@ public class UnreadCounter : IRemovable
 
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
+
+    /// <summary>
+    /// Moment the marker was tombstoned (UTC), absent while it is live.
+    /// </summary>
+    /// <remarks>
+    /// What the collection's TTL index reads. A tombstone is only needed for as
+    /// long as something can still ask to mark the deleted entity as read, which
+    /// is minutes; without a moment to expire from it stayed forever, one document
+    /// per user per deleted entity. A live marker leaves the element absent, and a
+    /// TTL index ignores documents whose field is not a date, so nothing collects
+    /// what is still in use.
+    /// </remarks>
+    [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
+    public DateTime? RemovedUtc { get; set; }
 }

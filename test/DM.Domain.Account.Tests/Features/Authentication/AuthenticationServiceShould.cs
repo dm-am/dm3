@@ -105,6 +105,11 @@ public class AuthenticationServiceShould : UnitTestBase
         result.User.IsAuthenticated.Should().BeFalse();
         result.Error.Should().Be(AuthenticationError.WrongLogin);
         _loginAttemptTracker.Verify(t => t.RecordFailedAttempt(new LoginAttemptOrigin(email, null)), Times.Once);
+        // Answered in the same time as a wrong password, not only in the same
+        // words: with no hash of anything, a missing account comes back before
+        // Argon2id would have finished, and that difference is the answer
+        _securityManager.Verify(s => s.ComparePasswords(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Once);
     }
 
     [Fact]

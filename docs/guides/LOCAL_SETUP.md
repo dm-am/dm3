@@ -26,8 +26,8 @@ cd src/DM.Web.Client && npm install && npm run dev
 ### Альтернатива (ручной запуск)
 
 ```bash
+bash docker/scripts/init-env.sh local         # Создать docker/.env и ключ шифрования
 cd docker
-cp .env.example .env                          # Создать файл с секретами
 docker compose up -d                          # Инфраструктура
 
 cd src/DM.Web.Client && npm install && npm run dev  # Frontend

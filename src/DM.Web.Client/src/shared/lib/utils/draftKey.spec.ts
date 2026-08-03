@@ -33,6 +33,7 @@ const EVERY_PURPOSE: Record<DraftPurpose, true> = {
   message: true,
   publication: true,
   ticket: true,
+  review: true,
 };
 
 const entities = Object.keys(EVERY_ENTITY) as DraftEntity[];

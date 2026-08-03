@@ -173,7 +173,7 @@ onMounted(() => fetchNotifications());
         @click="fetchNotifications()"
       >
         <template v-if="loading">Загрузка...</template>
-        <template v-else>Загрузить еще</template>
+        <template v-else>Показать еще</template>
       </button>
     </div>
   </div>

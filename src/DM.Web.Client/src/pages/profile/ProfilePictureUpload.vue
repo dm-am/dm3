@@ -31,7 +31,7 @@ const stateLabel = computed(() => {
   if (avatar.uploading.value) return `${avatar.progress.value}%`;
   if (avatar.resetting.value) return "Сброс...";
   if (avatar.isDragover.value) return "Отпустите для загрузки";
-  return "Загрузить — перетащите или вставьте";
+  return "Загрузить (перетащите или вставьте)";
 });
 
 const handleUploaded = async (formData: FormData) => {

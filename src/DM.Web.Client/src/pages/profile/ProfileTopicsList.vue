@@ -35,6 +35,7 @@ import { TopicsFilter, useTopicsFilter } from "@/features/topic-filter";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
 import { useAuthStore } from "@/shared/stores/auth";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 const props = defineProps<{
   /** Profile owner whose topics we list. */
@@ -221,7 +222,7 @@ function boardLink(row: Topic) {
             </router-link>
           </Tooltip>
         </template>
-        <span v-else class="muted">—</span>
+        <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
       </template>
 
       <template v-if="paging && paging.pages && paging.pages > 1" #footer>

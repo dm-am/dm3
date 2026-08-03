@@ -148,7 +148,7 @@ async function startEdit() {
   const { data, error } = await forumApi.getTopicForUpdate(props.topic.id);
   editLoading.value = false;
   if (error) {
-    notifyFailure(error, "Не удалось загрузить текст темы");
+    notifyFailure(error, "Не удалось загрузить текст топика");
     return;
   }
   editTitle.value = props.topic.title;
@@ -175,19 +175,19 @@ function saveEdit() {
 
 <template>
   <div v-if="isEditing" class="topic-edit">
-    <label class="edit-label">Заголовок темы</label>
+    <label class="edit-label">Заголовок топика</label>
     <input
       v-model="editTitle"
       type="text"
       class="edit-title"
       maxlength="130"
-      placeholder="Заголовок темы"
+      placeholder="Заголовок топика"
     />
     <label class="edit-label">Текст</label>
     <BBCodeEditor
       v-model="editText"
       context="common"
-      placeholder="Текст темы..."
+      placeholder="Текст топика..."
       :min-height="120"
       :max-height="400"
       :is-moderator="isModerator"

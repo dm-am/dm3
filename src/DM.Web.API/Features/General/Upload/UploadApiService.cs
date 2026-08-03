@@ -6,7 +6,6 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Amazon.S3;
-using Amazon.S3.Model;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Caching;
@@ -32,7 +31,7 @@ internal class UploadApiService : IUploadApiService
     private readonly IIntentionManager _intentionManager;
     private readonly IUserService _userService;
     private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IAmazonS3 _s3Client;
+    private readonly IObjectStorage _objectStorage;
     private readonly IImageProcessingService _imageProcessingService;
     private readonly ICache _cache;
     private readonly IHttpContextAccessor _httpContext;
@@ -57,7 +56,7 @@ internal class UploadApiService : IUploadApiService
         IIntentionManager intentionManager,
         IUserService userService,
         IDateTimeProvider dateTimeProvider,
-        IAmazonS3 s3Client,
+        IObjectStorage objectStorage,
         IImageProcessingService imageProcessingService,
         ICache cache,
         IHttpContextAccessor httpContext,
@@ -69,7 +68,7 @@ internal class UploadApiService : IUploadApiService
         _intentionManager = intentionManager;
         _userService = userService;
         _dateTimeProvider = dateTimeProvider;
-        _s3Client = s3Client;
+        _objectStorage = objectStorage;
         _imageProcessingService = imageProcessingService;
         _cache = cache;
         _httpContext = httpContext;
@@ -274,9 +273,9 @@ internal class UploadApiService : IUploadApiService
         //    content-type, NOT from the user filename — anti-extension-spoofing).
         var objectKey = GenerateObjectKey(type, userId, processed.Extension);
 
-        // 4. A single S3 PUT. Everything after it that can fail is wrapped in
-        //    the rollback below.
-        await PutToS3Async(objectKey, processed.Bytes, processed.ContentType);
+        // 4. A single PUT into the object store. Everything after it that can
+        //    fail is wrapped in the rollback below.
+        await _objectStorage.PutAsync(objectKey, processed.Bytes, processed.ContentType);
 
         Activity.Current?.SetTag("upload.output_size_bytes", processed.Bytes.LongLength);
 
@@ -295,7 +294,7 @@ internal class UploadApiService : IUploadApiService
             SizeBytes = processed.Bytes.LongLength,
             ObjectKey = objectKey,
             Original = true,
-            Url = GeneratePublicUrl(objectKey),
+            Url = _objectStorage.BuildPublicUrl(objectKey),
             CreatedUtc = now,
             ConfirmedUtc = now,
         };
@@ -307,12 +306,12 @@ internal class UploadApiService : IUploadApiService
         }
         catch
         {
-            // Compensation for the PUT above. The object is in the bucket and the
-            // only row that would ever have named it does not exist: the orphan
-            // sweeper walks rows, so nothing else will ever find this key. The
-            // catch has to stay on this side of the repository call — that is
-            // where the S3 write happened and where the key is still known.
-            await RollbackS3PutsAsync(new[] { objectKey });
+            // Compensation for the PUT above, and the only chance there is: the
+            // object is in the bucket and the only row that would ever have named
+            // it does not exist, while the orphan sweeper walks rows. The catch
+            // has to stay on this side of the repository call — that is where the
+            // object was written and where the key is still known.
+            await _objectStorage.DeleteAsync(objectKey);
             throw;
         }
 
@@ -369,49 +368,6 @@ internal class UploadApiService : IUploadApiService
         await authorizer.EnsureAllowedAsync(target);
     }
 
-    private async Task PutToS3Async(string objectKey, byte[] bytes, string contentType)
-    {
-        await PutToS3Async(objectKey, new MemoryStream(bytes, writable: false), contentType);
-    }
-
-    private async Task PutToS3Async(string objectKey, Stream stream, string contentType)
-    {
-        var putRequest = new PutObjectRequest
-        {
-            BucketName = _cdnConfig.BucketName,
-            Key = objectKey,
-            InputStream = stream,
-            ContentType = contentType,
-            // A key is never rewritten — replacing an avatar allocates a new one —
-            // so a cached object cannot go stale → aggressive browser/CDN caching.
-            // The key is random, not a content hash: see GenerateObjectKey.
-            Headers =
-            {
-                CacheControl = "public, max-age=31536000, immutable",
-            },
-        };
-        await _s3Client.PutObjectAsync(putRequest);
-    }
-
-    private async Task RollbackS3PutsAsync(IReadOnlyCollection<string> keys)
-    {
-        foreach (var key in keys)
-        {
-            try
-            {
-                await _s3Client.DeleteObjectAsync(new DeleteObjectRequest
-                {
-                    BucketName = _cdnConfig.BucketName,
-                    Key = key,
-                });
-            }
-            catch
-            {
-                // Best-effort rollback — remaining orphans are swept by the background GC.
-            }
-        }
-    }
-
     private static string SanitizeFileName(string? originalName, string normalizedExtension)
     {
         if (string.IsNullOrWhiteSpace(originalName))
@@ -444,39 +400,32 @@ internal class UploadApiService : IUploadApiService
     }
 
     /// <summary>
-    /// Object key: type folder + scope (userId) + a random 8-hex suffix. Not a
-    /// content hash — the same image uploaded twice occupies two objects, and the
+    /// Object key: type folder + scope (userId) + a full random suffix. Not a
+    /// content hash: the same image uploaded twice occupies two objects, and the
     /// key says nothing about what stands behind it. Keys are never rewritten (a
     /// replaced avatar allocates a fresh one), and that, not the shape of the key,
-    /// is what the immutable cache headers on PUT rest on; the 32 bits of
-    /// randomness are the only thing keeping two keys in one user folder apart.
+    /// is what the immutable cache headers on PUT rest on.
+    ///
+    /// The suffix is the whole identifier and not eight characters of it. The
+    /// bucket answers anonymously, which is right for avatars and is what post
+    /// attachments live under too, so for an attachment in a closed room the
+    /// address is the access control. Eight hex is 32 bits next to a user id
+    /// anyone can read off the page, and that is a hint rather than a capability.
     /// The extension is accepted as a validated, normalized string.
     /// </summary>
     private string GenerateObjectKey(UploadType type, Guid userId, string normalizedExtension)
     {
-        var folder = type switch
-        {
-            UploadType.UserAvatar => "avatars",
-            UploadType.CharacterAvatar => "characters",
-            UploadType.PostAttachment => "posts",
-            _ => "misc",
-        };
+        // The prefix is not chosen here: the bucket policy grants anonymous reads
+        // per prefix, so the two have to say the same thing about a type.
+        var folder = UploadFolder.For(type);
 
-        var uniqueId = Guid.NewGuid().ToString("N")[..8];
+        var uniqueId = Guid.NewGuid().ToString("N");
         var ext = string.IsNullOrEmpty(normalizedExtension) ? string.Empty : normalizedExtension;
         var keyName = $"{userId:N}_{uniqueId}{ext}";
 
         return string.IsNullOrEmpty(_cdnConfig.Folder)
             ? $"{folder}/{keyName}"
             : $"{_cdnConfig.Folder}/{folder}/{keyName}";
-    }
-
-    private string GeneratePublicUrl(string objectKey)
-    {
-        return new UriBuilder(new Uri(_cdnConfig.PublicUrl))
-        {
-            Path = $"{_cdnConfig.BucketName}/{objectKey}",
-        }.ToString();
     }
 
     private static Shared.Dto.Upload MapToDto(StoredUpload upload)

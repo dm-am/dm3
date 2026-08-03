@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
+using DM.Domain.Core.Chats;
 using DM.Domain.Core.Enums;
 
 namespace DM.Infrastructure.Persistence.Entities.Messaging;
@@ -12,9 +13,11 @@ namespace DM.Infrastructure.Persistence.Entities.Messaging;
 public class Chat
 {
     /// <summary>
-    /// Well-known ID for global chat
+    /// Well-known ID for global chat. Declared by the domain and mirrored here, so
+    /// that a query written over this entity keeps naming it without the kernel and
+    /// a service that does not reference persistence can still name it at all.
     /// </summary>
-    public static readonly Guid GlobalChatId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    public static readonly Guid GlobalChatId = WellKnownChats.GlobalChatId;
 
     /// <summary>
     /// Chat identifier

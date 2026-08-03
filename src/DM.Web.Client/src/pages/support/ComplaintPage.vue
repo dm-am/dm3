@@ -15,7 +15,7 @@ import { SupportTicketForm } from "@/features/support-ticket";
   <page-title>Жалоба</page-title>
 
   <LeadText
-    >Если кто-то нарушает правила, опишите ситуацию — модерация
+    >Если кто-то нарушает правила, опишите ситуацию. Модерация
     разберется</LeadText
   >
 
@@ -25,8 +25,7 @@ import { SupportTicketForm } from "@/features/support-ticket";
     Модерация тоже читает
     <a :href="DISCORD_INVITE_URL" target="_blank" rel="noopener noreferrer"
       >Discord</a
-    >
-    — жалобу там рассмотрят так же, как и через форму
+    >: жалобу там рассмотрят так же, как и через форму
   </p>
 </template>
 

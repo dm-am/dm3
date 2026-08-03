@@ -28,10 +28,8 @@ import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useExpandableSection } from "@/shared/lib/composables";
 import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
-import {
-  ONLINE_THRESHOLD_MINUTES,
-  RATING_UNAVAILABLE,
-} from "@/shared/lib/constants/user";
+import { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 import { ROLE_INFO, STAFF_ROLES } from "@/shared/config/roles";
 
 import Button from "@/shared/ui/Button/Button.vue";
@@ -288,7 +286,7 @@ const ratingSum = computed<number | null>(() => {
 
 const ratingSumDisplay = computed<string>(() => {
   const v = ratingSum.value;
-  if (v === null) return RATING_UNAVAILABLE;
+  if (v === null) return VALUE_UNAVAILABLE;
   return v > 0 ? `+${v}` : String(v);
 });
 

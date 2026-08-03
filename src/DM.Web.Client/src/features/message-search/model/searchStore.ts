@@ -1,54 +1,32 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
-import type { MessageSearchResult, SearchScope, SearchSort } from "./types";
+import type { MessageSearchResult } from "./types";
 import messageSearchApi from "../api/messageSearchApi";
 
 const PAGE_SIZE = 50;
 
 /**
- * Map a scope selection to the repeatable `in` query param.
+ * The only scope this search ever asks for.
  *
- * Pure and exported for unit testing. Returns `undefined` for the "search
- * everything" cases (all scope, or a dm/game scope with no concrete target
- * picked yet — the backend `in:` filter needs a specific chat/game id).
+ * The endpoint can search every source the reader may read, but the one entry
+ * point into it is the field above the global chat, and a field above the
+ * global chat searches the global chat. Anything wider needs a page of its own
+ * before it needs a control.
  */
-export function scopeToIn(scope: SearchScope): string[] | undefined {
-  switch (scope.kind) {
-    case "global":
-      return ["global"];
-    case "dm":
-      return scope.targetId ? [`dm:${scope.targetId}`] : undefined;
-    case "game":
-      return scope.targetId ? [`game:${scope.targetId}`] : undefined;
-    case "all":
-    default:
-      return undefined;
-  }
-}
-
-/** Map the UI sort toggle to the optional `sort` query param. */
-export function sortToParam(sort: SearchSort): string {
-  return sort === "best" ? "best" : "newest";
-}
-
-/**
- * A dm/game scope is only actionable once a concrete target is chosen; the
- * panel blocks the search until then.
- */
-export function scopeNeedsTarget(scope: SearchScope): boolean {
-  return (scope.kind === "dm" || scope.kind === "game") && !scope.targetId;
-}
+const GLOBAL_SCOPE = ["global"];
 
 /**
  * Dedicated search store. Deliberately NOT part of the live global-chat store:
- * search results are a distinct navigable list with their own cursor/sort
- * state, not the live scroll-back buffer.
+ * search results are a distinct navigable list with its own cursor, not the
+ * live scroll-back buffer.
+ *
+ * Order is the backend's and there is no way to ask for another one: relevance
+ * ranking exists neither in the domain nor in the endpoint's signature, so a
+ * control offering it would only be a promise the site does not keep.
  */
 export const useMessageSearchStore = defineStore("messageSearch", () => {
-  // Query + controls
+  // Query
   const query = ref("");
-  const scope = ref<SearchScope>({ kind: "all" });
-  const sort = ref<SearchSort>("date");
 
   // Results + cursor
   const results = ref<MessageSearchResult[]>([]);
@@ -65,10 +43,8 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
 
   const trimmedQuery = computed(() => query.value.trim());
 
-  /** Whether a search can currently run (non-empty query, resolvable scope). */
-  const canSearch = computed(
-    () => trimmedQuery.value.length > 0 && !scopeNeedsTarget(scope.value),
-  );
+  /** Whether a search can currently run. */
+  const canSearch = computed(() => trimmedQuery.value.length > 0);
 
   function reset() {
     results.value = [];
@@ -78,14 +54,6 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
     hasSearched.value = false;
     loading.value = false;
     loadingMore.value = false;
-  }
-
-  function setScope(next: SearchScope) {
-    scope.value = next;
-  }
-
-  function setSort(next: SearchSort) {
-    sort.value = next;
   }
 
   /** Run a fresh search from the top (replaces results). */
@@ -100,8 +68,7 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
     try {
       const { data, error: apiError } = await messageSearchApi.searchMessages({
         q: trimmedQuery.value,
-        in: scopeToIn(scope.value),
-        sort: sortToParam(sort.value),
+        in: GLOBAL_SCOPE,
         limit: PAGE_SIZE,
       });
       if (apiError) {
@@ -127,8 +94,7 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
     try {
       const { data, error: apiError } = await messageSearchApi.searchMessages({
         q: trimmedQuery.value,
-        in: scopeToIn(scope.value),
-        sort: sortToParam(sort.value),
+        in: GLOBAL_SCOPE,
         cursor: nextCursor.value,
         limit: PAGE_SIZE,
       });
@@ -152,8 +118,6 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
 
   return {
     query,
-    scope,
-    sort,
     results,
     nextCursor,
     hasMore,
@@ -163,8 +127,6 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
     hasSearched,
     canSearch,
     reset,
-    setScope,
-    setSort,
     search,
     loadMore,
   };
