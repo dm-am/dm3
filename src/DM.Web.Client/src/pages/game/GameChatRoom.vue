@@ -23,18 +23,19 @@ import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
 import { ChatMessage } from "@/widgets/chat-message";
 import { LoginPrompt } from "@/features/auth";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { CommentSkeleton } from "@/shared/ui/Skeleton";
-import { useDocumentTitle } from "@/shared/lib/composables";
+import { joinTitleSegments, useDocumentTitle } from "@/shared/lib/composables";
 
 const PAGE_SIZE = 50;
 const MAX_MESSAGE_HEIGHT = 300;
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
-const { rooms } = storeToRefs(gameStore);
+const { game, rooms } = storeToRefs(gameStore);
 const { user } = storeToRefs(useAuthStore());
 const { isCompactLayout } = storeToRefs(useUiStore());
 
@@ -48,7 +49,9 @@ const room = computed(
 );
 const chatRoomId = computed(() => (room.value?.id as string) ?? null);
 
-useDocumentTitle(() => (room.value ? `Чат: ${room.value.title}` : "Чат"));
+// Same as the post room: the room IS the section and its name is data, so the
+// page composes the zone title itself, the game first, the room second.
+useDocumentTitle(() => joinTitleSegments(game.value?.title, room.value?.title));
 
 // ───────────────────────────────────────────────────────────────────────────
 // Message stream (cursor pagination)
@@ -229,11 +232,11 @@ onUnmounted(cleanupObserver);
   <div class="chat-room">
     <!-- Back link -->
     <router-link
-      :to="{ name: 'game-rooms', params: { id: gameId } }"
+      :to="{ name: 'game', params: { id: gameId } }"
       class="back-link"
     >
       <SvgIcon name="chevronLeft" />
-      Назад к комнатам
+      Назад к игре
     </router-link>
 
     <block-title v-if="room"
@@ -309,7 +312,7 @@ onUnmounted(cleanupObserver);
             v-model="newMessage"
             context="message"
             placeholder="Написать сообщение..."
-            :draft-key="`chat_room_${chatRoomId}`"
+            :draft-key="composerDraftKey('room', 'message', chatRoomId)"
             :disabled="sending"
             :min-height="60"
             :max-height="200"

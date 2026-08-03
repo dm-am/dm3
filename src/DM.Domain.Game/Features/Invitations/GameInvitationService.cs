@@ -296,7 +296,7 @@ internal class GameInvitationService : IGameInvitationService
         var currentUserId = _identityProvider.Current.User.UserId;
 
         // Check content blacklist
-        if (game.BlacklistedUsers.Any(b => b.UserId == userId))
+        if (game.IsBlacklisted(userId))
         {
             throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.CannotInviteBlacklistedUser);
         }

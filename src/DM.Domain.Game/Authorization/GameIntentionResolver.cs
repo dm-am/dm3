@@ -45,6 +45,11 @@ internal class GameIntentionResolver :
             // open it. The SQL scope already hands them the row, so without this
             // line the moderation queue links to a 403 on the very game the link
             // exists for.
+            //
+            // The blacklist is not one of the arms and must not become one. It
+            // closes writing, not reading: the game stays public to everybody
+            // else, so hiding it from one person would promise a privacy it does
+            // not have. GameAccessibilityFilters answers the list the same way.
             GameIntention.Read => userIsSeniorModerator ||
                                   roles.HasEditAccess() ||
                                   roles.Contains(GameRole.Mentor) ||
@@ -93,7 +98,7 @@ internal class GameIntentionResolver :
             // of; a game they lead or were accepted into stays open. Posts in
             // rooms are a different intention and are not affected.
             GameIntention.CreateComment when user.IsAuthenticated =>
-                !target.BlacklistedUsers.Any(b => b.UserId == user.UserId) &&
+                !target.IsBlacklisted(user.UserId) &&
                 (target.CommentsAccessMode == CommentsAccessMode.Public ||
                 target.GetRoles(user.UserId).HasAnyRole()) &&
                 user.MaySpeak(inOwnSpace: target.GetRoles(user.UserId).IsOwnGame()),

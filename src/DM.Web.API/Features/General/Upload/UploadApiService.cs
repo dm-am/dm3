@@ -37,7 +37,6 @@ internal class UploadApiService : IUploadApiService
     private readonly ICache _cache;
     private readonly IHttpContextAccessor _httpContext;
     private readonly IReadOnlyCollection<IUploadTargetAuthorizer> _targetAuthorizers;
-    private readonly IUploadGarbageCollector _uploadsCleanup;
     private readonly CdnConfiguration _cdnConfig;
 
     /// <summary>Max upload size — 10 MB (in sync with RequestSizeLimit on the controller).</summary>
@@ -63,7 +62,6 @@ internal class UploadApiService : IUploadApiService
         ICache cache,
         IHttpContextAccessor httpContext,
         IEnumerable<IUploadTargetAuthorizer> targetAuthorizers,
-        IUploadGarbageCollector uploadsCleanup,
         IOptions<CdnConfiguration> cdnOptions)
     {
         _uploadRepository = uploadRepository;
@@ -76,7 +74,6 @@ internal class UploadApiService : IUploadApiService
         _cache = cache;
         _httpContext = httpContext;
         _targetAuthorizers = targetAuthorizers.ToList();
-        _uploadsCleanup = uploadsCleanup;
         _cdnConfig = cdnOptions.Value;
     }
 
@@ -317,17 +314,6 @@ internal class UploadApiService : IUploadApiService
             // where the S3 write happened and where the key is still known.
             await RollbackS3PutsAsync(new[] { objectKey });
             throw;
-        }
-
-        // A character has no link step. A user avatar becomes current when the
-        // profile is saved, and UserService collects the superseded rows then; a
-        // character portrait is read straight off the newest upload pointing at it,
-        // so the previous one has to be retired here or two live rows exist. Not
-        // done for a post: a post is meant to carry several attachments, and the
-        // collector keeps only the newest row per target.
-        if (type == UploadType.CharacterAvatar)
-        {
-            await _uploadsCleanup.CollectObsoleteAsync(effectiveTarget.Value);
         }
 
         return MapToDto(stored);

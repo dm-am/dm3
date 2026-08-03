@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
@@ -65,9 +64,10 @@ internal class GameCommentService : IGameCommentService
         var game = await _gameService.GetAsync(createComment.EntityId);
         _intentionManager.ThrowIfForbidden(GameIntention.CreateComment, game);
 
-        // Check blacklist
+        // The blacklist closes writing: reading this game is open to the user it
+        // blacklisted, commenting in it is not.
         var currentUser = _identityProvider.Current.User;
-        if (game.BlacklistedUsers.Any(b => b.UserId == currentUser.UserId))
+        if (game.IsBlacklisted(currentUser.UserId))
         {
             throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
         }

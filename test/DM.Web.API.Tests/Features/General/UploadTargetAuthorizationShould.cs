@@ -49,7 +49,6 @@ public class UploadTargetAuthorizationShould : UnitTestBase
     private readonly Mock<IAmazonS3> _s3;
     private readonly Mock<IImageProcessingService> _imageProcessing;
     private readonly Mock<IUploadRepository> _repository;
-    private readonly Mock<IUploadGarbageCollector> _cleanup;
 
     public UploadTargetAuthorizationShould()
     {
@@ -78,8 +77,6 @@ public class UploadTargetAuthorizationShould : UnitTestBase
                 CreatedUtc = u.CreatedUtc,
                 ConfirmedUtc = u.ConfirmedUtc,
             });
-
-        _cleanup = Mock<IUploadGarbageCollector>();
     }
 
     /// <summary>
@@ -158,26 +155,6 @@ public class UploadTargetAuthorizationShould : UnitTestBase
             "a type with no rule must not be uploadable");
     }
 
-    /// <summary>
-    /// A character portrait is read straight off the newest upload pointing at the
-    /// character, with no link step of its own, so the previous one is retired on
-    /// upload. A post is meant to carry several attachments and the collector keeps
-    /// only the newest row per target, so it must not run for one.
-    /// </summary>
-    [Theory]
-    [InlineData(UploadType.CharacterAvatar, 1)]
-    [InlineData(UploadType.PostAttachment, 0)]
-    [InlineData(UploadType.UserAvatar, 0)]
-    public async Task RetireTheSupersededPortraitAndNothingElse(UploadType type, int expectedCalls)
-    {
-        var target = type == UploadType.UserAvatar ? _userId : Guid.NewGuid();
-        var service = Service(new AllowingAuthorizer(type));
-
-        await service.DirectUpload(File(), type, target);
-
-        _cleanup.Verify(c => c.CollectObsoleteAsync(target), Times.Exactly(expectedCalls));
-    }
-
     private UploadApiService Service(params IUploadTargetAuthorizer[] authorizers)
     {
         var identityProvider = Mock<IIdentityProvider>();
@@ -198,7 +175,6 @@ public class UploadTargetAuthorizationShould : UnitTestBase
             cache.Object,
             Mock<IHttpContextAccessor>().Object,
             authorizers,
-            _cleanup.Object,
             Options.Create(new CdnConfiguration
             {
                 BucketName = "dm-test",

@@ -1014,6 +1014,7 @@
   ],
   "DM.Web.API.Features.Game.Rooms.RoomSettings": [
     "diceEnabled",
+    "hiddenWithoutAccess",
     "viewDiceResults",
     "viewPrivateText"
   ],

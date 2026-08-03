@@ -297,6 +297,16 @@ public class DmDbContext : DbContext
         modelBuilder.Entity<Subscription>()
             .HasIndex(s => new { s.TargetType, s.TargetId });
 
+        // One subscription per (subscriber, target). All three subscribe services
+        // check first and insert after, so two overlapping requests both find
+        // nothing and both insert, and the extra row is not something the reader
+        // can clear: the button reads "subscribed" while any row is left, and each
+        // unsubscribe click removes one. Leads with SubscriberId, so it replaces
+        // the plain FK index the convention used to add rather than adding to it.
+        modelBuilder.Entity<Subscription>()
+            .HasIndex(s => new { s.SubscriberId, s.TargetType, s.TargetId })
+            .IsUnique();
+
         // Likes are polymorphic and had no index at all. Every aggregate reads them
         // either as "likes of this entity" or as "likes of this kind" followed by a
         // join on EntityId, so EntityType leads: with the reverse order the join-shaped
@@ -334,6 +344,12 @@ public class DmDbContext : DbContext
         modelBuilder.Entity<Room>()
             .HasIndex(r => new { r.GameId, r.RoomNumber })
             .IsUnique();
+
+        // Off by default: a closed room is named to everybody unless its master
+        // says otherwise, and a row written without the column has to mean that.
+        modelBuilder.Entity<Room>()
+            .Property(r => r.HiddenWithoutAccess)
+            .HasDefaultValue(false);
 
         #endregion
 
@@ -2176,6 +2192,18 @@ public class DmDbContext : DbContext
                 .HasFilter("\"TargetCharacterId\" IS NOT NULL");
             entity.HasIndex(u => u.TargetPostId)
                 .HasFilter("\"TargetPostId\" IS NOT NULL");
+
+            // A character has at most one live portrait. It owns no column pointing
+            // at one — the portrait is whichever CharacterAvatar row still points at
+            // the character — so a second live row is not an extra picture but a
+            // second answer to one question, and the batch read of a room used to
+            // fail outright on the pair. Partial on Type = 2 (CharacterAvatar) and on
+            // the live rows, because the portrait a character replaces stays in the
+            // table until the orphan sweeper drops it. Named, because the non-unique
+            // index above already holds the default name for this column.
+            entity.HasIndex(u => u.TargetCharacterId, "IX_Uploads_TargetCharacterId_Live")
+                .IsUnique()
+                .HasFilter("\"Type\" = 2 AND \"IsRemoved\" = false");
 
             // CHECK constraint: exactly one typed target column
             // is non-null AND matches the Type discriminator.

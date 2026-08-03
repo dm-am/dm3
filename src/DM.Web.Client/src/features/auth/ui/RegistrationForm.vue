@@ -446,13 +446,6 @@ a
     width: 100%
     box-sizing: border-box
 
-.honeypot-field
-  position: absolute
-  left: -9999px
-  width: 1px
-  height: 1px
-  opacity: 0
-
 .rules-checkbox
   margin-top: $medium
   display: flex

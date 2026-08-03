@@ -73,8 +73,9 @@ internal class CharacterService : ICharacterService
 
         var currentUserId = _identityProvider.Current.User.UserId;
 
-        // Check blacklist
-        if (game.BlacklistedUsers.Any(b => b.UserId == currentUserId))
+        // The blacklist closes writing: reading this game is open to the user it
+        // blacklisted, applying to it with a character is not.
+        if (game.IsBlacklisted(currentUserId))
         {
             throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
         }

@@ -152,6 +152,7 @@ internal class RoomService : IRoomService
             ViewPrivateText = updateRoom.ViewPrivateText,
             ViewDiceResults = updateRoom.ViewDiceResults,
             DiceEnabled = updateRoom.DiceEnabled,
+            HiddenWithoutAccess = updateRoom.HiddenWithoutAccess,
             IsArchived = updateRoom.IsArchived,
             IsRemoved = updateRoom.IsRemoved,
             ShouldReorder = updateRoom.PreviousRoomId != null,

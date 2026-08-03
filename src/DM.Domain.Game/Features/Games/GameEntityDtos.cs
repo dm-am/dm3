@@ -342,6 +342,11 @@ public class UpdateRoomEntity
     public bool? DiceEnabled { get; set; }
 
     /// <summary>
+    /// Room is kept out of the room list for those without access (if changed)
+    /// </summary>
+    public bool? HiddenWithoutAccess { get; set; }
+
+    /// <summary>
     /// Room is archived (if changed)
     /// </summary>
     public bool? IsArchived { get; set; }

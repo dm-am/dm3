@@ -7,9 +7,14 @@
  * complaint-only "violation link" field and the wording. Guests are allowed
  * to submit - losing account access must not lock a user out of support -
  * so the form never requires authentication.
+ *
+ * The body is a plain multiline field, not the BBCode editor: every surface
+ * that reads a ticket back (MyTicketsPage, TicketTrackPage, the moderation
+ * TicketCard) prints it verbatim, so markup typed here would only ever be read
+ * back as brackets.
  */
 import { computed, ref } from "vue";
-import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import { TextArea } from "@/shared/ui/TextArea";
 import { ticketApi, type TicketSubtype } from "@/entities/ticket";
 import type { BadRequestError } from "@/shared/api/models/common";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
@@ -52,12 +57,11 @@ const subtype = ref<string>(
 );
 
 const authStore = useAuthStore();
-// Guests have no account to reach them by, so a contact email is mandatory and
-// they receive a tracking link after submit; authenticated authors are
-// reachable by identity and track their tickets from "Мои обращения".
+// Guests have no account to reach them by, so a contact email is mandatory:
+// no ticket mail is sent yet, so after submit the tracking number and the link
+// to it are shown on screen instead. Authenticated authors are reachable by
+// identity and track their tickets from "Мои обращения".
 const isGuest = computed(() => !authStore.isAuthenticated);
-
-const editorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 
 const subject = ref("");
 const text = ref("");
@@ -82,28 +86,29 @@ const isComplaint = computed(() => props.kind === "complaint");
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const contactLabel = computed(() =>
-  isGuest.value ? "Почта для ответа" : "Контакт для ответа (необязательно)",
+  isGuest.value ? "Почта для ответа" : "Контакт для ответа",
 );
 const contactHint = computed(() =>
   isGuest.value
-    ? "Мы ответим на этот адрес и вышлем ссылку для отслеживания обращения"
-    : "Email или Discord, чтобы мы могли ответить",
+    ? "Адрес нужен модерации для связи. Ответ появится на странице обращения, номер и ссылку вы увидите после отправки"
+    : 'Email или Discord для связи помимо сайта. Ответ появится в разделе "Мои обращения"',
 );
 
 const copy = computed(() =>
   isComplaint.value
     ? {
+        subtypeLabel: "Тип жалобы",
         subjectLabel: "Тема жалобы",
         subjectPlaceholder: "Кратко: кто и что нарушает",
         textLabel: "Текст жалобы",
         textPlaceholder: "Опишите нарушение: что произошло, где и когда...",
         action: "Отправить жалобу",
         successTitle: "Жалоба отправлена",
-        successNext:
-          "Модерация рассмотрит жалобу в ближайшее время. Если вы указали контакт, мы ответим по нему",
+        successNext: "Модерация рассмотрит жалобу в ближайшее время",
         again: "Отправить еще одну жалобу",
       }
     : {
+        subtypeLabel: "Тип обращения",
         subjectLabel: "Тема обращения",
         subjectPlaceholder: "Кратко: что случилось",
         textLabel: "Описание проблемы",
@@ -111,8 +116,7 @@ const copy = computed(() =>
           "Опишите проблему: что вы делали, что ожидали и что произошло...",
         action: "Отправить",
         successTitle: "Обращение отправлено",
-        successNext:
-          "Мы рассмотрим обращение в ближайшее время. Если вы указали контакт, мы ответим по нему",
+        successNext: "Мы рассмотрим обращение в ближайшее время",
         again: "Отправить еще одно обращение",
       },
 );
@@ -191,9 +195,6 @@ const submit = async () => {
 
   // Guests get a tracking token to follow up without an account
   trackingToken.value = data?.trackingToken ?? null;
-  // Clear the editor content and its persisted draft while the editor is
-  // still mounted - the success state unmounts the form
-  editorRef.value?.clear();
   sent.value = true;
 };
 
@@ -215,6 +216,9 @@ const reset = () => {
     <p class="success-next">{{ copy.successNext }}</p>
 
     <div v-if="trackingToken" class="tracking-block">
+      <p class="tracking-number">
+        Номер обращения: <code>{{ trackingToken }}</code>
+      </p>
       <router-link
         class="tracking-link"
         :to="{ name: 'support-track', params: { token: trackingToken } }"
@@ -222,10 +226,15 @@ const reset = () => {
         Проверить статус обращения
       </router-link>
       <p class="tracking-hint">
-        Сохраните эту ссылку — по ней можно проверить статус обращения без входа
-        в аккаунт
+        Сохраните номер и ссылку. Писем по обращениям мы не отправляем, ответ
+        модерации появится на странице обращения
       </p>
     </div>
+
+    <p v-else-if="!isGuest" class="success-next">
+      Ответ появится в разделе
+      <router-link :to="{ name: 'my-tickets' }">Мои обращения</router-link>
+    </p>
 
     <button type="button" class="success-again" @click="reset">
       {{ copy.again }}
@@ -240,11 +249,25 @@ const reset = () => {
     :action="copy.action"
     @submit="submit"
   >
-    <form-field
-      :label="isComplaint ? 'Тип жалобы' : 'Тип обращения'"
-      name="subtype"
-    >
+    <form-field :label="copy.subtypeLabel" name="subtype">
       <Select v-model="subtype" :options="subtypeOptions" :disabled="loading" />
+    </form-field>
+
+    <form-field
+      :label="contactLabel"
+      name="contact"
+      :optional="!isGuest"
+      :errors="contactError ? [contactError] : []"
+    >
+      <template #hint>{{ contactHint }}</template>
+      <input
+        v-model="contact"
+        :type="isGuest ? 'email' : 'text'"
+        id="contact"
+        maxlength="200"
+        autocomplete="email"
+        :disabled="loading"
+      />
     </form-field>
 
     <form-field
@@ -264,8 +287,9 @@ const reset = () => {
 
     <form-field
       v-if="isComplaint"
-      label="Ссылка на нарушение (необязательно)"
+      label="Ссылка на нарушение"
       name="violationUrl"
+      optional
       :errors="violationUrlError ? [violationUrlError] : []"
     >
       <input
@@ -283,33 +307,11 @@ const reset = () => {
       name="text"
       :errors="textError ? [textError] : []"
     >
-      <BBCodeEditor
-        ref="editorRef"
+      <TextArea
         v-model="text"
-        context="info"
         :placeholder="copy.textPlaceholder"
-        :draft-key="`${kind}_request`"
         :disabled="loading"
-        :min-height="150"
-        :max-height="400"
         :max-length="10000"
-        @submit="submit"
-      />
-    </form-field>
-
-    <form-field
-      :label="contactLabel"
-      name="contact"
-      :errors="contactError ? [contactError] : []"
-    >
-      <template #hint>{{ contactHint }}</template>
-      <input
-        v-model="contact"
-        :type="isGuest ? 'email' : 'text'"
-        id="contact"
-        maxlength="200"
-        autocomplete="email"
-        :disabled="loading"
       />
     </form-field>
 
@@ -328,13 +330,14 @@ const reset = () => {
 @import "@/assets/styles/Variables"
 @import "@/assets/styles/Themes"
 
+// The panel the site's other forms sit in (the create-game section, the
+// create-topic card, the registration dialog). The shared Form draws its
+// action bar with negative margins that assume exactly this $medium of
+// padding around it; with no panel the bar hangs outside the content.
 .support-form
-  :deep(.form-field-row) input
-    width: 100%
-    box-sizing: border-box
-
-  :deep(.bbcode-editor-wrapper)
-    width: 100%
+  padding: $medium
+  background-color: $bg-element
+  border-radius: $border-radius
 
 .success-card
   padding: $medium
@@ -355,6 +358,13 @@ const reset = () => {
   margin: 0 0 $medium
   background-color: $bg-page
   border: 1px dashed $border
+
+.tracking-number
+  margin: 0 0 $small
+
+  code
+    font-family: $code-font
+    word-break: break-all
 
 .tracking-link
   font-weight: 700

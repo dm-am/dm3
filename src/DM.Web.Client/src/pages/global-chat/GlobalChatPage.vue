@@ -22,6 +22,7 @@ import dayjs from "dayjs";
 import { symbols } from "@/shared/lib/utils/icons";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import { globalChatApi } from "@/entities/global-chat";
 import { ChatMessage } from "@/widgets/chat-message";
 import ChatEventsPanel from "./ChatEventsPanel.vue";
@@ -1298,7 +1299,7 @@ async function confirmDelete() {
           v-model="newMessage"
           context="message"
           placeholder=""
-          draft-key="global-chat"
+          :draft-key="composerDraftKey('global-chat', 'message')"
           :disabled="sending"
           :min-height="60"
           :max-height="200"

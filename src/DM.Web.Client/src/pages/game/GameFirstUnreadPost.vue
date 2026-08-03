@@ -14,8 +14,10 @@ onMounted(async () => {
   // binds the id strictly as a Guid
   const gameId = route.params.id as string;
 
-  function fallbackToRooms() {
-    router.replace({ name: "game-rooms", params: { id: gameId } });
+  // The game's own page: the site has no rooms-list page, so a reader with
+  // nothing unread lands on the game information view.
+  function fallbackToGame() {
+    router.replace({ name: "game", params: { id: gameId } });
   }
 
   try {
@@ -23,8 +25,8 @@ onMounted(async () => {
     const result = data?.resource;
 
     if (!result?.hasUnread) {
-      // No posts at all (or request failed) - go to rooms list
-      fallbackToRooms();
+      // No posts at all (or request failed) - go to the game page
+      fallbackToGame();
       return;
     }
 
@@ -34,7 +36,7 @@ onMounted(async () => {
     const room = roomsData?.resources.find((r) => r.id === result.roomId);
 
     if (!room) {
-      fallbackToRooms();
+      fallbackToGame();
       return;
     }
 
@@ -50,8 +52,8 @@ onMounted(async () => {
       },
     });
   } catch {
-    // On unexpected error, just go to rooms list
-    fallbackToRooms();
+    // On unexpected error, just go to the game page
+    fallbackToGame();
   }
 });
 </script>

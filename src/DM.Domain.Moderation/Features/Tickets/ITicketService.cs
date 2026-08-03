@@ -55,7 +55,7 @@ public class CreateTicketIntake
     public string Subject { get; set; } = "";
 
     /// <summary>
-    /// Ticket text (raw BBCode)
+    /// Ticket text (plain text, no markup)
     /// </summary>
     public string Text { get; set; } = "";
 

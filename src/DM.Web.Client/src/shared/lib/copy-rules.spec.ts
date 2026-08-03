@@ -164,8 +164,8 @@ function copyOf(file: string, raw: string): string[] {
 
 /**
  * Wordings the owner replaced by hand. None of these is a style rule the code
- * could re-derive: each is a page name or a sentence he dictated, so a list is
- * what keeps them fixed.
+ * could re-derive: each is a page name, a sentence he dictated, or a promise
+ * the site does not keep, so a list is what keeps them fixed.
  */
 const RETIRED_COPY: { text: string; instead: string }[] = [
   {
@@ -180,6 +180,21 @@ const RETIRED_COPY: { text: string; instead: string }[] = [
   {
     text: "форма ошибок",
     instead: '"форма поддержки" — /support takes more than bug reports',
+  },
+  {
+    text: "ответим на этот адрес",
+    instead:
+      'the truth while no ticket mail exists: the answer appears in "Мои обращения", and for a guest on the tracking page',
+  },
+  {
+    text: "вышлем ссылку для отслеживания обращения",
+    instead:
+      "the number and the link are printed on the success card, nothing is mailed",
+  },
+  {
+    text: "мы ответим по нему",
+    instead:
+      "where the answer appears: on the site, not through the contact the author left",
   },
   {
     text: "А с полной статистикой сайта",
@@ -198,9 +213,10 @@ function probeOf(phrase: string): string {
 
 /**
  * The other half of the same edits. Dropping the support link out of the
- * hacking rule, or splitting the news line back in two, brings no retired
- * wording back, so the scan above cannot see it. Each anchor is the shortest
- * phrase that carries the point, so re-wording around it is still free.
+ * hacking rule, splitting the news line back in two, or leaving a guest the
+ * tracking link without the number it carries, brings no retired wording back,
+ * so the scan above cannot see it. Each anchor is the shortest phrase that
+ * carries the point, so re-wording around it is still free.
  */
 const REQUIRED_COPY: { file: string; what: string; pattern: RegExp }[] = [
   {
@@ -213,6 +229,11 @@ const REQUIRED_COPY: { file: string; what: string; pattern: RegExp }[] = [
     file: "pages/home/RecentNews.vue",
     what: "the news line stays one sentence",
     pattern: /, а с полной статистикой сайта/,
+  },
+  {
+    file: "features/support-ticket/ui/SupportTicketForm.vue",
+    what: "a guest reads the ticket number itself, not only a link holding it",
+    pattern: /Номер обращения:\s*<code>\{\{ trackingToken \}\}/,
   },
 ];
 

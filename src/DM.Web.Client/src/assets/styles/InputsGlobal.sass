@@ -16,3 +16,15 @@ select
 
 input[type="checkbox"]
   +checkbox()
+
+// The bot trap the public forms render: in the markup, out of the page. Off
+// screen rather than display:none, which is the first thing a bot skips. One
+// rule for all three call sites: they had drifted into two different
+// treatments, and the support form drew the trap with none at all, in plain
+// sight, where a reader could type into it and get the ticket refused.
+.honeypot-field
+  position: absolute
+  left: -9999px
+  width: 1px
+  height: 1px
+  opacity: 0

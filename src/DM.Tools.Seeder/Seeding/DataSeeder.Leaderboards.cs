@@ -93,8 +93,12 @@ internal sealed partial class DataSeeder
             .Select(g => g.GameId)
             .ToListAsync();
 
+        // Iterated below, and every pass draws from the generator and takes the
+        // next publication number, so the order of this list is part of the
+        // fixture rather than a detail of the query plan.
         var blogs = await _dbContext.Set<DbBlog>()
             .Where(b => !b.IsRemoved && b.Status != ModuleStatus.Draft)
+            .OrderBy(b => b.SerialNumber)
             .ToListAsync();
 
         // Publication numbers are assigned across windows before a single
@@ -146,7 +150,11 @@ internal sealed partial class DataSeeder
                     candidatesQuery = candidatesQuery
                         .Where(po => po.CreatedUtc >= winStart && po.CreatedUtc < winEnd);
                 }
+                // The first rows take the highest scores below, so this order is
+                // the ranking the boards end up showing.
                 var candidates = (await candidatesQuery
+                        .OrderBy(po => po.CreatedUtc)
+                        .ThenBy(po => po.PostId)
                         .Select(po => new { po.PostId, po.AuthorId, GameId = po.Room.GameId })
                         .ToListAsync())
                     .Where(c => !usedPostIds.Contains(c.PostId))

@@ -18,6 +18,7 @@ import { SvgIcon } from "@/shared/ui/Icon";
 import { symbols } from "@/shared/lib/utils/icons";
 import { Select, type SelectOption } from "@/shared/ui/Select";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import { GamePost } from "@/widgets/game-post";
 import { GamePostSkeleton } from "@/shared/ui/Skeleton";
 import { notifyFailure } from "@/shared/lib/errors";
@@ -321,11 +322,11 @@ async function dismissPendency(pendencyId: string) {
   <div class="game-room">
     <!-- Back link -->
     <router-link
-      :to="{ name: 'game-rooms', params: { id: game?.id } }"
+      :to="{ name: 'game', params: { id: gameId } }"
       class="back-link"
     >
       <SvgIcon name="chevronLeft" />
-      Назад к комнатам
+      Назад к игре
     </router-link>
 
     <!-- Room header -->
@@ -431,7 +432,7 @@ async function dismissPendency(pendencyId: string) {
         v-model="gameText"
         context="post"
         placeholder="Игровой текст поста..."
-        :draft-key="`post_game_${room?.id}`"
+        :draft-key="composerDraftKey('room', 'post', room?.id)"
         :disabled="submitting"
         :min-height="120"
         :is-moderator="canManageTurns"
@@ -443,7 +444,7 @@ async function dismissPendency(pendencyId: string) {
         v-model="metagameText"
         context="post"
         placeholder="Метаигровой комментарий (необязательно)..."
-        :draft-key="`post_meta_${room?.id}`"
+        :draft-key="composerDraftKey('room', 'metagame', room?.id)"
         :disabled="submitting"
         :min-height="60"
         :max-height="200"

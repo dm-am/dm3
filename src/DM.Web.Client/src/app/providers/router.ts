@@ -525,9 +525,10 @@ const router = createRouter({
         {
           // GamePage (the zone shell) owns the tab title for every route
           // below: the game name first, then `section` of the active
-          // sub-route. The two room routes name a room instead of a fixed
-          // section — the shell cannot spell that, so they declare
-          // `dynamicTitle` and compose the title themselves.
+          // sub-route. A route whose section is data cannot be spelled by
+          // the shell: the two rooms name their room, the character form
+          // names its mode, so they declare `dynamicTitle` and compose the
+          // title themselves.
           path: "/game/:id",
           meta: { gameZone: true },
           component: () => import("@/pages/game/GamePage.vue"),
@@ -537,12 +538,6 @@ const router = createRouter({
               path: "",
               meta: { dynamicTitle: true },
               component: () => import("@/pages/game/GameDetails.vue"),
-            },
-            {
-              name: "game-rooms",
-              path: "rooms",
-              meta: { section: "Комнаты" },
-              component: () => import("@/pages/game/GameRooms.vue"),
             },
             {
               name: "game-room",
@@ -567,7 +562,10 @@ const router = createRouter({
             {
               name: "game-character-create",
               path: "characters/create",
-              meta: { requiresAuth: true, section: "Новый персонаж" },
+              // The section is the ?npc flag: "Новый NPC" or "Новый
+              // персонаж". Meta cannot spell a section that is data, so the
+              // page composes the title, and its H1 reads the same string.
+              meta: { requiresAuth: true, dynamicTitle: true },
               component: () => import("@/pages/game/CharacterCreate.vue"),
             },
             {

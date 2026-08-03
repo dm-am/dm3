@@ -22,7 +22,7 @@ public class CreateTicketIntakeRequest
     public string Subject { get; set; } = "";
 
     /// <summary>
-    /// Ticket text (BBCode)
+    /// Ticket text (plain text, no markup)
     /// </summary>
     /// <example>The page shows an error when I open it...</example>
     public string Text { get; set; } = "";

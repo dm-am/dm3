@@ -19,6 +19,7 @@ import { CommentItem, useCommentWarnDialog } from "@/features/comment";
 import { LoginPrompt } from "@/features/auth";
 import { CommentSkeleton } from "@/shared/ui/Skeleton";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import Button from "@/shared/ui/Button/Button.vue";
 
 const route = useRoute();
@@ -220,7 +221,7 @@ useFetchData(
               v-model="newComment"
               context="common"
               placeholder="Написать комментарий..."
-              :draft-key="`blog_${blog?.id}_comment`"
+              :draft-key="composerDraftKey('blog', 'comment', blog?.id)"
               :disabled="sending"
               :min-height="100"
               :max-height="300"

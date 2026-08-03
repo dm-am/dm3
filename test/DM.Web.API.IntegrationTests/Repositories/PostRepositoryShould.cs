@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Uploads;
 using DM.Domain.Game.Features.Posts;
 using DM.Infrastructure.Persistence;
 using FluentAssertions;
@@ -19,7 +20,6 @@ using DbPost = DM.Infrastructure.Persistence.Entities.Game.Posts.Post;
 using DbPostReview = DM.Infrastructure.Persistence.Entities.Game.PostReview;
 using DbRoom = DM.Infrastructure.Persistence.Entities.Game.Posts.Room;
 using DbSubscription = DM.Infrastructure.Persistence.Entities.Subscriptions.Subscription;
-using DbUpload = DM.Infrastructure.Persistence.Entities.Shared.Upload;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
@@ -211,33 +211,33 @@ public class PostRepositoryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Reading a room must not depend on a character having exactly one portrait.
+    /// A room shows the portrait the character has now, not the one it replaced.
     /// </summary>
     /// <remarks>
     /// The batch load keyed a dictionary on the target character, so a second live
     /// upload pointing at the same character made ToDictionaryAsync throw on the
     /// duplicate key — and that read is on all three post paths, so every member of
-    /// the room got a 500 until somebody edited rows by hand. Nothing in the schema
-    /// prevents the second row; the upload path retires the previous portrait now,
-    /// and this asserts the read survives regardless.
-    ///
-    /// The newest wins, which is the same rule the garbage collector applies when
-    /// it picks which upload of an entity is current.
+    /// the room got a 500 until somebody edited rows by hand. The pair is refused by
+    /// the schema now, and the second upload here is legal only because the insert
+    /// retires the row it replaces in the same transaction: it goes through the
+    /// repository the endpoint calls, so a unique violation is what this test would
+    /// report if that retirement were dropped.
     /// </remarks>
     [Fact]
-    public async Task TakeTheNewestPortraitWhenACharacterHasTwoLiveUploads()
+    public async Task ShowThePortraitThatReplacedTheOneBeforeIt()
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
+        var uploads = scope.ServiceProvider.GetRequiredService<IUploadRepository>();
         var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
 
         var context = await AddGameWithRoomAsync(dbContext);
         var characterId = await AddPostByNewCharacterAsync(dbContext, context);
 
         var older = await AddCharacterPortraitAsync(
-            dbContext, context.UserId, characterId, DateTimeOffset.UtcNow.AddHours(-1));
+            uploads, context.UserId, characterId, DateTimeOffset.UtcNow.AddHours(-1));
         var newer = await AddCharacterPortraitAsync(
-            dbContext, context.UserId, characterId, DateTimeOffset.UtcNow);
+            uploads, context.UserId, characterId, DateTimeOffset.UtcNow);
 
         var posts = (await repository.Get(
             context.RoomId,
@@ -246,7 +246,7 @@ public class PostRepositoryShould : IntegrationTestBase
 
         posts.Should().ContainSingle();
         posts[0].Character.Picture.SourceObjectKey.Should().Be(newer,
-            "the current portrait is the newest upload pointing at the character");
+            "the current portrait is the live upload pointing at the character");
         posts[0].Character.Picture.SourceObjectKey.Should().NotBe(older);
     }
 
@@ -405,28 +405,33 @@ public class PostRepositoryShould : IntegrationTestBase
         return characterId;
     }
 
-    /// <summary>A live CharacterAvatar upload. Returns its object key.</summary>
+    /// <summary>
+    /// A character portrait written the way the upload endpoint writes it, so the
+    /// retirement of the previous one is part of what is under test. Returns its
+    /// object key.
+    /// </summary>
     private static async Task<string> AddCharacterPortraitAsync(
-        DmDbContext dbContext, Guid userId, Guid characterId, DateTimeOffset createdUtc)
+        IUploadRepository uploads, Guid userId, Guid characterId, DateTimeOffset createdUtc)
     {
         var objectKey = $"characters/{Guid.NewGuid():N}.png";
 
-        dbContext.Uploads.Add(new DbUpload
+        await uploads.AddAsync(new NewUpload
         {
-            UploadId = Guid.NewGuid(),
+            Id = Guid.NewGuid(),
             UserId = userId,
-            TargetCharacterId = characterId,
+            TargetId = characterId,
             Type = UploadType.CharacterAvatar,
             Status = UploadStatus.Confirmed,
+            FileName = "portrait.png",
             ContentType = "image/png",
             SizeBytes = 1024,
             ObjectKey = objectKey,
-            FilePath = $"https://cdn.example/{objectKey}",
+            Original = true,
+            Url = $"https://cdn.example/{objectKey}",
             CreatedUtc = createdUtc,
-            IsRemoved = false,
+            ConfirmedUtc = createdUtc,
         });
 
-        await dbContext.SaveChangesAsync();
         return objectKey;
     }
 

@@ -11,6 +11,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Game.Authorization;
+using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.Games;
 using FluentValidation;
 
@@ -30,6 +31,7 @@ internal class PostReviewService : IPostReviewService
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IProbationConfiguration _probationConfig;
+    private readonly IGameBlacklistRepository _blacklistRepository;
 
     public PostReviewService(
         IValidator<CreatePostReview> createValidator,
@@ -39,7 +41,8 @@ internal class PostReviewService : IPostReviewService
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
-        IProbationConfiguration probationConfig)
+        IProbationConfiguration probationConfig,
+        IGameBlacklistRepository blacklistRepository)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -49,6 +52,7 @@ internal class PostReviewService : IPostReviewService
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
         _probationConfig = probationConfig;
+        _blacklistRepository = blacklistRepository;
     }
 
     /// <inheritdoc />
@@ -66,6 +70,14 @@ internal class PostReviewService : IPostReviewService
         if (postInfo == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.PostNotFound);
+        }
+
+        // The blacklist closes writing, and rating a post writes into the game it
+        // belongs to. The game's rooms and posts are open to a blacklisted reader
+        // and stay open, so the refusal has to be here and not in what they see.
+        if (await _blacklistRepository.IsBlocked(postInfo.GameId, authorId))
+        {
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
         }
 
         // Can't review own post

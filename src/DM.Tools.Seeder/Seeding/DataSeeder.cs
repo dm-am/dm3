@@ -57,18 +57,6 @@ namespace DM.Tools.Seeder.Seeding;
 /// </summary>
 internal sealed partial class DataSeeder
 {
-    /// <summary>
-    /// Configuration key holding the instant the whole seed is laid out around.
-    /// Environment form: <c>DM_SeedEpochUtc</c>.
-    /// </summary>
-    private const string SeedEpochKey = "SeedEpochUtc";
-
-    /// <summary>
-    /// Seed of <see cref="_random"/>. Arbitrary value, fixed forever: what
-    /// matters is that it never changes, not what it is.
-    /// </summary>
-    private const int RandomSeed = 20260730;
-
     private readonly DmDbContext _dbContext;
     private readonly DmMongoClient _mongoClient;
     private readonly ISecurityManager _securityManager;
@@ -81,32 +69,14 @@ internal sealed partial class DataSeeder
 
     /// <summary>
     /// The only source of randomness in the seed, and a seeded one.
+    /// See <see cref="SeedDeterminism.Random"/>.
     /// </summary>
-    /// <remarks>
-    /// Every draw here reaches something a reader sees: which accounts play
-    /// which game, who wrote a comment and what it says, view and like counts,
-    /// review verdicts, list order. On <c>Random.Shared</c> that made the
-    /// fixture different on every run, so an assertion about a count or a name
-    /// held or failed by luck and nothing could be measured twice. Seeded, the
-    /// same command produces the same fixture on any machine.
-    ///
-    /// Not thread-safe, and does not need to be: the seed runs one aggregate
-    /// after another on a single scope, because a shared <c>DmDbContext</c>
-    /// cannot be used concurrently either.
-    /// </remarks>
     private readonly Random _random;
 
     /// <summary>
     /// The instant every seeded timestamp is offset from.
+    /// See <see cref="SeedDeterminism.Epoch"/>.
     /// </summary>
-    /// <remarks>
-    /// Resolved once so that a single run is internally consistent, and
-    /// overridable through <see cref="SeedEpochKey"/> so that a run can be
-    /// pinned to a chosen moment. It defaults to the real clock on purpose: a
-    /// hardcoded past epoch would empty every surface built around recency -
-    /// the current-month leaderboards, "activated N days ago", the new-games
-    /// block. Pinning is what a pixel baseline needs, and only it.
-    /// </remarks>
     private readonly DateTimeOffset _now;
 
     /// <summary>
@@ -117,13 +87,12 @@ internal sealed partial class DataSeeder
         DmMongoClient mongoClient,
         ISecurityManager securityManager,
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider,
+        SeedDeterminism determinism,
         IPollRepository pollRepository,
         IPublicIdService publicIdService,
         IImageProcessingService imageProcessing,
         Amazon.S3.IAmazonS3 s3Client,
-        IOptions<CdnConfiguration> cdnOptions,
-        IConfiguration configuration)
+        IOptions<CdnConfiguration> cdnOptions)
     {
         _dbContext = dbContext;
         _mongoClient = mongoClient;
@@ -134,31 +103,8 @@ internal sealed partial class DataSeeder
         _imageProcessing = imageProcessing;
         _s3Client = s3Client;
         _cdnConfig = cdnOptions.Value;
-        _random = new Random(RandomSeed);
-        _now = ResolveEpoch(configuration, dateTimeProvider);
-    }
-
-    /// <summary>
-    /// Reads the pinned epoch, falling back to the clock.
-    /// </summary>
-    /// <exception cref="FormatException">
-    /// The key was set to something unparseable. Thrown rather than ignored: a
-    /// typo that silently reverted to the clock would look like a determinism
-    /// bug in whatever consumed the seed.
-    /// </exception>
-    private static DateTimeOffset ResolveEpoch(
-        IConfiguration configuration, IDateTimeProvider dateTimeProvider)
-    {
-        var configured = configuration[SeedEpochKey];
-        if (string.IsNullOrWhiteSpace(configured))
-        {
-            return dateTimeProvider.Now;
-        }
-
-        return DateTimeOffset.Parse(
-            configured,
-            CultureInfo.InvariantCulture,
-            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
+        _random = determinism.Random;
+        _now = determinism.Epoch;
     }
 
     /// <summary>

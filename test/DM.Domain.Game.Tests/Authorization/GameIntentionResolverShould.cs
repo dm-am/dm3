@@ -357,6 +357,39 @@ public class GameIntentionResolverShould : UnitTestBase
     }
 
     [Fact]
+    public void AllowReadOfAPublicGameForTheUserItBlacklisted()
+    {
+        var blacklistedId = Guid.NewGuid();
+        var game = new GameBuilder()
+            .WithStatus(ModuleStatus.Active)
+            .WithPremoderationStatus(PremoderationStatus.Approved)
+            .WithBlacklisted(blacklistedId)
+            .Please();
+        var user = Create.User(blacklistedId).WithRole(UserRole.RegularUser).Please();
+
+        // The blacklist closes writing, not reading. The game is public to
+        // everybody else, so hiding it from one person would promise a privacy it
+        // does not have, and GameAccessibilityFilters answers the list the same
+        // way now: the two used to disagree.
+        resolver.IsAllowed(user, GameIntention.Read, game).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ForbidCommentingAGameForTheUserItBlacklisted()
+    {
+        var blacklistedId = Guid.NewGuid();
+        var game = new GameBuilder()
+            .WithCommentsAccessMode(CommentsAccessMode.Public)
+            .WithBlacklisted(blacklistedId)
+            .Please();
+        var user = Create.User(blacklistedId).WithRole(UserRole.RegularUser).Please();
+
+        // The other half of the same rule: they may read the game and may not
+        // write in it
+        resolver.IsAllowed(user, GameIntention.CreateComment, game).Should().BeFalse();
+    }
+
+    [Fact]
     public void ForbidCommentingOwnGameUnderAFullBan()
     {
         var masterId = Guid.NewGuid();

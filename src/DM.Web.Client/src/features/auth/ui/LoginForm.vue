@@ -229,9 +229,6 @@ const onPasswordInput = () => {
 .field-action
   +inline-link-button
 
-.honeypot-field
-  display: none
-
 .remember-me
   margin-top: $medium
   display: flex

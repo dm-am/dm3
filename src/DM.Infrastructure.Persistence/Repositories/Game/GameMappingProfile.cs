@@ -69,7 +69,8 @@ internal class GameMappingProfile : Profile
             {
                 ViewPrivateText = r.ViewPrivateText,
                 ViewDiceResults = r.ViewDiceResults,
-                DiceEnabled = r.DiceEnabled
+                DiceEnabled = r.DiceEnabled,
+                HiddenWithoutAccess = r.HiddenWithoutAccess
             }));
 
         CreateMap<DbRoom, RoomOrderInfo>()

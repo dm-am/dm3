@@ -849,6 +849,53 @@ describe("BBCodeEditor", () => {
   });
 
   // ============================================================================
+  // DRAFT KEY CHANGE
+  // ============================================================================
+
+  describe("Draft Key Change", () => {
+    it("does not carry the text over to the next subject", async () => {
+      const wrapper = mount(BBCodeEditor, {
+        props: { modelValue: "", draftKey: "game:7f1a:comment" },
+      });
+      await nextTick();
+
+      await wrapper.find(".bbcode-textarea").setValue("текст первой игры");
+      await flushPromises();
+
+      await wrapper.setProps({ draftKey: "game:b204:comment" });
+      await flushPromises();
+
+      // The box is emptied for the new subject, and nothing of the previous
+      // one's text is written under the new key.
+      expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual([""]);
+      expect(
+        localStorageMock.getItem("bbcode_draft_game:b204:comment"),
+      ).toBeNull();
+    });
+
+    it("keeps each subject's draft under its own key", async () => {
+      const wrapper = mount(BBCodeEditor, {
+        props: { modelValue: "", draftKey: "game:7f1a:comment" },
+      });
+      await nextTick();
+
+      await wrapper.find(".bbcode-textarea").setValue("текст первой игры");
+      await flushPromises();
+
+      await wrapper.setProps({ draftKey: "game:b204:comment" });
+      await flushPromises();
+      await wrapper.setProps({ draftKey: "game:7f1a:comment" });
+      await flushPromises();
+
+      // Back on the first game, its own draft is on offer again.
+      expect(wrapper.find(".draft-available").exists()).toBe(true);
+      expect(
+        localStorageMock.getItem("bbcode_draft_game:7f1a:comment"),
+      ).toContain("текст первой игры");
+    });
+  });
+
+  // ============================================================================
   // ERROR HANDLING
   // ============================================================================
 

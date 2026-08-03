@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using DM.Domain.Account.Features.Security;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Configuration;
 using DM.Infrastructure.Core;
 using DM.Infrastructure.Core.Configuration;
@@ -94,6 +95,19 @@ internal static class Program
             // internal, so the assembly scan is what picks it up.
             builder.RegisterDefaultTypes(typeof(ISecurityManager).Assembly);
 
+            // Last, and deliberately last: Autofac takes the final registration
+            // as the default, so this is what replaces the infrastructure
+            // Guid.NewGuid() factory for the tool and only for the tool. Single
+            // instances, because a per-dependency generator restarts its stream
+            // on every resolve and hands out the same identifiers twice.
+            builder.RegisterType<SeedDeterminism>()
+                .AsSelf()
+                .SingleInstance();
+
+            builder.RegisterType<SeededGuidFactory>()
+                .As<IGuidFactory>()
+                .SingleInstance();
+
             builder.RegisterType<DataSeeder>()
                 .AsSelf()
                 .InstancePerLifetimeScope();
@@ -110,6 +124,10 @@ internal static class Program
         Console.WriteLine("                 2026-06-15T12:00:00Z. Unset: the real clock, which is what");
         Console.WriteLine("                 keeps a development site looking alive. Pin it when the same");
         Console.WriteLine("                 dates have to come out of two different runs.");
+        Console.WriteLine();
+        Console.WriteLine("DM_SeedRandomSeed  integer the randomness and the identifiers are drawn");
+        Console.WriteLine("                 from. Unset: a fixed default, so two runs already agree.");
+        Console.WriteLine("                 Pin it to lay out a different, equally repeatable fixture.");
     }
 
     private static void PrintUsers(SeedResult result)

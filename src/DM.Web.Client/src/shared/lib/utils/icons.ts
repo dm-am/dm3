@@ -329,10 +329,9 @@ export const symbols = {
   arrowDown: "\u2193",
   arrowLeft: "\u2190",
   arrowRight: "\u2192",
-  triangleUp: "\u25B2",
-  triangleDown: "\u25BC",
-  triangleLeft: "\u25C0",
-  triangleRight: "\u25B6",
+  // The disclosure triangles are gone. A marker that opens a section is drawn by
+  // CSS, not written into the markup: written, it lands in the clipboard with the
+  // row it decorates, and the row has to copy as the sentence a person reads.
 } as const;
 
 /**

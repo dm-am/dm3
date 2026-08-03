@@ -53,6 +53,8 @@ internal class RoomMappingProfile : Profile
                 s => s.MapFrom(r => r.Settings != null ? (bool?)r.Settings.ViewDiceResults : null))
             .ForMember(d => d.DiceEnabled,
                 s => s.MapFrom(r => r.Settings != null ? (bool?)r.Settings.DiceEnabled : null))
+            .ForMember(d => d.HiddenWithoutAccess,
+                s => s.MapFrom(r => r.Settings != null ? (bool?)r.Settings.HiddenWithoutAccess : null))
             .ForMember(d => d.IsRemoved, opt => opt.Ignore());
 
         // Policy used to be ignored here, so every access of every response

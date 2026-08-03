@@ -104,4 +104,10 @@ public class RoomSettings
     /// Dice rolling is enabled in this room
     /// </summary>
     public bool DiceEnabled { get; set; }
+
+    /// <summary>
+    /// Room is kept out of the game's room list for everybody who may not open
+    /// it. Off by default, so a closed room is named to everybody.
+    /// </summary>
+    public bool HiddenWithoutAccess { get; set; }
 }

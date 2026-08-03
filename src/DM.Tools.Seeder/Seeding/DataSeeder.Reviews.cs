@@ -126,8 +126,13 @@ internal sealed partial class DataSeeder
         var existingGameReviewsCount = await _dbContext.GameReviews.CountAsync();
         if (gameIds.Count > 0 && experiencedUsers.Count >= 2 && existingGameReviewsCount == 0)
         {
+            // Two of them get a review, so which two is a decision, and a LIMIT
+            // over an unordered result hands that decision to the query plan.
+            // Ordered by the serial number: the order the games were created in,
+            // and a number, so no collation gets a say either.
             var games = await _dbContext.Set<DbGame>()
                 .Where(g => gameIds.Contains(g.GameId) && g.Status != ModuleStatus.Draft)
+                .OrderBy(g => g.SerialNumber)
                 .ToListAsync();
 
             foreach (var game in games.Take(2))

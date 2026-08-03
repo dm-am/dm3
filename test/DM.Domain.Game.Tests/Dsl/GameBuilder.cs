@@ -100,5 +100,20 @@ public class GameBuilder
         return this;
     }
 
+    /// <summary>
+    /// The game's owner put these users on its blacklist. It closes writing and
+    /// not reading, so a game built with it still reads as the public game it is.
+    /// </summary>
+    public GameBuilder WithBlacklisted(params Guid[] userIds)
+    {
+        var blacklisted = new List<BlacklistedUser>();
+        foreach (var userId in userIds)
+        {
+            blacklisted.Add(new BlacklistedUser { UserId = userId, LinkId = Guid.NewGuid() });
+        }
+        game.BlacklistedUsers = blacklisted;
+        return this;
+    }
+
     public GameDetails Please() => game;
 }

@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
@@ -44,9 +43,9 @@ internal class GameCommentLikeService : IGameCommentLikeService
         var comment = await _commentService.GetAsync(commentId);
         _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
 
-        // Check blacklist
+        // The blacklist closes writing, and a like is writing.
         var game = await _gameService.GetAsync(comment.EntityId);
-        if (game.BlacklistedUsers.Any(b => b.UserId == _identityProvider.Current.User.UserId))
+        if (game.IsBlacklisted(_identityProvider.Current.User.UserId))
         {
             throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
         }
@@ -60,9 +59,9 @@ internal class GameCommentLikeService : IGameCommentLikeService
         var comment = await _commentService.GetAsync(commentId);
         _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
 
-        // Check blacklist
+        // The blacklist closes writing, and taking a like back is writing.
         var game = await _gameService.GetAsync(comment.EntityId);
-        if (game.BlacklistedUsers.Any(b => b.UserId == _identityProvider.Current.User.UserId))
+        if (game.IsBlacklisted(_identityProvider.Current.User.UserId))
         {
             throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
         }

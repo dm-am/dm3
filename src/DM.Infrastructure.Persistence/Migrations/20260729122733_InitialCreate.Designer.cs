@@ -2876,6 +2876,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("GameId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("HiddenWithoutAccess")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsArchived")
                         .HasColumnType("boolean");
 
@@ -4277,6 +4282,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasIndex("TargetCharacterId")
                         .HasFilter("\"TargetCharacterId\" IS NOT NULL");
 
+                    b.HasIndex(new[] { "TargetCharacterId" }, "IX_Uploads_TargetCharacterId_Live")
+                        .IsUnique()
+                        .HasFilter("\"Type\" = 2 AND \"IsRemoved\" = false");
+
                     b.HasIndex("TargetPostId")
                         .HasFilter("\"TargetPostId\" IS NOT NULL");
 
@@ -4317,7 +4326,8 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("SubscriptionId");
 
-                    b.HasIndex("SubscriberId");
+                    b.HasIndex("SubscriberId", "TargetType", "TargetId")
+                        .IsUnique();
 
                     b.HasIndex("TargetType", "TargetId");
 

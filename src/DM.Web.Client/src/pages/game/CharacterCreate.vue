@@ -17,6 +17,10 @@ import { CharacterForm } from "@/features/edit-character";
 import { createEmptySchema } from "@/entities/game";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import {
+  joinTitleSegments,
+  useDocumentTitle,
+} from "@/shared/lib/composables/useDocumentTitle";
 import { useToast } from "@/shared/lib/composables/useToast";
 
 const route = useRoute();
@@ -34,6 +38,12 @@ const gameGuid = computed(() => game.value?.id ?? gameId.value);
 
 const schema = computed(() => game.value?.schema ?? createEmptySchema());
 
+// One name for the page: the H1 and the section of the tab title are the same
+// string. That section is the `?npc` flag, which a static meta.section cannot
+// spell, so the page composes the zone title itself, the game first.
+const heading = computed(() => (isNpc.value ? "Новый NPC" : "Новый персонаж"));
+useDocumentTitle(() => joinTitleSegments(game.value?.title, heading.value));
+
 onMounted(() => {
   if (!game.value) store.loadGame(gameId.value);
 });
@@ -50,9 +60,7 @@ function onCancel() {
 
 <template>
   <div class="character-create">
-    <page-title>
-      {{ isNpc ? "Новый NPC" : "Новый персонаж" }}
-    </page-title>
+    <page-title>{{ heading }}</page-title>
 
     <secondary-text v-if="!isNpc" class="intro">
       Заполните анкету персонажа. После отправки мастер рассмотрит заявку.

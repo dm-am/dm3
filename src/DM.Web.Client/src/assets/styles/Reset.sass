@@ -116,6 +116,23 @@ button:focus-visible
     overflow: hidden
     min-height: 0
 
+// Disclosure marker — the triangle in front of a row that opens. The glyph is
+// pseudo-content and never a text node: interface text stays selectable, so a
+// marker written into the markup rides along into every row a reader copies.
+// Collapsed is the base state, and `.expanded` turns the same triangle a
+// quarter circle, which draws the down-pointing one. Global for the same
+// reason as the folds above, and on their tempo — the marker and the content
+// it opens are one motion. Size and color are inherited, so a marker looks
+// like the row it belongs to.
+.expand-marker
+  &::before
+    content: "\25B6"
+    display: inline-block
+    transition: transform $expand-duration $expand-easing
+
+  &.expanded::before
+    transform: rotate(90deg)
+
 // Screen-reader-only content (standard clip pattern)
 .visually-hidden
   position: absolute

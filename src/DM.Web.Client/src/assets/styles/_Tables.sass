@@ -69,12 +69,13 @@ $details-offset: 20px
     outline: 2px solid $border-focus
     outline-offset: -2px
 
+// The column the marker sits in. The marker itself is the global
+// .expand-marker (Reset.sass): it draws the glyph and owns the turn.
 =expand-icon
   font-size: $expand-icon-size
   color: $text-muted
   width: $expand-icon-width
   flex-shrink: 0
-  transition: transform 0.15s ease
 
 =expandable-details
   padding: $table-cell-padding-v $table-cell-padding-h $table-cell-padding-v ($table-cell-padding-h + $details-offset)

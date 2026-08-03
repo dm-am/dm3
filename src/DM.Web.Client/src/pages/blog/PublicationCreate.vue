@@ -11,6 +11,7 @@ import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useBlogDetailsStore, blogApi } from "@/entities/blog";
 import { PublicationForm } from "@/features/publication";
+import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
@@ -89,7 +90,7 @@ function cancel() {
       :loading="saving"
       action="Опубликовать"
       cancel-label="Отмена"
-      :draft-key="`blog_${blogId}_publication_new`"
+      :draft-key="composerDraftKey('blog', 'publication', blogId)"
       @submit="publish"
       @cancel="cancel"
     />

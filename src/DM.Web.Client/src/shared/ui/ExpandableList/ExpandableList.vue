@@ -17,7 +17,6 @@
  */
 
 import { computed } from "vue";
-import { symbols } from "@/shared/lib/utils/icons";
 import { useExpandable } from "@/shared/lib/composables";
 
 export interface ExpandableItem {
@@ -132,9 +131,11 @@ defineExpose({ expandItem });
         @click="toggle(item.id)"
         @keydown="handleKeydown($event, item.id)"
       >
-        <span class="expand-icon" aria-hidden="true">{{
-          isExpanded(item.id) ? symbols.triangleDown : symbols.triangleRight
-        }}</span>
+        <span
+          class="expand-icon expand-marker"
+          :class="{ expanded: isExpanded(item.id) }"
+          aria-hidden="true"
+        />
         <span
           v-for="column in columns"
           :key="column.key"
@@ -161,9 +162,11 @@ defineExpose({ expandItem });
         @click="toggle(item.id)"
         @keydown="handleKeydown($event, item.id)"
       >
-        <span class="expand-icon" aria-hidden="true">{{
-          isExpanded(item.id) ? symbols.triangleDown : symbols.triangleRight
-        }}</span>
+        <span
+          class="expand-icon expand-marker"
+          :class="{ expanded: isExpanded(item.id) }"
+          aria-hidden="true"
+        />
         <span class="item-title">{{ item.title }}</span>
       </div>
 

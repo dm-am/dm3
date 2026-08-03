@@ -829,6 +829,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     PreviousRoomId = table.Column<Guid>(type: "uuid", nullable: true),
                     NextRoomId = table.Column<Guid>(type: "uuid", nullable: true),
                     IsArchived = table.Column<bool>(type: "boolean", nullable: false),
+                    HiddenWithoutAccess = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
                     DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
@@ -2322,9 +2323,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "DeletedByUserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Subscriptions_SubscriberId",
+                name: "IX_Subscriptions_SubscriberId_TargetType_TargetId",
                 table: "Subscriptions",
-                column: "SubscriberId");
+                columns: new[] { "SubscriberId", "TargetType", "TargetId" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Subscriptions_TargetType_TargetId",
@@ -2443,6 +2445,13 @@ namespace DM.Infrastructure.Persistence.Migrations
                 table: "Uploads",
                 column: "TargetCharacterId",
                 filter: "\"TargetCharacterId\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Uploads_TargetCharacterId_Live",
+                table: "Uploads",
+                column: "TargetCharacterId",
+                unique: true,
+                filter: "\"Type\" = 2 AND \"IsRemoved\" = false");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Uploads_TargetPostId",

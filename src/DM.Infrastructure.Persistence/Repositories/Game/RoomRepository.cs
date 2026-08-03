@@ -220,6 +220,9 @@ internal class RoomRepository : IRoomRepository
         if (updateRoom.DiceEnabled.HasValue)
             room.DiceEnabled = updateRoom.DiceEnabled.Value;
 
+        if (updateRoom.HiddenWithoutAccess.HasValue)
+            room.HiddenWithoutAccess = updateRoom.HiddenWithoutAccess.Value;
+
         if (updateRoom.IsArchived.HasValue)
             room.IsArchived = updateRoom.IsArchived.Value;
 

@@ -67,9 +67,11 @@ const { toggle: toggleLoginHistory, zoneBindings: historyZoneBindings } =
           @click="toggleLoginHistory()"
         >
           История входов ({{ loginHistory?.length ?? 0 }})
-          <span class="mod-expand-icon" aria-hidden="true">{{
-            showLoginHistory ? symbols.triangleDown : symbols.triangleRight
-          }}</span>
+          <span
+            class="mod-expand-icon expand-marker"
+            :class="{ expanded: showLoginHistory }"
+            aria-hidden="true"
+          />
         </button>
       </h5>
       <div

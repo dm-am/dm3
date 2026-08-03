@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# Runs the seeder twice into the same empty database and diffs the result.
+#
+# This is the proof behind every future pixel baseline: a screenshot is a
+# measurement only if the fixture under it is the same fixture twice. It is not
+# an xUnit test because seeding writes to PostgreSQL, MongoDB and object storage
+# at once, so the thing being proved does not exist until the stack is up. The
+# regression guard is the test, and it runs on every build:
+# test/DM.Architecture.Tests/SeedDeterminismShould.cs.
+#
+# It RESETS the dm3 databases of the local stack. They hold seeded development
+# data and nothing else, which is the only reason this script is allowed to
+# exist, but it is still a reset. Stop dmapi first if it is running: it holds
+# connections to a database this drops.
+#
+#   bash scripts/verify-seed-reproducibility.sh --yes
+#
+# Knobs: SEED_EPOCH and SEED_RANDOM, both pinned by default. The epoch has to be
+# pinned here even though the seeder defaults it to the clock - that default is
+# what keeps a development site looking alive, and it is exactly what two runs
+# must not do.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT/docker"
+
+SEED_EPOCH="${SEED_EPOCH:-2026-06-15T12:00:00Z}"
+SEED_RANDOM="${SEED_RANDOM:-20260730}"
+
+if [ "${1:-}" != "--yes" ]; then
+  echo "This drops and rebuilds the dm3 database in PostgreSQL and in MongoDB."
+  read -r -p "Continue? [y/N] " answer
+  [ "$answer" = "y" ] || exit 1
+fi
+
+set -a
+# shellcheck disable=SC1091
+. ./.env
+set +a
+
+snapshots="$(mktemp -d)"
+trap 'rm -rf "$snapshots"' EXIT
+
+reset_databases() {
+  docker compose exec -T postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+    -c 'DROP DATABASE IF EXISTS dm3 WITH (FORCE)' \
+    -c 'CREATE DATABASE dm3' >/dev/null
+
+  # mongo-init.js runs only on an empty data directory, so dropping the database
+  # takes the application user with it and it has to be created again.
+  docker compose exec -T mongo mongosh --quiet \
+    -u "$MONGO_ROOT_USER" -p "$MONGO_ROOT_PASSWORD" --authenticationDatabase admin \
+    --eval "db.getSiblingDB('dm3').dropDatabase(); db.getSiblingDB('dm3').createUser({user:'${MONGO_USER:-dm}',pwd:'$MONGO_PASSWORD',roles:[{role:'readWrite',db:'dm3'}]})" >/dev/null
+
+  # --force-recreate, because a one-shot service that already exited is
+  # "up to date" as far as compose is concerned, and the second run would then
+  # be seeded into a database with no schema.
+  docker compose up -d --force-recreate --wait migration >/dev/null
+}
+
+snapshot() {
+  local target="$1"
+
+  # The salt comes from a cryptographic generator and the hash follows it: the
+  # only two values in the fixture that are not a function of the seed.
+  # Flattened in place rather than filtered out of the dump, so the comparison
+  # stays a plain diff with no exclusion list to grow.
+  docker compose exec -T postgres psql -U postgres -d dm3 -v ON_ERROR_STOP=1 >/dev/null <<'SQL'
+UPDATE "Users" SET "PasswordHash" = '', "Salt" = '';
+SQL
+
+  docker compose exec -T postgres \
+    pg_dump -U postgres -d dm3 --data-only --column-inserts \
+    | LC_ALL=C sort > "$target.pg"
+
+  docker compose exec -T mongo mongosh --quiet \
+    "mongodb://${MONGO_USER:-dm}:$MONGO_PASSWORD@localhost:27017/dm3?authSource=dm3" \
+    --eval 'db.getCollectionNames().forEach(c => db.getCollection(c).find().forEach(d => print(c + " " + EJSON.stringify(d))))' \
+    | LC_ALL=C sort > "$target.mongo"
+}
+
+docker compose up -d postgres mongo rabbitmq minio >/dev/null
+docker compose build migration seeder
+
+for run in 1 2; do
+  echo "--- run $run: epoch $SEED_EPOCH, seed $SEED_RANDOM"
+  reset_databases
+  # One command, not "users" then "content": the user step draws from the same
+  # generator, so splitting the run shifts every content choice after it.
+  docker compose run --rm -T \
+    -e "DM_SeedEpochUtc=$SEED_EPOCH" \
+    -e "DM_SeedRandomSeed=$SEED_RANDOM" \
+    seeder all
+  snapshot "$snapshots/run$run"
+done
+
+status=0
+for store in pg mongo; do
+  if diff -u "$snapshots/run1.$store" "$snapshots/run2.$store" > "$snapshots/$store.diff"; then
+    echo "OK: $store identical across both runs ($(wc -l < "$snapshots/run1.$store") lines)."
+  else
+    echo "DIFFERENT: $store"
+    head -n 40 "$snapshots/$store.diff"
+    status=1
+  fi
+done
+
+if [ "$status" -ne 0 ]; then
+  cat <<'EOF'
+
+The seed is not reproducible yet, so no pixel baseline taken against it means
+anything. Find what the differing rows have in common - a date, a name, an id,
+a count - and follow it back to the draw that produced it.
+EOF
+fi
+
+exit "$status"

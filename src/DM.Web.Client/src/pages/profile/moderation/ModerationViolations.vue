@@ -2,7 +2,6 @@
 import { ref, reactive, toRef, watch } from "vue";
 import { useExpandableSection } from "@/shared/lib/composables";
 import { useModal } from "vue-final-modal";
-import { symbols } from "@/shared/lib/utils/icons";
 import type {
   ViolationSummary,
   ModerationPermissions,
@@ -146,9 +145,11 @@ const { open: openBanDialog, close: closeBanDialog } = useModal({
         >
           ({{ violations.activeWarningPoints }} активных баллов)
         </span>
-        <span class="mod-expand-icon" aria-hidden="true">{{
-          showWarnings ? symbols.triangleDown : symbols.triangleRight
-        }}</span>
+        <span
+          class="mod-expand-icon expand-marker"
+          :class="{ expanded: showWarnings }"
+          aria-hidden="true"
+        />
       </button>
 
       <div
@@ -198,9 +199,11 @@ const { open: openBanDialog, close: closeBanDialog } = useModal({
               : " — перманентный"
           }})
         </span>
-        <span class="mod-expand-icon" aria-hidden="true">{{
-          showBans ? symbols.triangleDown : symbols.triangleRight
-        }}</span>
+        <span
+          class="mod-expand-icon expand-marker"
+          :class="{ expanded: showBans }"
+          aria-hidden="true"
+        />
       </button>
 
       <div ref="bansZoneRef" class="expand-zone" v-bind="bansZoneBindings">

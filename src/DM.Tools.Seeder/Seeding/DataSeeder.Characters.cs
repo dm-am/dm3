@@ -363,6 +363,7 @@ internal sealed partial class DataSeeder
             // e.g. after a restart between seed steps).
             availableGames = await _dbContext.Set<DbGame>()
                 .Where(g => !g.IsRemoved && g.MasterId != solohin.UserId)
+                .OrderBy(g => g.SerialNumber)
                 .Take(toCreate * 2)
                 .ToListAsync();
         }
@@ -498,6 +499,7 @@ internal sealed partial class DataSeeder
                             g.Status != ModuleStatus.Draft &&
                             g.MasterId != solohin.UserId &&
                             !occupiedGameIds.Contains(g.GameId))
+                .OrderBy(g => g.SerialNumber)
                 .Take(gamesNeeded)
                 .ToListAsync();
         }

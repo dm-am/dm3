@@ -1,14 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Subscriptions;
 using DM.Domain.Core.Users;
+using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.Subscriptions;
 using DM.Testing.Dsl;
 using DM.Testing;
@@ -23,6 +26,7 @@ public class GameSubscriptionServiceShould : UnitTestBase
     private readonly Mock<ISubscriptionRepository> _repository;
     private readonly Mock<IUserLookupService> _userLookupService;
     private readonly Mock<IIdentityProvider> _identityProvider;
+    private readonly Mock<IGameBlacklistRepository> _blacklistRepository;
     private readonly GameSubscriptionService _service;
     private readonly Guid _currentUserId;
 
@@ -42,12 +46,36 @@ public class GameSubscriptionServiceShould : UnitTestBase
         var dateTimeProvider = Mock<IDateTimeProvider>();
         dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
 
+        _blacklistRepository = Mock<IGameBlacklistRepository>();
+
         _service = new GameSubscriptionService(
             _repository.Object,
             _userLookupService.Object,
             _identityProvider.Object,
             guidFactory.Object,
-            dateTimeProvider.Object);
+            dateTimeProvider.Object,
+            _blacklistRepository.Object);
+    }
+
+    [Fact]
+    public async Task RefuseToSubscribeAUserTheGameBlacklisted()
+    {
+        var gameId = Guid.NewGuid();
+        _blacklistRepository
+            .Setup(r => r.IsBlocked(gameId, _currentUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var act = async () => await _service.SubscribeAsync(gameId);
+
+        // Reading the game is open to them and stays open. Joining its roster is
+        // the write the blacklist refuses: it hands out GameRole.Reader and with it
+        // the private comment thread, and a subscriber cannot be blacklisted in the
+        // first place, the owner has to remove them from the game first.
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+        _repository.Verify(
+            r => r.CreateAsync(It.IsAny<CreateSubscription>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Fact]

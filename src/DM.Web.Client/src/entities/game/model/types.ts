@@ -529,6 +529,12 @@ export interface RoomSettings {
   viewPrivateText: boolean;
   viewDiceResults: boolean;
   diceEnabled: boolean;
+  /**
+   * Room is kept out of the game's room list for everybody who may not open
+   * it. The server is what drops it: a hidden room never reaches a viewer
+   * without access at all, so this is only ever read by the settings form.
+   */
+  hiddenWithoutAccess: boolean;
 }
 
 export type Room = {

@@ -83,7 +83,7 @@ internal sealed partial class DataSeeder
             // Authenticated complaint about a user (Moderator scope)
             new Ticket
             {
-                TicketId = Guid.NewGuid(),
+                TicketId = _guidFactory.Create(),
                 UserId = reporter.UserId,
                 TargetId = target.UserId,
                 EntityType = "",
@@ -97,7 +97,7 @@ internal sealed partial class DataSeeder
             // Authenticated suggestion, answered by a moderator (Moderator scope)
             new Ticket
             {
-                TicketId = Guid.NewGuid(),
+                TicketId = _guidFactory.Create(),
                 UserId = target.UserId,
                 EntityType = "",
                 Status = TicketStatus.WaitingForUser,
@@ -114,7 +114,7 @@ internal sealed partial class DataSeeder
             // Authenticated complaint about a junior moderator decision (SeniorModerator scope)
             new Ticket
             {
-                TicketId = Guid.NewGuid(),
+                TicketId = _guidFactory.Create(),
                 UserId = reporter.UserId,
                 EntityType = "",
                 Status = TicketStatus.WaitingForModeration,
@@ -127,7 +127,7 @@ internal sealed partial class DataSeeder
             // Guest support request with a contact email (Admin scope)
             new Ticket
             {
-                TicketId = Guid.NewGuid(),
+                TicketId = _guidFactory.Create(),
                 GuestEmail = "guest@example.com",
                 EntityType = "",
                 Status = TicketStatus.WaitingForModeration,
@@ -140,7 +140,7 @@ internal sealed partial class DataSeeder
             // Guest submission marked as spam (Admin scope, Spam status demo)
             new Ticket
             {
-                TicketId = Guid.NewGuid(),
+                TicketId = _guidFactory.Create(),
                 GuestEmail = "promo@spam.example.com",
                 EntityType = "",
                 Status = TicketStatus.Spam,
@@ -208,7 +208,7 @@ internal sealed partial class DataSeeder
             var ago = (existing + i + 1) * 30; // spread evenly over recent months
             _dbContext.Set<Ban>().Add(new Ban
             {
-                BanId = Guid.NewGuid(),
+                BanId = _guidFactory.Create(),
                 TargetUserId = solohin.UserId,
                 AuthorId = author.UserId,
                 StartedUtc = now.AddDays(-ago),

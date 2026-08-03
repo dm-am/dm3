@@ -9,8 +9,18 @@ using DbRoom = DM.Infrastructure.Persistence.Entities.Game.Posts.Room;
 namespace DM.Infrastructure.Persistence.RelationalStorage;
 
 /// <summary>
-/// Filters for game blacklist and visibility
+/// Filters for game visibility
 /// </summary>
+/// <remarks>
+/// The game's blacklist is deliberately not one of them. It closes writing and
+/// leaves reading alone: the game stays public to everybody else, so hiding it
+/// from one person promises a privacy the game does not have. Both filters used
+/// to drop a blacklisted user's row, which answered differently from
+/// GameIntentionResolver.Read, which never consulted the list at all: the game
+/// vanished from the list, from search and from its own address while the page
+/// rule would have opened it. Every refusal the blacklist does produce sits on a
+/// write path and carries RefusalMessage.BlacklistedFromGame.
+/// </remarks>
 public static class GameAccessibilityFilters
 {
     /// <summary>
@@ -18,10 +28,6 @@ public static class GameAccessibilityFilters
     /// </summary>
     public static Expression<Func<DbGame, bool>> GameAvailable(Guid userId) => game =>
         !game.IsRemoved &&
-        !(
-            game.BlackList != null &&
-            game.BlackList.Any(b => b.BlockedUserId == userId)
-        ) &&
         (
             game.MasterId == userId ||
             game.Assistants.Any(a => a.UserId == userId) ||
@@ -51,16 +57,15 @@ public static class GameAccessibilityFilters
     /// skipping the room's own access type. The rooms menu shows private rooms
     /// the reader may not enter (closed lock, plain text instead of a link), so
     /// "listed" and "may be opened" are two questions over one rule; every
-    /// point read keeps the default and stays closed.
+    /// point read keeps the default and stays closed. A room whose master set
+    /// HiddenWithoutAccess is the one exception: the switch takes it off the
+    /// list of everybody who may not open it, so it has to cut here, in the
+    /// query, and not on the client over a payload that still carries the room.
     /// </param>
     public static Expression<Func<DbRoom, bool>> RoomAvailable(
         Guid userId, bool listingOnly = false) => room =>
         !room.IsRemoved &&
         !room.Game.IsRemoved &&
-        !(
-            room.Game.BlackList != null &&
-            room.Game.BlackList.Any(b => b.BlockedUserId == userId)
-        ) &&
         (
             room.Game.MasterId == userId ||
             room.Game.Assistants.Any(a => a.UserId == userId) ||
@@ -73,7 +78,7 @@ public static class GameAccessibilityFilters
               room.Game.DraftVisibility == DraftVisibility.Public))
         ) &&
         (
-            listingOnly ||
+            listingOnly && !room.HiddenWithoutAccess ||
             room.AccessType == RoomAccessType.Open ||
             room.AccessType == RoomAccessType.Private &&
             (

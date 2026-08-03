@@ -132,6 +132,25 @@ public static class GameRoleExtensions
     }
 
     /// <summary>
+    /// Whether the game's owner put this user on its blacklist.
+    /// </summary>
+    /// <remarks>
+    /// The blacklist closes writing and leaves reading alone: the game is public
+    /// to everybody else, so hiding it from one person would promise a privacy it
+    /// does not have. Every refusal built on this predicate is therefore on a
+    /// write intention, and the storage filters that answer the game and room
+    /// lists do not consult the list at all.
+    ///
+    /// One spelling on purpose. The question was written out six times as an
+    /// inline Any over BlacklistedUsers, and a rule this short is exactly the kind
+    /// whose copies drift the moment one of them is edited.
+    /// </remarks>
+    public static bool IsBlacklisted(this Game game, Guid userId)
+    {
+        return game.BlacklistedUsers.Any(b => b.UserId == userId);
+    }
+
+    /// <summary>
     /// Convert GameRole to API string representation
     /// </summary>
     public static string ToApiString(this GameRole role) => role switch

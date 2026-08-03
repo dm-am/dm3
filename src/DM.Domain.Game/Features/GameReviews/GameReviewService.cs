@@ -9,6 +9,7 @@ using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
+using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Core.Identity;
 using DM.Domain.Game.Authorization;
@@ -29,6 +30,7 @@ internal class GameReviewService : IGameReviewService
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IProbationConfiguration _probationConfig;
+    private readonly IGameBlacklistRepository _blacklistRepository;
 
     public GameReviewService(
         IValidator<CreateGameReview> createValidator,
@@ -38,7 +40,8 @@ internal class GameReviewService : IGameReviewService
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
-        IProbationConfiguration probationConfig)
+        IProbationConfiguration probationConfig,
+        IGameBlacklistRepository blacklistRepository)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -48,6 +51,7 @@ internal class GameReviewService : IGameReviewService
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
         _probationConfig = probationConfig;
+        _blacklistRepository = blacklistRepository;
     }
 
     /// <inheritdoc />
@@ -59,6 +63,15 @@ internal class GameReviewService : IGameReviewService
         var author = _identityProvider.Current.User;
         var authorId = author.UserId;
         var gameId = createReview.GameId;
+
+        // The blacklist closes writing, and a review is writing. Reading the game
+        // is open to a blacklisted user, so they reach the review form, and the
+        // eligibility below (a post in the game) survives being removed from it,
+        // which is the exact sequence a blacklist is put up for.
+        if (await _blacklistRepository.IsBlocked(gameId, authorId))
+        {
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
+        }
 
         // Newbies cannot create game reviews
         if (await IsNewbieAsync(authorId))

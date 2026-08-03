@@ -781,20 +781,46 @@ function clearDraft() {
   }
 }
 
+/** Put text into whichever mode is showing, and hand it to the parent. */
+function applyContent(content: string) {
+  emit("update:modelValue", content);
+  if (mode.value === "wysiwyg" && editor.value) {
+    const html = bbcodeToHtml(content);
+    editor.value.commands.setContent(html, { emitUpdate: false });
+  } else {
+    bbcodeText.value = content;
+    nextTick(() => autoResizeTextarea());
+  }
+}
+
 function restoreDraft() {
   const draft = loadDraft();
-  if (draft) {
-    emit("update:modelValue", draft);
-    if (mode.value === "wysiwyg" && editor.value) {
-      const html = bbcodeToHtml(draft);
-      editor.value.commands.setContent(html, { emitUpdate: false });
-    } else {
-      bbcodeText.value = draft;
-      nextTick(() => autoResizeTextarea());
-    }
-  }
+  if (draft) applyContent(draft);
   hasDraft.value = false;
 }
+
+/**
+ * The composer belongs to one subject at a time, and the key says which one.
+ * Pages keep the composer across a change of subject — the router reuses the
+ * component and reloads its data underneath — so nothing else empties the box
+ * when the reader opens another game, another dialogue, another room. Left
+ * alone, what was typed for the previous subject stays on screen and is saved
+ * under the new subject's key.
+ *
+ * An empty previous key means nothing was being drafted (the subject had not
+ * loaded yet), so that transition only picks up the new subject's draft.
+ */
+watch(
+  () => props.draftKey,
+  (key, previous) => {
+    lastSavedDraft = "";
+    draftStatus.value = "idle";
+    draftSavedAt.value = null;
+    if (previous) applyContent("");
+    const draft = key ? loadDraft() : null;
+    hasDraft.value = Boolean(draft?.trim());
+  },
+);
 
 // Check for existing draft on mount
 onMounted(() => {

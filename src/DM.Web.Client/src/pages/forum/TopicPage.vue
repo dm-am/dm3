@@ -9,6 +9,7 @@ import { TopicView as TopicDisplay } from "@/features/topic";
 import { LoginPrompt } from "@/features/auth";
 import { WarningDialog } from "@/features/moderation-actions";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
@@ -317,7 +318,7 @@ function handleWarn(id: string) {
           v-model="newComment"
           context="common"
           placeholder="Написать комментарий..."
-          :draft-key="`topic_${topic?.id}`"
+          :draft-key="composerDraftKey('topic', 'comment', topic?.id)"
           :disabled="sending"
           :min-height="100"
           :max-height="300"

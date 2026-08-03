@@ -13,6 +13,7 @@ import { CommentItem, useCommentWarnDialog } from "@/features/comment";
 import { LoginPrompt } from "@/features/auth";
 import { CommentSkeleton } from "@/shared/ui/Skeleton";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import Button from "@/shared/ui/Button/Button.vue";
 import { gameApi } from "@/entities/game";
 import { CommentariesAccessMode, GameParticipation } from "@/entities/game";
@@ -247,7 +248,7 @@ useFetchData(
               v-model="newComment"
               context="common"
               placeholder="Написать комментарий..."
-              :draft-key="`game_${game?.id}_comment`"
+              :draft-key="composerDraftKey('game', 'comment', game?.id)"
               :disabled="sending"
               :min-height="100"
               :max-height="300"

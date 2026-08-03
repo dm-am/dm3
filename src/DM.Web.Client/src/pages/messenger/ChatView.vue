@@ -27,6 +27,7 @@ import dayjs from "dayjs";
 import { symbols } from "@/shared/lib/utils/icons";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import { messagingApi } from "@/entities/message";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
 import { notifyFailure } from "@/shared/lib/errors";
@@ -660,7 +661,7 @@ onUnmounted(() => {
               v-model="newMessage"
               context="message"
               placeholder="Написать сообщение..."
-              :draft-key="`chat_${selectedChat?.id}`"
+              :draft-key="composerDraftKey('chat', 'message', selectedChat?.id)"
               :disabled="sending"
               :min-height="60"
               :max-height="200"
