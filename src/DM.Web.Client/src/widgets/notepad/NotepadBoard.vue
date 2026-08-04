@@ -553,7 +553,7 @@ onMounted(fetchEntries);
     font-family: inherit
     font-size: $font-size
 
-    &:focus
+    &:focus:not(:focus-visible)
       outline: none
       border-color: $accent-green
 

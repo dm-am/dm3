@@ -31,7 +31,7 @@
         <span class="unavailable">{{ unavailableReason }}</span>
       </template>
       <template v-else>
-        <span class="hint">2–20 символов</span>
+        <span class="hint">2-20 символов</span>
       </template>
     </div>
   </div>

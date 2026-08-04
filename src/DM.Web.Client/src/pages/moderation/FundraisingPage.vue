@@ -125,7 +125,7 @@ onMounted(load);
     color: $text
     box-sizing: border-box
 
-    &:focus
+    &:focus:not(:focus-visible)
       outline: none
       border-color: $link
 

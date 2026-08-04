@@ -57,7 +57,10 @@ const errorDefaults: Record<number, ErrorConfig> = {
   404: {
     title: "Страница не найдена",
     description:
-      "Такой страницы не существует. Возможно, она была перемещена или удалена.",
+      // Without the deletion clause: that is what 410 below says, and while
+      // both said it the two pages answered the same question. This one is the
+      // wrong address, nothing more.
+      "По этому адресу ничего нет. Проверьте ссылку, возможно, в ней ошибка.",
     image: generalImage,
   },
   409: {

@@ -325,7 +325,7 @@ onMounted(async () => {
     color: $text
     font: inherit
 
-    &:focus
+    &:focus:not(:focus-visible)
       outline: none
       border-color: $link
 

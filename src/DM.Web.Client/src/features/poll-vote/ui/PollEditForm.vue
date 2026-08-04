@@ -138,7 +138,7 @@ async function saveEdit() {
   font-size: inherit
   box-sizing: border-box
 
-  &:focus
+  &:focus:not(:focus-visible)
     outline: none
     border-style: solid
     border-color: $border-focus

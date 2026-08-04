@@ -49,8 +49,17 @@ a
 // them for keyboard navigation only (mouse focus stays outline-free).
 // Component-level :focus-visible rules (e.g. _Tables.sass expandable rows,
 // DataTable sort buttons) have higher specificity and override this.
+// Form controls are on this list too. They used to rely on the ring inside
+// +input-base, which a control that styles its own frame never takes, and the
+// components that do that are the search field, the date field and the range
+// picker — the most-used fields on the site. A keyboard reader had nothing at
+// all to tell them where they were.
 a:focus-visible,
-button:focus-visible
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible
   outline: 2px solid $border-focus
   outline-offset: 2px
 

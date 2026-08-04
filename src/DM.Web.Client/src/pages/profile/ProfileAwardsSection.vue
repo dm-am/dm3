@@ -320,14 +320,12 @@ const hasAwards = computed(() => awards.value.length > 0);
   white-space: nowrap
   color: $heading
   background-color: var(--tier-badge-bg)
+  // One ring, not two. The border in the page colour is what lifts the badge
+  // off the icon it overlaps; a second hairline in the metal was added on top
+  // of it and drew outside the border, so the badge read as a dark pill with a
+  // white gap and a stray metal ring around it.
   border: 2px solid $bg-page
   border-radius: $minor
-  // The tier classes below paint the metal on the glyph, so currentColor IS
-  // the metal: one hairline holds the badge apart from the page in the dark
-  // theme, where its fill is a shade off the page colour. No halo under the
-  // glyph — a metal letter on a dark fill needs none, and the dark one that
-  // stood here was left over from the white numeral it used to outline.
-  outline: 1px solid currentColor
   font-variant-numeric: tabular-nums
 
 // Caption, centered under the icon. A reserved 2-line min-height keeps the
@@ -338,11 +336,11 @@ const hasAwards = computed(() => awards.value.length > 0);
   width: 100%
   box-sizing: border-box
   font-size: $secondary-font-size
-  // The name of an entity, at the weight the site sets a name in. 500 was the
-  // one place on the profile where it was lighter, and next to the icon it
-  // read as a caption of the picture instead of the name of the award.
+  // The name of an entity, at the weight and the colour the site sets a name
+  // in. $heading is the brown of h1 and of block titles; on a caption under an
+  // icon it read as a heading of its own, and bold made that louder still.
   font-weight: bold
-  color: $heading
+  color: $text
   letter-spacing: 0.1px
   text-align: center
   line-height: 1.2

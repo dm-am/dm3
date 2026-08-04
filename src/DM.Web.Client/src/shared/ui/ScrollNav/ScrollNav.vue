@@ -409,11 +409,18 @@ const { canSwitch, switchTooltip, switchRegion, isHydrated, isSwitching } =
       background: $link-nav-hover
 
 // Mirror button
+// The glyph is sized in pixels, not through font-size. 1.3em was written for
+// an emoji, where the drawn glyph is smaller than its em box; an SvgIcon is
+// exactly 1em square, so the same rule made a 20.8px icon inside an 18px-tall
+// button and it spilled over the edges.
 .mirror-btn
-  font-size: 1.3em
   line-height: 1
   color: $link-nav
   +icon-button(36px, 18px)
+
+  .svg-icon
+    width: 14px
+    height: 14px
 
   &:hover:not(:disabled)
     color: $link-nav-hover

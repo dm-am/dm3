@@ -454,7 +454,8 @@ function progressLabel(chain: Chain): string {
   // but 12px in a cell of an eight-column grid, where full bold adds width and
   // pushes the longest titles onto a third line the reserve does not hold.
   font-weight: 600
-  color: $heading
+  // Same as the award caption beside it: the name of a thing, not a heading.
+  color: $text
   letter-spacing: 0.1px
   text-align: center
   line-height: 1.2

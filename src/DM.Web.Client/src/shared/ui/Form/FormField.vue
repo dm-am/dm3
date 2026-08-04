@@ -186,8 +186,18 @@ const translateError = (error: string): string => {
 // No shake: the rule referenced @keyframes shake-error, which is defined
 // nowhere in the project and never was, so the two references to it are gone
 // rather than given a body.
+//
+// Reached through :deep(), because the control is not this component's markup:
+// it arrives through the slot, carrying the scope id of the page that wrote it.
+// Without this the selector matched nothing at all, on every form of the site,
+// for as long as it has existed — the state was declared and never drawn.
+//
+// Colour is not the only carrier: .form-field-error prints the reason under the
+// field, so a reader who cannot tell the border apart still gets the sentence.
 .form-field.error
-  input, textarea, select
+  :deep(input),
+  :deep(textarea),
+  :deep(select)
     border-color: $border-accent-red
 
     &:focus

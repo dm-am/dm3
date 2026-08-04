@@ -105,7 +105,10 @@ $filter-avatar-size: 24px
     border: none
     background: none
     color: $text
-    outline: none
+    // Only for the pointer. The keyboard ring comes from Reset.sass, and
+    // this field draws no frame of its own to stand in for it.
+    &:focus:not(:focus-visible)
+      outline: none
 
     &::placeholder
       color: $text-muted
@@ -241,8 +244,10 @@ $filter-avatar-size: 24px
     // $bg-element dropdown panel — a solid fill would blend to zero delta
     background-color: $input-bg-overlay
     color: $text
-    outline: none
     box-sizing: border-box
+
+    &:focus:not(:focus-visible)
+      outline: none
 
     &:focus
       border-color: $border-focus

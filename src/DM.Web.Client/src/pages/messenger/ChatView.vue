@@ -916,7 +916,7 @@ onUnmounted(() => {
   // tabindex="0" makes the whole row focusable so keyboard users can reach
   // the hover-only toolbar (focusin -> handleMessageFocusIn); outline only
   // on :focus-visible so mouse clicks don't leave a visible ring.
-  &:focus
+  &:focus:not(:focus-visible)
     outline: none
   &:focus-visible
     outline: 2px solid $border-focus
