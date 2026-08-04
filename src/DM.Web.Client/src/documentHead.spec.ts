@@ -43,8 +43,8 @@ const indexHtml = readFileSync(join(CLIENT_ROOT, "index.html"), "utf8");
 
 // Escaped, as in shared/lib/copy-rules.spec.ts: a file that checks for a sign
 // must not be a place where the sign is spelled.
-const EM_DASH = "—";
-const YO = "ё";
+const EM_DASH = "\u2014";
+const YO = "\u0451";
 const BRAND = formatDocumentTitle("");
 
 /** Every `<meta>` of the document, read as an attribute map. */
