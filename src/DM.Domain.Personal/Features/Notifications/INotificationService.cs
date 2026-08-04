@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 
@@ -30,8 +31,17 @@ public interface INotificationService
     /// <summary>
     /// Create new notifications
     /// </summary>
+    /// <remarks>
+    /// Answers with the audience as it survived the recipient filter, not with
+    /// the audience it was asked for. Every channel has to be built from this
+    /// answer: the filter is what keeps a blocked person from reaching somebody,
+    /// and a channel reading the request instead of the reply mails out exactly
+    /// what the filter refused to store.
+    /// </remarks>
     /// <param name="createNotifications">List of creating DTOs</param>
-    Task<IEnumerable<CreateNotificationEntity>> CreateAsync(IEnumerable<CreateNotification> createNotifications);
+    /// <param name="ct">Cancellation token</param>
+    Task<IReadOnlyList<CreatedNotification>> CreateAsync(
+        IEnumerable<CreateNotification> createNotifications, CancellationToken ct = default);
 
     #endregion
 

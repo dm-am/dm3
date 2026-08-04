@@ -11,9 +11,10 @@ import {
 } from "@/shared/lib/composables/useDocumentTitle";
 import { useScrollToElement } from "@/shared/lib/composables/useScrollToElement";
 import { gameApi, type DiceRollInput } from "@/entities/game";
-import Paging from "@/shared/ui/Paging/Paging.vue";
+import PagingWithSeparators from "@/shared/ui/Paging/PagingWithSeparators.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
+import { ErrorState } from "@/shared/ui/ErrorState";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { symbols } from "@/shared/lib/utils/icons";
 import { Select, type SelectOption } from "@/shared/ui/Select";
@@ -96,6 +97,21 @@ function postNumber(index: number): number {
 const postsListRef = ref<HTMLElement | null>(null);
 function pagingAnchor(): HTMLElement | null {
   return postsListRef.value;
+}
+
+// One target for both paging blocks, above and below the posts.
+const pagingTarget = computed(() => ({
+  name: "game-room",
+  params: { id: game.value?.publicId || game.value?.id, num: roomNum.value },
+}));
+
+/** Re-read the page of posts that is on screen (the error banner's retry). */
+function reloadPosts() {
+  return gameStore.loadPostsByRoomNumber(
+    gameId.value,
+    roomNum.value,
+    getPage(),
+  );
 }
 
 useFetchData(
@@ -336,53 +352,69 @@ async function dismissPendency(pendencyId: string) {
       Назад к игре
     </router-link>
 
-    <!-- Room header -->
-    <block-title v-if="room">
-      {{ room.title }}
-    </block-title>
+    <!-- Room header. An archived room says so beside its title, in the same
+         marker the chat room uses — never as a suffix inside the room name. -->
+    <block-title v-if="room"
+      >{{ room.title
+      }}<template v-if="room.isArchived"
+        >{{ " " }}<span class="archived-tag">архив</span></template
+      ></block-title
+    >
 
-    <!-- Error -->
-    <div v-if="postsError" class="posts-error">
-      {{ postsError }}
-    </div>
+    <!-- Error — an independent banner, the way the pulse feed draws one: a
+         failed refetch keeps the posts that are already on screen instead of
+         replacing them with a red line. -->
+    <ErrorState
+      v-if="postsError"
+      class="error-banner"
+      :message="postsError"
+      :retry="reloadPosts"
+    />
 
     <!-- Loading -->
     <GamePostSkeleton
-      v-else-if="postsLoading && posts.length === 0"
+      v-if="postsLoading && posts.length === 0"
       :count="3"
       :show-navigation="false"
     />
 
     <!-- Empty -->
-    <div v-else-if="posts.length === 0" class="posts-empty">
+    <div v-else-if="!postsError && posts.length === 0" class="posts-empty">
       <secondary-text>В этой комнате пока нет постов</secondary-text>
     </div>
 
-    <!-- Posts list -->
-    <div v-else ref="postsListRef" class="posts-list">
-      <game-post
-        v-for="(post, index) in posts"
-        :key="post.id"
-        :post="post"
-        :data-id="post.id"
-        :number="postNumber(index)"
-        editable
-        @deleted="handlePostDeleted"
+    <!-- Posts list, between the two paging blocks -->
+    <template v-else>
+      <PagingWithSeparators
+        v-if="postsPaging"
+        :paging="postsPaging"
+        :to="pagingTarget"
+        :use-query="true"
+        query-key="number"
+        :scroll-anchor="pagingAnchor"
       />
-    </div>
 
-    <!-- Paging -->
-    <Paging
-      v-if="postsPaging"
-      :paging="postsPaging"
-      :to="{
-        name: 'game-room',
-        params: { id: game?.publicId || game?.id, num: roomNum },
-      }"
-      :use-query="true"
-      query-key="number"
-      :scroll-anchor="pagingAnchor"
-    />
+      <div ref="postsListRef" class="posts-list">
+        <game-post
+          v-for="(post, index) in posts"
+          :key="post.id"
+          :post="post"
+          :data-id="post.id"
+          :number="postNumber(index)"
+          editable
+          @deleted="handlePostDeleted"
+        />
+      </div>
+
+      <PagingWithSeparators
+        v-if="postsPaging"
+        :paging="postsPaging"
+        :to="pagingTarget"
+        :use-query="true"
+        query-key="number"
+        :scroll-anchor="pagingAnchor"
+      />
+    </template>
 
     <!-- Master / assistant turn tracking -->
     <section v-if="canManageTurns" class="turns">
@@ -565,12 +597,22 @@ async function dismissPendency(pendencyId: string) {
   &:hover
     text-decoration: underline
 
-.posts-error,
 .posts-empty
   padding: $big
 
-.posts-error
-  color: $accent-red
+// Muted "архив" tag beside an archived room's title — the same marker the chat
+// room draws, archive is conveyed by it and by the muted colour, never by a
+// suffix inside the room name. The gap in front of it is the " " text node in
+// the title, not a margin: a margin is drawn but not copied, and the title
+// would reach the clipboard glued.
+.archived-tag
+  font-size: $secondary-font-size
+  font-weight: normal
+  color: $text-muted
+  text-transform: uppercase
+
+.error-banner
+  margin-bottom: $medium
 
 .posts-list
   display: flex

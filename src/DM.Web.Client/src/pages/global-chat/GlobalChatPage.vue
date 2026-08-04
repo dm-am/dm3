@@ -1293,7 +1293,7 @@ async function confirmDelete() {
     <!-- Quiet notice for non-participants while a closed event is live:
          the backend rejects their messages, so warn before they type. -->
     <secondary-text v-if="showClosedEventHint" class="globalChat-event-hint">
-      Идет закрытый эвент: писать могут только участники
+      Идет закрытый эвент, писать могут только участники
     </secondary-text>
     <div class="globalChat-input-container">
       <template v-if="canSendMessages">

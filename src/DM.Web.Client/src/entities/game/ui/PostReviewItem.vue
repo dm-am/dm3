@@ -20,7 +20,8 @@ const props = withDefaults(
     number?: number;
     /**
      * Address the number copies: the room page the reviewed post lives on,
-     * anchored at the post. A review has no page of its own, so the widget
+     * anchored at the post and naming this review, which is what opens the
+     * reviews block on arrival. A review has no page of its own, so the widget
      * that owns the post owns the address (GamePost.vue) — built here it would
      * be the address of whatever surface the card is embedded in, which is how
      * a link to a review on the home page used to point at the home page.
@@ -33,9 +34,10 @@ const props = withDefaults(
 const { success: toastSuccess, error: toastError } = useToast();
 
 // One sentence for both the name of the control and the tooltip that describes
-// it, the way the comment permalink does it (CommentItem.vue). It says post,
-// because the post is where the link lands.
-const anchorHint = "Скопировать ссылку на пост";
+// it, the way the comment permalink does it (CommentItem.vue). It says review,
+// because the address it copies opens the reviews of the post it lands on and
+// marks this one.
+const anchorHint = "Скопировать ссылку на отзыв";
 
 async function copyAnchorLink() {
   if (!props.permalink) return;

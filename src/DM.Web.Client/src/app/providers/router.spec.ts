@@ -292,6 +292,7 @@ const ZONES = [
 const ZONE_TITLE_OWNERS: Record<string, string> = {
   "pages/blog/BlogPage.vue": "blog shell: blog name + meta.section",
   "pages/game/CharacterCreate.vue": "character form: game + ?npc mode",
+  "pages/game/GameCharacter.vue": "character sheet: game + character name",
   "pages/game/GameChatRoom.vue": "chat room: game + room name",
   "pages/game/GamePage.vue": "game shell: game name + meta.section",
   "pages/game/GameRoom.vue": "post room: game + room name",
@@ -403,6 +404,25 @@ describe("room titles", () => {
       expect(room.meta?.section, room.path).toBeUndefined();
       expect(room.meta?.dynamicTitle, room.path).toBe(true);
     }
+  });
+});
+
+/**
+ * The character routes of a game share one prefix, and one of them takes the id
+ * of a character as a parameter. "characters/create" is a literal segment and
+ * outranks the parameter in the router's own scoring, but the page that would
+ * be lost to a mistake here is the one a player opens to join a game.
+ */
+describe("character routes of a game", () => {
+  const CASES: Array<[string, string]> = [
+    ["/game/abcde/characters", "game-characters"],
+    ["/game/abcde/characters/create", "game-character-create"],
+    ["/game/abcde/characters/7f1c/edit", "game-character-edit"],
+    ["/game/abcde/characters/7f1c", "game-character"],
+  ];
+
+  it.each(CASES)("resolves %s to %s", (path, name) => {
+    expect(router.resolve(path).name).toBe(name);
   });
 });
 

@@ -94,6 +94,7 @@ internal class GameActivatedNotificationGenerator : BaseNotificationGenerator
         {
             EventType = EventType.NewGameFromSubscribedAuthor,
             UsersInterested = usersInterested.ToArray(),
+            ActorId = gameData.MasterId,
             Metadata = new
             {
                 GameId = gameData.GameId.EncodeToReadable(gameData.Title),

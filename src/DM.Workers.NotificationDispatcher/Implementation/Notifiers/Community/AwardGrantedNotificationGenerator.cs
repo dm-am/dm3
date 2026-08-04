@@ -54,6 +54,12 @@ internal class AwardGrantedNotificationGenerator : BaseNotificationGenerator
         yield return new CreateNotification
         {
             UsersInterested = new[] { data.UserId },
+            // ActorId stays null on purpose, and not because there is nobody to
+            // put there: the award was granted by an admin or a senior mod, and
+            // AwardedByUserId holds them. It is a staff decision about the
+            // recipient's own profile, of the same kind as a warning, so it must
+            // not become undeliverable when the recipient has that admin on their
+            // blacklist.
             Metadata = new
             {
                 UserAwardId = data.UserAwardId,

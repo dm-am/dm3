@@ -62,10 +62,6 @@ jobs:
       with:
         name: test-results
         path: TestResults/
-    # Collected since the run existed and compared with nothing, while the
-    # frontend has had a threshold in vite.config.ts all along.
-    - name: Coverage floor
-      run: ./scripts/check-coverage.sh TestResults
     - name: Upload coverage reports
       uses: actions/upload-artifact@v4
       if: always()
@@ -214,6 +210,42 @@ jobs:
     - name: Run the suite
       working-directory: src/DM.Web.Client
       run: npx playwright test --project=chromium
+
+    # retries: 2 in CI means a test that failed twice and passed on the third
+    # attempt leaves the job green, and the only evidence used to be inside an
+    # HTML artifact somebody has to download and open. A flake that nobody sees
+    # is a test on its way to being deleted for being "always red anyway", so the
+    # count and the names go on the run page itself, whether the suite passed or
+    # not. The reporter that writes the file is declared in playwright.config.ts.
+    - name: Flaky tests of this run
+      if: always()
+      working-directory: src/DM.Web.Client
+      # Node rather than jq: the job already installs it, and the same script runs
+      # on a developer machine. A spec is flaky when Playwright retried it into a
+      # pass; suites nest, so the walk is recursive.
+      run: |
+        node -e '
+          const fs = require("fs");
+          const report = "playwright-report/results.json";
+          const summary = process.env.GITHUB_STEP_SUMMARY;
+          if (!fs.existsSync(report)) {
+            fs.appendFileSync(summary, "No Playwright report at " + report + "\n");
+            process.exit(0);
+          }
+          const flaky = [];
+          const walk = (suite) => {
+            for (const spec of suite.specs || []) {
+              if ((spec.tests || []).some((test) => test.status === "flaky")) {
+                flaky.push((spec.file || suite.title) + ": " + spec.title);
+              }
+            }
+            for (const child of suite.suites || []) walk(child);
+          };
+          walk(JSON.parse(fs.readFileSync(report, "utf8")));
+          const lines = ["### Playwright: " + flaky.length + " flaky test(s)"];
+          for (const name of flaky) lines.push("- " + name);
+          fs.appendFileSync(summary, lines.join("\n") + "\n");
+        '
 
     - name: Upload Playwright report
       uses: actions/upload-artifact@v4

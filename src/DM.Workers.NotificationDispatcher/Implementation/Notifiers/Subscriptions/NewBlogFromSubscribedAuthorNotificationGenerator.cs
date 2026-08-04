@@ -87,6 +87,7 @@ internal class NewBlogFromSubscribedAuthorNotificationGenerator : BaseNotificati
         {
             EventType = EventType.NewBlogFromSubscribedAuthor,
             UsersInterested = usersInterested.ToArray(),
+            ActorId = blogData.AuthorId,
             Metadata = new
             {
                 BlogId = blogData.BlogId.EncodeToReadable(blogData.Title),

@@ -47,15 +47,17 @@ public class NotificationProcessorShould : UnitTestBase
         _mapper = Mock<IMapper>();
 
         _notificationService
-            .Setup(s => s.CreateAsync(It.IsAny<IEnumerable<CreateNotification>>()))
+            .Setup(s => s.CreateAsync(It.IsAny<IEnumerable<CreateNotification>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[]
             {
-                new CreateNotificationEntity
-                {
-                    NotificationId = Guid.NewGuid(),
-                    EventType = HandledEvent,
-                    UsersInterested = [Guid.NewGuid()]
-                }
+                new CreatedNotification(
+                    new CreateNotification { EventType = HandledEvent, UsersInterested = [Guid.NewGuid()] },
+                    new CreateNotificationEntity
+                    {
+                        NotificationId = Guid.NewGuid(),
+                        EventType = HandledEvent,
+                        UsersInterested = [Guid.NewGuid()]
+                    })
             });
 
         _mapper
@@ -97,7 +99,7 @@ public class NotificationProcessorShould : UnitTestBase
     public async Task LetAFailureBeforeTheDurableWriteEscape()
     {
         _notificationService
-            .Setup(s => s.CreateAsync(It.IsAny<IEnumerable<CreateNotification>>()))
+            .Setup(s => s.CreateAsync(It.IsAny<IEnumerable<CreateNotification>>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("the store went away"));
 
         var process = () => Processor().Process("key", _event, CancellationToken.None);

@@ -79,6 +79,11 @@ internal class BlogStatusChangedNotificationGenerator : INotificationGenerator
             yield break;
         }
 
+        // ActorId stays null: the blog keeps no record of who moved the status. The
+        // transition is made by the author, an assistant or a moderator through
+        // BlogService.ChangeStatusAsync, and none of them is written to the row, so
+        // there is nothing here to filter blacklisted recipients on. AuthorId is not
+        // it: he is a recipient of this one, not necessarily its cause.
         yield return new CreateNotification
         {
             UsersInterested = usersInterested,

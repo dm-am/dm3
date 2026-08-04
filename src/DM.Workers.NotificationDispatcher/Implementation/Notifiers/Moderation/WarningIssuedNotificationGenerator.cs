@@ -51,6 +51,9 @@ internal class WarningIssuedNotificationGenerator : BaseNotificationGenerator
         yield return new CreateNotification
         {
             UsersInterested = new[] { warningData.TargetUserId },
+            // No ActorId although the moderator is right there in warningData.AuthorId:
+            // a warning is not less delivered because the warned user has its author
+            // on their blacklist, so this one stays outside the filter.
             Metadata = new
             {
                 WarningId = warningData.WarningId,

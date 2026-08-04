@@ -46,6 +46,8 @@ internal class PasswordChangedNotificationGenerator : BaseNotificationGenerator
         yield return new CreateNotification
         {
             UsersInterested = new[] { userData.UserId },
+            // No ActorId: a system event. The owner changed their own password,
+            // so there is no other person the recipient could have blacklisted.
             Metadata = new
             {
                 Username = userData.Username,

@@ -125,6 +125,28 @@ internal class UserBlacklistRepository : IUserBlacklistRepository
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// One statement for the whole audience. The unique index leads with OwnerId,
+    /// so the set membership seeks and the equality on BlockedUserId is the second
+    /// column of the same index.
+    /// </remarks>
+    public async Task<IReadOnlySet<Guid>> GetOwnersBlockingAsync(
+        Guid blockedUserId, IReadOnlyCollection<Guid> ownerIds, CancellationToken ct = default)
+    {
+        if (ownerIds.Count == 0)
+        {
+            return new HashSet<Guid>();
+        }
+
+        var blocking = await _dbContext.UserBlacklists
+            .Where(b => b.BlockedUserId == blockedUserId && ownerIds.Contains(b.OwnerId))
+            .Select(b => b.OwnerId)
+            .ToListAsync(ct);
+
+        return blocking.ToHashSet();
+    }
+
+    /// <inheritdoc />
     public async Task<UserBlacklistSettings> GetSettings(Guid userId, CancellationToken ct = default)
     {
         var settings = await _dbContext.Users

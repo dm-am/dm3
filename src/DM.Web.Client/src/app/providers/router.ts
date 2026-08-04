@@ -591,6 +591,17 @@ const router = createRouter({
               component: () => import("@/pages/game/CharacterCreate.vue"),
             },
             {
+              // A single character's sheet. Declared after the static
+              // "characters/create" on purpose — the router ranks a literal
+              // segment above a parameter either way, and the order says so to
+              // a reader too. The section is the character's name, which is
+              // data, so the page composes the title itself.
+              name: "game-character",
+              path: "characters/:characterId",
+              meta: { dynamicTitle: true },
+              component: () => import("@/pages/game/GameCharacter.vue"),
+            },
+            {
               name: "game-character-edit",
               path: "characters/:characterId/edit",
               meta: { requiresAuth: true, section: "Редактирование персонажа" },

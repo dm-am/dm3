@@ -28,7 +28,15 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: [["html"], ["list"]],
+  // Машиночитаемый отчет рядом с человекочитаемым: с retries: 2 тест, прошедший
+  // с третьей попытки, оставляет джобу зеленой, и единственным следом флейка был
+  // HTML-артефакт, который надо скачать и открыть. Из этого файла шаг CI печатает
+  // список флейков в сводку прогона.
+  reporter: [
+    ["html"],
+    ["list"],
+    ["json", { outputFile: "playwright-report/results.json" }],
+  ],
   use: {
     baseURL,
     trace: "on-first-retry",

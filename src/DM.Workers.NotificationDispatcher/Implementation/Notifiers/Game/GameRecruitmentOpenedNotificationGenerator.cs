@@ -89,9 +89,14 @@ internal class GameRecruitmentOpenedNotificationGenerator : BaseNotificationGene
             yield break;
         }
 
+        // The actor is the master: this announcement goes to the people who
+        // subscribed to his game events and it is his name it carries. The game
+        // does not record which member of the team flipped the recruitment flag,
+        // and an assistant doing it does not make the game somebody else's.
         yield return new CreateNotification
         {
             UsersInterested = usersInterested.ToArray(),
+            ActorId = gameData.MasterId,
             Metadata = new
             {
                 GameId = gameData.GameId.EncodeToReadable(gameData.Title),

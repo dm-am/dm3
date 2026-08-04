@@ -33,8 +33,11 @@ const review = {
   likes: [],
 } as unknown as PostReview;
 
-/** The address of the room page, as GamePost hands it down. */
-const PERMALINK = "http://dm.am/game/abcde/rooms/2#post-p-1";
+/**
+ * The address of the room page with the post anchored and this review named,
+ * as GamePost hands it down.
+ */
+const PERMALINK = "http://dm.am/game/abcde/rooms/2?review=r-1#post-p-1";
 
 const mountItem = () =>
   mount(PostReviewItem, {
@@ -56,9 +59,9 @@ describe("PostReviewItem", () => {
     const anchor = wrapper.get(".review-anchor");
 
     expect(anchor.attributes("title")).toBeUndefined();
-    expect(anchor.attributes("aria-label")).toBe("Скопировать ссылку на пост");
+    expect(anchor.attributes("aria-label")).toBe("Скопировать ссылку на отзыв");
     expect(wrapper.findComponent(Tooltip).props("text")).toBe(
-      "Скопировать ссылку на пост",
+      "Скопировать ссылку на отзыв",
     );
   });
 

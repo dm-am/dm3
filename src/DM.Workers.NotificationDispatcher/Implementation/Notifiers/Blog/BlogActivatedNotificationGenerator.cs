@@ -89,10 +89,15 @@ internal class BlogActivatedNotificationGenerator : BaseNotificationGenerator
             yield break;
         }
 
+        // The author is the actor: the recipients subscribed to him, not to the blog,
+        // and the notification reports his blog opening under his name. Whoever of the
+        // team flipped the switch, a subscriber who blocked the author is not told
+        // about a new blog of his.
         yield return new CreateNotification
         {
             EventType = EventType.NewBlogFromSubscribedAuthor,
             UsersInterested = usersInterested.ToArray(),
+            ActorId = blogData.AuthorId,
             Metadata = new
             {
                 BlogId = blogData.BlogId.EncodeToReadable(blogData.Title),

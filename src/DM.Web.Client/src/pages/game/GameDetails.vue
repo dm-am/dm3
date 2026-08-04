@@ -76,15 +76,17 @@ function isRetired(c: Character): boolean {
   return c.status === "Retired";
 }
 
-// The name of a character leads to its card on the characters page of the
-// game: there is no page of a single character, and pointing at one row of a
-// list is what the site's scrollTo query already does for a post. The name
-// inside a post leads to the same card, so one name never means two places.
+// The name of a character leads to that character's own page. It used to lead
+// to the roster of the whole game with a scrollTo query, which pointed at the
+// right card only in intent: no roster reads that query. The name inside a post
+// leads to the same page, so one name never means two places.
 function characterLink(c: Character) {
   return {
-    name: "game-characters",
-    params: { id: game.value?.publicId || game.value?.id },
-    query: { scrollTo: c.id },
+    name: "game-character",
+    params: {
+      id: game.value?.publicId || game.value?.id,
+      characterId: c.id,
+    },
   };
 }
 
@@ -93,11 +95,17 @@ function statusClass(c: Character): string {
   return c.status === "Active" ? "status-active" : "status-retired";
 }
 
-// Columns mirror the old site's roster: every column centred, widths in the
-// same proportions (# ~4% / Игрок 17 / Рейтинг 11 / Присутствие 13 / Имя 14 /
-// Класс 11 / Посты 7 / Последний пост 12 / Статус 11).
+// Roster columns, every one centred as on the old site. Both tables use layout
+// "auto" instead of a percentage width on the content-sized columns: a date
+// ("DD.MM.YYYY в HH:mm") and the "Присутствие" header each need a constant
+// number of pixels, and no single percentage covers both a 1600 and a 1920
+// viewport. At 12% the date wrapped onto a second line at either width, and
+// the wrap grew every roster row. So "Последний пост" and "Присутствие" are
+// nowrap and width-less (they take exactly their content), "Игрок" and "Имя
+// персонажа" are width-less too and absorb the rest, and the remaining columns
+// keep their proportions as hints.
 const playerColumns = computed<Column[]>(() => [
-  { key: "player", label: "Игрок", align: "center", width: "17%" },
+  { key: "player", label: "Игрок", align: "center" },
   {
     key: "rating",
     label: "Рейтинг",
@@ -109,10 +117,9 @@ const playerColumns = computed<Column[]>(() => [
     key: "presence",
     label: "Присутствие",
     align: "center",
-    width: "13%",
     hideOnMobile: true,
   },
-  { key: "character", label: "Имя персонажа", align: "center", width: "14%" },
+  { key: "character", label: "Имя персонажа", align: "center" },
   {
     key: "descriptor",
     label: descriptorTitle.value,
@@ -124,13 +131,12 @@ const playerColumns = computed<Column[]>(() => [
     key: "lastpost",
     label: "Последний пост",
     align: "center",
-    width: "12%",
     hideOnMobile: true,
   },
   { key: "status", label: "Статус", align: "center", width: "11%" },
 ]);
 const npcColumns = computed<Column[]>(() => [
-  { key: "character", label: "Имя персонажа", align: "center", width: "30%" },
+  { key: "character", label: "Имя персонажа", align: "center" },
   {
     key: "descriptor",
     label: descriptorTitle.value,
@@ -142,7 +148,6 @@ const npcColumns = computed<Column[]>(() => [
     key: "lastpost",
     label: "Последний пост",
     align: "center",
-    width: "22%",
     hideOnMobile: true,
   },
   { key: "status", label: "Статус", align: "center", width: "18%" },
@@ -267,6 +272,7 @@ const npcColumns = computed<Column[]>(() => [
         :data="playerCharacters"
         :show-row-numbers="true"
         empty-text="Персонажей пока нет"
+        table-layout="auto"
       >
         <template #cell-player="{ row }">
           <UserLink v-if="row.author" :user="row.author" hide-badge />
@@ -314,6 +320,7 @@ const npcColumns = computed<Column[]>(() => [
         :data="npcCharacters"
         :show-row-numbers="true"
         empty-text="Персонажей мастера пока нет"
+        table-layout="auto"
       >
         <template #cell-character="{ row }">
           <router-link
@@ -380,4 +387,12 @@ const npcColumns = computed<Column[]>(() => [
 // Retired characters read as muted in the roster (dead / left / exiled).
 .retired
   color: $text-muted
+
+// The two content-sized roster columns. With the auto table layout each takes
+// exactly the width its content needs on one line: the date of the last post,
+// and "Присутствие", where the widest thing in the column is the header itself
+// and not the "online"/"offline" value under it.
+:deep(.col-lastpost),
+:deep(.col-presence)
+  white-space: nowrap
 </style>

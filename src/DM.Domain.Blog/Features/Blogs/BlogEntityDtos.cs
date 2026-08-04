@@ -275,6 +275,17 @@ public class UpdatePublicationEntity
     /// Update timestamp
     /// </summary>
     public DateTimeOffset UpdatedUtc { get; set; }
+
+    /// <summary>
+    /// Who is editing
+    /// </summary>
+    /// <remarks>
+    /// Not always the author: an assistant and a moderator may edit somebody
+    /// else's publication (PublicationIntentionResolver). The column existed and
+    /// nothing wrote it, so the notification about a changed publication went out
+    /// with no actor and could not be held against a reader's blacklist.
+    /// </remarks>
+    public Guid ModifiedByUserId { get; set; }
 }
 
 /// <summary>

@@ -53,6 +53,9 @@ internal class BanIssuedNotificationGenerator : BaseNotificationGenerator
         yield return new CreateNotification
         {
             UsersInterested = new[] { banData.TargetUserId },
+            // No ActorId although the moderator is right there in banData.AuthorId:
+            // this is the notification that tells a person they are banned, and
+            // blacklisting the moderator must not be a way to stop it arriving.
             Metadata = new
             {
                 BanId = banData.BanId,

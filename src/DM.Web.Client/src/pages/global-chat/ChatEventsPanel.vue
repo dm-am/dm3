@@ -4,36 +4,52 @@
  * layered over the scrolling feed.
  *
  * The line always leads with ONE focal event — the live one if something is
- * running, otherwise the nearest scheduled one — shown in full: a bold "Идет:"
- * label (live only), the title, and the muted time ("до HH:mm" live /
- * "DD.MM в HH:mm" scheduled, + ", закрытый" for invite-only events). Every
- * other upcoming event is demoted to one quiet count link "+N запланировано"
+ * running, otherwise the nearest scheduled one — shown in full: the state word
+ * ("Идет:" / "Скоро:"), the title, and the muted time ("до HH:mm" live /
+ * "DD.MM в HH:mm" scheduled, + ", закрытый" for invite-only events). The word
+ * is not decoration: a scheduled event used to differ from a running one by
+ * font weight alone, so the nearest one read as happening now. Every other
+ * upcoming event is demoted to one quiet count link "+N запланировано"
  * ("+N ..., ближайший DD.MM" while a live event holds the line); clicking it
  * unrolls the full upcoming list. There is no arrow browsing — the focal event
  * is derived (live ?? nearest), so there is no index to desync when an event
  * starts or ends in realtime.
  *
- * The strip carries no controls of its own beyond the chevron that discloses
- * the focal event's description: search and the archive date live on the
- * search row above the chat frame, in the site's filter-bar idiom.
+ * The strip is written in the site's one strip idiom: literal " | " text nodes
+ * between items, every item a link-button. Search and the archive date are not
+ * here — they live on the search row above the chat frame, in the filter-bar
+ * idiom.
  *
  * Two floating layers hang below the strip — the upcoming list and the
- * description overlay — mutually exclusive, each kept mounted and toggled by an
+ * description card — mutually exclusive, each kept mounted and toggled by an
  * ".open" class so they animate open/closed with the site's one reveal idiom
  * ($expand-duration/$expand-easing), and marked `inert` while closed so their
  * content is out of the tab order and the a11y tree. They float over the feed
- * (absolute, below the strip), so the message list never shifts.
+ * (absolute, below the strip), so the message list never shifts. Both are
+ * content rather than tools, so they answer the page-wide "Развернуть все".
  *
  * Copy-friendly: the whole line is one inline-flow run with real spaces, so
- * selecting it copies exactly "Идет: Title, до 22:48 | +2 запланировано,
- * ближайший 05.08" — one string, the way it reads. onelineCopy.spec.ts holds
- * that shape; a flex row put a line break at every item boundary instead.
+ * selecting it copies exactly "Идет: Title, до 22:48 | описание | +2
+ * запланировано, ближайший 05.08" — one string, the way it reads.
+ * onelineCopy.spec.ts holds that shape; a flex row put a line break at every
+ * item boundary instead.
  */
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  onUnmounted,
+  ref,
+  watch,
+} from "vue";
 import dayjs from "dayjs";
 import { storeToRefs } from "pinia";
 import { useGlobalChatStore } from "@/entities/global-chat";
-import { SvgIcon } from "@/shared/ui/Icon";
+import {
+  notifyExpandableChanged,
+  refreshExpandableStates,
+  registerExpandable,
+} from "@/shared/lib/composables";
 import { ContentText } from "@/shared/ui";
 
 const store = useGlobalChatStore();
@@ -56,12 +72,21 @@ const isPrimaryLive = computed(
     primaryEvent.value.id === liveEvent.value.id,
 );
 
+// The word the line leads with. Mandatory for both states: weight alone (600
+// live / 500 scheduled) is a difference no reader can name, and a scheduled
+// event without a word reads as one that is already running.
+const stateWord = computed(() => (isPrimaryLive.value ? "Идет" : "Скоро"));
+
 // Everything not on the focal line, collapsed behind the count: all upcoming
 // while a live event leads, otherwise the upcoming after the shown nearest one.
 const restEvents = computed(() =>
   liveEvent.value ? upcomingEvents.value : upcomingEvents.value.slice(1),
 );
 const restCount = computed(() => restEvents.value.length);
+
+// "+2" and " запланировано" are two parts on purpose: a narrow screen keeps the
+// number and drops the noun, so the count never eats the title's width.
+const countLabel = computed(() => `+${restCount.value}`);
 
 // "..., ближайший DD.MM" is shown only while a live event holds the line — when
 // an upcoming event is the focal one, it already IS the nearest.
@@ -109,24 +134,73 @@ const primaryMeta = computed(() => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// Floating layers — mutually exclusive, animated, focus-returning
+// Floating layers — mutually exclusive, animated, focus-returning. One ref
+// holds which one is up, because two booleans can disagree and these two
+// layers never may: they occupy the same place over the feed.
 // ─────────────────────────────────────────────────────────────
-const overlayOpen = ref(false);
-const listOpen = ref(false);
+type RevealId = "description" | "upcoming";
+
+const openReveal = ref<RevealId | null>(null);
+const descriptionOpen = computed(() => openReveal.value === "description");
+const upcomingOpen = computed(() => openReveal.value === "upcoming");
 let lastTrigger: HTMLElement | null = null;
 
-function closeAll() {
-  overlayOpen.value = false;
-  listOpen.value = false;
+/**
+ * Close whatever is up. `manual` tells the registry a person did it (which
+ * clears a pending bulk action); a layer closing because its subject went
+ * away only refreshes the aggregate state.
+ */
+function closeAll(manual = false) {
+  if (!openReveal.value) return;
+  openReveal.value = null;
+  if (manual) notifyExpandableChanged();
+  else refreshExpandableStates();
 }
 
-function toggle(which: "overlay" | "list", e: MouseEvent) {
-  const flag = which === "overlay" ? overlayOpen : listOpen;
-  const willOpen = !flag.value;
-  closeAll();
-  flag.value = willOpen;
+function toggle(which: RevealId, e: MouseEvent) {
+  const willOpen = openReveal.value !== which;
+  openReveal.value = willOpen ? which : null;
   lastTrigger = willOpen ? (e.currentTarget as HTMLElement) : null;
+  notifyExpandableChanged();
 }
+
+// ─────────────────────────────────────────────────────────────
+// Page-wide "Развернуть все / Свернуть все". Both layers are CONTENT — the
+// focal event's card and the list of upcoming ones — so they belong to the
+// registry; search and the archive date are tools and stay out of it by the
+// same rule. One handle for the pair, because they are mutually exclusive:
+// two handles could never be "all expanded" at once and the ScrollNav label
+// would be stuck on "Развернуть все" forever. Registered only while there is
+// an event to reveal, or the button would appear over an empty strip and do
+// nothing when pressed.
+// ─────────────────────────────────────────────────────────────
+let unregisterReveal: (() => void) | null = null;
+
+function syncRevealRegistration() {
+  const hasSubject = !!primaryEvent.value;
+  if (hasSubject && !unregisterReveal) {
+    unregisterReveal = registerExpandable({
+      id: Symbol("chat-events-panel"),
+      isExpanded: () => openReveal.value !== null,
+      // Pure state changes: notifyExpandableChanged() belongs to a manual
+      // click only — calling it here would clear the bulk action mid-loop.
+      expand: () => {
+        if (!openReveal.value) openReveal.value = "description";
+      },
+      collapse: () => {
+        openReveal.value = null;
+      },
+    });
+  } else if (!hasSubject && unregisterReveal) {
+    unregisterReveal();
+    unregisterReveal = null;
+  }
+}
+
+// Register synchronously in setup, so the ScrollNav button appears in the same
+// frame as the strip it belongs to.
+syncRevealRegistration();
+onBeforeUnmount(() => unregisterReveal?.());
 
 // Overlay details for the focal event.
 const overlayDetails = computed(() =>
@@ -156,18 +230,19 @@ const overlayOrganizer = computed(
 );
 
 // Lazily fill the details cache for the focal event — covers first open and the
-// focal event changing (a live one starting/ending) while the overlay stays up.
-watch([primaryEvent, overlayOpen], ([ev, open]) => {
+// focal event changing (a live one starting/ending) while the card stays up.
+watch([primaryEvent, descriptionOpen], ([ev, open]) => {
   if (open && ev) void store.fetchEventDetails(ev.id);
-  else if (open && !ev) overlayOpen.value = false;
 });
 
-// Close the list / overlay if their subject disappears out from under them.
-watch(restCount, (n) => {
-  if (n === 0) listOpen.value = false;
-});
+// Close a layer whose subject disappeared out from under it, and hand the
+// registry the strip's new shape in the same step.
 watch(primaryEvent, (ev) => {
-  if (!ev) overlayOpen.value = false;
+  if (!ev) closeAll();
+  syncRevealRegistration();
+});
+watch(restCount, (n) => {
+  if (n === 0 && upcomingOpen.value) closeAll();
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -176,15 +251,17 @@ watch(primaryEvent, (ev) => {
 // clicked, so it keeps its own focus).
 // ─────────────────────────────────────────────────────────────
 function onDocClick(e: MouseEvent) {
-  if (rootRef.value && !rootRef.value.contains(e.target as Node)) closeAll();
+  if (rootRef.value && !rootRef.value.contains(e.target as Node))
+    closeAll(true);
 }
 
 function onKeydown(e: KeyboardEvent) {
   if (e.key !== "Escape") return;
-  const wasOpen = overlayOpen.value || listOpen.value;
-  closeAll();
-  if (wasOpen && lastTrigger) {
-    lastTrigger.focus();
+  const trigger = lastTrigger;
+  const wasOpen = openReveal.value !== null;
+  closeAll(true);
+  if (wasOpen && trigger) {
+    trigger.focus();
     lastTrigger = null;
   }
 }
@@ -202,39 +279,42 @@ onUnmounted(() => {
 <template>
   <div ref="rootRef" class="chat-events-panel">
     <div class="panel-row">
-      <!-- Focal event composite (or the empty placeholder), then the quiet
-           count of everything else. -->
+      <!-- Focal event composite (or the empty placeholder), the description
+           item, then the quiet count of everything else. The separators are
+           literal " | " text nodes, and every label a reader would copy is
+           written as a literal interpolation: a bare word after the tag picks
+           up the formatter's line break as a leading space, which is how the
+           strip used to copy as "|  +2". -->
       <div class="row-main">
         <template v-if="primaryEvent">
           <span class="row-text" aria-live="polite"
-            ><span v-if="isPrimaryLive" class="row-status">Идет:{{ " " }}</span
+            ><span class="row-status">{{ stateWord }}:{{ " " }}</span
             ><span class="row-title" :class="{ upcoming: !isPrimaryLive }">{{
               primaryEvent.title
             }}</span
             ><span class="row-meta">{{ primaryMeta }}</span></span
+          ><span class="row-sep" aria-hidden="true">{{ " | " }}</span
           ><button
             type="button"
-            class="disc-toggle"
-            :class="{ open: overlayOpen }"
-            :aria-expanded="overlayOpen"
+            class="strip-item"
+            :class="{ act: descriptionOpen }"
+            :aria-expanded="descriptionOpen"
             aria-controls="chat-event-overlay"
-            aria-label="Описание"
-            title="Описание"
-            @click="toggle('overlay', $event)"
+            @click="toggle('description', $event)"
           >
-            <SvgIcon name="chevronDown" /></button
+            {{ "описание" }}</button
           ><span v-if="restCount > 0" class="row-more"
-            ><span class="copy-space">{{ " " }}</span
-            ><span class="row-sep" aria-hidden="true">|{{ " " }}</span
+            ><span class="row-sep" aria-hidden="true">{{ " | " }}</span
             ><button
               type="button"
-              class="rest-toggle"
-              :class="{ act: listOpen }"
-              :aria-expanded="listOpen"
+              class="strip-item"
+              :class="{ act: upcomingOpen }"
+              :aria-expanded="upcomingOpen"
               aria-controls="chat-event-list"
-              @click="toggle('list', $event)"
+              @click="toggle('upcoming', $event)"
             >
-              +{{ restCount }} запланировано</button
+              {{ countLabel
+              }}<span class="rest-word">{{ " запланировано" }}</span></button
             ><span v-if="nearestText" class="rest-near">{{
               nearestText
             }}</span></span
@@ -249,8 +329,8 @@ onUnmounted(() => {
       v-if="restCount > 0"
       id="chat-event-list"
       class="event-reveal rest-list"
-      :class="{ open: listOpen }"
-      :inert="!listOpen"
+      :class="{ open: upcomingOpen }"
+      :inert="!upcomingOpen"
     >
       <div class="reveal-clip">
         <div class="reveal-inner">
@@ -265,13 +345,13 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Description overlay for the focal event. -->
+    <!-- Description card for the focal event. -->
     <div
       v-if="primaryEvent"
       id="chat-event-overlay"
       class="event-reveal event-overlay"
-      :class="{ open: overlayOpen }"
-      :inert="!overlayOpen"
+      :class="{ open: descriptionOpen }"
+      :inert="!descriptionOpen"
     >
       <div class="reveal-clip">
         <div class="reveal-inner">
@@ -324,8 +404,9 @@ onUnmounted(() => {
   border-bottom: 1px dashed $border
   font-size: $secondary-font-size
 
-// Self-sizing flex row: the focal text (grows, ellipsis) on the left, the
-// control cluster (fixed) on the right. No absolute aside, no magic reserve.
+// The strip's own box: one row, vertically centred, never scrolled. It holds a
+// single child now that search and the archive date sit above the frame, so the
+// flex here only centres and pads — the line itself is inline flow inside it.
 .panel-row
   display: flex
   align-items: center
@@ -336,11 +417,11 @@ onUnmounted(() => {
   white-space: nowrap
 
 // Inline flow, not flex: a flex item is blockified, so the strip copied as
-// "Идет: ...\n\n| +2 запланировано". Inline parts copy as one line; the former
-// gap: $minor is a left margin on the two parts that follow the text, and the
-// space before the "|" is a real .copy-space node inside .row-more. The
-// ellipsis moves up here with the flow: the strip now clips at its own right
-// edge instead of the focal text clipping inside a flex track.
+// "Идет: ...\n\n| +2 запланировано". Inline parts copy as one line, and the
+// visible gaps are the spaces of the literal " | " nodes rather than geometry.
+// The ellipsis moves up here with the flow: the strip clips at its own right
+// edge instead of the focal text clipping inside a flex track, which is what
+// makes the title the LAST thing a narrow screen gives up.
 .row-main
   display: block
   flex: 1 1 auto
@@ -365,42 +446,8 @@ onUnmounted(() => {
 .row-meta
   color: $text-muted
 
-// Description disclosure — a quiet chevron on the event line that reveals the
-// focal event's own description; it rotates as the overlay opens. An icon
-// control (not a text link), so it darkens on hover rather than turning blue.
-.disc-toggle
-  display: inline-flex
-  align-items: center
-  justify-content: center
-  vertical-align: middle
-  margin-left: $minor
-  width: 20px
-  height: 20px
-  padding: 0
-  border: none
-  background: none
-  color: $text-muted
-  cursor: pointer
-  line-height: 0
-  svg
-    width: 14px
-    height: 14px
-    transition: transform $expand-duration $expand-easing
-  &.open
-    color: $text
-    svg
-      transform: rotate(180deg)
-  &:hover
-    color: $text
-  &:focus:not(:focus-visible)
-    outline: none
-  &:focus-visible
-    outline: 2px solid $border-focus
-    outline-offset: 2px
-
 // The quiet count of everything else.
 .row-more
-  margin-left: $minor
   color: $text-muted
 
 .row-sep
@@ -409,10 +456,13 @@ onUnmounted(() => {
 .rest-near
   color: $text-muted
 
-// Count of the remaining events. Calm at rest ($text-muted, blends into the
-// info line), link-blue + underline on hover, and $link/600 while its list is
-// open — so blue appears on intent, not scattered across the strip.
-.rest-toggle
+// Items of the strip: the description and the count of the remaining events.
+// Both are link-buttons, the site's one strip idiom — the chevron that used to
+// sit here was the single non-link element of the line, which made the "|"
+// next to it read as a separator for an icon. Calm at rest ($text-muted, so
+// the line stays one colour), link-blue + underline on hover, $link/600 while
+// the layer it opened is up: blue appears on intent, not scattered.
+.strip-item
   +inline-link-button
   &
     font-size: $secondary-font-size
@@ -433,8 +483,8 @@ onUnmounted(() => {
   color: $text-muted
 
 // On a phone the line gives up words before it gives up the title: first the
-// date of the nearest event, then the word of the count. Measured at 375px,
-// where the running event's title had no width left at all.
+// date of the nearest event, then the noun of the count, which leaves "+2".
+// Measured at 375px, where the running event's title had no width left at all.
 @media (max-width: $bp-mobile)
   .rest-near
     display: none

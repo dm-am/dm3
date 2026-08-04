@@ -24,10 +24,11 @@
     </ItemGroup>
 
     <ItemGroup>
-        <!-- The dispatcher has no test project of its own: its tests live with the
-             routing tests in DM.Infrastructure.Messaging.Tests. The blanket grant in
-             Directory.Build.props only covers a project named after this assembly, and
-             the processor together with its collaborators is internal. -->
+        <!-- The routing and processor tests live next to the broker they exercise,
+             in DM.Infrastructure.Messaging.Tests, and the processor together with its
+             collaborators is internal. The blanket grant in Directory.Build.props
+             covers only DM.Workers.NotificationDispatcher.Tests, which is the tier
+             that runs the generators against a database. -->
         <InternalsVisibleTo Include="DM.Infrastructure.Messaging.Tests" />
     </ItemGroup>
 

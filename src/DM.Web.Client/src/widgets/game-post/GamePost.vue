@@ -9,7 +9,7 @@ import {
   nextTick,
 } from "vue";
 import dayjs from "dayjs";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import type { Post, PostReview } from "@/entities/game";
 import { gameApi, GameLink, PostReviewItem, RoomLink } from "@/entities/game";
@@ -30,6 +30,7 @@ import {
 } from "@/shared/lib/composables/useExpandableRegistry";
 import { symbols } from "@/shared/lib/utils/icons";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
+import { scrollBlockIntoView } from "@/shared/lib/scroll";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { notifyFailure } from "@/shared/lib/errors";
 
@@ -285,6 +286,7 @@ const gameId = computed(() => props.post?.room?.game?.publicId);
 const roomNumber = computed(() => props.post?.room?.roomNumber);
 
 const router = useRouter();
+const route = useRoute();
 
 // The post's own address, built once here and handed to everything that needs
 // it: the room page the post lives on, anchored at the post. A surface that is
@@ -307,6 +309,47 @@ const postPermalink = computed(() =>
     ? window.location.origin + router.resolve(postRoute.value).href
     : window.location.origin + window.location.pathname + postAnchor.value,
 );
+
+/**
+ * The address of one review: the post's address plus `?review={id}`. A review
+ * has no page of its own, and the block it lives in is collapsed and unfetched
+ * until a reader opens it, so the post anchor alone landed the reader on the
+ * post with the review still out of sight. The parameter is read back below:
+ * it opens the block and marks the review it names.
+ */
+function reviewPermalink(reviewId: string): string {
+  const target = postRoute.value
+    ? { ...postRoute.value, query: { review: reviewId } }
+    : {
+        // The room page itself: `post.room` is not sent there, and the current
+        // route IS the room. Its own query (the page number) has to survive,
+        // or the link would point at the first page of the room.
+        path: route.path,
+        query: { ...route.query, review: reviewId },
+        hash: postAnchor.value,
+      };
+  return window.location.origin + router.resolve(target).href;
+}
+
+/**
+ * The review the current address points at, or null. The hash is what makes it
+ * this post's business: a room draws many posts, and every one of them reads
+ * the same query.
+ */
+const anchoredReviewId = computed(() => {
+  if (route.hash !== postAnchor.value) return null;
+  const asked = route.query.review;
+  return (Array.isArray(asked) ? asked[0] : asked) || null;
+});
+
+/** A review is marked either because it is the one linked to, or by author. */
+function isReviewHighlighted(review: PostReview): boolean {
+  return (
+    review.id === anchoredReviewId.value ||
+    (!!props.highlightUsername &&
+      review.author?.username === props.highlightUsername)
+  );
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Truncation — dynamic height matching post-meta, line-aligned.
@@ -469,6 +512,22 @@ async function loadReviews() {
   reviewsLoaded.value = true;
 }
 
+/**
+ * A permalink to a review has to open what it points at: the block starts
+ * collapsed and its list is fetched on demand, so a reader who followed one
+ * landed on a post whose reviews were still hidden. Once, on arrival — what
+ * the reader opens and closes afterwards is theirs.
+ */
+onMounted(async () => {
+  const target = anchoredReviewId.value;
+  if (!target) return;
+  showReviews.value = true;
+  await loadReviews();
+  await nextTick();
+  const marked = document.getElementById(`review-${target}`);
+  if (marked) scrollBlockIntoView(marked);
+});
+
 /** Manual toggle by user click — notifies the registry so pendingAction resets. */
 async function toggleReviews() {
   showReviews.value = !showReviews.value;
@@ -548,15 +607,17 @@ async function submitReview() {
             <div class="meta-inner">
               <!-- Character/Author info -->
               <template v-if="hasCharacter">
+                <!-- The character's own page, the same target the game's
+                     roster points a name at. -->
                 <router-link
                   v-if="canLinkCharacter"
                   class="character-name"
                   :to="{
-                    name: 'game-characters',
+                    name: 'game-character',
                     params: {
                       id: post.room?.game?.publicId || post.room?.game?.id,
+                      characterId: character?.id,
                     },
-                    query: { scrollTo: character?.id },
                   }"
                   >{{ characterName }}</router-link
                 >
@@ -762,11 +823,8 @@ async function submitReview() {
             :key="review.id"
             :review="review"
             :number="i + 1"
-            :permalink="postPermalink"
-            :highlight="
-              !!highlightUsername &&
-              review.author?.username === highlightUsername
-            "
+            :permalink="reviewPermalink(review.id)"
+            :highlight="isReviewHighlighted(review)"
           />
           <!-- Review form (eligible logged-in users) -->
           <li v-if="showReviews && showReviewForm" class="review-form">

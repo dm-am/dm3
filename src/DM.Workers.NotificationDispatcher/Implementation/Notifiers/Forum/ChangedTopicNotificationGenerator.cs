@@ -68,6 +68,11 @@ internal class ChangedTopicNotificationGenerator : BaseNotificationGenerator
             yield break;
         }
 
+        // ActorId stays null because the schema does not keep the editor: a
+        // topic stores only its author, and the TopicEdits history that would
+        // hold EditorUserId is never written by the update path. AuthorId below
+        // is the one who opened the topic, not the one who changed it, so
+        // filling ActorId from it would blacklist-filter the wrong person.
         yield return new CreateNotification
         {
             UsersInterested = subscriberIds,

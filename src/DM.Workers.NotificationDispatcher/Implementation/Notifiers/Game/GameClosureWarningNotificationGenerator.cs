@@ -51,6 +51,9 @@ internal class GameClosureWarningNotificationGenerator : BaseNotificationGenerat
         var usersInterested = new HashSet<Guid> { data.MasterId };
         usersInterested.UnionWith(data.AssistantIds);
 
+        // No ActorId: nobody performed this. The warning comes from the schedule
+        // that closes a game gone quiet, and MasterUsername below names the game's
+        // master for the text — he is a recipient here, not an actor.
         yield return new CreateNotification
         {
             UsersInterested = usersInterested.ToArray(),

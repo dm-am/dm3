@@ -36,6 +36,7 @@ internal class TopicCommentLikedNotificationGenerator : BaseNotificationGenerato
             select new
             {
                 LikerUsername = like.User!.Username,
+                LikerId = like.UserId,
                 comment.CommentId,
                 comment.AuthorId,
                 TopicId = topic.TopicId,
@@ -51,6 +52,7 @@ internal class TopicCommentLikedNotificationGenerator : BaseNotificationGenerato
         yield return new CreateNotification
         {
             UsersInterested = [likedCommentData.AuthorId],
+            ActorId = likedCommentData.LikerId,
             Metadata = new
             {
                 LikerUsername = likedCommentData.LikerUsername,

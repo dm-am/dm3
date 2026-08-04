@@ -89,6 +89,43 @@ public class CompositionRootShould
             "needs it instead of missing at startup");
     }
 
+    /// <summary>
+    /// The component each worker exists to run resolves, with everything under it.
+    /// </summary>
+    /// <remarks>
+    /// A container builds whether or not its graph can be walked: Autofac finds a
+    /// missing registration when something asks for it, which for a worker is on a
+    /// live message. So a dependency added to a domain service compiles, the
+    /// container still builds, the whole tier stays green, and the queue starts
+    /// failing on the first event.
+    ///
+    /// Resolved inside a scope, because that is where the hosted service resolves
+    /// its processor, and per-scope registrations are not resolvable from the root.
+    /// </remarks>
+    [Fact]
+    public void ResolveTheComponentEachWorkerRunsOn()
+    {
+        var entryPoints = new Dictionary<string, Type>
+        {
+            ["DM.Workers.NotificationDispatcher"] =
+                typeof(DM.Workers.NotificationDispatcher.Startup).Assembly
+                    .GetType("DM.Workers.NotificationDispatcher.Implementation.NotificationProcessor")!,
+        };
+
+        foreach (var (host, type) in entryPoints)
+        {
+            type.Should().NotBeNull($"{host} must still declare the component this rule names");
+
+            var container = Hosts.Single(h => h.Host == host).Container;
+            using var scope = container.BeginLifetimeScope();
+
+            var resolve = () => scope.Resolve(type);
+            resolve.Should().NotThrow(
+                $"{host} runs on {type.Name}, and a dependency it cannot resolve is a " +
+                "worker that builds, starts, reports healthy and fails on the first message");
+        }
+    }
+
     private static IReadOnlyList<(string, IContainer)> BuildHosts() =>
     [
         ("DM.Web.API", Build("DM.Web.API", (configuration, environment) =>

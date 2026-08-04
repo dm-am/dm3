@@ -12,6 +12,7 @@
 // `controls` slot is rendered under the character's name.
 import { computed, ref } from "vue";
 import type { Character, CharacterAttribute } from "../model/types";
+import { characterStatusLabel } from "../model/characterStatus";
 import { UserLink } from "@/entities/user/@x/game";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { AvatarImg, ContentText } from "@/shared/ui";
@@ -24,20 +25,11 @@ const props = defineProps<{
 const isExpanded = ref(false);
 
 // Status badge for non-active characters (Retired is refined by the flags).
-const statusLabel = computed<string | null>(() => {
-  const c = props.character;
-  switch (c.status) {
-    case "UnderReview":
-      return "На рассмотрении";
-    case "Retired":
-      if (c.isDead) return "Персонаж мертв";
-      if (c.isPlayerLeft) return "Покинул игру";
-      if (c.isPlayerExiled) return "Выведен из игры";
-      return "Вне игры";
-    default:
-      return null;
-  }
-});
+// The caption itself is entity-level: the character's own page prints the same
+// one, and two copies of it would be two vocabularies for one lifecycle.
+const statusLabel = computed<string | null>(() =>
+  characterStatusLabel(props.character),
+);
 
 // An attribute is worth rendering when it carries either server-rendered
 // BbCode HTML or a non-empty plain value.

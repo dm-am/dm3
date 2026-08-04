@@ -78,6 +78,10 @@ export type {
 // Composables
 export { useGameDisplay } from "./model/useGameDisplay";
 
+// Lifecycle caption of a character, shared by the roster card and the
+// character's own page.
+export { characterStatusLabel } from "./model/characterStatus";
+
 // Attribute-schema helpers: pure functions over the schema shape declared
 // above, framework-free and shared by every embed site of the editor.
 export {

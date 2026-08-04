@@ -226,16 +226,6 @@ onMounted(loadRoleGroups);
     > span + span
       margin-top: $tiny
 
-  .role-col
-    flex-direction: row
-    align-items: baseline
-    gap: $tiny
-
   .desc-col
     color: $text-muted
-
-  .users-col
-    flex-direction: row
-    flex-wrap: wrap
-    gap: $small
 </style>

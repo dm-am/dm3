@@ -66,6 +66,10 @@ internal class GlobalChatEventLifecycleNotificationGenerator : INotificationGene
             // API realtime processor, not through per-user stored notifications
             // (which would put a row about a public event in every inbox)
             UsersInterested = [],
+            // No ActorId: an organizer does press start and end, but the row keeps
+            // only StartedUtc and EndedUtc, never who moved the switch, and the
+            // creator it does store is not necessarily that person. Nothing to
+            // filter against either, the recipient set being the whole chat.
             Metadata = new
             {
                 GlobalChatEventId = entityId

@@ -586,22 +586,25 @@ function progressLabel(chain: Chain): string {
     font-size: $secondary-font-size
     color: $tooltip-text
 
+  // Tiers taken out of tiers there are — a count, not a tier, so nothing here
+  // is tinted by the metal. It used to be two badges: a closed chain said
+  // "Завершено" on a tier fill in upper case, an open one said "X / Y" on this
+  // overlay, so the two differed in wording, fill, colour and case at once.
+  // The one that is gone said nothing new either: the tier table below lights
+  // all four of its rows, and the tile carries the roman numeral.
   &__badge
     flex: 0 0 auto
     padding: 2px 6px
     font-size: 10px
     font-weight: 600
     line-height: 1
-    color: var(--card-tier-color, $heading)
-    background-color: var(--tier-badge-bg)
+    color: $tooltip-text
+    // The tooltip surface is dark in BOTH themes (see $tooltip-bg), so the
+    // shade over it is a white overlay rather than a theme token, exactly as
+    // in the tier list's divider below.
+    background-color: rgba(255, 255, 255, 0.12)
     border-radius: 999px
-    outline: 1px solid currentColor
-    text-transform: uppercase
     letter-spacing: 0.5px
-
-    &--muted
-      color: $tooltip-text
-      background-color: rgba(255, 255, 255, 0.12)
 
   &__desc
     margin: 0

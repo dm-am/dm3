@@ -68,7 +68,7 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
             return ProcessResult.Success;
         }
 
-        var notifications = await _notificationService.CreateAsync(notificationsToCreate);
+        var notifications = await _notificationService.CreateAsync(notificationsToCreate, cancellationToken);
 
         // Past this call the notifications are durable, and the event carries no
         // idempotency key — nothing downstream can tell a replay from a first
@@ -84,14 +84,22 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
         // In-app notifications, pushed over SignalR by the API
         foreach (var notification in notifications)
         {
-            await Deliver("realtime", notification.EventType, () =>
-                _producer.SendAsync(_mapper.Map<RealtimeNotification>(notification), cancellationToken));
+            await Deliver("realtime", notification.Entity.EventType, () =>
+                _producer.SendAsync(_mapper.Map<RealtimeNotification>(notification.Entity), cancellationToken));
         }
 
         // A realtime-only notification ends at the hub. It carries no words of
         // its own and exists to refresh a counter in an open tab, so mailing it
         // out would turn a badge into correspondence nobody asked for.
-        var outbound = notificationsToCreate.Where(n => !n.RealtimeOnly).ToArray();
+        //
+        // Read off what CreateAsync answered, never off notificationsToCreate:
+        // the service narrows the audience to who may receive the notification,
+        // and the list built above is the one it was asked for. Mailing that one
+        // delivers precisely what the filter refused to store.
+        var outbound = notifications
+            .Select(n => n.Source)
+            .Where(n => !n.RealtimeOnly)
+            .ToArray();
 
         // Email notifications to users who have enabled them
         foreach (var createNotification in outbound)

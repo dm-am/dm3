@@ -856,6 +856,7 @@ internal class BlogRepository : IBlogRepository
         }
 
         publication.ModifiedUtc = entity.UpdatedUtc;
+        publication.ModifiedByUserId = entity.ModifiedByUserId;
         await _dbContext.SaveChangesAsync(ct);
 
         return await GetPublication(entity.PublicationId, ct) ?? throw new InvalidOperationException("Publication not found after update");

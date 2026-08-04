@@ -43,6 +43,7 @@ internal class NewMessageNotificationGenerator : BaseNotificationGenerator
             {
                 m.MessageId,
                 m.ChatId,
+                AuthorUserId = m.UserId,
                 RecipientIds = m.Chat.UserLinks
                     .Where(link => link.UserId != m.UserId)
                     .Select(link => link.UserId)
@@ -59,6 +60,7 @@ internal class NewMessageNotificationGenerator : BaseNotificationGenerator
         {
             RealtimeOnly = true,
             UsersInterested = messageData.RecipientIds,
+            ActorId = messageData.AuthorUserId,
             // Neither the text nor the author travels with the push: the client
             // answers it by re-reading its chat list from the API, which applies
             // the reader's own access rules to whatever it returns.

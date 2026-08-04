@@ -35,6 +35,7 @@ internal class GameCommentLikedNotificationGenerator : BaseNotificationGenerator
             where like.LikeId == entityId && like.EntityType == LikeEntityType.Comment
             select new
             {
+                LikerId = like.UserId,
                 LikerUsername = like.User!.Username,
                 comment.CommentId,
                 comment.AuthorId,
@@ -51,6 +52,7 @@ internal class GameCommentLikedNotificationGenerator : BaseNotificationGenerator
         yield return new CreateNotification
         {
             UsersInterested = [likedCommentData.AuthorId],
+            ActorId = likedCommentData.LikerId,
             Metadata = new
             {
                 LikerUsername = likedCommentData.LikerUsername,

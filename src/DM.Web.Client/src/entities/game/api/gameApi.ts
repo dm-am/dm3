@@ -314,6 +314,16 @@ class GameApi {
     return Api.get<ListEnvelope<Character>>(`games/${gameId}/characters`);
   }
 
+  /**
+   * Get a single character with its filled-in sheet, for reading. The default
+   * Display audience is what separates it from getCharacterForEdit below:
+   * BbCode attribute values arrive as server-rendered HTML in valueBbText, so
+   * the page binds them through ContentText and never renders raw markup.
+   */
+  public getCharacter(characterId: string) {
+    return Api.get<Envelope<Character>>(`characters/${characterId}`);
+  }
+
   public getRooms(gameId: string) {
     return Api.get<ListEnvelope<Room>>(`games/${gameId}/rooms`);
   }

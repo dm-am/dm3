@@ -84,6 +84,11 @@ internal class GameStatusChangedNotificationGenerator : INotificationGenerator
             yield break;
         }
 
+        // ActorId stays null because the schema does not keep who moved the game:
+        // a game stores its master, not the author of the transition. Two of the
+        // four events here are raised by GameInactivityProcessor on a schedule
+        // with no human at all, and a moderator may close somebody else's game,
+        // so MasterUsername below names the owner rather than the one who acted.
         yield return new CreateNotification
         {
             UsersInterested = usersInterested,

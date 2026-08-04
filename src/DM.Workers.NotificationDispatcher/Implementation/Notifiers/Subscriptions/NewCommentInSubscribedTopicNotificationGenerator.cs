@@ -79,6 +79,7 @@ internal class NewCommentInSubscribedTopicNotificationGenerator : BaseNotificati
         {
             EventType = EventType.NewCommentInSubscribedTopic,
             UsersInterested = subscriberIds,
+            ActorId = commentData.AuthorId,
             Metadata = new
             {
                 CommentId = commentData.CommentId,

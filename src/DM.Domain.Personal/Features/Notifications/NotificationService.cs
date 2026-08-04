@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Dto;
+using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 
 namespace DM.Domain.Personal.Features.Notifications;
@@ -15,18 +18,21 @@ internal class NotificationService : INotificationService
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly INotificationFactory _factory;
     private readonly INotificationRepository _repository;
+    private readonly IUserBlacklistChecker _blacklistChecker;
 
     /// <inheritdoc />
     public NotificationService(
         IIdentityProvider identityProvider,
         IDateTimeProvider dateTimeProvider,
         INotificationFactory factory,
-        INotificationRepository repository)
+        INotificationRepository repository,
+        IUserBlacklistChecker blacklistChecker)
     {
         _identityProvider = identityProvider;
         _dateTimeProvider = dateTimeProvider;
         _factory = factory;
         _repository = repository;
+        _blacklistChecker = blacklistChecker;
     }
 
     #region Reading
@@ -49,12 +55,20 @@ internal class NotificationService : INotificationService
     #region Creating
 
     /// <inheritdoc />
-    public async Task<IEnumerable<CreateNotificationEntity>> CreateAsync(
-        IEnumerable<CreateNotification> createNotifications)
+    public async Task<IReadOnlyList<CreatedNotification>> CreateAsync(
+        IEnumerable<CreateNotification> createNotifications, CancellationToken ct = default)
     {
         var createDate = _dateTimeProvider.Now;
-        var notifications = createNotifications
-            .Select(n => (Source: n, Entity: _factory.Create(n, createDate)))
+        var requested = createNotifications.ToArray();
+
+        // The one place a personal blacklist reaches notifications. Applied here
+        // and not in the generators because there are forty-one of them: a rule
+        // written per generator is a rule the forty-second forgets, and the ones
+        // that exist had no reason to know about blacklists at all.
+        var addressedTo = await ExcludeBlockedRecipients(requested, ct);
+
+        var notifications = addressedTo
+            .Select(n => new CreatedNotification(n, _factory.Create(n, createDate)))
             .ToArray();
 
         // A notification with no recipients is not stored: nobody can ever read
@@ -74,7 +88,59 @@ internal class NotificationService : INotificationService
             await _repository.Create(addressed);
         }
 
-        return notifications.Select(n => n.Entity).ToArray();
+        return notifications;
+    }
+
+    /// <summary>
+    /// Drops from each notification the recipients who have its actor on their
+    /// personal blacklist.
+    /// </summary>
+    /// <remarks>
+    /// Unconditional, with no settings flag in front of it. The flags of
+    /// <see cref="UserBlacklistSettings"/> govern what a listing shows — comments,
+    /// chat messages, games, blogs — which is a different question from whether
+    /// the site writes to you about somebody. Blocking a person is the opt-in
+    /// already given, and a notification is the one surface a reader cannot
+    /// scroll past: it arrives in the list, by mail and through a bot.
+    ///
+    /// One statement per distinct actor, not per recipient. A batch out of the
+    /// dispatcher is normally one event by one person addressed to many.
+    /// </remarks>
+    private async Task<IReadOnlyList<CreateNotification>> ExcludeBlockedRecipients(
+        IReadOnlyList<CreateNotification> notifications, CancellationToken ct)
+    {
+        var byActor = notifications
+            .Where(n => n.ActorId.HasValue && n.UsersInterested.Any())
+            .GroupBy(n => n.ActorId!.Value)
+            .ToArray();
+        if (byActor.Length == 0)
+        {
+            return notifications;
+        }
+
+        var blocking = new Dictionary<Guid, IReadOnlySet<Guid>>();
+        foreach (var group in byActor)
+        {
+            var audience = group.SelectMany(n => n.UsersInterested).Distinct().ToArray();
+            blocking[group.Key] = await _blacklistChecker.GetOwnersBlockingAsync(group.Key, audience, ct);
+        }
+
+        return notifications
+            .Select(n =>
+            {
+                if (!n.ActorId.HasValue ||
+                    !blocking.TryGetValue(n.ActorId.Value, out var blockedBy) ||
+                    blockedBy.Count == 0)
+                {
+                    return n;
+                }
+
+                var remaining = n.UsersInterested.Where(id => !blockedBy.Contains(id)).ToArray();
+                return remaining.Length == n.UsersInterested.Count()
+                    ? n
+                    : n with { UsersInterested = remaining };
+            })
+            .ToArray();
     }
 
     #endregion

@@ -79,6 +79,7 @@ internal class NewBlogCommentNotificationGenerator : BaseNotificationGenerator
         yield return new CreateNotification
         {
             UsersInterested = usersToNotify.ToArray(),
+            ActorId = commentData.AuthorId,
             Metadata = new
             {
                 CommentId = commentData.CommentId,

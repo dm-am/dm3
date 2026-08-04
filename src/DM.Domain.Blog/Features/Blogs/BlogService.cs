@@ -419,7 +419,8 @@ internal class BlogService : IBlogService
             Preview = updatePublication.Preview,
             CommentsEnabled = updatePublication.CommentsEnabled,
             IsPublished = updatePublication.IsPublished,
-            UpdatedUtc = _dateTimeProvider.Now
+            UpdatedUtc = _dateTimeProvider.Now,
+            ModifiedByUserId = _identityProvider.Current.User.UserId
         };
         var updatedPublication = await _repository.UpdatePublication(entity, ct);
         await _eventProducer.SendAsync(EventType.ChangedPublication, updatedPublication.Id);

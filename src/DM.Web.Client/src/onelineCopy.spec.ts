@@ -32,7 +32,7 @@
  * together here too.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
+import { readdirSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { parse as parseSfc } from "vue/compiler-sfc";
@@ -62,9 +62,33 @@ const STRIPS: { file: string; strip: string; line: string }[] = [
     line: "{wordCountLabel} | {charCountLabel} | Есть черновик | {draftStatusText}",
   },
   {
+    // The pair of mode switches above every editor, the strip the status bar
+    // was fixed with: a flex row copied as "[bbcode]\nwysiwyg".
+    file: "shared/ui/BBCodeEditor/BBCodeEditor.vue",
+    strip: "mode-tabs",
+    line: "[bbcode] wysiwyg",
+  },
+  {
     file: "pages/support/SupportPage.vue",
     strip: "discord-fallback",
     line: "Если удобнее, напишите нам в Discord",
+  },
+  {
+    // Every accordion of the site in its one-title mode (the rules pages, the
+    // bans table, the FAQ): a flex row copied as a newline and then the title,
+    // because the marker beside it is a flex item and a flex item is a line.
+    // The marker puts no character on the screen — the triangle is pseudo
+    // content — so the title is the whole line.
+    file: "shared/ui/ExpandableList/ExpandableList.vue",
+    strip: "expandable-row--title",
+    line: "{item.title}",
+  },
+  {
+    // The events strip of the global chat: a flex row that copied as three
+    // lines, and with no space in front of the bar at all ("зарисовок|").
+    file: "pages/global-chat/ChatEventsPanel.vue",
+    strip: "row-main",
+    line: "{stateWord}: {primaryEvent.title}{primaryMeta} | описание | {countLabel} запланировано{nearestText}",
   },
 ];
 
@@ -188,13 +212,26 @@ const elementOf = (root: Node, cls: string): Node => {
   return found[0];
 };
 
+/** A `+mixin` include, with or without arguments. */
+const INCLUDE = /^\+([\w-]+)/;
+
 /**
  * Every declaration of an indented-Sass block, under the chain of selectors
  * it is nested in. A `prop: value` always has whitespace after the colon in
  * Sass, which is what separates it from `&:hover` and `a:hover`; a selector
  * group spans lines, every one but the last ending in a comma.
+ *
+ * A block reaches a layout through `+mixin` as often as it writes one, and the
+ * defect this check exists for was written that way: the `display: flex` that
+ * split a one-title accordion row over two lines lived in `=expandable-row`,
+ * not in the component. `mixins` is what the include stands for — pass the
+ * shared ones to read a component, pass nothing to read a mixin body.
  */
-const declarations = (sass: string, firstLine: number): Declaration[] => {
+const declarations = (
+  sass: string,
+  firstLine: number,
+  mixins: Map<string, Declaration[]> = new Map(),
+): Declaration[] => {
   const out: Declaration[] = [];
   const stack: { indent: number; selector: string }[] = [];
   let group: string[] = [];
@@ -217,6 +254,13 @@ const declarations = (sass: string, firstLine: number): Declaration[] => {
       });
       return;
     }
+    const include = INCLUDE.exec(text);
+    if (include) {
+      const chain = stack.map((entry) => entry.selector).join(" ");
+      for (const inherited of mixins.get(include[1]) ?? [])
+        out.push({ ...inherited, selector: chain, line: firstLine + index });
+      return;
+    }
     if (text.endsWith(",")) {
       if (!group.length) groupIndent = indent;
       group.push(text.slice(0, -1).trim());
@@ -232,6 +276,48 @@ const declarations = (sass: string, firstLine: number): Declaration[] => {
 
   return out;
 };
+
+/**
+ * The shared mixins, by name, with what they declare on the element itself —
+ * a `&:hover` inside one paints a state, not the box, so only the body's own
+ * level is kept.
+ */
+const sharedMixins = (): Map<string, Declaration[]> => {
+  const out = new Map<string, Declaration[]>();
+  const dir = join(CLIENT_SRC, "assets/styles");
+
+  for (const file of readdirSync(dir).filter((n) => n.endsWith(".sass"))) {
+    const lines = readFileSync(join(dir, file), "utf8").split("\n");
+    let name = "";
+    let body: string[] = [];
+    const close = () => {
+      if (name)
+        out.set(
+          name,
+          declarations(body.join("\n"), 0).filter((decl) => !decl.selector),
+        );
+      name = "";
+      body = [];
+    };
+
+    for (const raw of lines) {
+      const opening = /^=([\w-]+)/.exec(raw);
+      if (opening) {
+        close();
+        name = opening[1];
+        continue;
+      }
+      if (!name) continue;
+      // Back at the left margin: the mixin body has ended.
+      if (raw.trim() && !/^[\t ]/.test(raw)) close();
+      else body.push(raw);
+    }
+    close();
+  }
+  return out;
+};
+
+const MIXINS = sharedMixins();
 
 /** The classes a rule paints: the last one of every part of the selector. */
 const subjects = (selector: string): string[] =>
@@ -271,6 +357,10 @@ describe("one-line compositions", () => {
       const root = elementOf(ast, strip);
       const inside = descendants(root);
       const parts = new Set(inside.flatMap(classesOf));
+      // Every class the strip itself wears, not just the one it is named by:
+      // a row that is `.expandable-row .expandable-row--title` takes its box
+      // from the first and its flow from the second.
+      const own = new Set(classesOf(root));
       // A part that puts no characters on the screen — an icon button, a
       // spacer — has nothing in the clipboard to break, so what it declares
       // is none of this rule's business either. Read from the markup rather
@@ -281,13 +371,17 @@ describe("one-line compositions", () => {
       const broken: string[] = [];
 
       for (const style of styles) {
-        for (const decl of declarations(style.content, style.loc.start.line)) {
+        for (const decl of declarations(
+          style.content,
+          style.loc.start.line,
+          MIXINS,
+        )) {
           // Pseudo-elements are the one place a selection cannot reach, so
           // what they declare is none of this rule's business.
           if (decl.selector.includes("::")) continue;
           const painted = subjects(decl.selector);
           const isPart = painted.some((cls) => parts.has(cls));
-          if (!isPart && !painted.includes(strip)) continue;
+          if (!isPart && !painted.some((cls) => own.has(cls))) continue;
           if (isPart && !painted.some((cls) => written.has(cls))) continue;
           if (
             (decl.prop === "display" && SPLITS_ITEMS.test(decl.value)) ||
@@ -306,6 +400,52 @@ describe("one-line compositions", () => {
       // A strip with no parts would pass every line above without reading
       // anything at all.
       expect(parts.size).toBeGreaterThan(0);
+      expect(broken).toEqual([]);
+    });
+  }
+});
+
+/**
+ * The rows a reader copies whole, but that hold more than one cell. A CSS
+ * table row copies its cells tab-separated, the way the site's data tables do;
+ * a grid or flex row copies them one per line. Both of these were grids, and
+ * the staff table was left with a header moved to a table over rows that were
+ * not, so one file copied its header and its rows two different ways.
+ *
+ * Only the row's own display is read. What a cell does inside itself — the
+ * staff table breaks a role's joke name onto a second line and gives every
+ * player a line — is the row's meaning and not a defect.
+ */
+const TABLE_ROWS: { file: string; row: string }[] = [
+  { file: "pages/rules/RulesStaffTable.vue", row: "admin-row" },
+  {
+    file: "shared/ui/ExpandableList/ExpandableList.vue",
+    row: "expandable-row--grid",
+  },
+];
+
+describe("multi-cell rows", () => {
+  for (const { file, row } of TABLE_ROWS) {
+    it(`.${row} lays its cells out as a table, not as items`, () => {
+      const { ast, styles } = sfcOf(file);
+      const own = new Set(classesOf(elementOf(ast, row)));
+      const broken: string[] = [];
+
+      for (const style of styles) {
+        for (const decl of declarations(
+          style.content,
+          style.loc.start.line,
+          MIXINS,
+        )) {
+          if (decl.selector.includes("::")) continue;
+          if (!subjects(decl.selector).some((cls) => own.has(cls))) continue;
+          if (decl.prop === "display" && SPLITS_ITEMS.test(decl.value))
+            broken.push(
+              `${file}:${decl.line} ${decl.selector} — ${decl.prop}: ${decl.value}`,
+            );
+        }
+      }
+
       expect(broken).toEqual([]);
     });
   }
