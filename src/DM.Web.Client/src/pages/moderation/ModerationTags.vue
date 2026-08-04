@@ -516,7 +516,7 @@ onMounted(() => {
     height: 18px
 
 // Responsive
-@media (max-width: 768px)
+@media (max-width: $bp-tablet)
   .moderation-tags
     grid-template-columns: 1fr
 </style>

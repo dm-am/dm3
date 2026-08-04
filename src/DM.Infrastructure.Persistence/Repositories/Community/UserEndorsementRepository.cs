@@ -227,6 +227,14 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
     }
 
     /// <inheritdoc />
-    public Task<int> GetUserPostCountAsync(Guid userId) => _dbContext.Posts
-        .CountAsync(p => p.AuthorId == userId);
+    /// <remarks>
+    /// The denormalised counter, not a COUNT over posts: posts are counted under
+    /// the !IsRemoved filter while the counter is decremented on removal, so the
+    /// two are different numbers and reading each in a different place made the
+    /// newbie badge and the right to write disagree about one user.
+    /// </remarks>
+    public Task<int> GetUserPostCountAsync(Guid userId) => _dbContext.Users
+        .Where(u => u.UserId == userId)
+        .Select(u => u.QuantityRating)
+        .FirstOrDefaultAsync();
 }

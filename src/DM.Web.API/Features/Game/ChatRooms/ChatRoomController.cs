@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using DM.Web.API.Features.Messaging.Messages;
 using DM.Web.API.Shared.Authentication;
@@ -126,20 +127,25 @@ public class ChatRoomController : ControllerBase
     /// <param name="cursor">Pagination cursor</param>
     /// <param name="limit">Maximum number of messages (1-100, default 50)</param>
     /// <response code="200">Returns messages with pagination cursor</response>
+    /// <response code="400">Limit is outside the 1-100 range</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to view messages in this chat room</response>
     /// <response code="404">Chat room not found</response>
     [HttpGet("{id}/messages", Name = nameof(GetChatRoomMessages))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(CursorEnvelope<Message>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetChatRoomMessages(
         Guid id,
         [FromQuery] string? cursor = null,
-        [FromQuery] int limit = 50) =>
-        Ok(await _apiService.GetMessagesAsync(id, cursor, Math.Clamp(limit, 1, 100)));
+        // Rejected, not clipped: a caller who asked for a thousand has to learn
+        // that a thousand is not on offer instead of taking a hundred for the
+        // whole set. Same [Range] as every other list in the host.
+        [FromQuery] [Range(1, 100, ErrorMessage = "Размер страницы должен быть от 1 до 100")] int limit = 50) =>
+        Ok(await _apiService.GetMessagesAsync(id, cursor, limit));
 
     /// <summary>
     /// Send message to chat room

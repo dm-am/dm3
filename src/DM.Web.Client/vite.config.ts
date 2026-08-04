@@ -77,8 +77,12 @@ export default defineConfig({
         manualChunks: {
           // Vue core - меняется редко, хорошо кэшируется
           "vue-vendor": ["vue", "vue-router", "pinia"],
-          // TipTap editor - загружается только на chat/messenger
-          // @tiptap/pm исключен - имеет особую структуру пакета
+          // The engine behind BBCodeEditor, in a chunk of its own rather than
+          // in vendor. Not because few views need it: two dozen do (forum,
+          // blogs, games, profile, moderation, support - anywhere text is
+          // composed). Because the views that only READ text do not, and at
+          // 361 KB raw it is the largest thing a reader can avoid downloading.
+          // @tiptap/pm is left out: that package has a structure of its own.
           tiptap: [
             "@tiptap/vue-3",
             "@tiptap/starter-kit",
@@ -94,7 +98,5 @@ export default defineConfig({
         },
       },
     },
-    // Увеличим лимит предупреждения о размере chunk
-    chunkSizeWarningLimit: 500,
   },
 });

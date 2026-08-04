@@ -55,6 +55,15 @@ const page = (
 const paramsOf = (call: number) =>
   mockSearchMessages.mock.calls[call][0] as Record<string, unknown>;
 
+/** A response the test releases by hand, to keep two requests in flight. */
+function deferred() {
+  let release!: (value: ReturnType<typeof page>) => void;
+  const promise = new Promise<ReturnType<typeof page>>((resolve) => {
+    release = resolve;
+  });
+  return { promise, release };
+}
+
 describe("useMessageSearchStore", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -103,6 +112,53 @@ describe("useMessageSearchStore", () => {
     expect("sort" in paramsOf(1)).toBe(false);
     expect(store.results).toHaveLength(2);
     expect(store.hasMore).toBe(false);
+    expect(store.nextCursor).toBeNull();
+  });
+
+  it("keeps the answer of the newest search when an older one lands later", async () => {
+    const slow = deferred();
+    const fast = deferred();
+    mockSearchMessages
+      .mockReturnValueOnce(slow.promise)
+      .mockReturnValueOnce(fast.promise);
+
+    const store = useMessageSearchStore();
+    store.query = "коб";
+    const first = store.search();
+    store.query = "кобольд";
+    const second = store.search();
+
+    fast.release(page([hit("new")]));
+    await second;
+    slow.release(page([hit("old")]));
+    await first;
+
+    expect(store.results.map((r) => r.id)).toEqual(["new"]);
+    expect(store.loading).toBe(false);
+  });
+
+  it("does not append a page a newer search has already replaced", async () => {
+    mockSearchMessages.mockResolvedValueOnce(page([hit("m1")], "cur2"));
+    const store = useMessageSearchStore();
+    store.query = "коб";
+    await store.search();
+
+    const older = deferred();
+    const newer = deferred();
+    mockSearchMessages
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise);
+
+    const tail = store.loadMore();
+    store.query = "кобольд";
+    const fresh = store.search();
+
+    newer.release(page([hit("m2")]));
+    await fresh;
+    older.release(page([hit("m1-page2")], "cur3"));
+    await tail;
+
+    expect(store.results.map((r) => r.id)).toEqual(["m2"]);
     expect(store.nextCursor).toBeNull();
   });
 

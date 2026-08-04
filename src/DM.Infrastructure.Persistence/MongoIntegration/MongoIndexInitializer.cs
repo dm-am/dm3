@@ -210,7 +210,10 @@ public class MongoIndexInitializer : IHostedService
 
             // Counters have to decay. Without this a handful of typos spread over
             // months accumulates to the lockout threshold and locks the account out
-            // of nowhere. CleanupExpiredRecords exists but nothing calls it.
+            // of nowhere. This is the whole of the decay: the sweep that used to be
+            // declared beside it was never called from anywhere, and it skipped
+            // exactly the rows that outlive everything else — a record carrying a
+            // lockout start is never read again once its pair stops trying.
             Index<DbLoginAttempt>("IX_LoginAttempts_Expiry", keys => keys
                 .Ascending(a => a.LastAttemptUtc),
                 expireAfter: TimeSpan.FromHours(LoginAttemptRetentionHours)),

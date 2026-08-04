@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Game.Features.Blacklists;
 using DM.Infrastructure.Persistence.Entities.Game.Links;
@@ -17,14 +18,17 @@ internal class GameBlacklistRepository : IGameBlacklistRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public GameBlacklistRepository(
         DmDbContext dbContext,
-        IMapper mapper)
+        IMapper mapper,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _mapper = mapper;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
@@ -43,7 +47,7 @@ internal class GameBlacklistRepository : IGameBlacklistRepository
             GameId = gameId,
             BlockedUserId = blockedUserId,
             BlockedByUserId = blockedByUserId,
-            CreatedUtc = DateTimeOffset.UtcNow
+            CreatedUtc = _dateTimeProvider.Now
         };
 
         _dbContext.GameBlacklists.Add(blacklistEntry);

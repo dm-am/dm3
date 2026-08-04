@@ -108,13 +108,17 @@ internal class ChatRepository : IChatRepository
     /// <inheritdoc />
     public async Task<DtoChat> Create(CreateChatEntity chat, IEnumerable<CreateChatLinkEntity> chatLinks)
     {
+        var serialNumber = await SerialNumberAllocator.NextAsync<DbChat>(_dbContext);
+
         var dbChat = new DbChat
         {
             ChatId = chat.ChatId,
             Type = chat.Type,
             Title = chat.Title,
-            // Unique placeholder until the serial exists; replaced below.
-            PublicId = $"t{chat.ChatId:N}"[..10]
+            // Taken from the sequence before the insert, so the row is written with the
+            // address it keeps — same shape as games and blogs, and for the same reason.
+            SerialNumber = serialNumber,
+            PublicId = _publicIdService.Encode(serialNumber)
         };
 
         var dbChatLinks = chatLinks.Select(l => new UserChatLink
@@ -127,11 +131,6 @@ internal class ChatRepository : IChatRepository
 
         _dbContext.Chats.Add(dbChat);
         _dbContext.UserChatLinks.AddRange(dbChatLinks);
-        await _dbContext.SaveChangesAsync();
-
-        // SerialNumber is database-generated, so the readable id can only be
-        // produced after the insert — same two-phase shape as games and blogs.
-        dbChat.PublicId = _publicIdService.Encode(dbChat.SerialNumber);
         await _dbContext.SaveChangesAsync();
 
         return await _dbContext.Chats
@@ -193,19 +192,19 @@ internal class ChatRepository : IChatRepository
     /// <inheritdoc />
     public async Task<DtoChat> CreateGameRoomChat(CreateChatEntity chat)
     {
+        var serialNumber = await SerialNumberAllocator.NextAsync<DbChat>(_dbContext);
+
         var dbChat = new DbChat
         {
             ChatId = chat.ChatId,
             Type = chat.Type,
             Title = chat.Title,
             RoomId = chat.RoomId,
-            PublicId = $"t{chat.ChatId:N}"[..10]
+            SerialNumber = serialNumber,
+            PublicId = _publicIdService.Encode(serialNumber)
         };
 
         _dbContext.Chats.Add(dbChat);
-        await _dbContext.SaveChangesAsync();
-
-        dbChat.PublicId = _publicIdService.Encode(dbChat.SerialNumber);
         await _dbContext.SaveChangesAsync();
 
         return await _dbContext.Chats

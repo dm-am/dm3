@@ -30,6 +30,10 @@ public class CompilerPolicyShould
     private static readonly Regex InternalsGrant = new(
         @"<InternalsVisibleTo\s+Include=""([^""]+)""", RegexOptions.Compiled);
 
+    /// <summary>The solution-wide grant, written in the props as an assembly attribute.</summary>
+    private static readonly Regex SolutionWideGrant = new(
+        @"<_Parameter1>\$\(AssemblyName\)\.([^<]+)</_Parameter1>", RegexOptions.Compiled);
+
     /// <summary>
     /// Walks up from the test binary to the repository root. The sources are not
     /// copied to the output directory, and copying them would let this assert
@@ -256,6 +260,19 @@ public class CompilerPolicyShould
                 {
                     offenders.Add(where + " (no project of that name)");
                 }
+            }
+        }
+
+        // The props grant to every project at once, so a suffix nothing is named
+        // after opens seventeen assemblies to an assembly that cannot exist.
+        var props = File.ReadAllText(Path.Combine(root, "Directory.Build.props"));
+        foreach (Match match in SolutionWideGrant.Matches(props))
+        {
+            var suffix = match.Groups[1].Value;
+            if (!projects.Any(project => project.EndsWith("." + suffix, StringComparison.Ordinal)))
+            {
+                offenders.Add("Directory.Build.props -> $(AssemblyName)." + suffix +
+                              " (no project of this solution is named after that suffix)");
             }
         }
 

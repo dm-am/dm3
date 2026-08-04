@@ -16,7 +16,7 @@
         class="status-card status-card--pending"
       >
         <div class="status-header">
-          <span class="status-icon">{{ symbols.clock }}</span>
+          <SvgIcon name="clock" class="status-icon" />
           <span class="status-title">Заявка на рассмотрении</span>
         </div>
         <div class="status-details">
@@ -115,11 +115,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
 import { symbols } from "@/shared/lib/utils/icons";
+import { SvgIcon } from "@/shared/ui/Icon";
 import { formatDate } from "@/shared/lib/utils/datetime";
 import { accountApi } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
 import { FormField } from "@/shared/ui/Form";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { describeFailure } from "@/shared/lib/errors";
 import type { User } from "@/shared/api/models/community";
 import type { UsernameChangeRequest } from "@/shared/api/models/account";
 
@@ -174,7 +176,7 @@ async function submitRequest() {
   submitting.value = false;
 
   if (error) {
-    submitError.value = error.title || "Не удалось отправить заявку";
+    submitError.value = describeFailure(error, "Не удалось отправить заявку");
     return;
   }
 

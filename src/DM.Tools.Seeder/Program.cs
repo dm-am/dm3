@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
+using DM.Domain.Account;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Configuration;
@@ -83,6 +84,14 @@ internal static class Program
         .ConfigureServices((context, services) => services
             .AddOptions()
             .AddDmCoreConfiguration(context.Configuration)
+            // The container below scans the whole account assembly, whose types read
+            // four option sections. IOptions of an unbound type hands out a default
+            // rather than throwing, so the encryption key would have been empty at the
+            // first call that needed it instead of missing at startup.
+            .AddDmAccountConfiguration(context.Configuration)
+            .RequireRelationalStorage()
+            .RequireDocumentStorage()
+            .RequireObjectStorage()
             .AddDbContext<DmDbContext>(options => options.UseNpgsql(
                 context.Configuration.GetConnectionString(nameof(ConnectionStrings.Rdb)),
                 npgsql => npgsql.CommandTimeout(120))))

@@ -4,10 +4,15 @@
 // subscriber count live in the info table (BlogDetails), not duplicated in a
 // header strip. All per-blog navigation and actions live in the left-sidebar
 // BlogPanel; role flags are lifted into the shared useBlogDetailsStore (SSOT).
-import { computed, onUnmounted } from "vue";
+import { computed, onUnmounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useBlogDetailsStore } from "@/entities/blog";
+import {
+  ErrorPage,
+  errorCodeForStatus,
+  getErrorConfig,
+} from "@/shared/ui/ErrorPage";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import {
   joinTitleSegments,
@@ -18,18 +23,31 @@ import { PageTitleSkeleton } from "@/shared/ui/Skeleton";
 
 const route = useRoute();
 const blogStore = useBlogDetailsStore();
-const { blog, blogError } = storeToRefs(blogStore);
+const { blog } = storeToRefs(blogStore);
+
+// Same rule as the game shell: the failure is a page, not a sentence.
+const errorCode = ref<number | null>(null);
 
 const blogId = computed(() => route.params.id as string);
 
 // Same rule as the game shell: the blog name first, the section of the active
-// sub-route (meta.section) second.
+// sub-route (meta.section) second. While the error page is showing the error
+// owns the title: there is no blog behind the id, and a tab named after the
+// section alone names a page the reader is not looking at.
 useDocumentTitle(() =>
-  joinTitleSegments(blog.value?.title, route.meta.section),
+  errorCode.value
+    ? getErrorConfig(errorCode.value).title
+    : joinTitleSegments(blog.value?.title, route.meta.section),
 );
 
+async function load(id: string) {
+  errorCode.value = null;
+  const { ok, status } = await blogStore.loadBlog(id);
+  if (!ok) errorCode.value = errorCodeForStatus(status);
+}
+
 useFetchData(
-  () => blogStore.loadBlog(blogId.value),
+  () => load(blogId.value),
   [
     {
       param: (p) => p.id,
@@ -38,7 +56,7 @@ useFetchData(
         // route record is shared, so without wiping first the previous blog's
         // publications and comments stay under the new title.
         blogStore.reset();
-        return blogStore.loadBlog(id as string);
+        return load(id as string);
       },
     },
   ],
@@ -58,10 +76,7 @@ onUnmounted(() => {
     <router-view />
   </template>
 
-  <div v-else-if="blogError" class="blog-error">
-    <p>{{ blogError }}</p>
-    <router-link :to="{ name: 'blogs' }">Вернуться к списку блогов</router-link>
-  </div>
+  <ErrorPage v-else-if="errorCode" :code="errorCode" />
 
   <!-- Loading: twin of the loaded header (skeleton-parity). Reuses
        .blog-header so the margins match; the twin itself owns its geometry. -->
@@ -73,13 +88,4 @@ onUnmounted(() => {
 <style scoped lang="sass">
 .blog-header
   margin-bottom: $medium
-
-.blog-error
-  padding: $big
-  color: $accent-red
-
-  a
-    color: $link
-    margin-top: $small
-    display: inline-block
 </style>

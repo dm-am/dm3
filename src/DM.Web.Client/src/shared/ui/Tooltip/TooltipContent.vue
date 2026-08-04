@@ -105,6 +105,32 @@ const activeSegment = computed(() => {
   if (activeSegmentIdx.value === null) return null;
   return segments.value[activeSegmentIdx.value];
 });
+
+const activeImageUrl = computed(() => {
+  const segment = activeSegment.value;
+  if (!segment || segment.type !== "tipimg") return null;
+  return segment.imageUrl || null;
+});
+
+// Pictures that failed to load, keyed by URL. The failure is state Vue renders
+// from, not a node the handler swaps by hand: replacing the <img> markup from
+// the event took the element out from under the patcher, so Vue went on
+// believing the node was there and the next update of this subtree worked on
+// an element no longer in the document. Keyed by URL and not by segment index
+// because the indices shift whenever the text is re-parsed.
+const failedImageUrls = ref(new Set<string>());
+
+const activeImageFailed = computed(() => {
+  const url = activeImageUrl.value;
+  return url !== null && failedImageUrls.value.has(url);
+});
+
+// Takes the URL the failing element was rendered with: an error can arrive
+// after the pointer has moved on, and the active segment is no longer the one
+// that failed by then.
+function markImageFailed(url: string) {
+  failedImageUrls.value = new Set(failedImageUrls.value).add(url);
+}
 </script>
 
 <template>
@@ -129,60 +155,61 @@ const activeSegment = computed(() => {
           class="rich-text-popup"
           @mouseenter="cancelHidePopup"
           @mouseleave="scheduleHidePopup"
-          ><template
-            v-if="activeSegment.type === 'tipimg' && activeSegment.imageUrl"
+          ><template v-if="activeImageUrl"
+            ><span v-if="activeImageFailed" class="popup-error"
+              >Не удалось загрузить изображение</span
             ><img
-              :src="activeSegment.imageUrl"
+              v-else
+              :src="activeImageUrl"
               alt=""
               class="popup-image"
-              @error="
-                ($event.target as HTMLImageElement).outerHTML =
-                  '<span style=\'color: #ff6b6b;\'>Ошибка загрузки GIF</span>'
-              " /></template
-          ><template
-            v-else-if="activeSegment.type === 'tip' && activeSegment.tipText"
-            >{{ activeSegment.tipText }}</template
-          ><template v-else
-            >[Debug: type={{ activeSegment.type }}]</template
-          ></span
+              @error="markImageFailed(activeImageUrl)" /></template
+          ><template v-else>{{ activeSegment.tipText }}</template></span
         ></span
       >
     </template>
   </span>
 </template>
 
-<style>
-/* Global styles (not scoped - TooltipContent is inside teleported tooltip) */
-.rich-text-trigger {
-  position: relative;
-  text-decoration: underline dotted;
-  text-decoration-color: currentColor;
-  text-underline-offset: 3px;
-  cursor: help;
-}
+<style lang="sass">
+@import "@/assets/styles/ZIndex"
 
-.rich-text-popup {
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-bottom: 8px;
-  padding: 8px 16px;
-  background-color: var(--tooltip-bg);
-  color: var(--tooltip-text);
-  border: 1px solid var(--tooltip-border);
-  border-radius: 8px;
-  box-shadow: 0 2px 8px var(--shadow-color);
-  white-space: nowrap;
-  z-index: 10001;
-}
+// Global (not scoped): TooltipContent renders inside the teleported tooltip.
+.rich-text-trigger
+  position: relative
+  text-decoration: underline dotted
+  text-decoration-color: currentColor
+  text-underline-offset: 3px
+  cursor: help
 
-.rich-text-popup .popup-image {
-  display: block;
-  max-width: 280px;
-  max-height: 200px;
-  width: auto;
-  height: auto;
-  border-radius: 4px;
-}
+.rich-text-popup
+  position: absolute
+  bottom: 100%
+  left: 50%
+  transform: translateX(-50%)
+  margin-bottom: $small
+  padding: $small $medium
+  background-color: $tooltip-bg
+  color: $tooltip-text
+  border: 1px solid $tooltip-border
+  box-shadow: 0 2px 8px $shadow-color
+  border-radius: $small
+  white-space: nowrap
+  // The tooltip tier of the scale. The literal 10001 stood one above $z-toast,
+  // which the scale marks "always on top": a [tip:] opened while an error toast
+  // was on screen covered the error the toast was reporting.
+  z-index: $z-tooltip
+
+  .popup-image
+    display: block
+    max-width: 280px
+    max-height: 200px
+    width: auto
+    height: auto
+    border-radius: $minor
+
+  // The theme's red. The message used to carry a colour literal of its own,
+  // one of the two left in the client, and belonged to no palette.
+  .popup-error
+    color: $accent-red
 </style>

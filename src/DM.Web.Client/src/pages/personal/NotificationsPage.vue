@@ -180,6 +180,8 @@ onMounted(() => fetchNotifications());
 </template>
 
 <style scoped lang="sass">
+@import "@/assets/styles/Inputs"
+
 .notifications-page
   padding: $medium
 
@@ -193,18 +195,7 @@ onMounted(() => fetchNotifications());
     margin: 0
 
 .mark-all-btn
-  padding: $minor $small
-  border: 1px solid $accent-green
-  border-radius: $border-radius
-  background: transparent
-  color: $accent-green
-  cursor: pointer
-  font-size: 0.85rem
-
-  // Заливка тинтом, а не сплошным акцентом: в темной теме $text-on-green и
-  // $accent-green — один и тот же hex, текст исчезал.
-  &:hover
-    +tint($accent-green, 20%)
+  +button-outline($accent-green)
 
 .notification-list
   list-style: none

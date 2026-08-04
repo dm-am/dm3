@@ -439,7 +439,7 @@ onMounted(fetchEntries);
   flex: 1
   min-height: 0
 
-  @media (max-width: 768px)
+  @media (max-width: $bp-tablet)
     grid-template-columns: 1fr
     grid-template-rows: auto 1fr
 
@@ -589,32 +589,10 @@ onMounted(fetchEntries);
   gap: $minor
 
 .edit-btn
-  padding: $minor $small
-  border: 1px solid $link
-  border-radius: $border-radius
-  background: transparent
-  color: $link
-  cursor: pointer
-  font-size: 0.85rem
-
-  // Тинт вместо сплошной заливки: белый текст на $link читается только в
-  // светлой теме (в темной $link светлый сам).
-  &:hover
-    +tint($link, 15%)
+  +button-outline($link)
 
 .delete-btn
-  padding: $minor $small
-  border: 1px solid $accent-red
-  border-radius: $border-radius
-  background: transparent
-  color: $accent-red
-  cursor: pointer
-  font-size: 0.85rem
-
-  // Тинт вместо сплошной заливки: $text-on-red — текст для светлой
-  // подложки, на $accent-red его контраст 1.5.
-  &:hover
-    +tint($accent-red, 15%)
+  +button-outline($accent-red)
 
 .content-meta
   font-size: 0.8rem

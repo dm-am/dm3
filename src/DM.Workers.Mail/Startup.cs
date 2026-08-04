@@ -9,6 +9,7 @@ using DM.Infrastructure.Messaging;
 using DM.Workers.Mail;
 using Jamq.Client.Abstractions.Consuming;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using DM.Infrastructure.Mail;
@@ -21,14 +22,17 @@ namespace DM.Workers.Mail;
 public class Startup
 {
     private readonly IConfiguration _configuration;
+    private readonly IWebHostEnvironment _environment;
 
     /// <summary>
     ///
     /// </summary>
     /// <param name="configuration"></param>
-    public Startup(IConfiguration configuration)
+    /// <param name="environment">The host's answer about the environment, so logging cannot give a second one</param>
+    public Startup(IConfiguration configuration, IWebHostEnvironment environment)
     {
         _configuration = configuration;
+        _environment = environment;
     }
 
     /// <summary>
@@ -42,7 +46,7 @@ public class Startup
             .AddDmCoreConfiguration(_configuration)
             .AddDmMessageQueuing(_configuration)
             .AddDmMailConfiguration(_configuration)
-            .AddDmLogging("DM.MailSender.Consumer", _configuration);
+            .AddDmLogging("DM.MailSender.Consumer", _configuration, _environment);
 
         services.AddDmJamqClient(
             consumerBuilderDefaults: builder => builder.WithMiddleware<ConsumerRetryMiddleware>());

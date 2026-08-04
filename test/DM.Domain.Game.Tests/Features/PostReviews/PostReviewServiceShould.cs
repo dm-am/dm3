@@ -32,7 +32,6 @@ public class PostReviewServiceShould : UnitTestBase
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<IGuidFactory> _guidFactory;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
-    private readonly Mock<IProbationConfiguration> _probationConfig;
     private readonly Mock<IGameBlacklistRepository> _blacklistRepository;
     private readonly PostReviewService _service;
     private readonly Guid _currentUserId;
@@ -61,9 +60,6 @@ public class PostReviewServiceShould : UnitTestBase
         _dateTimeProvider = Mock<IDateTimeProvider>();
         _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
 
-        _probationConfig = Mock<IProbationConfiguration>();
-        _probationConfig.Setup(c => c.NewbiePostThreshold).Returns(100);
-
         _blacklistRepository = Mock<IGameBlacklistRepository>();
 
         _service = new PostReviewService(
@@ -74,7 +70,6 @@ public class PostReviewServiceShould : UnitTestBase
             _identityProvider.Object,
             _guidFactory.Object,
             _dateTimeProvider.Object,
-            _probationConfig.Object,
             _blacklistRepository.Object);
     }
 

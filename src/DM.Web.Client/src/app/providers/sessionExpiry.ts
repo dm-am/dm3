@@ -9,6 +9,7 @@
  * the entry point — it mounts the app, so nothing can call into it from a test.
  */
 import { setSessionExpiredHandler } from "@/shared/api";
+import { loginLocation } from "@/shared/lib/auth";
 import { useAuthStore } from "@/shared/stores";
 import router from "./router";
 
@@ -22,7 +23,17 @@ export function endExpiredSession(): void {
   // updateUser is the only writer of the persisted copy, so this drops both at
   // once — and the resulting `storage` event still logs the other tabs out.
   useAuthStore().updateUser(null);
-  void router.push({ name: "home" });
+
+  // Only a page the viewer may no longer see is worth leaving, and this fires
+  // on any 401 from any request. Navigating unconditionally tore a reader off
+  // a public page mid-sentence — out of a game room, out of a topic — and took
+  // whatever was typed in a field without a draft-key with it. A protected page
+  // is left, and it is left the way the guard leaves it: replaced, carrying the
+  // address, so signing in puts the viewer back where the session ran out.
+  const current = router.currentRoute.value;
+  if (current.meta.requiresAuth) {
+    void router.replace(loginLocation(current.fullPath));
+  }
 }
 
 /** Installed once at startup, before the app mounts. */

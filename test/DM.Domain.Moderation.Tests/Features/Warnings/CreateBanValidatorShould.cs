@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Moderation.Features.Warnings;
 using DM.Testing;
@@ -162,5 +163,49 @@ public class CreateBanValidatorShould : UnitTestBase
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor("Duration")
             .WithErrorMessage("Either DurationHours or ExpiresUtc must be specified for non-voluntary bans");
+    }
+
+    /// <summary>
+    /// Two ban scopes exist, and a request naming anything else is refused. The
+    /// type is [Flags] because a user's effective policy is a union of bans, so it
+    /// accepts eight values where a ban's scope has two. The rest used to be
+    /// coerced to FullBan in silence: a moderator sending 0 issued the strictest
+    /// ban on the site and was answered as if he had asked for it.
+    /// </summary>
+    [Theory]
+    [InlineData(AccessPolicy.NotSpecified)]
+    [InlineData((AccessPolicy)2)]
+    [InlineData(AccessPolicy.DemocraticBan | AccessPolicy.FullBan)]
+    [InlineData((AccessPolicy)7)]
+    public void RefuseAScopeThatIsNeitherOfTheTwo(AccessPolicy policy)
+    {
+        var input = new CreateBan
+        {
+            Username = "testuser",
+            Comment = "Valid comment",
+            DurationHours = 24,
+            AccessRestrictionPolicy = policy
+        };
+
+        var result = validator.TestValidate(input);
+        result.ShouldHaveValidationErrorFor(x => x.AccessRestrictionPolicy)
+            .WithErrorMessage(ValidationError.Invalid);
+    }
+
+    [Theory]
+    [InlineData(AccessPolicy.DemocraticBan)]
+    [InlineData(AccessPolicy.FullBan)]
+    public void PassForEitherBanScope(AccessPolicy policy)
+    {
+        var input = new CreateBan
+        {
+            Username = "testuser",
+            Comment = "Valid comment",
+            DurationHours = 24,
+            AccessRestrictionPolicy = policy
+        };
+
+        var result = validator.TestValidate(input);
+        result.ShouldNotHaveValidationErrorFor(x => x.AccessRestrictionPolicy);
     }
 }

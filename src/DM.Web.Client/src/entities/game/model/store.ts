@@ -279,6 +279,14 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   const game = ref<Game | null>(null);
   const gameLoading = ref(false);
   const gameError = ref<string | null>(null);
+  /**
+   * HTTP status of the refusal, kept alongside the sentence.
+   *
+   * The sentence alone made a deleted game, a private one and a fallen server
+   * read the same. The status is what the shell needs to draw the page the
+   * forum has drawn for its topics all along.
+   */
+  const gameErrorStatus = ref<number | null>(null);
 
   // Rooms data
   const rooms = ref<Room[]>([]);
@@ -391,30 +399,48 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
       charactersError.value,
   );
 
-  // Load game
-  async function loadGame(id: string): Promise<void> {
+  /**
+   * Load the game the URL names.
+   *
+   * Returns `{ ok, status }`, the same contract the forum store's selectors
+   * carry: a game that does not exist, one the viewer may not read
+   * (premoderation, blacklist, privacy) and a server that fell over are three
+   * different pages, and the single paragraph this used to render told a reader
+   * whose access was refused that the network had failed. `gameError` stays for
+   * the sidebar panel, which has room for a line and not for a page. The
+   * returned object is truthy, so the call sites that only await it are
+   * unaffected.
+   */
+  async function loadGame(
+    id: string,
+  ): Promise<{ ok: boolean; status?: number }> {
     const requestId = gameGuard.next();
     gameLoading.value = true;
     gameError.value = null;
+    gameErrorStatus.value = null;
 
     const { data, error } = await gameApi.getGame(id);
 
     // A newer load owns the visible state: committing here would draw the game
     // the user just left under the new title, and clearing the spinner would
-    // present the request still on the wire as finished.
-    if (!gameGuard.isCurrent(requestId)) return;
+    // present the request still on the wire as finished. Reported as ok so the
+    // (equally stale) caller treats it as a no-op instead of raising an error
+    // page over the newer navigation's state.
+    if (!gameGuard.isCurrent(requestId)) return { ok: true };
 
     if (error) {
       gameError.value = "Не удалось загрузить игру";
+      gameErrorStatus.value = error.status ?? null;
       game.value = null;
-    } else if (data) {
-      // The details endpoint wraps the payload in a single-resource
-      // envelope ({ resource }); unwrap defensively so a bare payload
-      // keeps working too.
-      game.value = data.resource ?? (data as unknown as Game);
+      gameLoading.value = false;
+      return { ok: false, status: error.status };
+    }
+    if (data) {
+      game.value = unwrapResource<Game>(data);
     }
 
     gameLoading.value = false;
+    return { ok: true };
   }
 
   // Load rooms
@@ -726,6 +752,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     game.value = null;
     gameLoading.value = false;
     gameError.value = null;
+    gameErrorStatus.value = null;
 
     rooms.value = [];
     roomsLoading.value = false;
@@ -786,6 +813,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     game,
     gameLoading,
     gameError,
+    gameErrorStatus,
     rooms,
     roomsLoading,
     roomsError,

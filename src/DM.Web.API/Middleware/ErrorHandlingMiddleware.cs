@@ -62,6 +62,22 @@ internal class ErrorHandlingMiddleware
             // care who the caller was therefore name them as a parameter instead
             // of relying on ambient context.
             var user = identityProvider.Current?.User?.Username ?? "anonymous";
+
+            // Nothing can be said to a response that is already on the wire. Setting
+            // the status of one throws, and that second exception leaves this
+            // middleware unhandled: the client gets a reset in the middle of the JSON
+            // and the branches below that do not log lose the cause entirely. Logged
+            // here for every kind of failure, then the socket is closed deliberately
+            // rather than by a secondary fault.
+            if (httpContext.Response.HasStarted)
+            {
+                logger.LogCritical(e,
+                    "Unhandled server error after the response started for {User}: {Message}",
+                    user, e.Message);
+                httpContext.Abort();
+                return;
+            }
+
             object error;
             switch (e)
             {

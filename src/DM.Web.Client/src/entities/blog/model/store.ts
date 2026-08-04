@@ -18,7 +18,12 @@ import type {
 } from "./types";
 import blogApi from "../api/blogApi";
 import { useApiList } from "@/shared/lib/composables/useApiResource";
-import { Api, unwrapResource, type CommentsQuery } from "@/shared/api";
+import { Api, type CommentsQuery } from "@/shared/api";
+// The envelope reader is a pure function over a payload shape, so it comes from
+// its own module instead of the transport barrel. Only the blogs search below
+// talks to the HTTP client; the details store talks to blogApi, and pulling a
+// helper through the barrel made it depend on the client for nothing.
+import { unwrapResource } from "@/shared/api/envelope";
 import { useAuthStore } from "@/shared/stores";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 import type { GeneralError } from "@/shared/api/models/common";
@@ -302,6 +307,8 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
   const blog = ref<Blog | null>(null);
   const blogLoading = ref(false);
   const blogError = ref<string | null>(null);
+  /** HTTP status of the refusal — see gameErrorStatus, same reason. */
+  const blogErrorStatus = ref<number | null>(null);
 
   // Publications (feed) data
   const publications = ref<Publication[]>([]);
@@ -397,26 +404,40 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
       readers.value.some((r) => r.user?.username === currentUsername.value),
   );
 
-  // Load blog
-  async function loadBlog(id: string): Promise<void> {
+  /**
+   * Load the blog the URL names.
+   *
+   * Returns `{ ok, status }` for the same reason loadGame does: a missing blog,
+   * a refused one and a broken server are three pages. `blogError` stays for
+   * the sidebar panel.
+   */
+  async function loadBlog(
+    id: string,
+  ): Promise<{ ok: boolean; status?: number }> {
     const requestId = blogGuard.next();
     blogLoading.value = true;
     blogError.value = null;
+    blogErrorStatus.value = null;
 
     const { data, error } = await blogApi.getBlog(id);
 
-    // A newer load owns the visible state — see the guards above.
-    if (!blogGuard.isCurrent(requestId)) return;
+    // A newer load owns the visible state, and reports ok as a no-op - see the
+    // guards above.
+    if (!blogGuard.isCurrent(requestId)) return { ok: true };
 
     if (error) {
       blogError.value = "Не удалось загрузить блог";
+      blogErrorStatus.value = error.status ?? null;
       blog.value = null;
-    } else if (data) {
-      // Unwrap the single-resource envelope defensively (mirrors loadGame).
-      blog.value = data.resource ?? (data as unknown as Blog);
+      blogLoading.value = false;
+      return { ok: false, status: error.status };
+    }
+    if (data) {
+      blog.value = unwrapResource<Blog>(data);
     }
 
     blogLoading.value = false;
+    return { ok: true };
   }
 
   // Load publications (optionally filtered by rubric)
@@ -684,6 +705,7 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     blog.value = null;
     blogLoading.value = false;
     blogError.value = null;
+    blogErrorStatus.value = null;
 
     publications.value = [];
     publicationsPaging.value = null;
@@ -713,6 +735,7 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     blog,
     blogLoading,
     blogError,
+    blogErrorStatus,
     publications,
     publicationsPaging,
     publicationsLoading,

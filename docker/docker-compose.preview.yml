@@ -12,7 +12,7 @@ networks:
 services:
   nginx:
     container_name: 'dm-nginx'
-    image: 'nginx:alpine'
+    image: 'nginx:1.27-alpine'
     ports:
       - '80:80'
     volumes:

@@ -239,7 +239,7 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
       background-color: $bg-element-accent
 
 // Mobile responsiveness
-@media (max-width: 768px)
+@media (max-width: $bp-tablet)
   .hide-mobile
     display: none
 </style>

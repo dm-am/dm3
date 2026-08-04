@@ -57,6 +57,25 @@ internal class GameSubscriptionService : IGameSubscriptionService
             throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
         }
 
+        return await SubscribeInternal(gameId, userId, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task SubscribeUserAsync(Guid gameId, Guid userId, CancellationToken ct = default)
+    {
+        // Same invariant, different answer to a violation: the subscriber is not
+        // the caller, so refusing would fail the caller's own action instead of
+        // the join. A blacklisted user is simply left off the roster.
+        if (await _blacklistRepository.IsBlocked(gameId, userId, ct))
+        {
+            return;
+        }
+
+        await SubscribeInternal(gameId, userId, ct);
+    }
+
+    private async Task<Subscription> SubscribeInternal(Guid gameId, Guid userId, CancellationToken ct)
+    {
         // Check if already subscribed
         var existing = await _repository.FindAsync(userId, SubscriptionTargetType.Game, gameId, ct);
         if (existing != null)

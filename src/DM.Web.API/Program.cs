@@ -7,6 +7,9 @@ using Serilog;
 
 [assembly: InternalsVisibleTo("DM.Web.API.IntegrationTests")]
 [assembly: InternalsVisibleTo("DM.Web.API.Tests")]
+// The composition-root rule builds this host's container next to the two workers',
+// and that project is the only one referencing all of them.
+[assembly: InternalsVisibleTo("DM.Architecture.Tests")]
 
 namespace DM.Web.API;
 

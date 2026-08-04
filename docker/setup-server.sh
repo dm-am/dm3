@@ -17,6 +17,36 @@ sudo apt install -y docker.io docker-compose-plugin git iptables-persistent open
 echo "=== Настройка Docker для текущего пользователя ==="
 sudo usermod -aG docker "$USER"
 
+echo "=== Ротация журналов Docker ==="
+# The default json-file driver keeps every line forever, and Serilog writes to
+# the console beside Loki - so each line is stored twice, once under Loki's own
+# retention and once in a file that grows until the disk is full. On a
+# preview-class VPS the first service to die on a full disk is Postgres.
+#
+# Given to the daemon rather than to each compose service: the daemon also
+# covers the one-off containers the backup script and the credential generator
+# start, and this is already the layer the installer owns - it writes the
+# firewall rules, the unit, the crontab and a logrotate policy for the backup
+# log. Log options apply to containers created after they are set, and nothing
+# has been started yet.
+DOCKER_DAEMON_CONFIG=/etc/docker/daemon.json
+if [ -f "$DOCKER_DAEMON_CONFIG" ]; then
+    echo "$DOCKER_DAEMON_CONFIG уже существует, ротацию журналов проверить вручную:"
+    echo "  log-driver json-file, log-opts max-size 10m, max-file 3"
+else
+    sudo mkdir -p "$(dirname "$DOCKER_DAEMON_CONFIG")"
+    sudo tee "$DOCKER_DAEMON_CONFIG" > /dev/null <<'JSON'
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  }
+}
+JSON
+    sudo systemctl restart docker
+fi
+
 echo "=== Клонирование репозитория ==="
 sudo mkdir -p "$INSTALL_DIR"
 sudo chown "$USER:$USER" "$INSTALL_DIR"
@@ -63,7 +93,10 @@ echo ""
 echo "=== Готово! ==="
 echo "Приложение доступно по адресу: http://$(curl -s ifconfig.me)"
 echo "Логин: preview"
-echo "Пароль: ${DM_PREVIEW_PASSWORD}"
+# Пароль здесь не печатается: его задал оператор минуту назад, а напечатанный
+# остается в терминале, в истории сессии и в логе установки, если она шла через
+# tee. Вдобавок под set -u эта строка роняла установщик на последнем шаге, если
+# пароль вводили в промпт init-htpasswd.sh, а не экспортировали.
 echo ""
 echo "Для смены пароля:"
 echo "  bash $INSTALL_DIR/docker/scripts/init-htpasswd.sh"

@@ -28,6 +28,7 @@ public class DeploymentConfigurationShould
 {
     private const string BaseCompose = "docker-compose.yml";
     private const string PreviewCompose = "docker-compose.preview.yml";
+    private const string MirrorCompose = "docker-compose.mirror.yml";
     private const string NginxConfiguration = "nginx/nginx.conf";
 
     /// <summary>
@@ -609,6 +610,327 @@ public class DeploymentConfigurationShould
 
         ServiceBlock(Read(PreviewCompose), "dmfront").Should().Contain("watchtower.enable=true",
             "the SPA image is published by the same run and has to move with it");
+    }
+
+    /// <summary>
+    /// The log of every container on the server has a ceiling.
+    /// </summary>
+    /// <remarks>
+    /// The default json-file driver keeps every line forever, and Serilog writes
+    /// to the console beside Loki, so each line is stored twice: once under
+    /// Loki's retention and once in a file that grows until the disk is full. On
+    /// a preview-class VPS the first service to die on a full disk is Postgres,
+    /// and the alert that would have said so is not wired to a receiver.
+    ///
+    /// Given to the daemon rather than to each compose service, because the
+    /// daemon also covers the one-off containers the backup script and the
+    /// credential generator start. The installer already owns this layer: it
+    /// writes the firewall rules, the unit, the crontab and a logrotate policy
+    /// for the backup log.
+    /// </remarks>
+    [Fact]
+    public void CapTheLogOfEveryContainerOnTheServer()
+    {
+        var installer = File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh"));
+
+        var policy = installer.IndexOf("/etc/docker/daemon.json", StringComparison.Ordinal);
+        var start = installer.IndexOf("docker compose", StringComparison.Ordinal);
+
+        policy.Should().BeGreaterThan(-1,
+            "the default driver keeps every line of every container until the disk is full");
+        installer.Should().Contain("max-size", "a driver with no size limit never rotates");
+        installer.Should().Contain("max-file", "one rotated file is one file that keeps growing");
+
+        start.Should().BeGreaterThan(-1, "the installer is still the thing that starts the stack");
+        policy.Should().BeLessThan(start,
+            "log options apply to containers created after they are set");
+    }
+
+    /// <summary>
+    /// The edge accepts a body as large as the endpoint behind it does.
+    /// </summary>
+    /// <remarks>
+    /// nginx defaults to one megabyte and the upload endpoint accepts ten, and
+    /// the client-side compressor returns a file untouched when neither side is
+    /// over 1024 pixels — so a four-megabyte PNG travelled as it was. What the
+    /// visitor got was an HTML 413 from the edge: not the API error shape, and
+    /// with no CORS header on it, so the form could not even show the refusal at
+    /// the field. The symptom is "upload does not work", with no explanation.
+    /// </remarks>
+    [Fact]
+    public void AcceptAtTheEdgeEverythingTheUploadEndpointAccepts()
+    {
+        var controller = File.ReadAllText(Path.Combine(RepositoryRoot,
+            "src", "DM.Web.API", "Features", "General", "Upload", "UploadController.cs"));
+
+        var endpoint = Regex.Match(controller, @"RequestSizeLimit\((\d+) \* 1024 \* 1024\)");
+        endpoint.Success.Should().BeTrue("the upload endpoint declares its own ceiling");
+
+        var edge = Regex.Match(
+            ActiveDirectives(Read(NginxConfiguration)), @"client_max_body_size (\d+)m;");
+        edge.Success.Should().BeTrue(
+            "without the directive the edge cuts every body at its own default of 1 MB");
+
+        edge.Groups[1].Value.Should().Be(endpoint.Groups[1].Value,
+            "a lower limit at the edge refuses what the endpoint accepts, and a higher one " +
+            "carries the whole body across the network to be refused at the end of it");
+    }
+
+    /// <summary>
+    /// An external heartbeat reaches the API, and nothing else about it does.
+    /// </summary>
+    /// <remarks>
+    /// The monitoring guide tells the operator to watch /_health from outside
+    /// the host. With no location of its own that path fell into "/", which
+    /// proxies the SPA container, and the SPA fallback answers index.html with
+    /// 200 — so the monitor reported a healthy site for exactly as long as nginx
+    /// and a static container were alive, which is when the answer is worthless.
+    ///
+    /// Exact matches rather than a prefix: /_health/detail names every
+    /// dependency and its state, and /metrics is the whole instrumentation of
+    /// the process. Both stay on the inside.
+    /// </remarks>
+    [Fact]
+    public void AnswerTheExternalHeartbeatAtTheEdge()
+    {
+        var nginx = Read(NginxConfiguration);
+
+        foreach (var server in new[] { ActiveDirectives(nginx), CommentedDirectives(nginx) })
+        {
+            server.Should().Contain("location = /_health {",
+                "the heartbeat the guide recommends has to reach the API, not the SPA fallback");
+            server.Should().Contain("location = /_ready {",
+                "readiness answers for the stores, and a stand that cannot reach Postgres is down");
+            server.Should().NotContain("location /_health",
+                "a prefix location publishes /_health/detail, which names every dependency");
+            server.Should().NotContain("location /metrics",
+                "the instrumentation of the process stays on loopback");
+        }
+    }
+
+    /// <summary>
+    /// The unit and the installer deploy the same set.
+    /// </summary>
+    /// <remarks>
+    /// The shell copy of this comparison in CI greps both files and compares the
+    /// results, and two empty results compare equal: a switch to --file, to
+    /// COMPOSE_FILE, or to a path outside the character class it matches would
+    /// have left the gate green on nothing at all. What it exists to catch is a
+    /// unit that brings up the base topology without nginx and the SPA, so a
+    /// reboot replaces the site with a bare API.
+    /// </remarks>
+    [Fact]
+    public void DeployTheSameFilesAndProfilesFromTheUnitAndTheInstaller()
+    {
+        var installer = ComposeSelectors(
+            File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh")));
+        var unit = ComposeSelectors(
+            File.ReadAllText(Path.Combine(DockerDirectory, "dm3.service")));
+
+        installer.Should().Contain(BaseCompose).And.Contain(PreviewCompose,
+            "the site lives in the overlay, and a command naming the base file alone starts " +
+            "the API without it");
+        installer.Should().Contain("production",
+            "watchtower sits behind that profile, and a deployment without it stops updating");
+        unit.Should().BeEquivalentTo(installer,
+            "a reboot has to bring up the set the installer deployed");
+    }
+
+    /// <summary>
+    /// A mirror runs its own edge and API, and the stores of the main server.
+    /// </summary>
+    /// <remarks>
+    /// A profile widens the default set instead of narrowing it, so the
+    /// documented mirror command brought up seventeen services: a local Postgres,
+    /// Mongo and MinIO beside a working connection to main, a migration container
+    /// that would have run Migrate() against the main database, and no nginx at
+    /// all — the edge lives only in the overlay, so the topology the guide draws
+    /// was produced by no command.
+    ///
+    /// The overlay clears the dependencies of the API rather than listing
+    /// services: compose starts whatever a named service depends on, and every
+    /// one of those dependencies is a store that lives on main.
+    /// </remarks>
+    [Fact]
+    public void StartOnlyItsOwnEdgeAndApiOnAMirror()
+    {
+        Read(MirrorCompose).Should().Contain("depends_on: !reset",
+            "compose starts the dependencies of a named service, and all of them are on main");
+
+        var documents = new[] { "MIRRORING.md", "DEPLOYMENT.md" }
+            .Select(name => File.ReadAllText(
+                Path.Combine(RepositoryRoot, "docs", "guides", name)));
+
+        var commands = documents
+            .SelectMany(document => document.Split('\n'))
+            .Where(line => line.Contains("--env-file .env.mirror", StringComparison.Ordinal))
+            .ToList();
+
+        commands.Should().NotBeEmpty("the guides still document how a mirror is started");
+        foreach (var command in commands)
+        {
+            command.Should().Contain(MirrorCompose,
+                "the base file alone starts every store the mirror is meant to borrow");
+            command.Should().Contain(PreviewCompose,
+                "the edge a mirror serves from lives in the overlay");
+        }
+    }
+
+    /// <summary>
+    /// The backups live on the host, out of reach of "docker compose down -v".
+    /// </summary>
+    /// <remarks>
+    /// A named volume mounted at /var/backups looked like backup storage and was
+    /// none: all three scripts write to host directories through docker exec.
+    /// Named volumes are what "down -v" removes, and two routine commands run it
+    /// — the developer reset and the cleanup step of the security workflow — so
+    /// the first backup ever written inside the container would have vanished at
+    /// the next reset, with the restore procedure still naming the path.
+    /// </remarks>
+    [Fact]
+    public void KeepTheBackupsOutOfAVolumeThatGoesWithTheStack()
+    {
+        var compose = Read(BaseCompose) + "\n" + Read(PreviewCompose);
+
+        compose.Should().NotContain("/var/backups",
+            "the backup scripts write on the host, and a volume mounted there is removed by " +
+            "docker compose down -v");
+        compose.Should().NotContain("backups:",
+            "a volume nothing ever writes to is a promise the restore procedure cannot keep");
+    }
+
+    /// <summary>
+    /// Every image the deployment runs names a version.
+    /// </summary>
+    /// <remarks>
+    /// A reference with no tag resolves to whatever the registry holds that day,
+    /// so the same commit gives a different runtime a month later. watchtower is
+    /// the one that decides it: it mounts /var/run/docker.sock, which is full
+    /// control of the host.
+    ///
+    /// minio/mc is the documented exception. It speaks to the server over the
+    /// admin API and the two are released together, so pinning the client apart
+    /// from the server is the failure mode rather than the fix.
+    /// </remarks>
+    [Fact]
+    public void PinEveryImageTheDeploymentRuns()
+    {
+        var composeImages = (Read(BaseCompose) + "\n" + Read(PreviewCompose))
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.StartsWith("image:", StringComparison.Ordinal))
+            .Select(line => line[6..].Trim().Trim('\'', '"'));
+
+        var dockerfileImages = new[]
+            {
+                Path.Combine(DockerDirectory, "app.Dockerfile"),
+                Path.Combine(RepositoryRoot, "src", "DM.Web.Client", "Dockerfile"),
+            }
+            .SelectMany(path => File.ReadAllLines(path))
+            .Where(line => line.StartsWith("FROM ", StringComparison.Ordinal))
+            .Select(line => line[5..].Split(' ')[0]);
+
+        var references = composeImages
+            .Concat(dockerfileImages)
+            .Where(reference => reference != "minio/mc")
+            .ToList();
+
+        references.Should().HaveCountGreaterThan(10, "the parser must find the image references");
+        foreach (var reference in references)
+        {
+            reference.Split('/')[^1].Should().Contain(":",
+                $"{reference} resolves to whatever the registry holds on the day it is pulled");
+        }
+    }
+
+    /// <summary>
+    /// The installer prints no credential.
+    /// </summary>
+    /// <remarks>
+    /// The operator chose the password a minute earlier, so printing it teaches
+    /// nobody anything and leaves it in the terminal, in the history of the
+    /// session and in the install log whenever the run goes through tee. Under
+    /// set -u it was worse than untidy: an operator who typed the password at the
+    /// generator's prompt instead of exporting it lost the installer on its very
+    /// last line.
+    /// </remarks>
+    [Fact]
+    public void PrintNoCredentialFromTheInstaller()
+    {
+        var lines = File.ReadAllLines(Path.Combine(DockerDirectory, "setup-server.sh"))
+            .Where(line => line.TrimStart().StartsWith("echo", StringComparison.Ordinal))
+            .ToList();
+
+        lines.Should().NotBeEmpty("the installer still reports what it did");
+        lines.Should().NotContain(
+            line => line.Contains("DM_PREVIEW_PASSWORD", StringComparison.Ordinal),
+            "the terminal, the shell history and the install log keep whatever is printed here");
+    }
+
+    /// <summary>
+    /// The gates exercise the environment that ships.
+    /// </summary>
+    /// <remarks>
+    /// Both workflows create docker/.env from the example, and the example ends
+    /// with ASPNETCORE_ENVIRONMENT=Development for local work — so the end-to-end
+    /// tier and the security scan ran against a build that maps Swagger and
+    /// relaxes the script-src of its own content policy for it, while the
+    /// configuration that reaches a server was exercised by nothing.
+    /// </remarks>
+    [Theory]
+    [InlineData("dotnet.yml")]
+    [InlineData("security.yml")]
+    public void RunTheGatesAgainstTheEnvironmentThatShips(string workflow)
+    {
+        var text = File.ReadAllText(
+            Path.Combine(RepositoryRoot, ".github", "workflows", workflow));
+
+        text.Should().Contain("docker compose",
+            $"{workflow} is one of the workflows that start the stack");
+        text.Should().Contain("ASPNETCORE_ENVIRONMENT: Production",
+            "a gate that exercises Development proves nothing about what gets deployed");
+    }
+
+    /// <summary>
+    /// The coverage the build collects is also read.
+    /// </summary>
+    /// <remarks>
+    /// The workflow collected cobertura and uploaded it with if-no-files-found:
+    /// error — a guarantee that the file exists, with no threshold anywhere, so
+    /// deleting tests or adding a module without any passed every gate green.
+    /// The frontend has had a ratchet since it had tests at all.
+    /// </remarks>
+    [Fact]
+    public void CheckTheCoverageTheBuildCollects()
+    {
+        var workflow = File.ReadAllText(
+            Path.Combine(RepositoryRoot, ".github", "workflows", "dotnet.yml"));
+
+        File.Exists(Path.Combine(RepositoryRoot, "scripts", "check-coverage.sh"))
+            .Should().BeTrue("the threshold lives beside the reason for it, in the script");
+
+        var collection = workflow.IndexOf("--collect:", StringComparison.Ordinal);
+        var check = workflow.IndexOf("check-coverage.sh", StringComparison.Ordinal);
+
+        check.Should().BeGreaterThan(-1, "a number nobody reads is a report, not a gate");
+        collection.Should().BeGreaterThan(-1, "the run still collects the coverage");
+        collection.Should().BeLessThan(check, "the check reads what the run collected");
+    }
+
+    /// <summary>Compose files and profiles named by the docker compose lines of a file.</summary>
+    private static List<string> ComposeSelectors(string text)
+    {
+        var selectors = text.Split('\n')
+            .Where(line => line.Contains("docker compose", StringComparison.Ordinal))
+            .SelectMany(line => Regex.Matches(line, @"(?:-f|--file)\s+(\S+\.yml)|--profile\s+(\S+)"))
+            .Select(match => match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value)
+            .Select(Path.GetFileName)
+            .Distinct()
+            .ToList();
+
+        selectors.Should().NotBeEmpty(
+            "an extraction that finds nothing compares equal to another that finds nothing");
+        return selectors!;
     }
 
     /// <summary>The body of one service, up to the next key at the same indent.</summary>

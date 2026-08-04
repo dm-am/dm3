@@ -3,11 +3,8 @@ using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using AutoMapper;
-using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
-using DM.Domain.Core.Identity;
-using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Rooms;
 using DM.Domain.Messaging.Features.Chats;
@@ -24,29 +21,20 @@ namespace DM.Web.API.Features.Game.ChatRooms;
 internal class ChatRoomApiService : IChatRoomApiService
 {
     private readonly IRoomService _roomService;
-    private readonly IRoomRepository _roomRepository;
     private readonly IChatService _chatService;
     private readonly IMessagingApiService _messagingService;
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IIntentionManager _intentionManager;
     private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public ChatRoomApiService(
         IRoomService roomService,
-        IRoomRepository roomRepository,
         IChatService chatService,
         IMessagingApiService messagingService,
-        IIdentityProvider identityProvider,
-        IIntentionManager intentionManager,
         IMapper mapper)
     {
         _roomService = roomService;
-        _roomRepository = roomRepository;
         _chatService = chatService;
         _messagingService = messagingService;
-        _identityProvider = identityProvider;
-        _intentionManager = intentionManager;
         _mapper = mapper;
     }
 
@@ -142,8 +130,7 @@ internal class ChatRoomApiService : IChatRoomApiService
     /// <inheritdoc />
     public async Task<CursorEnvelope<Message>> GetMessagesAsync(Guid chatRoomId, string? cursor, int limit)
     {
-        var room = await GetChatRoomForUpdateAsync(chatRoomId);
-        _intentionManager.ThrowIfForbidden(RoomIntention.ViewMessages, room);
+        var room = await _roomService.GetChatRoomForReadingAsync(chatRoomId);
 
         return await _messagingService.GetGameRoomMessagesWithCursorAsync(
             room.ChatId!.Value, cursor, limit);
@@ -152,8 +139,7 @@ internal class ChatRoomApiService : IChatRoomApiService
     /// <inheritdoc />
     public async Task<Envelope<Message>> CreateMessageAsync(Guid chatRoomId, CreateMessageInput input)
     {
-        var room = await GetChatRoomForUpdateAsync(chatRoomId);
-        _intentionManager.ThrowIfForbidden(RoomIntention.SendMessage, room);
+        var room = await _roomService.GetChatRoomForWritingAsync(chatRoomId);
 
         var message = new Message { Text = new CommonBbText { Value = input.Text } };
         return await _messagingService.CreateGameRoomMessageAsync(room.ChatId!.Value, message);
@@ -162,22 +148,8 @@ internal class ChatRoomApiService : IChatRoomApiService
     /// <inheritdoc />
     public async Task MarkAsReadAsync(Guid chatRoomId)
     {
-        var room = await GetChatRoomForUpdateAsync(chatRoomId);
-        _intentionManager.ThrowIfForbidden(RoomIntention.ViewMessages, room);
+        var room = await _roomService.GetChatRoomForReadingAsync(chatRoomId);
 
         await _messagingService.MarkAsReadAsync(room.ChatId!.Value);
-    }
-
-    private async Task<RoomToUpdate> GetChatRoomForUpdateAsync(Guid chatRoomId)
-    {
-        var userId = _identityProvider.Current.User.UserId;
-        var room = await _roomRepository.GetForUpdate(chatRoomId, userId);
-
-        if (room == null || room.Type != RoomType.Chat || !room.ChatId.HasValue)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
-        }
-
-        return room;
     }
 }

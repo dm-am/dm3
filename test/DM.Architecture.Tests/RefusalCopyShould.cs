@@ -50,6 +50,16 @@ public class RefusalCopyShould
     /// <summary>That same letter and its capital, by number and for the same reason.</summary>
     private static readonly char[] EWithDots = [(char)0x0451, (char)0x0401];
 
+    /// <summary>
+    /// The other noun for the thing the chat calls an event, by number for the same
+    /// reason the letter above is spelled that way: a file that keeps a word out of
+    /// messages should not carry it. The stem covers every case ending at once, and
+    /// it is looked for in refusals alone — a security log line is an event in the
+    /// ordinary sense of the word and says so.
+    /// </summary>
+    private static readonly Regex OtherNounForAnEvent = new(
+        @"[Сс]обыти", RegexOptions.Compiled);
+
     /// <summary>An interpolation hole is not wording: {commentId} and {id} say nothing.</summary>
     private static readonly Regex Hole = new(@"\{[^{}]*\}", RegexOptions.Compiled);
 
@@ -82,6 +92,20 @@ public class RefusalCopyShould
         offenders.Should().BeEmpty(
             "CODE_STYLE spells this letter without the dots everywhere a person reads it, " +
             "and a refusal is read by a person");
+    }
+
+    [Fact]
+    public void CallTheChatEventByTheNameTheInterfaceGivesIt()
+    {
+        var offenders = ThrowSites()
+            .Where(site => site.Messages.Any(message => OtherNounForAnEvent.IsMatch(message)))
+            .Select(Describe)
+            .ToList();
+
+        offenders.Should().BeEmpty(
+            "the strip over the chat and the hint over the composer name it with the " +
+            "borrowed word, and this refusal is read on that same screen a second " +
+            "later: one thing answering to two nouns is two things to the reader");
     }
 
     [Fact]

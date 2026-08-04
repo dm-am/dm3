@@ -21,7 +21,7 @@ internal class CommunityUserApiService : ICommunityUserApiService
     private readonly ICommunityProfileService _profileService;
     private readonly IUserLookupService _userLookupService;
     private readonly IUserProfileNoteService _profileNoteService;
-    private readonly ILoginRecordRepository _loginRecordRepository;
+    private readonly ILoginRecordService _loginRecordService;
     private readonly IMapper _mapper;
 
     /// <inheritdoc />
@@ -29,13 +29,13 @@ internal class CommunityUserApiService : ICommunityUserApiService
         ICommunityProfileService profileService,
         IUserLookupService userLookupService,
         IUserProfileNoteService profileNoteService,
-        ILoginRecordRepository loginRecordRepository,
+        ILoginRecordService loginRecordService,
         IMapper mapper)
     {
         _profileService = profileService;
         _userLookupService = userLookupService;
         _profileNoteService = profileNoteService;
-        _loginRecordRepository = loginRecordRepository;
+        _loginRecordService = loginRecordService;
         _mapper = mapper;
     }
 
@@ -148,7 +148,7 @@ internal class CommunityUserApiService : ICommunityUserApiService
     public async Task<ListEnvelope<LoginHistoryDto>> GetLoginHistory(string username)
     {
         var user = await _userLookupService.GetAsync(username);
-        var loginHistory = await _loginRecordRepository.GetLoginHistory(user.UserId);
+        var loginHistory = await _loginRecordService.GetHistory(user.UserId);
         var dtos = loginHistory.Select(r => new LoginHistoryDto
         {
             LoginTimestampUtc = r.LoginUtc,

@@ -38,11 +38,9 @@ Users ──────────────────>│  nginx → dm-a
 ## Требования
 
 ### Основной сервер
-- Открытые порты для зеркал (через firewall):
-  - `5432` (PostgreSQL)
-  - `27017` (MongoDB)
-  - `5672` (RabbitMQ)
-  - `9000` (MinIO)
+- Доступ зеркал к хранилищам: `5432` (PostgreSQL), `27017` (MongoDB), `5672`
+  (RabbitMQ), `9000` (MinIO). Порты опубликованы на loopback, поэтому нужен
+  приватный интерфейс между серверами или VPN, а не правило брандмауэра.
 - SSL сертификаты для БД (или VPN между серверами)
 
 ### Зеркало
@@ -63,7 +61,7 @@ cp .env.example .env.mirror
 certbot --nginx -d your-mirror-domain.ru
 
 # 4. Запустить
-docker compose --env-file .env.mirror --profile mirror up -d
+docker compose --env-file .env.mirror -f docker-compose.yml -f docker-compose.preview.yml -f docker-compose.mirror.yml --profile mirror up -d nginx watchtower
 ```
 
 ## Ручная настройка
@@ -89,15 +87,13 @@ cp .env.example .env.mirror
 | Публичные URL зеркала | `WEB_URL`, `API_URL`, `CDN_PUBLIC_URL`, `IMGPROXY_PUBLIC_URL`, `CORS_URL_0` | Домен этого зеркала |
 | Окружение | `ASPNETCORE_ENVIRONMENT` | `Production` |
 
-### 2. Настроить firewall на основном сервере
+### 2. Открыть хранилища main-сервера зеркалу
 
-```bash
-# UFW (Ubuntu)
-ufw allow from <mirror-ip> to any port 5432  # PostgreSQL
-ufw allow from <mirror-ip> to any port 27017 # MongoDB
-ufw allow from <mirror-ip> to any port 5672  # RabbitMQ
-ufw allow from <mirror-ip> to any port 9000  # MinIO
-```
+Правила ufw тут не помогут: все порты хранилищ опубликованы на `127.0.0.1`, а не
+наружу, и правило брандмауэра не открывает порт, которого никто не слушает на
+внешнем адресе. Нужно либо перевести публикации на приватный интерфейс между
+серверами, либо соединить серверы VPN и оставить публикации на loopback. Второе
+предпочтительнее: с ним пароли хранилищ перестают быть единственной границей.
 
 ### 3. SSL для подключения к БД
 
@@ -109,8 +105,13 @@ MONGO_TLS=&tls=true
 
 ### 4. Запуск
 
+Зеркалу нужны только край и API: хранилища, брокер и миграция живут на main.
+Профиль набор сервисов не сужает, а расширяет, поэтому команда называет и
+оверлеи, и сервисы. Оверлей зеркала снимает у API зависимости от локальных
+хранилищ, иначе compose поднял бы их следом за ним.
+
 ```bash
-docker compose --env-file .env.mirror --profile mirror up -d
+docker compose --env-file .env.mirror -f docker-compose.yml -f docker-compose.preview.yml -f docker-compose.mirror.yml --profile mirror up -d nginx watchtower
 ```
 
 ## Сессии и зеркала

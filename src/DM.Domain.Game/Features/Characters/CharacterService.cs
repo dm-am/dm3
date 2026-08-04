@@ -156,17 +156,25 @@ internal class CharacterService : ICharacterService
         var characterToUpdate = await _repository.GetForUpdate(updateCharacter.CharacterId);
         _intentionManager.ThrowIfForbidden(CharacterIntention.Edit, characterToUpdate);
 
-        // Check privacy settings permission
+        // A field the caller may not set is refused, not dropped. Asking IsAllowed
+        // and leaving the value out answered 200 with the character unchanged,
+        // which is what success looks like. Asked only when the request actually
+        // changes the field: the client round-trips the whole character, and a value
+        // it already has is nobody's attempt at anything.
         CharacterAccessPolicy? accessPolicy = null;
-        if (_intentionManager.IsAllowed(CharacterIntention.EditPrivacySettings))
+        if (updateCharacter.AccessPolicy.HasValue &&
+            updateCharacter.AccessPolicy != characterToUpdate.AccessPolicy)
         {
+            _intentionManager.ThrowIfForbidden(CharacterIntention.EditPrivacySettings);
             accessPolicy = updateCharacter.AccessPolicy;
         }
 
-        // Check master settings permission
         bool? isNpc = null;
-        if (_intentionManager.IsAllowed(CharacterIntention.EditMasterSettings))
+        if (updateCharacter.IsNpc.HasValue && updateCharacter.IsNpc != characterToUpdate.IsNpc)
+        {
+            _intentionManager.ThrowIfForbidden(CharacterIntention.EditMasterSettings);
             isNpc = updateCharacter.IsNpc;
+        }
 
         var invokedEvents = new List<EventType> { EventType.ChangedCharacter };
 
@@ -292,7 +300,10 @@ internal class CharacterService : ICharacterService
 
             if (!hasOtherActive)
             {
-                await _subscriptionService.SubscribeAsync(character.GameId);
+                // The player who lost the character, not whoever sent the request:
+                // the lead who kills or exiles used to become the reader of his own
+                // game while the player dropped out of the game list.
+                await _subscriptionService.SubscribeUserAsync(character.GameId, character.UserId);
             }
         }
 

@@ -24,7 +24,7 @@ import { GameIcon } from "@/shared/ui/Icon";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { UserLink } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
-import { notifyFailure } from "@/shared/lib/errors";
+import { describeFailure, notifyFailure } from "@/shared/lib/errors";
 import { useRoleGate } from "./lib/useRoleGate";
 
 const { hasAccess, deniedText } = useRoleGate("SeniorModerator");
@@ -86,7 +86,7 @@ async function grant() {
       },
     );
     if (error) {
-      grantError.value = error.title ?? "Не удалось выдать награду";
+      grantError.value = describeFailure(error, "Не удалось выдать награду");
       return;
     }
     grantForm.value.username = "";

@@ -29,7 +29,8 @@ import GameCharacters from "./GameCharacters.vue";
 // components that import it from the same module keep working.
 vi.mock("vue-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("vue-router")>()),
-  useRoute: () => ({ params: { id: "the-game" } }),
+  useRoute: () => ({ params: { id: "the-game" }, query: {} }),
+  useRouter: () => ({ replace: vi.fn() }),
 }));
 
 /** The fields of a roster entry this page reads; ids are branded on the wire. */
@@ -58,7 +59,11 @@ function character(over: CharacterOverrides = {}): Character {
   } as unknown as Character;
 }
 
-function render(participation: string[], characters: Character[]) {
+function render(
+  participation: string[],
+  characters: Character[],
+  state: { charactersLoading?: boolean; charactersError?: string } = {},
+) {
   const pinia = createPinia();
   setActivePinia(pinia);
   const store = useGameDetailsStore();
@@ -69,6 +74,10 @@ function render(participation: string[], characters: Character[]) {
   } as unknown as Game;
   // Seeded, so mounting the page does not reach for the endpoint.
   store.characters = characters;
+  store.charactersLoading = state.charactersLoading ?? false;
+  store.charactersError = state.charactersError ?? null;
+  // An empty roster makes the page ask for one; the endpoint is not the subject.
+  vi.spyOn(store, "loadCharacters").mockResolvedValue(undefined);
 
   return mount(GameCharacters, {
     global: {
@@ -130,5 +139,32 @@ describe("GameCharacters", () => {
 
     expect(wrapper.text()).toContain("На рассмотрении");
     expect(manageLinks(wrapper)).toHaveLength(0);
+  });
+});
+
+/**
+ * The same class of lie the messenger told about conversations: a roster still
+ * on the wire, and a roster that failed to arrive, were both rendered as "нет
+ * персонажей" — a statement about the game, made without knowing anything about
+ * it. The store carried the loading flag and the failure the whole time.
+ */
+describe("GameCharacters load states", () => {
+  const EMPTY = "В этой игре пока нет персонажей";
+
+  it("says nothing about the roster while it is being fetched", () => {
+    const wrapper = render([], [], { charactersLoading: true });
+
+    expect(wrapper.text()).not.toContain(EMPTY);
+    expect(wrapper.find(".character-skeleton-grid").exists()).toBe(true);
+  });
+
+  it("names a failed load and offers to repeat it", () => {
+    const wrapper = render([], [], {
+      charactersError: "Не удалось загрузить персонажей",
+    });
+
+    expect(wrapper.text()).not.toContain(EMPTY);
+    expect(wrapper.text()).toContain("Не удалось загрузить персонажей");
+    expect(wrapper.text()).toContain("Повторить");
   });
 });

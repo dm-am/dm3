@@ -40,25 +40,18 @@ internal class GameUserApiService : IGameUserApiService
     public async Task<IEnumerable<GameUser>> GetUsers(Guid gameId, string? role = null)
     {
         var users = await _invitationService.GetUsers(gameId);
-        var mappedUsers = users.Select(MapToDto);
 
-        if (string.IsNullOrEmpty(role))
+        // Filtered on the role itself, before it is rendered. The filter compared
+        // the rendered string against literals it wrote out a second time, and
+        // three of them - "mentor", "applicant", "formerPlayer" - were values
+        // ToApiString never produced; the model has no former player at all. An
+        // unrecognised value returns everybody, as on the blog side.
+        if (!string.IsNullOrEmpty(role) && GameRoleExtensions.TryParseApiString(role, out var wanted))
         {
-            return mappedUsers;
+            users = users.Where(u => u.Role == wanted);
         }
 
-        // Apply role filter
-        return role.ToLowerInvariant() switch
-        {
-            "master" => mappedUsers.Where(u => u.Role == "master"),
-            "assistant" => mappedUsers.Where(u => u.Role == "assistant"),
-            "mentor" => mappedUsers.Where(u => u.Role == "mentor"),
-            "player" => mappedUsers.Where(u => u.Role == "player"),
-            "applicant" => mappedUsers.Where(u => u.Role == "applicant"),
-            "reader" => mappedUsers.Where(u => u.Role == "reader"),
-            "formerplayer" => mappedUsers.Where(u => u.Role == "formerPlayer"),
-            _ => mappedUsers
-        };
+        return users.Select(MapToDto);
     }
 
     /// <inheritdoc />

@@ -12,7 +12,6 @@ networks:
 name: dm
 
 volumes:
-  backups:
   pgdata:
   mongodata:
   lokidata:
@@ -23,9 +22,12 @@ volumes:
 # Для зеркала: переопределить в .env.mirror
 x-workload-env: &workload-env
   # === ASP.NET Core ===
-  # Production unless explicitly overridden. Development unlocks the dev-only
-  # seed and role endpoints, so an unset variable on a server must not be the
-  # thing that opens them; docker/.env.example sets Development for local work.
+  # Production unless explicitly overridden. Development is what maps Swagger UI
+  # and relaxes the script CSP for it, so an unset variable on a server must not
+  # be the thing that publishes the API documentation; docker/.env.example sets
+  # Development for local work. There are no environment-gated seed or role
+  # endpoints: seeding is a separate tool and the role endpoint is closed by
+  # RequireRole(Admin).
   ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
 
   # === Базы данных ===
@@ -111,7 +113,6 @@ services:
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - backups:/var/backups
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d dm3"]
@@ -233,7 +234,7 @@ services:
 
   mailhog:
     container_name: 'dm-mailhog'
-    image: 'mailhog/mailhog'
+    image: 'mailhog/mailhog:v1.0.1'
     ports:
       - '127.0.0.1:1025:1025'
       - '127.0.0.1:8025:8025'
@@ -617,7 +618,7 @@ services:
   # unit, not a container swap.
   watchtower:
     container_name: 'dm-watchtower'
-    image: containrrr/watchtower
+    image: containrrr/watchtower:1.7.1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:

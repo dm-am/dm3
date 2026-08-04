@@ -59,7 +59,11 @@ import ModerationLinkedProfiles from "./moderation/ModerationLinkedProfiles.vue"
 import ModerationNotes from "./moderation/ModerationNotes.vue";
 import ModerationViolations from "./moderation/ModerationViolations.vue";
 import { BlockUserDialog } from "@/features/block-user";
-import { ErrorPage } from "@/shared/ui/ErrorPage";
+import {
+  ErrorPage,
+  errorCodeForStatus,
+  getErrorConfig,
+} from "@/shared/ui/ErrorPage";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { notifyFailure } from "@/shared/lib/errors";
 
@@ -87,16 +91,13 @@ const usernameParam = computed(() => route.params.username as string);
 // the status is read from it directly.
 const errorCode = ref<number | null>(null);
 
-function mapErrorStatus(status: number | undefined): number {
-  if (status === 404 || status === 410) return 404;
-  if (status === 403) return 403;
-  return 500;
-}
-
 async function loadProfile(name: Username) {
   errorCode.value = null;
   const error = await communityStore.trySelectProfile(name);
-  if (error) errorCode.value = mapErrorStatus(error.status);
+  // The profile endpoint answers an unknown username with 410, which here means
+  // "no such user" and not "deleted" - that is the default of the shared map,
+  // so this page reads the same as it did with its own copy.
+  if (error) errorCode.value = errorCodeForStatus(error.status);
 }
 
 useFetchData(
@@ -110,11 +111,16 @@ useFetchData(
 );
 const isSystemUser = computed(() => user.value?.role === UserRole.System);
 
-// Tab title reflects the loaded profile ("{username} — Dungeon Master");
-// falls back
-// to the URL param while the profile is still loading so the tab is never
-// blank or stale.
-useDocumentTitle(() => user.value?.username ?? usernameParam.value);
+// Tab title reflects the loaded profile, falling back to the URL param while
+// it is still loading so the tab is never blank or stale. When the load fails
+// the error owns the title: the param names a user who does not exist, and a
+// tab named after him over a 404 page is the page lying about itself. Same
+// rule and same source as the forum shell (ForumPage.vue).
+useDocumentTitle(() =>
+  errorCode.value
+    ? getErrorConfig(errorCode.value).title
+    : (user.value?.username ?? usernameParam.value),
+);
 
 const {
   isEditMode,
@@ -1086,6 +1092,15 @@ watch(usernameParam, async () => {
   position: relative
   width: 220px
   max-width: 100%
+  // The slot keeps its height when the picture turns out to be shorter than it
+  // is wide. AvatarImg declares a square through width/height, which is the
+  // best guess available: the API sends no intrinsic size for the original, and
+  // the original is aspect-preserving (<=1024 on the long side). Without this
+  // floor a landscape avatar shrank the box on decode and pulled the role line,
+  // the statistics and the tabs up with it. A portrait one still grows the box;
+  // closing that needs the real dimensions in the DTO, which is not a change
+  // this stylesheet can make.
+  min-height: 220px
   margin-bottom: $small
 
 .avatar
@@ -1366,7 +1381,7 @@ watch(usernameParam, async () => {
   transform: translateY(100%)
   opacity: 0
 
-@media (max-width: 768px)
+@media (max-width: $bp-tablet)
   .avatar-wrapper
     width: 100%
     max-width: 280px

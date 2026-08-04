@@ -46,6 +46,7 @@ public class CharacterStatusTransitionsShould : UnitTestBase
     private readonly Mock<ICharacterRepository> _repository;
     private readonly Mock<IIntentionManager> _intentionManager;
     private readonly Mock<IEventProducer> _producer;
+    private readonly Mock<IGameSubscriptionService> _subscriptions;
     private readonly ICharacterService _service;
 
     public CharacterStatusTransitionsShould()
@@ -64,6 +65,8 @@ public class CharacterStatusTransitionsShould : UnitTestBase
         var dateTimeProvider = Mock<IDateTimeProvider>();
         dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
 
+        _subscriptions = Mock<IGameSubscriptionService>();
+
         _service = new CharacterService(
             createValidator.Object,
             updateValidator.Object,
@@ -72,7 +75,7 @@ public class CharacterStatusTransitionsShould : UnitTestBase
             _repository.Object,
             Mock<ICharacterAttributeValueFiller>().Object,
             Mock<IUnreadCountersRepository>().Object,
-            Mock<IGameSubscriptionService>().Object,
+            _subscriptions.Object,
             _producer.Object,
             identityProvider.Object,
             Mock<IGuidFactory>().Object,
@@ -230,5 +233,32 @@ public class CharacterStatusTransitionsShould : UnitTestBase
                 GameAssistantIds = Array.Empty<Guid>(),
             });
         return characterId;
+    }
+
+    /// <summary>
+    /// Losing the last active character leaves the PLAYER with the game as a
+    /// reader. The subscription was written for whoever sent the request while the
+    /// "any characters left" question was asked about the character's author, so
+    /// the lead subscribed himself to his own game and the player lost it.
+    /// </summary>
+    [Theory]
+    [InlineData(CharacterStatusTransition.Kill)]
+    [InlineData(CharacterStatusTransition.Exile)]
+    [InlineData(CharacterStatusTransition.Leave)]
+    public async Task SubscribeThePlayerAndNotTheCaller(CharacterStatusTransition transition)
+    {
+        var characterId = Given(CharacterStatus.Active);
+        var character = await _repository.Object.GetForUpdate(characterId);
+        _repository.Setup(r => r.Update(It.IsAny<UpdateCharacterEntity>()))
+            .ReturnsAsync(new Character { Id = characterId });
+        _repository
+            .Setup(r => r.HasOtherActiveCharacters(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid>()))
+            .ReturnsAsync(false);
+
+        await _service.ChangeStatusAsync(characterId, transition);
+
+        _subscriptions.Verify(
+            s => s.SubscribeUserAsync(character.GameId, character.UserId, It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 }

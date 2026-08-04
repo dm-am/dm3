@@ -1,6 +1,7 @@
 ﻿<script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
 import { symbols } from "@/shared/lib/utils/icons";
+import { pluralize } from "@/shared/lib/utils/pluralize";
 import { useEditor, EditorContent } from "@tiptap/vue-3";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -202,6 +203,20 @@ const wordCount = computed(() => {
 const isOverLimit = computed(
   () => props.maxLength > 0 && charCount.value > props.maxLength,
 );
+
+// The two items of the status line are built here, not glued in the template:
+// an item spelled out of adjacent mustaches has no single text node to select,
+// and the noun after a count comes from pluralize — shared/lib/utils/pluralize
+// owns that rule, and the ternary that used to stand here said "22 слов".
+const wordCountLabel = computed(
+  () =>
+    `${wordCount.value} ${pluralize(wordCount.value, "слово", "слова", "слов")}`,
+);
+
+const charCountLabel = computed(() => {
+  const limit = props.maxLength > 0 ? ` / ${props.maxLength}` : "";
+  return `${charCount.value}${limit} символов`;
+});
 
 // Draft status text
 const draftStatusText = computed(() => {
@@ -1271,6 +1286,9 @@ defineExpose({
             <small>[bbcode]</small>
           </button>
         </Tooltip>
+        <!-- Zero-width preserved space: the pair copies as "[bbcode] wysiwyg"
+             and gains no gap on screen (the global .copy-space, Reset.sass). -->
+        <span class="copy-space">{{ " " }}</span>
         <Tooltip text="Визуальный редактор">
           <button
             type="button"
@@ -1485,36 +1503,26 @@ defineExpose({
       role="status"
       aria-live="polite"
     >
-      <span class="status-item"
-        >{{ wordCount }}
-        {{
-          wordCount === 1
-            ? "слово"
-            : wordCount >= 2 && wordCount <= 4
-              ? "слова"
-              : "слов"
-        }}</span
-      >
-      <span class="status-separator">|</span>
-      <span class="status-item" :class="{ 'over-limit': isOverLimit }">
-        {{ charCount }}{{ maxLength > 0 ? ` / ${maxLength}` : "" }} символов
-      </span>
-      <span v-if="hasDraft && draftKey" class="status-separator">|</span>
-      <span v-if="hasDraft && draftKey" class="status-item draft-available"
+      <span class="status-item">{{ wordCountLabel }}</span
+      ><span class="status-separator">{{ " | " }}</span
+      ><span class="status-item" :class="{ 'over-limit': isOverLimit }">{{
+        charCountLabel
+      }}</span
+      ><span v-if="hasDraft && draftKey" class="status-separator">{{
+        " | "
+      }}</span
+      ><span v-if="hasDraft && draftKey" class="status-item draft-available"
         >Есть черновик</span
-      >
-      <span
+      ><span
         v-if="draftStatusText && draftKey && !hasDraft"
         class="status-separator"
-        >|</span
-      >
-      <span
+        >{{ " | " }}</span
+      ><span
         v-if="draftStatusText && draftKey && !hasDraft"
         class="status-item draft-status"
         :class="{ saving: draftStatus === 'saving' }"
+        >{{ draftStatusText }}</span
       >
-        {{ draftStatusText }}
-      </span>
     </div>
 
     <!-- BBCode validation errors - outside resizable area -->
@@ -1580,12 +1588,20 @@ defineExpose({
 .toolbar-spacer
   flex: 1
 
+// Inline flow, not flex, for the same reason as the status bar: flex items
+// copy one per line, and this pair copied as "[bbcode]\nwysiwyg". font-size: 0
+// removes the container's own line-box strut, so the tabs keep exactly the
+// height the flex row gave them (each button restates its own font size).
 .mode-tabs
-  display: flex
+  display: block
+  white-space: nowrap
+  font-size: 0
   border-bottom: 2px solid $border
   position: relative
 
 .mode-tab
+  display: inline-block
+  vertical-align: top
   padding: $tiny $small
   border: none
   background: none
@@ -1732,16 +1748,19 @@ defineExpose({
     background-color: $selection-bg
     color: $selection-text
 
-// Status bar - outside the bordered container
+// Status bar - outside the bordered container. Inline flow, not flex: a flex
+// item is blockified, and the strip copied as "0 слов\n|\n0 / 10000 символов"
+// on every form of the site. The separator carries a real " | " text node, so
+// the copy reads as one line; the former gap: $small is that pair of spaces
+// plus the separator's own padding.
 .status-bar
-  display: flex
-  align-items: center
-  gap: $small
+  display: block
   padding: $tiny 0
   font-size: 11px
   color: $text-muted
 
 .status-separator
+  padding: 0 $minor
   opacity: 0.5
 
 .status-item
@@ -1755,9 +1774,6 @@ defineExpose({
   color: $accent-red
 
 .draft-status
-  display: flex
-  align-items: center
-  gap: 4px
   color: $accent-green
 
   &.saving
@@ -1913,12 +1929,12 @@ defineExpose({
   transform: translate(-50%, -50%) scale(0.95)
 
 // Help dialog mobile
-@media (max-width: 600px)
+@media (max-width: $bp-mobile)
   :global(.help-grid)
     grid-template-columns: 1fr
 
 // Mobile responsive
-@media (max-width: 768px)
+@media (max-width: $bp-tablet)
   .editor-toolbar
     padding: $small
     gap: 2px
@@ -1940,8 +1956,7 @@ defineExpose({
     margin-left: auto
 
   .status-bar
-    flex-wrap: wrap
-    justify-content: center
+    text-align: center
     padding: 6px $small
 
   .help-table
@@ -1953,7 +1968,7 @@ defineExpose({
     th:last-child
       display: none
 
-@media (max-width: 480px)
+@media (max-width: $bp-narrow)
   .editor-toolbar
     justify-content: center
 

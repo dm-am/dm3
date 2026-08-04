@@ -72,9 +72,6 @@ public class UploadsQuery
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public UploadStatus? Status { get; set; }
 
-    /// <summary>Filter by user ID (admin only).</summary>
-    public Guid? UserId { get; set; }
-
     /// <summary>Page number (1-based).</summary>
     [Range(1, int.MaxValue, ErrorMessage = "Номер страницы должен быть не менее 1")]
     public int Number { get; set; } = 1;

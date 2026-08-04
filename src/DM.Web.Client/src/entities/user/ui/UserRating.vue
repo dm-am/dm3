@@ -1,15 +1,21 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { User, UserRef } from "../model/types";
+import type { Rating, User, UserRef } from "../model/types";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 const props = defineProps<{
   user: User | UserRef;
+  /**
+   * The rating when it does not travel inside the user: a game roster serves
+   * the character's author as a reference and the author's rating beside it.
+   * Left out wherever the user carries its own.
+   */
+  rating?: Rating | null;
 }>();
 
-const rating = computed(() => {
-  const r = (props.user as User).rating;
+const shown = computed(() => {
+  const r = props.rating ?? (props.user as User).rating;
   if (!r) return null;
   return {
     reviewSum: r.postReviewScoreSum ?? 0,
@@ -18,15 +24,15 @@ const rating = computed(() => {
 });
 
 const reviewSumDisplay = computed(() => {
-  if (!rating.value) return "";
-  const v = rating.value.reviewSum;
+  if (!shown.value) return "";
+  const v = shown.value.reviewSum;
   return v > 0 ? `+${v}` : String(v);
 });
 
 const reviewSumClass = computed(() => {
-  if (!rating.value) return "muted";
-  if (rating.value.reviewSum > 0) return "positive";
-  if (rating.value.reviewSum < 0) return "negative";
+  if (!shown.value) return "muted";
+  if (shown.value.reviewSum > 0) return "positive";
+  if (shown.value.reviewSum < 0) return "negative";
   return "muted";
 });
 
@@ -37,14 +43,14 @@ const target = computed(() => ({
 </script>
 
 <template>
-  <span v-if="rating" class="user-rating">
+  <span v-if="shown" class="user-rating">
     <Tooltip text="Сумма полученных оценок"
       ><router-link :to="target" class="review-sum" :class="reviewSumClass">{{
         reviewSumDisplay
       }}</router-link></Tooltip
     ><span class="sep">/</span
     ><Tooltip text="Количество постов" focusable
-      ><span class="post-count">{{ rating.postCount }}</span></Tooltip
+      ><span class="post-count">{{ shown.postCount }}</span></Tooltip
     >
   </span>
   <router-link

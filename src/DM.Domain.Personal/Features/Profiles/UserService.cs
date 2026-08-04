@@ -294,4 +294,8 @@ internal class UserService : IUserService
         var userId = await _repository.FindUserIdAsync(username);
         return userId.HasValue ? (true, userId.Value) : (false, Guid.Empty);
     }
+
+    /// <inheritdoc />
+    public Task<IEnumerable<UserReference>> GetReferencesAsync(IEnumerable<Guid> userIds) =>
+        _repository.GetUserReferencesAsync(userIds);
 }

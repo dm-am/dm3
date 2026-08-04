@@ -171,10 +171,18 @@ function toggle() {
 watch(isOpen, (opened) => {
   // Track any scrolling container (capture phase) while the popover is open
   if (opened) {
-    document.addEventListener("scroll", updatePosition, true);
+    // Passive: updatePosition only READS geometry (getBoundingClientRect,
+    // offsetWidth), and a non-passive scroll listener makes the browser wait
+    // for it before every frame — a forced layout on the scroll path, felt as
+    // stutter while the popover is open. The same options the tooltip's
+    // listener in this same layer already carries.
+    document.addEventListener("scroll", updatePosition, {
+      passive: true,
+      capture: true,
+    });
     window.addEventListener("resize", updatePosition);
   } else {
-    document.removeEventListener("scroll", updatePosition, true);
+    document.removeEventListener("scroll", updatePosition, { capture: true });
     window.removeEventListener("resize", updatePosition);
   }
 });

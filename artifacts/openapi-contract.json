@@ -1185,7 +1185,8 @@
     "isActive",
     "isLifted",
     "isVoluntary",
-    "liftedBy",
+    "liftReason",
+    "liftedByUserId",
     "liftedUtc",
     "moderator",
     "startedUtc",
@@ -1197,7 +1198,6 @@
     "comment",
     "durationHours",
     "expiresUtc",
-    "type",
     "username"
   ],
   "DM.Web.API.Features.Moderation.Bans.LiftBanRequest": [
@@ -1680,7 +1680,9 @@
     "id",
     "settings",
     "targetId",
-    "targetType"
+    "targetTitle",
+    "targetType",
+    "targetUsername"
   ],
   "DM.Web.API.Features.Personal.Subscriptions.UpdateSubscriptionRequest": [
     "settings"

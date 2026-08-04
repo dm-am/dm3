@@ -112,6 +112,43 @@ describe("useApiResource", () => {
     expect(resource.data.value).toBeNull();
   });
 
+  it("keeps refreshing in the background after a forced fetch overtook one", async () => {
+    const first = deferred<string>();
+    const background = deferred<string>();
+    const forced = deferred<string>();
+    const later = deferred<string>();
+    const queue = [
+      first.promise,
+      background.promise,
+      forced.promise,
+      later.promise,
+    ];
+    const fetcher = vi.fn(() => queue.shift() as Promise<ApiResult<string>>);
+    // Negative TTL: everything is stale the moment it lands, so the test needs
+    // no clock to reach the stale-while-revalidate branch.
+    const resource = useApiResource(fetcher, { cacheMs: -1 });
+
+    const initial = resource.fetch();
+    first.release(ok("first"));
+    await initial;
+
+    // Stale: this one takes the background branch and raises the flag.
+    await resource.fetch();
+
+    // A mutation invalidates the same resource while that refresh is still on
+    // the wire, so the guard moves on and the background answer is dropped.
+    const invalidated = resource.invalidate();
+    forced.release(ok("forced"));
+    background.release(ok("background"));
+    await invalidated;
+
+    // Stale again. With the flag left raised this call returned without a
+    // request, and the resource never refreshed again.
+    await resource.fetch();
+
+    expect(fetcher).toHaveBeenCalledTimes(4);
+  });
+
   it("raises loading synchronously, before the first await", () => {
     const never = deferred<string>();
     const resource = useApiResource(() => never.promise);

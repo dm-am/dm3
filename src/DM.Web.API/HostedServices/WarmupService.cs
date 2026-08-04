@@ -4,7 +4,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
-using DM.Domain.Moderation.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.MongoIntegration;
@@ -16,7 +15,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 
 namespace DM.Web.API.HostedServices;
@@ -46,9 +44,6 @@ internal class WarmupService : IHostedService
 
             try
             {
-                // Validate configuration
-                ValidateConfiguration();
-
                 // Phase 1: DB, MongoDB and AutoMapper warmup (all in parallel)
                 var tasks = new[]
                 {
@@ -68,19 +63,6 @@ internal class WarmupService : IHostedService
             }
         }, cancellationToken);
         return Task.CompletedTask;
-    }
-
-    private void ValidateConfiguration()
-    {
-        using var scope = _serviceProvider.CreateScope();
-        var probationConfig = scope.ServiceProvider.GetRequiredService<IOptions<ProbationConfiguration>>().Value;
-
-        if (probationConfig.NewbiePostThreshold != 100)
-        {
-            _logger.LogWarning(
-                "[Warmup] ProbationConfiguration.NewbiePostThreshold is {Threshold} but DB computed column uses hardcoded 100. Run migration to sync.",
-                probationConfig.NewbiePostThreshold);
-        }
     }
 
     private void WarmupAutoMapper()

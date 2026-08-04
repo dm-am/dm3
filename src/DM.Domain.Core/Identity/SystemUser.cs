@@ -4,7 +4,8 @@ namespace DM.Domain.Core.Identity;
 
 /// <summary>
 /// System user (Robot Administrator) for automated actions.
-/// This user cannot log in and is used for system-generated content like auto-bans.
+/// This user cannot log in and authors system-generated content. Not automatic
+/// bans: nothing on the site issues one.
 /// </summary>
 public static class SystemUser
 {

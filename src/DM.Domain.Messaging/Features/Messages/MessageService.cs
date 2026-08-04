@@ -121,7 +121,7 @@ internal class MessageService : IMessageService
                 if (!isParticipant)
                 {
                     throw new HttpException(HttpStatusCode.Forbidden,
-                        "Идет закрытое событие. Писать могут только его участники.");
+                        "Идет закрытый эвент. Писать могут только его участники.");
                 }
             }
         }

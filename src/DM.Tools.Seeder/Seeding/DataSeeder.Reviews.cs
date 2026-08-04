@@ -60,7 +60,7 @@ internal sealed partial class DataSeeder
             result.Details.Add($"Testimonials already exist ({existingTestimonialsCount}), skipping reviews seeding");
         }
 
-        var experiencedUsers = users.Where(u => u.QuantityRating >= 100).ToList();
+        var experiencedUsers = users.Where(u => !ProbationPolicy.IsNewbie(u.QuantityRating)).ToList();
         if (experiencedUsers.Count == 0) experiencedUsers = users.Take(3).ToList();
 
         // Testimonials - website reviews (Text, DaysAgo) tuples for diverse lengths, styles, and dates

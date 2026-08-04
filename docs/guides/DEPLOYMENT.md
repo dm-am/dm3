@@ -38,7 +38,7 @@ Internet → Nginx → Frontend (Vue.js)
 
 **Принцип:** Multi-stage build (SDK → Runtime), non-root user `dmuser`
 
-**Оптимизация:** BuildKit NuGet cache mount, .csproj-first restore для кэширования слоев
+**Оптимизация:** файлы проектов копируются и восстанавливаются до исходников, поэтому слой пакетов не пересобирается на каждое изменение кода. Между прогонами слои переиспользует кэш сборки CI.
 
 ---
 
@@ -127,7 +127,7 @@ cd docker
 cp .env.example .env.mirror
 # Заполнить: секреты и крипто-ключ с main, MIRROR_ID, хосты main-сервера,
 # публичные URL зеркала — полный список переменных в MIRRORING.md
-docker compose --env-file .env.mirror --profile mirror up -d
+docker compose --env-file .env.mirror -f docker-compose.yml -f docker-compose.preview.yml -f docker-compose.mirror.yml --profile mirror up -d nginx watchtower
 ```
 
 **Обновление — автоматически!**
@@ -221,11 +221,7 @@ compose — поднять реплики нельзя даже случайно
 
 ## Health Checks
 
-| Endpoint | Назначение |
-|----------|-----------|
-| `/_health` | Liveness (Docker health check) |
-| `/_ready` | Readiness (PostgreSQL + MongoDB) |
-| `/_health/detail` | Детальная информация обо всех проверках |
+Адреса и что проверяет каждый — [CONFIGURATION.md](../references/CONFIGURATION.md#health-endpoints).
 
 ---
 

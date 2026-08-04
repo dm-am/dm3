@@ -168,10 +168,6 @@ internal class GameMappingProfile : Profile
             // Draft visibility is not part of the update contract (API has no
             // such field); leave null so the domain keeps the current value.
             .ForMember(g => g.DraftVisibility, opt => opt.Ignore())
-            .ForMember(g => g.PremoderationStatus, opt => opt.Ignore())
-            .ForMember(g => g.ClosedReason, opt => opt.Ignore())
-            .ForMember(g => g.ActivatedUtc, opt => opt.Ignore())
-            .ForMember(g => g.ClosedUtc, opt => opt.Ignore())
             .ForMember(g => g.IsRemoved, opt => opt.Ignore())
             .ForMember(g => g.Tags, opt => opt.Ignore());
     }

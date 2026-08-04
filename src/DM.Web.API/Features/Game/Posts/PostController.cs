@@ -144,9 +144,10 @@ public class PostController : ControllerBase
     /// <response code="200">Returns the list of rated posts</response>
     [HttpGet(Name = nameof(GetRatedPosts))]
     [ProducesResponseType(typeof(ListEnvelope<Post>), StatusCodes.Status200OK)]
-    // Client-only cache: the response is personalized (unread counters, private rooms),
-    // so it must never be stored by shared caches or the server response cache
-    [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
+    // No cache policy at all: the response is personalized (unread counters,
+    // private rooms), and a personal answer held for a minute is stale for that
+    // caller rather than leaked to another — a smaller defect, not a different
+    // one. Freshness here is worth more than a saved request.
     public async Task<IActionResult> GetRatedPosts([FromQuery] PostsQuery query) =>
         Ok(await _postApiService.GetRated(query));
 }

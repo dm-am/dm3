@@ -174,7 +174,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     Comment = table.Column<string>(type: "text", nullable: false),
                     AccessRestrictionPolicy = table.Column<int>(type: "integer", nullable: false),
                     IsVoluntary = table.Column<bool>(type: "boolean", nullable: false),
-                    IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
                     LiftedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     LiftedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     LiftReason = table.Column<string>(type: "text", nullable: true)
@@ -878,7 +877,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     BlogId = table.Column<Guid>(type: "uuid", nullable: false),
                     Title = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     SortOrder = table.Column<int>(type: "integer", nullable: false),
-                    AccessType = table.Column<int>(type: "integer", nullable: false),
                     IsArchived = table.Column<bool>(type: "boolean", nullable: false),
                     CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
@@ -1544,7 +1542,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                 columns: new[] { "BoardId", "Alias", "CreateTopicPolicy", "Description", "LastTopicAuthorId", "LastTopicCreatedUtc", "LastTopicId", "LastTopicNumber", "LastTopicTitle", "Order", "Title", "TopicsCount", "ViewPolicy" },
                 values: new object[,]
                 {
-                    { new Guid("00000000-0000-0000-0000-000000000001"), "general", 32, "Жизнь сообщества и решения администрации", null, null, null, null, null, 1, "Общий", 1, 64 },
+                    { new Guid("00000000-0000-0000-0000-000000000001"), "general", 32, "Жизнь сообщества и решения администрации", null, null, null, null, null, 1, "Общий", 2, 64 },
                     { new Guid("00000000-0000-0000-0000-000000000002"), "game-systems", 32, "Обсуждение правил и помощь в выборе системы", null, null, null, null, null, 2, "Игровые системы", 0, 64 },
                     { new Guid("00000000-0000-0000-0000-000000000003"), "looking-for-group", 32, "Набор игроков в игру или поиск мастера", null, null, null, null, null, 3, "Поиск мастера и игроков", 0, 64 },
                     { new Guid("00000000-0000-0000-0000-000000000004"), "ideas", 32, "Обкатка задумок и поиск единомышленников", null, null, null, null, null, 4, "Котел идей", 0, 64 },
@@ -1820,6 +1818,12 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "MentorId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Blogs_PublicId",
+                table: "Blogs",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_BoardModerators_BoardId",
                 table: "BoardModerators",
                 column: "BoardId");
@@ -1987,9 +1991,16 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "MentorId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_GameTags_GameId",
+                name: "IX_Games_PublicId",
+                table: "Games",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_GameTags_GameId_TagId",
                 table: "GameTags",
-                column: "GameId");
+                columns: new[] { "GameId", "TagId" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_GameTags_TagId",
@@ -2017,9 +2028,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "DeletedByUserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Likes_EntityType_EntityId",
+                name: "IX_Likes_EntityType_EntityId_UserId",
                 table: "Likes",
-                columns: new[] { "EntityType", "EntityId" });
+                columns: new[] { "EntityType", "EntityId", "UserId" },
+                unique: true,
+                filter: "\"IsRemoved\" = false");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Likes_UserId",

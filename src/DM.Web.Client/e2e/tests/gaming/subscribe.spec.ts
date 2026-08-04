@@ -23,15 +23,21 @@ test.describe("Game Subscription", () => {
     }
   });
 
-  test("should show game tabs", async ({ page }) => {
+  test("should show the game menu in the sidebar", async ({ page }) => {
+    // ".game-tabs" and ".games-row" are in no template of the client: per-game
+    // navigation is the left-sidebar "Меню игры" block, and the games table is
+    // a DataTable. Both locators matched nothing, so the `if` was false and the
+    // test asserted nothing — see characters.spec.ts for the same pair.
     await page.goto("/games");
-    await page.waitForSelector(".games-row", { timeout: 10000 });
+    const firstGameLink = page
+      .getByRole("table")
+      .locator("tr.table-row td.col-title a")
+      .first();
+    await expect(firstGameLink).toBeVisible();
+    await firstGameLink.click();
 
-    const firstGameLink = page.locator(".games-row .col-title a").first();
-    if (await firstGameLink.isVisible()) {
-      await firstGameLink.click();
-      // Should see game navigation tabs
-      await expect(page.locator(".game-tabs")).toBeVisible({ timeout: 10000 });
-    }
+    await expect(
+      page.locator(".sidebar-block").filter({ hasText: "Меню игры" }),
+    ).toBeVisible();
   });
 });

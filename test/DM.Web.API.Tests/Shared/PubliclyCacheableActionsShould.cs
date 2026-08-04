@@ -80,6 +80,32 @@ public class PubliclyCacheableActionsShould
             "field makes the first caller's answer everyone's, see the class remarks");
     }
 
+    /// <summary>
+    /// And nothing caches privately either.
+    /// </summary>
+    /// <remarks>
+    /// Location.Client keeps the answer out of shared caches and leaves it in the
+    /// reader's own browser for the duration — which for a response carrying
+    /// unread counters means the badge survives the request that clears it. The
+    /// two endpoints that had it were the forum board list and the rated posts,
+    /// and both were personal. There is no list of exceptions here on purpose: a
+    /// response worth caching in a browser has to be impersonal, and an
+    /// impersonal response belongs on the list above instead.
+    /// </remarks>
+    [Fact]
+    public void NotCacheInTheBrowserEither()
+    {
+        var offenders = Actions()
+            .Where(action => action.Policy is { NoStore: false, Location: ResponseCacheLocation.Client })
+            .Select(action => action.Name)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        offenders.Should().BeEmpty(
+            "a personal answer held in the browser is stale for its own reader, " +
+            "see the class remarks");
+    }
+
     [Fact]
     public void LeaveNoStaleNameOnTheList()
     {

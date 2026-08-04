@@ -3,6 +3,7 @@
     :class="[
       'form-field',
       label || $slots.label ? 'form-field__labeled' : null,
+      displayErrors.length ? 'error' : null,
     ]"
   >
     <div v-if="label || $slots.label" ref="labelBox" class="form-field-label">
@@ -175,10 +176,18 @@ const translateError = (error: string): string => {
   margin: $small 0
   gap: $minor
 
-  &.error input
-    animation-name: shake-error
-    animation-duration: 0.4s
-    animation-timing-function: ease-in-out
+// A field that failed validation looks different from one that did not. The
+// rule sits on `.form-field` and not on the labelled variant: a field rendered
+// without a label could not show the state at all, and the state does not
+// depend on whether the field has a label. All three control elements are
+// named, because a textarea and a select fail validation the same way an input
+// does and used to be left out even of the intent.
+//
+// No shake: the rule referenced @keyframes shake-error, which is defined
+// nowhere in the project and never was, so the two references to it are gone
+// rather than given a body.
+.form-field.error
+  input, textarea, select
     border-color: $border-accent-red
 
     &:focus

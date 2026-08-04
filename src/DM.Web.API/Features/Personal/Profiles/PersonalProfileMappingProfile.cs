@@ -12,14 +12,11 @@ namespace DM.Web.API.Features.Personal.Profiles;
 /// </summary>
 internal class PersonalProfileMappingProfile : Profile
 {
-    private const int NewbieThreshold = 100;
-
     public PersonalProfileMappingProfile()
     {
         // UserDetails (domain) -> PersonalProfile (API)
         CreateMap<UserDetails, PersonalProfile>()
             .ForMember(d => d.Id, o => o.MapFrom(s => s.UserId))
-            .ForMember(d => d.IsNewbie, o => o.MapFrom(s => s.QuantityRating < NewbieThreshold))
             .ForMember(d => d.Rating, o => o.MapFrom(s => new Rating
             {
                 TotalPosts = s.QuantityRating,

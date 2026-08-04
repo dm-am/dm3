@@ -73,7 +73,7 @@ internal class GlobalChatEventService : IGlobalChatEventService
         var chatEvent = await _repository.Get(eventId).ConfigureAwait(false);
         if (chatEvent == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Событие не найдено");
+            throw new HttpException(HttpStatusCode.NotFound, "Эвент не найден");
         }
 
         return chatEvent;
@@ -141,7 +141,7 @@ internal class GlobalChatEventService : IGlobalChatEventService
         // Check if there's already an active event
         if (await _repository.HasActiveEvent())
         {
-            throw new HttpException(HttpStatusCode.Conflict, "Сейчас уже идет другое событие");
+            throw new HttpException(HttpStatusCode.Conflict, "Сейчас уже идет другой эвент");
         }
 
         var result = await _repository.UpdateStatus(

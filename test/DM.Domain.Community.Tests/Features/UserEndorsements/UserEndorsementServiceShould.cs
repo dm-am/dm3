@@ -30,7 +30,6 @@ public class UserEndorsementServiceShould : UnitTestBase
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<IGuidFactory> _guidFactory;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
-    private readonly Mock<IProbationConfiguration> _probationConfig;
     private readonly UserEndorsementService _service;
     private readonly Guid _currentUserId;
 
@@ -58,9 +57,6 @@ public class UserEndorsementServiceShould : UnitTestBase
         _dateTimeProvider = Mock<IDateTimeProvider>();
         _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
 
-        _probationConfig = Mock<IProbationConfiguration>();
-        _probationConfig.Setup(c => c.NewbiePostThreshold).Returns(100);
-
         _service = new UserEndorsementService(
             _createValidator.Object,
             _updateValidator.Object,
@@ -68,8 +64,7 @@ public class UserEndorsementServiceShould : UnitTestBase
             _repository.Object,
             _identityProvider.Object,
             _guidFactory.Object,
-            _dateTimeProvider.Object,
-            _probationConfig.Object);
+            _dateTimeProvider.Object);
     }
 
     #region Create Tests

@@ -41,10 +41,10 @@ public class GameUserController : ControllerBase
     /// <remarks>
     /// Returns users of the game. Use the role parameter to filter by specific roles:
     /// - master, assistant, mentor - game staff
-    /// - player - users with active characters
-    /// - applicant - users with pending characters only
-    /// - formerPlayer - users with only inactive characters (no active or pending)
+    /// - player - users with active characters, one entry per character
     /// - reader - subscribed users without other roles
+    /// An unrecognised value returns every user. Applicants and former players are
+    /// not on the roster, so there is nothing to filter them by.
     /// </remarks>
     /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <param name="role">Optional role filter</param>

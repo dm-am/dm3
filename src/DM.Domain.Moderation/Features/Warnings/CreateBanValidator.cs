@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using FluentValidation;
 
@@ -17,6 +18,16 @@ internal class CreateBanValidator : AbstractValidator<CreateBan>
         RuleFor(b => b.Comment)
             .NotEmpty().WithMessage(ValidationError.Empty)
             .MaximumLength(2000).WithMessage(ValidationError.Long);
+
+        // Exactly one of the two scopes. The service coerces anything else to
+        // FullBan and is right to - a malformed request must not produce a weaker
+        // ban than the safe default - but as the answer to a request it is wrong: a
+        // moderator who sent 0, or a client that spelled the flags as a pair, got
+        // the strictest ban there is, including refused authentication, and was
+        // told he got what he asked for.
+        RuleFor(b => b.AccessRestrictionPolicy)
+            .Must(policy => policy is AccessPolicy.DemocraticBan or AccessPolicy.FullBan)
+            .WithMessage(ValidationError.Invalid);
 
         RuleFor(b => b.DurationHours)
             .GreaterThan(0).WithMessage(ValidationError.Invalid)

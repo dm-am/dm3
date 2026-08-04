@@ -96,8 +96,16 @@ export function useApiResource<T>(
       backgroundInFlight = true;
       fetcher()
         .then(({ data: newData, error: fetchError }) => {
-          if (!guard.isCurrent(requestId)) return;
+          // Lowered before the staleness check, not after. The flag says "my
+          // request came back", not "my answer still counts": cleared after the
+          // check, it stayed raised for good whenever a forced fetch or an
+          // invalidate() bumped the guard while this refresh was on the wire,
+          // and from then on every background refresh of that resource
+          // returned at the flag above without asking the server. The data on
+          // screen then aged forever. invalidateGameLists() invalidates six
+          // resources at once after a mutation, so one overlap was enough.
           backgroundInFlight = false;
+          if (!guard.isCurrent(requestId)) return;
           if (fetchError) {
             console.warn(
               "[useApiResource] Background refresh failed:",
@@ -112,7 +120,6 @@ export function useApiResource<T>(
           }
         })
         .catch(() => {
-          if (!guard.isCurrent(requestId)) return;
           backgroundInFlight = false;
         });
       return;

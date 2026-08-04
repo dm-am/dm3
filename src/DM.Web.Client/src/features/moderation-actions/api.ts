@@ -91,12 +91,15 @@ export type BanAccessPolicy = "DemocraticBan" | "FullBan";
  */
 export interface CreateBanPayload {
   username: string;
-  type?: "Temporary" | "Permanent";
   durationHours?: number;
   expiresUtc?: string;
   comment: string;
-  /** Ban access restriction scope, see {@link BanAccessPolicy}. */
-  accessPolicy?: BanAccessPolicy;
+  /**
+   * Ban access restriction scope, see {@link BanAccessPolicy}. Required: the
+   * server has no default for it, and an omitted scope is a 400 rather than the
+   * strictest ban.
+   */
+  accessPolicy: BanAccessPolicy;
 }
 
 /** 100 years in hours — the wire encoding of "Бессрочный". */

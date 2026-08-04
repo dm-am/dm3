@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Enums;
@@ -403,5 +404,146 @@ public class GameIntentionResolverShould : UnitTestBase
             .Please();
 
         resolver.IsAllowed(user, GameIntention.CreateComment, game).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Who may invite whom, and who may remove a user.
+    /// </summary>
+    /// <remarks>
+    /// Five neighbouring arms, three reading HasEditAccess (master or assistant)
+    /// and two reading Contains(Master). Nothing exercised any of them, so
+    /// folding the two into the three - the obvious tidy - would have handed
+    /// every assistant the right to appoint and remove other assistants, and
+    /// left the suite green.
+    /// </remarks>
+    [Theory]
+    [InlineData(GameIntention.InvitePlayer, GameRole.Master, true)]
+    [InlineData(GameIntention.InvitePlayer, GameRole.Assistant, true)]
+    [InlineData(GameIntention.InvitePlayer, GameRole.Player, false)]
+    [InlineData(GameIntention.InvitePlayer, GameRole.None, false)]
+    [InlineData(GameIntention.InviteReader, GameRole.Master, true)]
+    [InlineData(GameIntention.InviteReader, GameRole.Assistant, true)]
+    [InlineData(GameIntention.InviteReader, GameRole.Player, false)]
+    [InlineData(GameIntention.InviteReader, GameRole.None, false)]
+    [InlineData(GameIntention.CancelInvitation, GameRole.Master, true)]
+    [InlineData(GameIntention.CancelInvitation, GameRole.Assistant, true)]
+    [InlineData(GameIntention.CancelInvitation, GameRole.Player, false)]
+    [InlineData(GameIntention.CancelInvitation, GameRole.None, false)]
+    [InlineData(GameIntention.InviteAssistant, GameRole.Master, true)]
+    [InlineData(GameIntention.InviteAssistant, GameRole.Assistant, false)]
+    [InlineData(GameIntention.InviteAssistant, GameRole.Player, false)]
+    [InlineData(GameIntention.InviteAssistant, GameRole.None, false)]
+    [InlineData(GameIntention.RemoveUser, GameRole.Master, true)]
+    [InlineData(GameIntention.RemoveUser, GameRole.Assistant, false)]
+    [InlineData(GameIntention.RemoveUser, GameRole.Player, false)]
+    [InlineData(GameIntention.RemoveUser, GameRole.None, false)]
+    public void DecideAnInvitationByTheSeatTheRuleNames(
+        GameIntention intention, GameRole seat, bool expected)
+    {
+        var userId = Guid.NewGuid();
+        var builder = new GameBuilder();
+        builder = seat switch
+        {
+            GameRole.Master => builder.WithMaster(userId),
+            GameRole.Assistant => builder.WithAssistants(userId),
+            GameRole.Player => builder.WithPlayers(userId),
+            _ => builder
+        };
+        var user = Create.User(userId).WithRole(UserRole.RegularUser).Please();
+
+        resolver.IsAllowed(user, intention, builder.Please()).Should().Be(expected);
+    }
+
+    /// <summary>
+    /// A status change is decided from the status the game is in.
+    /// </summary>
+    /// <remarks>
+    /// Four arms, each guarded by the current status, and no test named any of
+    /// them: swapping two guards is a change no assertion could see, and the
+    /// first report of it would be a master answered 403 on publishing a game.
+    /// </remarks>
+    [Theory]
+    [InlineData(ModuleStatus.Draft, GameIntention.SetStatusActive, true)]
+    [InlineData(ModuleStatus.Active, GameIntention.SetStatusActive, false)]
+    [InlineData(ModuleStatus.Closed, GameIntention.SetStatusActive, true)]
+    [InlineData(ModuleStatus.Active, GameIntention.SetStatusDraft, true)]
+    [InlineData(ModuleStatus.Draft, GameIntention.SetStatusDraft, false)]
+    [InlineData(ModuleStatus.Closed, GameIntention.SetStatusDraft, false)]
+    [InlineData(ModuleStatus.Active, GameIntention.SetStatusClosed, true)]
+    [InlineData(ModuleStatus.Closed, GameIntention.SetStatusClosed, true)]
+    [InlineData(ModuleStatus.Draft, GameIntention.SetStatusClosed, false)]
+    public void AllowAStatusChangeOnlyFromTheStatusItStartsIn(
+        ModuleStatus current, GameIntention intention, bool expected)
+    {
+        var masterId = Guid.NewGuid();
+        var game = new GameBuilder().WithMaster(masterId).WithStatus(current).Please();
+        var user = Create.User(masterId).WithRole(UserRole.RegularUser).Please();
+
+        resolver.IsAllowed(user, intention, game).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(ModuleStatus.Draft, GameIntention.SetStatusActive)]
+    [InlineData(ModuleStatus.Active, GameIntention.SetStatusDraft)]
+    [InlineData(ModuleStatus.Active, GameIntention.SetStatusClosed)]
+    public void RefuseAStatusChangeToAPlayer(ModuleStatus current, GameIntention intention)
+    {
+        var playerId = Guid.NewGuid();
+        var game = new GameBuilder().WithPlayers(playerId).WithStatus(current).Please();
+        var user = Create.User(playerId).WithRole(UserRole.RegularUser).Please();
+
+        resolver.IsAllowed(user, intention, game).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Every intention the enum declares is granted to somebody.
+    /// </summary>
+    /// <remarks>
+    /// Nine of the nineteen members were named in no test at all. This is the
+    /// gate that keeps the count from sliding back: an arm that stops granting
+    /// anything - the shape a careless simplification takes - and a member added
+    /// with no rule behind it both land here. The seats and states below are the
+    /// ones the arms are written for; add a member and this is red until its case
+    /// joins them.
+    /// </remarks>
+    [Fact]
+    public void GrantEveryIntentionTheEnumDeclaresToSomebody()
+    {
+        var userId = Guid.NewGuid();
+        var actors = new[]
+        {
+            AuthenticatedUser.Guest,
+            Create.User(userId).WithRole(UserRole.RegularUser).Please(),
+            Create.User(userId).WithRole(UserRole.Mentor).Please(),
+            Create.User(userId).WithRole(UserRole.SeniorModerator).Please()
+        };
+
+        var targets = new[]
+        {
+            new GameBuilder().WithMaster(userId).WithRecruitmentOpen().Please(),
+            new GameBuilder().WithAssistants(userId).WithRecruitmentOpen().Please(),
+            new GameBuilder().WithPlayers(userId).Please(),
+            new GameBuilder().WithMentor(userId).Please(),
+            new GameBuilder().WithViewerSubscribed().Please(),
+            new GameBuilder().Please(),
+            new GameBuilder().WithMaster(userId).WithStatus(ModuleStatus.Draft).Please(),
+            new GameBuilder().WithMentor(userId).WithStatus(ModuleStatus.Draft)
+                .WithPremoderationStatus(PremoderationStatus.AwaitingApproval).Please(),
+            new GameBuilder().WithMaster(userId).WithStatus(ModuleStatus.Closed).Please(),
+            new GameBuilder().WithPendingPlayerInvitation(userId).Please()
+        };
+
+        var ungrantable = Enum.GetValues<GameIntention>()
+            // Create is the one intention decided without a target: the game
+            // does not exist yet, and the subject-only overload answers it.
+            .Where(intention => intention != GameIntention.Create)
+            .Where(intention => !actors.Any(actor =>
+                targets.Any(target => resolver.IsAllowed(actor, intention, target))))
+            .Select(intention => intention.ToString())
+            .ToArray();
+
+        ungrantable.Should().BeEmpty(
+            "an intention nobody can ever be granted is a rule with no subject");
+        resolver.IsAllowed(actors[1], GameIntention.Create).Should().BeTrue();
     }
 }

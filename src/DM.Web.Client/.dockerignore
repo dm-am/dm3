@@ -5,3 +5,14 @@ dist
 .DS_Store
 .vscode
 *.local
+
+# Test and report artefacts. The context is what the build uploads and what the
+# cache key of its layers is computed from, so an e2e run that rewrites
+# playwright-report invalidated the layers of an image none of it belongs in.
+# The type check the build runs reads tsconfig.vitest.json, whose include is
+# env.d.ts and src/**, so none of this is needed to compile the bundle.
+coverage
+e2e
+playwright-report
+test-results
+.env.preview

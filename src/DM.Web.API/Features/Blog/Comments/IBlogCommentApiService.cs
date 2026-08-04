@@ -14,14 +14,6 @@ namespace DM.Web.API.Features.Blog.Comments;
 public interface IBlogCommentApiService
 {
     /// <summary>
-    /// Get blog discussion with permission flags
-    /// </summary>
-    /// <param name="blogId">Blog identifier</param>
-    /// <param name="query">Query with filtering, sorting and paging</param>
-    /// <returns>Discussion response with comments and metadata</returns>
-    Task<DiscussionResponse> GetDiscussion(Guid blogId, BlogCommentsQuery query);
-
-    /// <summary>
     /// Get blog comments
     /// </summary>
     /// <param name="blogId">Blog identifier</param>

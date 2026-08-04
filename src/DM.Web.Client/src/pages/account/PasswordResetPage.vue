@@ -96,8 +96,15 @@ function goHome() {
     :class="{ 'reset-page--wide': pageState === 'invalid' }"
   >
     <div class="reset-card">
+      <!-- Checking the link — see AccountActivationPage: the state existed and
+           the template had no branch for it, so the page from the letter was a
+           blank card with a link to support under it. -->
+      <div v-if="pageState === 'loading'" class="reset-loading">
+        <p class="loading-text">Проверяем ссылку...</p>
+      </div>
+
       <!-- Success state -->
-      <template v-if="pageState === 'completed'">
+      <template v-else-if="pageState === 'completed'">
         <status-icon type="success" />
         <dialog-title>Пароль изменен</dialog-title>
         <p class="status-description">
@@ -140,7 +147,7 @@ function goHome() {
       </template>
 
       <!-- Form (ready state) -->
-      <template v-if="pageState === 'ready'">
+      <template v-else-if="pageState === 'ready'">
         <dialog-title>Новый пароль</dialog-title>
 
         <form @submit.prevent="submit" class="reset-form">
@@ -190,6 +197,12 @@ function goHome() {
 
   &--wide
     max-width: 480px
+
+.reset-loading
+  padding: $big 0
+
+.loading-text
+  color: $text-muted
 
 .reset-card
   text-align: center

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Domain.Blog.Features.Comments;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
@@ -21,11 +22,16 @@ internal class BlogCommentRepository : IBlogCommentRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public BlogCommentRepository(DmDbContext dbContext, IMapper mapper)
+    public BlogCommentRepository(
+        DmDbContext dbContext,
+        IMapper mapper,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _mapper = mapper;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
@@ -135,7 +141,7 @@ internal class BlogCommentRepository : IBlogCommentRepository
     public async Task<(Comment comment, Guid commentId)> Create(CreateComment createComment, Guid authorId, Guid blogId, int newCommentCount, CancellationToken ct = default)
     {
         var commentId = Guid.NewGuid();
-        var now = DateTimeOffset.UtcNow;
+        var now = _dateTimeProvider.Now;
 
         var dbComment = new DbComment
         {

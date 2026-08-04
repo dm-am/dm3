@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using DM.Domain.Core.Configuration;
 
 namespace DM.Web.API.Features.Forum.Topics;
 
@@ -11,7 +12,8 @@ public class CreateTopicRequest
     /// Topic title
     /// </summary>
     [Required(ErrorMessage = "Заголовок обязателен")]
-    [StringLength(200, MinimumLength = 3, ErrorMessage = "Заголовок должен быть от 3 до 200 символов")]
+    [StringLength(TopicPolicy.TitleMaxLength, MinimumLength = 3,
+        ErrorMessage = "Заголовок должен быть от 3 до 130 символов")]
     public string Title { get; set; } = "";
 
     /// <summary>

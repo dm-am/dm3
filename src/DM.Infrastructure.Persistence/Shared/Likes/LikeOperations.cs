@@ -38,11 +38,22 @@ internal class LikeOperations : ILikeOperations
         if (entity.Likes.Any(l => l.UserId == currentUser.UserId))
         {
             throw new HttpException(HttpStatusCode.Conflict,
-                "Вы уже поставили лайк");
+                RefusalMessage.AlreadyLiked);
         }
 
         var like = _likeFactory.Create(entity.Id, entity.LikeEntityType, currentUser.UserId);
-        await _likeRepository.Add(like);
+        try
+        {
+            await _likeRepository.Add(like);
+        }
+        catch (DuplicateEntityException)
+        {
+            // The check above and this one answer the same question; the difference is
+            // that the schema answers it after the other request has committed.
+            throw new HttpException(HttpStatusCode.Conflict,
+                RefusalMessage.AlreadyLiked);
+        }
+
         await _producer.SendAsync(eventType, like.LikeId);
         return currentUser;
     }

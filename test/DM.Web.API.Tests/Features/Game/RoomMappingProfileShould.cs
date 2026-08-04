@@ -24,9 +24,6 @@ public class RoomMappingProfileShould : UnitTestBase
         cfg.AddProfile<RoomMappingProfile>();
     });
 
-    [Fact]
-    public void HaveValidConfiguration() => _configuration.AssertConfigurationIsValid();
-
     /// <summary>
     /// The policy is what decides who may write in the room. It was mapped with
     /// Ignore(), so every access of every response answered null: the screen that

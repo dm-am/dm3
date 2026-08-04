@@ -10,8 +10,8 @@ using DM.Domain.Forum.Authorization;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Messaging.Authorization;
 using DM.Domain.Messaging.Configuration;
+using DM.Domain.Moderation;
 using DM.Domain.Moderation.Authorization;
-using DM.Domain.Moderation.Configuration;
 using DM.Domain.Personal.Authorization;
 using DM.Infrastructure.Core;
 using DM.Infrastructure.Core.Configuration;
@@ -91,8 +91,10 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .AddDmMailConfiguration(configuration)
             .AddDmAccountConfiguration(configuration)
             .Configure<MessagingConfiguration>(configuration.GetSection(nameof(MessagingConfiguration)).Bind)
-            .Configure<ProbationConfiguration>(configuration.GetSection(nameof(ProbationConfiguration)).Bind)
-            .AddDmLogging("DM.API", configuration);
+            .AddDmLogging("DM.API", configuration, _environment)
+            .RequireRelationalStorage()
+            .RequireDocumentStorage()
+            .RequireObjectStorage();
 
         // CORS is an API concern and no other host has an opinion on it, so this
         // one stays with the host rather than moving into the core extension.
@@ -106,10 +108,6 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         // is what the login journal, the security audit and the suspicious-login
         // detector record.
         services.AddReverseProxySupport(configuration);
-
-        // Register IProbationConfiguration interface for Domain modules
-        services.AddSingleton<IProbationConfiguration>(sp =>
-            sp.GetRequiredService<IOptions<ProbationConfiguration>>().Value);
 
         services
             // No AddAutoMapper here: the mapper is owned by the Autofac
@@ -319,21 +317,21 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
                 c.MapHub<Notifications.NotificationHub>("/whatsup");
                 c.MapPrometheusScrapingEndpoint("/metrics");
 
-                // Liveness � Docker health check (no dependency checks)
+                // Liveness - Docker health check (no dependency checks)
                 c.MapHealthChecks("/_health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
                 {
                     Predicate = _ => false,
                     ResponseWriter = HealthReportWriter
                 });
 
-                // Readiness � all "ready" dependencies (for load balancer)
+                // Readiness - all "ready" dependencies (for load balancer)
                 c.MapHealthChecks("/_ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
                 {
                     Predicate = check => check.Tags.Contains("ready"),
                     ResponseWriter = HealthReportWriter
                 });
 
-                // Detail � all checks (for monitoring dashboard)
+                // Detail - all checks (for monitoring dashboard)
                 c.MapHealthChecks("/_health/detail", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
                 {
                     ResponseWriter = HealthReportWriter

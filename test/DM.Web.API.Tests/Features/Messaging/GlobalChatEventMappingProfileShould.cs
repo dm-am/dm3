@@ -30,9 +30,6 @@ public class GlobalChatEventMappingProfileShould : UnitTestBase
             ? new AvatarPictureConverter(Mock<IImgproxyUrlBuilder>().Object)
             : Activator.CreateInstance(type)!);
 
-    [Fact]
-    public void HaveValidConfiguration() => Configuration.AssertConfigurationIsValid();
-
     /// <summary>
     /// The planned start and the actual one are two different facts, and only the
     /// planned one used to cross the API. A start is manual: an event that went

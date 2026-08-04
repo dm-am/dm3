@@ -11,7 +11,7 @@ import {
   GameStatusBadge,
   type Character,
 } from "@/entities/game";
-import { UserLink, useUserDisplay } from "@/entities/user";
+import { UserLink, UserRating, useUserDisplay } from "@/entities/user";
 import { ContentText } from "@/shared/ui";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
@@ -76,12 +76,16 @@ function isRetired(c: Character): boolean {
   return c.status === "Retired";
 }
 
-// Rating "X/Y" — X (quality) is coloured green/red; Y (quantity) stays the
-// default body colour (matches the old site: "484" green, "/5582" plain #444).
-function ratingSignClass(x: number): string {
-  if (x > 0) return "pos";
-  if (x < 0) return "neg";
-  return "";
+// The name of a character leads to its card on the characters page of the
+// game: there is no page of a single character, and pointing at one row of a
+// list is what the site's scrollTo query already does for a post. The name
+// inside a post leads to the same card, so one name never means two places.
+function characterLink(c: Character) {
+  return {
+    name: "game-characters",
+    params: { id: game.value?.publicId || game.value?.id },
+    query: { scrollTo: c.id },
+  };
 }
 
 // Character status colour — "В игре" green, everything else muted (old site).
@@ -236,6 +240,18 @@ const npcColumns = computed<Column[]>(() => [
             {{ game.masterPostsCount ?? 0 }}/{{ game.totalPostsCount ?? 0 }}
           </td>
         </tr>
+        <!-- The home of the post ratings, which the games listing no longer
+             shows: they address posts of this game, so they belong to the
+             game's facts and not to a column of a list of games. -->
+        <tr>
+          <th>Оцененных постов</th>
+          <td>
+            <router-link
+              :to="{ name: 'game-post-reviews', params: { id: game.publicId } }"
+              >{{ game.postReviewsCount ?? 0 }}</router-link
+            >
+          </td>
+        </tr>
         <tr v-if="game.lastMasterPostUtc">
           <th>Последний пост</th>
           <td>{{ formatDateFull(game.lastMasterPostUtc) }}</td>
@@ -257,13 +273,13 @@ const npcColumns = computed<Column[]>(() => [
           <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
         </template>
         <template #cell-rating="{ row }">
-          <template v-if="row.authorRating"
-            ><span
-              :class="ratingSignClass(row.authorRating.postReviewScoreSum)"
-              >{{ row.authorRating.postReviewScoreSum }}</span
-            >/{{ row.authorRating.totalPosts }}</template
-          >
-          <span v-else>{{ VALUE_UNAVAILABLE }}</span>
+          <UserRating
+            v-if="row.author"
+            :user="row.author"
+            :rating="row.authorRating"
+          />
+          <!-- No author, no page for the link to lead to. -->
+          <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
         </template>
         <template #cell-presence="{ row }">
           <span
@@ -273,7 +289,11 @@ const npcColumns = computed<Column[]>(() => [
           >
         </template>
         <template #cell-character="{ row }">
-          <span :class="{ retired: isRetired(row) }">{{ row.name }}</span>
+          <router-link
+            :to="characterLink(row)"
+            :class="{ retired: isRetired(row) }"
+            >{{ row.name }}</router-link
+          >
         </template>
         <template #cell-descriptor="{ row }">{{ descriptorOf(row) }}</template>
         <template #cell-posts="{ row }">{{ row.totalPostsCount }}</template>
@@ -296,7 +316,11 @@ const npcColumns = computed<Column[]>(() => [
         empty-text="Персонажей мастера пока нет"
       >
         <template #cell-character="{ row }">
-          <span :class="{ retired: isRetired(row) }">{{ row.name }}</span>
+          <router-link
+            :to="characterLink(row)"
+            :class="{ retired: isRetired(row) }"
+            >{{ row.name }}</router-link
+          >
         </template>
         <template #cell-descriptor="{ row }">{{ descriptorOf(row) }}</template>
         <template #cell-posts="{ row }">{{ row.totalPostsCount }}</template>
@@ -340,12 +364,6 @@ const npcColumns = computed<Column[]>(() => [
 
 .muted
   color: $text-muted
-
-.pos
-  color: $accent-green
-
-.neg
-  color: $accent-red
 
 .online
   color: $accent-green

@@ -33,7 +33,7 @@ public class ServiceLayerBoundaryShould
         .That().AreAssignableTo(typeof(ControllerBase))
         .As("MVC controllers");
 
-    // Matched on the declaring assembly rather than the namespace: five compliant
+    // Matched on the declaring assembly rather than the namespace: 6 compliant
     // controllers import DM.Domain.*.Features.* for query DTOs while injecting
     // nothing but an ApiService, and a namespace rule would flag them.
     //

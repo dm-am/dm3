@@ -1,5 +1,6 @@
 using System;
 using System.Linq.Expressions;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Entities.Blog;
 using DM.Infrastructure.Persistence.Entities.Shared;
@@ -307,13 +308,39 @@ public class DmDbContext : DbContext
             .HasIndex(s => new { s.SubscriberId, s.TargetType, s.TargetId })
             .IsUnique();
 
-        // Likes are polymorphic and had no index at all. Every aggregate reads them
-        // either as "likes of this entity" or as "likes of this kind" followed by a
-        // join on EntityId, so EntityType leads: with the reverse order the join-shaped
-        // reads (profile counters, community statistics) would not take the index at
-        // all. The table grows without bound, so the scan degrades superlinearly.
-        modelBuilder.Entity<Like>()
-            .HasIndex(l => new { l.EntityType, l.EntityId });
+        // One live like per (entity, reader). Liking is check-then-insert over the
+        // loaded navigation, so two overlapping clicks both find nothing and both
+        // insert: the counter then reports one person twice, and the same duplicate
+        // reaches the LikesReceived metric, where somebody else's double click moves
+        // the author towards an award. Partial on live rows because unliking sets
+        // IsRemoved and liking again has to be allowed — the same shape as the
+        // endorsement and review indexes above.
+        //
+        // EntityType leads because every aggregate reads likes either as "likes of
+        // this entity" or as "likes of this kind" joined on EntityId: equality on the
+        // type gives a range already ordered by EntityId, which is what the join-shaped
+        // reads (profile counters, community statistics) want. The reverse order is
+        // usable too — a nested loop driven by EntityId would take it — so the choice
+        // is about the shape and the cost of the join, not about the index being read
+        // at all. Replaces the plain (EntityType, EntityId) index: it is the leading
+        // pair, and no read of this table looks at removed rows.
+        var likeIndexBuilder = modelBuilder.Entity<Like>()
+            .HasIndex(l => new { l.EntityType, l.EntityId, l.UserId });
+        if (isPostgres)
+        {
+            likeIndexBuilder.HasFilter("\"IsRemoved\" = false");
+        }
+        likeIndexBuilder.IsUnique();
+
+        // A game carries a tag once. The link rows are written from a resolved
+        // catalogue today, which is why no duplicate exists to clean up, but the
+        // required-tag filter counts rows and not distinct tags, so a second row for
+        // one tag would answer a search for "D&D AND detective" with a game that only
+        // has D&D twice. Leading with GameId, so it replaces the conventional FK index
+        // rather than adding to it.
+        modelBuilder.Entity<GameTag>()
+            .HasIndex(t => new { t.GameId, t.TagId })
+            .IsUnique();
 
         // The readable chat id is resolved by equality in GET /chats/{id}. Without
         // uniqueness a collision between an encoded serial and the reserved name of
@@ -321,6 +348,18 @@ public class DmDbContext : DbContext
         // the plan happened to reach first.
         modelBuilder.Entity<Chat>()
             .HasIndex(c => c.PublicId)
+            .IsUnique();
+
+        // Games and blogs resolve their pages by the same readable key and by the same
+        // equality, so they get the same constraint — and the index besides, which
+        // neither of them had: the address in every link on the site was answered by a
+        // sequential scan.
+        modelBuilder.Entity<Game>()
+            .HasIndex(g => g.PublicId)
+            .IsUnique();
+
+        modelBuilder.Entity<Blog>()
+            .HasIndex(b => b.PublicId)
             .IsUnique();
 
         // TopicNumber is the canonical topic URL key, and it is allocated as
@@ -1116,7 +1155,12 @@ public class DmDbContext : DbContext
                 Order = 1,
                 ViewPolicy = BoardAccessPolicy.Guest,
                 CreateTopicPolicy = BoardAccessPolicy.RegularUser,
-                TopicsCount = 1
+                // Two topics are seeded into this board below. The column is a
+                // denormalised count that only a topic write recomputes, so a seeded
+                // value that disagrees with the seeded rows is what a freshly migrated
+                // database shows the forum — and it also becomes the unread count for
+                // everyone who has never opened the board.
+                TopicsCount = 2
             },
             new Board
             {
@@ -2078,7 +2122,10 @@ public class DmDbContext : DbContext
             .HasForeignKey(c => c.EntityId)
             .OnDelete(DeleteBehavior.ClientCascade);
 
-        // Configure IsNewbie as a computed column
+        // IsNewbie as a stored computed column: the schema's copy of
+        // ProbationPolicy.NewbiePostThreshold, which SQL cannot read. The number is
+        // repeated here, in the migration and in both snapshots, and an
+        // architecture test compares all four with the constant.
         if (isPostgres)
         {
             modelBuilder.Entity<User>()

@@ -100,7 +100,6 @@ async function submit() {
 
   const { data, error } = await moderationActionsApi.createBan({
     username: props.username,
-    type: isPermanent.value ? "Permanent" : "Temporary",
     durationHours: durationHours.value,
     comment: comment.value.trim(),
     accessPolicy: policy.value,

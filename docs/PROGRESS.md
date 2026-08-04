@@ -4,8 +4,8 @@
 
 **Легенда:** ✅ построено и в тестах · 🔎 требует живого осмотра владельцем · 🟡 частично (бэкенд-зазор) · ⬜ не начато.
 
-## Сводка тестов (после reset+seed 2026-07-14)
-Backend: `dotnet build DM.sln` 0/0; `dotnet test` — **14 проектов, 1697 тестов + DM.Web.API 54 = зеленые**. Frontend: `vue-tsc` чист, `eslint` 0 ошибок, `vitest` **798/798**. Сид: 22 юзера, 69 игр, 9326 постов, 306 персонажей, 28 топиков, 18 блогов, 45 публикаций, 19 опросов, 116 отзывов. диакритическая е в src/docs — 0; елочки — только девиз в About.
+## Гейты
+Числа тестов и объемы сида здесь не хранятся: они меняются каждой волной и устаревают быстрее документа. Что гонять до пуша и в каком порядке, знает `scripts/hooks/pre-push`, там же сказано, какие джобы воркфлоу оставлены за CI. Текстовые правила (буква "е", кавычки, разделители) держат тесты фронта, а не строка в этом документе.
 
 ## Функциональные зоны
 
@@ -16,12 +16,12 @@ Backend: `dotnet build DM.sln` 0/0; `dotnet test` — **14 проектов, 169
 | Награды/Достижения | ✅ | награды timeless + серии; достижения — цепочки по метрикам; "Лит #22" бейдж |
 | Сообщество / Опросы / Статистика сайта | ✅ | статистика: 8 топ-десяток (игроки/игры/блоги × оценки/активность/объем), период в URL (?year&month / ?period=all), пикер месяца/года с 2007 (12-летние блоки), серверные positive-only ранги с делеными местами при ничьих, кэш периодов (закрытые — сессия/24ч) |
 | Игровая зона (инфо/комнаты/чат-комнаты/персонажи/схема атрибутов/посты/отзывы/заметки/настройки/премодерация/статусы) | ✅ | схема 6 типов; персонаж 4 статуса+3 флага; комнаты 2 типа + архив; статусы Draft/Active/Closed+ClosedReason |
-| Блог-зона (инфо/рубрики/публикации/обсуждение/заметки/настройки/премодерация/статусы) | ✅ | зеркало игровой; publicId, счетчики+реордер рубрик, инлайн-редактирование, ментор-гейт — закрыты |
+| Блог-зона (инфо/рубрики/публикации/обсуждение/заметки/настройки/премодерация/статусы) | ✅ | зеркало игровой; publicId, счетчики+реордер рубрик, инлайн-редактирование, гейт наставника — закрыты |
 | Форум (индекс/раздел/тема/создание/редактирование) | ✅ | навигация полос " \| " унифицирована с профилем |
 | Глобальный чат + эвенты | ✅ / 🔎 | эвент-баннер — на осмотр владельцу (CHAT-1/5/13) |
 | Личные сообщения / Уведомления / Подписки / Блокнот | ✅ | |
 | Обращения (Поддержка/Жалобы/Мои обращения) | ✅ / 🟡 | единая модель Ticket (7 подтипов, 4 статуса, тред, гостевой); зазор: гостевой email опционален, серверных фильтров у /mine нет |
-| Модерация (11 страниц + панель) | ✅ / 🔎 | контекстный сайдбар; 6 модалок → Lightbox (вид изменился — на осмотр); варны 0-6+автобан; баны SeniorMod+ + история |
+| Модерация (страницы + панель) | ✅ / 🔎 | контекстный сайдбар; 6 модалок → Lightbox (вид изменился — на осмотр); варны 0-6+автобан; баны SeniorMod+ + история |
 | Наставничество (панель + премодерация) | ✅ | панель наставника; премодерация игр и блогов (Mentor+) |
 | Боты/уведомления | ✅ / 🟡 | единый webhook-путь `/v1/webhooks/{type}/{secret}`; Discord inbound-контракт — на подтверждение |
 | Правовые / О проекте / Правила / Помочь проекту | ✅ | |
@@ -32,23 +32,25 @@ Backend: `dotnet build DM.sln` 0/0; `dotnet test` — **14 проектов, 169
 - ✅ Блог отдает `publicId` (ссылки канонические, 5-буквенные как у игр).
 - ✅ Рубрики: счетчики (N/A) + эндпоинты переименования (PATCH) и реордера (PUT rubrics/order).
 - ✅ Raw-source для инлайн-редактирования описания блога/инфо игры (author_edit envelope).
-- ✅ Ментор блога в DTO + гейт заметок (owner+assistant+mentor).
+- ✅ Наставник блога в DTO + гейт заметок (owner+assistant+mentor).
 - ✅ Статистика: период "все время" (year=0) + 8 топ-десяток (вкл. блоговые) + publicId игр/блогов в топах; позже (2026-07-17): positive-фильтр и competition-ранги на сервере, валидация year/month (400), удалены мертвые reports/compare/legacy-stats эндпоинты.
 - ✅ `tickets/mine` серверные фильтры (status+subtype); гостевой email обязателен + трекинг-эндпоинт `/v1/tickets/track` (токен в заголовке).
 - ✅ `GetUpload` → Moderator+.
 
 **Остаточные (минорные):** 3 сид-блога с placeholder-publicId (`t...`, из внешнего сид-пути; работают, но неканонично — фикс реседом); Discord inbound-webhook контракт — подтвердить при подключении реального бота.
 
-## Верификация (reset+seed 2026-07-14, порт 5174 / API 5000)
-Живой проход: **53/53 PASS**. Все страницы рендерятся, все 14 авторизованных эндпоинтов гейтятся (401/403), гостевой intake 400. Один регресс найден и починен: `/game/{id}/details` OOM (декартово произведение проекции GameDetails) → `AsSplitQuery` на 4 запросах, теперь 200 за ~0.4с. Флаг: SignalR-хаб `/whatsup` дает negotiate-404 на :5174 (реалтайм не подключается — проверить apiHost/прокси/гость; не сегодняшний регресс).
+## Живой проход
+Инвентарь ниже и есть маршрут прохода: открывается по порядку на поднятом стеке
+после `reset+seed`. Результат конкретного прохода тут не хранится — он устаревает
+к следующей волне, а найденное живет в аудите и в истории коммитов.
 
-## Инвентарь страниц (кликабельные, seed-id)
-**Гость/общие:** [/](http://localhost:5174/) · [/about](http://localhost:5174/about) · [/rules](http://localhost:5174/rules) · [/polls](http://localhost:5174/polls) · [/testimonials](http://localhost:5174/testimonials) · [/pulse](http://localhost:5174/pulse) · [/community](http://localhost:5174/community) · [/global-chat](http://localhost:5174/global-chat) · [/privacy](http://localhost:5174/privacy) · [/agreement](http://localhost:5174/agreement) · [/support](http://localhost:5174/support) · [/complaint](http://localhost:5174/complaint) · [/statistics](http://localhost:5174/statistics) · [/error/404](http://localhost:5174/error/404)
+## Инвентарь страниц (ссылки на дев-сервер, seed-id)
+**Гость/общие:** [/](http://localhost:5173/) · [/about](http://localhost:5173/about) · [/rules](http://localhost:5173/rules) · [/polls](http://localhost:5173/polls) · [/testimonials](http://localhost:5173/testimonials) · [/pulse](http://localhost:5173/pulse) · [/community](http://localhost:5173/community) · [/global-chat](http://localhost:5173/global-chat) · [/privacy](http://localhost:5173/privacy) · [/agreement](http://localhost:5173/agreement) · [/support](http://localhost:5173/support) · /support/track/:token · [/complaint](http://localhost:5173/complaint) · [/statistics](http://localhost:5173/statistics) · [/error/404](http://localhost:5173/error/404)
 **Аккаунт (требует входа):** /account · /notifications · /subscriptions · /notepad · /my-tickets · /warnings
-**Профиль (SolohinLex):** [/users/SolohinLex](http://localhost:5174/users/SolohinLex) (+вкладки about/games/blogs/topics/achievements) · /received-reviews · /given-reviews · /received-endorsements · /given-endorsements · /uploads
-**Игры:** [/games](http://localhost:5174/games) · /games/create · [/game/aaaaa](http://localhost:5174/game/aaaaa) (+/rooms /rooms/:num /chat-rooms/:num /characters /characters/create /characters/:id/edit /settings /comments /reviews /post-reviews /notes)
-**Блоги:** [/blogs](http://localhost:5174/blogs) · /blogs/create · [/blogs/e6b1e8c0-…](http://localhost:5174/blogs/e6b1e8c0-f713-4e58-93b6-d0715ed34980) (+/feed /feed/create /feed/:pubId/edit /comments /settings /notes)
-**Форум:** [/forum](http://localhost:5174/forum) · [/forum/general](http://localhost:5174/forum/general) · [/forum/general/4](http://localhost:5174/forum/general/4)
-**Чат/сообщения:** [/global-chat](http://localhost:5174/global-chat) · /messenger · /messenger/c/:id · /messenger/user/:username
-**Модерация (Moderator+):** /moderation · /moderation/moderators · /moderation/games · /moderation/blogs · /moderation/bans · /moderation/warnings · /moderation/rated-posts · /moderation/new-users · /moderation/violators · /moderation/support · /moderation/complaints · /moderation/tickets/:id · /moderation/uploads · /moderation/username-changes · /moderation/tags · /moderation/awards · /moderation/award-types · /moderation/achievements · /moderation/fundraising
+**Профиль (SolohinLex):** [/users/SolohinLex](http://localhost:5173/users/SolohinLex) · /users/SolohinLex/about · /users/SolohinLex/games · /users/SolohinLex/blogs · /users/SolohinLex/topics · /users/SolohinLex/achievements · /users/SolohinLex/received-reviews · /users/SolohinLex/given-reviews · /users/SolohinLex/received-endorsements · /users/SolohinLex/given-endorsements · /users/SolohinLex/uploads
+**Игры:** [/games](http://localhost:5173/games) · /games/create · [/game/aaaaa](http://localhost:5173/game/aaaaa) · /game/aaaaa/rooms/:num · /game/aaaaa/chat-rooms/:num · /game/aaaaa/characters · /game/aaaaa/characters/create · /game/aaaaa/characters/:characterId/edit · /game/aaaaa/settings · /game/aaaaa/comments · /game/aaaaa/reviews · /game/aaaaa/post-reviews · /game/aaaaa/notes · /game/aaaaa/posts/unread · /game/aaaaa/comments/unread
+**Блоги:** [/blogs](http://localhost:5173/blogs) · /blogs/create · [/blogs/e6b1e8c0-f713-4e58-93b6-d0715ed34980](http://localhost:5173/blogs/e6b1e8c0-f713-4e58-93b6-d0715ed34980) · /blogs/:id/feed · /blogs/:id/feed/create · /blogs/:id/feed/:pubId/edit · /blogs/:id/comments · /blogs/:id/settings · /blogs/:id/notes
+**Форум:** [/forum](http://localhost:5173/forum) · [/forum/general](http://localhost:5173/forum/general) · [/forum/general/4](http://localhost:5173/forum/general/4) · /forum/general/4/unread · /forum-topic/:topicId
+**Чат/сообщения:** [/global-chat](http://localhost:5173/global-chat) · /messenger · /messenger/c/:id · /messenger/user/:username
+**Модерация (Moderator+):** /moderation · /moderation/moderators · /moderation/games · /moderation/blogs · /moderation/bans · /moderation/warnings · /moderation/rated-posts · /moderation/new-users · /moderation/violators · /moderation/support · /moderation/complaints · /moderation/tickets/:id · /moderation/uploads · /moderation/username-changes · /moderation/tags · /moderation/awards · /moderation/awards/series/:id · /moderation/award-types · /moderation/achievements · /moderation/fundraising
 **Auth/служебные:** /auth/callback · /activate/:token · /confirm-email/:token · /reset-password/:token · /error/:code

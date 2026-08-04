@@ -22,6 +22,19 @@ const below = (layer) =>
 const SLICED = LAYERS.slice(1, -1);
 
 /**
+ * Layers whose slices publish through a barrel, and the file a consumer of one
+ * may address.
+ *
+ * `pages` is deliberately absent and must stay absent: a page has exactly one
+ * consumer, the router, and the router imports the page file itself. Routing
+ * that through a barrel would pull every page into a single chunk and end code
+ * splitting. No page directory has an index.ts, and none should.
+ */
+const BARRELED = ["widgets", "features", "entities"];
+const SLICE_ENTRY = ["index.ts"];
+const isBarreled = (type) => BARRELED.includes(type);
+
+/**
  * Components the app registers globally, read out of the registration itself so
  * this config cannot drift from it: drop a `.component(...)` line and every
  * template that leaned on that global becomes a lint error instead of a runtime
@@ -143,15 +156,37 @@ module.exports = {
       "error",
       {
         default: "disallow",
+        // `{{to.…}}`, not `{{target.…}}`: v7 renders the latter as an empty
+        // string, so every message read "pages may not import :" and named
+        // neither end of the edge it refused.
         message:
-          "{{from.element.type}} may not import {{target.element.type}}: FSD allows downward imports only, and same-layer only through the target slice's @x door (docs/conventions/PATTERNS.md).",
+          "{{from.element.type}} may not import {{to.element.type}} this way: FSD allows downward imports only, into another slice through its index.ts barrel, and same-layer only through the target slice's @x door (docs/conventions/PATTERNS.md).",
         policies: [
-          // Downward: any layer below, doors included.
+          // Downward: any layer below, doors included - and into a sliced layer
+          // only through that slice's own barrel. The barrel half of the rule
+          // was written in PATTERNS.md and enforced nowhere: every deep import
+          // into another slice's internals passed lint and type-check while the
+          // document said the linter caught it. `fileInternalPath` on the
+          // existing policies does the job; `boundaries/entry-point` is
+          // deprecated in v7 and rewrites itself into exactly this.
           ...LAYERS.flatMap((layer) =>
-            [layer, `${layer}-x`].map((from) => ({
-              from: { element: { type: from } },
-              allow: { to: { element: { types: { anyOf: below(layer) } } } },
-            })),
+            [layer, `${layer}-x`].flatMap((from) =>
+              [
+                { types: below(layer).filter(isBarreled), entry: SLICE_ENTRY },
+                { types: below(layer).filter((t) => !isBarreled(t)) },
+              ]
+                .filter(({ types }) => types.length > 0)
+                .map(({ types, entry }) => ({
+                  from: { element: { type: from } },
+                  allow: {
+                    to: {
+                      element: entry
+                        ? { types: { anyOf: types }, fileInternalPath: entry }
+                        : { types: { anyOf: types } },
+                    },
+                  },
+                })),
+            ),
           ),
           // Same layer: only the door addressed to the importing slice.
           ...SLICED.map((layer) => ({

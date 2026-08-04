@@ -59,6 +59,14 @@ export interface Subscription {
   id: string;
   targetType: SubscriptionTargetType;
   targetId: string;
+  /**
+   * Name of what was subscribed to, resolved server-side. Absent when the
+   * target is gone. Without it the page had nothing but the identifier to
+   * print, and printed it: a column of GUIDs.
+   */
+  targetTitle?: string;
+  /** Username of a User target — the profile route is addressed by name. */
+  targetUsername?: string;
   settings: SubscriptionSettings;
   createdUtc: string;
 }

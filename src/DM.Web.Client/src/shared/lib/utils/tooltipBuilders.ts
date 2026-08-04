@@ -56,19 +56,17 @@ export type PluralForms = [one: string, few: string, many: string];
  * Build status lines for tooltip (draft/active/closed counts).
  *
  * @param byStatus - Object with draft, active, closed counts
- * @param wordOrForms - Either a `PluralForms` tuple (correct Russian
- *   pluralization per count, e.g. `["игра", "игры", "игр"]`) or a plain
- *   suffix string kept for backward compatibility with existing callers
- *   (fixed suffix, no pluralization — e.g. the historical `"игры"`).
+ * @param forms - `PluralForms` tuple, e.g. `["игра", "игры", "игр"]`. A plain
+ *   string used to be accepted here "for existing callers", and every caller
+ *   passed a tuple: the branch was dead and the comment said the opposite.
  */
 export function buildStatusLines(
   byStatus: StatusByType | undefined,
-  wordOrForms: PluralForms | string,
+  forms: PluralForms,
 ): string[] {
   if (!byStatus) return [];
 
-  const wordFor = (count: number): string =>
-    Array.isArray(wordOrForms) ? pluralize(count, ...wordOrForms) : wordOrForms;
+  const wordFor = (count: number): string => pluralize(count, ...forms);
 
   const lines: string[] = [];
   if (byStatus.draft && byStatus.draft > 0) {

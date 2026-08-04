@@ -149,10 +149,7 @@ function pagingAnchor(): HTMLElement | null {
   @media (max-width: $bp-shell)
     grid-template-columns: repeat(2, 1fr)
 
-  // Not migrated to $bp-mobile — out of scope for this pass (see
-  // UI_STANDARDS.md "Брейкпоинты": only the shell + drawer use the token
-  // scale so far, the rest is a future consolidation)
-  @media (max-width: 600px)
+  @media (max-width: $bp-mobile)
     grid-template-columns: 1fr
 
 .poll-card

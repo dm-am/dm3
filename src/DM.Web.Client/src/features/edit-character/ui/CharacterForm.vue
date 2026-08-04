@@ -31,7 +31,9 @@ import { Form, FormField } from "@/shared/ui/Form";
 import { ContentText } from "@/shared/ui";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
+import { describeFailure } from "@/shared/lib/errors";
 import { CHARACTER_NAME_MAX_LENGTH } from "@/shared/lib/constants/game";
+import { UnsavedChangesGuard } from "@/shared/ui/UnsavedChangesGuard";
 
 const props = withDefaults(
   defineProps<{
@@ -109,9 +111,25 @@ const privacy = computed<CharacterPrivacySettings>(
     },
 );
 
+// The sheet as it was opened. Edit mode seeds itself from an existing
+// character, so "there is something to lose" is a comparison, not an
+// emptiness check.
+const pristineName = name.value;
+const pristineValues: Record<string, string> = { ...values };
+
 const submitted = ref(false);
+const saved = ref(false);
 const saving = ref(false);
 const errorMessage = ref<string | null>(null);
+
+const dirty = computed(
+  () =>
+    !saved.value &&
+    (name.value !== pristineName ||
+      specs.value.some(
+        (spec) => (values[spec.id] ?? "") !== (pristineValues[spec.id] ?? ""),
+      )),
+);
 
 // --- Validation -------------------------------------------------------------
 
@@ -179,10 +197,16 @@ async function submit() {
   saving.value = false;
 
   if (error) {
-    errorMessage.value = error.title || "Не удалось сохранить персонажа";
+    errorMessage.value = describeFailure(
+      error,
+      "Не удалось сохранить персонажа",
+    );
     return;
   }
-  if (data) emit("saved", data);
+  if (data) {
+    saved.value = true;
+    emit("saved", data);
+  }
 }
 
 const actionLabel = computed(() =>
@@ -254,6 +278,8 @@ const actionLabel = computed(() =>
     <p v-if="errorMessage" class="form-error" role="alert">
       {{ errorMessage }}
     </p>
+
+    <UnsavedChangesGuard :dirty="dirty" />
   </Form>
 </template>
 

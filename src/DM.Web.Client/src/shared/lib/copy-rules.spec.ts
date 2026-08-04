@@ -357,6 +357,22 @@ const EM_DASH_BUDGET: { file: string; count: number }[] = [
  */
 const EM_DASH_TOTAL = 77;
 
+/**
+ * What draws as a colour pictograph rather than as text.
+ *
+ * Unicode's own property and not a hand-written table of ranges. The blocks are
+ * mixed: U+2713 and U+2717 are the check and the cross the symbol registry
+ * uses, U+2605 is the rating star, U+26A0 is the warning sign — all text by
+ * default — and they sit among the characters that are not. A range covering
+ * the block forbids the site's own monochrome symbols and reads, wrongly, like
+ * a rule somebody verified.
+ *
+ * The variation selector is the second half: any text-default character
+ * followed by U+FE0F is asked to draw in colour, which is the same defect
+ * written differently.
+ */
+const EMOJI_PRESENTATION = /\p{Emoji_Presentation}|\uFE0F/u;
+
 describe("interface copy", () => {
   it("never uses the middle dot in a user-visible string", () => {
     const offenders = collectFiles(CLIENT_SRC).flatMap((file) =>
@@ -389,6 +405,24 @@ describe("interface copy", () => {
       return !pattern.test(template.replace(/\s+/g, " "));
     }).map(({ file, what }) => `${file}: ${what}`);
     expect(missing).toEqual([]);
+  });
+
+  it("draws an icon with an icon and not with an emoji", () => {
+    const offenders: string[] = [];
+    for (const file of collectFiles(CLIENT_SRC)) {
+      for (const part of copyOf(file, readFileSync(file, "utf8"))) {
+        // Iterating a string yields code points, so a surrogate pair arrives
+        // whole — which is the only way the pictograph planes are reachable.
+        for (const character of part) {
+          if (!EMOJI_PRESENTATION.test(character)) continue;
+          const point = character.codePointAt(0) as number;
+          offenders.push(
+            `${where(file)}: U+${point.toString(16).toUpperCase()} draws as a colour emoji, and the icon registry has forty monochrome ones`,
+          );
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 
   it("never spells the letter with the two dots", () => {

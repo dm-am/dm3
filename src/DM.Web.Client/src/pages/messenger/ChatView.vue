@@ -406,15 +406,19 @@ function goBack() {
 // chat (?msg changes but params.id does not).
 watch(() => [route.params.id, route.query.msg], loadChat, { immediate: true });
 
-// Watch for new messages to init interactive BBCode elements
+// New messages bring new BBCode into the feed. Only the LENGTH is watched, the
+// way the global chat next door already does it: a deep watch walked every
+// message object on every nested mutation — a like, a read flag — and then
+// re-scanned the whole container, while each ChatMessage already initialises
+// its own markup through TruncatedContent's on-content-mounted. In a chat with
+// five hundred loaded messages that ran on every incoming push.
 watch(
-  messagesList,
+  () => messagesList.value?.length,
   () => {
     nextTick(() => {
       initBbcodeInteractive(messagesContainer.value);
     });
   },
-  { deep: true },
 );
 
 onMounted(() => {

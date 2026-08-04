@@ -33,9 +33,12 @@ const review = {
   likes: [],
 } as unknown as PostReview;
 
+/** The address of the room page, as GamePost hands it down. */
+const PERMALINK = "http://dm.am/game/abcde/rooms/2#post-p-1";
+
 const mountItem = () =>
   mount(PostReviewItem, {
-    props: { review, number: 1 },
+    props: { review, number: 1, permalink: PERMALINK },
     global: {
       components: { RouterLink: { template: "<a><slot /></a>" } },
     },
@@ -53,11 +56,30 @@ describe("PostReviewItem", () => {
     const anchor = wrapper.get(".review-anchor");
 
     expect(anchor.attributes("title")).toBeUndefined();
-    expect(anchor.attributes("aria-label")).toBe(
-      "Скопировать ссылку на отзыв 1",
-    );
+    expect(anchor.attributes("aria-label")).toBe("Скопировать ссылку на пост");
     expect(wrapper.findComponent(Tooltip).props("text")).toBe(
-      "Скопировать ссылку на отзыв 1",
+      "Скопировать ссылку на пост",
     );
+  });
+
+  it("copies the address it was handed, not the page it is drawn on", async () => {
+    const written: string[] = [];
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: (text: string) => {
+          written.push(text);
+          return Promise.resolve();
+        },
+      },
+    });
+
+    await mountItem().get(".review-anchor").trigger("click");
+
+    // The old link was window.location.pathname plus a "#review-" hash: on
+    // every surface that is not the room (the pulse, the home page, a profile)
+    // it addressed that surface, and the hash was read by nobody.
+    expect(written).toEqual([PERMALINK]);
+    expect(written[0]).not.toContain("#review-");
   });
 });

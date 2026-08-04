@@ -87,12 +87,4 @@ internal class LoginAttemptRepository : MongoCollectionRepository<LoginAttempt>,
             Filter.Eq(x => x.Email, email.ToLowerInvariant()));
     }
 
-    /// <inheritdoc />
-    public Task CleanupExpiredRecords(int expirationHours)
-    {
-        var cutoff = _dateTimeProvider.Now.UtcDateTime.AddHours(-expirationHours);
-        return Collection.DeleteManyAsync(
-            Filter.Lt(x => x.LastAttemptUtc, cutoff) &
-            Filter.Eq(x => x.LockoutStartUtc, null));
-    }
 }

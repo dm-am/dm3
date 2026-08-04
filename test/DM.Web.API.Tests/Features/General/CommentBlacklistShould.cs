@@ -79,7 +79,7 @@ public class CommentBlacklistShould : UnitTestBase
         var service = new BlogCommentApiService(
             commentService.Object, _identityProvider.Object, _blacklist.Object, _mapper.Object);
 
-        await service.GetDiscussion(_entityId, new BlogCommentsQuery());
+        await service.Get(_entityId, new BlogCommentsQuery());
 
         commentService.Verify(s => s.GetAsync(_entityId, It.IsAny<BlogCommentsQuery>(),
             It.Is<IReadOnlyCollection<Guid>>(ids => ids != null && ids.Contains(_blockedId))), Times.Once);
@@ -97,7 +97,7 @@ public class CommentBlacklistShould : UnitTestBase
         var service = new PublicationCommentApiService(
             commentService.Object, _identityProvider.Object, _blacklist.Object, _mapper.Object);
 
-        await service.GetDiscussion(_entityId, new PublicationCommentsQuery());
+        await service.Get(_entityId, new PublicationCommentsQuery());
 
         commentService.Verify(s => s.GetAsync(_entityId, It.IsAny<PublicationCommentsQuery>(),
             It.Is<IReadOnlyCollection<Guid>>(ids => ids != null && ids.Contains(_blockedId))), Times.Once);
@@ -151,7 +151,7 @@ public class CommentBlacklistShould : UnitTestBase
         var service = new GameCommentApiService(
             commentService.Object, _identityProvider.Object, _blacklist.Object, _mapper.Object);
 
-        await service.GetDiscussion(_entityId, new GameCommentsQuery());
+        await service.Get(_entityId, new GameCommentsQuery());
 
         commentService.Verify(s => s.GetAsync(_entityId, It.IsAny<GameCommentsQuery>(),
             It.Is<IReadOnlyCollection<Guid>>(ids => ids != null && ids.Contains(_blockedId))), Times.Once);

@@ -102,9 +102,16 @@ internal class BoardRepository(
                 })
                 .ToArrayAsync();
 
+            // The identifier breaks the tie: two comments can share a timestamp — an
+            // import produces that by the thousand — and without it the board's last
+            // comment is whichever row the plan returned first, which can differ
+            // between two renders of the same unchanged board.
             lastByBoard = lastComments
                 .GroupBy(x => x.BoardId)
-                .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.Last.CreatedUtc).First().Last);
+                .ToDictionary(g => g.Key, g => g
+                    .OrderByDescending(x => x.Last.CreatedUtc)
+                    .ThenByDescending(x => x.Last.Id)
+                    .First().Last);
         }
 
         foreach (var board in boards)

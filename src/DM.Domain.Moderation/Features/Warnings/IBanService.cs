@@ -74,7 +74,9 @@ public class CreateBan
     /// <see cref="DM.Domain.Core.Authorization.AccessRestrictions"/> — and is not
     /// retold here: the paraphrase that used to stand in this place had drifted
     /// into calling the ordinary ban read-only, which it never was. The service
-    /// coerces any other value to FullBan. Defaults to FullBan so that
+    /// refuses anything other than the two with 400; the service still coerces
+    /// behind it, so an in-process caller cannot produce a weaker ban than the safe
+    /// default either. Defaults to FullBan so that
     /// existing callers (e.g. ticket resolution) keep the full restriction.
     /// </summary>
     public AccessPolicy AccessRestrictionPolicy { get; set; } = AccessPolicy.FullBan;

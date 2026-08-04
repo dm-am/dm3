@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Configuration;
+using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
@@ -30,7 +30,6 @@ internal class PostReviewService : IPostReviewService
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IProbationConfiguration _probationConfig;
     private readonly IGameBlacklistRepository _blacklistRepository;
 
     public PostReviewService(
@@ -41,7 +40,6 @@ internal class PostReviewService : IPostReviewService
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
-        IProbationConfiguration probationConfig,
         IGameBlacklistRepository blacklistRepository)
     {
         _createValidator = createValidator;
@@ -51,7 +49,6 @@ internal class PostReviewService : IPostReviewService
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
-        _probationConfig = probationConfig;
         _blacklistRepository = blacklistRepository;
     }
 
@@ -90,7 +87,7 @@ internal class PostReviewService : IPostReviewService
         if (createReview.Sign != ReviewSign.Neutral && await IsNewbieAsync(authorId))
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "Ставить плюс и минус можно после 100 постов в играх");
+                $"Ставить плюс и минус можно после {ProbationPolicy.NewbiePostThreshold} постов в играх");
         }
 
         // Check if already reviewed this post
@@ -262,9 +259,6 @@ internal class PostReviewService : IPostReviewService
         return now <= editDeadline;
     }
 
-    private async Task<bool> IsNewbieAsync(Guid userId)
-    {
-        var postCount = await _repository.GetUserPostCountAsync(userId);
-        return postCount < _probationConfig.NewbiePostThreshold;
-    }
+    private async Task<bool> IsNewbieAsync(Guid userId) =>
+        ProbationPolicy.IsNewbie(await _repository.GetUserPostCountAsync(userId));
 }

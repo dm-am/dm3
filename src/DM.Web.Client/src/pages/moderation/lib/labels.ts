@@ -81,7 +81,6 @@ export function warningTypeLabel(points: number): string {
 }
 
 export const BAN_TYPE_LABELS: Record<BanType, string> = {
-  [BanType.Auto]: "Автоматический",
   [BanType.Temporary]: "Временный",
   [BanType.Permanent]: "Постоянный",
   [BanType.Voluntary]: "Добровольный",

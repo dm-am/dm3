@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
+import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 import type { MessageSearchResult } from "./types";
 import messageSearchApi from "../api/messageSearchApi";
 
@@ -46,7 +47,22 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
   /** Whether a search can currently run. */
   const canSearch = computed(() => trimmedQuery.value.length > 0);
 
+  /**
+   * One counter for both requests, not one each.
+   *
+   * The field is debounced by 300ms and a search does not cancel the one before
+   * it, so two are regularly on the wire at once: the slower answer landed last
+   * and put the hits for "коб" under the text "кобольд", with nothing on screen
+   * saying they disagreed. loadMore shares the counter because a page that
+   * started under the older query would otherwise be appended to the newer
+   * query's results and would move its cursor.
+   */
+  const guard = createRequestGuard();
+
   function reset() {
+    // An answer still on the wire must not repopulate what this just cleared:
+    // the field going empty is the caller.
+    guard.next();
     results.value = [];
     nextCursor.value = null;
     hasMore.value = false;
@@ -62,6 +78,7 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
       reset();
       return;
     }
+    const requestId = guard.next();
     loading.value = true;
     error.value = null;
     hasSearched.value = true;
@@ -71,6 +88,8 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
         in: GLOBAL_SCOPE,
         limit: PAGE_SIZE,
       });
+      // A newer search owns the visible list.
+      if (!guard.isCurrent(requestId)) return;
       if (apiError) {
         results.value = [];
         nextCursor.value = null;
@@ -82,13 +101,16 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
       nextCursor.value = data?.paging?.nextCursor ?? null;
       hasMore.value = data?.paging?.hasNext ?? false;
     } finally {
-      loading.value = false;
+      // Only the newest request may lower the spinner: an older one clearing it
+      // presents the request still on the wire as finished.
+      if (guard.isCurrent(requestId)) loading.value = false;
     }
   }
 
   /** Load the next (older) page and append it to the results. */
   async function loadMore() {
     if (loadingMore.value || !hasMore.value || !nextCursor.value) return;
+    const requestId = guard.next();
     loadingMore.value = true;
     error.value = null;
     try {
@@ -98,6 +120,9 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
         cursor: nextCursor.value,
         limit: PAGE_SIZE,
       });
+      // A search started after this page did: its results are the list now, and
+      // appending an older query's tail to them would also move its cursor.
+      if (!guard.isCurrent(requestId)) return;
       if (apiError) {
         // Keep the already-rendered results and the cursor so the sentinel's
         // retry can try again, matching the chat's stale-content convention.

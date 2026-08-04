@@ -18,25 +18,29 @@ const props = withDefaults(
     highlight?: boolean;
     /** 1-based position — renders a copyable anchor number (doc 4.2.2.14). */
     number?: number;
+    /**
+     * Address the number copies: the room page the reviewed post lives on,
+     * anchored at the post. A review has no page of its own, so the widget
+     * that owns the post owns the address (GamePost.vue) — built here it would
+     * be the address of whatever surface the card is embedded in, which is how
+     * a link to a review on the home page used to point at the home page.
+     */
+    permalink?: string;
   }>(),
   { highlight: false },
 );
 
 const { success: toastSuccess, error: toastError } = useToast();
 
-const reviewAnchor = computed(() => `#review-${props.review.id}`);
-
 // One sentence for both the name of the control and the tooltip that describes
-// it, the way the comment permalink does it (CommentItem.vue).
-const anchorHint = computed(
-  () => `Скопировать ссылку на отзыв ${props.number}`,
-);
+// it, the way the comment permalink does it (CommentItem.vue). It says post,
+// because the post is where the link lands.
+const anchorHint = "Скопировать ссылку на пост";
 
 async function copyAnchorLink() {
-  const url =
-    window.location.origin + window.location.pathname + reviewAnchor.value;
+  if (!props.permalink) return;
   try {
-    await navigator.clipboard.writeText(url);
+    await navigator.clipboard.writeText(props.permalink);
     toastSuccess("Ссылка скопирована");
   } catch {
     toastError("Не удалось скопировать ссылку");
@@ -89,7 +93,7 @@ const likersTooltip = computed(() => getLikesTooltip(likes.value as User[]));
         :hide-badge="true"
         :class="{ 'author-highlight': highlight }"
       />{{ `, ${formattedDate}`
-      }}<template v-if="number"
+      }}<template v-if="number && permalink"
         >{{ ", "
         }}<Tooltip :text="anchorHint"
           ><button

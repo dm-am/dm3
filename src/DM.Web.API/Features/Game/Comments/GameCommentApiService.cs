@@ -36,16 +36,6 @@ internal class GameCommentApiService : IGameCommentApiService
     }
 
     /// <inheritdoc />
-    public async Task<DiscussionResponse> GetDiscussion(Guid gameId, GameCommentsQuery query)
-    {
-        var identity = _identityProvider.Current;
-        var excludeUserIds = await CommentReading.HiddenAuthorsAsync(_blacklistChecker, identity);
-        var (comments, paging) = await _commentService.GetAsync(gameId, query, excludeUserIds);
-
-        return CommentReading.ToDiscussion(comments, paging, identity, _mapper);
-    }
-
-    /// <inheritdoc />
     public async Task<ListEnvelope<Comment>> Get(Guid gameId, GameCommentsQuery query)
     {
         var excludeUserIds = await CommentReading.HiddenAuthorsAsync(

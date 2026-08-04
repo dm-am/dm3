@@ -151,14 +151,44 @@ public static class GameRoleExtensions
     }
 
     /// <summary>
-    /// Convert GameRole to API string representation
+    /// Convert GameRole to API string representation.
     /// </summary>
+    /// <remarks>
+    /// Every member, and no default arm on purpose. Four of the seven were listed
+    /// and the rest collapsed into "unknown", so the mentor the roster query
+    /// returns reached the client under a role its union type does not contain.
+    /// Without the arm the compiler names an unrendered member (CS8509 is
+    /// deliberately not silenced, see Directory.Build.props).
+    /// </remarks>
     public static string ToApiString(this GameRole role) => role switch
     {
         GameRole.Master => "master",
         GameRole.Assistant => "assistant",
+        GameRole.Mentor => "mentor",
         GameRole.Player => "player",
+        GameRole.Applicant => "applicant",
         GameRole.Reader => "reader",
-        _ => "unknown"
+        GameRole.None => "none"
     };
+
+    /// <summary>
+    /// Parse the API string representation back into a role. Derived from
+    /// <see cref="ToApiString" /> rather than spelled out again: the role filter
+    /// kept its own literals, three of which the renderer never produced, so those
+    /// filters answered empty for every game.
+    /// </summary>
+    public static bool TryParseApiString(string? value, out GameRole role)
+    {
+        foreach (var candidate in Enum.GetValues<GameRole>())
+        {
+            if (string.Equals(candidate.ToApiString(), value, StringComparison.OrdinalIgnoreCase))
+            {
+                role = candidate;
+                return true;
+            }
+        }
+
+        role = GameRole.None;
+        return false;
+    }
 }

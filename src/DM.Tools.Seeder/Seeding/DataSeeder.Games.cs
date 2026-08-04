@@ -64,8 +64,8 @@ internal sealed partial class DataSeeder
         var existingTitles = existingGames.Select(g => g.Title).ToHashSet();
 
         var mentor = users.First(u => u.Role == UserRole.Mentor);
-        var experiencedUsers = users.Where(u => u.QuantityRating >= 100).ToList();
-        var newbieUsers = users.Where(u => u.QuantityRating < 100).ToList();
+        var experiencedUsers = users.Where(u => !ProbationPolicy.IsNewbie(u.QuantityRating)).ToList();
+        var newbieUsers = users.Where(u => ProbationPolicy.IsNewbie(u.QuantityRating)).ToList();
 
         if (experiencedUsers.Count == 0)
         {
@@ -432,7 +432,13 @@ internal sealed partial class DataSeeder
 
             // Add assistants (realistic distribution: ~20% have 1, ~5% have 2)
             // Using modulo for deterministic distribution: every 5th game gets 1 assistant, every 20th gets 2
-            var availableForAssistant = users.Where(u => u.UserId != master.UserId && u.QuantityRating >= 50).ToList();
+            // Half the newbie threshold: an assistant is somebody with a track record,
+            // and the fixture says so through the rule rather than through a number of
+            // its own, which would answer differently the day the rule moves.
+            const int assistantPostFloor = ProbationPolicy.NewbiePostThreshold / 2;
+            var availableForAssistant = users
+                .Where(u => u.UserId != master.UserId && u.QuantityRating >= assistantPostFloor)
+                .ToList();
             var assistantCount = gi % 20 == 0 && availableForAssistant.Count >= 2 ? 2
                 : gi % 5 == 0 && availableForAssistant.Count >= 1 ? 1
                 : 0;

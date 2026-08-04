@@ -213,7 +213,7 @@ internal class BanService : IBanService
         }
 
         var ban = await _banRepository.Get(banId, ct);
-        if (ban == null || ban.IsRemoved)
+        if (ban == null || ban.IsLifted)
         {
             throw new HttpException(HttpStatusCode.NotFound, "Бан не найден");
         }
@@ -234,7 +234,7 @@ internal class BanService : IBanService
             throw new HttpException(HttpStatusCode.Forbidden, "Постоянный бан может снять только администратор");
         }
 
-        await _banRepository.Remove(banId, currentUser.UserId, _dateTimeProvider.Now, reason, ct);
+        await _banRepository.Lift(banId, currentUser.UserId, _dateTimeProvider.Now, reason, ct);
     }
 
 }

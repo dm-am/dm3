@@ -3,7 +3,7 @@
  */
 
 /**
- * Two rules over the Playwright corpus, both written after the same failure: a
+ * Three rules over the Playwright corpus, all written after the same failure: a
  * tier that reported green because it had not run.
  *
  * A test that skips itself is the mechanism. `test.skip(condition)` in a body,
@@ -15,7 +15,12 @@
  * `test.skip("title", fn)` names a test that is switched off, and the report
  * says so.
  *
- * Credentials are the other half. The corpus once signed in as
+ * An assertion is the second half of the same rule. A body that ends on a
+ * visibility guard, or on a comment describing what would be true, passes
+ * whatever the page renders: eleven tests could not tell a working screen from
+ * a white one, and the report counted them.
+ *
+ * Credentials are the third. The corpus once signed in as
  * alice@example.com, an account the seeder does not create, and then asserted
  * against a signed-out page. Accounts live in e2e/fixtures/auth.ts and nowhere
  * else, and the fixture's defaults have to be accounts DM.Tools.Seeder writes —
@@ -154,6 +159,34 @@ describe("no e2e test can hide a failure behind a skip", () => {
         if (name === null || !SKIPPING.test(name)) return;
         if (isDeclaration(node)) return;
         violations.push(`${at(node)}: ${name}(...)`);
+      });
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("puts an assertion in every test it declares", () => {
+    const violations: string[] = [];
+    for (const file of collect(join(E2E_ROOT, "tests"))) {
+      walk(parse(file), (node) => {
+        if (!ts.isCallExpression(node)) return;
+        const name = calleeName(node.expression);
+        // Dotted names are the declared skips, and a switched-off test owes
+        // nothing: the report says it did not run.
+        if (name !== "test" && name !== "it") return;
+        if (!isDeclaration(node)) return;
+
+        let asserts = false;
+        walk(node.arguments[1], (inner) => {
+          if (!ts.isCallExpression(inner)) return;
+          const called = calleeName(inner.expression);
+          if (called === "expect" || called?.startsWith("expect.")) {
+            asserts = true;
+          }
+        });
+        if (asserts) return;
+
+        const title = node.arguments[0] as ts.StringLiteral;
+        violations.push(`${at(node)}: ${title.text}`);
       });
     }
     expect(violations).toEqual([]);

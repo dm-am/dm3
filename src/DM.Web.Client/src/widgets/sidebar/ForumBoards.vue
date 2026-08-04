@@ -7,6 +7,7 @@ import { useBoardsStore } from "@/entities/forum";
 import { useAuthStore } from "@/entities/user";
 import { onMounted, watch } from "vue";
 import { storeToRefs } from "pinia";
+import { useViewerChange } from "@/shared/lib/composables";
 import { useRoute } from "vue-router";
 
 const store = useBoardsStore();
@@ -17,16 +18,8 @@ const route = useRoute();
 // Fetch on mount (uses cache with stale-while-revalidate)
 onMounted(() => store.fetchBoards());
 
-// Refetch only on actual login/logout to update unread counts
-watch(
-  () => userStore.user?.username,
-  (newUsername, oldUsername) => {
-    // Only refetch if user actually logged in or out
-    if ((newUsername && !oldUsername) || (!newUsername && oldUsername)) {
-      store.fetchBoards(true);
-    }
-  },
-);
+// Refetch on any change of viewer to update unread counts
+useViewerChange(() => store.fetchBoards(true));
 
 // Re-trigger on navigation so a failed fetch gets another chance once the
 // TTL cache considers it stale, without requiring a full page reload.

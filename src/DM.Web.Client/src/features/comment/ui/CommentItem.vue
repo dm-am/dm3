@@ -21,6 +21,7 @@ import {
 } from "@/shared/lib/utils/bbcodeInteractive";
 import { highlightDom, clearDomHighlight } from "@/shared/lib/utils/highlight";
 import { SvgIcon } from "@/shared/ui/Icon";
+import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { notifyFailure } from "@/shared/lib/errors";
@@ -226,12 +227,21 @@ function toggleLike() {
 }
 
 const deleting = ref(false);
+const showDeleteConfirm = ref(false);
+
+// "Удалить" sits at a $small step from "Редактировать" and "Предупреждение", and
+// it used to fire on the first click with nothing to undo it. The post of a game
+// and a forum topic both ask first, through this same dialog.
+function requestDelete() {
+  showDeleteConfirm.value = true;
+}
 
 async function handleDelete() {
   if (deleting.value) return;
   deleting.value = true;
   const { error } = await props.submitDelete(props.comment.id);
   deleting.value = false;
+  showDeleteConfirm.value = false;
   if (error) notifyFailure(error, "Не удалось удалить комментарий");
 }
 
@@ -471,7 +481,7 @@ watch(
             <button
               v-if="canDelete"
               class="action-btn delete-btn"
-              @click="handleDelete"
+              @click="requestDelete"
             >
               Удалить
             </button>
@@ -501,6 +511,19 @@ watch(
         </div>
       </div>
     </template>
+
+    <!-- The question "Удалить" asks before it deletes. Kept outside the
+         isRemoved branches so the answer still has a dialog to close. -->
+    <ConfirmDialog
+      :show="showDeleteConfirm"
+      title="Удалить комментарий?"
+      message="Комментарий будет удален. Это действие необратимо."
+      confirm-label="Удалить"
+      danger
+      :loading="deleting"
+      @confirm="handleDelete"
+      @update:show="showDeleteConfirm = $event"
+    />
   </div>
 </template>
 

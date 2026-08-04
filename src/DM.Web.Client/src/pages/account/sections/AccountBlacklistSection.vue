@@ -285,7 +285,7 @@ async function confirmUnblock() {
   border: 1px solid $border
   gap: $medium
 
-  @media (max-width: 768px)
+  @media (max-width: $bp-tablet)
     flex-direction: column
     align-items: stretch
 
@@ -325,7 +325,7 @@ async function confirmUnblock() {
     opacity: 0.5
     cursor: default
 
-  @media (max-width: 768px)
+  @media (max-width: $bp-tablet)
     align-self: flex-end
     margin-top: $small
 

@@ -239,7 +239,7 @@ const columns = computed<Column[]>(() =>
     ? [
         { key: "title", label: "Название", width: "28%", align: "left" },
         { key: "master", label: "Ведущие", width: "18%", align: "left" },
-        { key: "status", label: "Статус игры", width: "18%", align: "left" },
+        { key: "status", label: "Статус игры", width: "16.3%", align: "left" },
         {
           key: "character",
           label: "Статус персонажа",
@@ -249,8 +249,8 @@ const columns = computed<Column[]>(() =>
         },
         {
           key: "reviews",
-          label: "Отзывы",
-          width: "6%",
+          label: "Рецензии",
+          width: "7.7%",
           align: "center",
           hideOnMobile: true,
         },
@@ -259,11 +259,11 @@ const columns = computed<Column[]>(() =>
     : [
         { key: "title", label: "Название", width: "38%", align: "left" },
         { key: "master", label: "Ведущие", width: "23%", align: "left" },
-        { key: "status", label: "Статус игры", width: "23%", align: "left" },
+        { key: "status", label: "Статус игры", width: "21.3%", align: "left" },
         {
           key: "reviews",
-          label: "Отзывы",
-          width: "6%",
+          label: "Рецензии",
+          width: "7.7%",
           align: "center",
           hideOnMobile: true,
         },
@@ -413,25 +413,15 @@ function pagingAnchor(): HTMLElement | null {
 
       <!-- Reviews column, same format as /games -->
       <template #cell-reviews="{ row }">
-        <span class="reviews-cell">
-          <router-link
-            :to="{
-              name: 'game-reviews',
-              params: { id: row.publicId || row.id },
-            }"
-            class="review-link"
-            >{{ row.gameReviewsCount ?? 0 }}</router-link
-          >
-          <span class="muted">/</span>
-          <router-link
-            :to="{
-              name: 'game-post-reviews',
-              params: { id: row.publicId || row.id },
-            }"
-            class="review-link"
-            >{{ row.postReviewsCount ?? 0 }}</router-link
-          >
-        </span>
+        <router-link
+          :to="{
+            name: 'game-reviews',
+            params: { id: row.publicId || row.id },
+          }"
+          class="review-link"
+          :aria-label="`Рецензии: ${row.gameReviewsCount ?? 0}`"
+          >{{ row.gameReviewsCount ?? 0 }}</router-link
+        >
       </template>
 
       <template #cell-readers="{ row }">
@@ -508,12 +498,6 @@ function pagingAnchor(): HTMLElement | null {
 .slots-indicator
   color: $text-muted
   cursor: help
-
-.muted
-  color: $text-muted
-
-.reviews-cell
-  white-space: nowrap
 
 .review-link
   color: $link

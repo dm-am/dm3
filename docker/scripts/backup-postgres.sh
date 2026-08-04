@@ -27,7 +27,7 @@ if [ ! -s "$BACKUP_FILE" ]; then
 fi
 
 # Cleanup old backups
-DELETED=$(find "$BACKUP_DIR" -name "*.sql.gz" -mtime +$RETENTION_DAYS -delete -print | wc -l)
+DELETED=$(find "$BACKUP_DIR" -name "*.sql.gz" -mtime +"$RETENTION_DAYS" -delete -print | wc -l)
 echo "[$(date)] Cleaned up $DELETED backups older than $RETENTION_DAYS days"
 
 # Optional: replicate to S3

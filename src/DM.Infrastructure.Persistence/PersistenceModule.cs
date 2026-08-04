@@ -119,11 +119,6 @@ public class PersistenceModule : Module
             // its own, which is the one way to defeat pooling.
             .SingleInstance();
 
-        builder.RegisterType<UpdateBuilderFactory>()
-            .AsSelf()
-            .AsImplementedInterfaces()
-            .SingleInstance();
-
         // Register AutoMapper profiles from this assembly
         builder.RegisterMapper();
 

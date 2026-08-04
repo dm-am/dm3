@@ -22,7 +22,7 @@ import Form from "@/shared/ui/Form/Form.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
 import SupportPage from "./SupportPage.vue";
 import ComplaintPage from "./ComplaintPage.vue";
-import SupportTicketForm from "@/features/support-ticket/ui/SupportTicketForm.vue";
+import { SupportTicketForm } from "@/features/support-ticket";
 
 // /support reads ?reason=access off the route; nothing else on either page
 // touches the router (the form's only link sits on the success screen).

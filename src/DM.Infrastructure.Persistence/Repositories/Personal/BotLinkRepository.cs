@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Tokens;
 using DM.Domain.Personal.Features.Notifications;
@@ -18,12 +19,15 @@ namespace DM.Infrastructure.Persistence.Repositories.Personal;
 internal class BotLinkRepository : MongoCollectionRepository<UserSettings>, IBotLinkRepository
 {
     private readonly DmDbContext _dbContext;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     public BotLinkRepository(
         DmDbContext dbContext,
-        DmMongoClient mongoClient) : base(mongoClient)
+        DmMongoClient mongoClient,
+        IDateTimeProvider dateTimeProvider) : base(mongoClient)
     {
         _dbContext = dbContext;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
@@ -47,7 +51,7 @@ internal class BotLinkRepository : MongoCollectionRepository<UserSettings>, IBot
     public async Task<Token?> FindValidToken(string code, CancellationToken ct = default)
     {
         var codeUpper = code.ToUpperInvariant();
-        var cutoffTime = DateTimeOffset.UtcNow.AddMinutes(-10);
+        var cutoffTime = _dateTimeProvider.Now.AddMinutes(-10);
 
         // Load pending BotLink tokens, then filter in memory by first 6 chars of GUID
         var candidates = await _dbContext.Tokens

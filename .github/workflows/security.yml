@@ -68,6 +68,15 @@ jobs:
 
   zap-scan:
     runs-on: ubuntu-latest
+    env:
+      # docker/.env.example ends with Development for local work, and a scan of
+      # Development is a scan of a surface that never ships: Swagger is mapped
+      # only there and the content policy relaxes its script-src for it, so the
+      # tool both sees what production does not have and misses what it does.
+      # Through the environment rather than by rewriting a line of the file, the
+      # way the throwaway encryption key below is handed in: compose prefers the
+      # environment over .env.
+      ASPNETCORE_ENVIRONMENT: Production
     steps:
       - uses: actions/checkout@v4
 

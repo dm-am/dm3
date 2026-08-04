@@ -47,10 +47,4 @@ public interface ILoginAttemptRepository
     /// </summary>
     /// <param name="email">User email</param>
     Task ResetAttempts(string email);
-
-    /// <summary>
-    /// Clean up expired attempt records
-    /// </summary>
-    /// <param name="expirationHours">Hours after which records are considered expired</param>
-    Task CleanupExpiredRecords(int expirationHours);
 }

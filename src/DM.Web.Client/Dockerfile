@@ -19,7 +19,7 @@ ENV VITE_API_HOST=$VITE_API_HOST
 RUN npm run build
 
 # Production stage
-FROM nginx:alpine
+FROM nginx:1.27-alpine
 
 # Copy built files
 COPY --from=build /app/dist /usr/share/nginx/html

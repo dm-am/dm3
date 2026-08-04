@@ -21,8 +21,9 @@ import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
 import { useAnimatedHeightToggle } from "@/shared/lib/composables";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
-import { notifyFailure } from "@/shared/lib/errors";
+import { describeFailure, notifyFailure } from "@/shared/lib/errors";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
+import { TOPIC_TITLE_MAX_LENGTH } from "@/shared/lib/constants/forum";
 
 const route = useRoute();
 const router = useRouter();
@@ -322,7 +323,10 @@ async function handleCreateTopic() {
       // field-level validation errors (e.g. a GeneralError, not a
       // BadRequestError) — this covers 403 (board policy) and 500 alike.
       if (!Object.keys(fieldErrors).length) {
-        createGeneralError.value = error.title || "Не удалось создать топик";
+        createGeneralError.value = describeFailure(
+          error,
+          "Не удалось создать топик",
+        );
       }
       return;
     }
@@ -557,7 +561,7 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
             type="text"
             class="create-topic-title-input"
             placeholder="Заголовок топика"
-            maxlength="200"
+            :maxlength="TOPIC_TITLE_MAX_LENGTH"
           />
         </form-field>
 
@@ -611,12 +615,12 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
   flex-direction: column
   gap: $small
 
+// A caption, not a pinned block: the text is four to seven words in every
+// board, and a dashed box around one line reads as weight the content does not
+// carry. Same idiom as the moderators line at the foot of this page, so the
+// listing sits between two muted captions.
 .board-description
-  padding: $small $medium
-  border: 1px dashed $border
-  background-color: $bg-element
-  color: $text
-  font-size: $secondary-font-size
+  +muted-links-line
 
 .topic-link
   color: $link

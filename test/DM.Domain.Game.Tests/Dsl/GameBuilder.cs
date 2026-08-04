@@ -115,5 +115,24 @@ public class GameBuilder
         return this;
     }
 
+    /// <summary>
+    /// Recruitment is what admits a character; an unset block reads as closed.
+    /// </summary>
+    public GameBuilder WithRecruitmentOpen()
+    {
+        game.Recruitment = new GameRecruitment { IsOpen = true };
+        return this;
+    }
+
+    /// <summary>
+    /// A player invitation the user has not answered yet: the second way into
+    /// character creation, past a closed recruitment.
+    /// </summary>
+    public GameBuilder WithPendingPlayerInvitation(Guid userId)
+    {
+        game.PendingPlayerInvitedUserIds = new[] { userId };
+        return this;
+    }
+
     public GameDetails Please() => game;
 }

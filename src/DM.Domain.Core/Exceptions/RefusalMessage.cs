@@ -314,6 +314,13 @@ public static class RefusalMessage
     public static string TagTitleTaken(string title, string groupTitle) =>
         $"Тег \"{title}\" уже есть в группе \"{groupTitle}\"";
 
+    /// <summary>
+    /// The viewer already liked this. Raised twice on one path: once from the loaded
+    /// collection and once from the unique index, which answers after the competing
+    /// request has committed.
+    /// </summary>
+    public const string AlreadyLiked = "Вы уже поставили лайк";
+
     // ═══ FIELDS ═══
 
     /// <summary>

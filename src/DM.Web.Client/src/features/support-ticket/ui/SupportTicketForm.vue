@@ -27,6 +27,11 @@ const props = defineProps<{
 
 // Subtype options per page (doc 4.2.3.2.4/5). Labels mirror the backend
 // TicketSubtype [Description] attributes.
+//
+// One list per page, and the two lists share nothing: support is "the site is
+// in my way", a complaint is "a person or a moderator decision is". The owner
+// settled this after the audit proposed a single grouped picker on both pages.
+// Two pages over one form, each with its own reasons and its own surroundings.
 const SUPPORT_SUBTYPES: { value: TicketSubtype; label: string }[] = [
   { value: "Bug", label: "Ошибка" },
   { value: "AccessRecovery", label: "Восстановление доступа" },
@@ -79,6 +84,9 @@ const textError = ref("");
 const contactError = ref("");
 const violationUrlError = ref("");
 
+// The page decides: its list of reasons holds nothing from the other one, so
+// the wording and the complaint-only "Ссылка на нарушение" field follow the
+// door the reader came through.
 const isComplaint = computed(() => props.kind === "complaint");
 
 // Pragmatic email shape check — the server is the source of truth, this only

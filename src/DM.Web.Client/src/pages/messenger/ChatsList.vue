@@ -13,11 +13,13 @@ import { symbols } from "@/shared/lib/utils/icons";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { EmptyState } from "@/shared/ui";
+import { ErrorState } from "@/shared/ui/ErrorState";
+import { ChatPreviewSkeleton } from "@/shared/ui/Skeleton";
 
 const route = useRoute();
 const router = useRouter();
 const messagingStore = useMessagingStore();
-const { chats } = storeToRefs(messagingStore);
+const { chats, loadingChats, error: chatsError } = storeToRefs(messagingStore);
 const { user: currentUser } = storeToRefs(useAuthStore());
 
 const searchQuery = ref("");
@@ -33,17 +35,19 @@ function extractPage(value: string | null | undefined): number {
 
 // The shared Paging widget writes the page as ?number= (codebase-wide
 // query-key convention) — read the same key back.
+function loadChats() {
+  return messagingStore.fetchChats(
+    extractPage(route.query.number as string | undefined),
+  );
+}
+
 useFetchData(
-  () =>
-    messagingStore.fetchChats(
-      extractPage(route.query.number as string | undefined),
-    ),
+  loadChats,
   [],
   [
     {
       query: (q) => q.number,
-      callback: (page) =>
-        messagingStore.fetchChats(extractPage(page as string | undefined)),
+      callback: () => loadChats(),
     },
   ],
 );
@@ -186,6 +190,21 @@ function clearSearch() {
         :scroll-anchor="pagingAnchor"
       />
     </div>
+
+    <!-- Loading. A first open has nothing to keep on screen, and the empty
+         state below answered "Нет переписок" while the request was still on
+         the wire. -->
+    <ChatPreviewSkeleton v-else-if="loadingChats" />
+
+    <!-- A failed load must not be presented as fake emptiness — the idiom is
+         written out in pages/forum/CommentsList. Before this a 500 read as
+         "у вас нет переписок", with nothing to press and only a page reload
+         to recover. -->
+    <ErrorState
+      v-else-if="chatsError"
+      :message="chatsError"
+      :retry="loadChats"
+    />
 
     <EmptyState
       v-else

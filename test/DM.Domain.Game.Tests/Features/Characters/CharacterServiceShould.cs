@@ -323,4 +323,56 @@ public class CharacterServiceShould : UnitTestBase
 
         _intentionManager.Verify(m => m.ThrowIfForbidden(CharacterIntention.Delete, character), Times.Once);
     }
+
+    /// <summary>
+    /// A field the caller may not set is refused, not dropped. The update asked
+    /// IsAllowed and, on a no, left the value out: the request came back 200 with
+    /// the character unchanged, which is exactly what a successful edit looks like.
+    /// One test for the pattern - the same shape guarded the privacy policy beside
+    /// this flag, the closed and attached flags of a forum topic, and the text of a
+    /// game post.
+    /// </summary>
+    [Fact]
+    public async Task RefuseAnNpcFlagTheCallerMayNotSet()
+    {
+        var characterId = Guid.NewGuid();
+        _repository.Setup(r => r.GetForUpdate(characterId)).ReturnsAsync(
+            new CharacterToUpdate { Id = characterId, GameId = Guid.NewGuid(), IsNpc = false });
+        _repository.Setup(r => r.Update(It.IsAny<UpdateCharacterEntity>()))
+            .ReturnsAsync(new Character { Id = characterId });
+
+        await _service.UpdateAsync(new UpdateCharacter
+        {
+            CharacterId = characterId,
+            Name = "Updated",
+            IsNpc = true
+        });
+
+        _intentionManager.Verify(
+            m => m.ThrowIfForbidden(CharacterIntention.EditMasterSettings), Times.Once);
+    }
+
+    /// <summary>
+    /// The client round-trips the whole character, so a value it already has is
+    /// nobody's attempt at anything and must not be refused.
+    /// </summary>
+    [Fact]
+    public async Task NotAskForMasterSettingsWhenTheNpcFlagIsUnchanged()
+    {
+        var characterId = Guid.NewGuid();
+        _repository.Setup(r => r.GetForUpdate(characterId)).ReturnsAsync(
+            new CharacterToUpdate { Id = characterId, GameId = Guid.NewGuid(), IsNpc = true });
+        _repository.Setup(r => r.Update(It.IsAny<UpdateCharacterEntity>()))
+            .ReturnsAsync(new Character { Id = characterId });
+
+        await _service.UpdateAsync(new UpdateCharacter
+        {
+            CharacterId = characterId,
+            Name = "Updated",
+            IsNpc = true
+        });
+
+        _intentionManager.Verify(
+            m => m.ThrowIfForbidden(CharacterIntention.EditMasterSettings), Times.Never);
+    }
 }

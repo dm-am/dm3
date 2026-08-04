@@ -10,7 +10,8 @@ public class AwardType
     public Guid Id { get; set; }
     /// <summary>Stable code ("contest_first", "popular_vote").</summary>
     public string Code { get; set; } = string.Empty;
-    /// <summary>Display name ("Литконкурс", "Народное признание").</summary>
+    /// <summary>Display name ("Литконкурс", "Народное признание, например" - the
+    /// trailing words are part of that award's name).</summary>
     public string Title { get; set; } = string.Empty;
     /// <summary>Description (what it is granted for).</summary>
     public string Description { get; set; } = string.Empty;

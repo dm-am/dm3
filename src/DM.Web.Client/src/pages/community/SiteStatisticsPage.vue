@@ -326,7 +326,7 @@ const allEmpty = computed(
 
 // 3 columns is the target; collapse to a single column only when genuinely
 // too narrow for it (mobile / very narrow content area).
-@media (max-width: 620px)
+@media (max-width: $bp-mobile)
   .boards-grid
     grid-template-columns: 1fr
 </style>

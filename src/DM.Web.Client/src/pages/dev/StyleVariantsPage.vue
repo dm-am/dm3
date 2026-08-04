@@ -797,7 +797,7 @@ html.theme_Dark .probe-030
 html.theme_Dark .probe-024
   --sv-probe: rgba(255, 255, 255, 0.024)
 
-@media (max-width: 620px)
+@media (max-width: $bp-mobile)
   .boards-grid
     grid-template-columns: 1fr
 

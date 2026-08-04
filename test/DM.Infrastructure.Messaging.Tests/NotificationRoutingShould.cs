@@ -36,24 +36,22 @@ public class NotificationRoutingShould
     }
 
     /// <summary>
-    /// A generator answers either through the single-event property of the base
-    /// class or by overriding CanResolve itself (the character-status generator
-    /// covers a whole family of events that way). One of the two must be true,
-    /// otherwise the type is registered, resolved, and never triggered.
+    /// A generator answers at least one event, asked the way the dispatcher asks.
     /// </summary>
+    /// <remarks>
+    /// This used to look for the members rather than call them: GetProperty walks
+    /// the whole hierarchy, so the abstract EventType of the base class answered
+    /// for every subclass, and a type implementing the interface directly has to
+    /// declare CanResolve to compile. The set was empty whatever the code did.
+    /// Calling CanResolve over the whole enum is the question the dispatcher
+    /// asks at startup, and a generator whose answer is always false is exactly
+    /// what shipped fourteen times.
+    /// </remarks>
     [Fact]
     public void AnswerAtLeastOneEvent()
     {
         var silent = GeneratorTypes
-            .Where(type =>
-            {
-                var declaresEvent = type.GetProperty("EventType",
-                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public |
-                    BindingFlags.FlattenHierarchy) is not null;
-                var overridesCanResolve = type.GetMethod("CanResolve",
-                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly) is not null;
-                return !declaresEvent && !overridesCanResolve;
-            })
+            .Where(type => !Enum.GetValues<EventType>().Any(eventType => Answers(type, eventType)))
             .Select(type => type.Name)
             .ToArray();
 

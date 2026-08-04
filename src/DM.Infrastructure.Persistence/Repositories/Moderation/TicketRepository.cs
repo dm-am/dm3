@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Moderation.Features.Tickets;
 using Microsoft.EntityFrameworkCore;
@@ -17,12 +18,17 @@ internal class TicketRepository : ITicketRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
-    public TicketRepository(DmDbContext dbContext, IMapper mapper)
+    public TicketRepository(
+        DmDbContext dbContext,
+        IMapper mapper,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _mapper = mapper;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
@@ -177,7 +183,7 @@ internal class TicketRepository : ITicketRepository
             ticket.BanId = entity.BanId;
         }
 
-        ticket.UpdatedUtc = DateTimeOffset.UtcNow;
+        ticket.UpdatedUtc = _dateTimeProvider.Now;
 
         await _dbContext.SaveChangesAsync(ct);
 

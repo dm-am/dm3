@@ -1,0 +1,208 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text.RegularExpressions;
+using FluentAssertions;
+using Xunit;
+
+namespace DM.Architecture.Tests;
+
+/// <summary>
+/// One meaning is called by one word, and the letters of that word are the ones
+/// the convention allows -- outside the client, where the client's own check
+/// cannot see.
+/// </summary>
+/// <remarks>
+/// GLOSSARY states the rule in as many words: one Russian word and one English
+/// identifier per term, the same in the UI, in the code and in the
+/// documentation. The client enforces it for interface strings
+/// (copy-rules.spec.ts). Nothing enforced it anywhere else, and the gap showed:
+/// the role every screen calls a наставник was still a ментор in five documents
+/// -- including the glossary that declares the rule -- and in a seeded profile,
+/// and the documentation is where the next screen takes its words from.
+///
+/// The two characters are here for the same reason. CODE_STYLE keeps the letter
+/// at U+0451 and the typographic quotes out of every text a person reads, seeded
+/// data and documentation included, and said in as many words that the rule was
+/// checked by hand.
+///
+/// The check is textual because the offending value is prose: no type stands
+/// between a word and the file it is written in. The retired words are a list
+/// rather than a rule, exactly as on the client: neither of them is something
+/// the code could re-derive.
+/// </remarks>
+public class InterfaceVocabularyShould
+{
+    /// <summary>
+    /// Generated trees and foreign checkouts. A worktree is a second copy of
+    /// this repository and may hold the text of any branch.
+    /// </summary>
+    private static readonly string[] NotSource =
+        ["bin", "obj", "node_modules", "coverage", "dist", "worktrees"];
+
+    /// <summary>
+    /// A word the site retired, and the word it kept. The pattern opens on a
+    /// word boundary: "старт конкурса" holds the letters of the second entry
+    /// and is not it.
+    /// </summary>
+    private static readonly (Regex Pattern, string Retired, string Instead)[] RetiredWording =
+    [
+        (new Regex(@"\bментор", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+            "ментор",
+            "наставник: the badge, the roles table, the game settings and GLOSSARY all say so"),
+        (new Regex(@"\bарт конкурс", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+            "арт конкурс",
+            "арт-конкурс, with the hyphen Russian puts there")
+    ];
+
+    /// <summary>
+    /// The letter at U+0451 and its capital, by number: a file that keeps a
+    /// character out of the text should not carry it.
+    /// </summary>
+    private static readonly char[] EWithDots = [(char)0x0451, (char)0x0401];
+
+    /// <summary>The quotes CODE_STYLE reserves for the motto, by number as well.</summary>
+    private static readonly char[] Guillemets = [(char)0x00AB, (char)0x00BB];
+
+    /// <summary>
+    /// The one file that has to hold the letter: it maps every Cyrillic letter
+    /// to Latin, and a table missing one transliterates it to nothing.
+    /// </summary>
+    private const string TransliterationTable =
+        "src/DM.Domain.Core/Extensions/ReadableGuidHelper.cs";
+
+    [Fact]
+    public void CallOneMeaningByOneWord()
+    {
+        var root = RepositoryRoot;
+        var offenders = new List<string>();
+        var scanned = 0;
+
+        foreach (var file in ReadableText(root))
+        {
+            scanned++;
+            var text = File.ReadAllText(file);
+
+            foreach (var (pattern, retired, instead) in RetiredWording)
+            {
+                if (pattern.IsMatch(text))
+                {
+                    offenders.Add($"{Relative(root, file)}: \"{retired}\", use {instead}");
+                }
+            }
+        }
+
+        scanned.Should().BeGreaterThan(0, "a rule that reads nothing passes");
+        offenders.Should().BeEmpty(
+            "the documentation and the seed are where the next screen takes its words from");
+    }
+
+    [Fact]
+    public void SpellRussianWithTheCharactersTheConventionAllows()
+    {
+        var root = RepositoryRoot;
+        var offenders = new List<string>();
+        var scanned = 0;
+
+        foreach (var file in ReadableText(root))
+        {
+            scanned++;
+            var relative = Relative(root, file);
+            var text = File.ReadAllText(file);
+
+            if (relative != TransliterationTable && text.IndexOfAny(EWithDots) >= 0)
+            {
+                offenders.Add($"{relative}: the letter at U+0451, the site spells it without the dots");
+            }
+
+            if (text.IndexOfAny(Guillemets) >= 0)
+            {
+                offenders.Add($"{relative}: typographic quotes are reserved for the motto");
+            }
+        }
+
+        scanned.Should().BeGreaterThan(0, "a rule that reads nothing passes");
+        offenders.Should().BeEmpty(
+            "the rules for Russian text hold for documentation and server sources as well");
+    }
+
+    /// <summary>
+    /// Every file outside the client that a person reads Russian in: the
+    /// documentation, the agent instructions and the server sources. The client
+    /// is left out because it checks itself, and the audit reports at the root
+    /// are left out because they quote the violations they name.
+    /// </summary>
+    private static IEnumerable<string> ReadableText(string root)
+    {
+        var readme = Path.Combine(root, "README.md");
+        if (File.Exists(readme))
+        {
+            yield return readme;
+        }
+
+        foreach (var directory in new[] { "docs", ".claude" })
+        {
+            var full = Path.Combine(root, directory);
+            if (!Directory.Exists(full))
+            {
+                continue;
+            }
+
+            foreach (var file in FilesUnder(full, "*.md"))
+            {
+                yield return file;
+            }
+        }
+
+        foreach (var file in FilesUnder(Path.Combine(root, "src"), "*.cs"))
+        {
+            yield return file;
+        }
+    }
+
+    private static IEnumerable<string> FilesUnder(string directory, string pattern)
+    {
+        foreach (var file in Directory.EnumerateFiles(directory, pattern))
+        {
+            yield return file;
+        }
+
+        foreach (var nested in Directory.EnumerateDirectories(directory))
+        {
+            if (Array.IndexOf(NotSource, Path.GetFileName(nested)) >= 0)
+            {
+                continue;
+            }
+
+            foreach (var file in FilesUnder(nested, pattern))
+            {
+                yield return file;
+            }
+        }
+    }
+
+    private static string Relative(string root, string file) =>
+        Path.GetRelativePath(root, file).Replace('\\', '/');
+
+    /// <summary>
+    /// Walks up from the test binary to the repository root: the sources are not
+    /// copied to the output directory, and copying them would assert against a
+    /// stale snapshot.
+    /// </summary>
+    private static string RepositoryRoot
+    {
+        get
+        {
+            var directory = new DirectoryInfo(AppContext.BaseDirectory);
+            while (directory != null &&
+                   !(Directory.Exists(Path.Combine(directory.FullName, "src")) &&
+                     Directory.Exists(Path.Combine(directory.FullName, "test"))))
+            {
+                directory = directory.Parent;
+            }
+
+            directory.Should().NotBeNull("the repository root must be above the test binary");
+            return directory!.FullName;
+        }
+    }
+}

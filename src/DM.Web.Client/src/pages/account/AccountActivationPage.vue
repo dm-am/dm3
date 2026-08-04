@@ -136,7 +136,7 @@ async function submitActivation() {
 
   const { data, error: apiError } = await accountApi.activate(token.value, {
     username: username.value,
-    expectedEmail: pendingEmail.value,
+    retryEmail: pendingEmail.value,
   });
 
   if (apiError) {
@@ -211,8 +211,17 @@ function goToProfile() {
     :class="{ 'activation-page--wide': phase === 'notFound' }"
   >
     <div class="activation-card">
+      <!-- Checking the link. The phase existed and the template had no branch
+           for it: someone arriving from the letter on a slow connection saw an
+           empty card with "Нужна помощь? Обратитесь в поддержку" under it —
+           the signal that something is broken, at the moment nothing is.
+           EmailChangePage, the third page of this family, does it this way. -->
+      <div v-if="phase === 'loading'" class="activation-loading">
+        <p class="loading-text">Проверяем ссылку...</p>
+      </div>
+
       <!-- Step 1: Username Selection -->
-      <template v-if="phase === 'selectUsername'">
+      <template v-else-if="phase === 'selectUsername'">
         <dialog-title>Выберите имя</dialog-title>
 
         <div class="username-form">
@@ -235,7 +244,9 @@ function goToProfile() {
       </template>
 
       <!-- Step 2: Confirm Username -->
-      <template v-if="phase === 'confirmUsername' || phase === 'submitting'">
+      <template
+        v-else-if="phase === 'confirmUsername' || phase === 'submitting'"
+      >
         <dialog-title>Подтвердите выбор имени</dialog-title>
 
         <div class="confirm-form">
@@ -351,6 +362,12 @@ function goToProfile() {
 
   &--wide
     max-width: 480px
+
+.activation-loading
+  padding: $big 0
+
+.loading-text
+  color: $text-muted
 
 .activation-card
   text-align: center
@@ -531,7 +548,7 @@ function goToProfile() {
     font-weight: bold
 
 // Mobile adjustments
-@media (max-width: 480px)
+@media (max-width: $bp-narrow)
   .username-form
     :deep(.button)
       width: 100%

@@ -579,6 +579,9 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("MentorId");
 
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
                     b.ToTable("Blogs");
                 });
 
@@ -726,9 +729,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("RubricId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
-
-                    b.Property<int>("AccessType")
-                        .HasColumnType("integer");
 
                     b.Property<Guid>("BlogId")
                         .HasColumnType("uuid");
@@ -1998,7 +1998,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             Description = "Жизнь сообщества и решения администрации",
                             Order = 1,
                             Title = "Общий",
-                            TopicsCount = 1,
+                            TopicsCount = 2,
                             ViewPolicy = 64
                         },
                         new
@@ -2484,6 +2484,9 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("MentorId");
 
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
                     b.ToTable("Games");
                 });
 
@@ -2605,9 +2608,10 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("GameTagId");
 
-                    b.HasIndex("GameId");
-
                     b.HasIndex("TagId");
+
+                    b.HasIndex("GameId", "TagId")
+                        .IsUnique();
 
                     b.ToTable("GameTags");
                 });
@@ -3171,9 +3175,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("EndedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("IsRemoved")
-                        .HasColumnType("boolean");
-
                     b.Property<bool>("IsVoluntary")
                         .HasColumnType("boolean");
 
@@ -3510,7 +3511,9 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.HasIndex("EntityType", "EntityId");
+                    b.HasIndex("EntityType", "EntityId", "UserId")
+                        .IsUnique()
+                        .HasFilter("\"IsRemoved\" = false");
 
                     b.ToTable("Likes");
                 });

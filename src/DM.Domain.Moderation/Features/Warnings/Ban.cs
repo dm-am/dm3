@@ -57,9 +57,27 @@ public class Ban
     public bool IsVoluntary { get; set; }
 
     /// <summary>
-    /// Whether the ban has been removed (lifted early)
+    /// When the ban was lifted early, null while it runs its course
     /// </summary>
-    public bool IsRemoved { get; set; }
+    public DateTimeOffset? LiftedUtc { get; set; }
+
+    /// <summary>
+    /// Moderator who lifted the ban early
+    /// </summary>
+    public Guid? LiftedByUserId { get; set; }
+
+    /// <summary>
+    /// Why the ban was lifted early
+    /// </summary>
+    public string? LiftReason { get; set; }
+
+    /// <summary>
+    /// Whether the ban was lifted before its end date. Lifting is not deleting:
+    /// the row used to be soft-deleted, which put it under the global !IsRemoved
+    /// filter, so this flag - read off that same column - was false on every row a
+    /// query could still return.
+    /// </summary>
+    public bool IsLifted => LiftedUtc.HasValue;
 
     /// <summary>
     /// How far into the future a permanent ban is written. Permanence is not a
@@ -87,7 +105,7 @@ public class Ban
     /// for the moderation history and is in force for nobody.
     /// </remarks>
     public bool IsInForceAt(DateTimeOffset moment) =>
-        !IsRemoved &&
+        !IsLifted &&
         new AccessRestriction(AccessRestrictionPolicy, StartedUtc, EndedUtc).IsInForceAt(moment);
 
     /// <summary>

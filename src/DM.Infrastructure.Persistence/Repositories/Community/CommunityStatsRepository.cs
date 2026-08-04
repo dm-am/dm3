@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Community.Features.Statistics;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,19 +13,23 @@ namespace DM.Infrastructure.Persistence.Repositories.Community;
 internal class CommunityStatsRepository : ICommunityStatsRepository
 {
     private readonly DmDbContext _dbContext;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     private static readonly TimeSpan OnlineThreshold = TimeSpan.FromMinutes(5);
 
     /// <inheritdoc />
-    public CommunityStatsRepository(DmDbContext dbContext)
+    public CommunityStatsRepository(
+        DmDbContext dbContext,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
     public async Task<LiveStats> GetLiveStats(CancellationToken ct = default)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = _dateTimeProvider.Now;
         var todayStart = now.Date;
         var todayStartUtc = new DateTimeOffset(todayStart, TimeSpan.Zero);
         var onlineThreshold = now - OnlineThreshold;

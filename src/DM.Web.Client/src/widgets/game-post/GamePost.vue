@@ -9,6 +9,7 @@ import {
   nextTick,
 } from "vue";
 import dayjs from "dayjs";
+import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import type { Post, PostReview } from "@/entities/game";
 import { gameApi, GameLink, PostReviewItem, RoomLink } from "@/entities/game";
@@ -283,6 +284,30 @@ const hasNavigation = computed(
 const gameId = computed(() => props.post?.room?.game?.publicId);
 const roomNumber = computed(() => props.post?.room?.roomNumber);
 
+const router = useRouter();
+
+// The post's own address, built once here and handed to everything that needs
+// it: the room page the post lives on, anchored at the post. A surface that is
+// not that room (the pulse, the home page, a profile) has a pathname of its
+// own, so an address taken from window.location there points at the page the
+// reader happened to be on. On the room page itself `post.room` is redundant
+// and not sent, and there the current pathname IS the room.
+const postRoute = computed(() =>
+  gameId.value && roomNumber.value
+    ? {
+        name: "game-room" as const,
+        params: { id: gameId.value, num: roomNumber.value },
+        hash: postAnchor.value,
+      }
+    : null,
+);
+
+const postPermalink = computed(() =>
+  postRoute.value
+    ? window.location.origin + router.resolve(postRoute.value).href
+    : window.location.origin + window.location.pathname + postAnchor.value,
+);
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Truncation — dynamic height matching post-meta, line-aligned.
 // Opt-in via `truncatable` only. Contexts that just need the breadcrumb
@@ -328,9 +353,7 @@ onUnmounted(() => {
 // Truncation is delegated to <TruncatedContent> in the template.
 
 function copyAnchorLink() {
-  navigator.clipboard.writeText(
-    window.location.origin + window.location.pathname + postAnchor.value,
-  );
+  navigator.clipboard.writeText(postPermalink.value);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -533,6 +556,7 @@ async function submitReview() {
                     params: {
                       id: post.room?.game?.publicId || post.room?.game?.id,
                     },
+                    query: { scrollTo: character?.id },
                   }"
                   >{{ characterName }}</router-link
                 >
@@ -688,15 +712,9 @@ async function submitReview() {
           </span>
 
           <Tooltip v-if="hasNavigation" text="Перейти к посту">
-            <router-link
-              class="post-link"
-              :to="{
-                name: 'game-room',
-                params: { id: gameId, num: roomNumber },
-                hash: postAnchor,
-              }"
-              >{{ symbols.returnArrow }}</router-link
-            >
+            <router-link class="post-link" :to="postRoute!">{{
+              symbols.returnArrow
+            }}</router-link>
           </Tooltip>
           <a
             v-else-if="number"
@@ -744,6 +762,7 @@ async function submitReview() {
             :key="review.id"
             :review="review"
             :number="i + 1"
+            :permalink="postPermalink"
             :highlight="
               !!highlightUsername &&
               review.author?.username === highlightUsername

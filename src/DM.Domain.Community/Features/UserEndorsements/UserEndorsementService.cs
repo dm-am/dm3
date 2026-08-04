@@ -26,7 +26,6 @@ internal class UserEndorsementService : IUserEndorsementService
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IProbationConfiguration _probationConfig;
 
     public UserEndorsementService(
         IValidator<CreateUserEndorsement> createValidator,
@@ -35,8 +34,7 @@ internal class UserEndorsementService : IUserEndorsementService
         IUserEndorsementRepository repository,
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider,
-        IProbationConfiguration probationConfig)
+        IDateTimeProvider dateTimeProvider)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -45,7 +43,6 @@ internal class UserEndorsementService : IUserEndorsementService
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
-        _probationConfig = probationConfig;
     }
 
     /// <inheritdoc />
@@ -61,7 +58,7 @@ internal class UserEndorsementService : IUserEndorsementService
         if (await IsNewbieAsync(authorId))
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "Чтобы рекомендовать других, нужно не меньше 100 постов в играх");
+                $"Чтобы рекомендовать других, нужно не меньше {ProbationPolicy.NewbiePostThreshold} постов в играх");
         }
 
         // Can't endorse yourself
@@ -203,9 +200,6 @@ internal class UserEndorsementService : IUserEndorsementService
         return now <= editDeadline;
     }
 
-    private async Task<bool> IsNewbieAsync(Guid userId)
-    {
-        var postCount = await _repository.GetUserPostCountAsync(userId);
-        return postCount < _probationConfig.NewbiePostThreshold;
-    }
+    private async Task<bool> IsNewbieAsync(Guid userId) =>
+        ProbationPolicy.IsNewbie(await _repository.GetUserPostCountAsync(userId));
 }

@@ -34,6 +34,7 @@ const emit = defineEmits<{
 </template>
 
 <style scoped lang="sass">
+@import "@/assets/styles/Inputs"
 @import "@/assets/styles/Filters"
 
 .dropdown-nav-header
@@ -45,16 +46,8 @@ const emit = defineEmits<{
   border-bottom: 1px solid $border
 
 .nav-back-btn
-  display: flex
-  align-items: center
-  justify-content: center
-  width: 20px
-  height: 20px
-  padding: 0
-  cursor: pointer
-  border: none
-  background: none
   color: $text-muted
+  +icon-button(20px)
 
   &:hover
     color: $text

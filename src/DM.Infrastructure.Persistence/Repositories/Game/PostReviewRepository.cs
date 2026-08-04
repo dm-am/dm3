@@ -218,9 +218,15 @@ internal class PostReviewRepository : IPostReviewRepository
                            !r.IsRemoved);
 
     /// <inheritdoc />
-    public Task<int> GetUserPostCountAsync(Guid userId) => _dbContext.Posts
+    /// <remarks>
+    /// The denormalised counter, the same one the newbie badge is computed from;
+    /// a COUNT over posts is a second number and drifts from it on every removal.
+    /// </remarks>
+    public Task<int> GetUserPostCountAsync(Guid userId) => _dbContext.Users
         .TagWith("DM.PostReview.UserPostCount")
-        .CountAsync(p => p.AuthorId == userId);
+        .Where(u => u.UserId == userId)
+        .Select(u => u.QuantityRating)
+        .FirstOrDefaultAsync();
 
     // ═══ PRIVATE ═══
 

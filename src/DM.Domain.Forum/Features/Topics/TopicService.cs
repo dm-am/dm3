@@ -354,7 +354,15 @@ internal class TopicService : ITopicService
         }
         else
         {
-            // Non-admin users cannot change these fields
+            // Asking for one of these is refused; round-tripping the value the topic
+            // already has is not. Both used to be dropped in silence, so a user
+            // closing somebody else's topic got 200 and an open topic back.
+            if ((updateTopic.IsClosed.HasValue && updateTopic.IsClosed != oldTopic.IsClosed) ||
+                (updateTopic.IsAttached.HasValue && updateTopic.IsAttached != oldTopic.IsAttached))
+            {
+                _intentionManager.ThrowIfForbidden(ForumIntention.AdministrateTopics, oldTopic.Board);
+            }
+
             updateTopic.IsClosed = null;
             updateTopic.IsAttached = null;
         }

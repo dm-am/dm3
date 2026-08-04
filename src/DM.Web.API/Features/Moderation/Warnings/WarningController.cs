@@ -17,8 +17,9 @@ namespace DM.Web.API.Features.Moderation.Warnings;
 ///
 /// ## Warning Points
 /// - Each warning carries 0-6 points (0 = verbal warning, no points)
-/// - 6+ points in 30 days triggers an automatic ban
 /// - Points are recalculated when warnings are removed
+/// - A ban is always issued by a senior moderator: points accumulate and are read,
+///   they are not compared against any threshold
 /// </remarks>
 [ApiController]
 [Route("v1/moderation/warnings")]
@@ -83,7 +84,8 @@ public class WarningController : ControllerBase
     /// - 2 points: Moderate violation
     /// - 3-6 points: Serious violation
     ///
-    /// 6+ points within 30 days triggers automatic ban.
+    /// Points are a record for the moderator who decides on a ban; nothing bans a
+    /// user automatically.
     /// </remarks>
     /// <param name="request">Warning details</param>
     /// <response code="201">Warning created</response>

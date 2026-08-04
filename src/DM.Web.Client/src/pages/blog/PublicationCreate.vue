@@ -37,13 +37,18 @@ const title = ref("");
 const rubricId = ref<string>(NO_RUBRIC);
 const content = ref("");
 const saving = ref(false);
+const formRef = ref<InstanceType<typeof PublicationForm> | null>(null);
 
 const valid = computed(
   () => title.value.trim().length > 0 && content.value.trim().length > 0,
 );
 
 async function publish() {
-  if (!valid.value || saving.value) return;
+  // Validity gates the form, not this handler: the page hands `valid` down and
+  // the form keeps its action disabled while it is false, so a submit that
+  // arrives here is one the author was allowed to make. The second check that
+  // used to stand here answered the form's own event with silence.
+  if (saving.value) return;
   saving.value = true;
   const { data, error } = await blogApi.createPublication(blogId.value, {
     title: title.value.trim(),
@@ -57,6 +62,11 @@ async function publish() {
     return;
   }
   toast.success("Публикация создана");
+  // The text is published, so the draft of it is no longer a draft. It lived
+  // seven days, and the next visit to this page offered to restore an already
+  // published record — accepting posted it twice. Every other composer clears
+  // its draft here; this one navigated away instead.
+  formRef.value?.clearDraft();
   // Refresh the blog so counters and the sidebar stay in sync.
   if (blog.value) blogStore.loadBlog(blogId.value);
   const createdRubric = data?.resource?.rubric?.id;
@@ -82,6 +92,7 @@ function cancel() {
 
     <PublicationForm
       v-else
+      ref="formRef"
       v-model:title="title"
       v-model:rubric-id="rubricId"
       v-model:content="content"

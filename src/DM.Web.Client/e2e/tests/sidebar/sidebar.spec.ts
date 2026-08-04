@@ -267,14 +267,15 @@ test.describe("Sidebars", () => {
       await expect(section).toBeVisible();
     });
 
-    test("should show last activity time for games", async ({ page }) => {
-      const section = page.locator(".active-games");
-      const games = section.locator(".game-link");
-
-      if ((await games.count()) > 0) {
-        // The first game should have an activity indicator, but the
-        // activity time may or may not be rendered depending on game data
-      }
+    test("pins the unread counters open on every active game row", async ({
+      page,
+    }) => {
+      // The block passes always-show-counters, so the pair is not a hover
+      // affordance here. There is no activity time in this row and never was:
+      // the old title described one and the body asserted nothing at all.
+      const rows = page.locator("#sidebar-list-ActiveGames li.link");
+      await expect(rows.first()).toBeVisible();
+      await expect(rows.first().locator(".counters")).toBeVisible();
     });
   });
 
@@ -352,20 +353,28 @@ test.describe("Sidebars", () => {
     }) => {
       await authenticatedPage.goto("/");
 
-      const poll = authenticatedPage.locator(".poll").first();
-      if (await poll.isVisible().catch(() => false)) {
-        // The "голосовать" button should be visible if user hasn't voted
-      }
+      const poll = authenticatedPage
+        .locator("#sidebar-list-ActivePolls .poll")
+        .first();
+      await expect(poll).toBeVisible();
+      // Either "Проголосовать" on every option or "Отменить голос" on the one
+      // already chosen: an active poll offers a signed-in reader one of the
+      // two, and offers a guest neither.
+      await expect(poll.locator(".poll-option-vote").first()).toBeVisible();
     });
 
-    test("should show results after voting", async ({ authenticatedPage }) => {
+    test("shows the tally next to every option", async ({
+      authenticatedPage,
+    }) => {
       await authenticatedPage.goto("/");
 
-      const poll = authenticatedPage.locator(".poll").first();
-      if (await poll.isVisible().catch(() => false)) {
-        // If user has voted, results should be shown - may or may not be
-        // visible depending on vote state
-      }
+      const poll = authenticatedPage
+        .locator("#sidebar-list-ActivePolls .poll")
+        .first();
+      await expect(poll).toBeVisible();
+      await expect(poll.locator(".poll-option-count").first()).toHaveText(
+        /\(\d+\)/,
+      );
     });
   });
 
@@ -505,11 +514,12 @@ test.describe("Sidebars", () => {
     });
 
     test("should display master name", async ({ page }) => {
-      const gameLink = page.locator(".game-link").first();
-
-      if (await gameLink.isVisible().catch(() => false)) {
-        // Master name may be shown
-      }
+      // The row is a title; the master is in the tooltip that wraps it, which
+      // is where the old guard stopped without asserting anything.
+      const gameLink = page.locator("#sidebar-list-ActiveGames a").first();
+      await expect(gameLink).toBeVisible();
+      await gameLink.hover();
+      await expect(page.locator('[role="tooltip"]')).toContainText("Мастер:");
     });
 
     test("should show unread indicator when applicable", async ({
@@ -517,11 +527,13 @@ test.describe("Sidebars", () => {
     }) => {
       await authenticatedPage.goto("/");
 
-      const gameLink = authenticatedPage.locator(".game-link").first();
-      if (await gameLink.isVisible().catch(() => false)) {
-        // Unread indicator shown for subscribed games with new content -
-        // may or may not be visible
-      }
+      // "Мои игры" pins the counters open too, so the unread pair is on the
+      // row whatever its numbers are.
+      const rows = authenticatedPage.locator(
+        "#sidebar-list-OwnedGames li.link",
+      );
+      await expect(rows.first()).toBeVisible();
+      await expect(rows.first().locator(".counters")).toBeVisible();
     });
   });
 
@@ -553,10 +565,12 @@ test.describe("Sidebars", () => {
       await page.setViewportSize({ width: 375, height: 667 });
       await page.goto("/");
 
-      // Sidebars should be hidden or collapsible on mobile - either hidden
-      // or transformed into a mobile menu.
-      // On mobile, sidebars are typically hidden or in a hamburger menu
-      // This test verifies the responsive behavior exists
+      // Below the shell breakpoint the left column is gone and its content is
+      // reachable through the burger drawer; the right column reflows under
+      // the page instead of disappearing.
+      await expect(page.locator(".sidebar-left")).toBeHidden();
+      await expect(page.locator(".burger-btn")).toBeVisible();
+      await expect(page.locator(".sidebar-right")).toBeVisible();
     });
 
     test("should show sidebars on desktop viewport", async ({ page }) => {

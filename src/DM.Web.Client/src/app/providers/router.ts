@@ -1,4 +1,9 @@
-import { createRouter, createWebHistory } from "vue-router";
+import {
+  createRouter,
+  createWebHistory,
+  type RouteLocationNormalized,
+  type RouteLocationRaw,
+} from "vue-router";
 import { nextTick } from "vue";
 
 import { LeftSidebar, RightSidebar } from "@/widgets/sidebar";
@@ -8,6 +13,7 @@ import {
   formatDocumentTitle,
 } from "@/shared/lib/composables";
 import { scrollContentToTop } from "@/shared/lib/scroll";
+import { loginLocation } from "@/shared/lib/auth";
 import { useAuthStore } from "@/shared/stores";
 
 // Tab-title contract: every named route declares exactly one of `title`,
@@ -68,7 +74,11 @@ const router = createRouter({
         {
           path: "",
           name: "home",
-          meta: { title: "Главная страница" },
+          // One string with the static <title> of index.html: `afterEach`
+          // writes this title over the head's the moment the bundle boots, so
+          // two different names here mean the tab renames itself on load and a
+          // bookmark of the root says nothing about the site.
+          meta: { title: "Форумные ролевые игры" },
           component: () => import("@/pages/home/HomePage.vue"),
         },
         {
@@ -760,15 +770,30 @@ const router = createRouter({
   ],
 });
 
-router.beforeEach((to) => {
-  // Guests are sent home with the login modal opened instead of a silent
-  // redirect. Read the store, not the persisted copy: the two answered
-  // differently between a 401 and the next reload, so the guard bounced a
-  // viewer the rest of the interface was still drawing as signed in.
+/**
+ * Guests are sent home with the login modal opened instead of a silent
+ * redirect. Read the store, not the persisted copy: the two answered
+ * differently between a 401 and the next reload, so the guard bounced a viewer
+ * the rest of the interface was still drawing as signed in.
+ *
+ * The address travels with them. This navigation is REPLACED, so the page the
+ * viewer asked for never enters the history: dropping it left them on the home
+ * page after signing in, with "Назад" leading to where they came from and the
+ * link they had followed nowhere at all.
+ *
+ * Exported for the test: calling it is the whole decision, and a real push
+ * would pull every lazy route component into the suite.
+ */
+export function guardAuthenticated(
+  to: RouteLocationNormalized,
+): RouteLocationRaw | undefined {
   if (to.meta.requiresAuth && !useAuthStore().isAuthenticated) {
-    return { name: "home", query: { action: "login" } };
+    return loginLocation(to.fullPath);
   }
-});
+  return undefined;
+}
+
+router.beforeEach(guardAuthenticated);
 
 // Wipe the expandable registry when navigating to a DIFFERENT page.
 // Query-only changes (sort, filter, pagination) keep the same components

@@ -30,6 +30,9 @@ export type { ExpandableHandle } from "./useExpandableRegistry";
 // Data fetching patterns
 export { useFetchData } from "./useFetchData";
 
+// Per-viewer data: the one place that knows what "the viewer changed" means
+export { useViewerChange } from "./useViewerChange";
+
 // Authentication and validation
 export { useHibpCheck } from "./useHibpCheck";
 export type { HibpCheckOptions } from "./useHibpCheck";

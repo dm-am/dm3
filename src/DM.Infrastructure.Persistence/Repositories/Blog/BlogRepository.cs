@@ -13,6 +13,7 @@ using DM.Domain.Core.Identity;
 using BlogDto = DM.Domain.Blog.Features.Blogs.Blog;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using DM.Infrastructure.Persistence.Shared.Users;
 using Microsoft.EntityFrameworkCore;
@@ -633,16 +634,15 @@ internal class BlogRepository : IBlogRepository
             DraftVisibility = entity.DraftVisibility,
             CommentsEnabled = entity.CommentsEnabled,
             CreatedUtc = entity.CreatedUtc,
-            IsRemoved = false,
-            // Temporary unique placeholder for PublicId (will be updated after SerialNumber is generated)
-            PublicId = $"t{entity.BlogId:N}"[..10]
+            IsRemoved = false
         };
 
-        _dbContext.Blogs.Add(blog);
-        await _dbContext.SaveChangesAsync(ct);
-
-        // Generate PublicId from SerialNumber (which was auto-generated on insert)
+        // The readable address is taken before the insert instead of being stamped by
+        // a second SaveChanges — see SerialNumberAllocator for what that pair cost.
+        blog.SerialNumber = await SerialNumberAllocator.NextAsync<DbBlog>(_dbContext, ct);
         blog.PublicId = _publicIdService.Encode(blog.SerialNumber);
+
+        _dbContext.Blogs.Add(blog);
         await _dbContext.SaveChangesAsync(ct);
 
         return await Get(entity.BlogId, ct) ?? throw new InvalidOperationException("Blog not found after creation");
@@ -694,7 +694,7 @@ internal class BlogRepository : IBlogRepository
         {
             blog.IsRemoved = true;
             blog.DeletedByUserId = deletedByUserId;
-            blog.DeletedUtc = DateTimeOffset.UtcNow;
+            blog.DeletedUtc = _dateTimeProvider.Now;
             await _dbContext.SaveChangesAsync(ct);
         }
     }
@@ -787,7 +787,7 @@ internal class BlogRepository : IBlogRepository
         {
             rubric.IsRemoved = true;
             rubric.DeletedByUserId = deletedByUserId;
-            rubric.DeletedUtc = DateTimeOffset.UtcNow;
+            rubric.DeletedUtc = _dateTimeProvider.Now;
             await _dbContext.SaveChangesAsync(ct);
         }
     }
@@ -872,7 +872,7 @@ internal class BlogRepository : IBlogRepository
         {
             publication.IsRemoved = true;
             publication.DeletedByUserId = deletedByUserId;
-            publication.DeletedUtc = DateTimeOffset.UtcNow;
+            publication.DeletedUtc = _dateTimeProvider.Now;
 
             // Update blog publication count
             publication.Blog.PublicationCount--;

@@ -153,7 +153,7 @@ defineExpose({ expandItem });
       <div
         v-else
         :id="`expandable-toggle-${item.id}`"
-        class="expandable-row"
+        class="expandable-row expandable-row--title"
         :class="{ expanded: isExpanded(item.id) }"
         role="button"
         tabindex="0"
@@ -244,6 +244,18 @@ defineExpose({ expandItem });
   &
     user-select: text
 
+// Inline flow, not flex: the marker span carries no text (the triangle is
+// pseudo content, see disclosureMarker.spec.ts), but a flex row still
+// serializes it as a line of its own, so the row copied as a newline and then
+// its title. As inline-blocks the marker and the title copy as one line, and
+// the 12px marker column plus the former flex gap are the marker's own width
+// and its right margin.
+.expandable-row--title
+  display: block
+
+  > .expand-icon
+    margin-right: $small
+
 .expandable-row--grid
   display: table
   width: 100%
@@ -313,7 +325,7 @@ defineExpose({ expandItem });
       &:last-child
         margin-bottom: 0
 
-@media (max-width: $mobile-breakpoint)
+@media (max-width: $bp-mobile)
   .expandable-row
     +expandable-row-mobile
 

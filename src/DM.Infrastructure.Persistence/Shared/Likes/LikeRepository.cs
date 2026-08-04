@@ -1,7 +1,9 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using DM.Domain.Core.Exceptions;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace DM.Infrastructure.Persistence.Shared.Likes;
 
@@ -18,10 +20,21 @@ internal class LikeRepository : ILikeRepository
     }
 
     /// <inheritdoc />
-    public Task Add(Entities.Shared.Like like)
+    public async Task Add(Entities.Shared.Like like)
     {
         _dbContext.Likes.Add(like);
-        return _dbContext.SaveChangesAsync();
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        {
+            // The caller pre-checks the loaded navigation; this is the race where two
+            // clicks both pass that check. Translated here so the domain does not have
+            // to know the storage engine's error codes.
+            _dbContext.ChangeTracker.Clear();
+            throw new DuplicateEntityException("Duplicate like", ex);
+        }
     }
 
     /// <inheritdoc />

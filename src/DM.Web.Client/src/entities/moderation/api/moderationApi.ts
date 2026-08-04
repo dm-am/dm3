@@ -310,7 +310,6 @@ export type Ban = {
 };
 
 export enum BanType {
-  Auto = "Auto",
   Temporary = "Temporary",
   Permanent = "Permanent",
   Voluntary = "Voluntary",

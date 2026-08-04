@@ -147,14 +147,13 @@ test.describe("Users Search", () => {
     test("should show empty message when no users match search", async ({
       page,
     }) => {
-      // Use a search that likely won't match anything
-      await page.goto("/community?q=xyznonexistentuser123456789");
+      // The filter binds "search"; "q" is not read at all, so the old URL asked
+      // for the unfiltered list and no empty state could ever appear.
+      await page.goto("/community?search=xyznonexistentuser123456789");
 
-      // Wait for results
-      await page.waitForTimeout(500);
-
-      // Should show empty message or no results - may or may not be visible
-      // depending on implementation
+      await expect(page.locator(".table-empty")).toHaveText(
+        "Пользователей по заданным фильтрам не найдено",
+      );
     });
   });
 });

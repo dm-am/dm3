@@ -4,6 +4,7 @@ import {
   joinTitleSegments,
   useDocumentTitle,
 } from "@/shared/lib/composables/useDocumentTitle";
+import { getErrorConfig } from "@/shared/ui/ErrorPage";
 import { useProfileSubpageUser } from "./useProfileSubpageUser";
 
 /**
@@ -38,7 +39,14 @@ export function useProfileSubpage(label: string): {
     params: { username: username.value },
   }));
 
-  useDocumentTitle(() => joinTitleSegments(canonicalUsername.value, label));
+  // A missing owner means the page draws ErrorPage instead of itself, and the
+  // URL param is then the name of nobody: the error owns the title, exactly as
+  // it does on the profile page and in the forum shell.
+  useDocumentTitle(() =>
+    notFound.value
+      ? getErrorConfig(404).title
+      : joinTitleSegments(canonicalUsername.value, label),
+  );
 
   return { username, canonicalUsername, notFound, profileLink };
 }

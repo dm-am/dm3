@@ -121,20 +121,21 @@ onMounted(loadRoleGroups);
 .admin-table
   +table
 
-// CSS table, not grid: grid items copy with newlines between cells (the
-// one-line header copied as "Роль\nФункции\nСостав"), table cells copy
-// tab-separated like the site's real data tables. Fixed layout with the
-// same explicit column widths keeps the cells aligned with the grid rows
-// below (180px / auto / 220px, no gap in either layout).
-.admin-header
+// CSS table, not grid, and the header and the rows share the one geometry:
+// grid items copy with newlines between cells (the header copied as
+// "Роль\nФункции\nСостав" and a row as four lines), table cells copy
+// tab-separated like the site's real data tables. Fixed layout with explicit
+// column widths (180px / auto / 220px, no gap) keeps header and rows aligned.
+.admin-header,
+.admin-row
   display: table
   width: 100%
   box-sizing: border-box
   table-layout: fixed
-  +table-header
 
   > span
     display: table-cell
+    vertical-align: top
 
   > .role-col
     width: 180px
@@ -142,23 +143,23 @@ onMounted(loadRoleGroups);
   > .users-col
     width: 220px
 
-.admin-row
-  display: grid
-  grid-template-columns: 180px 1fr 220px
-  align-items: start
-  +table-row
+.admin-header
+  +table-header
 
-.role-col
-  display: flex
-  flex-direction: column
-  gap: 2px
+.admin-row
+  +table-row
 
 // Color and hover come from the global `a` rule (Reset.sass); only the
 // weight is local.
 .role-title
   font-weight: 600
 
+// Two visual lines inside ONE cell, so the break belongs to the nickname and
+// not to a layout on the cell: a cell that laid its children out would be the
+// flex box this table just left. 2px is the former gap.
 .role-nickname
+  display: block
+  margin-top: 2px
   color: $text-muted
   font-size: $secondary-font-size
 
@@ -167,13 +168,14 @@ onMounted(loadRoleGroups);
   font-size: $secondary-font-size
   line-height: 1.4
 
-.users-col
-  display: flex
-  flex-direction: column
-  gap: 2px
-
+// One name per line inside the cell, the same way: the line break is on the
+// item, the cell only holds the column width.
 .user-item
+  display: block
   line-height: 1.4
+
+  & + &
+    margin-top: 2px
 
 .no-users
   color: $text-muted
@@ -209,14 +211,20 @@ onMounted(loadRoleGroups);
   a
     +muted-link
 
-@media (max-width: $mobile-breakpoint)
+@media (max-width: $bp-mobile)
   .admin-header
     display: none
 
+  // One column: the cells stack, so they drop the table widths with the table.
   .admin-row
-    display: flex
-    flex-direction: column
-    gap: $tiny
+    display: block
+
+    > span
+      display: block
+      width: auto
+
+    > span + span
+      margin-top: $tiny
 
   .role-col
     flex-direction: row

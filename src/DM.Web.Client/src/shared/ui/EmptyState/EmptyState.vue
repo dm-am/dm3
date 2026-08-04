@@ -9,10 +9,11 @@
 
 <script setup lang="ts">
 import { SvgIcon } from "@/shared/ui/Icon";
+import type { IconName } from "@/shared/lib/utils/icons";
 
 defineProps<{
   /** Icon name to display (optional) */
-  icon?: string;
+  icon?: IconName;
   /** Main title text */
   title: string;
   /** Secondary hint text (optional) */

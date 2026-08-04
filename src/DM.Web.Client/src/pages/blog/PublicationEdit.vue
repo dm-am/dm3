@@ -26,6 +26,7 @@ import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { notifyFailure } from "@/shared/lib/errors";
+import { UnsavedChangesGuard } from "@/shared/ui/UnsavedChangesGuard";
 
 const route = useRoute();
 const router = useRouter();
@@ -78,6 +79,20 @@ const valid = computed(
 );
 
 const saving = ref(false);
+// Released on a successful save or delete: both navigate away themselves.
+const saved = ref(false);
+
+// The edit form carries no draft-key on purpose (a draft of an edit would
+// resurrect itself over the published text later), so leaving the page is the
+// only thing standing between the author and losing the edit.
+const dirty = computed(
+  () =>
+    !saved.value &&
+    !!publication.value &&
+    (title.value !== publication.value.title ||
+      rubricId.value !== (publication.value.rubric?.id ?? NO_RUBRIC) ||
+      content.value !== initialContent.value),
+);
 
 async function save() {
   if (!publication.value || !valid.value || saving.value) return;
@@ -101,6 +116,7 @@ async function save() {
     notifyFailure(error, "Не удалось сохранить публикацию");
     return;
   }
+  saved.value = true;
   toast.success("Публикация сохранена");
   router.push({ name: "blog-feed", params: { id: blogId.value } });
 }
@@ -116,6 +132,7 @@ async function confirmDelete() {
     notifyFailure(error, "Не удалось удалить публикацию");
     return;
   }
+  saved.value = true;
   toast.success("Публикация удалена");
   blogStore.loadBlog(blogId.value);
   router.push({ name: "blog-feed", params: { id: blogId.value } });
@@ -167,6 +184,8 @@ function cancel() {
           Удалить публикацию
         </button>
       </div>
+
+      <UnsavedChangesGuard :dirty="dirty" />
     </template>
 
     <!-- 4. empty / not found -->

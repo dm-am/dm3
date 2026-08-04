@@ -54,6 +54,18 @@ const STRIPS: { file: string; strip: string; line: string }[] = [
     strip: "mod-header",
     line: "ПАНЕЛЬ МОДЕРАЦИИ {modSummary}",
   },
+  {
+    // The editor stands on every form of the site, so this one strip was the
+    // defect repeated everywhere: a flex row of counters copied as three lines.
+    file: "shared/ui/BBCodeEditor/BBCodeEditor.vue",
+    strip: "status-bar",
+    line: "{wordCountLabel} | {charCountLabel} | Есть черновик | {draftStatusText}",
+  },
+  {
+    file: "pages/support/SupportPage.vue",
+    strip: "discord-fallback",
+    line: "Если удобнее, напишите нам в Discord",
+  },
 ];
 
 /** @vue/compiler-core NodeTypes — the members this walk reads. */
@@ -61,6 +73,10 @@ const ELEMENT = 1;
 const TEXT = 2;
 const INTERPOLATION = 5;
 const ATTRIBUTE = 6;
+const DIRECTIVE = 7;
+
+/** The directives that make an element the alternative to a sibling. */
+const ALTERNATIVE = new Set(["else", "else-if"]);
 
 /** The slice of the template AST this walk reads; the rest is ignored. */
 interface Node {
@@ -85,6 +101,12 @@ const STRING_LITERAL = /^(["'])(.*)\1$/;
 const textOf = (node: Node): string =>
   typeof node.content === "string" ? node.content : "";
 
+/** An element that never renders beside the branch it is an alternative to. */
+const isAlternative = (node: Node): boolean =>
+  (node.props ?? []).some(
+    (prop) => prop.type === DIRECTIVE && ALTERNATIVE.has(prop.name),
+  );
+
 /** A literal interpolation is its own text; any other one stands for itself. */
 const expressionOf = (node: Node): string => {
   const raw = (
@@ -98,14 +120,21 @@ const expressionOf = (node: Node): string => {
  * The children the template compiler keeps (`whitespace: "condense"`): a
  * whitespace-only node is dropped when it spans a newline or sits at either
  * end of the element, and is a single space otherwise.
+ *
+ * `leadingBranchOnly` also drops a v-else / v-else-if child. It never renders
+ * beside the branch it answers, so no selection holds both: the walk that
+ * reads what a copy yields passes the flag, and the walk that finds the parts
+ * of a strip does not, because the same declarations paint both branches.
  */
-const children = (node: Node): Node[] => {
-  const kept = (node.children ?? []).filter(
-    (child) =>
-      child.type === ELEMENT ||
-      child.type === TEXT ||
-      child.type === INTERPOLATION,
-  );
+const children = (node: Node, leadingBranchOnly = false): Node[] => {
+  const kept = (node.children ?? [])
+    .filter(
+      (child) =>
+        child.type === ELEMENT ||
+        child.type === TEXT ||
+        child.type === INTERPOLATION,
+    )
+    .filter((child) => !(leadingBranchOnly && isAlternative(child)));
   return kept.filter((child, index) => {
     if (child.type !== TEXT || !WHITESPACE_ONLY.test(textOf(child)))
       return true;
@@ -123,7 +152,7 @@ const copyText = (node: Node): string => {
   const walk = (current: Node): void => {
     if (current.type === TEXT) parts.push(textOf(current));
     else if (current.type === INTERPOLATION) parts.push(expressionOf(current));
-    else children(current).forEach(walk);
+    else children(current, true).forEach(walk);
   };
   walk(node);
   return parts
@@ -240,7 +269,15 @@ describe("one-line compositions", () => {
     it(`.${strip} keeps its parts inline and in the flow`, () => {
       const { ast, styles } = sfcOf(file);
       const root = elementOf(ast, strip);
-      const parts = new Set(descendants(root).flatMap(classesOf));
+      const inside = descendants(root);
+      const parts = new Set(inside.flatMap(classesOf));
+      // A part that puts no characters on the screen — an icon button, a
+      // spacer — has nothing in the clipboard to break, so what it declares
+      // is none of this rule's business either. Read from the markup rather
+      // than listed, so it cannot outlive the silence it is granted for.
+      const written = new Set(
+        inside.filter((node) => copyText(node) !== "").flatMap(classesOf),
+      );
       const broken: string[] = [];
 
       for (const style of styles) {
@@ -251,6 +288,7 @@ describe("one-line compositions", () => {
           const painted = subjects(decl.selector);
           const isPart = painted.some((cls) => parts.has(cls));
           if (!isPart && !painted.includes(strip)) continue;
+          if (isPart && !painted.some((cls) => written.has(cls))) continue;
           if (
             (decl.prop === "display" && SPLITS_ITEMS.test(decl.value)) ||
             (isPart &&

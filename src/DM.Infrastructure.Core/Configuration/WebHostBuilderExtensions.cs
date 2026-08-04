@@ -28,9 +28,15 @@ public static class WebHostBuilderExtensions
                 // from every compose file: it is the operator-supplied drop-in that the
                 // secrets convention names next to the DM_* variables. Nothing mounts it
                 // because it is not meant to be baked into an image.
-                .AddJsonFile("secrets/appsettings.json", optional: true, reloadOnChange: true)
+                // reloadOnChange is false on every source, including these two. Nothing
+                // in the tree reads IOptionsMonitor or IOptionsSnapshot, so every
+                // consumer holds the snapshot taken at first resolution: the flag bought
+                // a file watcher and the promise that editing the secrets file applies,
+                // which it never did, and ValidateOnStart would not see the new value
+                // either. Hot reload is a decision about consumers, not a flag here.
+                .AddJsonFile("secrets/appsettings.json", optional: true, reloadOnChange: false)
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
-                .AddJsonFile($"secrets/appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true)
+                .AddJsonFile($"secrets/appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: false)
                 .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: false);
             foreach (var defaultCfg in defaultNonJsonCfgs)
             {

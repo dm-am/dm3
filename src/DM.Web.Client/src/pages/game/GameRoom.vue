@@ -85,6 +85,13 @@ watch(
 
 const gameId = computed(() => route.params.id as string);
 
+/** Position of a post in the whole room, not on the page it is shown on. */
+function postNumber(index: number): number {
+  const paging = postsPaging.value;
+  if (!paging) return index + 1;
+  return (paging.current - 1) * paging.size + index + 1;
+}
+
 // Paging scrolls the posts list back into view (not the page top)
 const postsListRef = ref<HTMLElement | null>(null);
 function pagingAnchor(): HTMLElement | null {
@@ -354,10 +361,11 @@ async function dismissPendency(pendencyId: string) {
     <!-- Posts list -->
     <div v-else ref="postsListRef" class="posts-list">
       <game-post
-        v-for="post in posts"
+        v-for="(post, index) in posts"
         :key="post.id"
         :post="post"
         :data-id="post.id"
+        :number="postNumber(index)"
         editable
         @deleted="handlePostDeleted"
       />

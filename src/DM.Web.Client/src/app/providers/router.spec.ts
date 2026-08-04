@@ -2,12 +2,14 @@
  * @vitest-environment jsdom
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { readdirSync, readFileSync, statSync } from "fs";
 import { dirname, join, relative, resolve } from "path";
 import { fileURLToPath } from "url";
-import type { RouteMeta } from "vue-router";
-import router from "./router";
+import { createPinia, setActivePinia } from "pinia";
+import type { RouteLocationNormalized, RouteMeta } from "vue-router";
+import router, { guardAuthenticated } from "./router";
+import { REDIRECT_QUERY_KEY } from "@/shared/lib/auth";
 import {
   TITLE_SEPARATOR,
   formatDocumentTitle,
@@ -21,7 +23,7 @@ import {
  * route table can be restructured without silently dropping either.
  */
 const SHELLED: Array<[string, Record<string, unknown>]> = [
-  ["/", { title: "Главная страница" }],
+  ["/", { title: "Форумные ролевые игры" }],
   ["/about", {}],
   ["/forum", {}],
   ["/games", {}],
@@ -77,6 +79,54 @@ describe("route table", () => {
     expect(new Set(named).size, "route names must be unique").toBe(
       named.length,
     );
+  });
+});
+
+/**
+ * The guard between a guest and a page that needs a session.
+ *
+ * It used to answer with the bare home page: the address the viewer had asked
+ * for was dropped, and because the guard REPLACES the navigation that address
+ * never reached the history either. Someone who followed a link to a
+ * conversation, signed in, and looked around found themselves on the front page
+ * with the link gone.
+ */
+describe("the guest guard", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+  });
+
+  // resolve() answers a resolved location, which carries an href the guard's
+  // parameter type does not declare. The guard reads meta and fullPath, both of
+  // which a resolved location has; resolving a real route is what makes these
+  // assertions about the route table rather than about a hand-built object.
+  const arriving = (path: string) =>
+    router.resolve(path) as unknown as RouteLocationNormalized;
+
+  it("carries the address the guest was refused", () => {
+    const decision = guardAuthenticated(
+      arriving("/messenger/c/42?number=3"),
+    ) as {
+      name: string;
+      query: Record<string, string>;
+    };
+
+    expect(decision.name).toBe("home");
+    expect(decision.query.action).toBe("login");
+    // fullPath and not the route name: the query is part of the address.
+    expect(decision.query[REDIRECT_QUERY_KEY]).toBe("/messenger/c/42?number=3");
+  });
+
+  it("lets a signed-in viewer through", () => {
+    localStorage.setItem("user", JSON.stringify({ username: "SolohinLex" }));
+    setActivePinia(createPinia());
+
+    expect(guardAuthenticated(arriving("/messenger"))).toBeUndefined();
+  });
+
+  it("lets anyone through a page that asks for nothing", () => {
+    expect(guardAuthenticated(arriving("/forum"))).toBeUndefined();
   });
 });
 
@@ -368,5 +418,103 @@ describe("the mockup catalogs", () => {
 
     expect(route.name).toBe("dev-chat-events-variants");
     expect(route.meta.title).toBe("Мокапы: эвенты чата");
+  });
+});
+
+/**
+ * The static head is what a crawler and the tab before the first paint read,
+ * and `afterEach` writes the root route's title over it the moment the bundle
+ * boots. Two names for one page is what that produced: the document called the
+ * site one thing and the tab renamed it to another a second later.
+ * documentHead.spec.ts owns the head's own composition; this is the seam
+ * between the head and the route table.
+ */
+describe("the root route and the static head", () => {
+  const indexHtml = readFileSync(join(CLIENT_SRC, "..", "index.html"), "utf8");
+  const ogTitle = /<meta property="og:title" content="([^"]*)"/.exec(
+    indexHtml,
+  )?.[1];
+  const staticTitle = /<title>([\s\S]*?)<\/title>/.exec(indexHtml)?.[1].trim();
+
+  it("name the site with one string", () => {
+    const rootTitle = router.resolve("/").meta.title;
+
+    expect(ogTitle, "index.html declares no og:title").toBeTruthy();
+    expect(rootTitle).toBe(ogTitle);
+    expect(staticTitle).toBe(formatDocumentTitle(rootTitle));
+  });
+});
+
+/**
+ * A page that titles itself out of a route param keeps that title when the
+ * fetch fails, so /users/nonexistent drew the 404 page under a tab named after
+ * the user who does not exist. The forum shell had the answer already: while an
+ * error page is on screen the title comes from the error, because the param is
+ * then the name of nobody.
+ */
+describe("titles while an error page is showing", () => {
+  const owners = vueFilesIn(join(CLIENT_SRC, "pages")).filter((file) => {
+    const source = sourceOf(file);
+    return (
+      source.includes("<ErrorPage") && source.includes("useDocumentTitle(")
+    );
+  });
+
+  it("finds the pages that both title themselves and draw an error", () => {
+    expect(owners.length).toBeGreaterThan(1);
+  });
+
+  it("takes the title from the error and not from the route param", () => {
+    const offenders = owners
+      .filter((file) => !sourceOf(file).includes("getErrorConfig("))
+      .map(where);
+
+    expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * The page inventory of docs/PROGRESS.md is a walkthrough checklist: the owner
+ * opens the addresses in it one at a time. /auth/transfer stood in that list and
+ * matched no route, so a pass produced a bug report about a page nobody had
+ * built, and every link in the section pointed at port 5174 — the preview port
+ * only the e2e run starts — so none of them opened at all.
+ *
+ * Only that direction is asserted. A page built and never listed is what the
+ * walkthrough itself finds, while teaching this test which routes count as pages
+ * would restate the route table inside it.
+ */
+const PROGRESS = resolve(CLIENT_SRC, "..", "..", "..", "docs", "PROGRESS.md");
+
+/** An address as the inventory writes one: after a line start, a space or a bracket. */
+const ADDRESS = /(?<=^|[\s[(])\/[A-Za-z0-9_.:/-]*/gm;
+
+/** The server the links of the section point at. */
+const SERVER = /http:\/\/localhost:(\d+)/g;
+
+describe("the page inventory", () => {
+  const inventory =
+    readFileSync(PROGRESS, "utf8").split("## Инвентарь страниц")[1] ?? "";
+
+  it("is the section this test means", () => {
+    // A renamed heading would leave every assertion below reading an empty
+    // string and passing without having looked at anything.
+    expect(inventory.length).toBeGreaterThan(500);
+  });
+
+  it("names only addresses the route table answers", () => {
+    const dangling = [...new Set(inventory.match(ADDRESS) ?? [])].filter(
+      (address) => router.resolve(address).name === "not-found",
+    );
+
+    expect(dangling).toEqual([]);
+  });
+
+  it("links at the dev server, not at the port only e2e starts", () => {
+    const ports = [
+      ...new Set([...inventory.matchAll(SERVER)].map((match) => match[1])),
+    ];
+
+    expect(ports).toEqual(["5173"]);
   });
 });

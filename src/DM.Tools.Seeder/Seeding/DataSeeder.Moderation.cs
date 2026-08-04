@@ -214,9 +214,8 @@ internal sealed partial class DataSeeder
                 StartedUtc = now.AddDays(-ago),
                 EndedUtc = now.AddDays(-ago + 7),
                 Comment = reasons[(existing + i) % reasons.Length],
-                AccessRestrictionPolicy = AccessPolicy.NotSpecified,
+                AccessRestrictionPolicy = AccessPolicy.DemocraticBan,
                 IsVoluntary = false,
-                IsRemoved = false,
             });
         }
         await _dbContext.SaveChangesAsync();

@@ -17,7 +17,8 @@ import { formatDate } from "@/shared/lib/utils/datetime";
  *       * For contest_first/second/third — the series title ("23-й литературный
  *         конкурс"); the placement is read from the tier color (gold/silver/bronze)
  *       * For special awards (popular_vote, best_critic, guesser) — type.title
- *         ("Народное признание", "Лучший критик", "Угадайка")
+ *         ("Народное признание, например" - the last two words are part of the
+ *         name, "Лучший критик", "Угадайка")
  *
  * The rich popover shows type.description + a link to the results topic.
  */
@@ -273,7 +274,7 @@ const hasAwards = computed(() => awards.value.length > 0);
   gap: $medium
   align-items: start
 
-  @media (max-width: 640px)
+  @media (max-width: $bp-mobile)
     grid-template-columns: repeat(3, minmax(0, 1fr))
 
 .award
@@ -317,11 +318,17 @@ const hasAwards = computed(() => awards.value.length > 0);
   letter-spacing: 0.3px
   line-height: 1
   white-space: nowrap
-  color: var(--tier-badge-text)
+  color: $heading
+  background-color: var(--tier-badge-bg)
   border: 2px solid $bg-page
   border-radius: $minor
+  // The tier classes below paint the metal on the glyph, so currentColor IS
+  // the metal: one hairline holds the badge apart from the page in the dark
+  // theme, where its fill is a shade off the page colour. No halo under the
+  // glyph — a metal letter on a dark fill needs none, and the dark one that
+  // stood here was left over from the white numeral it used to outline.
+  outline: 1px solid currentColor
   font-variant-numeric: tabular-nums
-  text-shadow: 0 0 1px rgba(0, 0, 0, 0.4)
 
 // Caption, centered under the icon. A reserved 2-line min-height keeps the
 // common 1- and 2-line titles all the same height (no ragged bottoms); a
@@ -331,7 +338,10 @@ const hasAwards = computed(() => awards.value.length > 0);
   width: 100%
   box-sizing: border-box
   font-size: $secondary-font-size
-  font-weight: 500
+  // The name of an entity, at the weight the site sets a name in. 500 was the
+  // one place on the profile where it was lighter, and next to the icon it
+  // read as a caption of the picture instead of the name of the award.
+  font-weight: bold
   color: $heading
   letter-spacing: 0.1px
   text-align: center
@@ -340,41 +350,38 @@ const hasAwards = computed(() => awards.value.length > 0);
   min-height: 2.4em
 
 // Tier metal colors — shared tokens (see ThemeVariables.css), also
-// consumed by ModerationAwardTypes.vue for the same catalog dedup.
+// consumed by ModerationAwardTypes.vue for the same catalog dedup. The metal
+// goes on the glyph of both the icon and the series badge; the badge's fill is
+// the one dark token, so the tier colour reads on the letters instead of on
+// 16px of pill behind black text.
 .tier-gold
-  .award-icon
+  .award-icon,
+  .award-series
     color: var(--award-gold)
-  .award-series
-    background-color: var(--award-gold)
 .tier-silver
-  .award-icon
+  .award-icon,
+  .award-series
     color: var(--award-silver)
-  .award-series
-    background-color: var(--award-silver)
 .tier-bronze
-  .award-icon
+  .award-icon,
+  .award-series
     color: var(--award-bronze)
-  .award-series
-    background-color: var(--award-bronze)
 .tier-steel
-  .award-icon
+  .award-icon,
+  .award-series
     color: $text-meta
-  .award-series
-    background-color: $text-meta
 .tier-base
-  .award-icon
-    color: $heading
+  .award-icon,
   .award-series
-    background-color: $heading
+    color: $heading
 // Diamond — a unique, place-less honor (currently only "Почетный гоблин").
 // Rendered in the achievement platinum (the tier-IV colour from the
 // achievements grid), so the honour reads as a distinct, premium mark rather
 // than a contest metal. Colour: --award-diamond → --achievement-platinum (SSOT).
 .tier-diamond
-  .award-icon
-    color: var(--award-diamond)
+  .award-icon,
   .award-series
-    background-color: var(--award-diamond)
+    color: var(--award-diamond)
 
 // --- Rich popover ---
 .award-popover

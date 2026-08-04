@@ -17,7 +17,6 @@ import type {
   BotLinkResult,
   SecurityEvent,
 } from "@/shared/api/models/account";
-import type { Invitation } from "@/shared/api/models/game";
 import { Api, X_DM_ACCOUNT_TOKEN } from "@/shared/api";
 
 /**
@@ -54,7 +53,12 @@ export default new (class AccountApi {
    */
   public activate(
     token: string,
-    request: { username: string; expectedEmail?: string },
+    // retryEmail, spelled the way ActivationRequest binds it. It used to be
+    // sent as expectedEmail: no JsonPropertyName stands between them and the
+    // serializer is camelCase, so the value arrived null on every request and
+    // the idempotent-retry branch it feeds answered 410 to a repeat of an
+    // activation that had already succeeded.
+    request: { username: string; retryEmail?: string },
   ) {
     return Api.post<User>("account/activation", request, {
       headers: { [X_DM_ACCOUNT_TOKEN]: token },
@@ -109,18 +113,10 @@ export default new (class AccountApi {
     return Api.delete("account/login");
   }
 
-  // Invitations
-  public getMyInvitations() {
-    return Api.get<ListEnvelope<Invitation>>("users/me/invitations");
-  }
-
-  public acceptInvitation(tokenId: string) {
-    return Api.post(`users/me/invitations/${tokenId}/accept`);
-  }
-
-  public rejectInvitation(tokenId: string) {
-    return Api.post(`users/me/invitations/${tokenId}/reject`);
-  }
+  // Invitations live on personalApi, which types the same endpoint by what it
+  // actually answers (ReceivedInvitation: entityId / entityType / entityTitle).
+  // Two clients for one route is how the account page came to read gameId and
+  // gameTitle out of a payload that carries neither.
 
   // Password management
   /**

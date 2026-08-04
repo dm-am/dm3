@@ -14,7 +14,14 @@ export interface IconDefinition {
   strokeLinejoin?: "inherit" | "round" | "miter" | "bevel";
 }
 
-export const icons: Record<string, IconDefinition> = {
+// `satisfies` and not an annotation. `Record<string, IconDefinition>` erases the
+// literal keys, so `IconName` below unfolded into plain `string` and
+// <SvgIcon name="inbox" /> — a name no entry has — type-checked, then
+// dereferenced undefined at runtime and took down the render of the whole Vue
+// subtree, which is a white page rather than a missing icon. With `satisfies`
+// the shape is still checked and the keys survive, so the union is the names
+// that exist and a typo is a compile error.
+export const icons = {
   // ===== 1. Actions =====
 
   /** Pencil (editing) */
@@ -206,7 +213,7 @@ export const icons: Record<string, IconDefinition> = {
 
   // ===== 10. User =====
 
-  /** Default avatar (user silhouette). Used via the defaultAvatarUrl export */
+  /** Default avatar (user silhouette). Rendered inline by AvatarImg */
   defaultAvatar: {
     viewBox: "0 0 1200 1200",
     path: '<path d="m890.39 320.39c0 160.4-129.98 290.39-290.39 290.39s-290.39-129.98-290.39-290.39c0-160.36 129.98-290.39 290.39-290.39s290.39 130.03 290.39 290.39z"/><path d="m1004.4 786c-92.391-115.22-240-128.39-404.39-128.39s-312 13.219-404.39 127.22c-80.391 99.609-75.609 252-75.609 303.61 49.219 19.219 106.78 36 169.22 50.391 118.78 26.391 207.61 31.219 310.78 31.219 103.22 0 192-3.6094 310.78-31.219 63.609-14.391 120-32.391 169.22-50.391 0-50.438 4.7812-204.05-75.609-302.44z"/>',
@@ -307,13 +314,29 @@ export const icons: Record<string, IconDefinition> = {
     fill: "currentColor",
   },
 
+  // ===== 12. Status and place =====
+
+  /** Clock face (a request awaiting a decision) */
+  clock: {
+    viewBox: "-1 -1 26 26",
+    path: '<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    fill: "none",
+  },
+
+  /** Globe (the mirror switch) */
+  globe: {
+    viewBox: "-1 -1 26 26",
+    path: '<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    fill: "none",
+  },
+
   /** Idea (light bulb with rays) */
   idea: {
     viewBox: "-942 953 86 96",
     path: '<path d="M-876.3,998.4c0-12.5-10.2-22.7-22.7-22.7c-12.5,0-22.7,10.2-22.7,22.7c0,1.8,0.2,3.6,0.7,5.4c0.6,2.9,1.7,4.7,3.2,7.2c0.3,0.6,0.7,1.2,1.1,1.9c0.5,0.8,0.9,1.6,1.4,2.3c2,3.3,3.2,5.2,3.2,9.1v9.4c0,2.4,1.7,4.3,4,4.7c1,5.1,4,8.3,9.1,8.3c5.1,0,8.2-3.2,9.1-8.3c2.3-0.4,4-2.4,4-4.7v-9.4c0-3.9,1.2-5.9,3.2-9.1c0.4-0.7,0.9-1.5,1.4-2.3c0.4-0.7,0.8-1.3,1.1-1.9c1.5-2.5,2.6-4.3,3.2-7.2C-876.5,1002-876.3,1000.2-876.3,998.4z M-889.8,1026.7h-18.2v-2.3c0-0.5,0-0.9-0.1-1.3h18.3c0,0.4-0.1,0.8-0.1,1.3V1026.7z M-890.7,1034.6h-16.6c-0.5,0-0.8-0.4-0.8-0.8v-3.1h18.2v3.1C-889.8,1034.2-890.2,1034.6-890.7,1034.6z M-899,1042.8c-1.1,0-3.9,0-5-4.2h10.1C-895,1042.8-897.9,1042.8-899,1042.8z M-880.9,1003c-0.5,2.2-1.3,3.7-2.7,6c-0.4,0.6-0.7,1.2-1.1,1.9c-0.5,0.8-0.9,1.6-1.3,2.2c-1.2,2-2.3,3.8-3,5.9h-19.8c-0.7-2.1-1.7-3.9-3-5.9c-0.4-0.7-0.9-1.4-1.3-2.2c-0.4-0.7-0.8-1.4-1.1-1.9c-1.4-2.4-2.2-3.8-2.7-6.1c-0.4-1.5-0.6-3-0.6-4.5c0-10.3,8.4-18.7,18.7-18.7c10.3,0,18.7,8.4,18.7,18.7C-880.3,999.9-880.5,1001.4-880.9,1003z"/><path d="M-857.8,996.4h-8.3c-1.1,0-2,0.9-2,2s0.9,2,2,2h8.3c1.1,0,2-0.9,2-2S-856.7,996.4-857.8,996.4z"/><path d="M-875.8,977.2c0.5,0,1-0.2,1.4-0.6l5.9-5.9c0.8-0.8,0.8-2,0-2.8s-2-0.8-2.8,0l-5.9,5.9c-0.8,0.8-0.8,2,0,2.8C-876.8,977-876.3,977.2-875.8,977.2z"/><path d="M-899,967.5c1.1,0,2-0.9,2-2v-8.3c0-1.1-0.9-2-2-2s-2,0.9-2,2v8.3C-901,966.6-900.1,967.5-899,967.5z"/><path d="M-923.6,976.6c0.4,0.4,0.9,0.6,1.4,0.6s1-0.2,1.4-0.6c0.8-0.8,0.8-2,0-2.8l-5.9-5.9c-0.8-0.8-2-0.8-2.8,0s-0.8,2,0,2.8L-923.6,976.6z"/><path d="M-931.8,996.4h-8.3c-1.1,0-2,0.9-2,2s0.9,2,2,2h8.3c1.1,0,2-0.9,2-2S-930.7,996.4-931.8,996.4z"/><path d="M-923.6,1020.2l-5.9,5.9c-0.8,0.8-0.8,2,0,2.8c0.4,0.4,0.9,0.6,1.4,0.6s1-0.2,1.4-0.6l5.9-5.9c0.8-0.8,0.8-2,0-2.8S-922.9,1019.4-923.6,1020.2z"/><path d="M-874.4,1020.2c-0.8-0.8-2-0.8-2.8,0s-0.8,2,0,2.8l5.9,5.9c0.4,0.4,0.9,0.6,1.4,0.6s1-0.2,1.4-0.6c0.8-0.8,0.8-2,0-2.8L-874.4,1020.2z"/>',
     fill: "currentColor",
   },
-};
+} satisfies Record<string, IconDefinition>;
 
 export type IconName = keyof typeof icons;
 
@@ -323,7 +346,10 @@ export const symbols = {
   checkmark: "\u2713",
   cross: "\u2717",
   warning: "\u26A0",
-  clock: "\u23F0",
+  // No clock here. U+23F0 is one of the few characters in these blocks that
+  // draws in colour by default, so it arrived as an orange pictograph among
+  // monochrome glyphs; the registry above already has a clock outline, and a
+  // clock is an icon rather than a symbol.
   returnArrow: "\u21A9",
   arrowUp: "\u2191",
   arrowDown: "\u2193",
@@ -335,13 +361,16 @@ export const symbols = {
 } as const;
 
 /**
- * Default avatar as a data URI for use in <img src>.
- * Generated from the defaultAvatar icon -- single source of truth, no separate file.
+ * Body of the default avatar: the silhouette of the registry, plus the square
+ * behind it, with the two tones named by class instead of painted here.
  *
- * Theme-aware: the SVG includes `@media (prefers-color-scheme: dark)`, so it
- * adapts to the OS theme setting automatically. For an app with a manual
- * theme toggle (light/dark regardless of the OS) contrast stays WCAG-safe
- * thanks to mid-tone colors (not white and not pure black).
+ * It used to be a data URI, and a data URI is its own document: it cannot see
+ * the stylesheet of the page that shows it, so the light and the dark values
+ * had to be hard-coded and switched by `prefers-color-scheme` — the OPERATING
+ * SYSTEM's theme. This site's theme is switched by hand, by a class on <html>,
+ * and the two disagree the moment a reader picks the one their system is not
+ * on: a light-grey square on a #222 page. AvatarImg renders this inline now and
+ * gives the classes their fill from the theme's own tokens, so there is nothing
+ * left to disagree about — and four hand-mixed greys fewer.
  */
-const _avatarSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${icons.defaultAvatar.viewBox}"><style>.bg{fill:#e0e0e0}.fg{fill:#9e9e9e}@media (prefers-color-scheme: dark){.bg{fill:#2a2a2a}.fg{fill:#666}}</style><rect class="bg" width="1200" height="1200"/>${icons.defaultAvatar.path.replace(/currentColor/g, "currentColor").replace(/<path /g, '<path class="fg" ')}</svg>`;
-export const defaultAvatarUrl = `data:image/svg+xml,${encodeURIComponent(_avatarSvg)}`;
+export const defaultAvatarBody = `<rect class="default-avatar-bg" width="1200" height="1200"/>${icons.defaultAvatar.path.replace(/<path /g, '<path class="default-avatar-fg" ')}`;

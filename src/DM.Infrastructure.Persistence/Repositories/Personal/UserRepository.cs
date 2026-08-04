@@ -54,9 +54,10 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         var sort = filter.Sort;
         var sortAscending = filter.SortAscending;
 
-        var baseQuery = GetQuery(filter)
-            .Include(u => u.AvatarUpload)
-            .Include(u => u.UsernameHistories);
+        // No Include: the query ends in ProjectTo, which builds its own Select and makes
+        // EF drop every Include with a warning. The avatar comes from the mapping
+        // expression and the username history from its own statement below.
+        var baseQuery = GetQuery(filter);
 
         IOrderedQueryable<User> orderedQuery;
 
@@ -137,7 +138,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
 
-        await PopulatePostReviewCounts(users);
+        await PopulateListCounts(users);
         return users;
     }
 
@@ -485,8 +486,6 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
 
     // ═══ PRIVATE ═══
 
-    private const int NewbieThreshold = 100;
-
     private record StatusCountItem(Guid UserId, ModuleStatus Status, int Count);
 
     private static Dictionary<Guid, ModuleStatusCounts> BuildStatusBreakdownDict(
@@ -579,17 +578,11 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             query = query.Where(u => u.Role == filter.Role.Value);
         }
 
-        // Newbie filter (users with < 100 posts)
+        // The stored column, which is the same rule compiled into the schema, so
+        // the filter and the badge on the profile cannot answer differently.
         if (filter.IsNewbie.HasValue)
         {
-            if (filter.IsNewbie.Value)
-            {
-                query = query.Where(u => u.QuantityRating < NewbieThreshold);
-            }
-            else
-            {
-                query = query.Where(u => u.QuantityRating >= NewbieThreshold);
-            }
+            query = query.Where(u => u.IsNewbie == filter.IsNewbie.Value);
         }
 
         // Rating filter (based on QualityRating = post review score sum)
@@ -665,6 +658,94 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         return query;
     }
 
+    /// <summary>
+    /// The counters the user list draws: recommendations received, and the game and
+    /// blog breakdowns behind its three numeric columns.
+    /// </summary>
+    /// <remarks>
+    /// Split out of the profile enrichment because the list was paying for all of it —
+    /// twenty-odd aggregates for a page of fifty, of which the table renders four.
+    /// Reviews, bans, drops, likes, subscribers and username history are profile
+    /// content and are fetched by the profile.
+    /// </remarks>
+    private async Task PopulateListCounts(IEnumerable<GeneralUser> users)
+    {
+        var usersList = users.ToList();
+        if (!usersList.Any())
+        {
+            return;
+        }
+
+        var userIds = usersList.Select(u => u.UserId).ToList();
+
+        var endorsementsReceivedCounts = await _dmDbContext.UserEndorsements
+            .Where(e => userIds.Contains(e.TargetUserId) && !e.IsRemoved)
+            .GroupBy(e => e.TargetUserId)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        // Games hosting: user is master (count games where user is MasterId) - with status breakdown
+        var gamesMasterByStatus = await _dmDbContext.Games
+            .Where(g => !g.IsRemoved && userIds.Contains(g.MasterId))
+            .GroupBy(g => new { g.MasterId, g.Status })
+            .Select(g => new StatusCountItem(g.Key.MasterId, g.Key.Status, g.Count()))
+            .ToListAsync();
+
+        // Games assistant: with status breakdown
+        var gamesAssistantByStatus = await _dmDbContext.Set<Entities.Game.Links.GameAssistant>()
+            .Where(a => userIds.Contains(a.UserId) && !a.Game.IsRemoved)
+            .GroupBy(a => new { a.UserId, a.Game.Status })
+            .Select(g => new StatusCountItem(g.Key.UserId, g.Key.Status, g.Count()))
+            .ToListAsync();
+
+        // Games playing: user has active character - with status breakdown
+        var gamesPlayingByStatus = await _dmDbContext.Characters
+            .Where(c => !c.IsRemoved && !c.IsNpc && c.AuthorId.HasValue && userIds.Contains(c.AuthorId.Value) && !c.Game.IsRemoved)
+            .Select(c => new { AuthorId = c.AuthorId!.Value, c.Game.GameId, c.Game.Status })
+            .Distinct()
+            .GroupBy(c => new { c.AuthorId, c.Status })
+            .Select(g => new StatusCountItem(g.Key.AuthorId, g.Key.Status, g.Count()))
+            .ToListAsync();
+
+        // Blogs hosting: user is owner - with status breakdown
+        var blogsOwnerByStatus = await _dmDbContext.Blogs
+            .Where(b => !b.IsRemoved && userIds.Contains(b.AuthorId))
+            .GroupBy(b => new { b.AuthorId, b.Status })
+            .Select(g => new StatusCountItem(g.Key.AuthorId, g.Key.Status, g.Count()))
+            .ToListAsync();
+
+        // Blogs assistant: with status breakdown
+        var blogsAssistantByStatus = await _dmDbContext.Set<Entities.Blog.BlogAssistant>()
+            .Where(a => userIds.Contains(a.UserId) && !a.Blog.IsRemoved)
+            .GroupBy(a => new { a.UserId, a.Blog.Status })
+            .Select(g => new StatusCountItem(g.Key.UserId, g.Key.Status, g.Count()))
+            .ToListAsync();
+
+        var endorsementsReceivedDict = endorsementsReceivedCounts.ToDictionary(x => x.UserId, x => x.Count);
+
+        // Build status breakdown dictionaries
+        var gamesHostingByStatusDict = BuildStatusBreakdownDict(gamesMasterByStatus, gamesAssistantByStatus);
+        var gamesPlayingByStatusDict = BuildStatusBreakdownDict(gamesPlayingByStatus, null);
+        var blogsHostingByStatusDict = BuildStatusBreakdownDict(blogsOwnerByStatus, blogsAssistantByStatus);
+
+        foreach (var user in usersList)
+        {
+            user.EndorsementsReceivedCount = endorsementsReceivedDict.TryGetValue(user.UserId, out var er) ? er : 0;
+
+            // Games hosting = sum from status breakdown
+            user.GamesHostingByStatus = gamesHostingByStatusDict.TryGetValue(user.UserId, out var gh) ? gh : null;
+            user.GamesHosting = user.GamesHostingByStatus?.Total ?? 0;
+
+            // Games playing = sum from status breakdown
+            user.GamesPlayingByStatus = gamesPlayingByStatusDict.TryGetValue(user.UserId, out var gp) ? gp : null;
+            user.GamesPlaying = user.GamesPlayingByStatus?.Total ?? 0;
+
+            // Blogs hosting = sum from status breakdown
+            user.BlogsHostingByStatus = blogsHostingByStatusDict.TryGetValue(user.UserId, out var bh) ? bh : null;
+            user.BlogsHosting = user.BlogsHostingByStatus?.Total ?? 0;
+        }
+    }
+
     private async Task PopulatePostReviewCounts(IEnumerable<GeneralUser> users)
     {
         var usersList = users.ToList();
@@ -674,6 +755,9 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         }
 
         var userIds = usersList.Select(u => u.UserId).ToList();
+
+        // Everything the list needs is the first part of everything the profile needs.
+        await PopulateListCounts(usersList);
 
         // Run statistics queries sequentially (DbContext is not thread-safe)
         var givenCounts = await _dmDbContext.PostReviews
@@ -694,12 +778,6 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         var endorsementsGivenCounts = await _dmDbContext.UserEndorsements
             .Where(e => userIds.Contains(e.AuthorId) && !e.IsRemoved)
             .GroupBy(e => e.AuthorId)
-            .Select(g => new { UserId = g.Key, Count = g.Count() })
-            .ToListAsync();
-
-        var endorsementsReceivedCounts = await _dmDbContext.UserEndorsements
-            .Where(e => userIds.Contains(e.TargetUserId) && !e.IsRemoved)
-            .GroupBy(e => e.TargetUserId)
             .Select(g => new { UserId = g.Key, Count = g.Count() })
             .ToListAsync();
 
@@ -726,11 +804,12 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             .ToListAsync();
 
         // Bans received — drives the "резиновая уточка" chain. Same
-        // batched-GROUP-BY pattern. Soft-deleted bans excluded (IsRemoved):
-        // tidying ban history shouldn't retroactively erase the achievement,
-        // but if a ban gets revoked entirely we don't want to keep counting it.
+        // batched-GROUP-BY pattern. A ban lifted early does not count: it was taken
+        // back, and the count is of bans a user served. Spelled as LiftedUtc == null
+        // rather than as the soft-delete flag the ban no longer has; the behaviour
+        // is the same as before.
         var bansReceivedCounts = await _dmDbContext.Set<Entities.Moderation.Ban>()
-            .Where(b => userIds.Contains(b.TargetUserId) && !b.IsRemoved)
+            .Where(b => userIds.Contains(b.TargetUserId) && b.LiftedUtc == null)
             .GroupBy(b => b.TargetUserId)
             .Select(g => new { UserId = g.Key, Count = g.Count() })
             .ToListAsync();
@@ -796,43 +875,6 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
                 l => l.EntityId, m => m.MessageId, (l, m) => m.UserId)
             .GroupBy(uid => uid)
             .Select(g => new { UserId = g.Key, Count = g.Count() })
-            .ToListAsync();
-
-        // Games hosting: user is master (count games where user is MasterId) - with status breakdown
-        var gamesMasterByStatus = await _dmDbContext.Games
-            .Where(g => !g.IsRemoved && userIds.Contains(g.MasterId))
-            .GroupBy(g => new { g.MasterId, g.Status })
-            .Select(g => new StatusCountItem(g.Key.MasterId, g.Key.Status, g.Count()))
-            .ToListAsync();
-
-        // Games assistant: with status breakdown
-        var gamesAssistantByStatus = await _dmDbContext.Set<Entities.Game.Links.GameAssistant>()
-            .Where(a => userIds.Contains(a.UserId) && !a.Game.IsRemoved)
-            .GroupBy(a => new { a.UserId, a.Game.Status })
-            .Select(g => new StatusCountItem(g.Key.UserId, g.Key.Status, g.Count()))
-            .ToListAsync();
-
-        // Games playing: user has active character - with status breakdown
-        var gamesPlayingByStatus = await _dmDbContext.Characters
-            .Where(c => !c.IsRemoved && !c.IsNpc && c.AuthorId.HasValue && userIds.Contains(c.AuthorId.Value) && !c.Game.IsRemoved)
-            .Select(c => new { AuthorId = c.AuthorId!.Value, c.Game.GameId, c.Game.Status })
-            .Distinct()
-            .GroupBy(c => new { c.AuthorId, c.Status })
-            .Select(g => new StatusCountItem(g.Key.AuthorId, g.Key.Status, g.Count()))
-            .ToListAsync();
-
-        // Blogs hosting: user is owner - with status breakdown
-        var blogsOwnerByStatus = await _dmDbContext.Blogs
-            .Where(b => !b.IsRemoved && userIds.Contains(b.AuthorId))
-            .GroupBy(b => new { b.AuthorId, b.Status })
-            .Select(g => new StatusCountItem(g.Key.AuthorId, g.Key.Status, g.Count()))
-            .ToListAsync();
-
-        // Blogs assistant: with status breakdown
-        var blogsAssistantByStatus = await _dmDbContext.Set<Entities.Blog.BlogAssistant>()
-            .Where(a => userIds.Contains(a.UserId) && !a.Blog.IsRemoved)
-            .GroupBy(a => new { a.UserId, a.Blog.Status })
-            .Select(g => new StatusCountItem(g.Key.UserId, g.Key.Status, g.Count()))
             .ToListAsync();
 
         // Subscribers: the total plus a capped preview carrying username, last
@@ -919,7 +961,6 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         var givenDict = givenCounts.ToDictionary(x => x.UserId, x => x.Count);
         var receivedDict = receivedCounts.ToDictionary(x => x.UserId, x => x.Count);
         var endorsementsGivenDict = endorsementsGivenCounts.ToDictionary(x => x.UserId, x => x.Count);
-        var endorsementsReceivedDict = endorsementsReceivedCounts.ToDictionary(x => x.UserId, x => x.Count);
         var topicsAuthoredDict = topicsAuthoredCounts.ToDictionary(x => x.UserId, x => x.Count);
         var commentsAuthoredDict = commentsAuthoredCounts.ToDictionary(x => x.UserId, x => x.Count);
         var globalChatMessagesDict = globalChatMessageCounts.ToDictionary(x => x.UserId, x => x.Count);
@@ -938,17 +979,11 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         foreach (var x in likesOnMessagesCounts)
             likesReceivedDict[x.UserId] = (likesReceivedDict.TryGetValue(x.UserId, out var v) ? v : 0) + x.Count;
 
-        // Build status breakdown dictionaries
-        var gamesHostingByStatusDict = BuildStatusBreakdownDict(gamesMasterByStatus, gamesAssistantByStatus);
-        var gamesPlayingByStatusDict = BuildStatusBreakdownDict(gamesPlayingByStatus, null);
-        var blogsHostingByStatusDict = BuildStatusBreakdownDict(blogsOwnerByStatus, blogsAssistantByStatus);
-
         foreach (var user in usersList)
         {
             user.PostReviewsGivenCount = givenDict.TryGetValue(user.UserId, out var given) ? given : 0;
             user.PostReviewsReceivedCount = receivedDict.TryGetValue(user.UserId, out var received) ? received : 0;
             user.EndorsementsGivenCount = endorsementsGivenDict.TryGetValue(user.UserId, out var eg) ? eg : 0;
-            user.EndorsementsReceivedCount = endorsementsReceivedDict.TryGetValue(user.UserId, out var er) ? er : 0;
             user.TopicsAuthoredCount = topicsAuthoredDict.TryGetValue(user.UserId, out var ta) ? ta : 0;
             user.CommentsAuthoredCount = commentsAuthoredDict.TryGetValue(user.UserId, out var ca) ? ca : 0;
             user.GlobalChatMessagesCount = globalChatMessagesDict.TryGetValue(user.UserId, out var gc) ? gc : 0;
@@ -956,18 +991,6 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             user.GameDropsCount = gameDropsDict.TryGetValue(user.UserId, out var gd) ? gd : 0;
             user.PublicationsAuthoredCount = publicationsAuthoredDict.TryGetValue(user.UserId, out var pa) ? pa : 0;
             user.LikesReceivedCount = likesReceivedDict.TryGetValue(user.UserId, out var lr) ? lr : 0;
-
-            // Games hosting = sum from status breakdown
-            user.GamesHostingByStatus = gamesHostingByStatusDict.TryGetValue(user.UserId, out var gh) ? gh : null;
-            user.GamesHosting = user.GamesHostingByStatus?.Total ?? 0;
-
-            // Games playing = sum from status breakdown
-            user.GamesPlayingByStatus = gamesPlayingByStatusDict.TryGetValue(user.UserId, out var gp) ? gp : null;
-            user.GamesPlaying = user.GamesPlayingByStatus?.Total ?? 0;
-
-            // Blogs hosting = sum from status breakdown
-            user.BlogsHostingByStatus = blogsHostingByStatusDict.TryGetValue(user.UserId, out var bh) ? bh : null;
-            user.BlogsHosting = user.BlogsHostingByStatus?.Total ?? 0;
 
             var subscribers = subscriberSummaries.GetValueOrDefault(user.UserId);
             user.Subscribers = subscribers?.Preview ?? [];

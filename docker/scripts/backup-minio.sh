@@ -37,7 +37,7 @@ docker run --rm --network host \
 BACKUP_SIZE=$(du -sh "$BACKUP_DIR/$TIMESTAMP" | cut -f1)
 echo "[$(date)] Backup created: $TIMESTAMP/ ($BACKUP_SIZE)"
 
-DELETED=$(find "$BACKUP_DIR" -maxdepth 1 -type d -mtime +$RETENTION_DAYS -not -path "$BACKUP_DIR" -exec rm -rf {} \; -print | wc -l)
+DELETED=$(find "$BACKUP_DIR" -maxdepth 1 -type d -mtime +"$RETENTION_DAYS" -not -path "$BACKUP_DIR" -exec rm -rf {} \; -print | wc -l)
 echo "[$(date)] Cleaned up $DELETED backups older than $RETENTION_DAYS days"
 
 # Optional: replicate to S3

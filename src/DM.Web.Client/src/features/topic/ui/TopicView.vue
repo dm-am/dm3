@@ -17,6 +17,7 @@ import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { PeriodDigestBoards } from "@/features/leaderboard/@x/topic";
 import TopicCard from "./TopicCard.vue";
 import { notifyFailure } from "@/shared/lib/errors";
+import { TOPIC_TITLE_MAX_LENGTH } from "@/shared/lib/constants/forum";
 
 const props = withDefaults(
   defineProps<{
@@ -190,7 +191,7 @@ function saveEdit() {
       v-model="editTitle"
       type="text"
       class="edit-title"
-      maxlength="130"
+      :maxlength="TOPIC_TITLE_MAX_LENGTH"
       placeholder="Заголовок топика"
     />
     <label class="edit-label">Текст</label>

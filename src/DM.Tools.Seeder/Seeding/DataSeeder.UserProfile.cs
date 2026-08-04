@@ -186,7 +186,7 @@ internal sealed partial class DataSeeder
         var lit22 = new Guid("00000000-0000-0000-0004-000000000002"); // 22nd literary contest, 2023
         var lit20 = new Guid("00000000-0000-0000-0004-000000000004"); // 20th literary contest, 2022
         var art2  = new Guid("00000000-0000-0000-0004-000000000005"); // 2nd art contest, 2024
-        // "1-й арт конкурс 2023" (0004-...-06) intentionally holds no
+        // "1-й арт-конкурс 2023" (0004-...-06) intentionally holds no
         // SolohinLex award: his ONLY art award is the art2 place below.
         var contestFirst   = new Guid("00000000-0000-0000-0001-000000000001");
         var contestSecond  = new Guid("00000000-0000-0000-0001-000000000002");

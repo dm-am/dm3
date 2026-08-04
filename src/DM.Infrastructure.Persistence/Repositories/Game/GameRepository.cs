@@ -68,9 +68,17 @@ internal class GameRepository : IGameRepository
         // statements under READ COMMITTED, so a game created or removed between
         // them shifts the OFFSET window and a card can render with another card's
         // tags. Accepted deliberately — the window is milliseconds against a
-        // handful of writes a day, the damage is one wrong collection on one
-        // render, and the only real cure is keyset pagination, which changes the
-        // API contract. Revisit if game creation ever becomes high-volume.
+        // handful of writes a day, and the damage is one wrong collection on one
+        // render.
+        //
+        // The cure is not keyset pagination and does not touch the API contract:
+        // materialise the page of identifiers first and fetch the collections by
+        // Where(id => ids.Contains(...)), the way EnrichGamesAsync already fetches
+        // everything else, and the collection queries stop replaying the OFFSET.
+        // The price is one more round trip on the busiest list on the site, paid on
+        // every page by every visitor, against a defect that needs a concurrent
+        // create to appear at all. Revisit if game creation ever becomes
+        // high-volume — that is the number that moves this trade, not the contract.
         var orderedGames = ApplySorting(gamesQuery, query).ThenBy(g => g.GameId);
 
         var games = await orderedGames
@@ -244,11 +252,11 @@ internal class GameRepository : IGameRepository
             .Select(g => new
             {
                 GameId = g.Key,
-                // Distinct subscribers, not subscription rows. Subscriptions has
-                // no unique constraint on (SubscriberId, TargetType, TargetId) and
-                // subscribing is check-then-insert, so a double-clicked button
-                // leaves two rows for one reader. The set this replaced collapsed
-                // them; a plain COUNT(*) would count the reader twice.
+                // Distinct subscribers, not subscription rows. The pair is unique in
+                // the schema now, so the two forms agree; the distinct one stays
+                // because it is what the column means, and because the count has to
+                // keep meaning that if the rows ever arrive from an import rather
+                // than from the subscribe path.
                 Count = g.Select(s => s.SubscriberId).Distinct().Count(),
                 ViewerSubscribed = g.Any(s => s.SubscriberId == userId),
                 // Subscribers who have never been active must sort last, and a
@@ -274,28 +282,46 @@ internal class GameRepository : IGameRepository
             game.SubscriberUsernames = summary?.Preview ?? [];
         }
 
-        // Invitation tokens — single query instead of N subqueries.
+        // Invitation tokens — single query instead of N subqueries. Projected for the
+        // reason the players block above is: including the User navigation pulled whole
+        // User rows, Salt and PasswordHash included, into memory for every invitation on
+        // the page, and left PendingAssistant.Picture empty besides, because
+        // AvatarUpload is not loaded and lazy loading is off.
         var tokens = await _dbContext.Tokens
             .AsNoTracking()
-            .Include(t => t.User)
             .Where(t => !t.IsRemoved &&
                         t.EntityId.HasValue &&
                         gameIds.Contains(t.EntityId.Value) &&
                         (t.Type == TokenType.GameAssistantInvitation ||
                          t.Type == TokenType.GamePlayerInvitation ||
                          t.Type == TokenType.GameReaderInvitation))
+            .Select(t => new
+            {
+                GameId = t.EntityId!.Value,
+                t.Type,
+                t.UserId,
+                User = new GeneralUser
+                {
+                    UserId = t.User.UserId,
+                    Username = t.User.Username,
+                    Role = t.User.Role,
+                    Status = t.User.Status,
+                    LastActivityUtc = t.User.LastActivityUtc,
+                    RegisteredUtc = t.User.CreatedUtc,
+                    QuantityRating = t.User.QuantityRating,
+                    Picture = AvatarProjections.From(t.User.AvatarUpload),
+                },
+            })
             .ToListAsync(ct);
 
-        var tokensByGame = tokens.GroupBy(t => t.EntityId!.Value).ToDictionary(g => g.Key, g => g.ToList());
+        var tokensByGame = tokens.GroupBy(t => t.GameId).ToDictionary(g => g.Key, g => g.ToList());
 
         foreach (var game in games)
         {
             if (tokensByGame.TryGetValue(game.Id, out var gameTokens))
             {
                 var assistantToken = gameTokens.FirstOrDefault(t => t.Type == TokenType.GameAssistantInvitation);
-                game.PendingAssistant = assistantToken != null
-                    ? _mapper.Map<GeneralUser>(assistantToken.User)
-                    : null;
+                game.PendingAssistant = assistantToken?.User;
                 game.PendingInvitedUserIds = gameTokens
                     .Where(t => t.Type == TokenType.GamePlayerInvitation || t.Type == TokenType.GameReaderInvitation)
                     .Select(t => t.UserId)
@@ -995,23 +1021,23 @@ internal class GameRepository : IGameRepository
             IsRemoved = false
         };
 
-        var dbTags = game.TagIds.Select(tagId => new DbTag
+        // A set, not a list: the same tag twice is the same tag, and the pair is
+        // unique in the schema.
+        var dbTags = game.TagIds.Distinct().Select(tagId => new DbTag
         {
             GameTagId = _guidFactory.Create(),
             GameId = game.GameId,
             TagId = tagId
         });
 
-        // Temporary unique placeholder for PublicId (will be updated after SerialNumber is generated)
-        dbGame.PublicId = $"t{game.GameId:N}"[..10];
+        // The readable address is taken before the insert instead of being stamped by
+        // a second SaveChanges — see SerialNumberAllocator for what that pair cost.
+        dbGame.SerialNumber = await SerialNumberAllocator.NextAsync<DbGame>(_dbContext, ct);
+        dbGame.PublicId = _publicIdService.Encode(dbGame.SerialNumber);
 
         await _dbContext.Games.AddAsync(dbGame, ct);
         await _dbContext.Rooms.AddAsync(dbRoom, ct);
         await _dbContext.GameTags.AddRangeAsync(dbTags, ct);
-        await _dbContext.SaveChangesAsync(ct);
-
-        // Generate PublicId from SerialNumber (which was auto-generated on insert)
-        dbGame.PublicId = _publicIdService.Encode(dbGame.SerialNumber);
         await _dbContext.SaveChangesAsync(ct);
 
         return await _dbContext.Games
@@ -1099,18 +1125,28 @@ internal class GameRepository : IGameRepository
         // Update tags if provided
         if (updateGame.TagIds != null && updateGame.TagIds.Any())
         {
+            // The difference, not a wholesale replacement: deleting a row and
+            // inserting another one for the same pair in a single SaveChanges puts two
+            // statements against one unique key into one batch, and nothing here needs
+            // that. Rows that stay are left alone, which also keeps their identifiers.
+            var requestedTagIds = updateGame.TagIds.Distinct().ToList();
+
             var existingTags = await _dbContext.GameTags
                 .Where(t => t.GameId == updateGame.GameId)
                 .ToListAsync(ct);
 
-            _dbContext.GameTags.RemoveRange(existingTags);
+            _dbContext.GameTags.RemoveRange(
+                existingTags.Where(t => !requestedTagIds.Contains(t.TagId)));
 
-            var newTags = updateGame.TagIds.Select(tagId => new DbTag
-            {
-                GameTagId = _guidFactory.Create(),
-                GameId = updateGame.GameId,
-                TagId = tagId
-            });
+            var existingTagIds = existingTags.Select(t => t.TagId).ToHashSet();
+            var newTags = requestedTagIds
+                .Where(tagId => !existingTagIds.Contains(tagId))
+                .Select(tagId => new DbTag
+                {
+                    GameTagId = _guidFactory.Create(),
+                    GameId = updateGame.GameId,
+                    TagId = tagId
+                });
 
             _dbContext.GameTags.AddRange(newTags);
         }

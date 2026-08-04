@@ -7,10 +7,13 @@ import type { Character } from "@/entities/game";
 import { useAuthStore } from "@/entities/user";
 import { CharacterManageLink } from "@/features/game-actions";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import { ErrorState } from "@/shared/ui/ErrorState";
+import { CharacterCardSkeleton } from "@/shared/ui/Skeleton";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
-const { characters, charactersError, canManage } = storeToRefs(gameStore);
+const { characters, charactersLoading, charactersError, canManage } =
+  storeToRefs(gameStore);
 const { user } = storeToRefs(useAuthStore());
 
 const gameId = computed(() => route.params.id as string);
@@ -53,18 +56,31 @@ const hasAnything = computed(
     underReviewCharacters.value.length > 0,
 );
 
+function loadRoster() {
+  return gameStore.loadCharacters(gameId.value);
+}
+
 onMounted(() => {
   if (characters.value.length === 0) {
-    gameStore.loadCharacters(gameId.value);
+    loadRoster();
   }
 });
 </script>
 
 <template>
   <div class="game-characters">
-    <div v-if="charactersError" class="characters-error">
-      {{ charactersError }}
-    </div>
+    <!-- Loading. "В этой игре пока нет персонажей" is a fact about the game,
+         and the page stated it about a full roster for as long as the request
+         took — the only sentence on the screen. -->
+    <CharacterCardSkeleton v-if="charactersLoading && !characters.length" />
+
+    <!-- A failed load, named and repeatable: it used to be a red line with no
+         way out but a page reload. -->
+    <ErrorState
+      v-else-if="charactersError"
+      :message="charactersError"
+      :retry="loadRoster"
+    />
 
     <div v-else-if="!hasAnything" class="characters-empty">
       <secondary-text>В этой игре пока нет персонажей</secondary-text>
@@ -78,6 +94,7 @@ onMounted(() => {
           <character-card
             v-for="character in playerCharacters"
             :key="character.id"
+            :data-id="character.id"
             :character="character"
           >
             <template #controls>
@@ -94,6 +111,7 @@ onMounted(() => {
           <character-card
             v-for="character in npcCharacters"
             :key="character.id"
+            :data-id="character.id"
             :character="character"
           >
             <template #controls>
@@ -110,6 +128,7 @@ onMounted(() => {
           <character-card
             v-for="character in underReviewCharacters"
             :key="character.id"
+            :data-id="character.id"
             :character="character"
           >
             <template #controls>
@@ -126,12 +145,8 @@ onMounted(() => {
 .game-characters
   min-height: $grid-step * 50
 
-.characters-error,
 .characters-empty
   padding: $big
-
-.characters-error
-  color: $accent-red
 
 .characters-groups
   display: flex

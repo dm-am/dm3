@@ -2,8 +2,8 @@ import {
   test as base,
   expect,
   request as playwrightRequest,
-  Page,
-  APIRequestContext,
+  type Page,
+  type APIRequestContext,
 } from "@playwright/test";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";

@@ -63,10 +63,11 @@ public class BoardController : ControllerBase
     /// <response code="200">List of all boards with statistics</response>
     [HttpGet(Name = nameof(GetBoards))]
     [ProducesResponseType(typeof(ListEnvelope<Board>), StatusCodes.Status200OK)]
-    // Client-only cache: the response is personalized (per-user unread topic
-    // and comment counters), so a shared/public cache would leak one user's
-    // unread counts to another. Same fix as the rated-posts endpoint.
-    [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
+    // No cache policy at all. The response carries per-user unread counters, and
+    // a minute of browser-side freshness on those is a badge that does not clear
+    // after DELETE /v1/boards/{id}/comments/unread — the very action whose whole
+    // point is that it clears. "private" only moves the stale copy one hop
+    // closer to the reader; it does not make it less stale.
     public async Task<IActionResult> GetBoards()
     {
         return Ok(await _boardApiService.GetBoards());

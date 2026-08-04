@@ -1,3 +1,4 @@
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Exceptions;
 using FluentValidation;
 
@@ -13,6 +14,6 @@ internal class CreateTopicValidator : AbstractValidator<CreateTopic>
     {
         RuleFor(t => t.Title)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MaximumLength(130).WithMessage(ValidationError.Long);
+            .MaximumLength(TopicPolicy.TitleMaxLength).WithMessage(ValidationError.Long);
     }
 }

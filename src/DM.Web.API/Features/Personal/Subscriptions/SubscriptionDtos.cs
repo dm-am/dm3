@@ -25,6 +25,18 @@ public class Subscription
     public Guid TargetId { get; set; }
 
     /// <summary>
+    /// Name of the target (game, blog, topic or user). Null when the target is
+    /// gone: the row is still worth showing, because unsubscribing works.
+    /// </summary>
+    public string? TargetTitle { get; set; }
+
+    /// <summary>
+    /// Username of a User target. A profile is addressed by name, and TargetId
+    /// is an identifier.
+    /// </summary>
+    public string? TargetUsername { get; set; }
+
+    /// <summary>
     /// Notification settings flags
     /// </summary>
     public SubscriptionSettings Settings { get; set; }

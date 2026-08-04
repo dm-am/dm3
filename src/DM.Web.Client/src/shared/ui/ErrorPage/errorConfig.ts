@@ -92,6 +92,60 @@ export function getErrorConfig(code: number): ErrorConfig {
 }
 
 /**
+ * The error page an entity shell owes a failed fetch.
+ *
+ * A missing page, a page the viewer may not open, a page that was deleted and a
+ * server that fell over are four different things to say, and the status is the
+ * only place the difference lives. Written out once because three shells — the
+ * topic, the game, the blog — each need the same four answers; the game and the
+ * blog had none of them and said "Не удалось загрузить" to all four, which
+ * reads as "try again" to someone following a link to something deleted.
+ *
+ * A 4xx this map does not name is a bad address, so it lands on 404; no status
+ * at all means the request never left, which is 500's sentence.
+ */
+export function toErrorPageCode(status: number | undefined): number {
+  if (status === 403) return 403;
+  if (status === 410) return 410;
+  if (status === 404) return 404;
+  if (!status || status >= 500) return 500;
+  return 404;
+}
+
+/**
+ * The page a failed load's HTTP status deserves.
+ *
+ * One mapping, because three had already diverged: the forum board page turned
+ * every status but 404 into "ошибка сервера", and since the API answers a
+ * missing board with 410 that is what a mistyped alias actually showed; the
+ * topic page next to it mapped the same 410 to "Страница удалена"; the profile
+ * page had a third spelling. A game and a blog had no mapping at all and drew
+ * one paragraph for everything, so a reader refused access could not tell it
+ * from a network failure.
+ *
+ * 410 is the one status that means two things here, so the caller says which.
+ * The default is "не найдено", because the API spends Gone on "no such board /
+ * user"; `goneMeansRemoved` is the opt-in of the pages that read it literally.
+ * The topic page has that distinction from the server (TopicService answers
+ * Gone for a deleted topic and 404 for one that never existed). The game shell
+ * does not, and asks for it anyway: GameService answers Gone for every id that
+ * addresses nothing visible, and of those a game deleted by its master is the
+ * one a reader arrives at from a link he was given.
+ *
+ * Everything else collapses on purpose: a status with no page of its own reads
+ * as "not found", and a missing status or a 5xx as a fault on our side.
+ */
+export function errorCodeForStatus(
+  status: number | undefined,
+  options: { goneMeansRemoved?: boolean } = {},
+): number {
+  if (!status || status >= 500) return 500;
+  if (status === 403) return 403;
+  if (status === 410) return options.goneMeansRemoved ? 410 : 404;
+  return 404;
+}
+
+/**
  * Symbolic (non-numeric) error codes surfaced at /error/:code and
  * /error?code= — chiefly OAuth-style authorization failures (doc 4.2.3.1.6).
  * Each borrows the illustration/behavior of a matching HTTP status via `code`

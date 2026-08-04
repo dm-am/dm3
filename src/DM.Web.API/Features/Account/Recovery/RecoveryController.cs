@@ -20,7 +20,9 @@ namespace DM.Web.API.Features.Account.Recovery;
 /// - Didn't receive activation email (resends activation)
 ///
 /// All operations are rate-limited to prevent abuse.
-/// Responses are intentionally vague to prevent user enumeration.
+/// The recovery response names which of the three cases it hit, so it does tell a
+/// caller whether an address is registered. That is a recorded exception, stated
+/// with its reason on the endpoint below and in docs/conventions/SECURITY.md.
 /// </remarks>
 [ApiController]
 [Route("v1/account")]

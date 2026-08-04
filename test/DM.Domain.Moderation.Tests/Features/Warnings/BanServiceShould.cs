@@ -431,7 +431,7 @@ public class BanServiceShould : UnitTestBase
 
         await _service.LiftBan(_banId);
 
-        _banRepository.Verify(r => r.Remove(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+        _banRepository.Verify(r => r.Lift(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -445,7 +445,7 @@ public class BanServiceShould : UnitTestBase
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-        _banRepository.Verify(r => r.Remove(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        _banRepository.Verify(r => r.Lift(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -457,7 +457,7 @@ public class BanServiceShould : UnitTestBase
 
         await _service.LiftBan(_banId);
 
-        _banRepository.Verify(r => r.Remove(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+        _banRepository.Verify(r => r.Lift(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -468,7 +468,7 @@ public class BanServiceShould : UnitTestBase
 
         await _service.LiftBan(_banId);
 
-        _banRepository.Verify(r => r.Remove(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+        _banRepository.Verify(r => r.Lift(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
     // --- Кто кого может банить (BE-18, BE-19) ---
 
@@ -561,7 +561,7 @@ public class BanServiceShould : UnitTestBase
 
         await _service.LiftBan(_banId, "Разобрались");
 
-        _banRepository.Verify(r => r.Remove(_banId, _moderatorUserId, _now, "Разобрались",
+        _banRepository.Verify(r => r.Lift(_banId, _moderatorUserId, _now, "Разобрались",
             It.IsAny<CancellationToken>()), Times.Once);
     }
 }

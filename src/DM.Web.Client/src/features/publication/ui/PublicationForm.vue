@@ -6,6 +6,7 @@
  * the two actions. `draftKey` is passed on create (autosave the new-post
  * draft) and omitted on edit.
  */
+import { ref } from "vue";
 import { Form, FormField } from "@/shared/ui/Form";
 import { Select } from "@/shared/ui/Select";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
@@ -24,6 +25,13 @@ defineEmits<{ submit: []; cancel: [] }>();
 const title = defineModel<string>("title", { required: true });
 const rubricId = defineModel<string>("rubricId", { required: true });
 const content = defineModel<string>("content", { required: true });
+
+const editor = ref<InstanceType<typeof BBCodeEditor> | null>(null);
+
+// The draft belongs to the editor, and the page is the one that knows the text
+// has been published. Every other composer in the app clears its draft on
+// success through the same call.
+defineExpose({ clearDraft: () => editor.value?.clearDraft() });
 </script>
 
 <template>
@@ -54,6 +62,7 @@ const content = defineModel<string>("content", { required: true });
 
     <FormField label="Содержимое">
       <BBCodeEditor
+        ref="editor"
         v-model="content"
         context="common"
         placeholder="Текст публикации..."

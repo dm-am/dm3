@@ -77,8 +77,11 @@ internal class WarningService : IWarningService
             return await GetUserWarnings(username, ct);
         }
 
-        // For now, return empty - would need to implement GetAll in repository
-        return [];
+        // The unfiltered list used to be an empty one with a note that the
+        // repository method was missing: behind a Moderator+ gate and a 200, a
+        // moderator opening the page saw what a website without violations looks
+        // like.
+        return await _warningRepository.GetAllWarnings(ct);
     }
 
     /// <inheritdoc />

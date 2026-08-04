@@ -19,7 +19,7 @@
  *    unearned tier. A completed chain shows a full bar and the total
  *    metric value.
  *  - Rich popover (via `<Tooltip #content>`): category title with a
- *    "Завершено" / "X / Y" badge, the metric description, a progress
+ *    "X / Y" badge of the tiers taken, the metric description, a progress
  *    line toward the next tier and the full table of tiers with their
  *    thresholds and earned/locked state.
  *  - The parent (ProfileAchievements) listens to the `state` emit and
@@ -238,8 +238,11 @@ function nextPct(chain: Chain): number {
 // selection always has clean spaces — no whitespace-condense glue, no stray
 // newlines. Unit label SSOT is formatThreshold.
 function progressLabel(chain: Chain): string {
+  // Drawn only for a chain that is not completed, and such a chain always has
+  // a next tier — the "Максимальный уровень" this used to answer with could
+  // not be reached from anywhere.
   const next = chain.next;
-  if (!next) return "Максимальный уровень";
+  if (!next) return "";
   return `${displayCurrent(chain)} из ${formatThreshold(
     next.type.category.metric,
     next.type.threshold,
@@ -326,13 +329,7 @@ function progressLabel(chain: Chain): string {
           <div class="chain-popover" :class="tierClass(chain.maxEarnedTier)">
             <div class="chain-popover__header">
               <strong class="chain-popover__title">{{ chain.title }}</strong>
-              <span v-if="chain.completed" class="chain-popover__badge">
-                Завершено
-              </span>
-              <span
-                v-else
-                class="chain-popover__badge chain-popover__badge--muted"
-              >
+              <span class="chain-popover__badge">
                 {{ chain.earnedCount }} / {{ chain.tiers.length }}
               </span>
             </div>
@@ -403,7 +400,7 @@ function progressLabel(chain: Chain): string {
   column-gap: $tiny
   align-items: start
 
-  @media (max-width: 640px)
+  @media (max-width: $bp-mobile)
     grid-template-columns: repeat(4, minmax(0, 1fr))
 
   :deep(.tooltip-trigger)
@@ -438,6 +435,41 @@ function progressLabel(chain: Chain): string {
 .chain-icon
   font-size: 52px
   color: var(--card-tier-color, $heading)
+
+// Thematic title of the earned tier, centered under the icon. Smaller than
+// the award caption ($tertiary vs $secondary) — achievements are the lighter
+// section, and the smaller type also fits the longest word inside the narrow
+// 8-column cell without a mid-word break. A reserved 2-line min-height keeps
+// 1- and 2-line captions the same height (no ragged bottoms); a longer title
+// wraps in full rather than being clipped to one line.
+//
+// Declared before .chain--locked, which overrides it: the base rule of a class
+// is where its weight, size and colour are read from, and a reader (or a check)
+// that meets the modifier first sees a caption with no type set at all.
+.chain-title
+  width: 100%
+  box-sizing: border-box
+  font-size: $tertiary-font-size
+  // 600 and not bold: the same "this is a name" weight as the award caption,
+  // but 12px in a cell of an eight-column grid, where full bold adds width and
+  // pushes the longest titles onto a third line the reserve does not hold.
+  font-weight: 600
+  color: $heading
+  letter-spacing: 0.1px
+  text-align: center
+  line-height: 1.2
+  overflow-wrap: break-word
+  min-height: 2.4em
+  // A one-line caption used to sit at the top of that reserve, which put all
+  // 14.4px of its slack between the caption and the bar: 18.4px down to the
+  // bar against 4px up to the icon, and a different distance again on the
+  // neighbouring tile. Centring the caption in the reserve splits the slack
+  // in two and makes both distances the same. A column box centres it without
+  // touching how the text wraps: the caption still fills the cell width and
+  // breaks the same way.
+  display: flex
+  flex-direction: column
+  justify-content: center
 
 // Fully locked chain (no earned tiers yet): ghost muting via OPACITY, not
 // just a color swap — next to tier-tinted earned icons a merely gray icon
@@ -474,32 +506,14 @@ function progressLabel(chain: Chain): string {
   font-weight: 700
   letter-spacing: 0.5px
   line-height: 1
-  color: var(--tier-badge-text)
-  background-color: var(--card-tier-color, $heading)
+  color: var(--card-tier-color, $heading)
+  background-color: var(--tier-badge-bg)
   border: 2px solid $bg-page
   border-radius: $minor
+  // currentColor IS the tier metal: one hairline holds the badge apart from
+  // the page in the dark theme, where its fill is a shade off the page colour.
+  outline: 1px solid currentColor
   font-variant-numeric: tabular-nums
-  // Светлый ореол под темной цифрой — зеркало прежней темной обводки
-  // под белой.
-  text-shadow: 0 0 1px rgba(255, 255, 255, 0.5)
-
-// Thematic title of the earned tier, centered under the icon. Smaller than
-// the award caption ($tertiary vs $secondary) — achievements are the lighter
-// section, and the smaller type also fits the longest word inside the narrow
-// 8-column cell without a mid-word break. A reserved 2-line min-height keeps
-// 1- and 2-line captions the same height (no ragged bottoms); a longer title
-// wraps in full rather than being clipped to one line.
-.chain-title
-  width: 100%
-  box-sizing: border-box
-  font-size: $tertiary-font-size
-  font-weight: 500
-  color: $heading
-  letter-spacing: 0.1px
-  text-align: center
-  line-height: 1.2
-  overflow-wrap: break-word
-  min-height: 2.4em
 
 // Bar colors are unified with the poll bar (`ProgressBar.vue`):
 // background — $progress-bg-overlay, fill — $progress-fill-overlay.
@@ -578,9 +592,10 @@ function progressLabel(chain: Chain): string {
     font-size: 10px
     font-weight: 600
     line-height: 1
-    color: var(--tier-badge-text)
-    background-color: var(--card-tier-color, $heading)
+    color: var(--card-tier-color, $heading)
+    background-color: var(--tier-badge-bg)
     border-radius: 999px
+    outline: 1px solid currentColor
     text-transform: uppercase
     letter-spacing: 0.5px
 
@@ -626,9 +641,10 @@ function progressLabel(chain: Chain): string {
     text-align: center
     font-size: 10px
     font-weight: 700
-    color: var(--tier-badge-text)
-    background-color: var(--card-tier-color, $heading)
+    color: var(--card-tier-color, $heading)
+    background-color: var(--tier-badge-bg)
     border-radius: $minor
+    outline: 1px solid currentColor
     padding: 2px 0
     line-height: 1
 

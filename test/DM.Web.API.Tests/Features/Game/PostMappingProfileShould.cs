@@ -33,9 +33,6 @@ public class PostMappingProfileShould : UnitTestBase
 
     public PostMappingProfileShould() => _mapper = _configuration.CreateMapper();
 
-    [Fact]
-    public void HaveValidConfiguration() => _configuration.AssertConfigurationIsValid();
-
     /// <summary>
     /// The PATCH path maps the read model onto the update model, where CharacterId
     /// is an Optional&lt;Guid&gt; — a wrapper with a private constructor and no

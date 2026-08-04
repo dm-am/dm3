@@ -36,16 +36,6 @@ internal class PublicationCommentApiService : IPublicationCommentApiService
     }
 
     /// <inheritdoc />
-    public async Task<DiscussionResponse> GetDiscussion(Guid publicationId, PublicationCommentsQuery query)
-    {
-        var identity = _identityProvider.Current;
-        var excludeUserIds = await CommentReading.HiddenAuthorsAsync(_blacklistChecker, identity);
-        var (comments, paging) = await _commentService.GetAsync(publicationId, query, excludeUserIds);
-
-        return CommentReading.ToDiscussion(comments, paging, identity, _mapper);
-    }
-
-    /// <inheritdoc />
     public async Task<ListEnvelope<Comment>> Get(Guid publicationId, PublicationCommentsQuery query)
     {
         var excludeUserIds = await CommentReading.HiddenAuthorsAsync(

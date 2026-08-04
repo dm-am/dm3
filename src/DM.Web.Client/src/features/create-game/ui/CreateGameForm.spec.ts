@@ -20,8 +20,13 @@ import CreateGameForm from "./CreateGameForm.vue";
 import { gameApi, type Tag } from "@/entities/game";
 import type { BadRequestError } from "@/shared/api/models/common";
 
+// The form navigates to the created game, and it guards the way out while the
+// fields hold text (UnsavedChangesGuard registers onBeforeRouteLeave). Both are
+// out of the scope of the checks below, so both are doubles; a mock that leaves
+// the hook out fails the mount instead of the assertion.
 vi.mock("vue-router", () => ({
   useRouter: () => ({ push: vi.fn() }),
+  onBeforeRouteLeave: vi.fn(),
 }));
 
 // Three neighbours of the fields under test, none of them part of the check:

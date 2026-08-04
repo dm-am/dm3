@@ -21,6 +21,8 @@ import {
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
 import type { BadRequestError } from "@/shared/api/models/common";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { UnsavedChangesGuard } from "@/shared/ui/UnsavedChangesGuard";
+import { describeFailure } from "@/shared/lib/errors";
 
 const router = useRouter();
 const { user } = storeToRefs(useAuthStore());
@@ -44,6 +46,21 @@ const commentariesAccessMode = ref(CommentariesAccessMode.Public);
 const schemaDraft = ref<AttributeSchema | null>(null);
 const assistantUsername = ref<string | null>(null);
 const selectedTags = ref<number[]>([]);
+
+// Released the moment the game exists: the navigation that follows is this
+// form's own, and asking the author whether they meant to leave their new game
+// would be theatre.
+const saved = ref(false);
+const dirty = computed(
+  () =>
+    !saved.value &&
+    !!(
+      title.value.trim() ||
+      systemName.value.trim() ||
+      settingName.value.trim() ||
+      information.value.trim()
+    ),
+);
 
 const isSubmitting = ref(false);
 const titleError = ref("");
@@ -121,7 +138,7 @@ async function handleSubmit() {
         !infoError.value &&
         !assistantError.value
       ) {
-        toast.error(apiError.title || "Не удалось создать игру");
+        toast.error(describeFailure(apiError, "Не удалось создать игру"));
       }
       return;
     }
@@ -129,6 +146,7 @@ async function handleSubmit() {
     if (data) {
       // The lists are cached; without refreshing them the game the user just
       // created is missing from /games and from the sidebar until they expire.
+      saved.value = true;
       await gamesStore.invalidateGameLists();
       router.push({ name: "game", params: { id: data.resource.id } });
     }
@@ -275,6 +293,8 @@ async function handleSubmit() {
         Создать игру
       </Button>
     </div>
+
+    <UnsavedChangesGuard :dirty="dirty" />
   </form>
 </template>
 

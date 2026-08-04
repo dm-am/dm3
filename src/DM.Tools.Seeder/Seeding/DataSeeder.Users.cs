@@ -59,7 +59,10 @@ internal sealed partial class DataSeeder
         const string defaultPassword = "Test123!";
 
         // Test accounts to create based on the testing plan
-        // All users start with 0 posts (QuantityRating=0), so all are "newbie" status
+        // Ratings set here are a starting point only. The profile pass assigns its
+        // own, and the last step of the run recomputes QuantityRating from the posts
+        // actually seeded, so who ends up under the newbie threshold is decided
+        // there and not here.
         // Note: All records in Users table are fully activated. For pending activation testing, use PendingRegistration.
         //
         // Username policy (see docs/conventions/USERNAME_POLICY.md):
@@ -228,7 +231,7 @@ internal sealed partial class DataSeeder
             ("SolohinLex", "Алексей Солохин", "Слежу за порядком", "Москва", "Администратор сайта с многолетним опытом. Отвечаю за техническую часть и модерацию.", Gender.Male, 500, 1500),
             ("TestSeniorMod", "Старший Модератор", "На страже правил", "Санкт-Петербург", "Помогаю поддерживать дружелюбную атмосферу на сайте. Обращайтесь с вопросами!", Gender.Female, 350, 800),
             ("TestModerator", "Модератор Форума", "Читаю все", "Новосибирск", "Модерирую форум и помогаю новичкам освоиться.", Gender.Male, 200, 400),
-            ("TestMentor", "Опытный Наставник", "Учу мастерству", "Екатеринбург", "Ментор для начинающих мастеров. Провожу игры уже 10 лет.", Gender.Male, 450, 1200),
+            ("TestMentor", "Опытный Наставник", "Учу мастерству", "Екатеринбург", "Наставник для начинающих мастеров. Провожу игры уже 10 лет.", Gender.Male, 450, 1200),
             ("TestUser", "Активный Игрок", "Ищу новые приключения", "Казань", "Люблю фэнтези и sci-fi. Играю за воинов и магов.", Gender.Male, 150, 300),
             ("TestHonorary", "Почетный Гоблин", "Ветеран сообщества", "Нижний Новгород", "Один из первых участников сайта. Почетный гоблин с 2015 года.", Gender.Male, 600, 2000),
             ("Ян", "Ян", "Минималист", "Владивосток", "Краткость — сестра таланта.", Gender.Male, 50, 80),

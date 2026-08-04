@@ -487,64 +487,14 @@ internal class GameService : IGameService
 
         var invokedEvents = new List<EventType> { EventType.ChangedGame };
 
-        // Only a status transition out of Closed clears the closing date. It cannot
-        // be inferred from ClosedUtc being null: the API never sends that field
-        // (the mapping ignores it), so "null" meant "not provided" on every request
-        // and any edit of a closed game erased when it was closed.
-        var reopened = false;
-
-        if (updateGame.Status.HasValue && updateGame.Status != game.Status)
-        {
-            var (intention, eventType) = _intentionConverter.Convert(updateGame.Status.Value);
-            if (_intentionManager.IsAllowed(intention, game))
-            {
-                invokedEvents.Add(eventType);
-
-                if (!game.ActivatedUtc.HasValue && updateGame.Status == ModuleStatus.Active)
-                {
-                    updateGame.ActivatedUtc = _dateTimeProvider.Now;
-                }
-
-                if (updateGame.Status == ModuleStatus.Closed)
-                {
-                    updateGame.ClosedUtc = _dateTimeProvider.Now;
-                    updateGame.IsRecruitmentOpen = false;
-                }
-
-                if (game.Status == ModuleStatus.Closed && updateGame.Status != ModuleStatus.Closed)
-                {
-                    reopened = true;
-                    updateGame.ClosedUtc = null;
-                    updateGame.ClosedReason = ClosedReason.None;
-                }
-            }
-            else
-            {
-                updateGame.Status = null;
-            }
-        }
-
-        if (updateGame.PremoderationStatus.HasValue && updateGame.PremoderationStatus != game.PremoderationStatus)
-        {
-            if (_intentionManager.IsAllowed(GameIntention.SetStatusModeration, game))
-            {
-                if (updateGame.PremoderationStatus == PremoderationStatus.Approved ||
-                    updateGame.PremoderationStatus == PremoderationStatus.AwaitingEdits)
-                {
-                    updateGame.MentorId = _identityProvider.Current.User.UserId;
-                }
-
-                if (updateGame.PremoderationStatus == PremoderationStatus.Approved &&
-                    game.PremoderationStatus != PremoderationStatus.Approved)
-                {
-                    updateGame.MentorId = null;
-                }
-            }
-            else
-            {
-                updateGame.PremoderationStatus = null;
-            }
-        }
+        // No status and no premoderation status here: a game moves through them by
+        // ChangeStatusAsync and ChangePremoderationAsync, which name the transition
+        // and refuse an illegal one with 400 and a forbidden one with 403. This path
+        // used to accept both fields, ask IsAllowed and, on a no, drop the field and
+        // answer 200 with the game unchanged - one product transition through two
+        // doors with different rules, and the quiet door was indistinguishable from
+        // success. The premoderation arm was unreachable on top of that: it required
+        // a target state its only legal transition never starts from.
 
         // Check if recruitment is being opened (was closed, now opening)
         var isOpeningRecruitment = !game.Recruitment.IsOpen &&
@@ -561,9 +511,6 @@ internal class GameService : IGameService
         var updateEntity = new UpdateGameEntity
         {
             GameId = updateGame.GameId,
-            Status = updateGame.Status,
-            PremoderationStatus = updateGame.PremoderationStatus,
-            ClosedReason = updateGame.ClosedReason,
             IsRecruitmentOpen = updateGame.IsRecruitmentOpen,
             IncrementRecruitmentCount = isOpeningRecruitment,
             RecruitmentPcLimit = updateGame.RecruitmentPcLimit,
@@ -576,10 +523,7 @@ internal class GameService : IGameService
             HidePostStats = updateGame.HidePostStats,
             CommentsAccessMode = updateGame.CommentsAccessMode,
             TagIds = updateGame.Tags,
-            UpdatedUtc = _dateTimeProvider.Now,
-            ActivatedUtc = updateGame.ActivatedUtc,
-            ClosedUtc = updateGame.ClosedUtc,
-            ClearClosedUtc = reopened
+            UpdatedUtc = _dateTimeProvider.Now
         };
 
         var result = await _repository.Update(updateEntity);

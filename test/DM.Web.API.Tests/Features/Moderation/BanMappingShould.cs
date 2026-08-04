@@ -76,10 +76,38 @@ public class BanMappingShould : UnitTestBase
         {
             StartedUtc = moment.AddDays(-1),
             EndedUtc = moment.AddDays(1),
-            IsRemoved = true
+            LiftedUtc = moment
         };
 
         MapperAt(moment).Map<PublicBan>(ban).IsActive.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Who lifted the ban, when and why reaches the moderation view. The row was
+    /// soft-deleted on lifting, so no query returned it, the two audit fields were
+    /// mapped with Ignore(), and IsLifted was false on everything a moderator could
+    /// see.
+    /// </summary>
+    [Fact]
+    public void CarryTheLiftAuditIntoTheModerationView()
+    {
+        var moment = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var moderator = Guid.NewGuid();
+        var ban = new DomainBan
+        {
+            StartedUtc = moment.AddDays(-2),
+            EndedUtc = moment.AddDays(5),
+            LiftedUtc = moment.AddDays(-1),
+            LiftedByUserId = moderator,
+            LiftReason = "Разобрались"
+        };
+
+        var mapped = MapperAt(moment).Map<Ban>(ban);
+
+        mapped.IsLifted.Should().BeTrue();
+        mapped.LiftedUtc.Should().Be(moment.AddDays(-1));
+        mapped.LiftedByUserId.Should().Be(moderator);
+        mapped.LiftReason.Should().Be("Разобрались");
     }
 
     [Fact]

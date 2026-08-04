@@ -24,8 +24,10 @@
  * content is out of the tab order and the a11y tree. They float over the feed
  * (absolute, below the strip), so the message list never shifts.
  *
- * Copy-friendly: the focal composite is one inline-flow run with real spaces,
- * so selecting the line copies exactly "Идет: Title, до 22:48" as one string.
+ * Copy-friendly: the whole line is one inline-flow run with real spaces, so
+ * selecting it copies exactly "Идет: Title, до 22:48 | +2 запланировано,
+ * ближайший 05.08" — one string, the way it reads. onelineCopy.spec.ts holds
+ * that shape; a flex row put a line break at every item boundary instead.
  */
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import dayjs from "dayjs";
@@ -222,6 +224,7 @@ onUnmounted(() => {
           >
             <SvgIcon name="chevronDown" /></button
           ><span v-if="restCount > 0" class="row-more"
+            ><span class="copy-space">{{ " " }}</span
             ><span class="row-sep" aria-hidden="true">|{{ " " }}</span
             ><button
               type="button"
@@ -332,20 +335,21 @@ onUnmounted(() => {
   line-height: 1.4
   white-space: nowrap
 
+// Inline flow, not flex: a flex item is blockified, so the strip copied as
+// "Идет: ...\n\n| +2 запланировано". Inline parts copy as one line; the former
+// gap: $minor is a left margin on the two parts that follow the text, and the
+// space before the "|" is a real .copy-space node inside .row-more. The
+// ellipsis moves up here with the flow: the strip now clips at its own right
+// edge instead of the focal text clipping inside a flex track.
 .row-main
-  display: flex
-  align-items: center
-  gap: $minor
+  display: block
   flex: 1 1 auto
-  min-width: 0
-
-// The focal composite: one selectable inline run (status + title + meta),
-// ellipsis-clipped so the title truncates before the count is ever lost.
-.row-text
-  flex: 0 1 auto
   min-width: 0
   overflow: hidden
   text-overflow: ellipsis
+
+// The focal composite: one selectable inline run (status + title + meta).
+.row-text
   white-space: nowrap
 
 .row-status
@@ -365,10 +369,11 @@ onUnmounted(() => {
 // focal event's own description; it rotates as the overlay opens. An icon
 // control (not a text link), so it darkens on hover rather than turning blue.
 .disc-toggle
-  flex: 0 0 auto
   display: inline-flex
   align-items: center
   justify-content: center
+  vertical-align: middle
+  margin-left: $minor
   width: 20px
   height: 20px
   padding: 0
@@ -393,9 +398,9 @@ onUnmounted(() => {
     outline: 2px solid $border-focus
     outline-offset: 2px
 
-// The quiet count of everything else — never truncated.
+// The quiet count of everything else.
 .row-more
-  flex: 0 0 auto
+  margin-left: $minor
   color: $text-muted
 
 .row-sep
@@ -426,6 +431,16 @@ onUnmounted(() => {
 
 .row-none
   color: $text-muted
+
+// On a phone the line gives up words before it gives up the title: first the
+// date of the nearest event, then the word of the count. Measured at 375px,
+// where the running event's title had no width left at all.
+@media (max-width: $bp-mobile)
+  .rest-near
+    display: none
+
+  .rest-word
+    display: none
 
 // ─────────────────────────────────────────────────────────────
 // Floating reveals — the upcoming list and the description overlay float over

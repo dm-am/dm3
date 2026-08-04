@@ -137,7 +137,7 @@ export function useGameDisplay() {
   /**
    * Build game tooltip with labels (multiline):
    * Мастер: Username
-   * Ассистент(ы): A, B
+   * Ассистент: A / Ассистенты: A, B
    * Персонажи: X/Y
    * Читатели: Z
    */
@@ -149,7 +149,7 @@ export function useGameDisplay() {
       parts.push(`Мастер: ${game.master.username}`);
     }
 
-    // Ассистент(ы): Username, ... (if any)
+    // Ассистент / Ассистенты: Username, ... (if any)
     const assistants = game.assistants?.filter((a) => a?.username) ?? [];
     if (assistants.length > 0) {
       const label = assistants.length === 1 ? "Ассистент" : "Ассистенты";

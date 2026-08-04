@@ -15,7 +15,8 @@ public class AwardType
     /// <summary>Stable code ("contest_first", "popular_vote", "guesser").</summary>
     public string Code { get; set; } = string.Empty;
 
-    /// <summary>Display name ("Литконкурс", "Народное признание").</summary>
+    /// <summary>Display name ("Литконкурс", "Народное признание, например" - the
+    /// trailing words are part of that award's name, not a stray comment).</summary>
     public string Title { get; set; } = string.Empty;
 
     /// <summary>Description (what it is granted for).</summary>

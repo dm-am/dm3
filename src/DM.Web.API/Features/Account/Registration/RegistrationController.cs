@@ -122,7 +122,7 @@ public class RegistrationController : ControllerBase
     /// - No leading/trailing/consecutive whitespace
     /// - Must be unique (not used by active users or in login history)
     ///
-    /// The activation is idempotent: if ExpectedEmail matches an existing user
+    /// The activation is idempotent: if RetryEmail matches an existing user
     /// with the same Login, returns success without error.
     /// </remarks>
     /// <param name="token">Activation token from the mailed link, in the X-Dm-Account-Token header</param>

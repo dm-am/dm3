@@ -369,4 +369,20 @@ public class WarningServiceShould : UnitTestBase
         banned.Should().ContainSingle(v => v.User.Username == "BannedOnly");
         pointsOnly.Should().ContainSingle(v => v.User.Username == "PointsOnly");
     }
+
+    /// <summary>
+    /// The unfiltered list is the repository's, not an empty one. It used to return
+    /// [] with a note that the repository method was missing, behind a Moderator+
+    /// gate and a 200, so a moderator concluded there were no violations.
+    /// </summary>
+    [Fact]
+    public async Task ReturnEveryWarningWhenNoUserIsNamed()
+    {
+        _warningRepository.Setup(r => r.GetAllWarnings(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new Warning { WarningId = _warningId, Points = 3 }]);
+
+        var result = (await _service.GetAllWarnings()).ToList();
+
+        result.Should().ContainSingle(w => w.WarningId == _warningId);
+    }
 }

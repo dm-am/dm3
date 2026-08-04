@@ -40,14 +40,16 @@ public class BotConfiguration
     /// Secret for Telegram webhook URL validation.
     /// Sent by Telegram in X-Telegram-Bot-Api-Secret-Token when the webhook is
     /// registered with secret_token; the URL is /v1/webhooks/telegram.
-    /// If not set, any secret is accepted (dev mode).
+    /// If not set, the webhook is closed: it answers 404 rather than accepting
+    /// anything, because an unset secret is the shipped default.
     /// </summary>
     public string? TelegramWebhookSecret { get; set; }
 
     /// <summary>
     /// Secret for Discord webhook URL validation.
     /// Expected in X-Dm-Webhook-Secret; the URL is /v1/webhooks/discord.
-    /// If not set, any secret is accepted (dev mode).
+    /// If not set, the webhook is closed: it answers 404 rather than accepting
+    /// anything, because an unset secret is the shipped default.
     /// </summary>
     public string? DiscordWebhookSecret { get; set; }
 }

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Domain.Blog.Features.Blacklists;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Entities.Blog;
@@ -18,11 +19,16 @@ internal class BlogBlacklistRepository : IBlogBlacklistRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public BlogBlacklistRepository(DmDbContext dbContext, IMapper mapper)
+    public BlogBlacklistRepository(
+        DmDbContext dbContext,
+        IMapper mapper,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _mapper = mapper;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
@@ -51,7 +57,7 @@ internal class BlogBlacklistRepository : IBlogBlacklistRepository
             BlogId = blogId,
             BlockedUserId = blockedUserId,
             BlockedByUserId = blockedByUserId,
-            CreatedUtc = DateTimeOffset.UtcNow
+            CreatedUtc = _dateTimeProvider.Now
         };
 
         _dbContext.BlogBlacklists.Add(entry);
@@ -95,7 +101,7 @@ internal class BlogBlacklistRepository : IBlogBlacklistRepository
     /// <inheritdoc />
     public async Task<int> CopyFromPersonalBlacklist(Guid blogId, Guid ownerId, CancellationToken ct = default)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = _dateTimeProvider.Now;
 
         // Get personal blacklist entries that are not already in blog blacklist
         var personalBlacklistUserIds = await _dbContext.UserBlacklists

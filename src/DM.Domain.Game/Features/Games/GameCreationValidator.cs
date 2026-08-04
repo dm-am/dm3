@@ -15,18 +15,15 @@ internal class GameCreationValidator : IGameCreationValidator
     private readonly IValidator<CreateGame> _validator;
     private readonly IIntentionManager _intentionManager;
     private readonly IIdentityProvider _identityProvider;
-    private readonly IProbationConfiguration _probationConfig;
 
     public GameCreationValidator(
         IValidator<CreateGame> validator,
         IIntentionManager intentionManager,
-        IIdentityProvider identityProvider,
-        IProbationConfiguration probationConfig)
+        IIdentityProvider identityProvider)
     {
         _validator = validator;
         _intentionManager = intentionManager;
         _identityProvider = identityProvider;
-        _probationConfig = probationConfig;
     }
 
     /// <inheritdoc />
@@ -40,7 +37,7 @@ internal class GameCreationValidator : IGameCreationValidator
         CreateGame createGame)
     {
         var identity = _identityProvider.Current;
-        var requiresPremoderation = identity.User.QuantityRating < _probationConfig.NewbiePostThreshold;
+        var requiresPremoderation = identity.User.IsNewbie;
 
         var initialStatus = createGame.Draft ? ModuleStatus.Draft : ModuleStatus.Active;
         var premoderationStatus = requiresPremoderation

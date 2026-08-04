@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using AutoMapper;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Posts;
@@ -220,7 +221,7 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.JoinedUtc, s => s.MapFrom(a => a.JoinedUtc))
             .ForMember(d => d.LastActivityUtc, s => s.MapFrom(a => a.User.LastActivityUtc))
             .ForMember(d => d.Role, s => s.MapFrom(a => a.User.Role))
-            .ForMember(d => d.IsNewbie, s => s.MapFrom(a => a.User.QuantityRating < 100));
+            .ForMember(d => d.IsNewbie, s => s.MapFrom(a => a.User.IsNewbie));
 
         CreateMap<DbGame, GameDto>()
             .Include<DbGame, GameDetails>()

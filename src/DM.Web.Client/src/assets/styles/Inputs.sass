@@ -18,10 +18,25 @@ $input-padding: ($minor + 1px) $small
   font-family: "PT Sans", sans-serif
   font-size: $font-size
 
+  // A tint of the border is not a focus indicator. Measured, $border-focus
+  // against $border is 1.77 in the light theme and 2.10 in the dark one, and
+  // against the field's own fill 2.61 — WCAG 1.4.11 asks 3.0 of anything that
+  // marks the state of a control. On a form of five fields a keyboard user
+  // could not tell which one held the caret until they typed into it.
+  //
+  // So the field takes the ring this file already draws elsewhere
+  // (+expand-toggle-button, +muted-link): 2px of $link, one step outside the
+  // box. $link clears 3.0 on all three surfaces a field sits on, in both
+  // themes — fillContrast.spec.ts measures that rather than trusting this note.
+  // Mouse focus stays ring-free, exactly as it does on buttons.
   &:focus
     outline: none
     border-style: solid
     border-color: $border-focus
+
+  &:focus-visible
+    outline: 2px solid $link
+    outline-offset: 1px
 
   &:disabled
     background-color: $input-bg-disabled
@@ -128,6 +143,70 @@ $input-padding: ($minor + 1px) $small
   background-color: $accent-red
   border-color: $accent-red
   color: $text-on-fill
+
+/// Outlined pill — the fifth variant of the system, and the one that lived as
+/// four copies outside it (mark-all, unsubscribe, notepad edit/delete). Layout
+/// and height are a +button's, so it lines up with every other control; the
+/// body is transparent and the colour is one accent, carried by the border and
+/// the letters.
+///
+/// Hover is a TINT of that accent and never the solid fill: on the solid
+/// $accent-green the dark theme's $text-on-green is the very same hex, and on
+/// the solid $accent-red $text-on-red measures 1.5 — the four copies each
+/// carried a note saying so, each in its own words.
+@mixin button-outline($color)
+  +_button-layout
+  background-color: transparent
+  color: $color
+  border: 1px solid $color
+  transition: background-color $transition-normal
+
+  &:hover:not(:disabled)
+    +tint($color, 15%)
+
+  // Keep mouse focus outline-free; keyboard focus shows the global
+  // :focus-visible outline from Reset.sass
+  &:focus:not(:focus-visible)
+    outline: none
+
+  &:disabled
+    opacity: $disabled-opacity
+    cursor: default
+
+/// Icon-only control — a flat button whose whole body is one glyph.
+/// The drawn size is the caller's; the POINTER target is not. WCAG 2.5.8 puts
+/// its floor at $tap-target-min, and three controls on the site sat under it —
+/// 20x20 for "back" in every catalogue filter and for removing a contact, 36x18
+/// for the mirror switch. On a phone that is about three millimetres, and a
+/// miss on "back" counts as a click outside and closes the dropdown.
+///
+/// The target grows as a centred overlay rather than as padding: an overlay is
+/// out of flow, so the box the layout sees is still exactly the glyph and
+/// nothing around the control moves. A pseudo-element is not an event target of
+/// its own — the click is dispatched to the button that owns it.
+///
+/// The interpolation inside max() is load-bearing: written plainly, Sass would
+/// try to fold a percentage and a length together and refuse.
+@mixin icon-button($width, $height: $width)
+  position: relative
+  display: inline-flex
+  align-items: center
+  justify-content: center
+  width: $width
+  height: $height
+  padding: 0
+  border: none
+  background: none
+  cursor: pointer
+
+  &::after
+    content: ""
+    position: absolute
+    top: 50%
+    left: 50%
+    width: max(100%, #{$tap-target-min})
+    height: max(100%, #{$tap-target-min})
+    transform: translate(-50%, -50%)
 
 /// Inline link-styled button — full reset to look like a plain inline <a> tag.
 /// Unlike +button-link, has no layout/sizing (no height, no padding box) so it

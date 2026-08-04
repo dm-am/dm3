@@ -62,8 +62,8 @@ internal sealed partial class DataSeeder
         }
 
         var mentor = users.First(u => u.Role == UserRole.Mentor);
-        var experiencedUsers = users.Where(u => u.QuantityRating >= 100).ToList();
-        var newbieUsers = users.Where(u => u.QuantityRating < 100).ToList();
+        var experiencedUsers = users.Where(u => !ProbationPolicy.IsNewbie(u.QuantityRating)).ToList();
+        var newbieUsers = users.Where(u => ProbationPolicy.IsNewbie(u.QuantityRating)).ToList();
 
         if (experiencedUsers.Count == 0) experiencedUsers = users.Take(2).ToList();
 
@@ -197,8 +197,8 @@ internal sealed partial class DataSeeder
             // Create rubrics
             var rubrics = new[]
             {
-                new Rubric { RubricId = _guidFactory.Create(), BlogId = blog.BlogId, Title = "Общее", AccessType = RubricAccessType.Open, SortOrder = 1, CreatedUtc = blog.CreatedUtc, IsArchived = false, IsRemoved = false },
-                new Rubric { RubricId = _guidFactory.Create(), BlogId = blog.BlogId, Title = "Для избранных", AccessType = RubricAccessType.Private, SortOrder = 2, CreatedUtc = blog.CreatedUtc, IsArchived = false, IsRemoved = false },
+                new Rubric { RubricId = _guidFactory.Create(), BlogId = blog.BlogId, Title = "Общее", SortOrder = 1, CreatedUtc = blog.CreatedUtc, IsArchived = false, IsRemoved = false },
+                new Rubric { RubricId = _guidFactory.Create(), BlogId = blog.BlogId, Title = "Для избранных", SortOrder = 2, CreatedUtc = blog.CreatedUtc, IsArchived = false, IsRemoved = false },
             };
 
             foreach (var rubric in rubrics)

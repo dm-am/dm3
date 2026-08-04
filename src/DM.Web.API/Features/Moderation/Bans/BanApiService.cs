@@ -62,7 +62,17 @@ internal class BanApiService : IBanApiService
     public async Task<ListEnvelope<Ban>> GetAllActiveBans(BanType? type = null)
     {
         var bans = await _banService.GetAllActiveBans();
-        return new ListEnvelope<Ban>(bans.Select(_mapper.Map<Ban>));
+        var mapped = bans.Select(_mapper.Map<Ban>);
+
+        // The type is derived during mapping, so the filter runs after it. The
+        // parameter used to be accepted, documented and ignored: ?type=Permanent
+        // answered with every active ban there was.
+        if (type.HasValue)
+        {
+            mapped = mapped.Where(b => b.Type == type.Value);
+        }
+
+        return new ListEnvelope<Ban>(mapped);
     }
 
     /// <inheritdoc />

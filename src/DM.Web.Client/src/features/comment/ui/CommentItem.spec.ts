@@ -7,6 +7,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia } from "pinia";
 import { useToast } from "@/shared/lib/composables/useToast";
 import CommentItem from "./CommentItem.vue";
+import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import type { Comment } from "@/shared/api/models/common/comment";
 
 vi.mock("vue-router", () => ({
@@ -153,11 +154,36 @@ describe("CommentItem edit seeding", () => {
     const wrapper = mountComponent(vi.fn());
 
     await wrapper.find(".delete-btn").trigger("click");
+    wrapper.findComponent(ConfirmDialog).vm.$emit("confirm");
     await flushPromises();
 
     expect(submitDelete).toHaveBeenCalledWith("c-1");
     expect(useToast().toasts.value.map((t) => t.message)).toEqual([
       "Не удалось удалить комментарий",
     ]);
+  });
+
+  /**
+   * The footer packs "Редактировать", "Удалить" and "Предупреждение" at a $small
+   * step, and the middle one deleted on the first click with nothing to undo
+   * it. The game post and the forum topic both ask first, through this dialog.
+   */
+  it("asks before deleting", async () => {
+    const wrapper = mountComponent(vi.fn());
+
+    await wrapper.find(".delete-btn").trigger("click");
+
+    expect(submitDelete).not.toHaveBeenCalled();
+    expect(wrapper.findComponent(ConfirmDialog).props("show")).toBe(true);
+  });
+
+  it("deletes nothing when the question is answered no", async () => {
+    const wrapper = mountComponent(vi.fn());
+
+    await wrapper.find(".delete-btn").trigger("click");
+    wrapper.findComponent(ConfirmDialog).vm.$emit("cancel");
+    await flushPromises();
+
+    expect(submitDelete).not.toHaveBeenCalled();
   });
 });

@@ -130,13 +130,8 @@
 
 <script setup lang="ts">
 import { useUiStore } from "@/shared/stores/ui";
-import {
-  useAuthStore,
-  userIsModerator,
-  signOut,
-  signOutAll,
-  fetchUser,
-} from "@/entities/user";
+import { useAuthStore, userIsModerator, fetchUser } from "@/entities/user";
+import { useSessionExit } from "@/features/auth";
 import { useMessagingStore } from "@/entities/message";
 import { useNotificationStore } from "@/entities/notification";
 import { setScrollContainer } from "@/shared/lib/scroll";
@@ -158,6 +153,10 @@ const userStore = useAuthStore();
 const messagingStore = useMessagingStore();
 const notificationStore = useNotificationStore();
 const route = useRoute();
+
+// Same rule as the header: a sign-out on a page that needed the session has to
+// take the viewer off it.
+const { signOut, signOutAll } = useSessionExit();
 
 const isModerator = computed(() => userIsModerator(userStore.user));
 

@@ -208,9 +208,16 @@ internal class PostService : IPostService
             PostId = updatePost.PostId
         };
 
-        // Check text edit permission
-        if (_intentionManager.IsAllowed(PostIntention.EditText, (post, room)))
+        // Submitted text the caller may not edit is refused. It used to be swapped
+        // for the stored text and saved, so an edit nobody was allowed to make came
+        // back 200 with the post as it was - the same response a successful edit
+        // produces. A request that submits no text asks for nothing and keeps the
+        // stored values: the lead who may only change the character reaches the
+        // branch below.
+        if (updatePost.GameText != null || updatePost.MetagameText != null)
         {
+            _intentionManager.ThrowIfForbidden(PostIntention.EditText, (post, room));
+
             // PATCH semantics: an absent field keeps its value, an empty string
             // clears it. Without the null check, editing only the in-game text
             // wiped the out-of-character text, and omitting the in-game text threw.
@@ -232,17 +239,15 @@ internal class PostService : IPostService
         entity.PrivateAddresseeSnapshotJson = ResolvePrivateAddressees(
             entity.GameText, room, post.PrivateAddresseeSnapshotJson);
 
-        // Check character change permission
-        if (updatePost.CharacterId != null)
+        // Same rule for the character: a change the caller may not make is a
+        // refusal, an unchanged value is not a change.
+        if (updatePost.CharacterId != null && updatePost.CharacterId.HasChanged(post.Character?.Id))
         {
-            var canChangeCharacter = updatePost.CharacterId.HasChanged(post.Character?.Id) &&
-                _intentionManager.IsAllowed(RoomIntention.CreatePost, (room, updatePost.CharacterId.Value)) &&
-                _intentionManager.IsAllowed(PostIntention.EditCharacter, (post, room));
-            if (canChangeCharacter)
-            {
-                entity.ShouldChangeCharacter = true;
-                entity.CharacterId = updatePost.CharacterId.Value;
-            }
+            _intentionManager.ThrowIfForbidden(RoomIntention.CreatePost, (room, updatePost.CharacterId.Value));
+            _intentionManager.ThrowIfForbidden(PostIntention.EditCharacter, (post, room));
+
+            entity.ShouldChangeCharacter = true;
+            entity.CharacterId = updatePost.CharacterId.Value;
         }
 
         var updatedPost = await _repository.Update(entity);

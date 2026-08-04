@@ -98,10 +98,10 @@ const isAccessRecoveryAuthenticated = computed(
     color: $link-hover
     text-decoration: underline
 
+// Inline flow, not flex: a flex item is blockified, so the note copied as
+// "Если удобнее, напишите нам в\nDiscord". The gap the flex drew is already a
+// real space in the markup, right after the icon.
 .discord-fallback
-  display: flex
-  align-items: center
-  gap: $minor
   margin-top: $medium
   color: $text-muted
   font-size: $secondary-font-size
@@ -115,5 +115,5 @@ const isAccessRecoveryAuthenticated = computed(
 .discord-icon
   width: 16px
   height: 16px
-  flex-shrink: 0
+  vertical-align: text-bottom
 </style>

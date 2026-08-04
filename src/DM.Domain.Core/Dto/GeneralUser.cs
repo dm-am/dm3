@@ -232,7 +232,12 @@ public class GeneralUser : IUser
     public bool IsAuthenticated => Role != UserRole.Guest;
 
     /// <summary>
-    /// Whether user is a newbie (less than 100 posts)
+    /// Whether the user is still a newbie: fewer game posts than
+    /// <see cref="ProbationPolicy.NewbiePostThreshold" />. The predicate every
+    /// caller asks, over the counter every other reader uses. The rule used to be
+    /// written out seven times over two sources - this counter and a COUNT over
+    /// posts - so removing a post was enough to make the badge on the profile and
+    /// the right to write a review disagree about one person.
     /// </summary>
-    public bool IsNewbie => QuantityRating < 100;
+    public bool IsNewbie => QuantityRating < ProbationPolicy.NewbiePostThreshold;
 }

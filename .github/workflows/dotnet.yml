@@ -49,12 +49,23 @@ jobs:
       run: dotnet build --no-restore -c Release
     - name: Test
       run: dotnet test --no-build -c Release --verbosity normal --logger trx --results-directory TestResults --collect:"XPlat Code Coverage"
+    # The cobertura was collected and uploaded with if-no-files-found: error - a
+    # guarantee that the file exists, with no threshold anywhere, so deleting
+    # tests or adding a module without any passed every gate green. The frontend
+    # has had a ratchet since it had tests at all; this is the same rule for the
+    # solution, and the numbers live next to the reason in the script.
+    - name: Coverage threshold
+      run: bash scripts/check-coverage.sh
     - name: Upload test results
       uses: actions/upload-artifact@v4
       if: always()
       with:
         name: test-results
         path: TestResults/
+    # Collected since the run existed and compared with nothing, while the
+    # frontend has had a threshold in vite.config.ts all along.
+    - name: Coverage floor
+      run: ./scripts/check-coverage.sh TestResults
     - name: Upload coverage reports
       uses: actions/upload-artifact@v4
       if: always()
@@ -99,8 +110,8 @@ jobs:
         path: src/DM.Web.Client/coverage/
         if-no-files-found: warn
 
-  # The end-to-end tier, which until now ran nowhere: 32 spec files and 258 tests
-  # that only ever executed on the owner's machine, so nothing stopped a merge
+  # The end-to-end tier, which until now ran nowhere: 32 spec files and the 235
+  # tests in them, which only ever ran on the owner's machine, so nothing stopped a merge
   # from breaking them and nobody found out until the next manual run.
   #
   # It needs a real stack, not a mock — the suite talks to the API over HTTP and
@@ -112,6 +123,13 @@ jobs:
       # Every compose invocation in this job means the pair, and repeating the
       # flags five times is how one of them ends up missing the overlay.
       COMPOSE_FILE: docker-compose.yml:docker-compose.e2e.yml
+      # docker/.env.example ends with Development for local work, and a tier that
+      # exercises Development proves nothing about the build that ships: Swagger
+      # is mapped only there, and the content policy of the API relaxes its
+      # script-src for it. Through the environment rather than by rewriting a
+      # line of the file, the way the throwaway encryption key below is handed
+      # in: compose prefers the environment over .env.
+      ASPNETCORE_ENVIRONMENT: Production
     steps:
     - uses: actions/checkout@v4
 
@@ -364,6 +382,7 @@ jobs:
       run: |
         docker compose --env-file /dev/null -f docker-compose.yml config --quiet
         docker compose --env-file /dev/null -f docker-compose.yml -f docker-compose.preview.yml config --quiet
+        docker compose --env-file /dev/null -f docker-compose.yml -f docker-compose.preview.yml -f docker-compose.mirror.yml config --quiet
 
     - name: Every build context the overlay names must exist
       working-directory: docker
@@ -399,4 +418,106 @@ jobs:
         unit=$(grep -oE "$pattern" docker/dm3.service | sort -u)
         echo "installer: $installer"
         echo "unit:      $unit"
+        # Non-empty first, and named positively after that. Two empty extractions
+        # compare equal, so a switch to --file, to COMPOSE_FILE or to a path
+        # outside the character class above would have left this step green on
+        # nothing at all - while the failure it exists to catch came back.
+        test -n "$installer" || { echo "::error::no compose files or profiles found in docker/setup-server.sh"; exit 1; }
+        test -n "$unit" || { echo "::error::no compose files or profiles found in docker/dm3.service"; exit 1; }
+        printf '%s\n' "$installer" | grep -qx -- '-f docker-compose.preview.yml' || { echo "::error::the installer no longer names the overlay the site lives in"; exit 1; }
+        printf '%s\n' "$installer" | grep -qx -- '--profile production' || { echo "::error::the installer no longer enables the profile watchtower lives behind"; exit 1; }
         test "$installer" = "$unit" || { echo "::error::dm3.service and setup-server.sh disagree on the compose files or profiles"; exit 1; }
+
+    # Nothing compiled the edge: a typo in either nginx.conf was a crash-looping
+    # container on the server, which is the whole site, and a typo in the alert
+    # rules stopped Prometheus from starting at all. All three tools run in a
+    # container so the versions match what the deployment runs.
+    - name: The edge and the SPA server configurations must parse
+      run: |
+        # The upstreams are resolved at start-up and none of them exists here.
+        docker run --rm \
+          --add-host dmapi:127.0.0.1 --add-host dmfront:127.0.0.1 \
+          --add-host minio:127.0.0.1 --add-host imgproxy:127.0.0.1 \
+          -v "$PWD/docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
+          nginx:1.27-alpine nginx -t
+        # The SPA config is a server block, not a whole configuration: it is
+        # mounted where the image includes it from.
+        docker run --rm \
+          -v "$PWD/src/DM.Web.Client/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
+          nginx:1.27-alpine nginx -t
+
+    - name: The Prometheus configuration and its alert rules must parse
+      run: |
+        docker run --rm \
+          -v "$PWD/docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+          -v "$PWD/docker/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro" \
+          --entrypoint promtool prom/prometheus:v2.51.0 \
+          check config /etc/prometheus/prometheus.yml
+
+    # Every tracked script, not a hand kept list: the backup jobs run at two in
+    # the morning into a log nobody reads, so a typo in one of them is found by
+    # a failed restore.
+    - name: Every shell script must pass shellcheck
+      run: |
+        docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:v0.10.0 \
+          $(git ls-files '*.sh') scripts/hooks/pre-push
+
+  # The pair that actually gets deployed had never been started by anything: e2e
+  # brings up the base stack plus its own overlay and talks to the API directly,
+  # so nginx, its basic auth, the SPA container and every route through the edge
+  # were executed for the first time on the server. Three of the deployment
+  # defects this repository has already fixed - the API port outside the
+  # perimeter, the session cookie, the unreachable transform layer - are that one
+  # class, and none of them could have failed a gate.
+  deployment-smoke:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Generate a throwaway encryption key
+      run: echo "DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+
+    - name: Create .env for Docker Compose
+      run: cp docker/.env.example docker/.env
+
+    # The repository ships no credentials, and without the file docker creates a
+    # directory in its place and nginx does not start.
+    - name: Generate the stand credentials
+      env:
+        DM_PREVIEW_PASSWORD: smoke-test-password
+      run: bash docker/scripts/init-htpasswd.sh
+
+    - name: Start the pair the installer and the unit deploy
+      working-directory: docker
+      env:
+        COMPOSE_FILE: docker-compose.yml:docker-compose.preview.yml
+        ASPNETCORE_ENVIRONMENT: Production
+      run: |
+        docker compose up -d postgres mongo rabbitmq minio mailhog jaeger
+        docker compose up -d --build --wait migration
+        docker compose up -d --build --wait dmapi
+        docker compose up -d --build --wait nginx
+
+    - name: The edge answers where the deployment needs it to
+      run: |
+        status() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+        # The heartbeat the monitoring guide recommends: the liveness of the API
+        # itself, reachable without the stand credentials. Answered by the SPA
+        # fallback with 200 before it had a location of its own.
+        test "$(status http://localhost/_health)" = 200
+        test "$(status http://localhost/nginx-health)" = 200
+        # Everything else is behind basic auth, the SPA and the API alike.
+        test "$(status http://localhost/)" = 401
+        test "$(status http://localhost/v1/boards)" = 401
+        test "$(status -u preview:smoke-test-password http://localhost/)" = 200
+        test "$(status -u preview:smoke-test-password http://localhost/v1/boards)" = 200
+
+    - name: Logs on failure
+      if: failure()
+      working-directory: docker
+      env:
+        COMPOSE_FILE: docker-compose.yml:docker-compose.preview.yml
+      run: docker compose logs --tail=200 nginx dmapi dmfront

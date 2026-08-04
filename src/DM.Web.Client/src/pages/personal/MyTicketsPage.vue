@@ -293,7 +293,7 @@ const isFilteredEmpty = computed(
   > *
     flex: 0 1 280px
 
-@media (max-width: 600px)
+@media (max-width: $bp-mobile)
   .filters
     flex-direction: column
 

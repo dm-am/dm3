@@ -15,6 +15,13 @@
  * was a green pill with no digit inside it (ratio 1.00), while the light theme
  * showed the same digit at 1.15.
  *
+ * The keyboard focus ring is measured here too, for the same reason and by the
+ * same machinery: it is a non-text indicator, its colour is a token, the surface
+ * under it is a token, and the ratio is therefore a fact about the sources. It
+ * got its own block at the bottom of this file when the form controls turned
+ * out to mark focus by tinting their border from $border to $border-focus —
+ * 1.77 in the light theme, where the floor is 3.0.
+ *
  * Thresholds are WCAG 2.1 AA: 4.5 for body text, 3.0 for large text, 3.0 for
  * the outline of a control against the surface behind it.
  *
@@ -376,5 +383,47 @@ describe("contrast of solid accent fills", () => {
     expect(offenders).toEqual([]);
     // The walk really reaches the sources: the one sanctioned use is found.
     expect(allowed.sort()).toEqual(Object.keys(ALLOWED_LINK_HOVER_FILL).sort());
+  });
+});
+
+describe("contrast of the keyboard focus ring on a form control", () => {
+  // One block, because the ring is declared once: InputsGlobal.sass applies
+  // @mixin input() to input, textarea and select for the whole document, so
+  // this is the only place the ring can be given to all three — and the only
+  // place it can go missing for all three at once, which is what happened.
+  const FILE = "assets/styles/Inputs.sass";
+  const RING = ["@mixin input()", "&:focus-visible"];
+
+  /** The colour of the ring, taken out of the shorthand it is written in. */
+  function ringColour(): string {
+    const outline = declared(block(FILE, RING), /^outline$/);
+    if (outline === null) {
+      throw new Error("@mixin input() declares no focus outline");
+    }
+    const parts = outline.split(/\s+/);
+    return parts[parts.length - 1];
+  }
+
+  it("draws a ring at all, and draws it from a token", () => {
+    // A hex here would be outside the palettes and unmeasurable below, which is
+    // the same as unmeasured.
+    expect(declared(block(FILE, RING), /^outline$/)).toMatch(
+      /^\d+px solid \$[\w-]+$/,
+    );
+  });
+
+  it("keeps the ring apart from every surface a field sits on", () => {
+    const colour = ringColour();
+    const offenders: string[] = [];
+    for (const theme of THEMES) {
+      for (const surface of SURFACES) {
+        const measured = ratio(colour, surface, theme);
+        if (measured >= AA.nonText) continue;
+        offenders.push(
+          `${theme}: ${colour} on ${surface} is ${measured.toFixed(2)}, AA asks ${AA.nonText}`,
+        );
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

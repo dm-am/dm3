@@ -33,10 +33,11 @@ internal class WarningMappingProfile : Profile
             .ForMember(d => d.ExpiresUtc, s => s.MapFrom(b => b.EndedUtc))
             .ForMember(d => d.Comment, s => s.MapFrom(b => b.Comment))
             .ForMember(d => d.IsActive, s => s.MapFrom<BanActivityResolver>())
-            .ForMember(d => d.IsLifted, s => s.MapFrom(b => b.IsRemoved))
+            .ForMember(d => d.IsLifted, s => s.MapFrom(b => b.IsLifted))
             .ForMember(d => d.IsVoluntary, s => s.MapFrom(b => b.IsVoluntary))
-            .ForMember(d => d.LiftedUtc, s => s.Ignore())
-            .ForMember(d => d.LiftedBy, s => s.Ignore());
+            .ForMember(d => d.LiftedUtc, s => s.MapFrom(b => b.LiftedUtc))
+            .ForMember(d => d.LiftedByUserId, s => s.MapFrom(b => b.LiftedByUserId))
+            .ForMember(d => d.LiftReason, s => s.MapFrom(b => b.LiftReason));
 
         // Trimmed public views: no reason/comment, no moderator identity,
         // no causation entity refs — anonymous profile visitors only see

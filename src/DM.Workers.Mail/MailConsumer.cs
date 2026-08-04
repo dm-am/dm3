@@ -23,7 +23,7 @@ internal class MailConsumer : BackgroundService
     private readonly ILogger<MailConsumer> _logger;
     private readonly IConsumerBuilder _consumerBuilder;
     private readonly IAsyncConnectionFactory _rabbitConnectionFactory;
-    private readonly RetryPolicy _consumeRetryPolicy;
+    private readonly AsyncRetryPolicy _consumeRetryPolicy;
 
     public MailConsumer(
         ILogger<MailConsumer> logger,
@@ -34,16 +34,21 @@ internal class MailConsumer : BackgroundService
         _consumerBuilder = consumerBuilder;
         _rabbitConnectionFactory = rabbitConnectionFactory;
 
-        _consumeRetryPolicy = Policy.Handle<Exception>().WaitAndRetry(5,
+        _consumeRetryPolicy = Policy.Handle<Exception>().WaitAndRetryAsync(5,
             attempt => TimeSpan.FromSeconds(1 << attempt),
             (exception, _) => _logger.LogWarning(exception, "Could not subscribe to the queue"));
     }
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogDebug("[🚴] Starting mail sending consumer");
 
-        DeadLetterQueue.DeclareTerminal(_rabbitConnectionFactory, DeadLetterExchangeName);
+        // Yield before touching the broker: everything before the first await runs
+        // inside host startup, so a broker that is not up yet aborted the host before
+        // its own health check could report why, and the retry below held the start
+        // for a minute of Thread.Sleep first. The API consumer next door has done it
+        // this way all along.
+        await Task.Yield();
 
         var parameters = new RabbitConsumerParameters("dm.mail.sender", "dm.mail.sending", ProcessingOrder.Sequential)
         {
@@ -58,9 +63,17 @@ internal class MailConsumer : BackgroundService
             DeadLetterExchange = DeadLetterExchangeName,
         };
         var consumer = _consumerBuilder.BuildRabbit<EmailLetter, MailSendingProcessor>(parameters);
-        _consumeRetryPolicy.Execute(consumer.Subscribe);
+
+        // The dead-letter declaration is inside the policy with the subscription: it
+        // opens its own connection to the same broker, and it used to be the one call
+        // nothing retried, so an unreachable broker threw past Polly entirely.
+        await _consumeRetryPolicy.ExecuteAsync(_ =>
+        {
+            DeadLetterQueue.DeclareTerminal(_rabbitConnectionFactory, DeadLetterExchangeName);
+            consumer.Subscribe();
+            return Task.CompletedTask;
+        }, stoppingToken);
 
         _logger.LogDebug("[👂] Mail sending consumer is listening to {QueueName} queue", parameters.QueueName);
-        return Task.CompletedTask;
     }
 }

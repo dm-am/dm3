@@ -17,6 +17,7 @@ import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
 import { forumApi } from "@/entities/forum";
 import { CommentsFilter, useCommentsFilter } from "@/features/comment-filter";
 import { CommentSkeleton } from "@/shared/ui/Skeleton";
+import { errorCodeForStatus } from "@/shared/ui/ErrorPage";
 import { reportForumShellError } from "./forumShell";
 import { notifyFailure } from "@/shared/lib/errors";
 
@@ -35,15 +36,6 @@ const loading = ref(true);
 const errorCode = ref<number | null>(null);
 
 useDocumentTitle(() => topic.value?.title);
-
-/** Maps an API failure status to the ErrorPage code (404 default). */
-function mapErrorCode(status: number | undefined): number {
-  if (status === 403) return 403;
-  if (status === 410) return 410;
-  if (status === 404) return 404;
-  if (!status || status >= 500) return 500;
-  return 404;
-}
 
 // Comment creation state
 const newComment = ref("");
@@ -104,7 +96,10 @@ async function fetchData() {
 
   const { ok, status } = await trySelectTopicByNumber(alias, num);
   if (!ok) {
-    errorCode.value = mapErrorCode(status);
+    // The topic endpoint is the one that spends 410 on its literal meaning:
+    // TopicService answers Gone for a topic that was deleted and 404 for one
+    // that never existed, so this page keeps the "Страница удалена" branch.
+    errorCode.value = errorCodeForStatus(status, { goneMeansRemoved: true });
     reportShellError(errorCode.value);
     // Drop comments from the previously viewed topic so they never leak
     // onto an error page.

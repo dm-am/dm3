@@ -31,8 +31,17 @@ $header-row-height: 55px
 $border-radius: $small
 $bubble-radius: 20px // testimonial speech bubble
 
-/// Controls — unified height for all interactive controls (buttons, inputs, filter bar)
+/// Height of a button and of the filter bar. NOT of a bare <input>: the input
+/// base sizes itself by padding and lands near 33px, and pulling it onto this
+/// token would re-measure every form on the site. So a bare control set beside
+/// a Button in one flex row is about 5px shorter — put it in a wrapper of this
+/// height, the way the filter bar's .search-container does.
 $control-height: 38px
+
+/// Pointer target floor, WCAG 2.5.8. The drawn glyph of an icon-only control
+/// may be smaller than this; the area that answers a finger may not. Grown by
+/// +icon-button (Inputs.sass) as an overlay, so the layout never sees it.
+$tap-target-min: 24px
 
 /// Opacity
 $disabled-opacity: 0.5

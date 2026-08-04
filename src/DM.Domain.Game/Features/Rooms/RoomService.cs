@@ -139,6 +139,37 @@ internal class RoomService : IRoomService
         return room;
     }
 
+    /// <inheritdoc />
+    public Task<RoomToUpdate> GetChatRoomForReadingAsync(Guid roomId) =>
+        GetChatRoomAsync(roomId, RoomIntention.ViewMessages);
+
+    /// <inheritdoc />
+    public Task<RoomToUpdate> GetChatRoomForWritingAsync(Guid roomId) =>
+        GetChatRoomAsync(roomId, RoomIntention.SendMessage);
+
+    /// <summary>
+    /// A room of another type, or a chat room with no chat behind it, is absent
+    /// rather than forbidden: the caller asked for a chat and there is none at that
+    /// address, and a refusal would confirm the address exists.
+    /// </summary>
+    /// <remarks>
+    /// Read through GetForUpdate because it is the projection that carries the game,
+    /// and every room rule reads the roles of the game. Asked with the plain one the
+    /// check finds no resolver and refuses everybody.
+    /// </remarks>
+    private async Task<RoomToUpdate> GetChatRoomAsync(Guid roomId, RoomIntention intention)
+    {
+        var room = await _repository.GetForUpdate(roomId, _identityProvider.Current.User.UserId);
+        if (room == null || room.Type != RoomType.Chat || !room.ChatId.HasValue)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
+        }
+
+        _intentionManager.ThrowIfForbidden(intention, room);
+
+        return room;
+    }
+
     #endregion
 
     #region Update

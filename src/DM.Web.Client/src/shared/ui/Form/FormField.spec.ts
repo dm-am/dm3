@@ -155,6 +155,55 @@ describe("FormField group naming", () => {
   });
 });
 
+describe("FormField error state", () => {
+  // The red border: a state that was declared and never reached the screen. The
+  // root's class list had two entries and no third, so `.error` was a rule
+  // nothing could match. On a long form the only sign left was a line of text
+  // under each field, and a reader who submitted had to read all of them to
+  // learn which one to go back to.
+  it("marks the field while it carries an error", async () => {
+    const wrapper = await mountField(
+      { label: "Название", name: "title", errors: ["Обязательное поле"] },
+      { default: "<input />" },
+    );
+
+    expect(wrapper.classes()).toContain("error");
+  });
+
+  it("marks a field that has no label", async () => {
+    // The rule used to hang off the labelled variant, so a field rendered
+    // without one could not show the state even in principle.
+    const wrapper = await mountField(
+      { name: "title", errors: ["Обязательное поле"] },
+      { default: "<input />" },
+    );
+
+    expect(wrapper.classes()).toContain("error");
+  });
+
+  it("takes the mark back when the errors go", async () => {
+    const wrapper = await mountField(
+      { label: "Название", name: "title", errors: ["Обязательное поле"] },
+      { default: "<input />" },
+    );
+
+    await wrapper.setProps({ errors: [] });
+    await nextTick();
+
+    expect(wrapper.classes()).not.toContain("error");
+  });
+
+  it("does not mark the field for an empty error string", async () => {
+    // .required("") produces one; it prints nothing, so it must paint nothing.
+    const wrapper = await mountField(
+      { label: "Название", name: "title", errors: [""] },
+      { default: "<input />" },
+    );
+
+    expect(wrapper.classes()).not.toContain("error");
+  });
+});
+
 describe("FormField description", () => {
   it("describes the control with its error and marks it invalid", async () => {
     const wrapper = await mountField(

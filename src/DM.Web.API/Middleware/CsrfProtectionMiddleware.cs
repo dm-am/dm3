@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Configuration;
+using DM.Domain.Core.Exceptions;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -79,19 +80,13 @@ public class CsrfProtectionMiddleware
                 "CSRF protection blocked request from origin {Origin}. Allowed: {AllowedOrigins}",
                 origin, string.Join(", ", settings.Value.CorsUrls));
 
-            // Та же форма, что у остальных ошибок API: RFC 7807 ProblemDetails.
-            // Собственная форма {"error": "..."} была пятой в наборе и не читалась
-            // ни одним клиентом.
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            await context.Response.WriteAsJsonAsync(
-                new ProblemDetails
-                {
-                    Status = StatusCodes.Status403Forbidden,
-                    Title = "Request origin is not allowed",
-                },
-                options: null,
-                contentType: "application/problem+json");
-            return;
+            // Тело отказа собирает ErrorHandlingMiddleware, и только оно: оно
+            // стоит выше в конвейере, поэтому исключение отсюда до него дойдет.
+            // Своя сборка ProblemDetails давала ответ без traceId и без type —
+            // форму, которой нет ни у одного другого отказа. Токен корреляции
+            // существует ровно для того, чтобы связать отказ с записью в логе,
+            // и здесь его как раз не было.
+            throw new HttpException(HttpStatusCode.Forbidden, "Запрос пришел с недопустимого адреса");
         }
 
         await _next(context);

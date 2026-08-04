@@ -73,10 +73,11 @@ $expand-icon-size: 10px
 $expand-icon-width: 12px
 $details-offset: 20px
 
+// Chrome without a layout: each mode lays its own cells out (--grid as a CSS
+// table, --title as inline flow). Neither may be flex — a flex item is
+// blockified, and a blockified part is a line of its own in the clipboard,
+// which is how a one-title row copied as a newline and then its title.
 =expandable-row
-  display: flex
-  align-items: center
-  gap: $small
   padding: $table-cell-padding-v $table-cell-padding-h
   background-color: $bg-element
   cursor: pointer
@@ -95,10 +96,11 @@ $details-offset: 20px
 // The column the marker sits in. The marker itself is the global
 // .expand-marker (Reset.sass): it draws the glyph and owns the turn.
 =expand-icon
+  display: inline-block
+  vertical-align: middle
   font-size: $expand-icon-size
   color: $text-muted
   width: $expand-icon-width
-  flex-shrink: 0
 
 =expandable-details
   padding: $table-cell-padding-v $table-cell-padding-h $table-cell-padding-v ($table-cell-padding-h + $details-offset)
@@ -111,7 +113,7 @@ $details-offset: 20px
   overflow-wrap: break-word
 
 // Mobile breakpoint
-$mobile-breakpoint: 600px
+
 
 =expandable-row-mobile
   padding: $small $table-cell-padding-h
