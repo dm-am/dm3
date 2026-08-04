@@ -31,6 +31,7 @@ import { ErrorState } from "@/shared/ui/ErrorState";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { formatContestSeriesTitle } from "@/entities/achievement";
 import { toInternalPath } from "@/shared/lib/utils/internalUrl";
+import { useGuardedRequest } from "@/shared/lib/composables";
 
 const props = defineProps<{ username: string }>();
 
@@ -43,27 +44,31 @@ const emit = defineEmits<{
 
 const awards = ref<UserAward[]>([]);
 const loaded = ref(false);
-const loading = ref(false);
-const error = ref(false);
 
-async function fetchAwards(username: string) {
-  loading.value = true;
+// The section refetches when the profile changes under it, so two answers can be
+// on the wire at once. Without a guard the slower one wins and the tab reports a
+// state — which the parent uses to decide the shared empty text — for a profile
+// the reader has already left.
+const { loading, error, run } = useGuardedRequest({
+  message: "Не удалось загрузить награды",
+  clearErrorOnStart: true,
+});
+
+function fetchAwards(username: string) {
   loaded.value = false;
-  error.value = false;
   emit("state", "loading");
-  const { data, error: fetchError } =
-    await achievementApi.getUserAwards(username);
-  if (fetchError) {
-    error.value = true;
-  } else {
-    awards.value = data?.resources ?? [];
-  }
-  loading.value = false;
-  loaded.value = true;
-  emit(
-    "state",
-    error.value ? "error" : awards.value.length > 0 ? "content" : "empty",
-  );
+  return run(
+    () => achievementApi.getUserAwards(username),
+    (data) => {
+      awards.value = data?.resources ?? [];
+    },
+  ).finally(() => {
+    loaded.value = true;
+    emit(
+      "state",
+      error.value ? "error" : awards.value.length > 0 ? "content" : "empty",
+    );
+  });
 }
 
 onMounted(() => fetchAwards(props.username));
@@ -166,10 +171,7 @@ const hasAwards = computed(() => awards.value.length > 0);
 
   <section v-else-if="error" class="awards-section">
     <BlockTitle>Награды</BlockTitle>
-    <ErrorState
-      message="Не удалось загрузить награды"
-      :retry="() => fetchAwards(username)"
-    />
+    <ErrorState :message="error" :retry="() => fetchAwards(username)" />
   </section>
 
   <section v-else-if="hasAwards" class="awards-section">

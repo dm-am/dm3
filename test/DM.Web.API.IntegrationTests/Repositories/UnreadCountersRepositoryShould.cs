@@ -51,14 +51,14 @@ public class UnreadCountersRepositoryShould : IntegrationTestBase
         var entityId = Guid.NewGuid();
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<IUnreadCountersRepository>();
-        await repository.CreateAsync(entityId, UnreadEntryType.Message, new[] {userId});
+        await repository.CreateAsync(entityId, UnreadEntryType.Message, new[] { userId });
         await repository.IncrementAsync(entityId, UnreadEntryType.Message);
         (await repository.SelectByEntitiesAsync(userId, UnreadEntryType.Message, entityId))[entityId]
             .Should().Be(1, "one entry went unread before the user was counted in again");
 
         // A participant removed from a group chat and added back: the second
         // create meets the marker the first one left.
-        await repository.CreateAsync(entityId, UnreadEntryType.Message, new[] {userId});
+        await repository.CreateAsync(entityId, UnreadEntryType.Message, new[] { userId });
 
         var stored = await Collection(scope).CountDocumentsAsync(Key(userId, entityId));
         stored.Should().Be(1);

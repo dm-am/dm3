@@ -4249,6 +4249,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<int?>("Height")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("IsRemoved")
                         .HasColumnType("boolean");
 
@@ -4280,6 +4283,9 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
+
+                    b.Property<int?>("Width")
+                        .HasColumnType("integer");
 
                     b.HasKey("UploadId");
 

@@ -264,20 +264,37 @@ describe("an asset in the tree", () => {
 });
 
 describe("the profile avatar slot", () => {
-  it("reserves the height it is drawn at", () => {
-    // The API sends no intrinsic size for the aspect-preserving original, so
-    // AvatarImg declares a square and the slot holds that square as a floor.
-    // Without it a landscape picture shrank the box on decode and pulled the
-    // role line, the statistics and the tabs up with it.
-    const source = readFileSync(
-      join(CLIENT_SRC, "pages/profile/ProfilePage.vue"),
-      "utf8",
-    );
-    const block = /\n\.avatar-wrapper\n([\s\S]*?)\n\n/.exec(source);
+  const profilePage = () =>
+    readFileSync(join(CLIENT_SRC, "pages/profile/ProfilePage.vue"), "utf8");
+
+  it("reserves no height of its own for a picture whose size is known", () => {
+    // The reservation belongs on the img, where width/height give the browser
+    // the real ratio before the decode. A floor on the wrapper cannot know that
+    // ratio, so it reserved a 220px square for a 220x165 picture and left 55px
+    // blank under every landscape avatar.
+    const block = /\n\.avatar-wrapper\n([\s\S]*?)\n\n/.exec(profilePage());
     expect(
       block,
       "ProfilePage.vue has no .avatar-wrapper block",
     ).not.toBeNull();
+    expect(block?.[1]).not.toMatch(/min-height/);
+  });
+
+  it("still holds the square when nobody measured the picture", () => {
+    // An upload made before the pipeline recorded its dimensions leaves
+    // AvatarImg declaring a square, and the square then has to be held by the
+    // slot: without it the box shrinks on decode and pulls the role line, the
+    // statistics and the tabs up with it.
+    const source = profilePage();
+    const block = /\n\.avatar-wrapper-unsized\n([\s\S]*?)\n\n/.exec(source);
+    expect(
+      block,
+      "ProfilePage.vue has no .avatar-wrapper-unsized block",
+    ).not.toBeNull();
     expect(block?.[1]).toMatch(/min-height:\s*220px/);
+    expect(
+      source,
+      "the modifier has to be bound, or the floor is unreachable",
+    ).toContain("'avatar-wrapper-unsized': !avatarSizeIsKnown");
   });
 });

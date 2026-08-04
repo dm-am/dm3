@@ -94,7 +94,7 @@ public class GameCommentController : ControllerBase
     {
         var gameId = await _gameApiService.ResolveId(id);
         var result = await _commentApiService.Create(gameId, request);
-        return CreatedAtRoute(nameof(GetGameComment), new {id = result.Resource.Id}, result);
+        return CreatedAtRoute(nameof(GetGameComment), new { id = result.Resource.Id }, result);
     }
 
     /// <summary>

@@ -81,7 +81,7 @@ internal class BlogRepository : IBlogRepository
     {
         var excludeOwnerIds = filter.ExcludeOwnerIds;
         var currentUserId = filter.CurrentUserId;
-        var premoderationStatus = filter.PremoderationStatus;
+        var premoderationStatuses = filter.PremoderationStatuses;
 
         // Show Active, Closed, and Draft blogs with public visibility (like games)
         var query = _dbContext.Blogs
@@ -95,8 +95,8 @@ internal class BlogRepository : IBlogRepository
         // assigned curator, and invited users. An explicit filter (Mentor+
         // only, gated by the service) replaces the restriction so reviewers
         // can browse the premoderation queue.
-        query = premoderationStatus.HasValue
-            ? query.Where(b => b.PremoderationStatus == premoderationStatus.Value)
+        query = premoderationStatuses?.Count > 0
+            ? query.Where(b => premoderationStatuses.Contains(b.PremoderationStatus))
             : query.Where(b =>
                 b.PremoderationStatus == PremoderationStatus.Approved ||
                 b.AuthorId == currentUserId ||
@@ -107,10 +107,10 @@ internal class BlogRepository : IBlogRepository
                      t.Type == TokenType.BlogReaderInvitation)));
 
         // Status filter
-        if (filter.Status.HasValue)
+        var statuses = filter.Statuses;
+        if (statuses?.Count > 0)
         {
-            var status = filter.Status.Value;
-            query = query.Where(b => b.Status == status);
+            query = query.Where(b => statuses.Contains(b.Status));
         }
 
         // Host filter (owner OR assistant, OR logic)

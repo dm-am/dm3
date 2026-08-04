@@ -5,6 +5,11 @@ import type {
   GlobalChatEventSummary,
   GlobalChatMessage,
 } from "./types";
+import type {
+  ApiResult,
+  Envelope,
+  GeneralError,
+} from "@/shared/api/models/common";
 import globalChatApi from "../api/globalChatApi";
 import { useAuthStore } from "@/shared/stores";
 import { NotificationType } from "@/shared/api/models/notifications";
@@ -439,6 +444,47 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     }
   }
 
+  /**
+   * One event action, whichever it is.
+   *
+   * All four endpoints answer with the whole event, so the details cache is
+   * filled from the response instead of being read a second time. The strip
+   * above the feed is drawn from the summary list, and the two fields these
+   * actions change (status and participantCount) live there and nowhere else —
+   * so the list is re-read as well, or a started event goes on saying "Скоро"
+   * on the very line its organizer has just acted on.
+   *
+   * The refusal is returned rather than swallowed. `Api` resolves on a 403 the
+   * same way it resolves on a 200, so an action nobody was allowed to take
+   * looks exactly like one that went through until the caller says otherwise.
+   */
+  async function runEventAction(
+    id: string,
+    act: () => Promise<ApiResult<Envelope<GlobalChatEvent>>>,
+  ): Promise<{ error: GeneralError | null }> {
+    const { data, error } = await act();
+    if (error) return { error };
+    if (data?.resource) eventDetails.value[id] = data.resource;
+    await fetchEvents();
+    return { error: null };
+  }
+
+  /** Sign up for an open event. */
+  const joinEvent = (id: string) =>
+    runEventAction(id, () => globalChatApi.joinEvent(id));
+
+  /** Give up a place in an event (organizers cannot: the API refuses them). */
+  const leaveEvent = (id: string) =>
+    runEventAction(id, () => globalChatApi.leaveEvent(id));
+
+  /** Take a scheduled event live. Organizer only. */
+  const startEvent = (id: string) =>
+    runEventAction(id, () => globalChatApi.startEvent(id));
+
+  /** Close a live event. Organizer only. */
+  const endEvent = (id: string) =>
+    runEventAction(id, () => globalChatApi.endEvent(id));
+
   async function unlikeMessage(id: string) {
     const { error } = await globalChatApi.unlikeMessage(id);
     // Backend returns 204 No Content, so update likes locally
@@ -496,5 +542,9 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     fetchEvents,
     refreshEventsOnNotification,
     fetchEventDetails,
+    joinEvent,
+    leaveEvent,
+    startEvent,
+    endEvent,
   };
 });

@@ -254,7 +254,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             Serilog.Log.CloseAndFlush();
             Environment.Exit(0);
         }
-        
+
         // First in the pipeline: everything downstream — the rate limiter
         // partitions, the login journal, the security audit — reads the peer
         // address, so it has to be the client's before any of them run.

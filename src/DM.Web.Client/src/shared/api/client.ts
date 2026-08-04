@@ -52,8 +52,23 @@ function ownsRefusal(request?: AxiosRequestConfig): boolean {
   return Boolean((request as TaggedRequest | undefined)?.ownsRefusal);
 }
 
+/**
+ * Headers on every request.
+ *
+ * No Cache-Control here. It used to say `no-cache` on all of them, which
+ * answered no question this client has — the session is a cookie, not a cached
+ * response — and cost both caches every hit they could have had: `no-cache` on
+ * the request forbids ResponseCachingMiddleware from reading its store, and
+ * makes the browser revalidate before reusing anything of its own. With no
+ * ETag and no Last-Modified in the API, that revalidation is a full request.
+ *
+ * What may be cached is the origin's decision and it states it per endpoint:
+ * five catalogues answer `public, max-age=300`, the two lists carrying
+ * per-caller unread counters answer `no-store, no-cache`, and the rest carry
+ * no policy at all — which, without a validator to revalidate against, is not
+ * reusable either.
+ */
 const defaultHeaders: { [key: string]: string } = {
-  "Cache-Control": "no-cache",
   "Content-Type": "application/json",
   // Marks the request as XHR. Not a CSRF control: the server never reads this header.
   // CSRF is covered by the Origin/Referer check in the API and SameSite=Lax on the

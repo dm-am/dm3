@@ -105,6 +105,8 @@ internal class UploadRepository : IUploadRepository
             FileName = upload.FileName,
             ContentType = upload.ContentType,
             SizeBytes = upload.SizeBytes,
+            Width = upload.Width,
+            Height = upload.Height,
             ObjectKey = upload.ObjectKey,
             FilePath = upload.Url,
             CreatedUtc = upload.CreatedUtc,

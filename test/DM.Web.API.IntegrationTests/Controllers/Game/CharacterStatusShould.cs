@@ -83,7 +83,9 @@ public class CharacterStatusShould : IntegrationTestBase
         var (_, characterId) = await AddGameWithCharacterAsync(CharacterStatus.Active);
         var stranger = new GeneralUser
         {
-            UserId = Guid.NewGuid(), Username = "stranger", Role = UserRole.RegularUser,
+            UserId = Guid.NewGuid(),
+            Username = "stranger",
+            Role = UserRole.RegularUser,
         };
 
         var response = await Send(characterId, CharacterStatusTransition.Kill, stranger);
@@ -170,7 +172,9 @@ public class CharacterStatusShould : IntegrationTestBase
         var master = dbContext.Users.Find(masterId)!;
         return (new GeneralUser
         {
-            UserId = masterId, Username = master.Username, Role = UserRole.RegularUser,
+            UserId = masterId,
+            Username = master.Username,
+            Role = UserRole.RegularUser,
         }, characterId);
     }
 }

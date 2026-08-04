@@ -44,6 +44,9 @@ import type { GameReview } from "@/shared/api/models/game/reviews";
 import { Api, toCommentsQueryParams, type CommentsQuery } from "@/shared/api";
 import { RENDER_AUDIENCE } from "@/shared/api/audience";
 
+/** Request options that put a read past both caches. */
+const FRESH = { headers: { "Cache-Control": "no-cache" } };
+
 /**
  * Search params for games API
  *
@@ -164,9 +167,8 @@ class GameApi {
       queryParams.masterUsernames = params.masterUsernames;
     if (params.assistantUsernames?.length)
       queryParams.assistantUsernames = params.assistantUsernames;
-    // Map hostUsernames to authorUsernames for backend
     if (params.hostUsernames?.length)
-      queryParams.authorUsernames = params.hostUsernames;
+      queryParams.hostUsernames = params.hostUsernames;
     if (params.playerUsername)
       queryParams.playerUsername = params.playerUsername;
     if (params.playerParticipation)
@@ -273,7 +275,7 @@ class GameApi {
    * @param params.sortBy - Sort field: rating, lastreview, created
    * @param params.sortOrder - Sort direction: asc, desc
    * @param params.hasReviews - Only posts with reviews
-   * @param params.lastReviewedAfter - Posts reviewed after this ISO date
+   * @param params.lastReviewedFromUtc - Posts reviewed at or after this ISO date
    * @param params.search - Search text in post content (ILIKE)
    * @param params.minRating - Minimum rating filter
    * @param params.gameId - Filter by game ID
@@ -284,19 +286,19 @@ class GameApi {
     sortBy?: "rating" | "lastreview" | "reviewcount" | "created";
     sortOrder?: "asc" | "desc";
     hasReviews?: boolean;
-    lastReviewedAfter?: string;
+    lastReviewedFromUtc?: string;
     search?: string;
     minRating?: number;
     maxRating?: number;
-    /** Comma-separated POST author usernames. */
-    authorUsernames?: string;
+    /** POST author usernames; repeated on the wire, one parameter each. */
+    authorUsernames?: string[];
     /**
      * Restrict to posts that have at least one review by this user.
      * Used by the profile page "Оценил чужих постов".
      */
     reviewerUsername?: string;
-    createdAfter?: string;
-    createdBefore?: string;
+    createdFromUtc?: string;
+    createdToUtc?: string;
     gameId?: string;
     take?: number;
     skip?: number;
@@ -468,8 +470,21 @@ class GameApi {
     return Api.get<ListEnvelope<AttributeSchema>>("schemas");
   }
 
-  public getTags() {
-    return Api.get<ListEnvelope<Tag>>("games/tags");
+  /**
+   * The public tag catalogue.
+   *
+   * @param fresh Skip the caches — for a reload after a moderator edited the
+   * catalogue. The endpoint answers `public, max-age=300` and is written
+   * through `moderation/tags`, a different address, so nothing invalidates the
+   * stored copy of this one.
+   */
+  public getTags(fresh = false) {
+    return Api.get<ListEnvelope<Tag>>(
+      "games/tags",
+      undefined,
+      undefined,
+      fresh ? FRESH : undefined,
+    );
   }
 
   public createSchema(schema: AttributeSchema) {

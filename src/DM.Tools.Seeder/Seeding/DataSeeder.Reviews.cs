@@ -717,10 +717,27 @@ internal sealed partial class DataSeeder
                     // constant rather than written out: a board that grows moves
                     // this with it, and a number here would go stale silently.
                     var chuckReviewCount = LeaderboardBoards.BoardSize + 3;
+
+                    // Reviewers are drawn from everyone but the author. The
+                    // experienced ones first, so the showcase reads as praise
+                    // from people who have played, and the rest only if there
+                    // are not enough of them: how many users clear the newbie
+                    // threshold depends on how many posts the game pass seeded,
+                    // and a pool that quietly comes up short would put this post
+                    // level with the filler instead of above it.
                     var chuckReviewers = experiencedUsers
+                        .Concat(users.Except(experiencedUsers))
                         .Where(u => u.UserId != chuckPlayer.UserId)
                         .Take(chuckReviewCount)
                         .ToList();
+
+                    if (chuckReviewers.Count < chuckReviewCount)
+                    {
+                        throw new InvalidOperationException(
+                            $"Showcase post needs {chuckReviewCount} distinct reviewers to outscore " +
+                            $"leaderboard coverage, and the seed has {chuckReviewers.Count}. " +
+                            "Add users, or the home page shows a filler post as the best of the week.");
+                    }
                     var chuckReviewTexts = new[]
                     {
                         "Лучший пост, что я читал за последний год. Грейпфрут — это философия.",

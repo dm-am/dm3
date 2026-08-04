@@ -51,6 +51,6 @@ public static class SerialNumberAllocator
                 $"SELECT nextval(pg_get_serial_sequence({table}, 'SerialNumber')) AS \"Value\"")
             .FirstAsync(ct);
 
-        return (int) serialNumber;
+        return (int)serialNumber;
     }
 }

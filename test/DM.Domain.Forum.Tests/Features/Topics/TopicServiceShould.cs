@@ -205,7 +205,7 @@ public class TopicServiceShould : UnitTestBase
         _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(topic);
         _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
-            .ReturnsAsync(topic);
+            .ReturnsAsync(new TopicUpdateResult(topic, true));
 
         var updateTopic = new UpdateTopic { TopicId = topicId, Title = "Updated Title" };
         await _service.UpdateAsync(updateTopic);
@@ -225,12 +225,84 @@ public class TopicServiceShould : UnitTestBase
         _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(topic);
         _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
-            .ReturnsAsync(topic);
+            .ReturnsAsync(new TopicUpdateResult(topic, true));
 
         var updateTopic = new UpdateTopic { TopicId = topicId, Title = "Updated Title" };
         await _service.UpdateAsync(updateTopic);
 
         _eventProducer.Verify(p => p.SendAsync(EventType.ChangedTopic, topicId), Times.Once);
+    }
+
+    /// <summary>
+    /// A save that changed nothing announces nothing.
+    /// </summary>
+    /// <remarks>
+    /// The two halves have to agree. The repository writes an edit-history row only
+    /// when the tracker says the row moved, and the ChangedTopic notification reads
+    /// its actor back from that history — so an event sent for a save that left no
+    /// row names whoever edited the topic last. A moderator edits, the author reopens
+    /// the form and saves it unchanged, and the subscribers get an announcement
+    /// attributed to the moderator: filtered against his blacklist, and not against
+    /// the blacklist of the person who actually pressed save.
+    /// </remarks>
+    [Fact]
+    public async Task SendNoChangedTopicEventWhenTheUpdateChangedNothing()
+    {
+        var topicId = Guid.NewGuid();
+        var topic = new Topic
+        {
+            Id = topicId,
+            Board = new Board { Id = Guid.NewGuid(), Title = "General" }
+        };
+        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(topic);
+        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
+            .ReturnsAsync(new TopicUpdateResult(topic, false));
+
+        var result = await _service.UpdateAsync(new UpdateTopic { TopicId = topicId, Title = "Same Title" });
+
+        result.Should().BeSameAs(topic, "the request is answered either way — it is not an error");
+        _eventProducer.Verify(p => p.SendAsync(EventType.ChangedTopic, It.IsAny<Guid>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The editor travels to the repository, which is what makes the topic edit
+    /// history hold anybody at all.
+    /// </summary>
+    /// <remarks>
+    /// The topic row keeps its author and no editor, so the only record of who
+    /// changed a topic is the history the repository writes from this field.
+    /// Left unset it defaults to Guid.Empty, the repository skips the write, and
+    /// the ChangedTopic notification goes out with no actor — meaning a topic
+    /// edited by somebody the subscriber has blocked is still delivered.
+    /// Asserted against the author too: the two are different people whenever a
+    /// moderator edits, and taking one for the other filters the wrong person.
+    /// </remarks>
+    [Fact]
+    public async Task RecordTheCurrentUserAsTheEditorOfTheTopic()
+    {
+        var topicId = Guid.NewGuid();
+        var authorId = Guid.NewGuid();
+        var topic = new Topic
+        {
+            Id = topicId,
+            Author = new GeneralUser { UserId = authorId },
+            Board = new Board { Id = Guid.NewGuid(), Title = "General" }
+        };
+        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(topic);
+        UpdateTopicEntity? passed = null;
+        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
+            .Callback((UpdateTopicEntity entity, Guid? _) => passed = entity)
+            .ReturnsAsync(new TopicUpdateResult(topic, true));
+
+        await _service.UpdateAsync(new UpdateTopic { TopicId = topicId, Title = "Updated Title" });
+
+        passed.Should().NotBeNull();
+        passed!.EditorUserId.Should().Be(_currentUserId,
+            "the history is the only place a topic keeps who changed it");
+        passed.EditorUserId.Should().NotBe(authorId,
+            "the person editing is not necessarily the person who opened the topic");
     }
 
     [Fact]
@@ -246,7 +318,7 @@ public class TopicServiceShould : UnitTestBase
         _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(topic);
         _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), newBoardId))
-            .ReturnsAsync(topic);
+            .ReturnsAsync(new TopicUpdateResult(topic, true));
 
         _intentionManager.Setup(m => m.IsAllowed(ForumIntention.AdministrateTopics, oldBoard))
             .Returns(true);
@@ -323,7 +395,7 @@ public class TopicServiceShould : UnitTestBase
         _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(topic);
         _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
-            .ReturnsAsync(topic);
+            .ReturnsAsync(new TopicUpdateResult(topic, true));
         _intentionManager.Setup(m => m.IsAllowed(ForumIntention.AdministrateTopics, board))
             .Returns(false);
         _intentionManager
@@ -356,7 +428,7 @@ public class TopicServiceShould : UnitTestBase
         _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(topic);
         _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
-            .ReturnsAsync(topic);
+            .ReturnsAsync(new TopicUpdateResult(topic, true));
         _intentionManager.Setup(m => m.IsAllowed(ForumIntention.AdministrateTopics, board))
             .Returns(false);
 
@@ -390,7 +462,7 @@ public class TopicServiceShould : UnitTestBase
         _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(topic);
         _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
-            .ReturnsAsync(topic);
+            .ReturnsAsync(new TopicUpdateResult(topic, true));
         _intentionManager.Setup(m => m.IsAllowed(ForumIntention.AdministrateTopics, board))
             .Returns(false);
         _intentionManager
@@ -422,7 +494,7 @@ public class TopicServiceShould : UnitTestBase
         _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(topic);
         _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
-            .ReturnsAsync(topic);
+            .ReturnsAsync(new TopicUpdateResult(topic, true));
         _intentionManager.Setup(m => m.IsAllowed(ForumIntention.AdministrateTopics, board))
             .Returns(false);
 

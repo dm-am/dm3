@@ -42,9 +42,16 @@ public interface IGameCommentRepository
     Task<GameCommentToDelete?> GetForDelete(Guid commentId);
 
     /// <summary>
-    /// Get second last comment ID
+    /// The newest live comment of the game other than <paramref name="exceptCommentId" />:
+    /// the successor of the comment being deleted.
     /// </summary>
-    Task<Guid?> GetSecondLastCommentId(Guid gameId);
+    /// <remarks>
+    /// Named by exclusion rather than by position — see the note on the forum's
+    /// counterpart. Two comments can share a timestamp, and then "the second one down the
+    /// list" can be the row that is leaving, which would leave the game pointing at a
+    /// soft-deleted comment.
+    /// </remarks>
+    Task<Guid?> GetNewestCommentIdExcept(Guid gameId, Guid exceptCommentId);
 
     #endregion
 

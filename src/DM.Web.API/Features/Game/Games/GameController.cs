@@ -114,7 +114,7 @@ public class GameController : ControllerBase
     public async Task<IActionResult> PostGame([FromBody] CreateGameRequest request)
     {
         var result = await _gameApiService.Create(request);
-        return CreatedAtRoute(nameof(GetGameDetails), new {id = result.Resource.Id}, result);
+        return CreatedAtRoute(nameof(GetGameDetails), new { id = result.Resource.Id }, result);
     }
 
     /// <summary>

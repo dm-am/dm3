@@ -61,7 +61,7 @@ public class WarningController : ControllerBase
     /// Returns all warnings across the website.
     /// Can be filtered by user login.
     /// </remarks>
-    /// <param name="user">Optional user login to filter by</param>
+    /// <param name="username">Optional username to filter by</param>
     /// <response code="200">List of warnings</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">Moderator role required</response>
@@ -70,8 +70,10 @@ public class WarningController : ControllerBase
     [ProducesResponseType(typeof(ListEnvelope<Warning>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetAllWarnings([FromQuery] string? user = null) =>
-        Ok(await _warningApiService.GetAllWarnings(user));
+    // A username filter is `username` on the wire, per the query vocabulary in
+    // API_DESIGN.md; this one alone said `user`.
+    public async Task<IActionResult> GetAllWarnings([FromQuery] string? username = null) =>
+        Ok(await _warningApiService.GetAllWarnings(username));
 
     /// <summary>
     /// Create a warning

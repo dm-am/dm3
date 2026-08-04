@@ -28,7 +28,7 @@ export type MessageSearchResult = {
 
 /** Query params sent to GET /v1/search/messages. */
 export type SearchMessagesParams = {
-  q: string;
+  search: string;
   /** Repeatable scope filter, e.g. ["global"]. */
   in?: string[];
   cursor?: string;

@@ -25,8 +25,9 @@ const props = withDefaults(
     /** Alt text for screen readers. Empty string = decorative. */
     alt: string;
     /**
-     * Size in CSS px (square avatar). Used for:
-     *   - the width/height attributes (anti-CLS),
+     * Size in CSS px. Used for:
+     *   - the declared width, and the declared height wherever the picture's
+     *     own ratio is not known (anti-CLS),
      *   - sizes='{N}px' for srcset selection.
      */
     size: number;
@@ -42,6 +43,9 @@ const props = withDefaults(
      * Needed for large aspect-preserving avatars (ProfilePage 220px).
      * srcset is not used in this mode (the original is the only variant
      * with the aspect preserved).
+     *
+     * The declared height follows the picture's own ratio in this mode, when
+     * the API knows it — see `boxHeight`.
      */
     preferOriginal?: boolean;
     /**
@@ -92,6 +96,39 @@ const srcset = computed(() => {
 });
 
 const sizes = computed(() => `${props.size}px`);
+
+/**
+ * The picture's own dimensions, but only while the original is what gets
+ * drawn. The thumbnails are square center-crops at the size they are asked
+ * for, so the square declared from `size` already describes them exactly;
+ * the original keeps the uploaded aspect ratio and nothing else describes it.
+ * Null for an upload made before the pipeline recorded the pair.
+ */
+const intrinsic = computed(() => {
+  if (!props.preferOriginal || !original.value) return null;
+  const width = props.picture?.originalWidth;
+  const height = props.picture?.originalHeight;
+  if (!width || !height || width <= 0 || height <= 0) return null;
+  return { width, height };
+});
+
+/**
+ * width/height as declared on the element. This is the whole anti-CLS
+ * mechanism: the browser derives an aspect ratio from the pair and reserves
+ * the box from it before a single byte of the picture has arrived, and
+ * `height: auto` in the stylesheet then resolves against that ratio instead
+ * of collapsing.
+ *
+ * The width stays `size`, so the declared box is still the slot the caller
+ * asked for; only the ratio comes from the file. Without a known ratio the
+ * declaration is the square it has always been — the best guess available,
+ * and one the caller has to keep backing with a floor.
+ */
+const boxHeight = computed(() => {
+  const size = intrinsic.value;
+  if (!size) return props.size;
+  return Math.max(1, Math.round((props.size * size.height) / size.width));
+});
 </script>
 
 <template>
@@ -102,7 +139,7 @@ const sizes = computed(() => `${props.size}px`);
     :sizes="srcset ? sizes : undefined"
     :alt="alt"
     :width="size"
-    :height="size"
+    :height="boxHeight"
     :class="imgClass"
     :loading="eager ? 'eager' : 'lazy'"
     :fetchpriority="eager ? 'high' : 'auto'"

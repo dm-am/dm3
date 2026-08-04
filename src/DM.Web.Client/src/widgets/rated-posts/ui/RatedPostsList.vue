@@ -31,7 +31,7 @@ import PagingWithSeparators from "@/shared/ui/Paging/PagingWithSeparators.vue";
 import { SecondaryText } from "@/shared/ui/Layout";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
-import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 
 const props = withDefaults(
   defineProps<{
@@ -53,12 +53,16 @@ const route = useRoute();
 const { filterState, searchParams, hasActiveFilters } = usePulseFilter();
 
 const envelope: Ref<ListEnvelope<Post> | null> = ref(null);
-const loading = ref(false);
-const loadError = ref<string | null>(null);
 
-// Discards stale responses when a fast filter/page change races an
-// in-flight request.
-const guard = createRequestGuard();
+// Keeps any already-shown posts on a failure (stale-while-revalidate); the
+// ErrorState banner renders independently above the list — see template —
+// matching /pulse's error-does-not-hide-content pattern.
+const {
+  loading,
+  error: loadError,
+  clearError,
+  run,
+} = useGuardedRequest({ message: "Не удалось загрузить оцененные посты" });
 
 const scopeKey = computed(() => JSON.stringify(props.scope));
 
@@ -67,7 +71,7 @@ const scopeKey = computed(() => JSON.stringify(props.scope));
 // loads.
 watch(scopeKey, () => {
   envelope.value = null;
-  loadError.value = null;
+  clearError();
 });
 
 /**
@@ -81,26 +85,16 @@ const requestFilters = computed<PulseSearchParams>(() =>
     : searchParams.value,
 );
 
-async function fetch() {
-  const requestId = guard.next();
-  loading.value = true;
-  try {
-    const { data, error } = await gameApi.getRatedPosts(
-      buildRatedPostsParams(requestFilters.value, props.scope),
-    );
-    if (!guard.isCurrent(requestId)) return;
-    if (error) {
-      // Keep any already-shown posts (stale-while-revalidate); the ErrorState
-      // banner renders independently above the list — see template — matching
-      // /pulse's error-does-not-hide-content pattern.
-      loadError.value = "Не удалось загрузить оцененные посты";
-    } else {
-      loadError.value = null;
+function fetch() {
+  return run(
+    () =>
+      gameApi.getRatedPosts(
+        buildRatedPostsParams(requestFilters.value, props.scope),
+      ),
+    (data) => {
       envelope.value = (data as ListEnvelope<Post>) ?? null;
-    }
-  } finally {
-    if (guard.isCurrent(requestId)) loading.value = false;
-  }
+    },
+  );
 }
 
 useFetchData(

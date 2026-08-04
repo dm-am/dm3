@@ -31,6 +31,8 @@ internal class GeneralUserMappingProfile : Profile
             .ForMember(d => d.PostReviewsReceivedCount, s => s.Ignore()) // Set separately after mapping
             .ForMember(d => d.EndorsementsGivenCount, s => s.Ignore()) // Set separately after mapping
             .ForMember(d => d.EndorsementsReceivedCount, s => s.Ignore()) // Set separately after mapping
+            .ForMember(d => d.GameReviewsGivenCount, s => s.Ignore()) // Set separately after mapping
+            .ForMember(d => d.GameReviewsReceivedCount, s => s.Ignore()) // Set separately after mapping
             .ForMember(d => d.TopicsAuthoredCount, s => s.Ignore()) // Set separately after mapping
             .ForMember(d => d.CommentsAuthoredCount, s => s.Ignore()) // Set separately after mapping
             .ForMember(d => d.GlobalChatMessagesCount, s => s.Ignore()) // Set separately after mapping

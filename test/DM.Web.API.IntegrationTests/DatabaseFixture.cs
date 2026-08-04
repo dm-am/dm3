@@ -26,8 +26,17 @@ namespace DM.Web.API.IntegrationTests;
 /// </summary>
 public class DatabaseFixture : IAsyncLifetime
 {
+    // The image the stand runs, not the small one. Alpine carries no locales, so
+    // initdb falls back to C and ORDER BY over a name becomes byte order: every
+    // capital before every lower-case letter, all of Cyrillic after all of Latin.
+    // The stand is postgres:16 in en_US.utf8 and orders the same names the way a
+    // reader expects, so a list assertion here answered a question production
+    // never asks. The locale is spelled out rather than left to the image default
+    // for the same reason the image is: an ordering is only testable against the
+    // collation it will actually run under.
     private readonly PostgreSqlContainer _postgresContainer = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+        .WithImage("postgres:16")
+        .WithEnvironment("POSTGRES_INITDB_ARGS", "--locale=en_US.utf8")
         .WithDatabase("dm3_test")
         .WithUsername("test")
         .WithPassword("test")

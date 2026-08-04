@@ -50,7 +50,7 @@ internal class CommunityUserApiService : ICommunityUserApiService
         {
             "asc" => true,
             "desc" => false,
-            _ => query.Sort == UserSort.Name // Default: asc for Name, desc for others
+            _ => query.SortBy == UserSort.Name // Default: asc for Name, desc for others
         };
 
         // Mapped by name, so a filter added to the query string and the domain

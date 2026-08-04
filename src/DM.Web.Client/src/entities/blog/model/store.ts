@@ -107,7 +107,7 @@ export const useBlogsStore = defineStore("blogs", () => {
 
     // Status
     if (params.status) {
-      apiParams.status = params.status;
+      apiParams.statuses = [params.status];
     }
 
     // Hosts (author OR assistant)
@@ -209,7 +209,7 @@ export const useBlogsStore = defineStore("blogs", () => {
       apiParams.skip = (page - 1) * pageSize;
     }
     if (params.search) apiParams.search = params.search;
-    if (params.status) apiParams.status = params.status;
+    if (params.status) apiParams.statuses = [params.status];
     if (params.hostUsernames && params.hostUsernames.length > 0) {
       apiParams.hostUsernames = params.hostUsernames;
     }

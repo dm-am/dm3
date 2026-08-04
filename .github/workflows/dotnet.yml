@@ -486,6 +486,62 @@ jobs:
           --entrypoint promtool prom/prometheus:v2.51.0 \
           check config /etc/prometheus/prometheus.yml
 
+    # promtool above is happy with rules that go nowhere, and that is what this
+    # repository ran: rule_files with no alerting section and no alertmanager to
+    # name in one. Every rule reached a firing state inside Prometheus and stayed
+    # there, so an outage was found by opening /alerts through a tunnel.
+    - name: Every alert rule must reach a receiver the stack runs
+      run: |
+        grep -q '^rule_files:' docker/prometheus.yml ||
+          { echo "::error::prometheus.yml evaluates no rules of its own any more - this check is about the ones it does"; exit 1; }
+
+        # The alerting section only, up to the next key at column zero: a
+        # "targets:" line taken from the whole file would match a scrape job and
+        # pass on a configuration that delivers nothing.
+        # `|| true` because the step runs under `bash -e` and the last grep exits
+        # 1 when there is no alerting section at all - which is the very case the
+        # message below exists for. Without it the step died on the assignment,
+        # printed nothing, and left whoever broke it an exit code to guess from.
+        targets=$(sed -n '/^alerting:/,/^[^[:space:]#]/p' docker/prometheus.yml |
+          grep -oE "targets:[[:space:]]*\[[^]]*\]" | grep -oE "[a-z0-9.-]+:[0-9]+" || true)
+        test -n "$targets" || { echo "::error::prometheus.yml declares rule_files and no alertmanager to post them to"; exit 1; }
+
+        for target in $targets; do
+          echo "checking alert target: $target"
+          grep -q "container_name: '${target%%:*}'" docker/docker-compose.yml ||
+            { echo "::error::nothing in the stack answers to ${target%%:*}, so every notification is a connection refused"; exit 1; }
+        done
+
+    # The one thing no test in the solution can do: start it. The configuration
+    # is rendered from the environment at container start, so a template that
+    # cannot produce a file alertmanager accepts is a receiver that is not there
+    # - and nothing else in the pipeline runs this container.
+    - name: The alert receiver must render its configuration and start
+      run: |
+        docker run --rm \
+          -v "$PWD/docker/prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro" \
+          -v "$PWD/docker/alertmanager-init.sh:/alertmanager-init.sh:ro" \
+          --entrypoint /bin/sh prom/alertmanager:v0.27.0 \
+          -c '/alertmanager-init.sh --render-only && amtool check-config /tmp/alertmanager.yml'
+
+        docker run -d --name alert-receiver-gate \
+          -v "$PWD/docker/prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro" \
+          -v "$PWD/docker/alertmanager-init.sh:/alertmanager-init.sh:ro" \
+          --entrypoint /bin/sh prom/alertmanager:v0.27.0 /alertmanager-init.sh
+
+        ready=0
+        for _ in $(seq 1 20); do
+          if docker exec alert-receiver-gate wget --spider -q http://localhost:9093/-/healthy; then
+            ready=1
+            break
+          fi
+          sleep 1
+        done
+
+        docker logs alert-receiver-gate
+        docker rm -f alert-receiver-gate > /dev/null
+        test "$ready" = 1 || { echo "::error::the alert receiver does not start with the configuration in this repository"; exit 1; }
+
     # Every tracked script, not a hand kept list: the backup jobs run at two in
     # the morning into a log nobody reads, so a typo in one of them is found by
     # a failed restore.

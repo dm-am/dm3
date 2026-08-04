@@ -96,7 +96,7 @@ public class CharacterController : ControllerBase
         var gameId = await _gameApiService.ResolveId(id);
         var result = await _characterApiService.Create(gameId, character);
         return CreatedAtRoute(nameof(GetCharacter),
-            new {id = result.Resource.Id}, result);
+            new { id = result.Resource.Id }, result);
     }
 
     /// <summary>

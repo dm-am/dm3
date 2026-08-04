@@ -77,6 +77,24 @@ public class Upload : ISoftDeletable
     public long SizeBytes { get; set; }
 
     /// <summary>
+    /// Intrinsic width of the stored file in pixels, measured after the upload
+    /// pipeline's downscale. Null for a row written before the pipeline recorded
+    /// it — a reader that needs the aspect ratio has to cope with not knowing it.
+    /// </summary>
+    /// <remarks>
+    /// Kept so a page can reserve the exact box the picture will occupy: the
+    /// source file preserves the aspect ratio, so without the pair every layout
+    /// showing it either guesses a square or reflows once the browser decodes.
+    /// </remarks>
+    public int? Width { get; set; }
+
+    /// <summary>
+    /// Intrinsic height of the stored file in pixels, on the same terms as
+    /// <see cref="Width"/>. The two are written together or not at all.
+    /// </summary>
+    public int? Height { get; set; }
+
+    /// <summary>
     /// S3 object key. Random per upload, not a content hash: the same file
     /// uploaded twice gets two keys, and nothing deduplicates by content. What
     /// the key does guarantee is immutability — it is never reused, so the object

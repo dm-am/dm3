@@ -54,5 +54,5 @@ public class ViolatorController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetViolators([FromQuery] ViolatorsQuery query) =>
-        Ok(await _violatorApiService.GetViolators(query.Filter));
+        Ok(await _violatorApiService.GetViolators(query.BanState));
 }

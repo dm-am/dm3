@@ -292,6 +292,10 @@ internal class UploadApiService : IUploadApiService
             FileName = SanitizeFileName(file.FileName, processed.Extension),
             ContentType = processed.ContentType,
             SizeBytes = processed.Bytes.LongLength,
+            // Measured by the pipeline that produced these bytes, so the row and
+            // the object in the bucket cannot disagree about the aspect ratio.
+            Width = processed.Width,
+            Height = processed.Height,
             ObjectKey = objectKey,
             Original = true,
             Url = _objectStorage.BuildPublicUrl(objectKey),
@@ -392,10 +396,15 @@ internal class UploadApiService : IUploadApiService
                 Type = query.Type,
                 Status = query.Status,
             },
-            skip: (query.Number - 1) * query.Size,
-            take: query.Size);
+            skip: query.Skip,
+            take: query.Take);
 
-        var paging = new PagingInfo(PagingResult.Create(totalCount, query.Number, query.Size));
+        // Skip is an offset in entities, which is the slot PagingResult.Create
+        // reads as a 1-based entity number — the same conversion PagingData does
+        // for every other offset-paged list. The page number used to be handed
+        // in here instead, and ceil(page / pageSize) reported page 1 for the
+        // first twenty pages.
+        var paging = new PagingInfo(PagingResult.Create(totalCount, query.Skip + 1, query.Take));
         return (uploads.Select(MapToDto), paging);
     }
 

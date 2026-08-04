@@ -197,6 +197,22 @@ const usernameHistory = computed<UsernameHistoryEntry[]>(
   () => user.value?.usernameHistory ?? [],
 );
 
+/**
+ * Whether the avatar slot can be reserved from the picture itself.
+ *
+ * This page draws the original, which keeps the aspect ratio of whatever was
+ * uploaded, so its height is not a function of the 220px width. When the API
+ * sends the intrinsic pair AvatarImg declares it and the browser reserves the
+ * exact box before decoding; when it does not — an upload made before the
+ * pipeline recorded one — the declaration falls back to a square and the slot
+ * has to hold that square itself, or the picture shrinks the box on decode and
+ * pulls the role line, the statistics and the tabs up with it.
+ */
+const avatarSizeIsKnown = computed(() => {
+  const picture = user.value?.picture;
+  return !!picture?.originalWidth && !!picture?.originalHeight;
+});
+
 const showChangeForm = ref(false);
 watch(isEditMode, (editing) => {
   if (!editing) showChangeForm.value = false;
@@ -263,6 +279,12 @@ const endorsementsReceived = computed(
   () => user.value?.endorsementsReceived ?? 0,
 );
 const endorsementsGiven = computed(() => user.value?.endorsementsGiven ?? 0);
+// Reviews of whole games. Not the same datum as `reviewsGiven` above, which
+// counts ratings of single posts.
+const gameReviewsReceived = computed(
+  () => user.value?.gameReviewsReceived ?? 0,
+);
+const gameReviewsGiven = computed(() => user.value?.gameReviewsGiven ?? 0);
 
 const reviewsGivenLink = computed(() => ({
   name: "given-reviews" as const,
@@ -281,6 +303,16 @@ const receivedEndorsementsLink = computed(() => ({
 
 const givenEndorsementsLink = computed(() => ({
   name: "given-endorsements" as const,
+  params: { username: usernameParam.value },
+}));
+
+const receivedGameReviewsLink = computed(() => ({
+  name: "received-game-reviews" as const,
+  params: { username: usernameParam.value },
+}));
+
+const givenGameReviewsLink = computed(() => ({
+  name: "given-game-reviews" as const,
   params: { username: usernameParam.value },
 }));
 
@@ -623,7 +655,10 @@ watch(usernameParam, async () => {
 
     <section class="identity">
       <div class="col col-identity">
-        <div class="avatar-wrapper">
+        <div
+          class="avatar-wrapper"
+          :class="{ 'avatar-wrapper-unsized': !avatarSizeIsKnown }"
+        >
           <AvatarImg
             :picture="user.picture"
             :alt="user.username"
@@ -717,6 +752,25 @@ watch(usernameParam, async () => {
               label="Написано рекомендаций"
               :value="endorsementsGiven"
               :to="endorsementsGiven > 0 ? givenEndorsementsLink : undefined"
+            />
+          </div>
+          <!-- Reviews of whole games: their own subgroup beside the
+               recommendations, on the same idiom and the same spacing. Worded
+               apart from the post pair above on purpose, because "Рейтинг" and
+               "Оценено чужих постов" count ratings of single posts and these
+               two count reviews of games. -->
+          <div class="game-review-stats">
+            <StatLine
+              label="Получено рецензий на игры"
+              :value="gameReviewsReceived"
+              :to="
+                gameReviewsReceived > 0 ? receivedGameReviewsLink : undefined
+              "
+            />
+            <StatLine
+              label="Написано рецензий на игры"
+              :value="gameReviewsGiven"
+              :to="gameReviewsGiven > 0 ? givenGameReviewsLink : undefined"
             />
           </div>
         </div>
@@ -1002,13 +1056,13 @@ watch(usernameParam, async () => {
   max-width: 100%
 
 // The within-group row-gap is unified across all profile stat groups
-// (.stats-group, .endorsement-stats in ProfilePage; .info-grid,
-// .contacts-subgroup in ProfilePersonalInfo) — $minor (4px) on top of
-// each line's line-height 1.25 gives 7-8px of visual air.
+// (.stats-group, .endorsement-stats, .game-review-stats in ProfilePage;
+// .info-grid, .contacts-subgroup in ProfilePersonalInfo) — $minor (4px) on top
+// of each line's line-height 1.25 gives 7-8px of visual air.
 // Less — the lines stick together; more — the group's logical unity breaks.
 // Inter-group spacing is controlled by the $medium margin on .endorsement-stats
-// / .info-grid-break — intentionally larger than the within-group one so
-// it reads as a context switch.
+// / .game-review-stats / .info-grid-break — intentionally larger than the
+// within-group one so it reads as a context switch.
 .stats-group
   display: flex
   flex-direction: column
@@ -1027,6 +1081,17 @@ watch(usernameParam, async () => {
   gap: $minor
   margin-top: $medium
 
+// Game reviews are the next subgroup down, on the same terms: recommendations
+// are about a person, reviews are about a game, and the two pairs read as two
+// units rather than as one list of four. Same $minor rhythm inside and the
+// same $medium step away from the block above.
+.game-review-stats
+  display: flex
+  flex-direction: column
+  align-items: flex-start
+  gap: $minor
+  margin-top: $medium
+
 // Subscribers list styling now lives in ProfileSubscribersSection — the
 // page-level rules are gone because nothing on ProfilePage renders
 // `.subscribers-list` / `.subscriber-link` directly anymore.
@@ -1034,10 +1099,10 @@ watch(usernameParam, async () => {
 // `.violations-inline` — the root div of ProfileViolations with the inline prop:
 // a sibling of `.stats-group` inside `.col-identity { gap: $small }`.
 // margin-top $small adds up with the parent's $small flex gap giving
-// a total $medium gap between "Написано рекомендаций" (the last
-// endorsement-stats line) and "Нарушения". This is symmetric with
-// `.endorsement-stats { margin-top: $medium }` above — both subgroups
-// sit at the same $medium distance from the preceding block.
+// a total $medium gap between "Написано рецензий на игры" (the last
+// game-review-stats line) and "Нарушения". This is symmetric with
+// `.endorsement-stats { margin-top: $medium }` above — every subgroup
+// sits at the same $medium distance from the preceding block.
 :deep(.violations-inline)
   display: flex
   flex-direction: column
@@ -1092,16 +1157,18 @@ watch(usernameParam, async () => {
   position: relative
   width: 220px
   max-width: 100%
-  // The slot keeps its height when the picture turns out to be shorter than it
-  // is wide. AvatarImg declares a square through width/height, which is the
-  // best guess available: the API sends no intrinsic size for the original, and
-  // the original is aspect-preserving (<=1024 on the long side). Without this
-  // floor a landscape avatar shrank the box on decode and pulled the role line,
-  // the statistics and the tabs up with it. A portrait one still grows the box;
-  // closing that needs the real dimensions in the DTO, which is not a change
-  // this stylesheet can make.
-  min-height: 220px
   margin-bottom: $small
+
+// The floor for a picture whose shape nobody knows. The original is
+// aspect-preserving (<=1024 on the long side), so once the DTO carries its
+// intrinsic pair AvatarImg declares it and the browser reserves the exact box
+// before decoding: no floor, and no blank strip under a landscape avatar.
+// An upload made before the pipeline recorded that pair leaves AvatarImg
+// declaring a square, and then the square has to be held here — without it the
+// box shrank on decode and pulled the role line, the statistics and the tabs
+// up with it.
+.avatar-wrapper-unsized
+  min-height: 220px
 
 .avatar
   display: block

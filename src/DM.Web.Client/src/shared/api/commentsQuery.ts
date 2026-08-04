@@ -32,7 +32,14 @@ export type CommentsQuery = {
 /** Page size when the caller states none. */
 const DEFAULT_SIZE = 20;
 
-/** The query as wire params: the page number becomes skip/take. */
+/**
+ * The query as wire params: the page number becomes skip/take, and the author
+ * filter becomes `authorUsernames`.
+ *
+ * The wire name is the one the API vocabulary fixes for a repeatable username
+ * filter (API_DESIGN.md); `authors` is what this type and the route query call
+ * it, and renaming the route would break every link already written down.
+ */
 export function toCommentsQueryParams(
   query: CommentsQuery = {},
 ): Record<string, string | number | string[] | undefined> {
@@ -43,7 +50,7 @@ export function toCommentsQueryParams(
 
   if (query.number && query.number > 1) params.skip = (query.number - 1) * size;
   if (query.search) params.search = query.search;
-  if (query.authors?.length) params.authors = query.authors;
+  if (query.authors?.length) params.authorUsernames = query.authors;
   if (query.createdFromUtc) params.createdFromUtc = query.createdFromUtc;
   if (query.createdToUtc) params.createdToUtc = query.createdToUtc;
   if (query.sortBy) params.sortBy = query.sortBy;

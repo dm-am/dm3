@@ -3,6 +3,7 @@ import { ref, computed, onMounted, reactive } from "vue";
 import { useModal } from "vue-final-modal";
 import {
   gameTagApi,
+  useGamesStore,
   type ModerationTagGroup,
   type ModerationTag,
 } from "@/entities/game";
@@ -19,6 +20,7 @@ import { useRoleGate } from "./lib/useRoleGate";
 
 const { hasAccess, deniedText } = useRoleGate("SeniorModerator");
 const toast = useToast();
+const gamesStore = useGamesStore();
 
 // State
 const groups = ref<ModerationTagGroup[]>([]);
@@ -69,6 +71,19 @@ async function loadData() {
   }
 }
 
+/**
+ * This page reads `moderation/tags`, which carries no cache policy; the rest of
+ * the site reads the same catalogue from `games/tags`, which answers
+ * `public, max-age=300`. The write goes to a third address, so nothing
+ * invalidates the copy the browser holds for the public one — the tag picker on
+ * "Создать игру" would show the pre-edit list for the next five minutes, and
+ * survive a reload doing it. So after a write here the public catalogue is
+ * re-read from the origin.
+ */
+async function reloadAfterWrite() {
+  await Promise.all([loadData(), gamesStore.fetchTags(true)]);
+}
+
 function selectGroup(groupId: string | null) {
   selectedGroupId.value = groupId;
 }
@@ -83,7 +98,7 @@ const { open: openGroupDialog, close: closeGroupDialog } = useModal({
     defaultSortOrder: computed(() => groups.value.length),
     onSuccess: async () => {
       closeGroupDialog();
-      await loadData();
+      await reloadAfterWrite();
     },
     onCancel: () => closeGroupDialog(),
   }),
@@ -126,7 +141,7 @@ async function confirmDeleteGroup() {
       selectedGroupId.value = null;
     }
     deleteGroupTarget.value = null;
-    await loadData();
+    await reloadAfterWrite();
   } finally {
     deletingGroup.value = false;
   }
@@ -146,7 +161,7 @@ const { open: openTagDialog, close: closeTagDialog } = useModal({
     defaultSortOrder: computed(() => filteredTags.value.length),
     onSuccess: async () => {
       closeTagDialog();
-      await loadData();
+      await reloadAfterWrite();
     },
     onCancel: () => closeTagDialog(),
   }),
@@ -187,7 +202,7 @@ async function confirmDeleteTag() {
       return;
     }
     deleteTagTarget.value = null;
-    await loadData();
+    await reloadAfterWrite();
   } finally {
     deletingTag.value = false;
   }

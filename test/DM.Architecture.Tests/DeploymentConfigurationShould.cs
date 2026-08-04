@@ -31,6 +31,9 @@ public class DeploymentConfigurationShould
     private const string PreviewCompose = "docker-compose.preview.yml";
     private const string MirrorCompose = "docker-compose.mirror.yml";
     private const string NginxConfiguration = "nginx/nginx.conf";
+    private const string ScrapeConfiguration = "prometheus.yml";
+    private const string AlertDelivery = "prometheus/alertmanager.yml";
+    private const string AlertDeliveryEntrypoint = "alertmanager-init.sh";
 
     /// <summary>
     /// Walks up from the test binary to the repository root. The compose files are
@@ -1131,6 +1134,140 @@ public class DeploymentConfigurationShould
         collection.Should().BeLessThan(check, "the check reads what the run collected");
     }
 
+    /// <summary>
+    /// Every alert rule reaches something that can deliver it.
+    /// </summary>
+    /// <remarks>
+    /// Prometheus evaluated fifteen rules and posted them nowhere: the file
+    /// declared rule_files and no alerting section, and no alertmanager existed to
+    /// declare. ApiDown, PostgresDown and DiskSpaceLow all reached a firing state
+    /// and stayed there, so the only way to learn of an outage was to open /alerts
+    /// through a tunnel — which takes already suspecting there is one.
+    ///
+    /// The whole chain is asserted because every link of it fails silently and
+    /// nothing else executes any of it: a rule file with no alerting section, an
+    /// alertmanagers list with no target, a target naming a host no service
+    /// answers to, and a receiver declared as a bare name — which alertmanager
+    /// accepts and which drops everything routed to it — all leave a stack that
+    /// looks configured and delivers nothing.
+    /// </remarks>
+    [Fact]
+    public void DeliverEveryAlertRuleToAReceiverThatExists()
+    {
+        var scrapes = Read(ScrapeConfiguration);
+
+        scrapes.Should().Contain("rule_files:",
+            "this assertion belongs to a Prometheus that evaluates rules of its own");
+
+        var targets = Regex
+            .Matches(TopLevelSection(scrapes, "alerting:"), @"targets:\s*\[([^\]]*)\]")
+            .SelectMany(match => match.Groups[1].Value.Split(','))
+            .Select(target => target.Trim().Trim('\'', '"'))
+            .Where(target => target.Length > 0)
+            .ToList();
+
+        targets.Should().NotBeEmpty(
+            "rules evaluated with nowhere to post them are a state on a page nobody opens: " +
+            "the alerting section, its alertmanagers list and a target in it are one link");
+
+        var compose = Read(BaseCompose);
+        foreach (var target in targets)
+        {
+            var host = target.Split(':');
+            host.Should().HaveCount(2, $"{target} has to name a host and a port");
+
+            var receiver = ServiceWithContainerName(compose, host[0]);
+            receiver.Should().Contain(host[1],
+                $"nothing in the stack answers on {target}, so every notification is a " +
+                "connection refused written to the log of a container nobody reads");
+            receiver.Should().Contain(AlertDelivery,
+                "the routing and the receiver come from that file, and alertmanager without " +
+                "one starts with a configuration that notifies nobody");
+        }
+
+        var delivery = Read(AlertDelivery);
+        var routed = FindValue(delivery, "receiver:");
+
+        routed.Should().NotBeNullOrEmpty("the route has to name where an alert goes");
+
+        var declared = Regex
+            .Matches(delivery, @"^\s*- name:\s*'?([\w-]+)'?", RegexOptions.Multiline)
+            .Select(match => match.Groups[1].Value)
+            .ToList();
+
+        declared.Should().Contain(routed!,
+            "a route naming a receiver that is not declared is refused at start-up, and a " +
+            "container that will not start is a receiver that is not there");
+
+        ReceiverBlock(delivery, routed!).Should().Contain("_configs:",
+            $"the receiver {routed} is a name with nothing under it: alertmanager accepts " +
+            "that and silently drops everything routed to it, which is the outcome having " +
+            "no alertmanager already had");
+    }
+
+    /// <summary>
+    /// What differs between a stand and a server reaches the receiver from the
+    /// environment, and nothing else does.
+    /// </summary>
+    /// <remarks>
+    /// Alertmanager expands no environment variable in its configuration file and
+    /// has no include mechanism, so the smarthost and the credentials of a relay
+    /// are either rendered in at start-up or committed. The entrypoint renders
+    /// them; what this holds is that the two files and compose agree on the set,
+    /// because each way of disagreeing is quiet. A placeholder the script does not
+    /// know reaches alertmanager as the literal text "${ALERT_...}" — a smarthost
+    /// nobody owns, with the configuration valid and the container healthy — and a
+    /// value compose does not pass is a value that cannot be changed without
+    /// editing the repository.
+    /// </remarks>
+    [Fact]
+    public void ConfigureTheAlertReceiverFromTheEnvironmentRatherThanFromTheRepository()
+    {
+        var delivery = Read(AlertDelivery);
+        var script = Read(AlertDeliveryEntrypoint);
+        var service = ServiceWithContainerName(Read(BaseCompose), "dm-alertmanager");
+
+        // The two links that make the rendering happen at all, and the two the
+        // rest of this check silently assumed. Both CI steps mount the template
+        // and the script by explicit path and set an entrypoint of their own, so
+        // neither notices compose losing either line — and compose without them
+        // is a container that reads the template as it stands, fails on
+        // "${ALERT_SMTP_SMARTHOST}: missing port in address", and never starts.
+        // Which is the state the whole row began in: fifteen rules, no receiver.
+        Regex.Match(service, @"entrypoint:.*").Value.Should().Contain(AlertDeliveryEntrypoint,
+            "the image's own entrypoint reads the configuration file as it is written, and " +
+            "as it is written it is a template");
+        service.Should().Contain($"./{AlertDeliveryEntrypoint}:",
+            "an entrypoint that is not mounted into the container is a file the container " +
+            "does not have");
+
+        var placeholders = Regex.Matches(delivery, @"\$\{(ALERT_\w+)\}")
+            .Select(match => match.Groups[1].Value)
+            .Distinct()
+            .ToList();
+
+        placeholders.Should().NotBeEmpty(
+            "a receiver configuration with no placeholder at all is one that names a " +
+            "smarthost and a mailbox in the repository");
+
+        foreach (var placeholder in placeholders)
+        {
+            script.Should().Contain(placeholder,
+                $"nothing expands {placeholder} on the way in, so a placeholder the " +
+                "entrypoint does not render arrives as its own text");
+            service.Should().Contain(placeholder + ":",
+                $"{placeholder} is what a deployment sets, and a variable compose never " +
+                "passes leaves the default as the only value there is");
+        }
+
+        var password = Regex.Match(delivery, @"smtp_auth_password:\s*'?([^'\n]*)'?");
+
+        password.Success.Should().BeTrue("the relay credential is still configured here");
+        password.Groups[1].Value.Should().Contain("${",
+            "a password written into this file is a password in the repository, and the " +
+            "file is mounted read-only into a container the operator cannot edit either");
+    }
+
     /// <summary>Compose files and profiles named by the docker compose lines of a file.</summary>
     private static List<string> ComposeSelectors(string text)
     {
@@ -1145,6 +1282,53 @@ public class DeploymentConfigurationShould
         selectors.Should().NotBeEmpty(
             "an extraction that finds nothing compares equal to another that finds nothing");
         return selectors!;
+    }
+
+    /// <summary>The block a top-level key opens, up to the next key at column zero.</summary>
+    private static string TopLevelSection(string configuration, string key)
+    {
+        var lines = configuration.Split('\n');
+        var start = Array.FindIndex(lines, line => line.StartsWith(key, StringComparison.Ordinal));
+
+        return start < 0
+            ? string.Empty
+            : string.Join('\n', lines.Skip(start + 1).TakeWhile(line => !Regex.IsMatch(line, @"^\S")));
+    }
+
+    /// <summary>The body of the service a container name belongs to.</summary>
+    /// <remarks>
+    /// By container name rather than by service name: a target is written as the
+    /// hostname another container resolves, and that is the container name.
+    /// </remarks>
+    private static string ServiceWithContainerName(string compose, string containerName)
+    {
+        var lines = compose.Split('\n');
+        var marker = Array.FindIndex(lines, line =>
+            line.TrimStart().StartsWith("container_name:", StringComparison.Ordinal) &&
+            line.Contains(containerName, StringComparison.Ordinal));
+
+        marker.Should().BeGreaterThan(-1, $"no service of the stack answers to {containerName}");
+
+        var start = marker;
+        while (start > 0 && !Regex.IsMatch(lines[start], @"^  \S"))
+        {
+            start--;
+        }
+
+        return string.Join('\n', lines.Skip(start + 1).TakeWhile(line => !Regex.IsMatch(line, @"^  \S")));
+    }
+
+    /// <summary>The entry of one receiver, up to the next one.</summary>
+    private static string ReceiverBlock(string delivery, string name)
+    {
+        var lines = delivery.Split('\n');
+        var start = Array.FindIndex(lines, line =>
+            Regex.IsMatch(line, @"^\s*- name:\s*'?" + Regex.Escape(name) + @"'?\s*$"));
+
+        start.Should().BeGreaterThan(-1, $"the receiver {name} must be declared");
+        return string.Join('\n', lines
+            .Skip(start + 1)
+            .TakeWhile(line => !Regex.IsMatch(line, @"^\s*- name:")));
     }
 
     /// <summary>The body of one service, up to the next key at the same indent.</summary>

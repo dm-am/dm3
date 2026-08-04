@@ -483,6 +483,8 @@
     "endorsementsGiven",
     "endorsementsReceived",
     "gameDrops",
+    "gameReviewsGiven",
+    "gameReviewsReceived",
     "gamesHosting",
     "gamesHostingByStatus",
     "gamesPlaying",
@@ -508,7 +510,9 @@
   "DM.Web.API.Features.Community.Users.UserPicture": [
     "id",
     "mediumUrl",
+    "originalHeight",
     "originalUrl",
+    "originalWidth",
     "smallUrl"
   ],
   "DM.Web.API.Features.Community.Users.UserProfile": [
@@ -521,6 +525,8 @@
     "endorsementsGiven",
     "endorsementsReceived",
     "gameDrops",
+    "gameReviewsGiven",
+    "gameReviewsReceived",
     "gamesHosting",
     "gamesHostingByStatus",
     "gamesPlaying",
@@ -992,6 +998,7 @@
     "author",
     "createdUtc",
     "gameId",
+    "gameTitle",
     "id",
     "modifiedUtc",
     "text"
@@ -1306,6 +1313,8 @@
     "endorsementsGiven",
     "endorsementsReceived",
     "gameDrops",
+    "gameReviewsGiven",
+    "gameReviewsReceived",
     "gamesHosting",
     "gamesHostingByStatus",
     "gamesPlaying",
@@ -1662,6 +1671,8 @@
     "endorsementsGiven",
     "endorsementsReceived",
     "gameDrops",
+    "gameReviewsGiven",
+    "gameReviewsReceived",
     "gamesHosting",
     "gamesHostingByStatus",
     "gamesPlaying",

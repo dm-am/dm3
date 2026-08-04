@@ -82,7 +82,7 @@ public class RoomController : ControllerBase
         var gameId = await _gameApiService.ResolveId(id);
         var result = await _roomApiService.Create(gameId, room);
         return CreatedAtRoute(nameof(GetRoom),
-            new {id = result.Resource.Id}, result);
+            new { id = result.Resource.Id }, result);
     }
 
     /// <summary>

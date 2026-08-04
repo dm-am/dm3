@@ -52,8 +52,8 @@ public static class AttributeExtensions
             if (isFlag && type.IsEnum)
             {
                 // This feels like a black magic
-                var enumValue = (object) structValue;
-                if (((int) fieldValue & (int) enumValue) != 0)
+                var enumValue = (object)structValue;
+                if (((int)fieldValue & (int)enumValue) != 0)
                 {
                     attributes = attributes.Concat((TAttr[])field.GetCustomAttributes(typeof(TAttr), false)).ToArray();
                 }

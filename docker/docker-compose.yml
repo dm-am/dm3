@@ -17,6 +17,7 @@ volumes:
   lokidata:
   miniodata:
   rmqdata:
+  alertmanagerdata:
 
 # Переменные с дефолтами для локальной разработки
 # Для зеркала: переопределить в .env.mirror
@@ -397,6 +398,54 @@ services:
         limits:
           memory: 256M
           cpus: '0.5'
+
+  # The receiver of the rules Prometheus evaluates. Without it the whole rule set
+  # reached a firing state inside Prometheus and stopped there: finding out that
+  # ApiDown had fired took opening /alerts through a tunnel, which takes already
+  # suspecting the site is down.
+  #
+  # No secret of its own. Alerts go out over the mail transport the deployment
+  # already has - MAIL_HOST is MailHog on a stand and the relay on a server - so
+  # an alert arrives wherever registration mail arrives, and there is no token to
+  # paste before delivery starts working.
+  alertmanager:
+    container_name: 'dm-alertmanager'
+    image: 'prom/alertmanager:v0.27.0'
+    # Alertmanager expands no environment variable in its configuration file, so
+    # the entrypoint renders one from the environment first. Everything below
+    # would otherwise have to be a literal in the repository.
+    entrypoint: ["/bin/sh", "/alertmanager-init.sh"]
+    ports:
+      - '127.0.0.1:9093:9093'
+    environment:
+      # The mail path of the application, not a second one: a relay reachable by
+      # the API is a relay reachable by the alerts about the API.
+      ALERT_SMTP_SMARTHOST: ${MAIL_HOST:-dm-mailhog}:${MAIL_PORT:-1025}
+      ALERT_SMTP_USERNAME: ${ALERT_SMTP_USERNAME:-}
+      ALERT_SMTP_PASSWORD: ${ALERT_SMTP_PASSWORD:-}
+      # MailHog offers no STARTTLS and alertmanager insists on it by default, so
+      # the stand default is off and a relay that wants TLS turns it on.
+      ALERT_SMTP_REQUIRE_TLS: ${ALERT_SMTP_REQUIRE_TLS:-false}
+      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-alertmanager@dm.am}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-alerts@dm.am}
+    volumes:
+      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager-init.sh:/alertmanager-init.sh:ro
+      # Silences and the notification log. In the container layer they went with
+      # every image update: the stack would then re-send every firing alert and
+      # forget the silence set on the incident being worked on.
+      - alertmanagerdata:/alertmanager
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:9093/-/healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
 
   grafana:
     container_name: 'dm-grafana'

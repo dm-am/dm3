@@ -215,6 +215,22 @@ const router = createRouter({
           meta: { dynamicTitle: true },
           component: () => import("@/pages/profile/GivenEndorsementsPage.vue"),
         },
+        // Reviews of whole games, not of posts: received-reviews /
+        // given-reviews above are the post ones, and the two pairs are
+        // different numbers on the profile.
+        {
+          name: "received-game-reviews",
+          path: "/users/:username/received-game-reviews",
+          meta: { dynamicTitle: true },
+          component: () =>
+            import("@/pages/profile/ReceivedGameReviewsPage.vue"),
+        },
+        {
+          name: "given-game-reviews",
+          path: "/users/:username/given-game-reviews",
+          meta: { dynamicTitle: true },
+          component: () => import("@/pages/profile/GivenGameReviewsPage.vue"),
+        },
         {
           name: "profile-uploads",
           path: "/users/:username/uploads",

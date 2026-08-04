@@ -147,14 +147,14 @@ public class ForumSearchShould : IntegrationTestBase
     [Fact]
     public async Task RejectAnEmptyQuery()
     {
-        var response = await Client.GetAsync("/v1/search/forum?query=");
+        var response = await Client.GetAsync("/v1/search/forum?search=");
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     private async Task<ForumSearchRow[]> Search(string query, DM.Domain.Core.Dto.GeneralUser? asUser = null)
     {
-        var url = $"/v1/search/forum?query={Uri.EscapeDataString(query)}";
+        var url = $"/v1/search/forum?search={Uri.EscapeDataString(query)}";
         var response = asUser is null
             ? await Client.GetAsync(url)
             : await Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Get, url, asUser));

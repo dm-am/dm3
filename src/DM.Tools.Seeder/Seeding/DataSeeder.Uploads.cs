@@ -98,6 +98,8 @@ internal sealed partial class DataSeeder
             Original = true,
             ContentType = processed.ContentType,
             SizeBytes = processed.Bytes.LongLength,
+            Width = processed.Width,
+            Height = processed.Height,
             ObjectKey = objectKey,
             FilePath = BuildPublicUrl(objectKey),
             FileName = sourceFileName,

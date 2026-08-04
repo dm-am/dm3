@@ -23,6 +23,7 @@ import { PublicationCard } from "@/features/publication";
 import { GamePostSkeleton } from "@/shared/ui/Skeleton";
 import { SecondaryText } from "@/shared/ui/Layout";
 import { ErrorState } from "@/shared/ui/ErrorState";
+import { useGuardedRequest } from "@/shared/lib/composables";
 
 const props = defineProps<{
   username: string;
@@ -30,22 +31,24 @@ const props = defineProps<{
 
 const publication = ref<Publication | null>(null);
 const loaded = ref(false);
-const loading = ref(false);
-const error = ref(false);
 
-async function fetchBest(username: string) {
-  loading.value = true;
+// The section refetches when the profile changes under it, so two answers can
+// be on the wire at once and the slower one used to win.
+const { loading, error, run } = useGuardedRequest({
+  message: "Не удалось загрузить лучшую публикацию",
+  clearErrorOnStart: true,
+});
+
+function fetchBest(username: string) {
   loaded.value = false;
-  error.value = false;
-  const { data, error: fetchError } =
-    await blogApi.getUserBestPublication(username);
-  if (fetchError) {
-    error.value = true;
-  } else {
-    publication.value = data?.resource ?? null;
-  }
-  loading.value = false;
-  loaded.value = true;
+  return run(
+    () => blogApi.getUserBestPublication(username),
+    (data) => {
+      publication.value = data?.resource ?? null;
+    },
+  ).finally(() => {
+    loaded.value = true;
+  });
 }
 
 onMounted(() => fetchBest(props.username));
@@ -61,7 +64,7 @@ watch(
 
     <ErrorState
       v-else-if="error"
-      message="Не удалось загрузить лучшую публикацию"
+      :message="error"
       :retry="() => fetchBest(username)"
     />
 

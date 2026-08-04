@@ -237,7 +237,10 @@ describe("useBlogsStore", () => {
         "blogs",
         expect.objectContaining({
           search: "test",
-          status: "Active",
+          // Plural and repeatable on the wire, the same name /v1/games takes.
+          // The store's own parameter stays singular: one status is what the
+          // filter offers.
+          statuses: ["Active"],
           sortBy: "popularity",
           sortOrder: "desc",
           skip: 10, // (number - 1) * size = (2 - 1) * 10 = 10

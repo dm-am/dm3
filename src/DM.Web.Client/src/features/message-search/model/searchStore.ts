@@ -84,7 +84,7 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
     hasSearched.value = true;
     try {
       const { data, error: apiError } = await messageSearchApi.searchMessages({
-        q: trimmedQuery.value,
+        search: trimmedQuery.value,
         in: GLOBAL_SCOPE,
         limit: PAGE_SIZE,
       });
@@ -115,7 +115,7 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
     error.value = null;
     try {
       const { data, error: apiError } = await messageSearchApi.searchMessages({
-        q: trimmedQuery.value,
+        search: trimmedQuery.value,
         in: GLOBAL_SCOPE,
         cursor: nextCursor.value,
         limit: PAGE_SIZE,

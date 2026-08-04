@@ -484,7 +484,10 @@ public class BanServiceShould : UnitTestBase
 
     private static CreateBan BanRequest() => new()
     {
-        Username = "Target", DurationHours = 24, Comment = "Spam", IsVoluntary = false
+        Username = "Target",
+        DurationHours = 24,
+        Comment = "Spam",
+        IsVoluntary = false
     };
 
     [Theory]

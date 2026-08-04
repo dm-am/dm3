@@ -5,6 +5,14 @@ export type {
   UseApiResourceReturn,
 } from "./useApiResource";
 
+// One local request with its own loading/error and a race guard — the shape a
+// screen uses when its answer is not worth a store.
+export { useGuardedRequest } from "./useGuardedRequest";
+export type {
+  UseGuardedRequestOptions,
+  UseGuardedRequestReturn,
+} from "./useGuardedRequest";
+
 // Async operations
 export { useAsyncAction } from "./useAsyncAction";
 export type { AsyncActionState } from "./useAsyncAction";

@@ -66,7 +66,7 @@ public class PostController : ControllerBase
     {
         var result = await _postApiService.Create(id, post);
         return CreatedAtRoute(nameof(GetPost),
-            new {id = result.Resource.Id}, result);
+            new { id = result.Resource.Id }, result);
     }
 
     /// <summary>
@@ -134,11 +134,11 @@ public class PostController : ControllerBase
     ///
     /// Filters:
     /// - hasReviews: Only posts with at least one review
-    /// - lastReviewedAfter: Posts with last review after this date (ISO 8601)
+    /// - lastReviewedFromUtc: Posts with last review at or after this date (ISO 8601)
     /// - gameId: Filter by specific game
     /// - minRating / maxRating: Rating range (can be negative)
-    /// - authorUsernames: Comma-separated post author usernames
-    /// - createdAfter / createdBefore: Post creation date range (ISO 8601)
+    /// - authorUsernames: Post author usernames, the parameter repeated once each
+    /// - createdFromUtc / createdToUtc: Post creation date range (ISO 8601)
     /// </remarks>
     /// <param name="query">Filter and sorting parameters</param>
     /// <response code="200">Returns the list of rated posts</response>

@@ -149,6 +149,15 @@ public class NewUpload
     /// <summary>File size in bytes.</summary>
     public long SizeBytes { get; init; }
 
+    /// <summary>
+    /// Intrinsic width of the stored file in pixels. Null when the caller does
+    /// not know it — a non-image upload, or a path that never measured one.
+    /// </summary>
+    public int? Width { get; init; }
+
+    /// <summary>Intrinsic height of the stored file in pixels; travels with <see cref="Width"/>.</summary>
+    public int? Height { get; init; }
+
     /// <summary>Key of the object in the bucket.</summary>
     public string ObjectKey { get; init; } = null!;
 

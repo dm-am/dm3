@@ -49,17 +49,56 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     /// <inheritdoc />
     public async Task<IEnumerable<GeneralUser>> GetUsersAsync(PagingData paging, UserFilter filter)
     {
+        var users = await BuildPageQuery(paging, filter)
+            .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
+            .ToArrayAsync();
+
+        await PopulateListCounts(users);
+        return users;
+    }
+
+    /// <summary>
+    /// The filtered, ordered and paged rows the user list draws, before projection.
+    /// </summary>
+    /// <remarks>
+    /// Separated from the projection because the statement it composes is the thing
+    /// under test — how many times a page counts a table is readable from
+    /// <c>ToQueryString</c> and from nothing else — and because ProjectTo needs a
+    /// configured mapper while this needs nothing but the context.
+    /// </remarks>
+    internal IQueryable<User> BuildPageQuery(PagingData paging, UserFilter filter)
+    {
         // Read once each: the ordering below branches on them a dozen times.
         var search = filter.Search;
         var sort = filter.Sort;
         var sortAscending = filter.SortAscending;
 
+        // The four sorts over a derived number; null for every other sort, which orders
+        // by a column of Users and needs no join at all.
+        var sortCounter = CounterOf(sort);
+
         // No Include: the query ends in ProjectTo, which builds its own Select and makes
         // EF drop every Include with a warning. The avatar comes from the mapping
         // expression and the username history from its own statement below.
-        var baseQuery = GetQuery(filter);
+        //
+        // The range over the counter this page is sorted by is left out here and applied
+        // to the join below: filtering and ordering by the same number through two joins
+        // put two GROUP BYs over the same table into one statement, and "min games
+        // hosting, sorted by games hosting" is the ordinary way that filter is used.
+        var baseQuery = GetQuery(filter, sortCounter);
 
-        IOrderedQueryable<User> orderedQuery;
+        IQueryable<User> pageQuery;
+
+        // The page left-joined to one GROUP BY per counted table, so the aggregate runs
+        // once per request instead of once per row of Users.
+        IQueryable<UserCountQueries.CountedUser>? counted = null;
+        if (sortCounter.HasValue)
+        {
+            counted = UserCountQueries.Counted(_dmDbContext, sortCounter.Value, baseQuery,
+                _dateTimeProvider.Now - ActivityPolicy.ActivePeriod);
+            var (min, max) = RangeOf(filter, sortCounter.Value);
+            counted = UserCountQueries.InRangeCounted(counted, min, max);
+        }
 
         // When searching without explicit sort, use relevance-based ordering
         // When user explicitly selects a sort (e.g., rating), respect their choice
@@ -71,18 +110,33 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             // 1. Exact match (highest)
             // 2. Prefix match
             // 3. Similarity score (for fuzzy matches)
-            // 4. Alphabetically within same relevance
-            orderedQuery = baseQuery
+            // 4. Alphabetically within same relevance, in the direction asked for
+            //
+            // The direction reaches the last key and no further. Relevance is what
+            // a search is for, so it leads whatever the caller asked; but the tie
+            // among equally relevant names is theirs to order, and the branch used
+            // to drop sortOrder on the floor — the list accepted the parameter,
+            // answered 200 and came back in the same order either way.
+            var relevance = baseQuery
                 .OrderByDescending(u => u.Username.ToLower() == searchLower)
                 .ThenByDescending(u => EF.Functions.ILike(u.Username, search + "%"))
-                .ThenByDescending(u => EF.Functions.TrigramsSimilarity(u.Username, searchLower))
-                .ThenBy(u => u.Username);
+                .ThenByDescending(u => EF.Functions.TrigramsSimilarity(u.Username, searchLower));
+
+            pageQuery = (sortAscending
+                    ? relevance.ThenBy(u => u.Username).ThenBy(u => u.UserId)
+                    : relevance.ThenByDescending(u => u.Username).ThenByDescending(u => u.UserId))
+                .Page(paging);
+        }
+        else if (counted != null)
+        {
+            pageQuery = UserCountQueries.Order(counted, sortAscending)
+                .Page(paging)
+                .Select(x => x.User);
         }
         else
         {
             // Explicit sort selected or no search - use specified sort with direction
-            // Note: GamesHosting, Popularity, BlogsHosting sorts require subqueries
-            orderedQuery = sort switch
+            var orderedQuery = sort switch
             {
                 UserSort.Rating => sortAscending
                     ? baseQuery.OrderBy(u => u.RatingDisabled).ThenBy(u => u.QualityRating).ThenBy(u => u.QuantityRating)
@@ -96,50 +150,23 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
                 UserSort.Registered => sortAscending
                     ? baseQuery.OrderBy(u => u.CreatedUtc)
                     : baseQuery.OrderByDescending(u => u.CreatedUtc),
-                UserSort.GamesHosting => sortAscending
-                    ? baseQuery.OrderBy(u =>
-                        _dmDbContext.Games.Count(g => !g.IsRemoved && g.MasterId == u.UserId) +
-                        _dmDbContext.Set<Entities.Game.Links.GameAssistant>().Count(a => a.UserId == u.UserId && !a.Game.IsRemoved)).ThenBy(u => u.Username)
-                    : baseQuery.OrderByDescending(u =>
-                        _dmDbContext.Games.Count(g => !g.IsRemoved && g.MasterId == u.UserId) +
-                        _dmDbContext.Set<Entities.Game.Links.GameAssistant>().Count(a => a.UserId == u.UserId && !a.Game.IsRemoved)).ThenBy(u => u.Username),
-                UserSort.BlogsHosting => sortAscending
-                    ? baseQuery.OrderBy(u =>
-                        _dmDbContext.Blogs.Count(b => !b.IsRemoved && b.AuthorId == u.UserId) +
-                        _dmDbContext.Set<Entities.Blog.BlogAssistant>().Count(a => a.UserId == u.UserId && !a.Blog.IsRemoved)).ThenBy(u => u.Username)
-                    : baseQuery.OrderByDescending(u =>
-                        _dmDbContext.Blogs.Count(b => !b.IsRemoved && b.AuthorId == u.UserId) +
-                        _dmDbContext.Set<Entities.Blog.BlogAssistant>().Count(a => a.UserId == u.UserId && !a.Blog.IsRemoved)).ThenBy(u => u.Username),
-                UserSort.Popularity => sortAscending
-                    ? baseQuery.OrderBy(u =>
-                        _dmDbContext.Subscriptions.Count(s => s.TargetType == SubscriptionTargetType.User && s.TargetId == u.UserId &&
-                            s.Subscriber.LastActivityUtc.HasValue && s.Subscriber.LastActivityUtc.Value > _dateTimeProvider.Now - ActivityPolicy.ActivePeriod)).ThenBy(u => u.Username)
-                    : baseQuery.OrderByDescending(u =>
-                        _dmDbContext.Subscriptions.Count(s => s.TargetType == SubscriptionTargetType.User && s.TargetId == u.UserId &&
-                            s.Subscriber.LastActivityUtc.HasValue && s.Subscriber.LastActivityUtc.Value > _dateTimeProvider.Now - ActivityPolicy.ActivePeriod)).ThenBy(u => u.Username),
-                // Count distinct games where user has at least one character (current or former player)
-                UserSort.GamesPlaying => sortAscending
-                    ? baseQuery.OrderBy(u =>
-                        _dmDbContext.Set<Entities.Game.Characters.Character>()
-                            .Where(c => c.AuthorId == u.UserId && !c.IsNpc && !c.IsRemoved && !c.Game.IsRemoved)
-                            .Select(c => c.GameId).Distinct().Count()).ThenBy(u => u.Username)
-                    : baseQuery.OrderByDescending(u =>
-                        _dmDbContext.Set<Entities.Game.Characters.Character>()
-                            .Where(c => c.AuthorId == u.UserId && !c.IsNpc && !c.IsRemoved && !c.Game.IsRemoved)
-                            .Select(c => c.GameId).Distinct().Count()).ThenBy(u => u.Username),
                 _ => sortAscending
                     ? baseQuery.OrderBy(u => u.Username)
                     : baseQuery.OrderByDescending(u => u.Username)
             };
+
+            // A last key nothing can tie on. Every ordering above is over a value
+            // users share — a rating, a registration date, a name — and a page is a
+            // window over it: with the tie left to the database, two pages of one
+            // list can repeat a row and drop another, and nothing in the answer says
+            // so. The identifier is unique by construction and settles it.
+            pageQuery = (sortAscending
+                    ? orderedQuery.ThenBy(u => u.UserId)
+                    : orderedQuery.ThenByDescending(u => u.UserId))
+                .Page(paging);
         }
 
-        var users = await orderedQuery
-            .Page(paging)
-            .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
-            .ToArrayAsync();
-
-        await PopulateListCounts(users);
-        return users;
+        return pageQuery;
     }
 
     /// <inheritdoc />
@@ -524,7 +551,39 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
                 });
     }
 
-    private IQueryable<User> GetQuery(UserFilter filter)
+    /// <summary>The counter a sort orders by, or null for a sort over a column of Users.</summary>
+    private static UserCountQueries.Counter? CounterOf(UserSort sort) => sort switch
+    {
+        UserSort.GamesHosting => UserCountQueries.Counter.GamesHosting,
+        UserSort.BlogsHosting => UserCountQueries.Counter.BlogsHosting,
+        UserSort.GamesPlaying => UserCountQueries.Counter.GamesPlaying,
+        UserSort.Popularity => UserCountQueries.Counter.Popularity,
+        _ => null,
+    };
+
+    /// <summary>
+    /// The numeric range the filter states over one counter. Popularity has none:
+    /// the list sorts by it and does not bound it.
+    /// </summary>
+    private static (int? Min, int? Max) RangeOf(UserFilter filter, UserCountQueries.Counter counter) =>
+        counter switch
+        {
+            UserCountQueries.Counter.GamesHosting => (filter.MinGamesHosting, filter.MaxGamesHosting),
+            UserCountQueries.Counter.GamesPlaying => (filter.MinGamesPlaying, filter.MaxGamesPlaying),
+            UserCountQueries.Counter.BlogsHosting => (filter.MinBlogsHosting, filter.MaxBlogsHosting),
+            _ => (null, null),
+        };
+
+    /// <summary>
+    /// The filtered set of users.
+    /// </summary>
+    /// <param name="filter">Everything the caller asked to narrow the list by.</param>
+    /// <param name="countedElsewhere">
+    /// A counter whose numeric range the caller applies itself, because it also orders
+    /// by that counter and the two share one join. Null — the count and every sort over
+    /// a column of Users — applies all three ranges here.
+    /// </param>
+    private IQueryable<User> GetQuery(UserFilter filter, UserCountQueries.Counter? countedElsewhere = null)
     {
         // Everything below reads off the filter directly, rather than aliasing
         // fifteen locals first and rebuilding the positional list this record
@@ -605,54 +664,31 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             query = query.WhereAtOrBefore(u => u.CreatedUtc, filter.RegisteredToUtc.Value);
         }
 
-        // Games hosting filter (master + assistant)
-        if (filter.MinGamesHosting.HasValue)
+        // The three numeric ranges, over the same counters the sorts order by and
+        // through the same join: a Count() correlated to the user row is evaluated
+        // per row of Users, and these filters are what the page is selected by.
+        // Min and max share one join — the bound is a predicate over the number,
+        // not a second reason to count.
+        foreach (var counter in new[]
+                 {
+                     UserCountQueries.Counter.GamesHosting,
+                     UserCountQueries.Counter.GamesPlaying,
+                     UserCountQueries.Counter.BlogsHosting,
+                 })
         {
-            query = query.Where(u =>
-                _dmDbContext.Games.Count(g => !g.IsRemoved && g.MasterId == u.UserId) +
-                _dmDbContext.Set<Entities.Game.Links.GameAssistant>().Count(a => a.UserId == u.UserId && !a.Game.IsRemoved)
-                >= filter.MinGamesHosting.Value);
-        }
-        if (filter.MaxGamesHosting.HasValue)
-        {
-            query = query.Where(u =>
-                _dmDbContext.Games.Count(g => !g.IsRemoved && g.MasterId == u.UserId) +
-                _dmDbContext.Set<Entities.Game.Links.GameAssistant>().Count(a => a.UserId == u.UserId && !a.Game.IsRemoved)
-                <= filter.MaxGamesHosting.Value);
-        }
+            if (counter == countedElsewhere)
+            {
+                continue;
+            }
 
-        // Games playing filter (distinct games where user has active character)
-        if (filter.MinGamesPlaying.HasValue)
-        {
-            query = query.Where(u =>
-                _dmDbContext.Set<Entities.Game.Characters.Character>()
-                    .Where(c => c.AuthorId == u.UserId && !c.IsNpc && !c.IsRemoved && !c.Game.IsRemoved)
-                    .Select(c => c.GameId).Distinct().Count()
-                >= filter.MinGamesPlaying.Value);
-        }
-        if (filter.MaxGamesPlaying.HasValue)
-        {
-            query = query.Where(u =>
-                _dmDbContext.Set<Entities.Game.Characters.Character>()
-                    .Where(c => c.AuthorId == u.UserId && !c.IsNpc && !c.IsRemoved && !c.Game.IsRemoved)
-                    .Select(c => c.GameId).Distinct().Count()
-                <= filter.MaxGamesPlaying.Value);
-        }
-
-        // Blogs hosting filter (owner + assistant)
-        if (filter.MinBlogsHosting.HasValue)
-        {
-            query = query.Where(u =>
-                _dmDbContext.Blogs.Count(b => !b.IsRemoved && b.AuthorId == u.UserId) +
-                _dmDbContext.Set<Entities.Blog.BlogAssistant>().Count(a => a.UserId == u.UserId && !a.Blog.IsRemoved)
-                >= filter.MinBlogsHosting.Value);
-        }
-        if (filter.MaxBlogsHosting.HasValue)
-        {
-            query = query.Where(u =>
-                _dmDbContext.Blogs.Count(b => !b.IsRemoved && b.AuthorId == u.UserId) +
-                _dmDbContext.Set<Entities.Blog.BlogAssistant>().Count(a => a.UserId == u.UserId && !a.Blog.IsRemoved)
-                <= filter.MaxBlogsHosting.Value);
+            var (min, max) = RangeOf(filter, counter);
+            if (min.HasValue || max.HasValue)
+            {
+                query = UserCountQueries.InRange(
+                    UserCountQueries.Counted(_dmDbContext, counter, query,
+                        _dateTimeProvider.Now - ActivityPolicy.ActivePeriod),
+                    min, max);
+            }
         }
 
         return query;
@@ -778,6 +814,25 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         var endorsementsGivenCounts = await _dmDbContext.UserEndorsements
             .Where(e => userIds.Contains(e.AuthorId) && !e.IsRemoved)
             .GroupBy(e => e.AuthorId)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        // Game reviews — the same pair of batched COUNTs, over the other kind of
+        // review. "Given" is authorship, as everywhere else. "Received" is not:
+        // a game review is about a game, so it lands on the game's master, which
+        // is the relation GameReviewFilter.GmId already selects by. Both sides
+        // have to agree with the endpoints behind the two profile counters, or
+        // the number on the profile and the length of the list it links to are
+        // answers to different questions.
+        var gameReviewsGivenCounts = await _dmDbContext.GameReviews
+            .Where(r => userIds.Contains(r.AuthorId) && !r.IsRemoved)
+            .GroupBy(r => r.AuthorId)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var gameReviewsReceivedCounts = await _dmDbContext.GameReviews
+            .Where(r => !r.IsRemoved && !r.Game.IsRemoved && userIds.Contains(r.Game.MasterId))
+            .GroupBy(r => r.Game.MasterId)
             .Select(g => new { UserId = g.Key, Count = g.Count() })
             .ToListAsync();
 
@@ -961,6 +1016,8 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         var givenDict = givenCounts.ToDictionary(x => x.UserId, x => x.Count);
         var receivedDict = receivedCounts.ToDictionary(x => x.UserId, x => x.Count);
         var endorsementsGivenDict = endorsementsGivenCounts.ToDictionary(x => x.UserId, x => x.Count);
+        var gameReviewsGivenDict = gameReviewsGivenCounts.ToDictionary(x => x.UserId, x => x.Count);
+        var gameReviewsReceivedDict = gameReviewsReceivedCounts.ToDictionary(x => x.UserId, x => x.Count);
         var topicsAuthoredDict = topicsAuthoredCounts.ToDictionary(x => x.UserId, x => x.Count);
         var commentsAuthoredDict = commentsAuthoredCounts.ToDictionary(x => x.UserId, x => x.Count);
         var globalChatMessagesDict = globalChatMessageCounts.ToDictionary(x => x.UserId, x => x.Count);
@@ -984,6 +1041,8 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             user.PostReviewsGivenCount = givenDict.TryGetValue(user.UserId, out var given) ? given : 0;
             user.PostReviewsReceivedCount = receivedDict.TryGetValue(user.UserId, out var received) ? received : 0;
             user.EndorsementsGivenCount = endorsementsGivenDict.TryGetValue(user.UserId, out var eg) ? eg : 0;
+            user.GameReviewsGivenCount = gameReviewsGivenDict.TryGetValue(user.UserId, out var grg) ? grg : 0;
+            user.GameReviewsReceivedCount = gameReviewsReceivedDict.TryGetValue(user.UserId, out var grr) ? grr : 0;
             user.TopicsAuthoredCount = topicsAuthoredDict.TryGetValue(user.UserId, out var ta) ? ta : 0;
             user.CommentsAuthoredCount = commentsAuthoredDict.TryGetValue(user.UserId, out var ca) ? ca : 0;
             user.GlobalChatMessagesCount = globalChatMessagesDict.TryGetValue(user.UserId, out var gc) ? gc : 0;

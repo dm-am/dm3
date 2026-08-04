@@ -32,7 +32,7 @@ import { createKeyedCache } from "@/shared/lib/utils/keyedCache";
  * and that stays below.
  *
  * The keys are literals rather than `stableCacheKey(query)` because the
- * best-of-week query carries `createdAfter: getWeekStartUtc()` — a timestamp
+ * best-of-week query carries `createdFromUtc: getWeekStartUtc()` — a timestamp
  * computed at call time. Keyed on the query, every call would be a new key and
  * the cache would never hit once.
  *
@@ -102,7 +102,7 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
       const response = await gameApi.getRatedPosts({
         sortBy: "rating",
         hasReviews: true,
-        createdAfter: getWeekStartUtc(),
+        createdFromUtc: getWeekStartUtc(),
         take: 1,
       });
       if (response.error) {
@@ -202,7 +202,7 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
       const response = await gameApi.getRatedPosts({
         sortBy: "rating",
         sortOrder: "desc",
-        authorUsernames: username,
+        authorUsernames: [username],
         take: 1,
       });
       if (response.error) {

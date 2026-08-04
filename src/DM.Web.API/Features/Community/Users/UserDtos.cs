@@ -120,6 +120,18 @@ public class User : UserRef
     public int? EndorsementsReceived { get; set; }
 
     /// <summary>
+    /// Number of game reviews written by this user. Reviews of whole games,
+    /// not of single posts — <see cref="ReviewsGiven" /> is the post one.
+    /// </summary>
+    public int? GameReviewsGiven { get; set; }
+
+    /// <summary>
+    /// Number of game reviews received by this user: reviews written about the
+    /// games they master.
+    /// </summary>
+    public int? GameReviewsReceived { get; set; }
+
+    /// <summary>
     /// Forum topics authored by this user.
     /// </summary>
     public int? TopicsAuthored { get; set; }
@@ -396,6 +408,26 @@ public class UserPicture
     /// Original picture URL (full size, only in PersonalProfile context)
     /// </summary>
     public string? OriginalUrl { get; set; }
+
+    /// <summary>
+    /// Intrinsic width of <see cref="OriginalUrl"/> in pixels.
+    /// </summary>
+    /// <remarks>
+    /// Only the original needs it: the small and medium variants are square
+    /// crops, so their box follows from the size they are asked for, while the
+    /// original preserves the aspect ratio of whatever was uploaded. A client
+    /// that puts the pair on the img element gets the exact box reserved before
+    /// the picture decodes; null means the upload predates the measurement, and
+    /// the client is on its own guess again.
+    /// </remarks>
+    public int? OriginalWidth { get; set; }
+
+    /// <summary>
+    /// Intrinsic height of <see cref="OriginalUrl"/> in pixels. Sent together
+    /// with <see cref="OriginalWidth"/> — one without the other says nothing
+    /// about the ratio.
+    /// </summary>
+    public int? OriginalHeight { get; set; }
 }
 
 /// <summary>
@@ -422,14 +454,19 @@ public class UsernameHistoryEntry
 /// Query parameters for user list filtering
 /// </summary>
 /// <remarks>
-/// GET /v1/users?q=john&amp;role=Mentor&amp;activity=Active&amp;skip=0&amp;take=20&amp;sort=name
+/// GET /v1/users?search=john&amp;role=Mentor&amp;activity=Active&amp;skip=0&amp;take=20&amp;sortBy=Name
 /// </remarks>
 public class UsersQuery : PagingQuery
 {
     /// <summary>
     /// Search by username prefix
     /// </summary>
-    public string? Q { get; set; }
+    /// <remarks>
+    /// Named for the query vocabulary in API_DESIGN.md: the free-text filter is
+    /// `search` on every list endpoint. It was `q` here and on
+    /// /v1/search/messages while thirteen neighbours already said `search`.
+    /// </remarks>
+    public string? Search { get; set; }
 
     /// <summary>
     /// Filter by user role
@@ -516,8 +553,9 @@ public class UsersQuery : PagingQuery
     /// </summary>
     /// <remarks>
     /// Name - alphabetically, Rating - by post review score sum, LastActivity, Registered, etc.
+    /// Spelled `sortBy` like the other thirteen sorted lists; it was `sort` here alone.
     /// </remarks>
-    public UserSort Sort { get; set; } = UserSort.Name;
+    public UserSort SortBy { get; set; } = UserSort.Name;
 
     /// <summary>
     /// Sort direction: asc or desc

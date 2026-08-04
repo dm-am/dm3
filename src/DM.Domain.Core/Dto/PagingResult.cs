@@ -43,9 +43,9 @@ public class PagingResult
     {
         return new PagingResult
         {
-            TotalPagesCount = (int) Math.Ceiling((decimal) totalEntitiesCount / pageSize),
+            TotalPagesCount = (int)Math.Ceiling((decimal)totalEntitiesCount / pageSize),
             TotalEntitiesCount = totalEntitiesCount,
-            CurrentPage = Math.Max(1, (int) Math.Ceiling((decimal) entityNumber / pageSize)),
+            CurrentPage = Math.Max(1, (int)Math.Ceiling((decimal)entityNumber / pageSize)),
             PageSize = pageSize,
             EntityNumber = Math.Min(Math.Max(1, entityNumber), totalEntitiesCount)
         };

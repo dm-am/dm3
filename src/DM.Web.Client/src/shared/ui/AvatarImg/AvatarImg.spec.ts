@@ -58,6 +58,68 @@ describe("AvatarImg", () => {
     expect(svg.attributes("height")).toBe("220");
   });
 
+  it("declares the picture's own box when the API measured it", () => {
+    // width/height is what the browser reserves the slot from, before it has a
+    // byte of the picture. The original preserves the uploaded aspect ratio, so
+    // a square declaration reserved 220px for a picture 165px tall and left the
+    // difference blank until somebody floored the wrapper to hide it.
+    const wrapper = mount(AvatarImg, {
+      props: {
+        picture: {
+          originalUrl: "https://example.test/o.jpg",
+          originalWidth: 200,
+          originalHeight: 150,
+        },
+        alt: "Кто-то",
+        size: 220,
+        preferOriginal: true,
+      },
+    });
+
+    const img = wrapper.find("img");
+    expect(img.attributes("width")).toBe("220");
+    expect(img.attributes("height")).toBe("165");
+  });
+
+  it("falls back to the square when nobody measured the picture", () => {
+    // An upload stored before the pipeline recorded its dimensions. A guessed
+    // ratio would be worse than the square: the square is at least the shape
+    // the slot floors itself to.
+    const wrapper = mount(AvatarImg, {
+      props: {
+        picture: { originalUrl: "https://example.test/o.jpg" },
+        alt: "Кто-то",
+        size: 220,
+        preferOriginal: true,
+      },
+    });
+
+    const img = wrapper.find("img");
+    expect(img.attributes("width")).toBe("220");
+    expect(img.attributes("height")).toBe("220");
+  });
+
+  it("keeps thumbnails square whatever the original measures", () => {
+    // small and medium are square center-crops at the size they are asked for,
+    // so the original's ratio says nothing about the box they occupy.
+    const wrapper = mount(AvatarImg, {
+      props: {
+        picture: {
+          smallUrl: "https://example.test/s.jpg",
+          originalUrl: "https://example.test/o.jpg",
+          originalWidth: 200,
+          originalHeight: 150,
+        },
+        alt: "Кто-то",
+        size: 48,
+      },
+    });
+
+    const img = wrapper.find("img");
+    expect(img.attributes("width")).toBe("48");
+    expect(img.attributes("height")).toBe("48");
+  });
+
   it("draws nothing for a caller that wants no default", () => {
     // Character: no avatar means no image, unlike User.
     const wrapper = mount(AvatarImg, {

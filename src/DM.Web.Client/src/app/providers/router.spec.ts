@@ -80,6 +80,36 @@ describe("route table", () => {
       named.length,
     );
   });
+
+  /**
+   * Two kinds of review, four subpages, and names that read alike.
+   *
+   * received-reviews and given-reviews are ratings of single posts and were
+   * taken long before the game pair existed; the profile counters for reviews
+   * of whole games therefore have their own names, and pointing either counter
+   * at the older pair would open a page about the other kind of review with no
+   * error to notice.
+   */
+  it.each([
+    ["received-game-reviews", "/users/somebody/received-game-reviews"],
+    ["given-game-reviews", "/users/somebody/given-game-reviews"],
+  ])("gives %s a route of its own", (name, path) => {
+    const shell = shellOf(path);
+
+    expect(shell.name, `${path} does not resolve to ${name}`).toBe(name);
+    expect(shell.hasLeft).toBe(true);
+    expect(shell.hasRight).toBe(true);
+    expect(shell.hasPage).toBe(true);
+    expect(shell.meta).toMatchObject({ dynamicTitle: true });
+
+    const postReviews = router.resolve(
+      path.replace("-game-reviews", "-reviews"),
+    );
+    expect(
+      postReviews.name,
+      "the game pair must not resolve to the post pair",
+    ).not.toBe(name);
+  });
 });
 
 /**

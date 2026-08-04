@@ -53,7 +53,7 @@ internal class TopicLikedNotificationGenerator : BaseNotificationGenerator
 
         yield return new CreateNotification
         {
-            UsersInterested = new[] {likedTopicData.AuthorId},
+            UsersInterested = new[] { likedTopicData.AuthorId },
             ActorId = likedTopicData.LikerId,
             Metadata = new
             {

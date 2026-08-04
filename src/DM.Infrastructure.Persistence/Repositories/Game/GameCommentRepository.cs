@@ -72,9 +72,9 @@ internal class GameCommentRepository : IGameCommentRepository
         }
 
         // Filter by authors (OR logic)
-        if (commentsQuery.Authors is { Count: > 0 })
+        if (commentsQuery.AuthorUsernames is { Count: > 0 })
         {
-            var authorNames = commentsQuery.Authors.Select(a => a.ToLowerInvariant()).ToArray();
+            var authorNames = commentsQuery.AuthorUsernames.Select(a => a.ToLowerInvariant()).ToArray();
             query = query.Where(c => c.Author != null && authorNames.Contains(c.Author.Username.ToLower()));
         }
 
@@ -210,13 +210,13 @@ internal class GameCommentRepository : IGameCommentRepository
     }
 
     /// <inheritdoc />
-    public async Task<Guid?> GetSecondLastCommentId(Guid gameId)
+    public async Task<Guid?> GetNewestCommentIdExcept(Guid gameId, Guid exceptCommentId)
     {
         return await _dbContext.Comments
-            .TagWith("DM.GameComments.SecondLastCommentId")
-            .Where(c => !c.IsRemoved && c.EntityId == gameId)
+            .TagWith("DM.GameComments.NewestCommentIdExcept")
+            .Where(c => !c.IsRemoved && c.EntityId == gameId && c.CommentId != exceptCommentId)
             .OrderByDescending(c => c.CreatedUtc)
-            .Skip(1)
+            .ThenByDescending(c => c.CommentId)
             .Select(c => (Guid?)c.CommentId)
             .FirstOrDefaultAsync();
     }

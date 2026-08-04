@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using DM.Domain.Core.Dto;
 
 namespace DM.Domain.Game.Features.Posts;
@@ -14,9 +15,9 @@ public class PostsQuery : PagingQuery
     public Guid? GameId { get; set; }
 
     /// <summary>
-    /// Filter posts whose last review was after this date
+    /// Filter posts whose last review was at or after this date
     /// </summary>
-    public DateTimeOffset? LastReviewedAfter { get; set; }
+    public DateTimeOffset? LastReviewedFromUtc { get; set; }
 
     /// <summary>
     /// Only include posts with at least one review
@@ -49,9 +50,15 @@ public class PostsQuery : PagingQuery
     public int? MaxRating { get; set; }
 
     /// <summary>
-    /// Filter by post author usernames (comma-separated)
+    /// Filter by post author usernames (repeat the parameter for several)
     /// </summary>
-    public string? AuthorUsernames { get; set; }
+    /// <remarks>
+    /// Plural because it is repeatable, per the query vocabulary in
+    /// API_DESIGN.md. It used to be one string holding a list under the same
+    /// plural name that /v1/games spells as a repeated parameter, so the same
+    /// name meant two different encodings on two neighbouring endpoints.
+    /// </remarks>
+    public IReadOnlyCollection<string>? AuthorUsernames { get; set; }
 
     /// <summary>
     /// Filter to posts that have at least one review by this username.
@@ -62,12 +69,12 @@ public class PostsQuery : PagingQuery
     public string? ReviewerUsername { get; set; }
 
     /// <summary>
-    /// Filter posts created after this date
+    /// Filter posts created at or after this date
     /// </summary>
-    public DateTimeOffset? CreatedAfter { get; set; }
+    public DateTimeOffset? CreatedFromUtc { get; set; }
 
     /// <summary>
-    /// Filter posts created before this date
+    /// Filter posts created at or before this date
     /// </summary>
-    public DateTimeOffset? CreatedBefore { get; set; }
+    public DateTimeOffset? CreatedToUtc { get; set; }
 }

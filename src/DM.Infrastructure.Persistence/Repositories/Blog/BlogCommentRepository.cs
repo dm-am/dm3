@@ -76,9 +76,9 @@ internal class BlogCommentRepository : IBlogCommentRepository
         }
 
         // Filter by authors (OR logic)
-        if (commentsQuery.Authors is { Count: > 0 })
+        if (commentsQuery.AuthorUsernames is { Count: > 0 })
         {
-            var authorNames = commentsQuery.Authors.Select(a => a.ToLowerInvariant()).ToArray();
+            var authorNames = commentsQuery.AuthorUsernames.Select(a => a.ToLowerInvariant()).ToArray();
             query = query.Where(c => c.Author != null && authorNames.Contains(c.Author.Username.ToLower()));
         }
 
@@ -219,13 +219,13 @@ internal class BlogCommentRepository : IBlogCommentRepository
     }
 
     /// <inheritdoc />
-    public async Task<Guid?> GetSecondLastCommentId(Guid blogId, CancellationToken ct = default)
+    public async Task<Guid?> GetNewestCommentIdExcept(Guid blogId, Guid exceptCommentId, CancellationToken ct = default)
     {
         return await _dbContext.Comments
-            .TagWith("DM.BlogComments.SecondLastCommentId")
-            .Where(c => !c.IsRemoved && c.EntityId == blogId)
+            .TagWith("DM.BlogComments.NewestCommentIdExcept")
+            .Where(c => !c.IsRemoved && c.EntityId == blogId && c.CommentId != exceptCommentId)
             .OrderByDescending(c => c.CreatedUtc)
-            .Skip(1)
+            .ThenByDescending(c => c.CommentId)
             .Select(c => (Guid?)c.CommentId)
             .FirstOrDefaultAsync(ct);
     }
@@ -239,12 +239,19 @@ internal class BlogCommentRepository : IBlogCommentRepository
             SoftDelete.Mark(dbComment, entity.DeletedByUserId, entity.DeletedUtc);
         }
 
-        // Update blog comment count and last comment ID
+        // Update blog comment count and last comment ID. The pointer moves only when
+        // the row it points at is the one going away: the service computes
+        // NewLastCommentId for the last comment and leaves it null for every other,
+        // so assigning it unconditionally erased the pointer whenever somebody
+        // deleted a comment from the middle of the discussion.
         var blog = await _dbContext.Blogs.FindAsync([entity.BlogId], ct);
         if (blog != null)
         {
             blog.CommentCount = entity.NewCommentCount;
-            blog.LastCommentId = entity.NewLastCommentId;
+            if (entity.NewLastCommentId.HasValue || blog.LastCommentId == entity.CommentId)
+            {
+                blog.LastCommentId = entity.NewLastCommentId;
+            }
         }
 
         await _dbContext.SaveChangesAsync(ct);

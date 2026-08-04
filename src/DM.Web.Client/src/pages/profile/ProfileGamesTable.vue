@@ -36,7 +36,7 @@ import { UserLink } from "@/entities/user";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import { buildReadersTooltip } from "@/shared/lib/utils/tooltipBuilders";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
-import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 const props = defineProps<{
@@ -118,43 +118,38 @@ const apiParams = computed(() => {
 });
 
 const envelope = ref<ListEnvelope<Game> | null>(null);
-const loading = ref(false);
-const error = ref(false);
 
-// Discards stale responses when a fast search/page/role change races an
-// in-flight request — otherwise a slow earlier reply can overwrite a
-// newer one and show the wrong page/filter results.
-const guard = createRequestGuard();
+// clearErrorOnStart: what this table did before the composable — the error line
+// goes away while the next page loads.
+const { loading, error, run } = useGuardedRequest({
+  message: "Не удалось загрузить игры",
+  clearErrorOnStart: true,
+});
 
-async function fetchGames() {
-  const requestId = guard.next();
+function fetchGames() {
   const roleAtRequest = role.value;
-  loading.value = true;
-  error.value = false;
-  const { data, error: apiError } = await gameApi.searchGames(apiParams.value);
-  if (!guard.isCurrent(requestId)) return;
-  loading.value = false;
-  if (apiError) {
-    error.value = true;
-    return;
-  }
-  envelope.value = data ?? null;
+  return run(
+    () => gameApi.searchGames(apiParams.value),
+    (data) => {
+      envelope.value = data;
 
-  // Self-contained auto-switch (#65): if the *initial default* "Ведущий"
-  // fetch comes back empty and the user hasn't touched the toggle yet, flip
-  // once to "Игрок" so a profile with no hosted games doesn't land on a
-  // dead tab. Restricted to the unfiltered first load (no search typed
-  // yet) — an empty search result for "host" must not trigger this, only
-  // a genuinely empty default fetch. Any later manual toggle, or an empty
-  // "player" result, must NOT bounce back.
-  if (
-    roleAtRequest === "host" &&
-    !roleTouchedManually.value &&
-    !search.value &&
-    (data?.paging?.total ?? 0) === 0
-  ) {
-    role.value = "player";
-  }
+      // Self-contained auto-switch (#65): if the *initial default* "Ведущий"
+      // fetch comes back empty and the user hasn't touched the toggle yet, flip
+      // once to "Игрок" so a profile with no hosted games doesn't land on a
+      // dead tab. Restricted to the unfiltered first load (no search typed
+      // yet) — an empty search result for "host" must not trigger this, only
+      // a genuinely empty default fetch. Any later manual toggle, or an empty
+      // "player" result, must NOT bounce back.
+      if (
+        roleAtRequest === "host" &&
+        !roleTouchedManually.value &&
+        !search.value &&
+        (data?.paging?.total ?? 0) === 0
+      ) {
+        role.value = "player";
+      }
+    },
+  );
 }
 
 const games = computed(() => envelope.value?.resources ?? []);
@@ -324,11 +319,7 @@ function pagingAnchor(): HTMLElement | null {
       />
     </div>
 
-    <ErrorState
-      v-if="error"
-      message="Не удалось загрузить игры"
-      :retry="fetchGames"
-    />
+    <ErrorState v-if="error" :message="error" :retry="fetchGames" />
 
     <DataTable
       v-if="!error || games.length > 0"

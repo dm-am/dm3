@@ -174,7 +174,7 @@ internal class PublicationCommentService : IPublicationCommentService
         Guid? newLastCommentId = null;
         if (comment.IsLastComment)
         {
-            newLastCommentId = await _repository.GetSecondLastCommentId(comment.PublicationId);
+            newLastCommentId = await _repository.GetNewestCommentIdExcept(comment.PublicationId, commentId);
         }
 
         var entity = new DeletePublicationCommentEntity

@@ -33,7 +33,7 @@ public static class ReadableGuidHelper
     /// <returns>Guid</returns>
     public static Guid DecodeFromReadableGuid(this string encodedGuid)
     {
-        var base64Guid = encodedGuid.Split(new[] {"~"}, StringSplitOptions.None)
+        var base64Guid = encodedGuid.Split(new[] { "~" }, StringSplitOptions.None)
             .Last()
             .Replace("-", "/")
             .Replace("_", "+") + "==";

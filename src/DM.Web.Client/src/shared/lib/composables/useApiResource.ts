@@ -1,5 +1,6 @@
 import { ref, type Ref } from "vue";
 import type { ApiResult, GeneralError } from "@/shared/api/models/common";
+import { createFreshness } from "@/shared/lib/utils/keyedCache";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 
 export interface UseApiResourceOptions {
@@ -45,7 +46,7 @@ export interface UseApiResourceReturn<T> {
  * ```
  */
 export function useApiResource<T>(
-  fetcher: () => Promise<ApiResult<T>>,
+  fetcher: (fresh?: boolean) => Promise<ApiResult<T>>,
   options: UseApiResourceOptions = {},
 ): UseApiResourceReturn<T> {
   const { cacheMs = 60_000, staleWhileRevalidate = true } = options;
@@ -54,7 +55,17 @@ export function useApiResource<T>(
   const error = ref<GeneralError | null>(null);
   const loading = ref(false);
 
-  let lastFetched = 0;
+  // The one implementation of "is this still fresh" in the client. What stood
+  // here was a `lastFetched` timestamp and its own `now - lastFetched > cacheMs`
+  // — the same arithmetic as keyedCache, with its own answer at the boundary and
+  // its own idea of what invalidation does. Two implementations of freshness is
+  // how a change to one of them silently stops applying to half the screens.
+  //
+  // Freshness and not a cache: the payload lives in the `data` ref above, which
+  // is what components render and what reset() clears. A one-slot cache was
+  // written to here for a while and never read from, which read as "the value is
+  // cached" and meant nothing.
+  const freshness = createFreshness(cacheMs);
 
   // Discards the answer to a request that a newer one has superseded. Without it
   // a slow first response overwrites a fresh forced one, and a response that
@@ -73,9 +84,7 @@ export function useApiResource<T>(
   let backgroundInFlight = false;
 
   async function fetch(force = false): Promise<void> {
-    const now = Date.now();
-    const age = now - lastFetched;
-    const isStale = age > cacheMs;
+    const isStale = freshness.isStale();
 
     // Fresh cache — do nothing
     if (!force && data.value !== null && !isStale) {
@@ -116,7 +125,7 @@ export function useApiResource<T>(
           if (newData !== undefined) {
             data.value = newData;
             error.value = null;
-            lastFetched = Date.now();
+            freshness.touch();
           }
         })
         .catch(() => {
@@ -132,9 +141,14 @@ export function useApiResource<T>(
     loading.value = true;
     error.value = null;
 
+    // `force` is handed to the fetcher, not just acted on here. Dropping this
+    // resource's own copy is only half of a forced read when the endpoint
+    // answers `public, max-age=300`: the browser and the shared cache still
+    // hold theirs, and a catalogue refetched right after a moderator edited it
+    // came back pre-edit. A fetcher that takes the flag asks the origin.
     const run = (async () => {
       try {
-        const { data: newData, error: fetchError } = await fetcher();
+        const { data: newData, error: fetchError } = await fetcher(force);
         if (!guard.isCurrent(requestId)) return;
 
         if (fetchError) {
@@ -144,7 +158,7 @@ export function useApiResource<T>(
         }
 
         data.value = newData ?? null;
-        lastFetched = Date.now();
+        freshness.touch();
       } finally {
         if (guard.isCurrent(requestId)) {
           loading.value = false;
@@ -168,7 +182,7 @@ export function useApiResource<T>(
    * absence, which is worse than the staleness it was meant to fix.
    */
   function invalidate(): Promise<void> {
-    lastFetched = 0;
+    freshness.expire();
 
     // Nothing loaded means nothing on screen to correct, and the next fetch
     // will read fresh data anyway. Refetching here would put a request on the
@@ -186,7 +200,7 @@ export function useApiResource<T>(
     data.value = null;
     error.value = null;
     loading.value = false;
-    lastFetched = 0;
+    freshness.clear();
     blockingInFlight = null;
     backgroundInFlight = false;
   }
@@ -199,11 +213,11 @@ export function useApiResource<T>(
  * Extracts .resources from the response.
  */
 export function useApiList<T>(
-  fetcher: () => Promise<ApiResult<{ resources: T[] }>>,
+  fetcher: (fresh?: boolean) => Promise<ApiResult<{ resources: T[] }>>,
   options: UseApiResourceOptions = {},
 ): UseApiResourceReturn<T[]> {
-  const wrappedFetcher = async (): Promise<ApiResult<T[]>> => {
-    const result = await fetcher();
+  const wrappedFetcher = async (fresh?: boolean): Promise<ApiResult<T[]>> => {
+    const result = await fetcher(fresh);
     if (result.data) {
       return { data: result.data.resources, error: null };
     }

@@ -115,6 +115,20 @@ public class GeneralUser : IUser
     public int? EndorsementsGivenCount { get; set; }
 
     /// <summary>
+    /// Number of game reviews received by this user: reviews written about the
+    /// games they master. A game review is about a game, and the game's master
+    /// is who it lands on — the same relation GameReviewFilter already spells
+    /// as GmId.
+    /// </summary>
+    public int? GameReviewsReceivedCount { get; set; }
+
+    /// <summary>
+    /// Number of game reviews written by this user (about other people's games
+    /// and their own alike).
+    /// </summary>
+    public int? GameReviewsGivenCount { get; set; }
+
+    /// <summary>
     /// Forum topics authored by this user. Denormalized aggregate
     /// populated by UserRepository.GetCommonRelatedData via batched COUNT.
     /// Drives the <c>TopicsAuthored</c> achievement metric.

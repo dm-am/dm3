@@ -21,7 +21,7 @@ export interface PulseSearchParams {
   search?: string;
   minRating?: number;
   maxRating?: number;
-  authorUsernames?: string;
+  authorUsernames?: string[];
   createdFrom?: string;
   createdTo?: string;
   gameId?: string;
@@ -69,14 +69,14 @@ export function buildRatedPostsParams(
   if (params.authorUsernames)
     apiParams.authorUsernames = params.authorUsernames;
   if (params.createdFrom) {
-    const createdAfter = new Date(params.createdFrom + "T00:00:00Z");
-    if (!isNaN(createdAfter.getTime()))
-      apiParams.createdAfter = createdAfter.toISOString();
+    const createdFromUtc = new Date(params.createdFrom + "T00:00:00Z");
+    if (!isNaN(createdFromUtc.getTime()))
+      apiParams.createdFromUtc = createdFromUtc.toISOString();
   }
   if (params.createdTo) {
-    const createdBefore = new Date(params.createdTo + "T23:59:59.999Z");
-    if (!isNaN(createdBefore.getTime()))
-      apiParams.createdBefore = createdBefore.toISOString();
+    const createdToUtc = new Date(params.createdTo + "T23:59:59.999Z");
+    if (!isNaN(createdToUtc.getTime()))
+      apiParams.createdToUtc = createdToUtc.toISOString();
   }
   if (params.gameId) apiParams.gameId = params.gameId;
 
@@ -84,7 +84,7 @@ export function buildRatedPostsParams(
   // route is the one the reader cannot have typed by accident.
   switch (scope.kind) {
     case "author":
-      apiParams.authorUsernames = scope.username;
+      apiParams.authorUsernames = [scope.username];
       break;
     case "reviewer":
       apiParams.reviewerUsername = scope.username;

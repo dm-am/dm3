@@ -95,8 +95,10 @@ export default new (class ForumApi {
     if (q.search) {
       queryParams.search = q.search;
     }
+    // `authorUsernames` on the wire, per the API query vocabulary; `authors`
+    // is the name this query type and the route use.
     if (q.authors && q.authors.length > 0) {
-      queryParams.authors = q.authors;
+      queryParams.authorUsernames = q.authors;
     }
     if (q.createdFromUtc) {
       queryParams.createdFromUtc = q.createdFromUtc;

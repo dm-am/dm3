@@ -41,6 +41,7 @@ import {
   formatThreshold,
   metricDisplayNumber,
 } from "@/entities/achievement";
+import { useGuardedRequest } from "@/shared/lib/composables";
 
 const props = defineProps<{
   username: string;
@@ -60,31 +61,46 @@ const emit = defineEmits<{
 
 const earned = ref<UserAchievement[]>([]);
 const catalog = ref<AchievementType[]>([]);
-const loading = ref(false);
 const loaded = ref(false);
-const error = ref(false);
 
-async function load(username: string) {
-  loading.value = true;
+// The section refetches when the profile changes under it, so two pairs of
+// answers can be on the wire at once; the guard drops the older pair instead of
+// letting it decide what the tab reports to its parent.
+const { loading, error, run } = useGuardedRequest({
+  message: "Не удалось загрузить достижения",
+  clearErrorOnStart: true,
+});
+
+function load(username: string) {
   loaded.value = false;
-  error.value = false;
   emit("state", "loading");
-  const [earnedRes, catalogRes] = await Promise.all([
-    achievementApi.getUserAchievements(username),
-    achievementApi.getAchievementTypes(),
-  ]);
-  if (earnedRes.error || catalogRes.error) {
-    error.value = true;
-  } else {
-    earned.value = earnedRes.data?.resources ?? [];
-    catalog.value = catalogRes.data?.resources ?? [];
-  }
-  loading.value = false;
-  loaded.value = true;
-  emit(
-    "state",
-    error.value ? "error" : hasAnyChain.value ? "content" : "empty",
-  );
+  return run(
+    async () => {
+      const [earnedRes, catalogRes] = await Promise.all([
+        achievementApi.getUserAchievements(username),
+        achievementApi.getAchievementTypes(),
+      ]);
+      // The chains are drawn from both halves together, so either failure is the
+      // section's failure and neither half is applied on its own.
+      return {
+        data: {
+          earned: earnedRes.data?.resources ?? [],
+          catalog: catalogRes.data?.resources ?? [],
+        },
+        error: earnedRes.error ?? catalogRes.error,
+      };
+    },
+    (data) => {
+      earned.value = data?.earned ?? [];
+      catalog.value = data?.catalog ?? [];
+    },
+  ).finally(() => {
+    loaded.value = true;
+    emit(
+      "state",
+      error.value ? "error" : hasAnyChain.value ? "content" : "empty",
+    );
+  });
 }
 
 onMounted(() => load(props.username));
@@ -260,10 +276,7 @@ function progressLabel(chain: Chain): string {
 
   <section v-else-if="error" class="achievements-section">
     <BlockTitle>Достижения</BlockTitle>
-    <ErrorState
-      message="Не удалось загрузить достижения"
-      :retry="() => load(username)"
-    />
+    <ErrorState :message="error" :retry="() => load(username)" />
   </section>
 
   <section v-else-if="hasAnyChain" class="achievements-section">

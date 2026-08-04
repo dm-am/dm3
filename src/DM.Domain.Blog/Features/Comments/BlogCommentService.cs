@@ -164,7 +164,7 @@ internal class BlogCommentService : IBlogCommentService
         Guid? newLastCommentId = null;
         if (comment.IsLastComment)
         {
-            newLastCommentId = await _repository.GetSecondLastCommentId(comment.BlogId);
+            newLastCommentId = await _repository.GetNewestCommentIdExcept(comment.BlogId, commentId);
         }
 
         var entity = new DeleteBlogCommentEntity

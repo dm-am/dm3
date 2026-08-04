@@ -44,9 +44,9 @@ public class SecurityController : ControllerBase
     /// - No type specified - All events
     /// </remarks>
     /// <param name="type">Optional filter by event type (login, password, session)</param>
-    /// <param name="limit">Maximum number of events to return (default: 50, max: 100)</param>
+    /// <param name="take">Maximum number of events to return (default: 50, max: 100)</param>
     /// <response code="200">List of security events</response>
-    /// <response code="400">Limit is outside the 1-100 range</response>
+    /// <response code="400">Take is outside the 1-100 range</response>
     /// <response code="401">User must be authenticated</response>
     [HttpGet("logs", Name = nameof(GetSecurityLogs))]
     [ProducesResponseType(typeof(ListEnvelope<SecurityEvent>), StatusCodes.Status200OK)]
@@ -56,11 +56,14 @@ public class SecurityController : ControllerBase
         [FromQuery] string? type = null,
         // The page size is bounded by the same [Range] as every other list, and
         // for the same reason on both ends. Clipping only the top left zero to
-        // mean "no limit" in the Mongo driver, so ?limit=0 answered with the
+        // mean "no limit" in the Mongo driver, so ?take=0 answered with the
         // whole security journal while the documentation promised max 100.
-        [FromQuery] [Range(1, 100, ErrorMessage = "Размер страницы должен быть от 1 до 100")] int limit = 50)
+        //
+        // `take`, not `limit`: limit belongs to a keyset page next to a cursor
+        // (API_DESIGN.md), and this list has no cursor — it is a cap.
+        [FromQuery][Range(1, 100, ErrorMessage = "Размер страницы должен быть от 1 до 100")] int take = 50)
     {
-        var events = await _securityApiService.GetSecurityLogs(type, limit);
+        var events = await _securityApiService.GetSecurityLogs(type, take);
         return Ok(new ListEnvelope<SecurityEvent>(events));
     }
 }

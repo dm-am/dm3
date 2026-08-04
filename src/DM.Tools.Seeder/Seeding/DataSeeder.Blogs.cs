@@ -51,7 +51,7 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-        private async Task CreateBlogs(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
+    private async Task CreateBlogs(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
     {
         // Check if blogs already exist
         var existingBlogsCount = await _dbContext.Set<DbBlog>().CountAsync();

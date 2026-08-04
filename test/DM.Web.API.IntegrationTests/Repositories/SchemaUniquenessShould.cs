@@ -297,13 +297,17 @@ public class SchemaUniquenessShould : IntegrationTestBase
 
         dbContext.GameTags.Add(new DbGameTag
         {
-            GameTagId = Guid.NewGuid(), GameId = gameId, TagId = tagId,
+            GameTagId = Guid.NewGuid(),
+            GameId = gameId,
+            TagId = tagId,
         });
         await dbContext.SaveChangesAsync();
 
         dbContext.GameTags.Add(new DbGameTag
         {
-            GameTagId = Guid.NewGuid(), GameId = gameId, TagId = tagId,
+            GameTagId = Guid.NewGuid(),
+            GameId = gameId,
+            TagId = tagId,
         });
         Func<Task> second = () => dbContext.SaveChangesAsync();
 

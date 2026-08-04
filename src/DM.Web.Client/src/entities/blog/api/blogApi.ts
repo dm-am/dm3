@@ -72,7 +72,7 @@ export default new (class {
    */
   public getActiveBlogs() {
     return Api.get<ListEnvelope<BlogRef>>("blogs", {
-      status: "Active",
+      statuses: ["Active"],
       take: 5,
       projection: "ref",
     });

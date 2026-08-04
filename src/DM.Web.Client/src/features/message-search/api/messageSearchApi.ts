@@ -16,7 +16,7 @@ export default new (class MessageSearchApi {
    */
   public searchMessages(params: SearchMessagesParams) {
     return Api.get<CursorEnvelope<MessageSearchResult>>("search/messages", {
-      q: params.q,
+      search: params.search,
       in: params.in,
       cursor: params.cursor,
       limit: params.limit ?? 50,

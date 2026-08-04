@@ -225,7 +225,7 @@ CI выкладывает их как `openapi-contract`. В репозитор�
 ### Filtering
 
 ```
-GET /v1/games?statuses=Active,Draft&authorUsernames=ivan&requiredTags=42
+GET /v1/games?statuses=Active,Draft&hostUsernames=ivan&requiredTags=42
 GET /v1/posts?gameId=abc&authorUsernames=ivan
 GET /v1/users?role=moderator&isOnline=true
 ```
@@ -235,6 +235,44 @@ GET /v1/users?role=moderator&isOnline=true
 - Boolean: `?isOpen=true`
 - ID reference: `?gameId=abc`
 - Числовые: `?minRating=5&maxPlayers=10`
+
+### Словарь query-параметров
+
+Одна задача — одно имя на всех эндпоинтах. Потребитель угадывает имя параметра
+по аналогии с соседним списком, и угадывать он должен верно: неизвестный
+параметр не отвергается, а молча игнорируется, так что опечатка в имени
+возвращает `200` и полный список вместо отфильтрованного.
+
+| Задача | Имя | Не писать |
+|--------|-----|-----------|
+| Полнотекстовый фильтр | `search` | `q`, `query`, `filter`, `text` |
+| Страница по смещению | `skip` + `take` | `number` + `size`, `page`, `offset`, `pageSize` |
+| Страница по курсору | `cursor` + `limit` | `after`, `nextCursor`, `count` |
+| Граница даты | `<поле>FromUtc` / `<поле>ToUtc` | `<поле>After`/`Before`, голые `after`/`before` |
+| Сортировка | `sortBy` + `sortOrder` | `sort`, `order`, `orderBy` |
+| Логин пользователя | `username` / `authorUsername` | `user`, `login`, `author` |
+| Статус модуля | `statuses` | `status` |
+| Статус премодерации | `premoderationStatuses` | `premoderationStatus` |
+| Кто ведет игру или блог | `hostUsernames` | `authorUsernames`, `masterUsernames` |
+
+Последние три — про зеркальные списки. `/v1/games` и `/v1/blogs` отвечают на одни
+и те же вопросы, и до сведения словаря отвечали разными именами: у игр `statuses`
+списком, у блогов `status` скаляром, а фильтр по ведущим назывался
+`authorUsernames` у игр и `hostUsernames` у блогов. Отдельно: "кто ведет" и "кто
+написал" — разные фильтры, поэтому мастер игры не `authorUsername`.
+
+**Число имени равно числу значений.** Повторяемый параметр — во множественном
+(`statuses`, `authorUsernames`, `requiredTags`), одиночный — в единственном
+(`status`, `authorUsername`, `role`). Множественное имя у скаляра — самая дорогая
+ошибка словаря: имя совпадает с соседним эндпоинтом, а кодировка значения нет.
+
+**Курсорная пагинация — не синоним смещенческой.** `cursor`/`limit` берут только
+списки с keyset-обходом (чаты, глобальный чат, поиск сообщений). У остальных
+`skip`/`take`, даже если страница на клиенте считается номером: номер в
+смещение переводит клиент.
+
+Правило держится тестом `QueryVocabularyShould`, который читает имена
+`[FromQuery]`-параметров из сборки API.
 
 ### Sorting
 

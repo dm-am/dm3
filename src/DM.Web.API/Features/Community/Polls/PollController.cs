@@ -63,7 +63,7 @@ public class PollController : ControllerBase
     public async Task<IActionResult> PostPoll([FromBody] CreatePollRequest request)
     {
         var result = await _apiService.Create(request);
-        return CreatedAtRoute(nameof(GetPoll), new {id = result.Resource.Id}, result);
+        return CreatedAtRoute(nameof(GetPoll), new { id = result.Resource.Id }, result);
     }
 
     /// <summary>

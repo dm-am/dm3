@@ -70,9 +70,18 @@ public interface ITopicCommentRepository
     Task<TopicCommentToDelete?> GetForDelete(Guid commentId);
 
     /// <summary>
-    /// Gets second last comment identifier of the topic
+    /// The newest live comment of the topic other than <paramref name="exceptCommentId" />:
+    /// the successor of the comment being deleted.
     /// </summary>
-    Task<Guid?> GetSecondLastCommentId(Guid topicId);
+    /// <remarks>
+    /// Named by exclusion rather than by position. "The second one down the list" is the
+    /// same row only while the comment being deleted is first on that list, and two
+    /// comments can share a timestamp — the DM2 import produces that by the thousand —
+    /// so the row leaving could sort second and be handed back as its own successor. The
+    /// topic would then point at a soft-deleted comment, which every read filters out,
+    /// and the topic drops to the bottom of the activity order.
+    /// </remarks>
+    Task<Guid?> GetNewestCommentIdExcept(Guid topicId, Guid exceptCommentId);
 
     /// <summary>
     /// Delete comment (soft delete)

@@ -25,7 +25,7 @@ class Program
             Log.CloseAndFlush();
         }
     }
-        
+
     /// <summary>
     /// Create web host builder
     /// </summary>

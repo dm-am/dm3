@@ -199,7 +199,7 @@ internal class TopicCommentService : ITopicCommentService
         Guid? newLastCommentId = null;
         if (comment.IsLastComment)
         {
-            newLastCommentId = await _repository.GetSecondLastCommentId(comment.TopicId);
+            newLastCommentId = await _repository.GetNewestCommentIdExcept(comment.TopicId, commentId);
         }
 
         var deleteComment = new DeleteTopicCommentEntity

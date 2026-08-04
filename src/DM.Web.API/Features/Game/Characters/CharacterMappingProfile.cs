@@ -30,7 +30,7 @@ internal class CharacterMappingProfile : Profile
                 s.Author != null && !s.Author.RatingDisabled
                     ? new Rating { TotalPosts = s.Author.QuantityRating, PostReviewScoreSum = s.Author.QualityRating }
                     : null));
-            // Descriptor and LastPostUtc map by name/convention.
+        // Descriptor and LastPostUtc map by name/convention.
 
         // CharacterShort -> Character (for Post.Character).
         // Picture is filled in batch by PostRepository.EnrichWithCharacterPictures.
@@ -158,10 +158,10 @@ internal class CharacterMappingProfile : Profile
         public CharacterPrivacySettings Resolve(DtoCharacter source,
             CharacterDetails destination, CharacterPrivacySettings destMember,
             ResolutionContext context) => new()
-        {
-            IsNpc = source.IsNpc,
-            EditByMaster = (source.AccessPolicy & Policy.EditAllowed) != Policy.NoAccess,
-            EditPostByMaster = (source.AccessPolicy & Policy.PostEditAllowed) != Policy.NoAccess
-        };
+            {
+                IsNpc = source.IsNpc,
+                EditByMaster = (source.AccessPolicy & Policy.EditAllowed) != Policy.NoAccess,
+                EditPostByMaster = (source.AccessPolicy & Policy.PostEditAllowed) != Policy.NoAccess
+            };
     }
 }

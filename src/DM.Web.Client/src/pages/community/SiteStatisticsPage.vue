@@ -28,7 +28,7 @@ import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { MonthYearPicker } from "@/shared/ui/MonthYearPicker";
 import { SegmentedControl } from "@/shared/ui/SegmentedControl";
 import { StatBoard, LEADERBOARD_BOARDS } from "@/features/leaderboard";
-import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 import { SITE_FOUNDED_YEAR } from "@/shared/config/site";
 import { createKeyedCache } from "@/shared/lib/utils/keyedCache";
 import { describeFailure } from "@/shared/lib/errors";
@@ -140,9 +140,18 @@ const closedPeriods = createKeyedCache<Leaderboards>({ ttlMs: Infinity });
 const openPeriod = createKeyedCache<Leaderboards>({ ttlMs: 60_000 });
 
 const boards = ref<Leaderboards | null>(null);
-const loading = ref(false);
-const loadError = ref<string | null>(null);
-const guard = createRequestGuard();
+
+// clearErrorOnStart: what this page did before the composable — the banner goes
+// away while the next period loads.
+const {
+  loading,
+  error: loadError,
+  clearError,
+  run,
+} = useGuardedRequest({
+  message: (error) => describeFailure(error, "Не удалось загрузить статистику"),
+  clearErrorOnStart: true,
+});
 
 function periodKey(): string {
   if (granularity.value === "all") return "all";
@@ -161,34 +170,28 @@ function isClosedPeriod(): boolean {
   );
 }
 
-async function fetchStats() {
+function fetchStats(): Promise<void> {
   const key = periodKey();
   const cached = closedPeriods.get(key) ?? openPeriod.get(key);
   if (cached) {
     boards.value = cached;
-    loadError.value = null;
-    return;
+    clearError();
+    return Promise.resolve();
   }
 
-  const requestId = guard.next();
-  loading.value = true;
-  loadError.value = null;
   const year = granularity.value === "all" ? 0 : selYear.value;
   const month = granularity.value === "month" ? selMonth.value : undefined;
 
-  const { data, error } = await statisticsApi.getLeaderboards(year, month);
-  if (!guard.isCurrent(requestId)) return;
-  loading.value = false;
-
-  if (error) {
-    loadError.value = describeFailure(error, "Не удалось загрузить статистику");
-    return;
-  }
-  const resource = unwrapResource<Leaderboards>(data);
-  if (resource) {
-    (isClosedPeriod() ? closedPeriods : openPeriod).set(key, resource);
-  }
-  boards.value = resource;
+  return run(
+    () => statisticsApi.getLeaderboards(year, month),
+    (data) => {
+      const resource = unwrapResource<Leaderboards>(data);
+      if (resource) {
+        (isClosedPeriod() ? closedPeriods : openPeriod).set(key, resource);
+      }
+      boards.value = resource;
+    },
+  );
 }
 
 onMounted(fetchStats);

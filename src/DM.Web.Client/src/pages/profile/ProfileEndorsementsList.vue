@@ -51,7 +51,7 @@ import { SecondaryText } from "@/shared/ui/Layout";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { DashSeparator } from "@/shared/ui/DashSeparator";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
-import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 
 const props = defineProps<{
   username: string;
@@ -72,12 +72,16 @@ const route = useRoute();
 const { filterState, searchParams, hasActiveFilters } = useTestimonialsFilter();
 
 const envelope: Ref<ListEnvelope<UserEndorsement> | null> = ref(null);
-const loading = ref(false);
-const loadError = ref<string | null>(null);
 
-// Discards stale responses when a fast filter/page change races an
-// in-flight request.
-const guard = createRequestGuard();
+// Keeps any already-shown items on a failure (stale-while-revalidate); the
+// ErrorState banner renders independently above the list — see template — so
+// the previous message is not cleared until the next answer lands.
+const {
+  loading,
+  error: loadError,
+  clearError,
+  run,
+} = useGuardedRequest({ message: "Не удалось загрузить рекомендации" });
 
 // Username/mode change (navigating between "received" and "written" pages,
 // or to another profile) must drop the previous list immediately.
@@ -85,45 +89,33 @@ watch(
   () => `${props.username}:${props.mode}`,
   () => {
     envelope.value = null;
-    loadError.value = null;
+    clearError();
   },
 );
 
-async function fetch() {
-  const requestId = guard.next();
-  loading.value = true;
-  try {
-    // Do not detach the method — `getUserEndorsements`/`getWrittenUserEndorsements`
-    // call `this.buildEndorsementParams(q)`, and a detached `const fn =
-    // userApi.getX` loses `this` and crashes with a TypeError that is silently
-    // swallowed by the catch block below.
-    const params = {
-      search: searchParams.value.search,
-      sortBy: searchParams.value.sortBy,
-      sortOrder: searchParams.value.sortOrder,
-      number: searchParams.value.number,
-      take: searchParams.value.size,
-    };
-    const { data, error } =
+function fetch() {
+  // Do not detach the method — `getUserEndorsements`/`getWrittenUserEndorsements`
+  // call `this.buildEndorsementParams(q)`, and a detached `const fn =
+  // userApi.getX` loses `this` and crashes with a TypeError.
+  const params = {
+    search: searchParams.value.search,
+    sortBy: searchParams.value.sortBy,
+    sortOrder: searchParams.value.sortOrder,
+    number: searchParams.value.number,
+    take: searchParams.value.size,
+  };
+  return run(
+    () =>
       props.mode === "received"
-        ? await userApi.getUserEndorsements(props.username as Username, params)
-        : await userApi.getWrittenUserEndorsements(
+        ? userApi.getUserEndorsements(props.username as Username, params)
+        : userApi.getWrittenUserEndorsements(
             props.username as Username,
             params,
-          );
-    if (!guard.isCurrent(requestId)) return;
-    if (error) {
-      // Keep any already-shown items (stale-while-revalidate); the
-      // ErrorState banner renders independently above the list — see
-      // template.
-      loadError.value = "Не удалось загрузить рекомендации";
-    } else {
-      loadError.value = null;
-      envelope.value = data ?? null;
-    }
-  } finally {
-    if (guard.isCurrent(requestId)) loading.value = false;
-  }
+          ),
+    (data) => {
+      envelope.value = data;
+    },
+  );
 }
 
 useFetchData(

@@ -37,13 +37,13 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
 
         // Online users count
         var onlineCount = await _dbContext.Users.CountAsync(u =>
-            !u.IsRemoved  &&
+            !u.IsRemoved &&
             u.LastActivityUtc.HasValue && u.LastActivityUtc.Value > onlineThreshold, ct);
 
         // Totals with today's delta
-        var totalUsers = await _dbContext.Users.CountAsync(u => !u.IsRemoved , ct);
+        var totalUsers = await _dbContext.Users.CountAsync(u => !u.IsRemoved, ct);
         var usersToday = await _dbContext.Users.CountAsync(u =>
-            !u.IsRemoved  && u.CreatedUtc >= todayStartUtc, ct);
+            !u.IsRemoved && u.CreatedUtc >= todayStartUtc, ct);
 
         var totalCharacters = await _dbContext.Characters.CountAsync(c => !c.IsRemoved, ct);
         var charactersToday = await _dbContext.Characters.CountAsync(c =>

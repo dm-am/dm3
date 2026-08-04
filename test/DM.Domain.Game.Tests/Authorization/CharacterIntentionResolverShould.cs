@@ -31,17 +31,17 @@ public class CharacterIntentionResolverShould : UnitTestBase
         bool isDead = false,
         bool isPlayerLeft = false,
         CharacterAccessPolicy accessPolicy = CharacterAccessPolicy.NoAccess) => new()
-    {
-        AuthorId = isNpc ? Guid.Empty : PlayerId,
-        GameMasterId = MasterId,
-        GameAssistantIds = [AssistantId],
-        GameStatus = gameStatus,
-        Status = status,
-        IsNpc = isNpc,
-        IsDead = isDead,
-        IsPlayerLeft = isPlayerLeft,
-        AccessPolicy = accessPolicy,
-    };
+        {
+            AuthorId = isNpc ? Guid.Empty : PlayerId,
+            GameMasterId = MasterId,
+            GameAssistantIds = [AssistantId],
+            GameStatus = gameStatus,
+            Status = status,
+            IsNpc = isNpc,
+            IsDead = isDead,
+            IsPlayerLeft = isPlayerLeft,
+            AccessPolicy = accessPolicy,
+        };
 
     // --- Ownership by the player ---
 

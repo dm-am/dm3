@@ -31,6 +31,8 @@ public static class AvatarProjections
             {
                 SourceObjectKey = upload.ObjectKey,
                 SourceUrl = upload.FilePath,
+                SourceWidth = upload.Width,
+                SourceHeight = upload.Height,
             };
 
     /// <summary>
@@ -44,5 +46,7 @@ public static class AvatarProjections
             {
                 SourceObjectKey = user.AvatarUpload.ObjectKey,
                 SourceUrl = user.AvatarUpload.FilePath,
+                SourceWidth = user.AvatarUpload.Width,
+                SourceHeight = user.AvatarUpload.Height,
             };
 }

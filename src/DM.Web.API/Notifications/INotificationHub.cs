@@ -1,4 +1,4 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 using DM.Web.API.Features.Personal.Notifications;
 
 namespace DM.Web.API.Notifications;

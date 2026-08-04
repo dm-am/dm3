@@ -8,7 +8,7 @@ namespace DM.Infrastructure.Core.Parsing;
 /// <inheritdoc />
 public class BbParserProvider : IBbParserProvider
 {
-        
+
     private const string CodeClassName = "code";
     private const string SpoilerHeadClassName = "spoiler-head";
     private const string SpoilerClassName = "spoiler";

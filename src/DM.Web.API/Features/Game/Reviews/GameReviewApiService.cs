@@ -3,7 +3,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Core.Dto;
+using DM.Domain.Core.Users;
 using DM.Domain.Game.Features.GameReviews;
+using DM.Domain.Game.Features.Games;
 using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Game.Reviews;
@@ -12,14 +14,17 @@ namespace DM.Web.API.Features.Game.Reviews;
 internal class GameReviewApiService : IGameReviewApiService
 {
     private readonly IGameReviewService _gameReviewService;
+    private readonly IUserLookupService _userLookupService;
     private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public GameReviewApiService(
         IGameReviewService gameReviewService,
+        IUserLookupService userLookupService,
         IMapper mapper)
     {
         _gameReviewService = gameReviewService;
+        _userLookupService = userLookupService;
         _mapper = mapper;
     }
 
@@ -27,6 +32,27 @@ internal class GameReviewApiService : IGameReviewApiService
     public async Task<ListEnvelope<GameReviewDto>> GetList(Guid gameId, PagingQuery query)
     {
         var (reviews, paging) = await _gameReviewService.GetListAsync(gameId, query);
+        var apiReviews = reviews.Select(_mapper.Map<GameReviewDto>);
+        return new ListEnvelope<GameReviewDto>(apiReviews, new PagingInfo(paging));
+    }
+
+    /// <inheritdoc />
+    public async Task<ListEnvelope<GameReviewDto>> GetReceivedByUser(string username, PagingQuery query)
+    {
+        var user = await _userLookupService.GetAsync(username);
+        return await GetFiltered(query, new GameReviewFilter { GmId = user.UserId });
+    }
+
+    /// <inheritdoc />
+    public async Task<ListEnvelope<GameReviewDto>> GetWrittenByUser(string username, PagingQuery query)
+    {
+        var user = await _userLookupService.GetAsync(username);
+        return await GetFiltered(query, new GameReviewFilter { AuthorId = user.UserId });
+    }
+
+    private async Task<ListEnvelope<GameReviewDto>> GetFiltered(PagingQuery query, GameReviewFilter filter)
+    {
+        var (reviews, paging) = await _gameReviewService.GetAllAsync(query, filter);
         var apiReviews = reviews.Select(_mapper.Map<GameReviewDto>);
         return new ListEnvelope<GameReviewDto>(apiReviews, new PagingInfo(paging));
     }

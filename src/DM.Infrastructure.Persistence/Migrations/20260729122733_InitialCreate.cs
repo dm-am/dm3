@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using NpgsqlTypes;
@@ -1058,6 +1058,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     Original = table.Column<bool>(type: "boolean", nullable: false),
                     ContentType = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     SizeBytes = table.Column<long>(type: "bigint", nullable: false),
+                    Width = table.Column<int>(type: "integer", nullable: true),
+                    Height = table.Column<int>(type: "integer", nullable: true),
                     ObjectKey = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
                     FilePath = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     FileName = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),

@@ -16,7 +16,7 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 ///
 /// The security journal clipped only the top. Below the range nothing looked,
 /// and its limit goes straight into the Mongo driver, where zero means "no
-/// limit" — so ?limit=0 answered with the whole login and password history of an
+/// limit" — so ?take=0 answered with the whole login and password history of an
 /// account, on a free request, from an endpoint whose own documentation promises
 /// a maximum of 100.
 /// </remarks>
@@ -27,9 +27,9 @@ public class PageSizeLimitsShould : IntegrationTestBase
     }
 
     [Theory]
-    [InlineData("/v1/account/logs?limit=0")]
-    [InlineData("/v1/account/logs?limit=-1")]
-    [InlineData("/v1/account/logs?limit=1000")]
+    [InlineData("/v1/account/logs?take=0")]
+    [InlineData("/v1/account/logs?take=-1")]
+    [InlineData("/v1/account/logs?take=1000")]
     public async Task RefuseALimitOutsideTheDeclaredRange(string url)
     {
         var response = await Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Get, url));
@@ -41,7 +41,7 @@ public class PageSizeLimitsShould : IntegrationTestBase
     public async Task AcceptALimitInsideTheDeclaredRange()
     {
         var response = await Client.SendAsync(
-            CreateAuthenticatedRequest(HttpMethod.Get, "/v1/account/logs?limit=10"));
+            CreateAuthenticatedRequest(HttpMethod.Get, "/v1/account/logs?take=10"));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }

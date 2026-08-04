@@ -80,7 +80,7 @@ function buildApiParams(
     apiParams.skip = (pageNumber - 1) * pageSize;
   }
 
-  if (params.search) apiParams.q = params.search;
+  if (params.search) apiParams.search = params.search;
 
   if (params.activity) {
     apiParams.activity =
@@ -110,7 +110,7 @@ function buildApiParams(
     apiParams.registeredToUtc = params.registeredToUtc;
 
   if (params.sortBy && SORT_MAP[params.sortBy]) {
-    apiParams.sort = SORT_MAP[params.sortBy];
+    apiParams.sortBy = SORT_MAP[params.sortBy];
   }
   if (params.sortOrder) apiParams.sortOrder = params.sortOrder;
 

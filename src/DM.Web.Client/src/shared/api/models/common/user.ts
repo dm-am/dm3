@@ -66,6 +66,15 @@ export type UserPicture = {
   mediumUrl?: string;
   /** Original picture URL (full size, only in PersonalProfile context) */
   originalUrl?: string;
+  /**
+   * Intrinsic width of `originalUrl` in pixels. Only the original carries a
+   * pair: small and medium are square crops at the size they are asked for,
+   * while the original keeps the uploaded aspect ratio. Absent for an upload
+   * stored before the pipeline measured one.
+   */
+  originalWidth?: number;
+  /** Intrinsic height of `originalUrl` in pixels; travels with `originalWidth`. */
+  originalHeight?: number;
 };
 
 /**
@@ -214,6 +223,10 @@ export interface User extends UserRef {
   endorsementsGiven?: number;
   /** Number of endorsements received by this user. */
   endorsementsReceived?: number;
+  /** Number of game reviews written by this user (whole games, not posts). */
+  gameReviewsGiven?: number;
+  /** Number of game reviews written about the games this user masters. */
+  gameReviewsReceived?: number;
   /** Forum topics authored by this user. */
   topicsAuthored?: number;
   /** Comments authored by this user (polymorphic across all comment-host entities). */

@@ -21,6 +21,16 @@ public class GameReviewDto
     public Guid GameId { get; set; }
 
     /// <summary>
+    /// Title of the reviewed game
+    /// </summary>
+    /// <remarks>
+    /// Redundant inside one game, where the page already names it, and the only
+    /// thing that identifies the row on the user-level listings: there the game
+    /// is what varies from row to row, and a GUID is not a name.
+    /// </remarks>
+    public string? GameTitle { get; set; }
+
+    /// <summary>
     /// Review author
     /// </summary>
     public User? Author { get; set; }

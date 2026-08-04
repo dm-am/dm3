@@ -5,6 +5,15 @@ global:
 rule_files:
   - /etc/prometheus/alerts.yml
 
+# Where a firing rule goes. Prometheus evaluates the file above either way and
+# keeps the result to itself: with no alertmanager to post to, every rule in it
+# was a state on a page nobody opens. The routing and the receiver live in
+# prometheus/alertmanager.yml.
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['dm-alertmanager:9093']
+
 scrape_configs:
   - job_name: 'dm-api'
     static_configs:

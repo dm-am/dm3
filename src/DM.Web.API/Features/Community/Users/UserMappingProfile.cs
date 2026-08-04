@@ -47,11 +47,12 @@ internal class UserMappingProfile : Profile
 
         // Query string to domain filter. Mapped by name rather than by hand so a
         // filter added to both sides needs no third edit here, and so the two
-        // members that do not line up have to be named to be handled: the search
-        // term is Q on the wire, and the direction is derived from SortOrder by
-        // CommunityUserApiService, which knows the per-field default.
+        // members that do not line up have to be named to be handled: the sort
+        // field is sortBy on the wire and Sort in the domain, and the direction
+        // is derived from SortOrder by CommunityUserApiService, which knows the
+        // per-field default.
         CreateMap<UsersQuery, UserFilter>()
-            .ForMember(d => d.Search, o => o.MapFrom(s => s.Q))
+            .ForMember(d => d.Sort, o => o.MapFrom(s => s.SortBy))
             .ForMember(d => d.SortAscending, o => o.Ignore());
 
         // GeneralUser (domain) -> User (API)
@@ -74,6 +75,8 @@ internal class UserMappingProfile : Profile
             .ForMember(d => d.ReviewsReceived, o => o.MapFrom(s => s.PostReviewsReceivedCount))
             .ForMember(d => d.EndorsementsGiven, o => o.MapFrom(s => s.EndorsementsGivenCount))
             .ForMember(d => d.EndorsementsReceived, o => o.MapFrom(s => s.EndorsementsReceivedCount))
+            .ForMember(d => d.GameReviewsGiven, o => o.MapFrom(s => s.GameReviewsGivenCount))
+            .ForMember(d => d.GameReviewsReceived, o => o.MapFrom(s => s.GameReviewsReceivedCount))
             .ForMember(d => d.TopicsAuthored, o => o.MapFrom(s => s.TopicsAuthoredCount))
             .ForMember(d => d.CommentsAuthored, o => o.MapFrom(s => s.CommentsAuthoredCount))
             .ForMember(d => d.GlobalChatMessages, o => o.MapFrom(s => s.GlobalChatMessagesCount))
@@ -107,6 +110,8 @@ internal class UserMappingProfile : Profile
             .ForMember(d => d.ReviewsReceived, o => o.MapFrom(s => s.PostReviewsReceivedCount))
             .ForMember(d => d.EndorsementsGiven, o => o.MapFrom(s => s.EndorsementsGivenCount))
             .ForMember(d => d.EndorsementsReceived, o => o.MapFrom(s => s.EndorsementsReceivedCount))
+            .ForMember(d => d.GameReviewsGiven, o => o.MapFrom(s => s.GameReviewsGivenCount))
+            .ForMember(d => d.GameReviewsReceived, o => o.MapFrom(s => s.GameReviewsReceivedCount))
             .ForMember(d => d.TopicsAuthored, o => o.MapFrom(s => s.TopicsAuthoredCount))
             .ForMember(d => d.CommentsAuthored, o => o.MapFrom(s => s.CommentsAuthoredCount))
             .ForMember(d => d.GlobalChatMessages, o => o.MapFrom(s => s.GlobalChatMessagesCount))

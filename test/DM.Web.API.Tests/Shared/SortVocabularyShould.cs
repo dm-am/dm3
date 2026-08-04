@@ -127,13 +127,27 @@ public class SortVocabularyShould : UnitTestBase
                 foreach (var parameter in action.GetParameters())
                 {
                     var type = parameter.ParameterType;
-                    if (type.GetProperty("SortBy", BindingFlags.Public | BindingFlags.Instance) == null)
+                    var sortBy = type.GetProperty("SortBy", BindingFlags.Public | BindingFlags.Instance);
+                    if (sortBy == null)
                     {
                         continue;
                     }
 
                     checkedTypes++;
-                    if (SortVocabulary.FieldsOf(type) is not { Count: > 0 })
+
+                    // A sortBy the caller spells as a string is only bounded by
+                    // the vocabulary — the filter reads string properties and
+                    // nothing else, so an unregistered one accepts anything.
+                    // Named by an enum, model binding refuses the unknown value
+                    // before any of this runs, and the entry is there to say so
+                    // rather than to hold a list: /v1/users names its field with
+                    // UserSort, and calls it sortBy like the thirteen lists
+                    // beside it.
+                    var required = (Nullable.GetUnderlyingType(sortBy.PropertyType) ?? sortBy.PropertyType).IsEnum
+                        ? SortVocabulary.FieldsOf(type) is not null
+                        : SortVocabulary.FieldsOf(type) is { Count: > 0 };
+
+                    if (!required)
                     {
                         unregistered.Add($"{controller.Name}.{action.Name}: {type.Name}");
                     }

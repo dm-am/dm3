@@ -11,6 +11,6 @@ public interface IViolatorApiService
     /// <summary>
     /// Get violators: users with active warning points or an active ban
     /// </summary>
-    /// <param name="filter">Filter: all | banned | points-only</param>
-    Task<ListEnvelope<Violator>> GetViolators(string filter);
+    /// <param name="banState">Ban state: all | banned | points-only</param>
+    Task<ListEnvelope<Violator>> GetViolators(string banState);
 }

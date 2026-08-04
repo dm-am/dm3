@@ -85,7 +85,7 @@ describe("useMessageSearchStore", () => {
     store.query = "hello";
     await store.search();
 
-    expect(paramsOf(0)).toEqual({ q: "hello", in: ["global"], limit: 50 });
+    expect(paramsOf(0)).toEqual({ search: "hello", in: ["global"], limit: 50 });
     // Explicit: an absent key and a key holding undefined compare equal above.
     expect("sort" in paramsOf(0)).toBe(false);
     expect(store.results).toHaveLength(1);
@@ -104,7 +104,7 @@ describe("useMessageSearchStore", () => {
     await store.loadMore();
 
     expect(paramsOf(1)).toEqual({
-      q: "hi",
+      search: "hi",
       in: ["global"],
       cursor: "cur2",
       limit: 50,

@@ -211,7 +211,7 @@ compose — поднять реплики нельзя даже случайно
 
 **Jaeger:** http://localhost:16686 — distributed tracing (OTLP gRPC)
 
-**Alerting:** `docker/prometheus/alerts.yml` — правила вычисляет Prometheus; получатель уведомлений не подключен, см. [MONITORING.md](MONITORING.md#alerting)
+**Alerting:** `docker/prometheus/alerts.yml` — правила вычисляет Prometheus, доставляет alertmanager (http://localhost:9093) почтой на тот же relay, что и письма приложения; получатель и его настройки — в [MONITORING.md](MONITORING.md#alerting)
 
 ---
 

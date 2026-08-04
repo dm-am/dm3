@@ -127,18 +127,23 @@ internal class PostRepository : IPostRepository
                 pattern));
         }
 
-        // Author filter (comma-separated usernames, parsed before LINQ)
-        if (!string.IsNullOrWhiteSpace(query.AuthorUsernames))
+        // Author filter (repeated parameter, materialised before LINQ)
+        if (query.AuthorUsernames is { Count: > 0 })
         {
             var usernames = query.AuthorUsernames
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            baseQuery = baseQuery.Where(p => usernames.Contains(p.Author.Username));
+                .Where(u => !string.IsNullOrWhiteSpace(u))
+                .Select(u => u.Trim())
+                .ToArray();
+            if (usernames.Length > 0)
+            {
+                baseQuery = baseQuery.Where(p => usernames.Contains(p.Author.Username));
+            }
         }
 
         // Reviewer filter — keep only posts which have at least one active
         // review authored by the given username. Powers the profile page
         // The "Оценил чужих постов: {username}" page. Subquery against PostReviews
-        // mirrors the LastReviewedAfter pattern below for plan stability.
+        // mirrors the LastReviewedFromUtc pattern below for plan stability.
         if (!string.IsNullOrWhiteSpace(query.ReviewerUsername))
         {
             var reviewer = query.ReviewerUsername.Trim();
@@ -149,19 +154,19 @@ internal class PostRepository : IPostRepository
         }
 
         // Post creation date filters
-        if (query.CreatedAfter.HasValue)
+        if (query.CreatedFromUtc.HasValue)
         {
-            baseQuery = baseQuery.Where(p => p.CreatedUtc >= query.CreatedAfter.Value);
+            baseQuery = baseQuery.Where(p => p.CreatedUtc >= query.CreatedFromUtc.Value);
         }
-        if (query.CreatedBefore.HasValue)
+        if (query.CreatedToUtc.HasValue)
         {
-            baseQuery = baseQuery.WhereAtOrBefore(p => p.CreatedUtc, query.CreatedBefore.Value);
+            baseQuery = baseQuery.WhereAtOrBefore(p => p.CreatedUtc, query.CreatedToUtc.Value);
         }
 
-        // LastReviewedAfter filter — only posts that have a review after this date
-        if (query.LastReviewedAfter.HasValue)
+        // LastReviewedFromUtc filter — only posts that have a review at or after this date
+        if (query.LastReviewedFromUtc.HasValue)
         {
-            var after = query.LastReviewedAfter.Value;
+            var after = query.LastReviewedFromUtc.Value;
             baseQuery = baseQuery.Where(p => _dbContext.PostReviews
                 .Any(r => r.PostId == p.PostId &&
                           !r.IsRemoved &&

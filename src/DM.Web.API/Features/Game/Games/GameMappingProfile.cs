@@ -44,15 +44,15 @@ internal class GameMappingProfile : Profile
                     ? new HashSet<int>(s.ExcludedTags)
                     : null))
             .ForMember(d => d.OwnerUsernames, o => o.MapFrom(s =>
-                s.AuthorUsernames != null && s.AuthorUsernames.Any(u => !string.IsNullOrWhiteSpace(u))
-                    ? new HashSet<string>(s.AuthorUsernames.Where(u => !string.IsNullOrWhiteSpace(u)))
+                s.HostUsernames != null && s.HostUsernames.Any(u => !string.IsNullOrWhiteSpace(u))
+                    ? new HashSet<string>(s.HostUsernames.Where(u => !string.IsNullOrWhiteSpace(u)))
                     : null))
             .ForMember(d => d.PremoderationStatuses, o => o.MapFrom(s =>
                 s.PremoderationStatuses != null && s.PremoderationStatuses.Any()
                     ? new HashSet<PremoderationStatus>(s.PremoderationStatuses)
                     : null));
-            // RecruitmentFilter, ClosedReasonFilter, PlayerUsername,
-            // PlayerParticipation map by convention
+        // RecruitmentFilter, ClosedReasonFilter, PlayerUsername,
+        // PlayerParticipation map by convention
 
         CreateMap<DtoGameRecruitment, GameRecruitment>();
         CreateMap<DtoActiveCharacterInfo, ActiveCharacterInfo>();

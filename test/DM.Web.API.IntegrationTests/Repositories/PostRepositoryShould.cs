@@ -97,7 +97,7 @@ public class PostRepositoryShould : IntegrationTestBase
     /// "Лучший пост недели" is the rating board of ONE week, not of all time.
     /// </summary>
     /// <remarks>
-    /// The homepage block sends sortBy=rating together with createdAfter=Monday,
+    /// The homepage block sends sortBy=rating together with createdFromUtc=Monday,
     /// and the window has to cut on the POST's creation date. The seed used to
     /// place its top-rated filler on posts written days before that boundary and
     /// the block showed the filler instead of the showcase post — a failure the
@@ -131,7 +131,7 @@ public class PostRepositoryShould : IntegrationTestBase
             Take = 10,
             SortBy = "rating",
             HasReviews = true,
-            CreatedAfter = weekStart,
+            CreatedFromUtc = weekStart,
             GameId = context.GameId,
         }, Guid.Empty);
 
@@ -142,7 +142,7 @@ public class PostRepositoryShould : IntegrationTestBase
         ordered.Should().NotContain(p => p.Id == lastWeek);
     }
 
-[Fact]
+    [Fact]
     public async Task ReportTheViewerAsAReaderOfTheGameTheySubscribeTo()
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();

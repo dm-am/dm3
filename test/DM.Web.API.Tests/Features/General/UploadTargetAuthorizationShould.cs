@@ -55,7 +55,7 @@ public class UploadTargetAuthorizationShould : UnitTestBase
         _imageProcessing = Mock<IImageProcessingService>();
         _imageProcessing
             .Setup(s => s.ProcessAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ProcessedImage(new byte[] { 1, 2, 3 }, "image/png", ".png"));
+            .ReturnsAsync(new ProcessedImage(new byte[] { 1, 2, 3 }, "image/png", ".png", 200, 150));
 
         _repository = Mock<IUploadRepository>();
         _repository.Setup(r => r.AddAsync(It.IsAny<NewUpload>()))

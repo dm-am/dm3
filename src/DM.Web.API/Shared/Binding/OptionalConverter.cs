@@ -17,7 +17,7 @@ internal class OptionalConverterFactory : JsonConverterFactory
     public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
     {
         var optionalType = typeToConvert.GetGenericArguments()[0];
-        var converter = (JsonConverter) Activator.CreateInstance(
+        var converter = (JsonConverter)Activator.CreateInstance(
             typeof(OptionalConverter<>).MakeGenericType(optionalType),
             BindingFlags.Instance | BindingFlags.Public,
             null, Array.Empty<object>(), null)!;

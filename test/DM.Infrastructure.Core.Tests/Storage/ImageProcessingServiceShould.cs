@@ -122,6 +122,45 @@ public class ImageProcessingServiceShould
         image.Height.Should().Be(200);
     }
 
+    /// <summary>
+    /// The result carries the dimensions of the bytes it carries. A consumer
+    /// stores them next to the file and a page reserves the exact box the
+    /// picture will occupy; measuring them again later means decoding the file
+    /// again, and guessing them means the page reflows on decode.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ReportsTheDimensionsOfTheStoredBytes()
+    {
+        var input = CreateJpegStream(width: 200, height: 150);
+
+        var result = await _sut.ProcessAsync(input, "image/jpeg");
+
+        using var image = Image.Load(result.Bytes);
+        result.Width.Should().Be(image.Width);
+        result.Height.Should().Be(image.Height);
+        result.Width.Should().Be(200);
+        result.Height.Should().Be(150);
+    }
+
+    /// <summary>
+    /// After a downscale the reported pair describes the file that gets stored,
+    /// not the file that arrived. Reporting the input size would put a number in
+    /// the database that no object in the bucket has.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ReportsTheDownscaledDimensions_NotTheSubmittedOnes()
+    {
+        var input = CreateJpegStream(width: 2000, height: 1000);
+
+        var result = await _sut.ProcessAsync(input, "image/jpeg");
+
+        using var image = Image.Load(result.Bytes);
+        result.Width.Should().Be(image.Width).And
+            .Be(ImageProcessingService.OriginalMaxDimension);
+        result.Height.Should().Be(image.Height).And
+            .Be(ImageProcessingService.OriginalMaxDimension / 2);
+    }
+
     [Fact]
     public async Task ProcessAsync_RejectsTooSmallImage()
     {

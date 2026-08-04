@@ -337,7 +337,10 @@ function Start-Services {
         }
 
         # Infrastructure - start containers (with animation)
-        if (-not (Invoke-WithAnimation -Label "Starting" -Command $script:DockerPath -Arguments "compose up -d postgres mongo rabbitmq minio imgproxy mailhog jaeger loki prometheus grafana")) {
+        # alertmanager comes up with prometheus: started apart, prometheus
+        # evaluates its rules into nothing, which is the state the deployment
+        # spent its life in and the one a developer would never notice.
+        if (-not (Invoke-WithAnimation -Label "Starting" -Command $script:DockerPath -Arguments "compose up -d postgres mongo rabbitmq minio imgproxy mailhog jaeger loki prometheus alertmanager grafana")) {
             Write-FailedStep -Label "Infrastructure" -Current 0 -Total 5
             exit 1
         }
@@ -589,7 +592,7 @@ function Show-Status {
     # Group services
     $infra = @("pg", "mongo", "rmq", "minio", "imgproxy")
     $apps = @("api", "mail-worker", "notification-worker", "migration")
-    $tools = @("mailhog", "grafana", "prometheus", "jaeger")
+    $tools = @("mailhog", "grafana", "prometheus", "alertmanager", "jaeger")
 
     $all = @{}
     foreach ($line in $containers) {

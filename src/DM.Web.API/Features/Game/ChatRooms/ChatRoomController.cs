@@ -148,7 +148,7 @@ public class ChatRoomController : ControllerBase
         // Rejected, not clipped: a caller who asked for a thousand has to learn
         // that a thousand is not on offer instead of taking a hundred for the
         // whole set. Same [Range] as every other list in the host.
-        [FromQuery] [Range(1, 100, ErrorMessage = "Размер страницы должен быть от 1 до 100")] int limit = 50) =>
+        [FromQuery][Range(1, 100, ErrorMessage = "Размер страницы должен быть от 1 до 100")] int limit = 50) =>
         Ok(await _apiService.GetMessagesAsync(id, cursor, limit));
 
     /// <summary>

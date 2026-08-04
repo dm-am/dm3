@@ -148,16 +148,16 @@ public class GameAccessibilityFiltersShould
         PremoderationStatus premoderationStatus,
         DraftVisibility draftVisibility,
         Guid? blacklisted = null) => new()
-    {
-        GameId = Guid.NewGuid(),
-        MasterId = Guid.NewGuid(),
-        Status = status,
-        PremoderationStatus = premoderationStatus,
-        DraftVisibility = draftVisibility,
-        BlackList = blacklisted is null
+        {
+            GameId = Guid.NewGuid(),
+            MasterId = Guid.NewGuid(),
+            Status = status,
+            PremoderationStatus = premoderationStatus,
+            DraftVisibility = draftVisibility,
+            BlackList = blacklisted is null
             ? new List<GameBlacklist>()
             : new List<GameBlacklist> { new() { BlockedUserId = blacklisted.Value } }
-    };
+        };
 
     // An open room, so that the room's own access type cannot decide the answer
     // either

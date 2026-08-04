@@ -30,8 +30,12 @@ export const useGamesStore = defineStore("games", () => {
   const moderation = useApiList<Game>(() => gameApi.getModerationGames());
   const popular = useApiList<GameRef>(() => gameApi.getPopularGames());
 
-  // Tags with long cache (5 minutes - tags change rarely)
-  const tags = useApiList<Tag>(() => gameApi.getTags(), { cacheMs: 300_000 });
+  // Tags with long cache (5 minutes - tags change rarely). A forced fetch asks
+  // the origin: the endpoint answers `public, max-age=300`, so dropping this
+  // store's copy alone would be answered from the browser's.
+  const tags = useApiList<Tag>((fresh) => gameApi.getTags(fresh), {
+    cacheMs: 300_000,
+  });
 
   // Sidebar lists - use lightweight GameRef
   const activePage = useApiResource<ListEnvelope<GameRef>>(

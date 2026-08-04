@@ -52,7 +52,7 @@ internal class LikeRepository : ILikeRepository
             .Where(l => l.UserId == userId && l.EntityId == entityId)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(l => l.IsRemoved, true)
-                .SetProperty(l => l.DeletedByUserId, (Guid?) userId)
-                .SetProperty(l => l.DeletedUtc, (DateTimeOffset?) deletedUtc));
+                .SetProperty(l => l.DeletedByUserId, (Guid?)userId)
+                .SetProperty(l => l.DeletedUtc, (DateTimeOffset?)deletedUtc));
     }
 }

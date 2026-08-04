@@ -104,7 +104,7 @@ internal class BlogService : IBlogService
         var resolvedFilter = filter with
         {
             HostUserIds = hostUserIds,
-            PremoderationStatus = identity.User.Role < UserRole.Mentor ? null : filter.PremoderationStatus,
+            PremoderationStatuses = identity.User.Role < UserRole.Mentor ? null : filter.PremoderationStatuses,
             CurrentUserId = identity.User.UserId
         };
 

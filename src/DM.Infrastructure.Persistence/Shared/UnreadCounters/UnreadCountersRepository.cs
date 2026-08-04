@@ -70,7 +70,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
                 LastReadUtc = _dateTimeProvider.Now.UtcDateTime,
                 Counter = 0
             },
-            new ReplaceOptions {IsUpsert = true}));
+            new ReplaceOptions { IsUpsert = true }));
     }
 
     /// <inheritdoc />
@@ -126,7 +126,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     public async Task<IDictionary<Guid, int>> SelectByParentsAsync(
         Guid userId, UnreadEntryType entryType, params Guid[] parentIds)
     {
-        var userIds = new[] {userId, Guid.Empty}.Distinct();
+        var userIds = new[] { userId, Guid.Empty }.Distinct();
         var counters = (await Collection.Aggregate()
                 .Match(
                     Filter.In(c => c.UserId, userIds) &
@@ -155,7 +155,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     public async Task<IDictionary<Guid, int>> SelectTotalUnreadByParentsAsync(
         Guid userId, UnreadEntryType entryType, params Guid[] parentIds)
     {
-        var userIds = new[] {userId, Guid.Empty}.Distinct();
+        var userIds = new[] { userId, Guid.Empty }.Distinct();
         var counters = (await Collection.Aggregate()
                 .Match(
                     Filter.In(c => c.UserId, userIds) &
@@ -184,7 +184,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     public async Task<IDictionary<Guid, int>> SelectByEntitiesAsync(
         Guid userId, UnreadEntryType entryType, params Guid[] entityIds)
     {
-        var userIds = new[] {userId, Guid.Empty}.Distinct();
+        var userIds = new[] { userId, Guid.Empty }.Distinct();
         var counters = (await Collection.Aggregate()
                 .Match(
                     Filter.In(c => c.UserId, userIds) &
@@ -235,7 +235,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
                     LastReadUtc = _dateTimeProvider.Now.UtcDateTime,
                     Counter = 0
                 },
-                new ReplaceOptions {IsUpsert = true}));
+                new ReplaceOptions { IsUpsert = true }));
     }
 
     /// <inheritdoc />
@@ -330,7 +330,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
         Filter.Eq(c => c.EntryType, entryType);
 
     private static ReplaceOneModel<UnreadCounter> Upsert(UnreadCounter marker) =>
-        new(Key(marker.UserId, marker.EntityId, marker.EntryType), marker) {IsUpsert = true};
+        new(Key(marker.UserId, marker.EntityId, marker.EntryType), marker) { IsUpsert = true };
 
     /// <summary>
     /// An upsert is not atomic against another upsert on the same key: both can

@@ -53,7 +53,7 @@ describe("useRatedPostsStore", () => {
     expect(mockGetRatedPosts).toHaveBeenCalledWith({
       sortBy: "rating",
       hasReviews: true,
-      createdAfter: "2026-07-29T09:30:00.000Z",
+      createdFromUtc: "2026-07-29T09:30:00.000Z",
       take: 1,
     });
   });
@@ -67,7 +67,7 @@ describe("useRatedPostsStore", () => {
     await useRatedPostsStore().fetchBestOfWeek();
 
     expect(mockGetRatedPosts).toHaveBeenCalledWith(
-      expect.objectContaining({ createdAfter: "2026-07-27T00:30:00.000Z" }),
+      expect.objectContaining({ createdFromUtc: "2026-07-27T00:30:00.000Z" }),
     );
   });
 

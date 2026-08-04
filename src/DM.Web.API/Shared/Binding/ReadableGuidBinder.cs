@@ -50,7 +50,7 @@ internal class ReadableGuidBinder : IModelBinder
             bindingContext.Result = ModelBindingResult.Success(parsedValue);
             return Task.CompletedTask;
         }
-            
+
         bindingContext.ModelState.AddModelError(key, $"Invalid value for field {key}");
         bindingContext.Result = ModelBindingResult.Failed();
         return Task.CompletedTask;

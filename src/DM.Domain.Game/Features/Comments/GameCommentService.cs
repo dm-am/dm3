@@ -173,7 +173,7 @@ internal class GameCommentService : IGameCommentService
         Guid? newLastCommentId = null;
         if (comment.IsLastComment)
         {
-            newLastCommentId = await _repository.GetSecondLastCommentId(comment.GameId);
+            newLastCommentId = await _repository.GetNewestCommentIdExcept(comment.GameId, commentId);
         }
 
         var entity = new DeleteGameCommentEntity

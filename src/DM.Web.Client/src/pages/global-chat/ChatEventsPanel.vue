@@ -20,6 +20,12 @@
  * here — they live on the search row above the chat frame, in the filter-bar
  * idiom.
  *
+ * The card is also where the focal event's one action lives (join, leave, and
+ * the organizer's start/end — see features/chat-event-actions): the strip is a
+ * summary, one line and the same line for every reader, while the label of an
+ * action depends on who is looking and is decided by the participants list,
+ * which arrives with the card and not with the strip's summary.
+ *
  * Two floating layers hang below the strip — the upcoming list and the
  * description card — mutually exclusive, each kept mounted and toggled by an
  * ".open" class so they animate open/closed with the site's one reveal idiom
@@ -45,6 +51,7 @@ import {
 import dayjs from "dayjs";
 import { storeToRefs } from "pinia";
 import { useGlobalChatStore } from "@/entities/global-chat";
+import { ChatEventActions } from "@/features/chat-event-actions";
 import {
   notifyExpandableChanged,
   refreshExpandableStates,
@@ -372,6 +379,12 @@ onUnmounted(() => {
               ></span
             >
           </div>
+          <!-- The one action this viewer may take. It lives in the card and
+               not on the strip: the label is per-viewer, and it is decided by
+               the participants list, which only the card's own request
+               brings. Above the description, so a long description never
+               pushes it out of the card's scroll. -->
+          <ChatEventActions :event-id="primaryEvent.id" />
           <content-text
             v-if="overlayDetails?.description"
             class="overlay-description"

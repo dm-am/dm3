@@ -19,7 +19,7 @@ public interface ITopicApiService
 
     /// <summary>
     /// Cross-board topic search — used by the profile "Topics" tab. The
-    /// caller is expected to set <c>query.Authors</c> to scope the result;
+    /// caller is expected to set <c>query.AuthorUsernames</c> to scope the result;
     /// access policy is enforced server-side so unauthorised boards never
     /// leak into the response.
     /// </summary>
