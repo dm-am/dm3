@@ -439,7 +439,11 @@ export type Character = {
   picture: Served<UserPicture>;
   /** Character is NPC (controlled by game master) */
   isNpc: Served<boolean>;
-  privacy: CharacterPrivacySettings;
+  /**
+   * Editing policy. Detail-only, like the sheet below: the roster listing does
+   * not carry it, and read from a roster entry it is undefined.
+   */
+  privacy?: CharacterPrivacySettings;
   /**
    * The filled-in sheet. Absent from the roster listing, which answers names
    * and portraits: the sheet is read one character at a time.

@@ -596,6 +596,10 @@
     "title",
     "topicNumber"
   ],
+  "DM.Web.API.Features.Forum.Comments.FirstUnreadComment": [
+    "commentId",
+    "commentNumber"
+  ],
   "DM.Web.API.Features.Forum.Topics.CreateTopicRequest": [
     "text",
     "title"
@@ -1113,9 +1117,11 @@
     "createdUtc",
     "description",
     "duration",
+    "endedUtc",
     "id",
     "isOpen",
     "participants",
+    "startedUtc",
     "startsUtc",
     "status",
     "title"
@@ -1834,6 +1840,10 @@
     "resource"
   ],
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Forum.Boards.Board, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "metadata",
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Forum.Comments.FirstUnreadComment, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "metadata",
     "resource"
   ],

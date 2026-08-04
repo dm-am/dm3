@@ -34,6 +34,9 @@ $input-padding: ($minor + 1px) $small
 //   +button          — solid variant (grayscale, default)
 //   +button-link     — link-styled variant (transparent, blue text)
 //
+// Colour modifiers sit on top of a variant, they never replace it:
+//   +button-danger   — destructive fill, applied to the modifier class
+//
 // IMPORTANT: call +button / +button-link AFTER all other declarations in the
 // selector to avoid Sass mixed-decls deprecation warning.
 // =============================================================================
@@ -112,6 +115,19 @@ $input-padding: ($minor + 1px) $small
   &:disabled
     opacity: $disabled-opacity
     cursor: default
+
+/// Destructive fill for a +button — apply to the modifier class (&.danger),
+/// which outranks the +button declarations by specificity. It carries the
+/// colour pair only, so the control keeps the shared layout and hover.
+/// The ink is $text-on-fill and not the inherited $text: on the solid
+/// $accent-red, $text measures 1.89 in the light theme and 1.84 in the dark
+/// one, which is the word "Удалить" made unreadable on the button that
+/// deletes. Hover stays the +button overlay, so the measured pair holds in
+/// every state.
+@mixin button-danger()
+  background-color: $accent-red
+  border-color: $accent-red
+  color: $text-on-fill
 
 /// Inline link-styled button — full reset to look like a plain inline <a> tag.
 /// Unlike +button-link, has no layout/sizing (no height, no padding box) so it

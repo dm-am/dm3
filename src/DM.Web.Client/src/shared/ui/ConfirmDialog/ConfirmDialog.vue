@@ -212,11 +212,7 @@ function handleKeydown(e: KeyboardEvent) {
   +button
 
   &.danger
-    background-color: $accent-red
-    border-color: $accent-red
-
-    &:hover:not(:disabled)
-      background-color: $accent-red
+    +button-danger
 
   &:disabled
     opacity: 0.6

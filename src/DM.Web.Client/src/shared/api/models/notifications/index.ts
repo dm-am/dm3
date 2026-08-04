@@ -30,6 +30,8 @@ export enum NotificationType {
   // Messaging
   NewMessage = "NewMessage",
   NewGlobalChatMessage = "NewGlobalChatMessage",
+  GlobalChatEventStarted = "GlobalChatEventStarted",
+  GlobalChatEventEnded = "GlobalChatEventEnded",
 
   // Community
   UserAvatarChanged = "UserAvatarChanged",

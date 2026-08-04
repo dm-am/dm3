@@ -65,7 +65,9 @@ const props = withDefaults(
     commentsTo?: RouteLocationRaw | null;
     /** Unread comments count (authenticated forum view only). */
     unreadCommentsCount?: number;
-    /** Unread-comments deep link; null disables the unread affordance. */
+    /** Where the viewer continues reading; null (a guest) falls back to the
+     * plain comments link. Independent of the unread count on purpose: with
+     * nothing unread this target answers with the topic's last comment. */
     unreadTo?: RouteLocationRaw | null;
     /** Users who liked the content (usernames drive the tooltip). */
     likes?: Array<{ username: Username }>;
@@ -237,23 +239,26 @@ function initCardBbcode(el: HTMLElement) {
           | Отредактировано {{ formattedEditDate }}</template
         >
         <!-- Product decision (2026-07-11): the card counter is the viewer's
-             UNREAD count — including an honest 0 when everything is read.
+             UNREAD count, including an honest 0 when everything is read.
              Guests have no read tracking, so for them (unreadTo is null)
              everything is unread and the counter shows the total. The
              "total (unread)" pair is a table convention, not a card one.
-             With 0 unread the ?unread=1 deep link is pointless, so the
-             number links to the plain comments target instead. -->
+             The TARGET does not depend on that number. It used to: at 0 unread
+             the link fell back to the top of the topic, and the counter is
+             zeroed the moment the topic opens, so the second click on the same
+             link always landed at the beginning. The resolver answers with the
+             last comment instead. -->
         | Комментарии (<router-link
-          v-if="unreadTo && unreadCommentsCount"
+          v-if="unreadTo"
           :to="unreadTo"
-          class="unread-link"
+          class="comments-link"
           >{{ unreadCommentsCount }}</router-link
         ><router-link
           v-else-if="commentsTo"
           :to="commentsTo"
           class="comments-link"
-          >{{ unreadTo ? unreadCommentsCount : commentsCount }}</router-link
-        ><span v-else>{{ unreadTo ? unreadCommentsCount : commentsCount }}</span
+          >{{ commentsCount }}</router-link
+        ><span v-else>{{ commentsCount }}</span
         >)</span
       >
 
@@ -393,11 +398,6 @@ function initCardBbcode(el: HTMLElement) {
   color: $text-muted
 
 .comments-link
-  color: $link
-  &:hover
-    color: $link-hover
-
-.unread-link
   color: $link
   &:hover
     color: $link-hover

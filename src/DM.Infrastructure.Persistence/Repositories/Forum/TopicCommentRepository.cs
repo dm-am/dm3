@@ -138,6 +138,71 @@ internal class TopicCommentRepository : ITopicCommentRepository
     }
 
     /// <inheritdoc />
+    public async Task<FirstUnreadComment?> FindFirstUnread(Guid topicId, DateTimeOffset lastReadUtc,
+        IReadOnlyCollection<Guid>? excludeUserIds = null)
+    {
+        var comments = VisibleComments(topicId, excludeUserIds);
+
+        var firstUnread = await comments
+            .TagWith("DM.TopicComments.FirstUnread")
+            .Where(c => c.CreatedUtc > lastReadUtc)
+            .OrderBy(c => c.CreatedUtc)
+            .Select(c => new { c.CommentId, c.CreatedUtc })
+            .FirstOrDefaultAsync();
+
+        return firstUnread == null
+            ? null
+            : await Position(comments, firstUnread.CommentId, firstUnread.CreatedUtc);
+    }
+
+    /// <inheritdoc />
+    public async Task<FirstUnreadComment?> GetLastComment(Guid topicId,
+        IReadOnlyCollection<Guid>? excludeUserIds = null)
+    {
+        var comments = VisibleComments(topicId, excludeUserIds);
+
+        var lastComment = await comments
+            .TagWith("DM.TopicComments.LastComment")
+            .OrderByDescending(c => c.CreatedUtc)
+            .Select(c => new { c.CommentId, c.CreatedUtc })
+            .FirstOrDefaultAsync();
+
+        return lastComment == null
+            ? null
+            : await Position(comments, lastComment.CommentId, lastComment.CreatedUtc);
+    }
+
+    /// <summary>
+    /// Comments of the topic as this reader is shown them. Counting a position
+    /// over any other set would send him to a page the comment is not on.
+    /// </summary>
+    private IQueryable<Entities.Shared.Comment> VisibleComments(
+        Guid topicId, IReadOnlyCollection<Guid>? excludeUserIds)
+    {
+        var query = _dbContext.Comments.Where(c => !c.IsRemoved && c.EntityId == topicId);
+
+        return excludeUserIds is { Count: > 0 }
+            ? query.Where(c => !excludeUserIds.Contains(c.AuthorId))
+            : query;
+    }
+
+    /// <summary>
+    /// The comment's 1-based place in the order the discussion is paged by,
+    /// oldest first, which is the order the list renders without a sort.
+    /// </summary>
+    private static async Task<FirstUnreadComment> Position(
+        IQueryable<Entities.Shared.Comment> comments, Guid commentId, DateTimeOffset createdUtc)
+    {
+        return new FirstUnreadComment
+        {
+            CommentId = commentId,
+            CommentNumber = await comments
+                .TagWith("DM.TopicComments.Position")
+                .CountAsync(c => c.CreatedUtc <= createdUtc)
+        };
+    }
+
+    /// <inheritdoc />
     public async Task<Comment> Create(CreateTopicCommentEntity createComment)
     {
         var commentId = _guidFactory.Create();

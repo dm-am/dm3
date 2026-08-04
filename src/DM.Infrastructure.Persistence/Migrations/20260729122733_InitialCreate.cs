@@ -324,7 +324,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     IsPlayerLeft = table.Column<bool>(type: "boolean", nullable: false),
                     IsPlayerExiled = table.Column<bool>(type: "boolean", nullable: false),
                     CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    Name = table.Column<string>(type: "text", nullable: false),
+                    Name = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     IsNpc = table.Column<bool>(type: "boolean", nullable: false),
                     AccessPolicy = table.Column<int>(type: "integer", nullable: false),
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),

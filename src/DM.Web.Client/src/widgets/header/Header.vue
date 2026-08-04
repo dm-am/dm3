@@ -457,7 +457,7 @@ $baseline-pad: 9px
   box-sizing: border-box
   border-radius: 8px
   background-color: $accent-green
-  color: $text-on-green
+  color: $text-on-fill
   font-size: 10px
   font-weight: bold
   line-height: 1

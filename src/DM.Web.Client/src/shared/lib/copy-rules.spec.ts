@@ -25,6 +25,10 @@
  *    form and edited a тема, then deleted a тема. The word "тема" means other
  *    things on the site (the colour theme, the subject of a ticket), so this
  *    one is checked where the forum lives rather than everywhere.
+ * 6. The em dash is not forbidden — Russian writes an omitted copula with one,
+ *    and a range needs a sign between its ends — but it is spent against a
+ *    budget: a file, a count, and the argument for that count. A dash in a
+ *    hint, a toast or a page title has no line to be spent on.
  *
  * This test is deliberately narrow:
  *   - only .vue and .ts under the client source tree — not docs, not styles;
@@ -50,11 +54,6 @@ const MIDDOT = "\u00B7";
 /** U+2014 EM DASH, spelled the same way and for the same reason. */
 const EM_DASH = "\u2014";
 
-/**
- * The BBCode help dialog is a dictionary: a tag on the left, what it does on
- * the right, and between them the separator a dictionary has always used. It is
- * the one file where a dash may be the whole of a text node.
- */
 /** U+0451 and U+0401, by code point so this file stays clean of them itself. */
 const E_WITH_DOTS = ["\u0451", "\u0401"];
 
@@ -84,11 +83,6 @@ const FORUM_SURFACE = ["pages/forum", "features/topic", "entities/forum"];
 /** "\u0442\u0435\u043C\u0430" as a whole word: other words merely start with it. */
 const TEMA =
   /(?<![\u0410-\u044F])[\u0422\u0442]\u0435\u043C(?:\u0430|\u044B|\u0435|\u0443|\u043E\u0439|\u0430\u043C|\u0430\u0445|\u0430\u043C\u0438)(?![\u0410-\u044F])/;
-
-const GLOSSARY = "shared/ui/BBCodeEditor/BBCodeEditor.vue";
-
-/** The module that declares the token is the one place that may spell it. */
-const TOKEN_HOME = "shared/lib/constants/copy.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // lib -> shared -> src
@@ -313,70 +307,9 @@ const REQUIRED_COPY: { file: string; what: string; pattern: RegExp }[] = [
   },
 ];
 
-/**
- * Complete string literals only. A template literal's fragments are not whole
- * strings, so the range label `${min} — ${max}` a filter chip builds stays a
- * range instead of reading as a missing value.
- */
-function wholeLiterals(code: string, fileName: string): string[] {
-  const source = ts.createSourceFile(
-    fileName,
-    code,
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  const found: string[] = [];
-  const visit = (node: ts.Node): void => {
-    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
-      found.push(node.text);
-    }
-    ts.forEachChild(node, visit);
-  };
-  ts.forEachChild(source, visit);
-  return found;
-}
-
 /** Script bodies: the whole file for a .ts, the blocks of an SFC. */
 function scriptsOf(file: string, raw: string): string[] {
   return file.endsWith(".ts") ? [raw] : sfcParts(raw, file).scripts;
-}
-
-/** Text between tags. An attribute value lives inside a tag and is not text. */
-function textNodes(template: string): string[] {
-  return template.split(/<[^>]*>/);
-}
-
-/**
- * Every way a file can spell a token out itself: as the whole of a text node,
- * as a quoted literal inside an interpolation or a binding, as a complete
- * literal in script. `home` is the module allowed to declare it.
- */
-function spelledOut(
-  file: string,
-  raw: string,
-  token: string,
-  home: string,
-): string[] {
-  const rel = where(file);
-  if (rel === home) return [];
-
-  const hits: string[] = [];
-  for (const script of scriptsOf(file, raw)) {
-    if (wholeLiterals(script, file).some((text) => text.trim() === token)) {
-      hits.push(`${rel}: a literal that is only "${token}"`);
-    }
-  }
-  if (!file.endsWith(".vue")) return hits;
-
-  const { template } = sfcParts(raw, file);
-  if (textNodes(template).some((text) => text.trim() === token)) {
-    hits.push(`${rel}: markup printing "${token}" and nothing else`);
-  }
-  const quoted = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  if (new RegExp(`["']\\s*${quoted}\\s*["']`).test(template)) {
-    hits.push(`${rel}: "${token}" written into an expression`);
-  }
-  return hits;
 }
 
 /** Every em dash a reader of one file can see. */
@@ -412,7 +345,7 @@ const EM_DASH_BUDGET: { file: string; count: number }[] = [
   { file: "pages/rules/RulesExternalLinks.vue", count: 3 },
   { file: "pages/rules/RulesPage.vue", count: 3 },
   { file: "pages/rules/RulesIntro.vue", count: 1 },
-  // The brand lockup, the one index.html also carries in og:title.
+  // The brand lockup in the home h1, and the copula dash of the About lead.
   { file: "pages/about/AboutPage.vue", count: 1 },
   { file: "pages/home/HomePage.vue", count: 1 },
 ];
@@ -470,6 +403,24 @@ describe("interface copy", () => {
       .filter((file) => !(where(file) in GUILLEMETS_ALLOWED))
       .flatMap((file) => GUILLEMETS.flatMap((mark) => offendersIn(file, mark)));
     expect(offenders).toEqual([]);
+  });
+
+  it("spends the em dash only where the budget says", () => {
+    const counted: Record<string, number> = {};
+    for (const file of collectFiles(CLIENT_SRC)) {
+      const raw = readFileSync(file, "utf8");
+      if (!raw.includes(EM_DASH)) continue;
+      const count = emDashCount(file, raw);
+      if (count) counted[where(file)] = count;
+    }
+    const budgeted = Object.fromEntries(
+      EM_DASH_BUDGET.map(({ file, count }) => [file, count]),
+    );
+
+    expect(counted).toEqual(budgeted);
+    expect(EM_DASH_BUDGET.reduce((sum, { count }) => sum + count, 0)).toBe(
+      EM_DASH_TOTAL,
+    );
   });
 
   it("calls the forum entity a топик", () => {

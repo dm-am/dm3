@@ -284,7 +284,7 @@ onMounted(() => fetchNotifications());
 
   &:hover
     background: $link
-    color: white
+    color: $text-on-fill
 
 .dismiss-btn
   width: 24px

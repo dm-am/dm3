@@ -246,6 +246,18 @@ const router = createRouter({
                 },
               ],
             },
+            // Resolver for the topic's comments counter: asks the server where
+            // this reader stopped and replaces itself with the topic route
+            // pointing at that comment. A sibling of the topic record, never a
+            // child of it: mounted under TopicPage the topic would be marked as
+            // read before the answer arrived, and the answer would be the one
+            // for a reader who has just read everything.
+            {
+              name: "topic-unread",
+              path: ":alias/:num/unread",
+              meta: { title: "Переход к непрочитанному комментарию" },
+              component: () => import("@/pages/forum/TopicUnread.vue"),
+            },
           ],
         },
 

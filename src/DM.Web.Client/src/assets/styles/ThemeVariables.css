@@ -14,6 +14,12 @@ html.theme_Light {
   --accent-yellow: #d4a000;
   --text-on-green: #363;
   --text-on-red: #633;
+  /* Ink for a SOLID accent fill: filled buttons, counter pills, active tabs.
+     The page background itself, so it flips with the theme. Not a new colour,
+     an alias with a name, because `color: var(--bg-page)` reads as a bug at
+     the call site. The two tokens above are inks for a TINT of the accent (see
+     the tint mixin); against the solid accent they measure 1.00-1.15. */
+  --text-on-fill: var(--bg-page);
   --heading: #630;
   --heading-alt: #666;
   --link: #304060;
@@ -128,6 +134,8 @@ html.theme_Dark {
   --accent-yellow: #e0b040;
   --text-on-green: #8fbc8f;
   --text-on-red: #d49a9a;
+  /* Ink for a solid accent fill, rationale in the light theme block. */
+  --text-on-fill: var(--bg-page);
   --heading: #d4956a;
   --heading-alt: #a0a0a0;
   --link: #7cb0e0;

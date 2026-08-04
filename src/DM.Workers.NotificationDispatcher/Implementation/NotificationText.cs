@@ -206,7 +206,7 @@ internal static class NotificationText
         "GameId", "RoomId", "CharacterId", "PendencyId",
         "TopicId", "BoardId", "CommentId",
         "BlogId", "PublicationId",
-        "ChatId", "MessageId", "AuthorUserId",
+        "ChatId", "MessageId", "AuthorUserId", "GlobalChatEventId",
         "TokenId", "BanId", "WarningId", "TicketId", "UserAwardId",
 
         // Machine values: the title says the same thing in words, or there are none

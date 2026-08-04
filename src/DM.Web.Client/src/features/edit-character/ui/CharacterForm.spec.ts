@@ -17,6 +17,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
+import { CHARACTER_NAME_MAX_LENGTH } from "@/shared/lib/constants/game";
 import CharacterForm from "./CharacterForm.vue";
 import {
   gameApi,
@@ -168,6 +169,20 @@ describe("CharacterForm", () => {
       expect(input.exists()).toBe(true);
       expect(input.attributes("type")).toBe("text");
       expect(input.attributes("maxlength")).toBe("100");
+    });
+
+    it("stops the name field at the limit the server enforces", () => {
+      const wrapper = mount(CharacterForm, {
+        props: { schema: makeSchema(), gameId: "game-1" },
+      });
+
+      // Only the form's use of the constant is asserted here. That the number
+      // itself equals the validator's and the column's is held on the server,
+      // which is the only side able to read all three.
+      const input = wrapper.find("input#character-name");
+      expect(input.attributes("maxlength")).toBe(
+        String(CHARACTER_NAME_MAX_LENGTH),
+      );
     });
 
     it("renders a numeric input for a Number specification and strips non-digits", async () => {

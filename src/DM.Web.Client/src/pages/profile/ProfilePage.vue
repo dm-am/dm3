@@ -771,6 +771,9 @@ watch(usernameParam, async () => {
     </section>
 
     <section v-if="moderatedProfile" class="mod-bar">
+      <!-- One line, one copy: inline flow with a real (zero-width) space
+           between the title and the summary. As a flex row it copied as
+           three lines — a browser serializes flex items one per line. -->
       <button
         type="button"
         class="mod-header"
@@ -780,9 +783,9 @@ watch(usernameParam, async () => {
         <SvgIcon
           :name="showModPanel ? 'chevronDown' : 'chevronRight'"
           class="mod-chevron"
-        />
-        <span class="mod-title">ПАНЕЛЬ МОДЕРАЦИИ</span>
-        <span class="mod-summary">{{ modSummary }}</span>
+        /><span class="mod-title">ПАНЕЛЬ МОДЕРАЦИИ</span
+        ><span class="copy-space">{{ " " }}</span
+        ><span class="mod-summary">{{ modSummary }}</span>
       </button>
       <div ref="modZoneRef" class="expand-zone" v-bind="modZoneBindings">
         <div v-if="showModPanel" class="mod-body">
@@ -1200,10 +1203,11 @@ watch(usernameParam, async () => {
   justify-content: space-between
   gap: $medium
 
+// Inline flow, not flex: the gap is a margin on the parts and the space
+// between the words is a real text node, so the whole header is one line
+// in a copy as well as on screen.
 .mod-header
-  display: flex
-  align-items: center
-  gap: $small
+  display: block
   width: 100%
   padding: 0
   background: none
@@ -1219,16 +1223,18 @@ watch(usernameParam, async () => {
 .mod-chevron
   width: 14px
   height: 14px
-  flex-shrink: 0
+  vertical-align: middle
   color: $accent-red
 
 .mod-title
+  margin-left: $small
   font-weight: 600
   letter-spacing: 0.5px
   text-transform: uppercase
   color: $accent-red
 
 .mod-summary
+  margin-left: $small
   font-size: $secondary-font-size
   color: $text-muted
 

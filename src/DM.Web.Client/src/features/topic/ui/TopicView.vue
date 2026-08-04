@@ -71,10 +71,20 @@ const topicRoute = computed(() => ({
   params: { alias: props.topic.board?.alias, num: props.topic.topicNumber },
 }));
 
-// The unread deep link is an authenticated-only affordance: guests never
-// receive unread counters, so the card falls back to the plain comments link.
+// Where the reader continues: a resolver route that asks the server for the
+// comment he stopped at and replaces itself with the topic route pointing at
+// it. Authenticated-only, a guest has no read marker of his own, so for him
+// the counter keeps the plain link to the topic.
 const unreadRoute = computed(() =>
-  currentUser.value ? { ...topicRoute.value, query: { unread: 1 } } : null,
+  currentUser.value
+    ? {
+        name: "topic-unread",
+        params: {
+          alias: props.topic.board?.alias,
+          num: props.topic.topicNumber,
+        },
+      }
+    : null,
 );
 
 const isModerator = computed(() => userIsModerator(currentUser.value));

@@ -160,7 +160,7 @@ const handleUnsubscribe = async (subscription: Subscription) => {
 
     &.active
       background: $accent-green
-      color: $text-on-green
+      color: $text-on-fill
       border-color: $accent-green
 
 .subscription-list

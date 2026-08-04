@@ -267,8 +267,9 @@ onUnmounted(() => {
         @click.stop="toggle"
       >
         <!-- Width is reserved by an invisible ::before reading data-sizer
-             (pseudo-content never enters a selection copy); the visible
-             label centers over it. -->
+             (pseudo-content never enters a selection copy); the label
+             itself is an ordinary word in the button's flow, because a box
+             taken out of the flow copies as a line of its own. -->
         <span class="myp-label">{{ label }}</span></button
       ><template v-if="stepper"
         ><span class="copy-space">{{ " " }}</span
@@ -413,9 +414,9 @@ onUnmounted(() => {
     overflow: hidden
     background-color: $bg-element
 
-// Standalone trigger (no stepper): the regular button idiom.
+// Standalone trigger (no stepper): the regular button idiom, which
+// centers the label itself — no sizer here, nothing steps beside it.
 .myp-trigger
-  position: relative
   vertical-align: middle
   +button
 
@@ -424,11 +425,11 @@ onUnmounted(() => {
 // label), so stepping never resizes it and the › arrow never shifts under
 // a rapidly clicking cursor.
 .myp-trigger-section
-  position: relative
   display: inline-block
   height: 100%
   vertical-align: top
   padding: 0 $medium
+  text-align: center
   background-color: $bg-element
   border: none
   border-left: 1px solid $border
@@ -448,18 +449,18 @@ onUnmounted(() => {
 
 // Width reservation: an invisible ::before with the widest label occupies
 // layout (pseudo-content is excluded from selection copies, unlike a
-// visibility-hidden span, whose text Range.toString still emits); the
-// visible label paints centered on top of it.
+// visibility-hidden span, whose text Range.toString still emits). It is a
+// zero-height block: it reserves the width and gives the line back to the
+// visible label, which stays an ordinary word in the button's flow and is
+// centered by the button itself. The label used to be centered over the
+// sizer out of flow, and a browser serializes an out-of-flow box as a line
+// of its own — the strip copied as "‹ \nИюль 2026\n ›".
 .myp-trigger-section::before
   content: attr(data-sizer)
+  display: block
+  height: 0
+  overflow: hidden
   visibility: hidden
-
-.myp-label
-  position: absolute
-  inset: 0
-  display: flex
-  align-items: center
-  justify-content: center
 
 // Arrow sections of the stepper pill.
 .myp-step

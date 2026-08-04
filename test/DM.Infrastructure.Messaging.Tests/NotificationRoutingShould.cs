@@ -76,6 +76,20 @@ public class NotificationRoutingShould
     }
 
     /// <summary>
+    /// The events strip above the chat feed has nothing else behind it either: it
+    /// is read when the page opens and no timer re-reads it. A start or an end
+    /// reaches an open tab through these two events and nothing else, and an
+    /// event no generator answers is not in the binding, so the broker drops it
+    /// without a trace and the strip goes on showing what was true at page load.
+    /// </summary>
+    [Theory]
+    [InlineData(EventType.GlobalChatEventStarted)]
+    [InlineData(EventType.GlobalChatEventEnded)]
+    public void BindTheEventsTheChatEventsStripRidesOn(EventType eventType) =>
+        GeneratorTypes.Any(type => Answers(type, eventType)).Should().BeTrue(
+            "the strip re-reads itself on this event and on no other");
+
+    /// <summary>
     /// Asks a generator the question the dispatcher asks it at startup. The
     /// constructor is not run: it wants a database context, while CanResolve
     /// reads constants only. The method is reached by name because the interface

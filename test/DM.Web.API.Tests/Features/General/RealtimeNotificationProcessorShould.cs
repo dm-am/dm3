@@ -21,8 +21,9 @@ namespace DM.Web.API.Tests.Features.General;
 /// </summary>
 /// <remarks>
 /// Two addressing modes share one method and which one a message gets is decided
-/// by a single equality against the global chat event. Global chat is public, it
-/// carries no recipient list and goes to every open connection, guests included.
+/// by whether the event is one of the global chat's own. Global chat is public,
+/// those carry no recipient list and go to every open connection, guests
+/// included.
 /// Everything else is personal and may only ever reach the connections the map
 /// holds, because the map is the whole of the guarantee that an anonymous
 /// connection cannot become a per-user target - a guarantee stated in the
@@ -65,6 +66,23 @@ public class RealtimeNotificationProcessorShould : UnitTestBase
     public async Task BroadcastAGlobalChatMessageToEveryConnection()
     {
         await Process(EventType.NewGlobalChatMessage);
+
+        _broadcast.Verify(hub => hub.Send(It.IsAny<Notification>()), Times.Once);
+        _connections.Verify(connections => connections.GetConnectedUsers(), Times.Never);
+    }
+
+    /// <summary>
+    /// The start and the end of a chat event travel the same way. They change what
+    /// the strip above the feed shows for everyone watching a public chat, and the
+    /// generator addresses them to nobody: through the connection map they would
+    /// reach no one at all, which is indistinguishable from not being sent.
+    /// </summary>
+    [Theory]
+    [InlineData(EventType.GlobalChatEventStarted)]
+    [InlineData(EventType.GlobalChatEventEnded)]
+    public async Task BroadcastTheLifecycleOfAChatEventToEveryConnection(EventType eventType)
+    {
+        await Process(eventType);
 
         _broadcast.Verify(hub => hub.Send(It.IsAny<Notification>()), Times.Once);
         _connections.Verify(connections => connections.GetConnectedUsers(), Times.Never);

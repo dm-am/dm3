@@ -419,7 +419,7 @@ onMounted(() => {
 
   &.active
     background: $link
-    color: white
+    color: $text-on-fill
 
 .group-title
   flex: 1

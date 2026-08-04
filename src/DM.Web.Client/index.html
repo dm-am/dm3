@@ -5,16 +5,20 @@
     <link rel="icon" href="/favicon.ico">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- The static head answers every address: with no server render it is
+         what a crawler and a link preview read. It carries site-level truths
+         only, one copy of each, and its title is composed like every tab title
+         (docs/conventions/UI_STANDARDS.md). -->
     <meta
       name="description"
-      content="Dungeon Master — платформа для текстовых форумных ролевых игр: создавайте игры, ведите блоги, общайтесь на форуме и в чате с сообществом."
+      content="Платформа для текстовых форумных ролевых игр: создавайте игры, ведите блоги, общайтесь на форуме и в чате с сообществом."
     >
     <!-- Single theme-aware meta; content is kept in sync with the JS theme
          class (not prefers-color-scheme) by the anti-FOUC script below at
          boot and by the theme watcher in App.vue on switch. -->
     <meta name="theme-color" content="#ffffff">
     <meta property="og:site_name" content="Dungeon Master">
-    <meta property="og:title" content="Dungeon Master — текстовые ролевые игры">
+    <meta property="og:title" content="Форумные ролевые игры">
     <meta
       property="og:description"
       content="Платформа для текстовых форумных ролевых игр: создавайте игры, ведите блоги, общайтесь на форуме и в чате с сообществом."
@@ -22,7 +26,7 @@
     <meta property="og:type" content="website">
     <meta property="og:image" content="/apple-touch-icon.png">
     <meta property="og:locale" content="ru_RU">
-    <title>Форумные ролевые игры на сайте Dungeon Master</title>
+    <title>Форумные ролевые игры | Dungeon Master</title>
     <script>
       // Anti-FOUC: apply the persisted theme class to <html> before the bundle
       // loads, so a dark-theme user never sees a light flash. Mirrors the

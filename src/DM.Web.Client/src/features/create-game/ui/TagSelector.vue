@@ -165,7 +165,7 @@ onMounted(loadTags);
   &.selected
     background-color: $link
     border-color: $link
-    color: white
+    color: $text-on-fill
 
 .selected-count
   margin-top: $small

@@ -414,6 +414,5 @@ function onCancel() {
   +button
 
   &.danger
-    background-color: $accent-red
-    border-color: $accent-red
+    +button-danger
 </style>

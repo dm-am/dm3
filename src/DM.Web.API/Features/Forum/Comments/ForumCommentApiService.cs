@@ -45,6 +45,17 @@ internal class ForumCommentApiService : IForumCommentApiService
     }
 
     /// <inheritdoc />
+    public async Task<Envelope<FirstUnreadComment>> GetFirstUnread(string boardAlias, int topicNumber)
+    {
+        // The same authors the discussion itself hides: the position is counted
+        // over the rows the reader is shown, so it has to know about them here.
+        var hiddenAuthors = await CommentReading.HiddenAuthorsAsync(_blacklistChecker, _identityProvider.Current);
+        var position = await _commentService.GetFirstUnreadAsync(boardAlias, topicNumber, hiddenAuthors);
+
+        return new Envelope<FirstUnreadComment>(_mapper.Map<FirstUnreadComment>(position));
+    }
+
+    /// <inheritdoc />
     public Task MarkAsRead(Guid topicId) => _commentService.MarkAsReadAsync(topicId);
 
     /// <inheritdoc />

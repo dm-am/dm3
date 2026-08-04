@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -209,5 +210,92 @@ public class TopicCommentServiceShould : UnitTestBase
         var exception = await act.Should().ThrowAsync<HttpException>();
         exception.Which.StatusCode.Should().Be(HttpStatusCode.NotFound);
         exception.Which.Message.Should().Contain($"Комментарий {commentId} не найден");
+    }
+
+    /// <summary>
+    /// What the topic's comments counter has to answer: where this reader
+    /// stopped, which is the first comment past his read marker.
+    /// </summary>
+    [Fact]
+    public async Task LeadToTheFirstCommentPastTheReadMarker()
+    {
+        var topic = new Topic { Id = Guid.NewGuid() };
+        var lastRead = new DateTime(2026, 8, 1, 12, 0, 0, DateTimeKind.Utc);
+        var firstUnread = new FirstUnreadComment { CommentId = Guid.NewGuid(), CommentNumber = 41 };
+
+        _topicService
+            .Setup(s => s.GetByBoardAndNumberAsync("news", 3, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(topic);
+        _countersRepository
+            .Setup(r => r.GetLastReadTimeAsync(
+                _identityProvider.Object.Current.User.UserId, topic.Id, UnreadEntryType.Message))
+            .ReturnsAsync(lastRead);
+        _repository
+            .Setup(r => r.FindFirstUnread(topic.Id, new DateTimeOffset(lastRead), null))
+            .ReturnsAsync(firstUnread);
+
+        var result = await _service.GetFirstUnreadAsync("news", 3);
+
+        result.Should().BeSameAs(firstUnread);
+        _repository.Verify(
+            r => r.GetLastComment(It.IsAny<Guid>(), It.IsAny<IReadOnlyCollection<Guid>?>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// Nothing unread is the ordinary state one second after the topic was
+    /// opened: opening it flushes the marker. Answering with the beginning of
+    /// the topic there is what made the same link useless on the second click.
+    /// </summary>
+    [Fact]
+    public async Task FallBackToTheLastCommentWhenNothingIsUnread()
+    {
+        var topic = new Topic { Id = Guid.NewGuid() };
+        var lastRead = new DateTime(2026, 8, 1, 12, 0, 0, DateTimeKind.Utc);
+        var lastComment = new FirstUnreadComment { CommentId = Guid.NewGuid(), CommentNumber = 60 };
+
+        _topicService
+            .Setup(s => s.GetByBoardAndNumberAsync("news", 3, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(topic);
+        _countersRepository
+            .Setup(r => r.GetLastReadTimeAsync(
+                _identityProvider.Object.Current.User.UserId, topic.Id, UnreadEntryType.Message))
+            .ReturnsAsync(lastRead);
+        _repository
+            .Setup(r => r.FindFirstUnread(topic.Id, It.IsAny<DateTimeOffset>(), null))
+            .ReturnsAsync((FirstUnreadComment?)null);
+        _repository
+            .Setup(r => r.GetLastComment(topic.Id, null))
+            .ReturnsAsync(lastComment);
+
+        var result = await _service.GetFirstUnreadAsync("news", 3);
+
+        result.Should().BeSameAs(lastComment);
+    }
+
+    /// <summary>
+    /// A reader who has never opened the topic has no marker at all, and every
+    /// comment is unread to him: he starts at the first one. Folding that case
+    /// into the fallback above would send him straight to the end.
+    /// </summary>
+    [Fact]
+    public async Task StartAtTheBeginningForAReaderWithoutAMarker()
+    {
+        var topic = new Topic { Id = Guid.NewGuid() };
+        var firstComment = new FirstUnreadComment { CommentId = Guid.NewGuid(), CommentNumber = 1 };
+
+        _topicService
+            .Setup(s => s.GetByBoardAndNumberAsync("news", 3, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(topic);
+        _countersRepository
+            .Setup(r => r.GetLastReadTimeAsync(It.IsAny<Guid>(), topic.Id, UnreadEntryType.Message))
+            .ReturnsAsync((DateTime?)null);
+        _repository
+            .Setup(r => r.FindFirstUnread(topic.Id, DateTimeOffset.MinValue, null))
+            .ReturnsAsync(firstComment);
+
+        var result = await _service.GetFirstUnreadAsync("news", 3);
+
+        result.Should().BeSameAs(firstComment);
     }
 }

@@ -31,6 +31,7 @@ import { Form, FormField } from "@/shared/ui/Form";
 import { ContentText } from "@/shared/ui";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
+import { CHARACTER_NAME_MAX_LENGTH } from "@/shared/lib/constants/game";
 
 const props = withDefaults(
   defineProps<{
@@ -238,7 +239,7 @@ const actionLabel = computed(() =>
         id="character-name"
         v-model="name"
         type="text"
-        maxlength="100"
+        :maxlength="CHARACTER_NAME_MAX_LENGTH"
         placeholder="Имя персонажа"
       />
     </FormField>

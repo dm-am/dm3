@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.AttributeSchemas;
@@ -23,7 +24,7 @@ internal class CreateCharacterValidator : AbstractValidator<CreateCharacter>
     {
         RuleFor(c => c.Name)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MaximumLength(50).WithMessage(ValidationError.Long);
+            .MaximumLength(CharacterPolicy.NameMaxLength).WithMessage(ValidationError.Long);
 
         // Outside the schema block on purpose: a game without a schema skips
         // every rule below, and the repeated identifier used to reach storage

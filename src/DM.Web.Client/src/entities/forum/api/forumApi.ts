@@ -4,6 +4,7 @@ import type {
   CommentId,
   Board,
   BoardId,
+  FirstUnreadComment,
   Topic,
   TopicId,
   TopicsQuery,
@@ -168,6 +169,19 @@ export default new (class ForumApi {
 
   public markTopicAsRead(id: TopicId) {
     return Api.delete(`topics/${id}/comments/unread`);
+  }
+
+  /**
+   * Where this reader continues in the topic: the first comment he has not
+   * read, or the topic's last comment when everything is read. Backs the
+   * card's comments counter, which lands him on that comment instead of at
+   * the top of the discussion. Addressed by alias and number, like the topic
+   * itself, so the resolver needs no separate lookup of the topic id.
+   */
+  public getFirstUnreadComment(boardAlias: string, topicNumber: number) {
+    return Api.get<Envelope<FirstUnreadComment>>(
+      `forum/${boardAlias}/${topicNumber}/comments/first-unread`,
+    );
   }
 
   public getComments(id: TopicId, q: CommentsQuery) {

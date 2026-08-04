@@ -19,6 +19,14 @@ public interface IForumCommentApiService
     Task<DiscussionResponse> GetDiscussion(Guid topicId, PagingQuery query);
 
     /// <summary>
+    /// Get where the reader continues in a topic
+    /// </summary>
+    /// <param name="boardAlias">Board URL alias</param>
+    /// <param name="topicNumber">Topic number within the board</param>
+    /// <returns>Envelope of the comment to open the topic at</returns>
+    Task<Envelope<FirstUnreadComment>> GetFirstUnread(string boardAlias, int topicNumber);
+
+    /// <summary>
     /// Mark topic comments as read
     /// </summary>
     /// <param name="topicId">Topic identifier</param>

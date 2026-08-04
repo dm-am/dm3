@@ -34,6 +34,23 @@ public interface ITopicCommentRepository
     Task<Comment?> Get(Guid commentId);
 
     /// <summary>
+    /// Find the first comment of the topic the reader has not seen yet
+    /// </summary>
+    /// <param name="topicId">Topic identifier</param>
+    /// <param name="lastReadUtc">Moment the reader last marked the topic as read</param>
+    /// <param name="excludeUserIds">Optional user IDs hidden from this reader</param>
+    Task<FirstUnreadComment?> FindFirstUnread(Guid topicId, DateTimeOffset lastReadUtc,
+        IReadOnlyCollection<Guid>? excludeUserIds = null);
+
+    /// <summary>
+    /// Get the last comment of the topic
+    /// </summary>
+    /// <param name="topicId">Topic identifier</param>
+    /// <param name="excludeUserIds">Optional user IDs hidden from this reader</param>
+    Task<FirstUnreadComment?> GetLastComment(Guid topicId,
+        IReadOnlyCollection<Guid>? excludeUserIds = null);
+
+    /// <summary>
     /// Create comment for topic
     /// </summary>
     /// <param name="createComment">Comment creation data</param>
@@ -142,4 +159,22 @@ public class DeleteTopicCommentEntity
     /// New last comment ID (if this was the last comment)
     /// </summary>
     public Guid? NewLastCommentId { get; set; }
+}
+
+/// <summary>
+/// Where a reader continues in a topic: a comment and its place in the order
+/// the discussion is paged by, so the caller can open the page holding it and
+/// scroll to the comment itself
+/// </summary>
+public class FirstUnreadComment
+{
+    /// <summary>
+    /// Comment identifier; absent when the topic has no comments at all
+    /// </summary>
+    public Guid? CommentId { get; set; }
+
+    /// <summary>
+    /// Position of that comment in the topic (1-based), for paging
+    /// </summary>
+    public int CommentNumber { get; set; }
 }

@@ -184,6 +184,25 @@ public class TopicController : ControllerBase
         Ok(await _topicApiService.GetByBoardAndNumber(alias, num));
 
     /// <summary>
+    /// Get where the reader continues in a topic
+    /// </summary>
+    /// <remarks>
+    /// Returns the first comment the reader has not read yet together with its
+    /// position in the topic, so the caller can open the page holding it and
+    /// scroll to the comment. When everything is read the topic's last comment
+    /// is returned instead. A topic with no comments answers with no comment.
+    /// </remarks>
+    /// <param name="alias">Board URL alias (lowercase, e.g. "general")</param>
+    /// <param name="num">Topic number within the board</param>
+    /// <response code="200">Comment to continue the topic from</response>
+    /// <response code="404">Board or topic not found</response>
+    [HttpGet("~/v1/forum/{alias}/{num:int}/comments/first-unread", Name = nameof(GetFirstUnreadTopicComment))]
+    [ProducesResponseType(typeof(Envelope<FirstUnreadComment>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetFirstUnreadTopicComment(string alias, int num) =>
+        Ok(await _commentApiService.GetFirstUnread(alias, num));
+
+    /// <summary>
     /// Get topic discussion with comments and permission flags
     /// </summary>
     /// <remarks>

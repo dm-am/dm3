@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.AttributeSchemas;
@@ -22,7 +23,7 @@ internal class UpdateCharacterValidator : AbstractValidator<UpdateCharacter>
         When(c => c.Name != default, () =>
             RuleFor(c => c.Name)
                 .NotEmpty().WithMessage(ValidationError.Empty)
-                .MaximumLength(50).WithMessage(ValidationError.Long));
+                .MaximumLength(CharacterPolicy.NameMaxLength).WithMessage(ValidationError.Long));
 
         // Same invariant as on create: one value per specification. Without it
         // a repeated identifier became a second insert and, since the unique

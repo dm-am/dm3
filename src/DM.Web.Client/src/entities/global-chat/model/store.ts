@@ -7,6 +7,7 @@ import type {
 } from "./types";
 import globalChatApi from "../api/globalChatApi";
 import { useAuthStore } from "@/shared/stores";
+import { NotificationType } from "@/shared/api/models/notifications";
 
 export const useGlobalChatStore = defineStore("globalChat", () => {
   const { user: currentUser } = storeToRefs(useAuthStore());
@@ -399,6 +400,28 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     events.value = data?.resources ?? [];
   }
 
+  /**
+   * The events list on a realtime push.
+   *
+   * The list is read once, when the chat opens, and nothing polls it: an event
+   * starting or ending is the only thing that can make it stale while the tab
+   * stays open, and until that arrived the strip above the feed went on
+   * describing the state of the chat at page load. Which pushes those are is
+   * knowledge about this list rather than about the screen that renders it, so
+   * it lives here and re-reads through the one fetch path above. Every other
+   * push on the socket (a new message above all) is somebody else's business:
+   * re-reading on those would put a request behind every line anybody types.
+   */
+  async function refreshEventsOnNotification(eventType: NotificationType) {
+    if (
+      eventType !== NotificationType.GlobalChatEventStarted &&
+      eventType !== NotificationType.GlobalChatEventEnded
+    ) {
+      return;
+    }
+    await fetchEvents();
+  }
+
   async function fetchEventDetails(
     id: string,
     force = false,
@@ -471,6 +494,7 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     liveEvent,
     upcomingEvents,
     fetchEvents,
+    refreshEventsOnNotification,
     fetchEventDetails,
   };
 });

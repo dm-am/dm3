@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.Entities.Contracts;
@@ -62,6 +63,7 @@ public class Character : ISoftDeletable, IHasEditHistory<CharacterEdit>
     /// <summary>
     /// Name
     /// </summary>
+    [MaxLength(CharacterPolicy.NameMaxLength)]
     public string Name { get; set; } = null!;
 
     /// <summary>

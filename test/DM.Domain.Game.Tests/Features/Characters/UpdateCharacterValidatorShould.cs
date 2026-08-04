@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Characters;
@@ -60,7 +61,7 @@ public class UpdateCharacterValidatorShould : UnitTestBase
         var input = new UpdateCharacter
         {
             CharacterId = Guid.NewGuid(),
-            Name = new string('a', 51)
+            Name = new string('a', CharacterPolicy.NameMaxLength + 1)
         };
 
         var result = await validator.TestValidateAsync(input);

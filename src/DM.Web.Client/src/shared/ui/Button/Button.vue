@@ -30,15 +30,15 @@ withDefaults(
 button
   +button
 
-  // Primary action — filled with the site's link/action navy so it clearly
-  // outranks the secondary (e.g. Отмена) control. Navy is dark, so white text
-  // keeps a high, theme-stable contrast.
+  // Primary action — filled with the site's link/action colour so it clearly
+  // outranks the secondary (e.g. Отмена) control. The ink is $text-on-fill and
+  // not white: $link is navy in the light theme only, in the dark one it is a
+  // light blue on which white measures 2.30.
+  // Hover is the +button overlay over the same fill. $link-hover cannot serve
+  // as the hover fill: at its luminance neither white (3.45) nor $text (3.63)
+  // clears AA in the light theme.
   &.primary
     background-color: $link
     border-color: $link
-    color: #fff
-
-    &:hover:not(:disabled)
-      background-color: $link-hover
-      border-color: $link-hover
+    color: $text-on-fill
 </style>

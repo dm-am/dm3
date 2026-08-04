@@ -92,6 +92,17 @@ export type PeriodDigestRef = {
   month?: number | null;
 };
 
+/**
+ * Where the reader continues in a topic: the first comment he has not read,
+ * or the topic's last comment when everything is read. `commentId` is null
+ * when the topic has no comments at all.
+ */
+export type FirstUnreadComment = {
+  commentId: string | null;
+  /** Position of that comment in the topic (1-based), for paging */
+  commentNumber: number;
+};
+
 // Query parameters for topics list
 export type TopicsQuery = {
   number?: number;

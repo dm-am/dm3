@@ -465,8 +465,13 @@ async function fetchNewMessages() {
 }
 
 function handleGlobalChatNotification(notification: SignalRNotification) {
-  if (notification.eventType !== NotificationType.NewGlobalChatMessage) return;
-  fetchNewMessages();
+  if (notification.eventType === NotificationType.NewGlobalChatMessage) {
+    fetchNewMessages();
+    return;
+  }
+  // The events strip rides the same broadcast: an event starting or ending
+  // changes what it shows, and the store decides which pushes those are.
+  globalChatStore.refreshEventsOnNotification(notification.eventType);
 }
 
 let unsubscribeSignalR: (() => void) | null = null;

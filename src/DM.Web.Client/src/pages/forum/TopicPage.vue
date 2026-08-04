@@ -17,7 +17,6 @@ import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
 import { forumApi } from "@/entities/forum";
 import { CommentsFilter, useCommentsFilter } from "@/features/comment-filter";
 import { CommentSkeleton } from "@/shared/ui/Skeleton";
-import { usePaging } from "@/shared/lib/composables/usePaging";
 import { reportForumShellError } from "./forumShell";
 import { notifyFailure } from "@/shared/lib/errors";
 
@@ -27,7 +26,6 @@ const boardsStore = useBoardsStore();
 const { trySelectTopicByNumber, searchComments, createComment } = boardsStore;
 const { selectedTopic: topic } = storeToRefs(boardsStore);
 const { user } = storeToRefs(useAuthStore());
-const { commentsPerPage } = usePaging();
 
 // Filter setup - get search params from URL
 const { searchParams } = useCommentsFilter();
@@ -89,49 +87,6 @@ async function markAsReadIfNeeded() {
   }
 }
 
-/**
- * Consumes the "?unread=1" deep link (from the topic's unread-comments
- * counter): computes the page holding the first unread comment and
- * replace-navigates to it before the mark-as-read call zeroes the counter.
- * Guests never see the link that produces this query param (TopicView.vue
- * builds it only for authenticated users), so no guest branch is needed here.
- *
- * Returns whether the caller can skip its own searchComments call. That's
- * only safe when this function actually changes the "?number=" page —
- * CommentsList's watcher fetches on THAT change. When the first unread
- * comment lands on the page the URL already points to (typically page 1
- * with no "number" param), stripping "?unread" is a no-op for "number", so
- * no watcher fires and the caller must fetch comments itself instead of
- * leaving the topic showing stale/no comments.
- */
-function redirectToFirstUnreadIfNeeded() {
-  if (route.query.unread !== "1") return false;
-  if (!user.value || !topic.value) return false;
-
-  const { commentsCount, unreadCommentsCount } = topic.value;
-  if (!unreadCommentsCount) return false;
-
-  const readCount = Math.max(0, commentsCount - unreadCommentsCount);
-  const firstUnreadPosition = readCount + 1;
-  const page = Math.max(
-    1,
-    Math.ceil(firstUnreadPosition / commentsPerPage.value),
-  );
-
-  const previousNumber = route.query.number;
-  const query = { ...route.query };
-  delete query.unread;
-  if (page > 1) query.number = String(page);
-  else delete query.number;
-
-  router.replace({ path: route.path, query, hash: route.hash });
-
-  // "?number=" is the only part of the query CommentsList's fetch watcher
-  // reacts to — only skip our own fetch when it actually changed.
-  const numberChanged = (query.number ?? null) !== (previousNumber ?? null);
-  return numberChanged;
-}
-
 // A missing/private/deleted topic is a page-level failure: report it to the
 // persistent forum shell, which swaps its whole header stack for the
 // full-screen ErrorPage (an error must never render squeezed under the
@@ -155,15 +110,6 @@ async function fetchData() {
     // onto an error page.
     boardsStore.comments = null;
     loading.value = false;
-    return;
-  }
-
-  if (redirectToFirstUnreadIfNeeded()) {
-    // CommentsList picks up the new "?number=" query on its own watcher —
-    // no need to fetch comments again here. Still mark as read so the
-    // counter clears once the reader has been routed to the right page.
-    loading.value = false;
-    markAsReadIfNeeded();
     return;
   }
 

@@ -215,7 +215,13 @@ internal class AttributeSchemaRepository :
     /// <summary>
     /// Build strongly-typed persistence constraints from a write-side specification
     /// </summary>
-    private static DbConstraints BuildConstraints(DtoSpecificationInput spec, bool required) =>
+    /// <remarks>
+    /// Internal rather than private so the round trip of an absent limit can be
+    /// asserted end to end. The absence is written here and read back by the
+    /// mapping profile, and a test that sees only one of the two halves stays
+    /// green while the other half turns the absence back into a zero.
+    /// </remarks>
+    internal static DbConstraints BuildConstraints(DtoSpecificationInput spec, bool required) =>
         spec.Type switch
         {
             AttributeSpecificationType.Number =>
@@ -229,7 +235,7 @@ internal class AttributeSchemaRepository :
             AttributeSpecificationType.BbCode =>
                 new DbBbCodeConstraints { Required = required, MaxLength = spec.MaxLength },
             _ =>
-                new DbStringConstraints { Required = required, MaxLength = spec.MaxLength ?? 0 }
+                new DbStringConstraints { Required = required, MaxLength = spec.MaxLength }
         };
 
     private static List<DbListAttributeValue> MapValues(IEnumerable<DtoListValue> values) =>
