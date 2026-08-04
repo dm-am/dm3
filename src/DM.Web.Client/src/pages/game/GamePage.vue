@@ -17,6 +17,7 @@ import {
   joinTitleSegments,
   useDocumentTitle,
 } from "@/shared/lib/composables/useDocumentTitle";
+import { provideZoneSection } from "@/shared/lib/composables/useZoneSection";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import { PageTitleSkeleton } from "@/shared/ui/Skeleton";
 
@@ -56,18 +57,26 @@ const errorCode = computed(() =>
 
 const gameId = computed(() => route.params.id as string);
 
-// The zone shell owns the tab title for every /game/:id route: the game name
-// first (it is what tells two tabs apart when the browser truncates), the
-// section of the active sub-route second. Sub-routes whose section is data —
-// a room, a chat room — declare meta.dynamicTitle and compose it themselves.
+// The zone shell owns both the heading on the page and the name of the tab, and
+// they are the same sentence: the game name first (it is what tells two tabs
+// apart when the browser truncates it), the section of the active sub-route
+// second. Composed once, so the two cannot disagree — before this the heading
+// said only the game, the sub-page drew a second h1 saying "Настройки игры",
+// and the tab said a third thing.
 //
-// While the error page is showing the error owns the title: there is no game
+// A sub-route whose section is data — a character's name, an NPC sheet — cannot
+// put it in meta and announces it through provideZoneSection instead.
+//
+// While the error page is showing, the error owns the title: there is no game
 // behind the id, so the section alone would name a page the reader is not
 // looking at. Same rule and same source as the forum shell (ForumPage.vue).
+const announced = provideZoneSection();
+const heading = computed(() =>
+  joinTitleSegments(game.value?.title, announced.value ?? route.meta.section),
+);
+
 useDocumentTitle(() =>
-  errorCode.value
-    ? getErrorConfig(errorCode.value).title
-    : joinTitleSegments(game.value?.title, route.meta.section),
+  errorCode.value ? getErrorConfig(errorCode.value).title : heading.value,
 );
 
 async function load(id: string) {
@@ -107,7 +116,7 @@ onUnmounted(() => {
 <template>
   <template v-if="game">
     <div class="game-header">
-      <page-title>{{ game.title }}</page-title>
+      <page-title>{{ heading }}</page-title>
     </div>
 
     <router-view />

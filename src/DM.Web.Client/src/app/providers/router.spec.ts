@@ -284,18 +284,18 @@ const ZONES = [
 ] as const;
 
 /**
- * Zone pages that write a title of their own, and what out of. Every other
- * page of a zone is titled by its shell out of `meta.section`; a second writer
- * for one page is two sources for one string, and the winner is whichever
- * effect happens to run last.
+ * The only pages of a zone that write a title: its two shells.
+ *
+ * The heading on the page and the name of the tab are one sentence — "{entity}
+ * | {section}" — and the shell composes it. A sub-page whose section is data (a
+ * room, a character, an NPC sheet) announces the section through
+ * `useZoneSection` rather than writing a title of its own: a second writer for
+ * one string means the winner is whichever effect happens to run last, and the
+ * page ends up with two h1's saying different things.
  */
 const ZONE_TITLE_OWNERS: Record<string, string> = {
-  "pages/blog/BlogPage.vue": "blog shell: blog name + meta.section",
-  "pages/game/CharacterCreate.vue": "character form: game + ?npc mode",
-  "pages/game/GameCharacter.vue": "character sheet: game + character name",
-  "pages/game/GameChatRoom.vue": "chat room: game + room name",
-  "pages/game/GamePage.vue": "game shell: game name + meta.section",
-  "pages/game/GameRoom.vue": "post room: game + room name",
+  "pages/blog/BlogPage.vue": "blog shell: blog name + section",
+  "pages/game/GamePage.vue": "game shell: game name + section",
 };
 
 const rawRoutes = router.options.routes as unknown as RawRoute[];
@@ -387,6 +387,31 @@ describe("zone pages that title themselves", () => {
     const offenders = writers
       .filter(({ zone, file }) => !zone.entity.test(sourceOf(file)))
       .map(({ file }) => where(file));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("draws no second heading on a page the shell already names", () => {
+    // The shell renders the one h1 of the zone. A sub-page that renders its own
+    // puts two on the page, and the second one repeats a word the first says or
+    // contradicts it — "Настройки игры" under a heading that said only the game.
+    //
+    // The index of each zone lives in the same folder and is mounted OUTSIDE
+    // the shell — /games and /blogs have no game and no blog behind them — so
+    // it owns its heading like any ordinary page.
+    const outsideTheShell = new Set([
+      "pages/game/GamesPage.vue",
+      "pages/blog/BlogsPage.vue",
+    ]);
+
+    const offenders = ZONES.flatMap((zone) =>
+      vueFilesIn(join(CLIENT_SRC, zone.dir)),
+    )
+      .filter((file) => !outsideTheShell.has(where(file)))
+      .filter((file) => !(where(file) in ZONE_TITLE_OWNERS))
+      .filter((file) => /<page-title|<PageTitle/.test(sourceOf(file)))
+      .map((file) => where(file))
+      .sort();
 
     expect(offenders).toEqual([]);
   });

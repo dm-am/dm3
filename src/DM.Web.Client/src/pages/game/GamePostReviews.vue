@@ -17,7 +17,6 @@ import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
 import type { RatedPostsScope } from "@/entities/game";
 import { RatedPostsList } from "@/widgets/rated-posts";
-import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import LeadText from "@/shared/ui/Layout/LeadText.vue";
 
 const route = useRoute();
@@ -40,7 +39,6 @@ const pagingTo = computed(() => ({
 
 <template>
   <div class="game-post-reviews">
-    <BlockTitle>Оцененные посты</BlockTitle>
     <LeadText v-once>
       Посты этой игры, которые получили хотя бы одну оценку
     </LeadText>

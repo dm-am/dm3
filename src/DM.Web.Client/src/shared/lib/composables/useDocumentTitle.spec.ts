@@ -178,8 +178,11 @@ describe("titles across the client sources", () => {
       }
     }
 
-    // A walk that finds nothing would pass silently.
-    expect(calls).toBeGreaterThan(10);
+    // A walk that finds nothing would pass silently. The floor is well under
+    // the count on purpose: the number falls whenever a page stops writing its
+    // own title and lets its shell compose it, which is a direction this rule
+    // should not fight.
+    expect(calls).toBeGreaterThan(5);
     expect(offenders).toEqual([]);
   });
 

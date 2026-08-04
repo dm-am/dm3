@@ -12,7 +12,6 @@ import { storeToRefs } from "pinia";
 import { blogApi, useBlogDetailsStore } from "@/entities/blog";
 import { useAuthStore } from "@/entities/user";
 import { DiscussionSection } from "@/widgets/discussion";
-import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import type { CommentsQuery } from "@/shared/api";
 
@@ -54,8 +53,6 @@ async function markAsRead() {
 
 <template>
   <div class="blog-comments">
-    <BlockTitle>Обсуждение</BlockTitle>
-
     <DiscussionSection
       :comments="comments"
       :paging="commentsPaging"

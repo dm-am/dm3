@@ -5,10 +5,7 @@ import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
 import { useAuthStore } from "@/entities/user";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
-import {
-  joinTitleSegments,
-  useDocumentTitle,
-} from "@/shared/lib/composables/useDocumentTitle";
+import { useZoneSection } from "@/shared/lib/composables/useZoneSection";
 import { useScrollToElement } from "@/shared/lib/composables/useScrollToElement";
 import { gameApi, type DiceRollInput } from "@/entities/game";
 import PagingWithSeparators from "@/shared/ui/Paging/PagingWithSeparators.vue";
@@ -59,9 +56,9 @@ const room = computed(
 );
 
 // The room IS the section here, and its name is data — meta.section cannot
-// spell it, so the page composes the zone title itself, in the zone's order:
-// the game first, the room second.
-useDocumentTitle(() => joinTitleSegments(game.value?.title, room.value?.title));
+// spell it. Announced to the shell, which is the only place that writes a
+// heading or a tab name in this zone.
+useZoneSection(() => room.value?.title);
 
 // Scroll to target element when posts are loaded
 const postsLoaded = computed(

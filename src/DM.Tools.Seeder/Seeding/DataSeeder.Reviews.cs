@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Community.Features.Polls;
+using DM.Domain.Community.Features.Statistics;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Identity;
 using DM.Domain.Personal.Features.Profiles;
@@ -698,13 +699,27 @@ internal sealed partial class DataSeeder
                     result.PostsCreated++;
                     chuckPlayer.QuantityRating++;
 
-                    // 7 positive reviews, net +7. That is the top of the week by
-                    // construction: the bulk of seeded posts gets at most +4,
-                    // Elvira's master post +5, and leaderboard coverage never
-                    // touches a post created this week (EnsureLeaderboardCoverage).
+                    // The showcase post has to outscore everything the seed puts
+                    // inside the weekly window, and the loudest thing in there is
+                    // leaderboard coverage: it tops one post at BoardSize + 2 and
+                    // steps down from there (EnsureLeaderboardCoverage).
+                    //
+                    // Coverage was written to keep its reviews before the week
+                    // start, and in the first seven days of a month it cannot: a
+                    // review has to sit inside its month window for the boards to
+                    // count it, the window opens on the first, and the rolling
+                    // week reaches back into the month before. The two demands
+                    // contradict each other there, so the widget was showing a
+                    // filler post that reads "Отличный отыгрыш!" instead of this
+                    // one for a week out of every four.
+                    //
+                    // Hence one above the coverage top, read from the same
+                    // constant rather than written out: a board that grows moves
+                    // this with it, and a number here would go stale silently.
+                    var chuckReviewCount = LeaderboardBoards.BoardSize + 3;
                     var chuckReviewers = experiencedUsers
                         .Where(u => u.UserId != chuckPlayer.UserId)
-                        .Take(7)
+                        .Take(chuckReviewCount)
                         .ToList();
                     var chuckReviewTexts = new[]
                     {
@@ -715,6 +730,15 @@ internal sealed partial class DataSeeder
                         "Персонаж раскрыт на все сто. Глубина, юмор, драма — все в одном посте.",
                         "Отыгрыш уровня бог. Сцена с трактирщиком — шедевр.",
                         "Жду продолжения грейпфрутовой саги. Это лучше 'Властелина Колец'.",
+                        "Прочитал трижды. На третий раз пошел за грейпфрутом.",
+                        "Вот так и надо писать посты. Без пафоса, а берет за душу.",
+                        "Мастер, дайте этому человеку премию. И еще грейпфрутов.",
+                        "Никогда не думал, что буду сопереживать цитрусовым. А вот.",
+                        "Половина игры ради таких постов и существует.",
+                        "Сохранил себе. Буду показывать новичкам как образец.",
+                        "Тот случай, когда пост лучше самого модуля. Без обид, мастер.",
+                        "Читал в метро, чуть не проехал станцию.",
+                        "Единственная претензия: слишком коротко.",
                     };
                     // Reviews land strictly between the post and `now`: dating
                     // them 2..11 hours back could put them BEFORE a post placed
@@ -738,7 +762,7 @@ internal sealed partial class DataSeeder
                         });
                         result.ReviewsCreated++;
                     }
-                    chuckPlayer.QualityRating += 7;
+                    chuckPlayer.QualityRating += chuckReviewers.Count;
                 }
             }
         }

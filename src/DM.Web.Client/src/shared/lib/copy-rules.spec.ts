@@ -17,7 +17,7 @@
  *    (REQUIRED_COPY).
  * 3. A rating with no value prints VALUE_UNAVAILABLE — never a dash, which in
  *    a column of numbers reads as a zero, and never a second hand-written copy
- *    of the token, which is why the token itself is written in two files only.
+ *    of the token, which is why the token itself is written in one file only.
  * 4. CODE_STYLE spells the letter at U+0451 without its dots and reserves the
  *    typographic quotes for the motto. Both rules were manual, and the
  *    convention said so in as many words.
@@ -68,17 +68,49 @@ const GUILLEMETS_ALLOWED: Record<string, string> = {
 };
 
 /**
- * Where the missing-value token may be written out. The constant declares it;
- * the header statistics block prints it for a whole row of numbers that failed
- * to load, which is not the "no value" case the constant is named for.
+ * Where the missing-value token may be written out: the constant that declares
+ * it, and nowhere else. Every screen that prints it imports it, the header
+ * statistics block included.
  */
-const TOKEN_ALLOWED = new Set([
-  "shared/lib/constants/copy.ts",
-  "widgets/header/SiteStatistics.vue",
-]);
+const TOKEN_ALLOWED = new Set(["shared/lib/constants/copy.ts"]);
 
-/** Where the forum entity is named, and therefore where its name is checked. */
+/**
+ * The token as a word rather than as a whole string. Comparing a part against
+ * the token caught it only in a script literal that held nothing else: a
+ * template prints it inside an expression or as one text node among many
+ * ({{ row.description || "n/a" }}), and there the part compared is the whole
+ * template, which is never equal to three characters. That is the shape the
+ * nineteen hand-written copies had, so the check was blind to exactly the thing
+ * it was written against.
+ *
+ * The neighbours excluded are letters, digits and the slash: "moderation/awards"
+ * holds these three characters between two letters and is a path, not copy.
+ */
+const TOKEN_SPELLED = new RegExp(
+  `(^|[^\\p{L}\\p{N}/])${VALUE_UNAVAILABLE.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}([^\\p{L}\\p{N}/]|$)`,
+  "u",
+);
+
+/**
+ * Where the forum entity is named, and therefore where its name is checked: the
+ * three directories the forum lives in, plus any file named after a topic or a
+ * forum wherever it sits. The directories alone left the deep-link resolver out
+ * — pages/redirect/TopicRedirect.vue, the page a notification's "Перейти" passes
+ * through, which said "Открываем тему...". "board" is not a marker here:
+ * leaderboard and keyboard carry the letters and the доска of a leaderboard is
+ * a different thing entirely.
+ */
 const FORUM_SURFACE = ["pages/forum", "features/topic", "entities/forum"];
+
+/** A file named after the entity names the entity, wherever the file lives. */
+const FORUM_FILE = /(topic|forum)/i;
+
+function namesTheForumEntity(rel: string): boolean {
+  return (
+    FORUM_SURFACE.some((dir) => rel.startsWith(`${dir}/`)) ||
+    FORUM_FILE.test(rel)
+  );
+}
 
 /** "\u0442\u0435\u043C\u0430" as a whole word: other words merely start with it. */
 const TEMA =
@@ -240,6 +272,12 @@ const RETIRED_COPY: { text: string; instead: string }[] = [
       '"Наставник" — the badge, the roles table, the notepad hint and the user filter all say so',
   },
   {
+    // The comparison is case-sensitive, and a sentence about the role names it
+    // in the middle: "назначить ментора" is the same retired word.
+    text: "ментор",
+    instead: '"наставник" — the role has one name in every case',
+  },
+  {
     text: "Переход к теме",
     instead: '"Переход к топику" — the forum entity has one name',
   },
@@ -345,17 +383,19 @@ const EM_DASH_BUDGET: { file: string; count: number }[] = [
   { file: "pages/rules/RulesExternalLinks.vue", count: 3 },
   { file: "pages/rules/RulesPage.vue", count: 3 },
   { file: "pages/rules/RulesIntro.vue", count: 1 },
-  // The brand lockup in the home h1, and the copula dash of the About lead.
+  // The copula dash of the About lead.
   { file: "pages/about/AboutPage.vue", count: 1 },
-  { file: "pages/home/HomePage.vue", count: 1 },
+  // The brand lockup in the h1, and the invitation under the testimonials:
+  // "поделитесь и своим — в топике на форуме", released by the owner by name.
+  { file: "pages/home/HomePage.vue", count: 2 },
 ];
 
 /**
- * The sum of the budget: 19 glosses, 13 range separators, 4 credit lines and
- * 41 definitions. Spelled out so the number stays a claim someone argued for
+ * The sum of the budget: 19 glosses, 13 range separators, 4 credit lines,
+ * 41 definitions and one invitation the owner released by name. Spelled out so the number stays a claim someone argued for
  * rather than whatever the tree happens to hold today.
  */
-const EM_DASH_TOTAL = 77;
+const EM_DASH_TOTAL = 78;
 
 /**
  * What draws as a colour pictograph rather than as text.
@@ -461,7 +501,7 @@ describe("interface copy", () => {
     const offenders: string[] = [];
     for (const file of collectFiles(CLIENT_SRC)) {
       const rel = where(file);
-      if (!FORUM_SURFACE.some((dir) => rel.startsWith(`${dir}/`))) continue;
+      if (!namesTheForumEntity(rel)) continue;
       const raw = readFileSync(file, "utf8");
       if (copyOf(file, raw).some((part) => TEMA.test(part))) {
         offenders.push(`${rel}: the forum entity is a "топик"`);
@@ -477,7 +517,7 @@ describe("interface copy", () => {
       if (TOKEN_ALLOWED.has(rel)) continue;
       const raw = readFileSync(file, "utf8");
       if (!raw.includes(VALUE_UNAVAILABLE)) continue;
-      if (copyOf(file, raw).some((part) => part === VALUE_UNAVAILABLE)) {
+      if (copyOf(file, raw).some((part) => TOKEN_SPELLED.test(part))) {
         offenders.push(`${rel}: spells the token instead of importing it`);
       }
     }

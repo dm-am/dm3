@@ -9,7 +9,7 @@
     Со всеми отзывами можно ознакомиться
     <router-link to="/testimonials"
       ><strong>на отдельной странице</strong></router-link
-    >. Будем рады, если поделитесь и своим:
+    >. Будем рады, если поделитесь и своим —
     <router-link :to="TESTIMONIALS_FORUM_TOPIC"
       ><strong>в топике на форуме</strong></router-link
     >.

@@ -21,7 +21,6 @@ import type { GameReview } from "@/shared/api/models/game/reviews";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import { ContentText } from "@/shared/ui/Content";
 import Button from "@/shared/ui/Button/Button.vue";
-import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import LeadText from "@/shared/ui/Layout/LeadText.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { ErrorState } from "@/shared/ui/ErrorState";
@@ -132,7 +131,6 @@ watch(page, fetchReviews);
 
 <template>
   <div class="game-reviews">
-    <BlockTitle>Рецензии</BlockTitle>
     <LeadText v-once>
       Отзывы об игре целиком, по одной рецензии от участника. Написать ее может
       тот, у кого в этой игре есть хотя бы один пост.

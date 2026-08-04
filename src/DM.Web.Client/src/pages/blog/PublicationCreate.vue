@@ -12,7 +12,6 @@ import { storeToRefs } from "pinia";
 import { useBlogDetailsStore, blogApi } from "@/entities/blog";
 import { PublicationForm } from "@/features/publication";
 import { composerDraftKey } from "@/shared/lib/utils/draftKey";
-import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { notifyFailure } from "@/shared/lib/errors";
@@ -84,8 +83,6 @@ function cancel() {
 
 <template>
   <div class="publication-create">
-    <page-title>Создание публикации</page-title>
-
     <secondary-text v-if="!canManage">
       Создание публикаций доступно мастеру блога и ассистентам.
     </secondary-text>

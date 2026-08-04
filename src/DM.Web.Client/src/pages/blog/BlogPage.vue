@@ -18,6 +18,7 @@ import {
   joinTitleSegments,
   useDocumentTitle,
 } from "@/shared/lib/composables/useDocumentTitle";
+import { provideZoneSection } from "@/shared/lib/composables/useZoneSection";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import { PageTitleSkeleton } from "@/shared/ui/Skeleton";
 
@@ -30,14 +31,18 @@ const errorCode = ref<number | null>(null);
 
 const blogId = computed(() => route.params.id as string);
 
-// Same rule as the game shell: the blog name first, the section of the active
-// sub-route (meta.section) second. While the error page is showing the error
-// owns the title: there is no blog behind the id, and a tab named after the
-// section alone names a page the reader is not looking at.
+// The mirror of the game shell: the heading on the page and the name of the tab
+// are one sentence, composed once — the blog name first, the section of the
+// active sub-route second. While the error page is showing, the error owns it:
+// there is no blog behind the id, and the section alone names a page the reader
+// is not looking at.
+const announced = provideZoneSection();
+const heading = computed(() =>
+  joinTitleSegments(blog.value?.title, announced.value ?? route.meta.section),
+);
+
 useDocumentTitle(() =>
-  errorCode.value
-    ? getErrorConfig(errorCode.value).title
-    : joinTitleSegments(blog.value?.title, route.meta.section),
+  errorCode.value ? getErrorConfig(errorCode.value).title : heading.value,
 );
 
 async function load(id: string) {
@@ -70,7 +75,7 @@ onUnmounted(() => {
 <template>
   <template v-if="blog">
     <div class="blog-header">
-      <page-title>{{ blog.title }}</page-title>
+      <page-title>{{ heading }}</page-title>
     </div>
 
     <router-view />

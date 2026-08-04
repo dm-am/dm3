@@ -28,14 +28,14 @@ import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { CommentSkeleton } from "@/shared/ui/Skeleton";
-import { joinTitleSegments, useDocumentTitle } from "@/shared/lib/composables";
+import { useZoneSection } from "@/shared/lib/composables/useZoneSection";
 
 const PAGE_SIZE = 50;
 const MAX_MESSAGE_HEIGHT = 300;
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
-const { game, rooms, roomsLoading } = storeToRefs(gameStore);
+const { rooms, roomsLoading } = storeToRefs(gameStore);
 const { user } = storeToRefs(useAuthStore());
 const { isCompactLayout } = storeToRefs(useUiStore());
 
@@ -49,9 +49,10 @@ const room = computed(
 );
 const chatRoomId = computed(() => (room.value?.id as string) ?? null);
 
-// Same as the post room: the room IS the section and its name is data, so the
-// page composes the zone title itself, the game first, the room second.
-useDocumentTitle(() => joinTitleSegments(game.value?.title, room.value?.title));
+// The room IS the section here, and its name is data — meta.section cannot
+// spell it. Announced to the shell, which is the only place that writes a
+// heading or a tab name in this zone.
+useZoneSection(() => room.value?.title);
 
 // ───────────────────────────────────────────────────────────────────────────
 // Message stream (cursor pagination)

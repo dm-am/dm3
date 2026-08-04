@@ -33,12 +33,8 @@ import { CharacterManageLink } from "@/features/game-actions";
 import { AvatarImg } from "@/shared/ui/AvatarImg";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { SvgIcon } from "@/shared/ui/Icon";
-import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import {
-  joinTitleSegments,
-  useDocumentTitle,
-} from "@/shared/lib/composables/useDocumentTitle";
+import { useZoneSection } from "@/shared/lib/composables/useZoneSection";
 import { describeFailure } from "@/shared/lib/errors";
 
 const route = useRoute();
@@ -53,11 +49,9 @@ const gameId = computed(() => route.params.id as string);
 const characterId = computed(() => route.params.characterId as string);
 
 // The zone shell titles its sub-pages out of meta.section, and a character's
-// name is data — so the page composes its own, in the zone's order: the game
-// first, the character second.
-useDocumentTitle(() =>
-  joinTitleSegments(game.value?.title, character.value?.name),
-);
+// name is data — announced here, so the heading and the tab still read "{game}
+// | {character}" and still come from one place.
+useZoneSection(() => character.value?.name);
 
 // The schema belongs to the game, not to the character: it is what turns the
 // stored attribute values into named rows. The shell renders this page only
@@ -129,8 +123,6 @@ watch(characterId, () => load(), { immediate: true });
     <ErrorState v-else-if="failure" :message="failure" :retry="load" />
 
     <template v-else-if="character">
-      <BlockTitle>{{ character.name }}</BlockTitle>
-
       <div class="character-head">
         <!-- Character: no avatar = no image (differs from the User default
              silhouette). -->

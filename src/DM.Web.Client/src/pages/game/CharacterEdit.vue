@@ -31,7 +31,6 @@ import { CharacterForm } from "@/features/edit-character";
 import { createEmptySchema } from "@/entities/game";
 import { Select } from "@/shared/ui/Select";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
-import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
@@ -306,8 +305,6 @@ function onCancel() {
 
 <template>
   <div class="character-edit">
-    <page-title>Редактирование персонажа</page-title>
-
     <secondary-text v-if="!editableCharacters.length" class="empty">
       Нет персонажей, доступных для редактирования.
     </secondary-text>

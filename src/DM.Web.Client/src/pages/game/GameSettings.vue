@@ -18,7 +18,6 @@ import { gameApi, type AttributeSchema } from "@/entities/game";
 import { AttributeSchemaEditor } from "@/features/attribute-schema-editor";
 import { createEmptySchema } from "@/entities/game";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
-import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
@@ -98,8 +97,6 @@ async function deleteGame() {
 
 <template>
   <div class="game-settings">
-    <page-title>Настройки игры</page-title>
-
     <secondary-text v-if="!canEdit">
       Настройки игры доступны мастеру и ассистенту.
     </secondary-text>

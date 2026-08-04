@@ -21,7 +21,6 @@ import { htmlToBbcode } from "@/shared/lib/utils/bbcode";
 import { PublicationForm } from "@/features/publication";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { ErrorState } from "@/shared/ui/ErrorState";
-import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useToast } from "@/shared/lib/composables/useToast";
@@ -145,8 +144,6 @@ function cancel() {
 
 <template>
   <div class="publication-edit">
-    <page-title>Редактирование публикации</page-title>
-
     <secondary-text v-if="!canManage">
       Редактирование публикаций доступно мастеру блога и ассистентам.
     </secondary-text>

@@ -14,11 +14,13 @@
  * own, and answers a failed load with something the reader can repeat.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { defineComponent, h, watchEffect } from "vue";
 import { flushPromises, mount, RouterLinkStub } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { gameApi, type Character, type Game } from "@/entities/game";
 import { useGameDetailsStore } from "@/entities/game";
 import GameCharacter from "./GameCharacter.vue";
+import { provideZoneSection } from "@/shared/lib/composables/useZoneSection";
 
 vi.mock("vue-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("vue-router")>()),
@@ -69,12 +71,27 @@ function render() {
     },
   } as unknown as Game;
 
-  return mount(GameCharacter, {
+  // The zone shell is what renders the heading, so the section this page
+  // announces is what the test can see of it. Provided here the way the shell
+  // provides it, and read back through `announced`.
+  const announced = { value: undefined as string | undefined };
+  const host = defineComponent({
+    setup() {
+      const section = provideZoneSection();
+      watchEffect(() => {
+        announced.value = section.value;
+      });
+      return () => h(GameCharacter);
+    },
+  });
+
+  const wrapper = mount(host, {
     global: {
       plugins: [pinia],
       stubs: { RouterLink: RouterLinkStub },
     },
   });
+  return { wrapper, announced };
 }
 
 describe("GameCharacter", () => {
@@ -87,11 +104,13 @@ describe("GameCharacter", () => {
       .spyOn(gameApi, "getCharacter")
       .mockResolvedValue({ data: { resource: SHEET } } as never);
 
-    const wrapper = render();
+    const { wrapper, announced } = render();
     await flushPromises();
 
     expect(get).toHaveBeenCalledWith("char-1");
-    expect(wrapper.text()).toContain("Ронин");
+    // The name reaches the reader through the heading of the zone, which reads
+    // "{game} | {character}" — the page announces the second half.
+    expect(announced.value).toBe("Ронин");
     // The lifecycle caption, in the wording the entity owns.
     expect(wrapper.text()).toContain("Персонаж мертв");
     expect(wrapper.text()).toContain("Постов: 17");
@@ -105,7 +124,7 @@ describe("GameCharacter", () => {
       error: { status: 500 },
     } as never);
 
-    const wrapper = render();
+    const { wrapper } = render();
     await flushPromises();
 
     expect(wrapper.text()).toContain("Не удалось загрузить персонажа");
@@ -117,7 +136,7 @@ describe("GameCharacter", () => {
       data: { resource: SHEET },
     } as never);
 
-    const wrapper = render();
+    const { wrapper } = render();
     await flushPromises();
 
     const back = wrapper.findAllComponents(RouterLinkStub).filter((link) => {
