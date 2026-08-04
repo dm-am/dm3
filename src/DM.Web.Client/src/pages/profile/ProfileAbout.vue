@@ -45,7 +45,7 @@ watch(
       <BBCodeEditor
         :model-value="infoText"
         context="info"
-        placeholder="Расскажите о себе (поддерживается BBCode)…"
+        placeholder="Расскажите о себе (поддерживается BBCode)..."
         :min-height="160"
         @update:model-value="emit('updateField', 'info', $event)"
       />

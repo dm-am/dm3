@@ -121,7 +121,7 @@ public class UserProfileNoteServiceShould : UnitTestBase
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound)
-            .Where(e => e.Message.Contains("not found"));
+            .Where(e => e.Message.Contains("не найден"));
     }
 
     [Fact]
@@ -135,7 +135,7 @@ public class UserProfileNoteServiceShould : UnitTestBase
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest)
-            .WithMessage("Cannot create a note about yourself");
+            .WithMessage("Нельзя оставить заметку о себе");
     }
 
     [Fact]

@@ -30,7 +30,7 @@ internal class CharacterMappingProfile : Profile
                 s.Author != null && !s.Author.RatingDisabled
                     ? new Rating { TotalPosts = s.Author.QuantityRating, PostReviewScoreSum = s.Author.QualityRating }
                     : null));
-            // Descriptor and LastPostUtc map by name/convention.
+        // Descriptor and LastPostUtc map by name/convention.
 
         // CharacterShort -> Character (for Post.Character).
         // Picture is filled in batch by PostRepository.EnrichWithCharacterPictures.
@@ -96,23 +96,32 @@ internal class CharacterMappingProfile : Profile
             .ForMember(c => c.GameId, opt => opt.Ignore())
             .ForMember(c => c.InitialStatus, opt => opt.Ignore());
 
-        // For character update, use CharacterDetails (has Privacy)
-        CreateMap<CharacterDetails, DtoUpdateCharacter>()
+        // Request DTO in, write model out. The source used to be the response
+        // DTO, and every field that must not be writable was held off one
+        // Ignore() at a time.
+        CreateMap<UpdateCharacterRequest, DtoUpdateCharacter>()
             // Nullable on purpose: the destination is bool? and "no privacy block
             // in the request" has to stay absent. The `!= null &&` form returns a
             // plain false, which the update path then wrote — patching an NPC
             // without a privacy block demoted it to a player character.
             .ForMember(c => c.IsNpc, s => s.MapFrom(c => c.Privacy != null ? (bool?)c.Privacy.IsNpc : null))
             .ForMember(c => c.AccessPolicy, s => s.MapFrom<AccessPolicyConverter>())
-            .ForMember(c => c.CharacterId, opt => opt.Ignore())
-            .ForMember(c => c.IsDead, opt => opt.Ignore())
-            .ForMember(c => c.IsPlayerLeft, opt => opt.Ignore())
-            .ForMember(c => c.IsPlayerExiled, opt => opt.Ignore());
+            .ForMember(c => c.CharacterId, opt => opt.Ignore());
+
+        // Input: the client submits the raw value; the specification title,
+        // type and rendered form are the server answer, not its input.
+        CreateMap<UpdateCharacterAttribute, DtoCharacterAttribute>()
+            .ForMember(d => d.AttributeId, o => o.Ignore())
+            .ForMember(d => d.Description, o => o.Ignore())
+            .ForMember(d => d.Title, o => o.Ignore())
+            .ForMember(d => d.Type, o => o.Ignore())
+            .ForMember(d => d.Modifier, o => o.Ignore())
+            .ForMember(d => d.Inconsistent, o => o.Ignore());
     }
 
     private class AccessPolicyConverter :
         IValueResolver<CharacterDetails, DtoCreateCharacter, Policy>,
-        IValueResolver<CharacterDetails, DtoUpdateCharacter, Policy?>,
+        IValueResolver<UpdateCharacterRequest, DtoUpdateCharacter, Policy?>,
         IValueResolver<DtoCharacter, CharacterDetails, CharacterPrivacySettings>
     {
         private static Policy Resolve(CharacterPrivacySettings privacySettings)
@@ -140,7 +149,7 @@ internal class CharacterMappingProfile : Profile
             ResolutionContext context) =>
             Resolve(source.Privacy);
 
-        public Policy? Resolve(CharacterDetails source, DtoUpdateCharacter destination, Policy? destMember,
+        public Policy? Resolve(UpdateCharacterRequest source, DtoUpdateCharacter destination, Policy? destMember,
             ResolutionContext context) =>
             source.Privacy == null
                 ? null
@@ -149,10 +158,10 @@ internal class CharacterMappingProfile : Profile
         public CharacterPrivacySettings Resolve(DtoCharacter source,
             CharacterDetails destination, CharacterPrivacySettings destMember,
             ResolutionContext context) => new()
-        {
-            IsNpc = source.IsNpc,
-            EditByMaster = (source.AccessPolicy & Policy.EditAllowed) != Policy.NoAccess,
-            EditPostByMaster = (source.AccessPolicy & Policy.PostEditAllowed) != Policy.NoAccess
-        };
+            {
+                IsNpc = source.IsNpc,
+                EditByMaster = (source.AccessPolicy & Policy.EditAllowed) != Policy.NoAccess,
+                EditPostByMaster = (source.AccessPolicy & Policy.PostEditAllowed) != Policy.NoAccess
+            };
     }
 }

@@ -118,13 +118,13 @@ internal class GameNotepadService : IGameNotepadService
         var entry = await _repository.GetEntryAsync(entryId, ct);
         if (entry == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Entry not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.NotepadEntryNotFound);
         }
 
         // Validate this is a game notepad type
         if (entry.NotepadType != NotepadType.Master && entry.NotepadType != NotepadType.Player)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Access denied");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
         }
 
         await ThrowIfNotAuthorizedAsync(NotepadIntention.Read, entry.NotepadType, entry.ContainerId, entry.OwnerId, ct);
@@ -137,12 +137,12 @@ internal class GameNotepadService : IGameNotepadService
         var entry = await _repository.GetEntryAsync(entryId, ct);
         if (entry == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Entry not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.NotepadEntryNotFound);
         }
 
         if (entry.NotepadType != NotepadType.Master && entry.NotepadType != NotepadType.Player)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Access denied");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
         }
 
         await ThrowIfNotAuthorizedAsync(NotepadIntention.Edit, entry.NotepadType, entry.ContainerId, entry.OwnerId, ct);
@@ -170,7 +170,7 @@ internal class GameNotepadService : IGameNotepadService
 
         if (entry.NotepadType != NotepadType.Master && entry.NotepadType != NotepadType.Player)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Access denied");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
         }
 
         await ThrowIfNotAuthorizedAsync(NotepadIntention.Delete, entry.NotepadType, entry.ContainerId, entry.OwnerId, ct);

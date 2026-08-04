@@ -70,7 +70,7 @@ public class UserBlacklistServiceShould : UnitTestBase
         var act = () => _service.Block(new OperateUserBlacklistLink { Username = "Unknown" });
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("not found"));
+            .Where(e => e.Message.Contains("не найден"));
     }
 
     [Fact]
@@ -82,7 +82,7 @@ public class UserBlacklistServiceShould : UnitTestBase
         var act = () => _service.Block(new OperateUserBlacklistLink { Username = "CurrentUser" });
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("Cannot block yourself"));
+            .Where(e => e.Message.Contains("Нельзя заблокировать самого себя"));
     }
 
     [Fact]

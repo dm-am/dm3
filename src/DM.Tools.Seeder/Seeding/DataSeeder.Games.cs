@@ -18,6 +18,7 @@ using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Core.Storage;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.MongoIntegration;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Entities.Blog;
 using DM.Infrastructure.Persistence.Entities.Forum;
 using DM.Infrastructure.Persistence.Entities.Game.Characters;
@@ -64,8 +65,8 @@ internal sealed partial class DataSeeder
         var existingTitles = existingGames.Select(g => g.Title).ToHashSet();
 
         var mentor = users.First(u => u.Role == UserRole.Mentor);
-        var experiencedUsers = users.Where(u => u.QuantityRating >= 100).ToList();
-        var newbieUsers = users.Where(u => u.QuantityRating < 100).ToList();
+        var experiencedUsers = users.Where(u => !ProbationPolicy.IsNewbie(u.QuantityRating)).ToList();
+        var newbieUsers = users.Where(u => ProbationPolicy.IsNewbie(u.QuantityRating)).ToList();
 
         if (experiencedUsers.Count == 0)
         {
@@ -380,6 +381,11 @@ internal sealed partial class DataSeeder
                 recruitmentStartedUtc = now.AddDays(-recruitmentStartDaysAgo);
             }
 
+            // The readable address is taken from the sequence before the insert, the way the
+            // repository takes it, instead of being written as a placeholder and stamped by a
+            // second SaveChanges — see SerialNumberAllocator for what that pair costs.
+            var gameSerialNumber = await SerialNumberAllocator.NextAsync<DbGame>(_dbContext);
+
             var game = new DbGame
             {
                 GameId = _guidFactory.Create(),
@@ -408,8 +414,8 @@ internal sealed partial class DataSeeder
                 HidePostStats = false,
                 CommentsAccessMode = CommentsAccessMode.Public,
                 CommentCount = 0,
-                // Temporary placeholder - will be updated after SaveChanges
-                PublicId = $"t{_guidFactory.Create():N}"[..10]
+                SerialNumber = gameSerialNumber,
+                PublicId = _publicIdService.Encode(gameSerialNumber)
             };
 
             _dbContext.Set<DbGame>().Add(game);
@@ -432,7 +438,13 @@ internal sealed partial class DataSeeder
 
             // Add assistants (realistic distribution: ~20% have 1, ~5% have 2)
             // Using modulo for deterministic distribution: every 5th game gets 1 assistant, every 20th gets 2
-            var availableForAssistant = users.Where(u => u.UserId != master.UserId && u.QuantityRating >= 50).ToList();
+            // Half the newbie threshold: an assistant is somebody with a track record,
+            // and the fixture says so through the rule rather than through a number of
+            // its own, which would answer differently the day the rule moves.
+            const int assistantPostFloor = ProbationPolicy.NewbiePostThreshold / 2;
+            var availableForAssistant = users
+                .Where(u => u.UserId != master.UserId && u.QuantityRating >= assistantPostFloor)
+                .ToList();
             var assistantCount = gi % 20 == 0 && availableForAssistant.Count >= 2 ? 2
                 : gi % 5 == 0 && availableForAssistant.Count >= 1 ? 1
                 : 0;
@@ -537,9 +549,18 @@ internal sealed partial class DataSeeder
             };
             _dbContext.Set<Room>().Add(privateRoom);
 
-            // UI test fixture: an archived room alongside the still-active ones,
-            // so the "archived rooms" spoiler has something to hide/reveal here
-            // while every other seeded game keeps zero archived rooms.
+            // Every closed room of a game grants access to the same characters,
+            // so the closed examples differ by room type and by nothing else.
+            var restrictedRooms = new List<Room> { privateRoom };
+
+            // UI test fixtures for the room list. The archived room gives the
+            // "archived rooms" spoiler something to hide and reveal here while
+            // every other seeded game keeps zero archived rooms. The closed chat
+            // room completes the four examples the game menu is read against:
+            // posts and messages, open and closed. It is seeded only here
+            // because only this game gets a Chat with messages behind it, and a
+            // chat room without one opens on "chat not found".
+            Room? privateChatRoom = null;
             if (isUiTestDataGame)
             {
                 var archivedRoom = new Room
@@ -558,6 +579,27 @@ internal sealed partial class DataSeeder
                     IsRemoved = false
                 };
                 _dbContext.Set<Room>().Add(archivedRoom);
+
+                // The open chat room field for field, access aside: the pair is
+                // there to be compared. The title echoes the closed post room of
+                // this setting ("Тайный алтарь"), the same way "Пролог" is
+                // written for this game rather than taken from the table.
+                privateChatRoom = new Room
+                {
+                    RoomId = _guidFactory.Create(),
+                    GameId = game.GameId,
+                    Title = "Шепот у алтаря",
+                    AccessType = RoomAccessType.Private,
+                    Type = RoomType.Chat,
+                    RoomNumber = 5,
+                    OrderNumber = 5,
+                    ViewPrivateText = true,
+                    ViewDiceResults = true,
+                    DiceEnabled = false,
+                    IsRemoved = false
+                };
+                _dbContext.Set<Room>().Add(privateChatRoom);
+                restrictedRooms.Add(privateChatRoom);
             }
 
             // Create characters - use variation.activeChars for active character count
@@ -567,6 +609,9 @@ internal sealed partial class DataSeeder
 
             var playersForGame = users.Where(u => u.UserId != master.UserId).OrderBy(_ => _random.Next()).Take(variation.activeChars + 2).ToList();
             var createdCharacters = new List<Character>();
+            // Characters holding access to the closed rooms: whoever writes
+            // there has to be able to read there.
+            var restrictedRoomMembers = new List<Character>();
 
             // Create active characters based on variation
             for (var ci = 0; ci < Math.Min(variation.activeChars, playersForGame.Count); ci++)
@@ -618,7 +663,7 @@ internal sealed partial class DataSeeder
                 result.CharactersCreated++;
 
                 // Add avatar for the Diopside character — the real pipeline:
-                // EXIF strip + WebP _m/_s thumbnails, everything lands in MinIO.
+                // EXIF strip + downscale, one source object lands in MinIO.
                 if (isDiopsideChar)
                 {
                     var bytes = ReadEmbeddedSeedBytes("DM.Tools.Seeder.Assets.Seed.diopside.jpg");
@@ -635,20 +680,29 @@ internal sealed partial class DataSeeder
                 }
 
                 // Add room access for active characters — except the last active
-                // character of the UI test data game, so that game's private
-                // room shows both a granted player (green lock) and a denied
+                // character of the UI test data game, so that game's closed
+                // rooms show both a granted player (green lock) and a denied
                 // one (grey lock) instead of everyone having access.
                 var denyPrivateAccessForUiTest = isUiTestDataGame &&
                     ci == Math.Min(variation.activeChars, playersForGame.Count) - 1;
                 if (!denyPrivateAccessForUiTest)
                 {
-                    _dbContext.Set<RoomAccess>().Add(new RoomAccess
+                    foreach (var restrictedRoom in restrictedRooms)
                     {
-                        AccessId = _guidFactory.Create(),
-                        RoomId = privateRoom.RoomId,
-                        CharacterId = character.CharacterId,
-                        ReaderUserId = null
-                    });
+                        _dbContext.Set<RoomAccess>().Add(new RoomAccess
+                        {
+                            AccessId = _guidFactory.Create(),
+                            RoomId = restrictedRoom.RoomId,
+                            CharacterId = character.CharacterId,
+                            ReaderUserId = null,
+                            // The enum defaults to NoAccess and the policy is what
+                            // admits writing: without it the members of the closed
+                            // rooms read them and cannot post in them.
+                            Policy = RoomAccessPolicy.Full
+                        });
+                    }
+
+                    restrictedRoomMembers.Add(character);
                 }
             }
 
@@ -816,7 +870,7 @@ internal sealed partial class DataSeeder
                                 DiceCount = 1,
                                 EdgesCount = 20,
                                 Bonus = 7,
-                                comment = "Восприятие",
+                                Comment = "Восприятие",
                                 Result = [new RollResult { Value = 18, IsCritical = false, IsExploded = false }]
                             },
                             new DiceRoll
@@ -827,7 +881,7 @@ internal sealed partial class DataSeeder
                                 DiceCount = 1,
                                 EdgesCount = 20,
                                 Bonus = 5,
-                                comment = "Убеждение",
+                                Comment = "Убеждение",
                                 Result = [new RollResult { Value = 14, IsCritical = false, IsExploded = false }]
                             }
                         };
@@ -854,15 +908,15 @@ internal sealed partial class DataSeeder
             }
 
             // UI test fixtures for the designated game: post pendency, unread
-            // counter, chat room messages and master notepad entries. Kept in
-            // one place so a reseed always gives QA the same deterministic
-            // game to check these UI states against.
-            // The chat's LastMessageId is applied only after the batch save:
+            // counter, closed room posts, chat room messages and master notepad
+            // entries. Kept in one place so a reseed always gives QA the same
+            // deterministic game to check these UI states against.
+            // The LastMessageId of a chat is applied only after the batch save:
             // setting it while both Chat and Message are still Added would make
             // EF detect a circular FK dependency (Chat.LastMessageId <->
-            // Message.ChatId) and fail the whole seed.
-            Chat? gameChatToLink = null;
-            Guid? gameChatLastMessageId = null;
+            // Message.ChatId) and fail the whole seed. It is a list because this
+            // game seeds two chats, the open one and the closed one.
+            var chatsAwaitingLastMessage = new List<(Chat Chat, Guid LastMessageId)>();
             if (isUiTestDataGame)
             {
                 var waitingPlayer = playersForGame[0];
@@ -900,53 +954,106 @@ internal sealed partial class DataSeeder
                     });
                 }
 
-                // Link the Chat room to a real Chat with a short OOC exchange
-                // between the master and a couple of players, so the chat page
-                // and its cursor pagination have something to render.
-                var chatParticipants = new[] { master }
-                    .Concat(playersForGame.Take(2))
-                    .ToList();
-                var gameChat = new Chat
+                // A closed room with a lock and an empty page is not an example
+                // of a closed room, so the private post room gets a scene of its
+                // own. It is written by the NPC the master speaks through and by
+                // the characters that hold access, so nobody posts where nobody
+                // can read.
+                var closedRoomPostTexts = new[]
                 {
-                    ChatId = _guidFactory.Create(),
-                    Type = ChatType.GameRoom,
-                    Title = chatRoomTitle,
-                    RoomId = chatRoom.RoomId
+                    "Тяжелая дверь закрывается за вашими спинами. Камень на алтаре светится ровным холодным светом.",
+                    "Подхожу ближе и осматриваю алтарь, стараясь ничего не задеть.",
+                    "Встаю у двери и слушаю коридор. Если кто-то пойдет следом, услышу первым.",
                 };
-                _dbContext.Set<Chat>().Add(gameChat);
-                chatRoom.ChatId = gameChat.ChatId;
-
-                var chatTexts = new[]
+                var closedRoomAuthors = new[] { npc }.Concat(restrictedRoomMembers).ToList();
+                for (var pi = 0; pi < closedRoomPostTexts.Length; pi++)
                 {
-                    "Народ, всем удобно новое время постинга?",
-                    "Да, вроде норм, буду успевать чаще писать.",
-                    "Класс! Тогда продолжаем в том же духе.",
-                    "Кстати, кто-нибудь помнит, где мы в прошлый раз остановились?",
-                    "Я вроде помню - у ворот перед встречей с торговцем.",
-                    "Точно, спасибо! Сейчас напишу пост.",
-                };
-                Message? lastGameChatMessage = null;
-                for (var mi = 0; mi < chatTexts.Length; mi++)
-                {
-                    var chatAuthor = chatParticipants[mi % chatParticipants.Count];
-                    var chatMessage = new Message
+                    var closedRoomCharacter = closedRoomAuthors[pi % closedRoomAuthors.Count];
+                    var closedRoomAuthorId = closedRoomCharacter.AuthorId ?? master.UserId;
+                    _dbContext.Set<Post>().Add(new Post
                     {
-                        MessageId = _guidFactory.Create(),
-                        UserId = chatAuthor.UserId,
-                        ChatId = gameChat.ChatId,
-                        CreatedUtc = now.AddHours(-(chatTexts.Length - mi) * 3),
-                        Text = chatTexts[mi],
+                        PostId = _guidFactory.Create(),
+                        RoomId = privateRoom.RoomId,
+                        CharacterId = closedRoomCharacter.CharacterId,
+                        AuthorId = closedRoomAuthorId,
+                        CreatedUtc = now.AddDays(-(closedRoomPostTexts.Length - pi)),
+                        GameText = closedRoomPostTexts[pi],
                         IsRemoved = false
-                    };
-                    _dbContext.Set<Message>().Add(chatMessage);
-                    lastGameChatMessage = chatMessage;
-                    result.MessagesCreated++;
+                    });
+                    result.PostsCreated++;
+                    users.First(u => u.UserId == closedRoomAuthorId).QuantityRating++;
                 }
-                if (lastGameChatMessage != null)
+
+                // Both chat rooms are filled through one helper: the open and the
+                // closed example differ by who may open them and by what is said
+                // in them, not by how the chat behind them is built.
+                void SeedRoomChat(Room room, IReadOnlyList<Guid> speakerIds, IReadOnlyList<string> texts)
                 {
-                    gameChatToLink = gameChat;
-                    gameChatLastMessageId = lastGameChatMessage.MessageId;
+                    var roomChat = new Chat
+                    {
+                        ChatId = _guidFactory.Create(),
+                        Type = ChatType.GameRoom,
+                        Title = room.Title,
+                        RoomId = room.RoomId
+                    };
+                    _dbContext.Set<Chat>().Add(roomChat);
+                    room.ChatId = roomChat.ChatId;
+
+                    Message? lastRoomMessage = null;
+                    for (var mi = 0; mi < texts.Count; mi++)
+                    {
+                        var roomMessage = new Message
+                        {
+                            MessageId = _guidFactory.Create(),
+                            UserId = speakerIds[mi % speakerIds.Count],
+                            ChatId = roomChat.ChatId,
+                            CreatedUtc = now.AddHours(-(texts.Count - mi) * 3),
+                            Text = texts[mi],
+                            IsRemoved = false
+                        };
+                        _dbContext.Set<Message>().Add(roomMessage);
+                        lastRoomMessage = roomMessage;
+                        result.MessagesCreated++;
+                    }
+
+                    if (lastRoomMessage != null)
+                    {
+                        chatsAwaitingLastMessage.Add((roomChat, lastRoomMessage.MessageId));
+                    }
                 }
+
+                // Open chat room: a short OOC exchange between the master and a
+                // couple of players, so the chat page and its cursor pagination
+                // have something to render.
+                SeedRoomChat(
+                    chatRoom,
+                    new[] { master.UserId }.Concat(playersForGame.Take(2).Select(p => p.UserId)).ToList(),
+                    new[]
+                    {
+                        "Народ, всем удобно новое время постинга?",
+                        "Да, вроде норм, буду успевать чаще писать.",
+                        "Класс! Тогда продолжаем в том же духе.",
+                        "Кстати, кто-нибудь помнит, где мы в прошлый раз остановились?",
+                        "Я вроде помню - у ворот перед встречей с торговцем.",
+                        "Точно, спасибо! Сейчас напишу пост.",
+                    });
+
+                // Closed chat room, created above under the same flag: the same
+                // kind of exchange, but only between the master and the players
+                // holding access, so the two chat examples differ in the lock
+                // and not in what is behind it.
+                SeedRoomChat(
+                    privateChatRoom!,
+                    new[] { master.UserId }
+                        .Concat(restrictedRoomMembers.Take(2).Select(c => c.AuthorId ?? master.UserId))
+                        .ToList(),
+                    new[]
+                    {
+                        "Тут только те, у кого есть доступ. Про алтарь при остальных не пишем.",
+                        "Принято. Мой персонаж делает вид, что ничего не заметил.",
+                        "А жрец успеет добежать до алтаря за один ход?",
+                        "Успеет, если не потратите ход на спор у двери.",
+                    });
 
                 // Master notepad entries (game "Заметки")
                 var masterNotepadEntries = new[]
@@ -1055,19 +1162,13 @@ internal sealed partial class DataSeeder
             // Batch save after each game to avoid memory pressure from thousands of tracked entities
             await _dbContext.SaveChangesAsync();
 
-            // Now that both the chat and its messages exist, link the last
-            // message (deferred to break the Chat <-> Message FK cycle). The
-            // PublicId save below persists it.
-            if (gameChatToLink != null && gameChatLastMessageId != null)
+            // Now that every chat and its messages exist, link the last message
+            // of each (deferred to break the Chat <-> Message FK cycle).
+            foreach (var (chat, lastMessageId) in chatsAwaitingLastMessage)
             {
-                gameChatToLink.LastMessageId = gameChatLastMessageId;
+                chat.LastMessageId = lastMessageId;
             }
 
-            // Reload the game to get the auto-generated SerialNumber
-            await _dbContext.Entry(game).ReloadAsync();
-
-            // Update PublicId from SerialNumber (which was auto-generated on insert)
-            game.PublicId = _publicIdService.Encode(game.SerialNumber);
             await _dbContext.SaveChangesAsync();
         }
 

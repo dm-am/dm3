@@ -68,9 +68,23 @@ internal class ChangedTopicNotificationGenerator : BaseNotificationGenerator
             yield break;
         }
 
+        // The actor is the last editor, and the update path records it
+        // (TopicService.UpdateAsync writes a TopicEdits row). The author is
+        // deliberately not substituted for a missing value: TopicIntention.Edit
+        // is open to moderators and administrators too, and filling the field
+        // from AuthorId would hold the notification against the wrong person's
+        // blacklist. Null until an edit happens is the honest answer, and it
+        // means the notification is delivered rather than filtered.
+        var lastEditorId = await _dbContext.TopicEdits
+            .Where(e => e.TopicId == topicData.TopicId)
+            .OrderByDescending(e => e.EditedUtc)
+            .Select(e => (Guid?)e.EditorUserId)
+            .FirstOrDefaultAsync();
+
         yield return new CreateNotification
         {
             UsersInterested = subscriberIds,
+            ActorId = lastEditorId,
             Metadata = new
             {
                 TopicId = topicData.TopicId.EncodeToReadable(topicData.Title),

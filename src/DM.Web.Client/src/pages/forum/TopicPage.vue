@@ -9,6 +9,7 @@ import { TopicView as TopicDisplay } from "@/features/topic";
 import { LoginPrompt } from "@/features/auth";
 import { WarningDialog } from "@/features/moderation-actions";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
@@ -16,7 +17,7 @@ import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
 import { forumApi } from "@/entities/forum";
 import { CommentsFilter, useCommentsFilter } from "@/features/comment-filter";
 import { CommentSkeleton } from "@/shared/ui/Skeleton";
-import { usePaging } from "@/shared/lib/composables/usePaging";
+import { errorCodeForStatus } from "@/shared/ui/ErrorPage";
 import { reportForumShellError } from "./forumShell";
 import { notifyFailure } from "@/shared/lib/errors";
 
@@ -26,7 +27,6 @@ const boardsStore = useBoardsStore();
 const { trySelectTopicByNumber, searchComments, createComment } = boardsStore;
 const { selectedTopic: topic } = storeToRefs(boardsStore);
 const { user } = storeToRefs(useAuthStore());
-const { commentsPerPage } = usePaging();
 
 // Filter setup - get search params from URL
 const { searchParams } = useCommentsFilter();
@@ -36,15 +36,6 @@ const loading = ref(true);
 const errorCode = ref<number | null>(null);
 
 useDocumentTitle(() => topic.value?.title);
-
-/** Maps an API failure status to the ErrorPage code (404 default). */
-function mapErrorCode(status: number | undefined): number {
-  if (status === 403) return 403;
-  if (status === 410) return 410;
-  if (status === 404) return 404;
-  if (!status || status >= 500) return 500;
-  return 404;
-}
 
 // Comment creation state
 const newComment = ref("");
@@ -61,16 +52,19 @@ async function handleSend() {
   if (!newComment.value.trim() || sending.value) return;
   const text = newComment.value;
   newComment.value = "";
-  editorRef.value?.clear();
   sending.value = true;
   const result = await createComment(text);
   sending.value = false;
   const failed = Boolean(result?.error);
-  // Give the text back on failure. Clearing before the request is what makes
-  // sending feel instant; losing what was written when it fails is not part
-  // of that bargain.
+  // Give the text back on failure. Emptying the field before the request is
+  // what makes sending feel instant; losing what was written when it fails is
+  // not part of that bargain. The editor's own clear() waits for the send to
+  // land — it also drops the saved draft, and that copy is the one that
+  // outlives the tab.
   if (failed) {
     newComment.value = text;
+  } else {
+    editorRef.value?.clear();
   }
 }
 
@@ -83,49 +77,6 @@ async function markAsReadIfNeeded() {
   if (topic.value) {
     (topic.value as any).unreadCommentsCount = 0;
   }
-}
-
-/**
- * Consumes the "?unread=1" deep link (from the topic's unread-comments
- * counter): computes the page holding the first unread comment and
- * replace-navigates to it before the mark-as-read call zeroes the counter.
- * Guests never see the link that produces this query param (Topic.vue only
- * renders it for authenticated users), so no guest branch is needed here.
- *
- * Returns whether the caller can skip its own searchComments call. That's
- * only safe when this function actually changes the "?number=" page —
- * CommentsList's watcher fetches on THAT change. When the first unread
- * comment lands on the page the URL already points to (typically page 1
- * with no "number" param), stripping "?unread" is a no-op for "number", so
- * no watcher fires and the caller must fetch comments itself instead of
- * leaving the topic showing stale/no comments.
- */
-function redirectToFirstUnreadIfNeeded() {
-  if (route.query.unread !== "1") return false;
-  if (!user.value || !topic.value) return false;
-
-  const { commentsCount, unreadCommentsCount } = topic.value;
-  if (!unreadCommentsCount) return false;
-
-  const readCount = Math.max(0, commentsCount - unreadCommentsCount);
-  const firstUnreadPosition = readCount + 1;
-  const page = Math.max(
-    1,
-    Math.ceil(firstUnreadPosition / commentsPerPage.value),
-  );
-
-  const previousNumber = route.query.number;
-  const query = { ...route.query };
-  delete query.unread;
-  if (page > 1) query.number = String(page);
-  else delete query.number;
-
-  router.replace({ path: route.path, query, hash: route.hash });
-
-  // "?number=" is the only part of the query CommentsList's fetch watcher
-  // reacts to — only skip our own fetch when it actually changed.
-  const numberChanged = (query.number ?? null) !== (previousNumber ?? null);
-  return numberChanged;
 }
 
 // A missing/private/deleted topic is a page-level failure: report it to the
@@ -145,21 +96,15 @@ async function fetchData() {
 
   const { ok, status } = await trySelectTopicByNumber(alias, num);
   if (!ok) {
-    errorCode.value = mapErrorCode(status);
+    // The topic endpoint is the one that spends 410 on its literal meaning:
+    // TopicService answers Gone for a topic that was deleted and 404 for one
+    // that never existed, so this page keeps the "Страница удалена" branch.
+    errorCode.value = errorCodeForStatus(status, { goneMeansRemoved: true });
     reportShellError(errorCode.value);
     // Drop comments from the previously viewed topic so they never leak
     // onto an error page.
     boardsStore.comments = null;
     loading.value = false;
-    return;
-  }
-
-  if (redirectToFirstUnreadIfNeeded()) {
-    // CommentsList picks up the new "?number=" query on its own watcher —
-    // no need to fetch comments again here. Still mark as read so the
-    // counter clears once the reader has been routed to the right page.
-    loading.value = false;
-    markAsReadIfNeeded();
     return;
   }
 
@@ -200,13 +145,13 @@ async function handleSaveEdit(
   patch: { title: string; description: string },
 ) {
   const { error } = await boardsStore.updateTopicContent(id, patch);
-  if (error) notifyFailure(error, "Не удалось сохранить тему");
+  if (error) notifyFailure(error, "Не удалось сохранить топик");
 }
 
 async function handleToggleClose(id: string) {
   const closing = !topic.value?.isClosed;
   const { error } = await boardsStore.setTopicClosed(id, closing);
-  if (error) notifyFailure(error, "Не удалось изменить статус темы");
+  if (error) notifyFailure(error, "Не удалось изменить статус топика");
 }
 
 const showDeleteConfirm = ref(false);
@@ -224,10 +169,10 @@ async function confirmDeleteTopic() {
   deletingTopic.value = false;
   showDeleteConfirm.value = false;
   if (error) {
-    notifyFailure(error, "Не удалось удалить тему");
+    notifyFailure(error, "Не удалось удалить топик");
     return;
   }
-  toast.success("Тема удалена");
+  toast.success("Топик удален");
   router.push({ name: "forum", params: { alias: route.params.alias } });
 }
 
@@ -314,7 +259,7 @@ function handleWarn(id: string) {
           v-model="newComment"
           context="common"
           placeholder="Написать комментарий..."
-          :draft-key="`topic_${topic?.id}`"
+          :draft-key="composerDraftKey('topic', 'comment', topic?.id)"
           :disabled="sending"
           :min-height="100"
           :max-height="300"
@@ -341,8 +286,8 @@ function handleWarn(id: string) {
   <!-- Topic delete confirmation -->
   <ConfirmDialog
     :show="showDeleteConfirm"
-    title="Удалить тему?"
-    message="Тема и все ее комментарии будут удалены. Это действие необратимо."
+    title="Удалить топик?"
+    message="Топик и все его комментарии будут удалены. Это действие необратимо."
     confirm-label="Удалить"
     danger
     :loading="deletingTopic"
@@ -377,6 +322,5 @@ function handleWarn(id: string) {
   +button
 
 .comment-closed-hint
-  text-align: center
   padding: $small
 </style>

@@ -9,28 +9,15 @@
 import { ref, watch, computed } from "vue";
 import { DateInput } from "@/shared/ui/DatePicker";
 import { FilterApplyButton } from "../primitives";
+import type { DateRangePickerProps } from "../types";
 
 defineOptions({ name: "DateRangePicker" });
 
-const props = withDefaults(
-  defineProps<{
-    /** From date value (YYYY-MM-DD format) */
-    fromValue: string | null;
-    /** To date value (YYYY-MM-DD format) */
-    toValue: string | null;
-    /** Label for "from" input */
-    fromLabel?: string;
-    /** Label for "to" input */
-    toLabel?: string;
-    /** Show clear button when values exist */
-    showClearButton?: boolean;
-  }>(),
-  {
-    fromLabel: "От",
-    toLabel: "До",
-    showClearButton: true,
-  },
-);
+const props = withDefaults(defineProps<DateRangePickerProps>(), {
+  fromLabel: "От",
+  toLabel: "До",
+  showClearButton: true,
+});
 
 const emit = defineEmits<{
   apply: [from: string | null, to: string | null];

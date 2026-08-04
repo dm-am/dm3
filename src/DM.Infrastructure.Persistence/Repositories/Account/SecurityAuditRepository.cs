@@ -16,16 +16,19 @@ internal class SecurityAuditRepository : ISecurityAuditService
 {
     private readonly DmMongoClient _mongoClient;
     private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <summary>
     /// Creates a new security audit service
     /// </summary>
     public SecurityAuditRepository(
         DmMongoClient mongoClient,
-        IGuidFactory guidFactory)
+        IGuidFactory guidFactory,
+        IDateTimeProvider dateTimeProvider)
     {
         _mongoClient = mongoClient;
         _guidFactory = guidFactory;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
@@ -41,7 +44,9 @@ internal class SecurityAuditRepository : ISecurityAuditService
             Id = _guidFactory.Create(),
             UserId = userId,
             EventType = (int)eventType,
-            TimestampUtc = DateTime.UtcNow,
+            // The retention TTL index expires the entry by this field, so the
+            // storage lifetime is set by the injected clock, not by the host's.
+            TimestampUtc = _dateTimeProvider.Now.UtcDateTime,
             IpAddress = ipAddress,
             UserAgent = userAgent,
             DeviceInfo = Parse(userAgent),

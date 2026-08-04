@@ -1,4 +1,6 @@
+using System.Net;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
 
 namespace DM.Domain.Core.Authorization;
 
@@ -37,5 +39,27 @@ public static class AccessRestrictions
         }
 
         return !policy.HasFlag(AccessPolicy.DemocraticBan) || inOwnSpace;
+    }
+
+    /// <summary>
+    /// Refuses a comment the ban silences, on any of the four commented
+    /// surfaces.
+    /// </summary>
+    /// <remarks>
+    /// The intention resolver cannot answer this one: the resolver of
+    /// CommentIntention is shared by the forum, games, blogs and publications,
+    /// and its target is the comment, which carries neither the game nor the
+    /// blog the own-space exemption is about. The service knows, because it
+    /// loads them. The sentence lives here rather than at those call sites so
+    /// that the four surfaces cannot answer the same refusal differently.
+    /// </remarks>
+    /// <param name="user">Authorization subject</param>
+    /// <param name="inOwnSpace">Same question as in <see cref="MaySpeak" /></param>
+    public static void ThrowIfMayNotComment(this IAuthorizationSubject user, bool inOwnSpace = false)
+    {
+        if (!user.MaySpeak(inOwnSpace))
+        {
+            throw new HttpException(HttpStatusCode.Forbidden, "Во время бана комментировать нельзя");
+        }
     }
 }

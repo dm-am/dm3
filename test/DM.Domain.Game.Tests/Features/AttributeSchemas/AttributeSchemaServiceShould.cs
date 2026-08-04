@@ -111,4 +111,37 @@ public class AttributeSchemaServiceShould : UnitTestBase
 
         _intentionManager.Verify(m => m.ThrowIfForbidden(AttributeSchemaIntention.Delete, schema), Times.Once);
     }
+
+    /// <summary>
+    /// The game row lives in Postgres and the schema in Mongo, so no store can
+    /// refuse this delete: the service is the only place the reference exists.
+    /// A public schema is anyone's to build a game on, which makes the game that
+    /// breaks somebody else's.
+    /// </summary>
+    [Fact]
+    public async Task RefuseToDeleteASchemaSomeGameStillReferences()
+    {
+        var schemaId = Guid.NewGuid();
+        var schema = new AttributeSchema { Id = schemaId };
+        _repository.Setup(r => r.GetSchema(schemaId)).ReturnsAsync(schema);
+        _repository.Setup(r => r.IsUsedByAnyGame(schemaId)).ReturnsAsync(true);
+
+        var act = async () => await _service.DeleteAsync(schemaId);
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Conflict);
+        _repository.Verify(r => r.Delete(It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteASchemaNoGameReferences()
+    {
+        var schemaId = Guid.NewGuid();
+        _repository.Setup(r => r.GetSchema(schemaId)).ReturnsAsync(new AttributeSchema { Id = schemaId });
+        _repository.Setup(r => r.IsUsedByAnyGame(schemaId)).ReturnsAsync(false);
+
+        await _service.DeleteAsync(schemaId);
+
+        _repository.Verify(r => r.Delete(schemaId), Times.Once);
+    }
 }

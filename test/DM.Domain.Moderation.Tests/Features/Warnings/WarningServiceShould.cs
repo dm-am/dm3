@@ -1,11 +1,14 @@
 using System;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Events;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
 using DM.Domain.Moderation.Features.Warnings;
@@ -24,6 +27,7 @@ public class WarningServiceShould : UnitTestBase
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<IGuidFactory> _guidFactory;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly Mock<IEventProducer> _eventProducer;
     private readonly WarningService _service;
     private readonly Guid _moderatorUserId = Guid.NewGuid();
     private readonly Guid _targetUserId = Guid.NewGuid();
@@ -38,6 +42,7 @@ public class WarningServiceShould : UnitTestBase
         _identityProvider = Mock<IIdentityProvider>();
         _guidFactory = Mock<IGuidFactory>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
+        _eventProducer = Mock<IEventProducer>();
 
         var moderatorIdentity = Identity.Success(
             new AuthenticatedUser { UserId = _moderatorUserId, Role = UserRole.Moderator, Username = "Moderator" },
@@ -55,18 +60,48 @@ public class WarningServiceShould : UnitTestBase
             _userLookupService.Object,
             _identityProvider.Object,
             _guidFactory.Object,
-            _dateTimeProvider.Object);
+            _dateTimeProvider.Object,
+            _eventProducer.Object);
     }
 
     [Fact]
     public async Task ReturnEmptyListWhenGettingWarningsForNonexistentUser()
     {
         _userLookupService.Setup(s => s.GetAsync("Unknown"))
-            .ThrowsAsync(new Exception());
+            .ThrowsAsync(new HttpException(HttpStatusCode.Gone, "Пользователь не найден"));
 
         var result = await _service.GetUserWarnings("Unknown");
 
         result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task LetAStorageFailureThroughInsteadOfReportingNoViolations()
+    {
+        // "No warnings" and "we could not read them" look the same to the
+        // moderator and the same in the log, because there is no log.
+        _userLookupService.Setup(s => s.GetAsync("Target"))
+            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _warningRepository.Setup(r => r.GetUserWarnings(_targetUserId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("connection reset"));
+
+        var act = () => _service.GetUserWarnings("Target");
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task LetAStorageFailureThroughInsteadOfReportingZeroPoints()
+    {
+        _userLookupService.Setup(s => s.GetAsync("Target"))
+            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _warningRepository
+            .Setup(r => r.GetUserWarningPoints(_targetUserId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("connection reset"));
+
+        var act = () => _service.GetUserWarningPoints("Target");
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Fact]
@@ -142,6 +177,24 @@ public class WarningServiceShould : UnitTestBase
         capturedEntity.Text.Should().Be("Spam");
         capturedEntity.Points.Should().Be(2);
         capturedEntity.CreatedUtc.Should().Be(_now);
+    }
+
+    [Fact]
+    public async Task AnnounceAnIssuedWarning()
+    {
+        var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
+        _userLookupService.Setup(s => s.GetAsync("Target")).ReturnsAsync(targetUser);
+        _warningRepository.Setup(r => r.Create(It.IsAny<CreateWarningEntity>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Warning { WarningId = _warningId });
+
+        await _service.CreateWarning(new CreateWarning
+        {
+            Username = "Target",
+            Reason = "Spam",
+            Points = 2
+        });
+
+        _eventProducer.Verify(p => p.SendAsync(EventType.WarningIssued, _warningId), Times.Once);
     }
 
     [Theory]
@@ -315,5 +368,21 @@ public class WarningServiceShould : UnitTestBase
 
         banned.Should().ContainSingle(v => v.User.Username == "BannedOnly");
         pointsOnly.Should().ContainSingle(v => v.User.Username == "PointsOnly");
+    }
+
+    /// <summary>
+    /// The unfiltered list is the repository's, not an empty one. It used to return
+    /// [] with a note that the repository method was missing, behind a Moderator+
+    /// gate and a 200, so a moderator concluded there were no violations.
+    /// </summary>
+    [Fact]
+    public async Task ReturnEveryWarningWhenNoUserIsNamed()
+    {
+        _warningRepository.Setup(r => r.GetAllWarnings(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new Warning { WarningId = _warningId, Points = 3 }]);
+
+        var result = (await _service.GetAllWarnings()).ToList();
+
+        result.Should().ContainSingle(w => w.WarningId == _warningId);
     }
 }

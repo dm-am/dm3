@@ -65,6 +65,7 @@ internal class GamePendencyFulfilledNotificationGenerator : BaseNotificationGene
         yield return new CreateNotification
         {
             UsersInterested = new[] { data.CreatedById },
+            ActorId = fulfilledByUserId,
             Metadata = new
             {
                 PendencyId = data.PendencyId.EncodeToReadable(),

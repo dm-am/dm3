@@ -1,0 +1,18 @@
+# A mirror: its own edge and its own API, the stores of the main server.
+#
+# An overlay on top of the pair docker-compose.yml + docker-compose.preview.yml.
+# A profile widens the default set instead of narrowing it, so
+# "--profile mirror up -d" on the base file alone brought up seventeen services
+# on a mirror: a local Postgres, Mongo and MinIO beside a working connection to
+# main, a migration container that would have run Migrate() against the main
+# database, and no nginx at all, because the edge lives only in the overlay.
+#
+# So the command names the services it wants, and this file takes the
+# dependencies off the API: compose starts whatever a named service depends on,
+# and every one of those dependencies is a store the mirror is there to borrow.
+#
+# The full command is in docs/guides/MIRRORING.md.
+
+services:
+  dmapi:
+    depends_on: !reset null

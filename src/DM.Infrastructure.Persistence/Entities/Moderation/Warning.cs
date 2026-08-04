@@ -11,7 +11,7 @@ namespace DM.Infrastructure.Persistence.Entities.Moderation;
 /// DAL model for user warning
 /// </summary>
 [Table("Warnings")]
-public class Warning : IAdministrated
+public class Warning : IAdministrated, IRemovable
 {
     /// <summary>
     /// Warning identifier

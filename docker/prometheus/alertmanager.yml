@@ -1,0 +1,63 @@
+# Where the rules in alerts.yml go once they fire. Prometheus evaluates them and
+# posts every firing alert to the alertmanager named in prometheus.yml; this file
+# is the only thing that decides what happens next. Without it the whole rule set
+# reached a firing state inside Prometheus and stayed there: the owner learned of
+# an outage by opening /alerts through a tunnel, which takes already knowing.
+#
+# ${...} is not read by alertmanager - it expands no environment variable and has
+# no include mechanism - so alertmanager-init.sh fills the placeholders in at
+# container start and the process reads the rendered copy. Which is also why
+# nothing here is a secret: everything that differs between a stand and a server
+# arrives from the environment file beside compose.
+
+global:
+  # How long after the last evaluation that said "firing" an alert counts as
+  # resolved. Well above the 15s evaluation interval: a scrape arriving a beat
+  # late must not produce a resolved message for an incident still in progress.
+  resolve_timeout: 5m
+
+  # The transport this deployment already has. Whatever host MAIL_HOST names is
+  # where registration mail goes, so alerts arrive wherever the mail of this
+  # deployment arrives: MailHog on a stand, the relay on a server. A channel of
+  # its own would need a token that cannot live in the repository, and a receiver
+  # that only works after somebody pastes a secret is how every rule in
+  # alerts.yml spent its life undelivered.
+  smtp_smarthost: '${ALERT_SMTP_SMARTHOST}'
+  smtp_from: '${ALERT_EMAIL_FROM}'
+  # An empty username means no authentication attempt at all, which is what both
+  # MailHog and an internal relay want. A relay that asks for credentials gets
+  # them from the environment, never from here.
+  smtp_auth_username: '${ALERT_SMTP_USERNAME}'
+  smtp_auth_password: '${ALERT_SMTP_PASSWORD}'
+  # Alertmanager requires STARTTLS by default and MailHog does not offer it, so
+  # the default stand would fail every notification with the rules green and the
+  # delivery log the only place saying so.
+  smtp_require_tls: ${ALERT_SMTP_REQUIRE_TLS}
+
+route:
+  receiver: 'operators'
+  # ApiDown, PostgresDown and ConsumerDown all fire when the host goes, and the
+  # severity label is what separates "wake up" from "look tomorrow".
+  group_by: ['alertname', 'severity']
+  # Long enough for the alerts of one failure to arrive in a single message,
+  # short enough that the message is the first thing that happens.
+  group_wait: 30s
+  group_interval: 5m
+  # A still-firing incident is repeated this often: rare enough not to bury the
+  # mailbox, frequent enough that an outage that started overnight is still in
+  # the last few messages by morning.
+  repeat_interval: 4h
+
+receivers:
+  # A receiver declared with a name and nothing else is accepted by alertmanager
+  # and silently drops everything routed to it - the same outcome as having no
+  # alertmanager at all, reached through a configuration file that looks
+  # complete. Which is why the gates check for a delivery block, not a name.
+  - name: 'operators'
+    email_configs:
+      - to: '${ALERT_EMAIL_TO}'
+        # Recovery is news too: without this the mailbox only ever grows and
+        # nothing ever says the disk stopped being full.
+        send_resolved: true
+        headers:
+          Subject: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }} - {{ .Alerts | len }} alert(s)'

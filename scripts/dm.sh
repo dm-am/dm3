@@ -42,12 +42,13 @@ EOF
 start_services() {
     echo -e "\033[36mStarting DM3 services...\033[0m"
 
-    # Check .env file
-    if [ ! -f "$DOCKER_DIR/.env" ]; then
-        echo -e "\033[33mCreating .env file from template...\033[0m"
-        cp "$DOCKER_DIR/.env.example" "$DOCKER_DIR/.env"
-        echo -e "\033[33mPlease edit docker/.env and set secure passwords!\033[0m"
-    fi
+    # docker/.env is created by the one script that also generates the
+    # encryption key. Copying the template alone is half the job: it ships that
+    # key empty on purpose, and compose declares it through ${...:?}, which
+    # rejects an empty value as hard as a missing one. So the documented first
+    # run on Linux and macOS died on interpolation before a single container
+    # started, on a file this script had just created.
+    bash "$DOCKER_DIR/scripts/init-env.sh" local
 
     cd "$DOCKER_DIR"
     docker compose up -d --build
@@ -64,8 +65,12 @@ start_services() {
 stop_services() {
     echo -e "\033[36mStopping DM3 services...\033[0m"
 
+    # --remove-orphans: a service deleted from the compose file leaves its
+    # container behind and a plain "down" walks past it, so it survives every
+    # stop and every reset after that, holding its name and its place on the
+    # network.
     cd "$DOCKER_DIR"
-    docker compose down
+    docker compose down --remove-orphans
 
     echo -e "\033[32mServices stopped.\033[0m"
 }
@@ -79,7 +84,7 @@ reset_services() {
     # Clear volumes
     echo -e "\n\033[33mClearing database volumes...\033[0m"
     cd "$DOCKER_DIR"
-    docker compose down -v
+    docker compose down -v --remove-orphans
 
     echo -e "\033[32mDatabase volumes cleared.\033[0m"
 
@@ -96,13 +101,19 @@ run_seed() {
     # the network. It runs under the "tools" compose profile, which never starts
     # with a plain "docker compose up". The API still has to be up, because the
     # upload bucket is created by its storage initializer.
-    if ! curl -s --max-time 5 "http://localhost:5000/v1/boards" > /dev/null; then
+    #
+    # The liveness endpoint, the one the container healthcheck and CI already
+    # ask, rather than a product route: this used to be pinned to /v1/boards,
+    # so the command depended on one controller keeping its path and staying
+    # anonymous. The two management scripts asked two different routes for the
+    # same thing.
+    if ! curl -s --max-time 5 "http://localhost:5000/_health" > /dev/null; then
         echo -e "\033[31mError: API is not available at http://localhost:5000\033[0m"
         echo "Start services first: ./scripts/dm.sh start"
         exit 1
     fi
 
-    cd "$(dirname "$0")/../docker" || exit 1
+    cd "$DOCKER_DIR"
 
     if ! docker compose run --rm -T --build seeder users; then
         echo -e "\033[31mError: user seeding failed\033[0m"
@@ -111,6 +122,27 @@ run_seed() {
 
     if ! docker compose run --rm -T --build seeder content; then
         echo -e "\033[31mError: content seeding failed\033[0m"
+        exit 1
+    fi
+
+    # The API computes its periodic projections at start - popularity, the best
+    # post of the week - so without this restart the site keeps showing what it
+    # worked out over the empty database, and there is nothing on screen to say
+    # so. dm.ps1 has always restarted it here and this script never did, which
+    # is two different outcomes from one documented command.
+    echo -e "\n\033[36mRestarting API so it picks up the seeded data...\033[0m"
+    docker restart dm-api > /dev/null
+
+    for _ in $(seq 1 30); do
+        if curl -s --max-time 2 "http://localhost:5000/_health" > /dev/null; then
+            break
+        fi
+        sleep 1
+    done
+
+    if ! curl -s --max-time 2 "http://localhost:5000/_health" > /dev/null; then
+        echo -e "\033[31mError: API did not come back after the restart\033[0m"
+        echo "Logs: ./scripts/dm.sh logs dm-api"
         exit 1
     fi
 

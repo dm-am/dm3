@@ -3,11 +3,19 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using DM.Domain.Account.Features.Authentication;
+using DM.Domain.Core.Identity;
 
 namespace DM.Web.API.Realtime;
 
-internal class UserConnectionService(IAuthenticationService authenticationService) : IUserConnectionService
+// Deliberately without constructor dependencies: the registration is a single
+// instance, so anything taken here is activated once in the root scope and kept
+// for the life of the process. Authentication is database-backed, and the pooled
+// DbContext at the end of that chain would then be shared by every connection at
+// once: two clients connecting at the same moment are two operations on one
+// context, and its change tracker would hold every user that ever connected.
+// The caller authenticates in its own per-invocation scope and hands the result
+// over already resolved.
+internal class UserConnectionService : IUserConnectionService
 {
     // Instance state, not static: the process-wide lifetime comes from the
     // single-instance registration. A static map would additionally survive
@@ -18,9 +26,8 @@ internal class UserConnectionService(IAuthenticationService authenticationServic
     // still being valid (it may already be invalidated by logout)
     private readonly ConcurrentDictionary<string, Guid> _connectionOwners = new();
 
-    public async Task Add(string authToken, string connectionId)
+    public void Add(IIdentity identity, string connectionId)
     {
-        var identity = await authenticationService.Authenticate(authToken);
         if (!identity.User.IsAuthenticated)
         {
             // Guests keep an open connection for public broadcasts, but are
@@ -31,10 +38,27 @@ internal class UserConnectionService(IAuthenticationService authenticationServic
 
         var userId = identity.User.UserId;
         _connectionOwners[connectionId] = userId;
-        var connectionIds = _connections.GetOrAdd(userId, _ => new HashSet<string>());
-        lock (connectionIds)
+
+        // Retried until the set the connection lands in is still the one the map
+        // holds. GetOrAdd hands back a set that a disconnect of the last
+        // connection of the same user drops from the map a moment later, and the
+        // connection then sits in an object nothing can reach: present in the
+        // owners map, absent from GetConnectedUsers, and skipped by every per-user
+        // push until the client reconnects. Removal happens under this same lock,
+        // so a set that is still the map's while the lock is held cannot be
+        // dropped, and the addition makes it non-empty for good.
+        while (true)
         {
-            connectionIds.Add(connectionId);
+            var connectionIds = _connections.GetOrAdd(userId, _ => new HashSet<string>());
+            lock (connectionIds)
+            {
+                if (_connections.TryGetValue(userId, out var current) &&
+                    ReferenceEquals(current, connectionIds))
+                {
+                    connectionIds.Add(connectionId);
+                    return;
+                }
+            }
         }
     }
 
@@ -51,7 +75,13 @@ internal class UserConnectionService(IAuthenticationService authenticationServic
             connectionIds.Remove(connectionId);
             if (connectionIds.Count == 0)
             {
-                _connections.TryRemove(userId, out _);
+                // Only while the map still holds this very set. An unconditional
+                // removal by key drops whatever took its place: a second
+                // disconnect that read the set before it was emptied would
+                // otherwise take out the set a fresh connection had just been
+                // registered in.
+                ((ICollection<KeyValuePair<Guid, HashSet<string>>>)_connections)
+                    .Remove(new KeyValuePair<Guid, HashSet<string>>(userId, connectionIds));
             }
         }
 

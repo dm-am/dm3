@@ -37,6 +37,7 @@ public class TopicServiceShould : UnitTestBase
     private readonly Mock<IUserLookupService> _userLookupService;
     private readonly Mock<IEventProducer> _eventProducer;
     private readonly ISetup<ITopicRepository, Task<Topic>> _createTopicSetup;
+    private readonly Guid _currentUserId = Guid.NewGuid();
     private readonly TopicService _service;
 
     public TopicServiceShould()
@@ -63,9 +64,8 @@ public class TopicServiceShould : UnitTestBase
         _intentionManager.Setup(m => m.IsAllowed(It.IsAny<ForumIntention>(), It.IsAny<Board>()))
             .Returns(false);
 
-        var userId = Guid.NewGuid();
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(userId, UserRole.RegularUser));
+        _identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
         _repository = Mock<ITopicRepository>();
         _createTopicSetup = _repository.Setup(r => r.Create(
@@ -175,7 +175,7 @@ public class TopicServiceShould : UnitTestBase
 
         var exception = await act.Should().ThrowAsync<HttpException>();
         exception.Which.StatusCode.Should().Be(HttpStatusCode.NotFound);
-        exception.Which.Message.Should().Contain("Topic not found");
+        exception.Which.Message.Should().Contain("Топик не найден");
     }
 
     [Fact]
@@ -205,7 +205,7 @@ public class TopicServiceShould : UnitTestBase
         _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(topic);
         _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
-            .ReturnsAsync(topic);
+            .ReturnsAsync(new TopicUpdateResult(topic, true));
 
         var updateTopic = new UpdateTopic { TopicId = topicId, Title = "Updated Title" };
         await _service.UpdateAsync(updateTopic);
@@ -225,12 +225,84 @@ public class TopicServiceShould : UnitTestBase
         _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(topic);
         _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
-            .ReturnsAsync(topic);
+            .ReturnsAsync(new TopicUpdateResult(topic, true));
 
         var updateTopic = new UpdateTopic { TopicId = topicId, Title = "Updated Title" };
         await _service.UpdateAsync(updateTopic);
 
         _eventProducer.Verify(p => p.SendAsync(EventType.ChangedTopic, topicId), Times.Once);
+    }
+
+    /// <summary>
+    /// A save that changed nothing announces nothing.
+    /// </summary>
+    /// <remarks>
+    /// The two halves have to agree. The repository writes an edit-history row only
+    /// when the tracker says the row moved, and the ChangedTopic notification reads
+    /// its actor back from that history — so an event sent for a save that left no
+    /// row names whoever edited the topic last. A moderator edits, the author reopens
+    /// the form and saves it unchanged, and the subscribers get an announcement
+    /// attributed to the moderator: filtered against his blacklist, and not against
+    /// the blacklist of the person who actually pressed save.
+    /// </remarks>
+    [Fact]
+    public async Task SendNoChangedTopicEventWhenTheUpdateChangedNothing()
+    {
+        var topicId = Guid.NewGuid();
+        var topic = new Topic
+        {
+            Id = topicId,
+            Board = new Board { Id = Guid.NewGuid(), Title = "General" }
+        };
+        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(topic);
+        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
+            .ReturnsAsync(new TopicUpdateResult(topic, false));
+
+        var result = await _service.UpdateAsync(new UpdateTopic { TopicId = topicId, Title = "Same Title" });
+
+        result.Should().BeSameAs(topic, "the request is answered either way — it is not an error");
+        _eventProducer.Verify(p => p.SendAsync(EventType.ChangedTopic, It.IsAny<Guid>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The editor travels to the repository, which is what makes the topic edit
+    /// history hold anybody at all.
+    /// </summary>
+    /// <remarks>
+    /// The topic row keeps its author and no editor, so the only record of who
+    /// changed a topic is the history the repository writes from this field.
+    /// Left unset it defaults to Guid.Empty, the repository skips the write, and
+    /// the ChangedTopic notification goes out with no actor — meaning a topic
+    /// edited by somebody the subscriber has blocked is still delivered.
+    /// Asserted against the author too: the two are different people whenever a
+    /// moderator edits, and taking one for the other filters the wrong person.
+    /// </remarks>
+    [Fact]
+    public async Task RecordTheCurrentUserAsTheEditorOfTheTopic()
+    {
+        var topicId = Guid.NewGuid();
+        var authorId = Guid.NewGuid();
+        var topic = new Topic
+        {
+            Id = topicId,
+            Author = new GeneralUser { UserId = authorId },
+            Board = new Board { Id = Guid.NewGuid(), Title = "General" }
+        };
+        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(topic);
+        UpdateTopicEntity? passed = null;
+        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
+            .Callback((UpdateTopicEntity entity, Guid? _) => passed = entity)
+            .ReturnsAsync(new TopicUpdateResult(topic, true));
+
+        await _service.UpdateAsync(new UpdateTopic { TopicId = topicId, Title = "Updated Title" });
+
+        passed.Should().NotBeNull();
+        passed!.EditorUserId.Should().Be(_currentUserId,
+            "the history is the only place a topic keeps who changed it");
+        passed.EditorUserId.Should().NotBe(authorId,
+            "the person editing is not necessarily the person who opened the topic");
     }
 
     [Fact]
@@ -246,7 +318,7 @@ public class TopicServiceShould : UnitTestBase
         _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(topic);
         _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), newBoardId))
-            .ReturnsAsync(topic);
+            .ReturnsAsync(new TopicUpdateResult(topic, true));
 
         _intentionManager.Setup(m => m.IsAllowed(ForumIntention.AdministrateTopics, oldBoard))
             .Returns(true);
@@ -272,7 +344,7 @@ public class TopicServiceShould : UnitTestBase
         };
         _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(topic);
-        _repository.Setup(r => r.Delete(topicId)).Returns(Task.CompletedTask);
+        _repository.Setup(r => r.Delete(topicId, _currentUserId)).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(topicId);
 
@@ -292,14 +364,147 @@ public class TopicServiceShould : UnitTestBase
         };
         _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(topic);
-        _repository.Setup(r => r.Delete(topicId)).Returns(Task.CompletedTask);
+        _repository.Setup(r => r.Delete(topicId, _currentUserId)).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(topicId);
 
-        _repository.Verify(r => r.Delete(topicId), Times.Once);
+        // The author of the removal travels with it: ISoftDeletable promises who deleted the
+        // row, and the column stays empty unless the service hands the identity over.
+        _repository.Verify(r => r.Delete(topicId, _currentUserId), Times.Once);
         _unreadCountersRepository.Verify(
             r => r.DeleteAsync(topicId, UnreadEntryType.Message),
             Times.Once);
         _eventProducer.Verify(p => p.SendAsync(EventType.DeletedTopic, topicId), Times.Once);
+    }
+
+    /// <summary>
+    /// Closing or pinning somebody else's topic is refused, not dropped. Both
+    /// flags used to be set to null when the caller could not administrate the
+    /// board, so the request came back 200 with an open topic - the same answer a
+    /// successful close produces.
+    /// </summary>
+    [Theory]
+    [InlineData(true, null)]
+    [InlineData(null, true)]
+    public async Task RefuseTheAdminFlagsTheCallerMayNotSet(bool? isClosed, bool? isAttached)
+    {
+        var topicId = Guid.NewGuid();
+        var board = new Board { Id = Guid.NewGuid(), Title = "General" };
+        var topic = new Topic { Id = topicId, Board = board, IsClosed = false, IsAttached = false };
+
+        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(topic);
+        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
+            .ReturnsAsync(new TopicUpdateResult(topic, true));
+        _intentionManager.Setup(m => m.IsAllowed(ForumIntention.AdministrateTopics, board))
+            .Returns(false);
+        _intentionManager
+            .Setup(m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, board))
+            .Throws(new HttpException(HttpStatusCode.Forbidden, "нельзя"));
+
+        var act = () => _service.UpdateAsync(new UpdateTopic
+        {
+            TopicId = topicId,
+            IsClosed = isClosed,
+            IsAttached = isAttached
+        });
+
+        await act.Should().ThrowAsync<HttpException>();
+        _repository.Verify(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()), Times.Never,
+            "a refused change writes nothing");
+    }
+
+    /// <summary>
+    /// The client round-trips the whole topic, so the flags it already carries are
+    /// nobody's attempt at anything and must not be refused.
+    /// </summary>
+    [Fact]
+    public async Task NotRefuseTheAdminFlagsTheTopicAlreadyCarries()
+    {
+        var topicId = Guid.NewGuid();
+        var board = new Board { Id = Guid.NewGuid(), Title = "General" };
+        var topic = new Topic { Id = topicId, Board = board, IsClosed = true, IsAttached = false };
+
+        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(topic);
+        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
+            .ReturnsAsync(new TopicUpdateResult(topic, true));
+        _intentionManager.Setup(m => m.IsAllowed(ForumIntention.AdministrateTopics, board))
+            .Returns(false);
+
+        await _service.UpdateAsync(new UpdateTopic
+        {
+            TopicId = topicId,
+            IsClosed = true,
+            IsAttached = false
+        });
+
+        _intentionManager.Verify(
+            m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, board), Times.Never);
+    }
+
+    /// <summary>
+    /// The third flag of the same branch, and the one the first pass missed.
+    /// Moving a topic to another board reaches the service through
+    /// UpdateTopicRequest.Board; the author passes TopicIntention.Edit, does not
+    /// enter the administrate branch, and the else branch used to name only the
+    /// two boolean flags -- so BoardTitle was neither checked nor cleared, the
+    /// repository was called with a null board id, and the author got 200 with
+    /// the topic still in the old board.
+    /// </summary>
+    [Fact]
+    public async Task RefuseTheBoardMoveTheCallerMayNotMake()
+    {
+        var topicId = Guid.NewGuid();
+        var board = new Board { Id = Guid.NewGuid(), Title = "General" };
+        var topic = new Topic { Id = topicId, Board = board, IsClosed = false, IsAttached = false };
+
+        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(topic);
+        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
+            .ReturnsAsync(new TopicUpdateResult(topic, true));
+        _intentionManager.Setup(m => m.IsAllowed(ForumIntention.AdministrateTopics, board))
+            .Returns(false);
+        _intentionManager
+            .Setup(m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, board))
+            .Throws(new HttpException(HttpStatusCode.Forbidden, "нельзя"));
+
+        var act = () => _service.UpdateAsync(new UpdateTopic
+        {
+            TopicId = topicId,
+            BoardTitle = "Offtopic"
+        });
+
+        await act.Should().ThrowAsync<HttpException>();
+        _repository.Verify(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()), Times.Never,
+            "a refused move writes nothing");
+    }
+
+    /// <summary>
+    /// The same round-trip rule as the flags: the client sends the whole topic
+    /// back, so the board it is already in is nobody's attempt to move it.
+    /// </summary>
+    [Fact]
+    public async Task NotRefuseTheBoardTheTopicIsAlreadyIn()
+    {
+        var topicId = Guid.NewGuid();
+        var board = new Board { Id = Guid.NewGuid(), Title = "General" };
+        var topic = new Topic { Id = topicId, Board = board, IsClosed = false, IsAttached = false };
+
+        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(topic);
+        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
+            .ReturnsAsync(new TopicUpdateResult(topic, true));
+        _intentionManager.Setup(m => m.IsAllowed(ForumIntention.AdministrateTopics, board))
+            .Returns(false);
+
+        await _service.UpdateAsync(new UpdateTopic
+        {
+            TopicId = topicId,
+            BoardTitle = board.Title
+        });
+
+        _intentionManager.Verify(
+            m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, board), Times.Never);
     }
 }

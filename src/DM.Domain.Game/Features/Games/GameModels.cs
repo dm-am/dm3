@@ -4,7 +4,6 @@ using DM.Domain.Core.Comments;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Likes;
 
 namespace DM.Domain.Game.Features.Games;
 
@@ -161,6 +160,13 @@ public class PostPendency
     /// Character identifier (whose turn it is to post)
     /// </summary>
     public Guid CharacterId { get; set; }
+
+    /// <summary>
+    /// Character name (whose turn it is to post). Sent with the pendency
+    /// because every screen that shows one names the character, and three of
+    /// them have no character list of their own to resolve the id against.
+    /// </summary>
+    public string CharacterName { get; set; } = null!;
 
     /// <summary>
     /// Who created this expectation
@@ -463,6 +469,13 @@ public class RoomSettings
     /// Dice rolling is enabled in this room
     /// </summary>
     public bool DiceEnabled { get; set; }
+
+    /// <summary>
+    /// Room is kept out of the game's room list for everybody who may not open
+    /// it. Off by default: a closed room is named to everybody until its master
+    /// asks otherwise.
+    /// </summary>
+    public bool HiddenWithoutAccess { get; set; }
 }
 
 /// <summary>
@@ -484,6 +497,12 @@ public class RoomAccess
     /// Type of access target (Character or Reader)
     /// </summary>
     public RoomAccessTargetType TargetType { get; set; }
+
+    /// <summary>
+    /// What the grant admits: the row itself opens the room for reading,
+    /// Full is what admits writing in it
+    /// </summary>
+    public RoomAccessPolicy Policy { get; set; }
 
     /// <summary>
     /// Character (when TargetType = Character)
@@ -555,6 +574,13 @@ public class Room
     /// Room is archived (hidden from the active rooms list, kept for history)
     /// </summary>
     public bool IsArchived { get; set; }
+
+    /// <summary>
+    /// Reader may open the room. Only the rooms listing ever answers false —
+    /// it names private rooms the reader may not enter — so every other read,
+    /// which returns a room only to those who may open it, leaves it true.
+    /// </summary>
+    public bool CanView { get; set; } = true;
 
     /// <summary>
     /// Room access links (characters and readers)
@@ -962,10 +988,29 @@ public class Post
     public bool RoomViewPrivateText { get; set; }
 
     /// <summary>
+    /// Game master at read time.
+    /// </summary>
+    public Guid GameMasterUserId { get; set; }
+
+    /// <summary>
+    /// Game assistants at read time.
+    /// </summary>
+    public IReadOnlyCollection<Guid> GameAssistantUserIds { get; set; } = [];
+
+    /// <summary>
     /// Game leads (master + assistants) at read time. Mentors are NOT
     /// included — a mentor is not a lead.
     /// </summary>
-    public IReadOnlyCollection<Guid> GameLeadUserIds { get; set; } = [];
+    /// <remarks>
+    /// Composed here rather than in the projection. Written as
+    /// <c>new[] { master }.Concat(assistants)</c> in the mapping profile it made
+    /// the whole DbPost projection untranslatable: Npgsql cannot correlate a
+    /// collection subquery concatenated onto an in-memory array, and it refused
+    /// the query rather than one member, so every read of a post answered 500.
+    /// The two parts project on their own; joining them is not database work.
+    /// </remarks>
+    public IReadOnlyCollection<Guid> GameLeadUserIds =>
+        [GameMasterUserId, .. GameAssistantUserIds];
 
     /// <summary>
     /// Raw JSONB snapshot of owner user ids for every [private] block in
@@ -1185,57 +1230,6 @@ public class GameInvitation
     /// When the invitation expires
     /// </summary>
     public DateTimeOffset ExpiresUtc { get; set; }
-}
-
-/// <summary>
-/// Game comment
-/// </summary>
-public class GameComment : ILikable
-{
-    /// <summary>
-    /// Comment identifier
-    /// </summary>
-    public Guid Id { get; set; }
-
-    /// <summary>
-    /// Game identifier
-    /// </summary>
-    public Guid GameId { get; set; }
-
-    /// <summary>
-    /// Author
-    /// </summary>
-    public GeneralUser Author { get; set; } = null!;
-
-    /// <summary>
-    /// Comment text
-    /// </summary>
-    public string Text { get; set; } = null!;
-
-    /// <summary>
-    /// Created date
-    /// </summary>
-    public DateTimeOffset CreatedUtc { get; set; }
-
-    /// <summary>
-    /// Modified date
-    /// </summary>
-    public DateTimeOffset? ModifiedUtc { get; set; }
-
-    /// <summary>
-    /// Likes count
-    /// </summary>
-    public int LikesCount { get; set; }
-
-    /// <summary>
-    /// Users who liked this comment
-    /// </summary>
-    public IEnumerable<GeneralUser> Likes { get; set; } = [];
-
-    /// <summary>
-    /// Like entity type
-    /// </summary>
-    public LikeEntityType LikeEntityType => LikeEntityType.Comment;
 }
 
 /// <summary>

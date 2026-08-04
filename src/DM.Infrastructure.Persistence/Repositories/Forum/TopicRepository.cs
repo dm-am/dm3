@@ -10,6 +10,7 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
 using DM.Domain.Forum.Features.Topics;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 
@@ -186,9 +187,9 @@ internal class TopicRepository : ITopicRepository
             dbQuery = dbQuery.Where(t => EF.Functions.ILike(t.Title, $"%{searchTerm}%"));
         }
 
-        if (query.Authors is { Count: > 0 })
+        if (query.AuthorUsernames is { Count: > 0 })
         {
-            var authorNames = query.Authors.Select(a => a.ToLowerInvariant()).ToArray();
+            var authorNames = query.AuthorUsernames.Select(a => a.ToLowerInvariant()).ToArray();
             dbQuery = dbQuery.Where(t => authorNames.Contains(t.Author.Username.ToLower()));
         }
 
@@ -407,8 +408,9 @@ internal class TopicRepository : ITopicRepository
     }
 
     /// <inheritdoc />
-    public async Task<Topic> Update(UpdateTopicEntity updateTopic, Guid? boardId = null)
+    public async Task<TopicUpdateResult> Update(UpdateTopicEntity updateTopic, Guid? boardId = null)
     {
+        var changed = false;
         var topic = await _dbContext.Topics.FindAsync(updateTopic.TopicId);
         if (topic != null)
         {
@@ -442,6 +444,26 @@ internal class TopicRepository : ITopicRepository
                 topic.BoardId = boardId.Value;
             }
 
+            // The tracker is the one fact about whether this request changed anything:
+            // a request that round-trips the values the topic already holds leaves it
+            // Unchanged. Both consequences hang off it — no row in the edit history,
+            // and no ChangedTopic announcement, since a notification whose actor is
+            // read back from that history would otherwise name the previous editor.
+            changed = _dbContext.Entry(topic).State == EntityState.Modified;
+
+            // The topic row keeps its author and no editor, so the history is the
+            // only record of who changed it.
+            if (updateTopic.EditorUserId != Guid.Empty && changed)
+            {
+                _dbContext.TopicEdits.Add(new Entities.Forum.TopicEdit
+                {
+                    TopicEditId = _guidFactory.Create(),
+                    TopicId = topic.TopicId,
+                    EditorUserId = updateTopic.EditorUserId,
+                    EditedUtc = _dateTimeProvider.Now
+                });
+            }
+
             await _dbContext.SaveChangesAsync();
 
             if (boardId.HasValue && boardId.Value != previousBoardId)
@@ -452,20 +474,22 @@ internal class TopicRepository : ITopicRepository
             }
         }
 
-        return await _dbContext.Topics
+        var updated = await _dbContext.Topics
             .TagWith("DM.Forum.UpdatedTopic")
             .Where(t => t.TopicId == updateTopic.TopicId)
             .ProjectTo<Topic>(_mapper.ConfigurationProvider)
             .FirstAsync();
+
+        return new TopicUpdateResult(updated, changed);
     }
 
     /// <inheritdoc />
-    public async Task Delete(Guid topicId)
+    public async Task Delete(Guid topicId, Guid deletedByUserId)
     {
         var topic = await _dbContext.Topics.FindAsync(topicId);
         if (topic != null)
         {
-            topic.IsRemoved = true;
+            SoftDelete.Mark(topic, deletedByUserId, _dateTimeProvider.Now);
             await _dbContext.SaveChangesAsync();
             await RefreshBoardTopicSummary(topic.BoardId);
             await _dbContext.SaveChangesAsync();

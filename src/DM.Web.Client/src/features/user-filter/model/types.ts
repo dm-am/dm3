@@ -173,6 +173,21 @@ export const EXPERIENCE_OPTIONS = [
 ] as const;
 
 /**
+ * The hint under a filter name: the list the filter opens, without the "all"
+ * option, which tells a reader nothing they cannot already see. Typed by hand
+ * the hint drifted from the list it described — three roles of six, and a form
+ * "Админ" that exists nowhere else on the site.
+ */
+export function optionsHint(
+  options: readonly { value: unknown; label: string }[],
+): string {
+  return options
+    .filter((option) => option.value !== "all")
+    .map((option) => option.label)
+    .join(", ");
+}
+
+/**
  * Sort options
  */
 export const SORT_OPTIONS = [

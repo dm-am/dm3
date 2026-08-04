@@ -43,7 +43,8 @@ import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import BlogLink from "./BlogLink.vue";
 import { useBlogsStore } from "@/entities/blog";
 import { useAuthStore } from "@/entities/user";
-import { onMounted, watch } from "vue";
+import { onMounted } from "vue";
+import { useViewerChange } from "@/shared/lib/composables";
 
 const userStore = useAuthStore();
 const store = useBlogsStore();
@@ -58,16 +59,12 @@ onMounted(() => {
   }
 });
 
-watch(
-  () => userStore.user?.username,
-  (newUsername, oldUsername) => {
-    if (!oldUsername && newUsername) {
-      store.fetchParticipatingBlogs();
-    } else if (oldUsername && !newUsername) {
-      store.resetParticipatingBlogs();
-    }
-  },
-);
+// Same rule as OwnedGames: reset in both directions, load for the viewer who
+// is here now. A sign-in in a second tab replaces the name in one step.
+useViewerChange((username) => {
+  store.resetParticipatingBlogs();
+  if (username) store.fetchParticipatingBlogs();
+});
 </script>
 
 <style scoped lang="sass">

@@ -62,9 +62,12 @@ public class DiceRoll
     public int Bonus { get; set; }
 
     /// <summary>
-    /// Roll comment
+    /// Roll comment. The stored element keeps its lowercase name: the driver maps
+    /// by member name unless told otherwise, so dropping this mapping would read
+    /// back an empty comment on every existing document without an error.
     /// </summary>
-    public string comment { get; set; } = null!;
+    [BsonElement("comment")]
+    public string Comment { get; set; } = null!;
 
     /// <summary>
     /// Result

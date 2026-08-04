@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
+using DM.Infrastructure.Messaging.GeneralBus;
 using Jamq.Client.Abstractions.Consuming;
 using Jamq.Client.Rabbit.Consuming;
 using Microsoft.Extensions.Hosting;
@@ -38,8 +39,14 @@ internal class RealtimeNotificationConsumer : BackgroundService
 
         var parameters = new RabbitConsumerParameters("dm.api", "dm.notifications.api", ProcessingOrder.Sequential)
         {
-            ExchangeName = "dm.notifications.sent",
+            ExchangeName = RealtimeNotificationsTransport.ExchangeName,
             RoutingKeys = new[] { "#" },
+
+            // No dead-letter exchange here, unlike the queues the workers consume.
+            // This message is a copy of a notification the dispatcher has already
+            // stored, and the client reads that over REST — a push kept past its
+            // moment gives nobody anything to act on. Dropping it is the decision,
+            // not an omission.
             Exclusive = true
         };
 

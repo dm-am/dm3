@@ -1,13 +1,21 @@
 <script setup lang="ts">
-// Left-sidebar "Действия" panel for a game page. Mounted by LeftSidebar
+// Left-sidebar "Меню игры" panel for a game page. Mounted by LeftSidebar
 // on any /game/:id route (route.meta.gameZone). It is the single home for
 // per-game navigation and management, driven entirely by the shared
 // useGameDetailsStore (the game page loads game + rooms; this panel adds
-// the chat-rooms slice and surfaces the mutation actions).
+// the characters slice and surfaces the mutation actions).
 //
-// Section order follows the product doc:
-//   {title} / "Активные комнаты" / "Архивные комнаты" / "Обсуждение" (N) /
-//   "Разделы" / "Управление игрой" / "Действия с игрой" / "Модерация игры"
+// Menu order:
+//   "Активные комнаты" / "Архивные комнаты" / "Информация" / "Обсуждение" /
+//   "Персонажи" / "Рецензии" / "Оцененные посты" / "Управление игрой" /
+//   "Действия с игрой" / "Модерация игры"
+//
+// Rooms nest under their group row and drop their own "- " prefix; the
+// indent is the nesting. Every navigation row carries a counter, zero
+// included, and a counter is grey down to its brackets (SidebarCounter).
+// Where the server keeps an unread counter that is what the row shows
+// (rooms, discussion, characters); reviews have no unread counter on the
+// wire, so those rows show the totals it does send.
 //
 // Role gates (never a single blanket "moderator" gate):
 //   "Управление игрой" — the header shows for Master/Assistant/Mentor, but
@@ -33,6 +41,8 @@ import { useAuthStore } from "@/entities/user";
 import { UserRole } from "@/shared/api/models/common";
 import { useExpandableSection } from "@/shared/lib/composables";
 import SidebarBlock from "./SidebarBlock.vue";
+import SidebarCounter from "./SidebarCounter.vue";
+import SidebarSectionTitle from "./SidebarSectionTitle.vue";
 import SidebarSkeleton from "./SidebarSkeleton.vue";
 import GameRoomLink from "./GameRoomLink.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
@@ -51,7 +61,6 @@ const {
   roomsError,
   activeRooms,
   archivedRooms,
-  chatRooms,
   characters,
   isMaster,
   isAssistant,
@@ -87,16 +96,21 @@ const { toggle: toggleArchived, zoneBindings: archivedZoneBindings } =
     label: "GamePanelArchivedRooms",
   });
 
-// Chat rooms are keyed by the game's GUID (the ChatRoom endpoint binds a
-// Guid, unlike the publicId-tolerant room/notepad endpoints), so wait for
-// the game to resolve before loading them. Characters are loaded too (only
-// when not already in the store) to drive the "Редактировать NPC" /
-// "Редактировать персонажа" panel items.
+// The spoiler's whole label, brackets included, so the button holds one
+// interpolation and nothing else: a text node of pure whitespace is dropped
+// when the template is compiled, one that carries a bracket too is not, and
+// the space before "(показать)" would then depend on how the tag was wrapped.
+// It is written once, in the row itself, as a non-breaking space.
+const archivedToggleLabel = computed(() =>
+  showArchived.value ? "(скрыть)" : "(показать)",
+);
+
+// Characters are loaded (only when not already in the store) to drive the
+// "Редактировать NPC" panel item.
 watch(
   () => game.value?.id,
   (id) => {
     if (!id) return;
-    store.loadChatRooms(id);
     if (!characters.value.length) store.loadCharacters(id);
   },
   { immediate: true },
@@ -205,12 +219,7 @@ async function confirmMod() {
 </script>
 
 <template>
-  <SidebarBlock token="GamePanel">
-    <template #title>
-      <template v-if="game">{{ game.title }}</template>
-      <template v-else>Игра</template>
-    </template>
-
+  <SidebarBlock token="GamePanel" title="Меню игры">
     <!-- 1. loading -->
     <SidebarSkeleton v-if="gameLoading && !game" :lines="8" />
 
@@ -221,53 +230,53 @@ async function confirmMod() {
 
     <!-- 3. content -->
     <template v-else-if="game">
-      <!-- "Активные комнаты" — active post-rooms and chat rooms in one list. -->
-      <div class="section-title">Активные комнаты</div>
+      <!-- "Активные комнаты" — the group row; active post-rooms and chat
+           rooms follow it indented, in one list. -->
+      <li class="link">
+        <span class="muted" aria-hidden="true">- </span>Активные комнаты
+      </li>
       <SidebarSkeleton v-if="roomsLoading && !rooms.length" :lines="3" />
       <SecondaryText v-else-if="roomsError" class="error">
         {{ roomsError }}
       </SecondaryText>
-      <template v-else-if="activeRooms.length || chatRooms.length">
+      <ul v-else-if="activeRooms.length" class="room-list">
         <GameRoomLink
           v-for="room in activeRooms"
           :key="room.id"
           :room="room"
           :game-public-id="publicId"
+          prefix=""
         />
-        <li v-for="chat in chatRooms" :key="chat.id" class="link">
-          <span class="muted" aria-hidden="true">- </span>
-          <span class="chat-title">{{ chat.title }}</span>
-          <span v-if="chat.unreadCount > 0" class="unread"
-            >&nbsp;({{ chat.unreadCount }})</span
-          >
-        </li>
-      </template>
+      </ul>
       <SecondaryText v-else>Комнат пока нет</SecondaryText>
 
-      <!-- "Архивные комнаты" — a bold heading (not a list row) with an inline
-           "(показать)/(скрыть)" spoiler link; rooms appear below when expanded. -->
+      <!-- "Архивные комнаты" — the same group row, with an inline
+           "(показать)/(скрыть)" spoiler link; rooms appear below when
+           expanded. -->
       <template v-if="archivedRooms.length">
-        <div class="section-title">
-          Архивные комнаты<button
+        <li class="link">
+          <span class="muted" aria-hidden="true">- </span>Архивные
+          комнаты&nbsp;<button
             type="button"
             class="archived-toggle"
             :aria-expanded="showArchived"
             @click="toggleArchived()"
           >
-            ({{ showArchived ? "скрыть" : "показать" }})
+            {{ archivedToggleLabel }}
           </button>
-        </div>
+        </li>
         <div
           ref="archivedZoneRef"
           class="expand-zone"
           v-bind="archivedZoneBindings"
         >
-          <ul v-if="showArchived" class="archived-list">
+          <ul v-if="showArchived" class="room-list">
             <GameRoomLink
               v-for="room in archivedRooms"
               :key="room.id"
               :room="room"
               :game-public-id="publicId"
+              prefix=""
             />
           </ul>
         </div>
@@ -277,37 +286,46 @@ async function confirmMod() {
            actions strip), no "Разделы"/"Обсуждение" sub-headings. -->
       <li class="link">
         <span class="muted" aria-hidden="true">- </span>
-        <router-link :to="{ name: 'game-comments', params: { id: publicId } }">
-          Обсуждение<span v-if="game.unreadCommentsCount">
-            ({{ game.unreadCommentsCount }})</span
-          >
-        </router-link>
+        <router-link :to="{ name: 'game', params: { id: publicId } }"
+          >Информация</router-link
+        >
+      </li>
+      <li class="link">
+        <span class="muted" aria-hidden="true">- </span>
+        <router-link :to="{ name: 'game-comments', params: { id: publicId } }"
+          >Обсуждение</router-link
+        ><SidebarCounter :value="game.unreadCommentsCount" />
       </li>
       <li class="link">
         <span class="muted" aria-hidden="true">- </span>
         <router-link :to="{ name: 'game-characters', params: { id: publicId } }"
           >Персонажи</router-link
-        >
+        ><SidebarCounter :value="game.unreadCharactersCount" />
+      </li>
+      <li class="link">
+        <span class="muted" aria-hidden="true">- </span>
+        <router-link :to="{ name: 'game-reviews', params: { id: publicId } }"
+          >Рецензии</router-link
+        ><SidebarCounter :value="game.gameReviewsCount" />
       </li>
       <li class="link">
         <span class="muted" aria-hidden="true">- </span>
         <router-link
           :to="{ name: 'game-post-reviews', params: { id: publicId } }"
           >Оцененные посты</router-link
-        >
+        ><SidebarCounter :value="game.postReviewsCount" />
       </li>
 
       <!-- "Управление игрой" section (Master / Assistant edit items) -->
       <template v-if="canEdit || canUseNotepad">
-        <div class="section-title">Управление игрой</div>
+        <SidebarSectionTitle>Управление игрой</SidebarSectionTitle>
         <template v-if="canEdit">
           <li class="link">
             <span class="muted" aria-hidden="true">- </span>
             <router-link
               :to="{ name: 'game-settings', params: { id: publicId } }"
+              >Настройки</router-link
             >
-              Настройки
-            </router-link>
           </li>
           <li class="link">
             <span class="muted" aria-hidden="true">- </span>
@@ -317,9 +335,8 @@ async function confirmMod() {
                 params: { id: publicId },
                 query: { npc: '1' },
               }"
+              >Создать NPC</router-link
             >
-              Создать NPC
-            </router-link>
           </li>
           <!-- "Редактировать NPC" — shown only when at least one NPC exists;
                links to the first NPC's edit page (doc 4.2.1.3). -->
@@ -330,30 +347,29 @@ async function confirmMod() {
                 name: 'game-character-edit',
                 params: { id: publicId, characterId: firstNpcId },
               }"
+              >Редактировать NPC</router-link
             >
-              Редактировать NPC
-            </router-link>
           </li>
           <!-- Status transition buttons (Master/Assistant) -->
           <GameStatusButtons variant="strip" />
         </template>
         <li v-if="canUseNotepad" class="link">
           <span class="muted" aria-hidden="true">- </span>
-          <router-link :to="{ name: 'game-notepad', params: { id: publicId } }">
-            Блокнот мастера
-          </router-link>
+          <router-link :to="{ name: 'game-notepad', params: { id: publicId } }"
+            >Блокнот мастера</router-link
+          >
         </li>
       </template>
 
       <!-- "Действия с игрой" section (any authed except master) -->
       <template v-if="canActOnGame">
-        <div class="section-title">Действия с игрой</div>
+        <SidebarSectionTitle>Действия с игрой</SidebarSectionTitle>
         <GameJoinActions variant="strip" />
       </template>
 
       <!-- "Модерация игры" section (global roles) -->
       <template v-if="showModeration">
-        <div class="section-title">Модерация игры</div>
+        <SidebarSectionTitle>Модерация игры</SidebarSectionTitle>
         <template v-if="isGlobalMentor">
           <li class="link">
             <span class="muted" aria-hidden="true">- </span>
@@ -415,25 +431,18 @@ async function confirmMod() {
 </template>
 
 <style scoped lang="sass">
-// Section headings read as content titles (bold, normal body colour + size,
-// no uppercase, no leading dash) — the same look as a poll's title.
-.section-title
-  margin: $small 0 $tiny
-  font-size: $font-size
-  font-weight: bold
-  color: $text
-
-// "(показать)/(скрыть)" spoiler toggle for archived rooms — an inline link
-// beside the bold heading (normal weight, so only the heading reads bold).
-// Nested list inside the animated archived-rooms zone: the li rows carry
-// their own .link class styles, the wrapper only resets list chrome.
-.archived-list
+// Rooms nest under their group row: the indent is the nesting, which is why
+// the room rows carry no "- " prefix of their own.
+.room-list
   list-style: none
   margin: 0
-  padding: 0
+  padding: 0 0 0 $medium
 
+// "(показать)/(скрыть)" spoiler toggle for archived rooms — an inline link
+// beside the group row (normal weight, so nothing in the row reads bold).
+// The gap before it is the row's own non-breaking space, not a margin: the
+// row has to copy with that space in it.
 .archived-toggle
-  margin-left: $tiny
   padding: 0
   border: none
   background: none
@@ -446,22 +455,11 @@ async function confirmMod() {
     color: $link-hover
     text-decoration: underline
 
-.unread
-  color: $text-muted
-
 .link
   display: block
 
 .muted
   color: $text-muted
-
-// Only the decorative "- " prefix (aria-hidden) is excluded from selection;
-// informative muted text (unread counters) must stay selectable.
-.muted[aria-hidden="true"]
-  user-select: none
-
-.chat-title
-  color: $text
 
 .error
   color: $accent-red

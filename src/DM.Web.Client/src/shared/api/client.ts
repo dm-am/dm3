@@ -6,7 +6,7 @@ import type {
   AxiosResponse,
   AxiosProgressEvent,
 } from "axios";
-import type { HubConnection } from "@microsoft/signalr";
+import type { HubConnection, IRetryPolicy } from "@microsoft/signalr";
 import type { ApiResult, GeneralError } from "./models/common";
 import {
   RENDER_AUDIENCE,
@@ -14,6 +14,7 @@ import {
   type RenderAudience,
 } from "./audience";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { describeFailure } from "@/shared/lib/errors";
 
 type QueryParams = Record<
   string,
@@ -21,10 +22,58 @@ type QueryParams = Record<
 >;
 type RequestBody = object | FormData;
 
+/**
+ * Options this client understands beyond the ones axios has. They ride on the
+ * request config, which is where the response interceptor finds them again on
+ * the request that failed.
+ */
+type RequestOptions = {
+  /**
+   * The caller shows the refusal itself, so the interceptor says nothing about
+   * a 403 on this request.
+   *
+   * The interceptor speaks for the statuses it knows more about than the call
+   * site does, and a 403 is one of them nearly everywhere: the caller knows
+   * which button was pressed, not why the server said no. Signing in is the
+   * exception. There the refusal is the whole answer to the submit — the
+   * account is banned, removed, or locked out after too many attempts — it
+   * belongs under the field with the rest of the answer, and the generic
+   * "Недостаточно прав для этого действия" replaced a reason with a sentence
+   * that names nothing.
+   */
+  ownsRefusal?: boolean;
+};
+
+/** An axios config with this client's own options riding along on it. */
+type TaggedRequest = AxiosRequestConfig & RequestOptions;
+
+/** Whether the request that failed said it would show the refusal itself. */
+function ownsRefusal(request?: AxiosRequestConfig): boolean {
+  return Boolean((request as TaggedRequest | undefined)?.ownsRefusal);
+}
+
+/**
+ * Headers on every request.
+ *
+ * No Cache-Control here. It used to say `no-cache` on all of them, which
+ * answered no question this client has — the session is a cookie, not a cached
+ * response — and cost both caches every hit they could have had: `no-cache` on
+ * the request forbids ResponseCachingMiddleware from reading its store, and
+ * makes the browser revalidate before reusing anything of its own. With no
+ * ETag and no Last-Modified in the API, that revalidation is a full request.
+ *
+ * What may be cached is the origin's decision and it states it per endpoint:
+ * five catalogues answer `public, max-age=300`, the two lists carrying
+ * per-caller unread counters answer `no-store, no-cache`, and the rest carry
+ * no policy at all — which, without a validator to revalidate against, is not
+ * reusable either.
+ */
 const defaultHeaders: { [key: string]: string } = {
-  "Cache-Control": "no-cache",
   "Content-Type": "application/json",
-  "X-Requested-With": "XMLHttpRequest", // CSRF protection - identifies AJAX requests
+  // Marks the request as XHR. Not a CSRF control: the server never reads this header.
+  // CSRF is covered by the Origin/Referer check in the API and SameSite=Lax on the
+  // session cookie.
+  "X-Requested-With": "XMLHttpRequest",
   [X_DM_AUDIENCE]: RENDER_AUDIENCE.Display,
 };
 
@@ -34,8 +83,8 @@ const defaultHeaders: { [key: string]: string } = {
  * The HTTP client is a `shared` module and must not know the router, which
  * lives in `app` — the layer above. It used to reach for it with a dynamic
  * import, which hid the inverted dependency rather than removing it. The app
- * installs its own handler at startup; until it does, an expired session only
- * clears local state and shows the toast.
+ * installs its own handler at startup — it drops the viewer from the auth store
+ * and navigates; until it does, an expired session only shows the toast.
  */
 let onSessionExpired: (() => void) | null = null;
 
@@ -88,6 +137,23 @@ const configuration: AxiosRequestConfig = {
   },
 };
 
+/**
+ * Reconnection policy of the realtime hub.
+ *
+ * The default is four attempts — 0, 2, 10 and 30 seconds — and then the
+ * connection is closed for good, with nothing on the client side trying again.
+ * An API restart longer than that, which an ordinary deploy with a warm-up is,
+ * left every open tab without realtime until the reader happened to reload the
+ * page: the global chat survived on its own polling fallback, while the
+ * messenger badge and the notification bell, which have none, froze on the
+ * number the page had loaded with. So the retries never stop and the delay is
+ * capped instead.
+ */
+const hubRetryPolicy: IRetryPolicy = {
+  nextRetryDelayInMilliseconds: (context) =>
+    Math.min(30000, 1000 * 2 ** context.previousRetryCount),
+};
+
 class Api {
   private axios: AxiosInstance;
 
@@ -98,18 +164,34 @@ class Api {
     this.axios.interceptors.response.use(
       (response) => response,
       async (error) => {
-        // Handle 401 Unauthorized — session expired or invalid
+        // Handle 401 Unauthorized — session expired or invalid.
+        // Who the viewer is belongs to the auth store, which owns the persisted
+        // copy. Clearing that copy from here left the store still holding the
+        // user, so the header, the sidebar blocks and every action button kept
+        // rendering as signed in while the route guard bounced the same viewer.
         if (error.response?.status === 401) {
-          localStorage.removeItem("user");
           const { warning } = useToast();
-          warning("Сессия истекла. Пожалуйста, войдите снова.");
+          warning("Сессия истекла. Войдите снова.");
           onSessionExpired?.();
         }
 
-        // Handle 403 Forbidden
-        if (error.response?.status === 403) {
+        // Handle 403 Forbidden — say which refusal it was.
+        // The API names the reason: 68 throw sites answer 403 with a sentence
+        // of their own ("Вы в черном списке этого блога", "Аккаунт
+        // заблокирован"), and an authorization refusal is answered with one
+        // constant title, so the title is always safe to relay as it stands.
+        // Showing the general sentence over all of them left a blacklisted
+        // reader in front of a working comment box with nothing to learn from:
+        // the text comes back, the toast says the rights are missing, and the
+        // reason it will never be accepted was on the wire and thrown away.
+        // The fallback is for a 403 the error middleware never saw — the
+        // framework answers those with no body at all.
+        if (error.response?.status === 403 && !ownsRefusal(error.config)) {
           const { error: showError } = useToast();
-          showError("Недостаточно прав для этого действия");
+          const refusal = asProblem(error.response);
+          showError(
+            describeFailure(refusal, "Недостаточно прав для этого действия"),
+          );
         }
 
         // Handle 429 Too Many Requests
@@ -140,19 +222,19 @@ class Api {
     );
   }
 
-  public isAuthenticated(): boolean {
-    // With cookie-based auth, we check if user is stored locally
-    // The actual auth state is determined by the HttpOnly cookie
-    return localStorage.getItem("user") !== null;
-  }
-
   public get<T>(
     url: string,
     params?: QueryParams,
     audience: RenderAudience = RENDER_AUDIENCE.Display,
-    options?: { skipAuth?: boolean },
+    options?: { skipAuth?: boolean; headers?: Record<string, string> },
   ): Promise<ApiResult<T>> {
-    const headers: Record<string, string> = { [X_DM_AUDIENCE]: audience };
+    // A token-gated endpoint reads its credential from a header. A URL is written
+    // verbatim into the proxy access log and into the trace; a header is written
+    // to neither.
+    const headers: Record<string, string> = {
+      [X_DM_AUDIENCE]: audience,
+      ...options?.headers,
+    };
 
     // For public endpoints, explicitly remove credentials
     // This prevents activity tracking from background polling
@@ -169,8 +251,16 @@ class Api {
     return this.send(() => this.axios.get(url, { params, headers }));
   }
 
-  public post<T>(url: string, body?: RequestBody): Promise<ApiResult<T>> {
-    return this.send(() => this.axios.post(url, body));
+  public post<T>(
+    url: string,
+    body?: RequestBody,
+    options?: RequestOptions & { headers?: Record<string, string> },
+  ): Promise<ApiResult<T>> {
+    const request: TaggedRequest = {
+      ownsRefusal: options?.ownsRefusal,
+      headers: options?.headers,
+    };
+    return this.send(() => this.axios.post(url, body, request));
   }
 
   /*
@@ -248,12 +338,6 @@ class Api {
     }
   }
 
-  public logout() {
-    // With cookie-based auth, just clear local state
-    // The server will invalidate the session on DELETE /v1/account/login
-    localStorage.removeItem("user");
-  }
-
   /**
    * Establish SignalR hub connection.
    * Cookies are sent automatically with withCredentials.
@@ -267,7 +351,7 @@ class Api {
   public async establishHubConnection(path: string): Promise<HubConnection> {
     const { HubConnectionBuilder } = await import("@microsoft/signalr");
     return new HubConnectionBuilder()
-      .withAutomaticReconnect()
+      .withAutomaticReconnect(hubRetryPolicy)
       .withUrl(`${apiHost}/${path}`, {
         withCredentials: true,
       })

@@ -5,6 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Moderation.Features.Tickets;
 using Microsoft.EntityFrameworkCore;
@@ -17,34 +19,49 @@ internal class TicketRepository : ITicketRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
-    public TicketRepository(DmDbContext dbContext, IMapper mapper)
+    public TicketRepository(
+        DmDbContext dbContext,
+        IMapper mapper,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _mapper = mapper;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Ticket>> GetTickets(TicketStatus? status = null,
+    public async Task<(IEnumerable<Ticket> tickets, PagingResult paging)> GetTickets(PagingQuery query,
+        TicketStatus? status = null,
         IReadOnlyCollection<TicketSubtype>? subtypes = null, CancellationToken ct = default)
     {
-        var query = _dbContext.Tickets.AsQueryable();
+        var tickets = _dbContext.Tickets.AsQueryable();
 
         if (status.HasValue)
         {
-            query = query.Where(t => t.Status == status.Value);
+            tickets = tickets.Where(t => t.Status == status.Value);
         }
 
         if (subtypes != null)
         {
-            query = query.Where(t => subtypes.Contains(t.Subtype));
+            tickets = tickets.Where(t => subtypes.Contains(t.Subtype));
         }
 
-        return await query
+        // The intake queue only grows, so the page is taken in the database:
+        // the whole of it used to come back on every open of the moderation
+        // screen, and the day it stops fitting in a response is a day nobody
+        // scheduled.
+        var total = await tickets.CountAsync(ct);
+        var page = await tickets
             .OrderByDescending(t => t.CreatedUtc)
+            .Skip(query.Skip)
+            .Take(query.Take)
             .ProjectTo<Ticket>(_mapper.ConfigurationProvider)
             .ToListAsync(ct);
+
+        return (page, PagingResult.Create(total, query.Skip + 1, query.Take));
     }
 
     /// <inheritdoc />
@@ -177,7 +194,7 @@ internal class TicketRepository : ITicketRepository
             ticket.BanId = entity.BanId;
         }
 
-        ticket.UpdatedUtc = DateTimeOffset.UtcNow;
+        ticket.UpdatedUtc = _dateTimeProvider.Now;
 
         await _dbContext.SaveChangesAsync(ct);
 

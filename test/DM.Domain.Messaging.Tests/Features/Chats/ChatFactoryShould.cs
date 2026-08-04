@@ -52,7 +52,7 @@ public class ChatFactoryShould : UnitTestBase
 
         act.Should().Throw<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest)
-            .WithMessage("Cannot create a direct chat with yourself*");
+            .WithMessage("Нельзя начать чат с самим собой*");
     }
 
     [Fact]

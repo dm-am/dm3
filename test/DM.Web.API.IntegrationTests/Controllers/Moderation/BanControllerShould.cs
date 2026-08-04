@@ -37,7 +37,6 @@ public class BanControllerShould : IntegrationTestBase
             Comment = "Секретный комментарий модератора",
             AccessRestrictionPolicy = AccessPolicy.FullBan,
             IsVoluntary = false,
-            IsRemoved = false
         });
         await db.SaveChangesAsync();
         return banId;

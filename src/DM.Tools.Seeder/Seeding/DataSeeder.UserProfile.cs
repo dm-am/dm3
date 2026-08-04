@@ -185,15 +185,15 @@ internal sealed partial class DataSeeder
         var lit23 = new Guid("00000000-0000-0000-0004-000000000001"); // 23rd literary contest, 2024
         var lit22 = new Guid("00000000-0000-0000-0004-000000000002"); // 22nd literary contest, 2023
         var lit20 = new Guid("00000000-0000-0000-0004-000000000004"); // 20th literary contest, 2022
-        var art2  = new Guid("00000000-0000-0000-0004-000000000005"); // 2nd art contest, 2024
-        // "1-й арт конкурс 2023" (0004-...-06) intentionally holds no
+        var art2 = new Guid("00000000-0000-0000-0004-000000000005"); // 2nd art contest, 2024
+        // "1-й арт-конкурс 2023" (0004-...-06) intentionally holds no
         // SolohinLex award: his ONLY art award is the art2 place below.
-        var contestFirst   = new Guid("00000000-0000-0000-0001-000000000001");
-        var contestSecond  = new Guid("00000000-0000-0000-0001-000000000002");
-        var contestThird   = new Guid("00000000-0000-0000-0001-000000000003");
-        var popularVote    = new Guid("00000000-0000-0000-0001-000000000004");
-        var bestCritic     = new Guid("00000000-0000-0000-0001-000000000005");
-        var guesser        = new Guid("00000000-0000-0000-0001-000000000006");
+        var contestFirst = new Guid("00000000-0000-0000-0001-000000000001");
+        var contestSecond = new Guid("00000000-0000-0000-0001-000000000002");
+        var contestThird = new Guid("00000000-0000-0000-0001-000000000003");
+        var popularVote = new Guid("00000000-0000-0000-0001-000000000004");
+        var bestCritic = new Guid("00000000-0000-0000-0001-000000000005");
+        var guesser = new Guid("00000000-0000-0000-0001-000000000006");
         // SolohinLex chronology: lit career 2022-2024 + a single art award
         // (silver at art contest #2, 2024).
         // WorkUrl — a placeholder topic with the work itself (for placements + popular

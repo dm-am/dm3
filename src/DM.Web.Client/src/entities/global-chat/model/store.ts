@@ -5,8 +5,14 @@ import type {
   GlobalChatEventSummary,
   GlobalChatMessage,
 } from "./types";
+import type {
+  ApiResult,
+  Envelope,
+  GeneralError,
+} from "@/shared/api/models/common";
 import globalChatApi from "../api/globalChatApi";
 import { useAuthStore } from "@/shared/stores";
+import { NotificationType } from "@/shared/api/models/notifications";
 
 export const useGlobalChatStore = defineStore("globalChat", () => {
   const { user: currentUser } = storeToRefs(useAuthStore());
@@ -320,30 +326,41 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     messagesById.set(message.id, message);
   }
 
+  /** Returns the error when the edit failed, so the editor can stay open. */
   async function updateMessage(id: string, text: string) {
-    const { data } = await globalChatApi.updateMessage(id, text);
-    if (data) {
+    const { data, error } = await globalChatApi.updateMessage(id, text);
+    if (!error && data) {
       const index = messages.value.findIndex((m) => m.id === id);
       if (index !== -1) {
         messages.value[index] = data;
         messagesById.set(id, data);
       }
     }
+    return { error };
   }
 
+  /**
+   * Returns the error when the delete failed. Striking the message through on
+   * a refusal is the worst of both: the moderator reads the deleted-message
+   * placeholder beside the toast that says it was not deleted, and leaves
+   * believing the text is gone for everyone else.
+   */
   async function deleteMessage(id: string) {
-    await globalChatApi.deleteMessage(id);
-    const index = messages.value.findIndex((m) => m.id === id);
-    if (index !== -1) {
-      const updated = {
-        ...messages.value[index],
-        isRemoved: true,
-        deletedBy: currentUser.value ?? null,
-        deletedUtc: new Date().toISOString(),
-      };
-      messages.value[index] = updated;
-      messagesById.set(id, updated);
+    const { error } = await globalChatApi.deleteMessage(id);
+    if (!error) {
+      const index = messages.value.findIndex((m) => m.id === id);
+      if (index !== -1) {
+        const updated = {
+          ...messages.value[index],
+          isRemoved: true,
+          deletedBy: currentUser.value ?? null,
+          deletedUtc: new Date().toISOString(),
+        };
+        messages.value[index] = updated;
+        messagesById.set(id, updated);
+      }
     }
+    return { error };
   }
 
   async function likeMessage(id: string) {
@@ -388,6 +405,28 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     events.value = data?.resources ?? [];
   }
 
+  /**
+   * The events list on a realtime push.
+   *
+   * The list is read once, when the chat opens, and nothing polls it: an event
+   * starting or ending is the only thing that can make it stale while the tab
+   * stays open, and until that arrived the strip above the feed went on
+   * describing the state of the chat at page load. Which pushes those are is
+   * knowledge about this list rather than about the screen that renders it, so
+   * it lives here and re-reads through the one fetch path above. Every other
+   * push on the socket (a new message above all) is somebody else's business:
+   * re-reading on those would put a request behind every line anybody types.
+   */
+  async function refreshEventsOnNotification(eventType: NotificationType) {
+    if (
+      eventType !== NotificationType.GlobalChatEventStarted &&
+      eventType !== NotificationType.GlobalChatEventEnded
+    ) {
+      return;
+    }
+    await fetchEvents();
+  }
+
   async function fetchEventDetails(
     id: string,
     force = false,
@@ -405,10 +444,51 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     }
   }
 
+  /**
+   * One event action, whichever it is.
+   *
+   * All four endpoints answer with the whole event, so the details cache is
+   * filled from the response instead of being read a second time. The strip
+   * above the feed is drawn from the summary list, and the two fields these
+   * actions change (status and participantCount) live there and nowhere else —
+   * so the list is re-read as well, or a started event goes on saying "Скоро"
+   * on the very line its organizer has just acted on.
+   *
+   * The refusal is returned rather than swallowed. `Api` resolves on a 403 the
+   * same way it resolves on a 200, so an action nobody was allowed to take
+   * looks exactly like one that went through until the caller says otherwise.
+   */
+  async function runEventAction(
+    id: string,
+    act: () => Promise<ApiResult<Envelope<GlobalChatEvent>>>,
+  ): Promise<{ error: GeneralError | null }> {
+    const { data, error } = await act();
+    if (error) return { error };
+    if (data?.resource) eventDetails.value[id] = data.resource;
+    await fetchEvents();
+    return { error: null };
+  }
+
+  /** Sign up for an open event. */
+  const joinEvent = (id: string) =>
+    runEventAction(id, () => globalChatApi.joinEvent(id));
+
+  /** Give up a place in an event (organizers cannot: the API refuses them). */
+  const leaveEvent = (id: string) =>
+    runEventAction(id, () => globalChatApi.leaveEvent(id));
+
+  /** Take a scheduled event live. Organizer only. */
+  const startEvent = (id: string) =>
+    runEventAction(id, () => globalChatApi.startEvent(id));
+
+  /** Close a live event. Organizer only. */
+  const endEvent = (id: string) =>
+    runEventAction(id, () => globalChatApi.endEvent(id));
+
   async function unlikeMessage(id: string) {
-    await globalChatApi.unlikeMessage(id);
+    const { error } = await globalChatApi.unlikeMessage(id);
     // Backend returns 204 No Content, so update likes locally
-    if (currentUser.value) {
+    if (!error && currentUser.value) {
       const index = messages.value.findIndex((m) => m.id === id);
       if (index !== -1) {
         const msg = messages.value[index];
@@ -460,6 +540,11 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     liveEvent,
     upcomingEvents,
     fetchEvents,
+    refreshEventsOnNotification,
     fetchEventDetails,
+    joinEvent,
+    leaveEvent,
+    startEvent,
+    endEvent,
   };
 });

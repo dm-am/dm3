@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
@@ -33,16 +34,19 @@ internal class PostRepository : IPostRepository
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
     private readonly IGameRepository _gameRepository;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public PostRepository(
         DmDbContext dbContext,
         IMapper mapper,
-        IGameRepository gameRepository)
+        IGameRepository gameRepository,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _mapper = mapper;
         _gameRepository = gameRepository;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     #region Read Operations
@@ -123,18 +127,23 @@ internal class PostRepository : IPostRepository
                 pattern));
         }
 
-        // Author filter (comma-separated usernames, parsed before LINQ)
-        if (!string.IsNullOrWhiteSpace(query.AuthorUsernames))
+        // Author filter (repeated parameter, materialised before LINQ)
+        if (query.AuthorUsernames is { Count: > 0 })
         {
             var usernames = query.AuthorUsernames
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            baseQuery = baseQuery.Where(p => usernames.Contains(p.Author.Username));
+                .Where(u => !string.IsNullOrWhiteSpace(u))
+                .Select(u => u.Trim())
+                .ToArray();
+            if (usernames.Length > 0)
+            {
+                baseQuery = baseQuery.Where(p => usernames.Contains(p.Author.Username));
+            }
         }
 
         // Reviewer filter — keep only posts which have at least one active
         // review authored by the given username. Powers the profile page
         // The "Оценил чужих постов: {username}" page. Subquery against PostReviews
-        // mirrors the LastReviewedAfter pattern below for plan stability.
+        // mirrors the LastReviewedFromUtc pattern below for plan stability.
         if (!string.IsNullOrWhiteSpace(query.ReviewerUsername))
         {
             var reviewer = query.ReviewerUsername.Trim();
@@ -145,19 +154,19 @@ internal class PostRepository : IPostRepository
         }
 
         // Post creation date filters
-        if (query.CreatedAfter.HasValue)
+        if (query.CreatedFromUtc.HasValue)
         {
-            baseQuery = baseQuery.Where(p => p.CreatedUtc >= query.CreatedAfter.Value);
+            baseQuery = baseQuery.Where(p => p.CreatedUtc >= query.CreatedFromUtc.Value);
         }
-        if (query.CreatedBefore.HasValue)
+        if (query.CreatedToUtc.HasValue)
         {
-            baseQuery = baseQuery.WhereAtOrBefore(p => p.CreatedUtc, query.CreatedBefore.Value);
+            baseQuery = baseQuery.WhereAtOrBefore(p => p.CreatedUtc, query.CreatedToUtc.Value);
         }
 
-        // LastReviewedAfter filter — only posts that have a review after this date
-        if (query.LastReviewedAfter.HasValue)
+        // LastReviewedFromUtc filter — only posts that have a review at or after this date
+        if (query.LastReviewedFromUtc.HasValue)
         {
-            var after = query.LastReviewedAfter.Value;
+            var after = query.LastReviewedFromUtc.Value;
             baseQuery = baseQuery.Where(p => _dbContext.PostReviews
                 .Any(r => r.PostId == p.PostId &&
                           !r.IsRemoved &&
@@ -404,17 +413,30 @@ internal class PostRepository : IPostRepository
 
         if (characterIds.Count == 0) return;
 
-        var pictures = await _dbContext.Uploads
+        // Newest per character rather than a dictionary keyed on the target.
+        // Nothing in the schema stops a second live row from pointing at the same
+        // character, and ToDictionaryAsync answered a duplicate key by throwing —
+        // which turned every read of the room into a 500 for everyone in it, with
+        // no way back that did not involve editing rows by hand. The upload path
+        // retires the previous portrait now, so a duplicate should not arise; the
+        // read no longer depends on that being true.
+        var rows = await _dbContext.Uploads
             .Where(u => u.TargetCharacterId != null
                 && characterIds.Contains(u.TargetCharacterId.Value)
                 && u.Type == UploadType.CharacterAvatar
                 && !u.IsRemoved)
+            .OrderByDescending(u => u.CreatedUtc)
+            .ThenByDescending(u => u.UploadId)
             .Select(u => new
             {
                 CharacterId = u.TargetCharacterId!.Value,
                 Picture = Shared.Users.AvatarProjections.From(u),
             })
-            .ToDictionaryAsync(x => x.CharacterId, x => x.Picture);
+            .ToListAsync();
+
+        var pictures = rows
+            .GroupBy(x => x.CharacterId)
+            .ToDictionary(g => g.Key, g => g.First().Picture);
 
         foreach (var post in posts)
         {
@@ -440,6 +462,7 @@ internal class PostRepository : IPostRepository
             CreatedUtc = createPost.CreatedUtc,
             GameText = createPost.GameText,
             MetagameText = createPost.MetagameText,
+            PrivateAddresseeSnapshotJson = createPost.PrivateAddresseeSnapshotJson,
             IsRemoved = false
         };
         // ExecuteUpdate runs and commits immediately while Add is deferred to
@@ -500,6 +523,9 @@ internal class PostRepository : IPostRepository
         // Update text always
         post.GameText = updatePost.GameText;
         post.MetagameText = updatePost.MetagameText;
+        // Travels with the text it describes: a snapshot left behind by an edit
+        // points at blocks the post no longer has.
+        post.PrivateAddresseeSnapshotJson = updatePost.PrivateAddresseeSnapshotJson;
 
         // Update character if requested
         if (updatePost.ShouldChangeCharacter)
@@ -517,12 +543,12 @@ internal class PostRepository : IPostRepository
             .FirstOrDefaultAsync();
     }
 
-    public async Task Delete(Guid postId)
+    public async Task Delete(Guid postId, Guid deletedByUserId)
     {
         var post = await _dbContext.Posts.FindAsync(postId);
         if (post != null)
         {
-            post.IsRemoved = true;
+            SoftDelete.Mark(post, deletedByUserId, _dateTimeProvider.Now);
             await _dbContext.SaveChangesAsync();
         }
     }

@@ -27,6 +27,7 @@
  * transforms, no animation pile-up.
  */
 import { onBeforeUpdate, onUpdated, type Ref } from "vue";
+import { prefersReducedMotion } from "@/shared/lib/utils/motion";
 
 export interface FlipReorderOptions {
   /** Container element holding the animated items. */
@@ -89,6 +90,18 @@ export function useFlipReorder(options: FlipReorderOptions): void {
     hadFocusInRoot = false;
 
     if (!prevRects || !root) return;
+
+    // The reorder is already committed — this flight between the two positions
+    // is decoration, and decoration is what the setting turns off. CSS cannot
+    // do it here: the site collapses every transition and animation under the
+    // media query (Reset.sass), but the Web Animations API is outside that
+    // reach, so the one caller of it asks. Focus restoration above runs either
+    // way: it is not motion, it is where the caret is.
+    if (prefersReducedMotion()) {
+      prevRects = null;
+      return;
+    }
+
     for (const el of root.querySelectorAll<HTMLElement>(options.itemSelector)) {
       const oldRect = prevRects.get(el);
       if (!oldRect) continue;

@@ -1,6 +1,10 @@
 ﻿import { fileURLToPath, URL } from "node:url";
 
-import { defineConfig } from "vite";
+// From vitest, not from vite: the `test` block below is vitest's, and vite's own
+// defineConfig does not know it. Typed by the wrong one it was an error nothing
+// reported — tsconfig.config.json is the only project that includes this file,
+// and no script type-checks it.
+import { defineConfig } from "vitest/config";
 import vue from "@vitejs/plugin-vue";
 
 // https://vitejs.dev/config/
@@ -67,14 +71,21 @@ export default defineConfig({
     },
   },
   build: {
-    // Разделение vendor библиотек для лучшего кэширования
+    // Dependencies that change on their own schedule, split out of the app
+    // chunk so a release of the app does not invalidate their cache entry.
     rollupOptions: {
       output: {
         manualChunks: {
-          // Vue core - меняется редко, хорошо кэшируется
+          // The framework itself: changes a few times a year, is on every
+          // address, and is the largest thing a returning reader never
+          // re-downloads.
           "vue-vendor": ["vue", "vue-router", "pinia"],
-          // TipTap editor - загружается только на chat/messenger
-          // @tiptap/pm исключен - имеет особую структуру пакета
+          // The engine behind BBCodeEditor, in a chunk of its own rather than
+          // in vendor. Not because few views need it: two dozen do (forum,
+          // blogs, games, profile, moderation, support - anywhere text is
+          // composed). Because the views that only READ text do not, and at
+          // 361 KB raw it is the largest thing a reader can avoid downloading.
+          // @tiptap/pm is left out: that package has a structure of its own.
           tiptap: [
             "@tiptap/vue-3",
             "@tiptap/starter-kit",
@@ -85,12 +96,12 @@ export default defineConfig({
             "@tiptap/extension-code-block",
             "@tiptap/extension-bubble-menu",
           ],
-          // SignalR - загружается для realtime
+          // The realtime transport: the chat, the global chat and the
+          // notification bell need it, a reader who opens none of them does
+          // not.
           signalr: ["@microsoft/signalr"],
         },
       },
     },
-    // Увеличим лимит предупреждения о размере chunk
-    chunkSizeWarningLimit: 500,
   },
 });

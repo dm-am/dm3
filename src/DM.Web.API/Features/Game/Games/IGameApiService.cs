@@ -73,9 +73,9 @@ public interface IGameApiService
     /// Update existing game
     /// </summary>
     /// <param name="gameId">Game identifier</param>
-    /// <param name="game">Game API model</param>
+    /// <param name="request">Editable game fields</param>
     /// <returns>Envelope for updated game</returns>
-    Task<Envelope<GameDetails>> Update(Guid gameId, GameDetails game);
+    Task<Envelope<GameDetails>> Update(Guid gameId, UpdateGameRequest request);
 
     /// <summary>
     /// Apply a game status transition (start / freeze / finish / close / reopen)

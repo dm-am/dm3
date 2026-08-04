@@ -9,15 +9,40 @@
  * The router `afterEach` runs first on navigation and sets a default title from
  * `meta.title`; a page calling this composable on the same tick overrides it,
  * so the composable always wins for dynamic pages.
+ *
+ * Composition is the same everywhere: the segment that tells two tabs apart
+ * first, the wider context after it, the brand last. A browser truncates a tab
+ * title from the right, so the leading segment is the one that survives.
  */
 import { toValue, watchEffect, type MaybeRefOrGetter } from "vue";
 
 const BRAND = "Dungeon Master";
 
-/** Formats a page title as `"{title} — Dungeon Master"`, or just the brand when empty. */
+/**
+ * The one separator between title segments: a vertical bar, the sign the design
+ * language already uses for navigation strips. It replaced an em dash, which is
+ * out of interface copy.
+ */
+export const TITLE_SEPARATOR = " | ";
+
+/**
+ * Joins title segments and drops the empty ones (an entity still loading, a
+ * route with no section), so a title never carries a dangling separator. The
+ * single place a multi-part title is composed: pages that glued their own put
+ * two different separators into one string.
+ */
+export function joinTitleSegments(
+  ...segments: Array<string | null | undefined>
+): string {
+  return segments
+    .map((segment) => segment?.trim())
+    .filter((segment): segment is string => !!segment)
+    .join(TITLE_SEPARATOR);
+}
+
+/** Formats a page title as `"{title} | Dungeon Master"`, or just the brand when empty. */
 export function formatDocumentTitle(title: string | null | undefined): string {
-  const trimmed = title?.trim();
-  return trimmed ? `${trimmed} — ${BRAND}` : BRAND;
+  return joinTitleSegments(title, BRAND);
 }
 
 /**

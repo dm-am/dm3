@@ -44,6 +44,21 @@ public interface IChatService
     Task<Chat> GetAsync(Guid chatId);
 
     /// <summary>
+    /// Get a game room chat, without the participation check
+    /// </summary>
+    /// <remarks>
+    /// A game room chat is created with no participant rows at all, so the
+    /// participation check that guards every other chat refuses it to everyone,
+    /// the master of the game included. Who may read and write there is access to
+    /// the room, decided by the game module before this call. The method accepts
+    /// nothing but a game room chat, so it cannot become a way around the
+    /// participation check for direct and group chats.
+    /// </remarks>
+    /// <param name="chatId">Chat identifier</param>
+    /// <returns>Chat</returns>
+    Task<Chat> GetGameRoomAsync(Guid chatId);
+
+    /// <summary>
     /// Get single chat by public ID
     /// </summary>
     /// <param name="publicId">Chat public ID (5 letters)</param>

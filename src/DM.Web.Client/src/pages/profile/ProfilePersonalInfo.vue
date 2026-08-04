@@ -99,11 +99,33 @@ function onShowYearToggle(event: Event) {
   );
 }
 
-function cloneContacts(src: readonly Contact[] | undefined): Contact[] {
-  return src ? JSON.parse(JSON.stringify(src)) : [];
+/**
+ * A draft row with an identity of its own. Neither of the two fields is one:
+ * `contactType` is free text and nothing stops two rows from both being
+ * "Telegram", and the index moves under every row below the one removed. Keyed
+ * by index, deleting a middle row left the caret on an input that now held the
+ * NEXT contact's data, and the reader went on typing into someone else's row.
+ */
+interface ContactDraft extends Contact {
+  uid: number;
 }
 
-const contactsDraft = ref<Contact[]>(cloneContacts(props.user.contacts));
+let nextDraftUid = 0;
+
+function cloneContacts(src: readonly Contact[] | undefined): ContactDraft[] {
+  return (src ?? []).map((contact) => ({
+    contactType: contact.contactType,
+    value: contact.value,
+    uid: (nextDraftUid += 1),
+  }));
+}
+
+/** What the server is told: the draft's own identity is not part of it. */
+function asContacts(drafts: readonly ContactDraft[]): Contact[] {
+  return drafts.map(({ contactType, value }) => ({ contactType, value }));
+}
+
+const contactsDraft = ref<ContactDraft[]>(cloneContacts(props.user.contacts));
 const contacts = computed(() => props.user.contacts ?? []);
 
 watch(
@@ -122,11 +144,19 @@ watch(
 );
 
 function commitContacts() {
-  emit("updateField", "contacts", JSON.stringify(contactsDraft.value));
+  emit(
+    "updateField",
+    "contacts",
+    JSON.stringify(asContacts(contactsDraft.value)),
+  );
 }
 
 function addContact() {
-  contactsDraft.value.push({ contactType: "", value: "" });
+  contactsDraft.value.push({
+    contactType: "",
+    value: "",
+    uid: (nextDraftUid += 1),
+  });
 }
 
 function removeContact(index: number) {
@@ -224,13 +254,13 @@ function onContactChange(
         <div v-if="contactsDraft.length" class="contacts-edit-list">
           <div
             v-for="(contact, idx) in contactsDraft"
-            :key="idx"
+            :key="contact.uid"
             class="contact-edit-row"
           >
             <input
               type="text"
               class="input contact-type"
-              placeholder="Telegram, Discord, …"
+              placeholder="Telegram, Discord, ..."
               :value="contact.contactType"
               @input="
                 onContactChange(
@@ -281,9 +311,15 @@ function onContactChange(
         {{ "\n" }}
       </div>
       <div v-if="!isEditMode && contacts.length" class="contacts-subgroup">
+        <!-- Keyed by position, and that is not the editor's mistake repeated:
+             this list is a read-only projection of a prop with no state of its
+             own, so its position IS its identity. contactType is not — the
+             editor lets a reader add "Telegram" twice, and two rows under one
+             key is a duplicate-key warning and a patch that can leave one of
+             them stale. -->
         <StatLine
-          v-for="contact in contacts"
-          :key="contact.contactType"
+          v-for="(contact, idx) in contacts"
+          :key="idx"
           :label="contact.contactType"
           :value="contact.value"
         />
@@ -355,16 +391,8 @@ function onContactChange(
   min-width: 0
 
 .contact-remove
-  display: inline-flex
-  align-items: center
-  justify-content: center
-  width: 20px
-  height: 20px
-  padding: 0
-  background: none
-  border: none
   color: $text-muted
-  cursor: pointer
+  +icon-button(20px)
 
   &:hover
     color: $accent-red

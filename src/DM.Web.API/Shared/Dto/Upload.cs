@@ -1,6 +1,6 @@
 using System;
-using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 
 namespace DM.Web.API.Shared.Dto;
@@ -62,7 +62,15 @@ public class Upload
 /// <summary>
 /// Query parameters for listing uploads.
 /// </summary>
-public class UploadsQuery
+/// <remarks>
+/// Pages with skip/take, inherited from <see cref="PagingQuery"/>, like the
+/// other twenty-seven offset-paged lists. It used to page with number/size and
+/// was the only endpoint that did, which cost the shared paging component on
+/// the client a branch of its own — and the page number was handed to
+/// PagingResult.Create in the slot that takes an entity index, so every page
+/// after the first came back declaring itself page 1.
+/// </remarks>
+public class UploadsQuery : PagingQuery
 {
     /// <summary>Filter by upload type.</summary>
     [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -71,15 +79,4 @@ public class UploadsQuery
     /// <summary>Filter by processing status.</summary>
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public UploadStatus? Status { get; set; }
-
-    /// <summary>Filter by user ID (admin only).</summary>
-    public Guid? UserId { get; set; }
-
-    /// <summary>Page number (1-based).</summary>
-    [Range(1, int.MaxValue, ErrorMessage = "Номер страницы должен быть не менее 1")]
-    public int Number { get; set; } = 1;
-
-    /// <summary>Number of items per page (1-100).</summary>
-    [Range(1, 100, ErrorMessage = "Размер страницы должен быть от 1 до 100")]
-    public int Size { get; set; } = 20;
 }

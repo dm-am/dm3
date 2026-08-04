@@ -30,13 +30,13 @@ internal class MentorshipService : IMentorshipService
 
         if (!await _repository.GameExists(gameId, ct))
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Game not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
         }
 
         var currentMentor = await _repository.GetGameMentorId(gameId, ct);
         if (currentMentor.HasValue)
         {
-            throw new HttpException(HttpStatusCode.Conflict, "Game already has a mentor assigned");
+            throw new HttpException(HttpStatusCode.Conflict, "У игры уже есть наставник");
         }
 
         var userId = _identityProvider.Current.User.UserId;
@@ -50,7 +50,7 @@ internal class MentorshipService : IMentorshipService
 
         if (!await _repository.GameExists(gameId, ct))
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Game not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
         }
 
         var userId = _identityProvider.Current.User.UserId;
@@ -58,7 +58,7 @@ internal class MentorshipService : IMentorshipService
 
         if (!currentMentor.HasValue || currentMentor.Value != userId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You are not the mentor of this game");
+            throw new HttpException(HttpStatusCode.Forbidden, "Вы не наставник этой игры");
         }
 
         await _repository.SetGameMentor(gameId, null, ct);
@@ -71,13 +71,13 @@ internal class MentorshipService : IMentorshipService
 
         if (!await _repository.BlogExists(blogId, ct))
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Blog not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
         }
 
         var currentMentor = await _repository.GetBlogMentorId(blogId, ct);
         if (currentMentor.HasValue)
         {
-            throw new HttpException(HttpStatusCode.Conflict, "Blog already has a mentor assigned");
+            throw new HttpException(HttpStatusCode.Conflict, "У блога уже есть наставник");
         }
 
         var userId = _identityProvider.Current.User.UserId;
@@ -91,7 +91,7 @@ internal class MentorshipService : IMentorshipService
 
         if (!await _repository.BlogExists(blogId, ct))
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Blog not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
         }
 
         var userId = _identityProvider.Current.User.UserId;
@@ -99,7 +99,7 @@ internal class MentorshipService : IMentorshipService
 
         if (!currentMentor.HasValue || currentMentor.Value != userId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You are not the mentor of this blog");
+            throw new HttpException(HttpStatusCode.Forbidden, "Вы не наставник этого блога");
         }
 
         await _repository.SetBlogMentor(blogId, null, ct);
@@ -136,7 +136,7 @@ internal class MentorshipService : IMentorshipService
         var userRole = _identityProvider.Current.User.Role;
         if (userRole < UserRole.Mentor)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Mentor role or higher is required");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нужна роль наставника или выше");
         }
     }
 
@@ -149,7 +149,7 @@ internal class MentorshipService : IMentorshipService
         var userRole = _identityProvider.Current.User.Role;
         if (userRole < UserRole.Moderator)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Moderator role or higher is required");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нужна роль модератора или выше");
         }
     }
 }

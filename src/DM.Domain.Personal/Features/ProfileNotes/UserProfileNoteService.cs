@@ -69,13 +69,13 @@ internal class UserProfileNoteService : IUserProfileNoteService
         if (subjectUser == null)
         {
             throw new HttpException(HttpStatusCode.NotFound,
-                $"User {createNote.SubjectUsername} not found");
+                RefusalMessage.UserNotFoundByUsername(createNote.SubjectUsername));
         }
 
         if (subjectUser.UserId == currentUser.UserId)
         {
             throw new HttpException(HttpStatusCode.BadRequest,
-                "Cannot create a note about yourself");
+                "Нельзя оставить заметку о себе");
         }
 
         var existingNote = await _repository.Get(currentUser.UserId, subjectUser.UserId, ct);
@@ -127,7 +127,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
         var subjectUser = await _userRepository.GetUserAsync(subjectUsername);
         if (subjectUser == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, $"User {subjectUsername} not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(subjectUsername));
         }
 
         var note = await _repository.Get(currentUser.UserId, subjectUser.UserId, ct);

@@ -1,12 +1,12 @@
 <script setup lang="ts">
 /**
  * AwardTypeEditDialog — edit an award-type catalog entry (title /
- * description / icon / tier / sortOrder). Dialog twin of the former
- * hand-rolled modal in ModerationAwardTypes.vue.
+ * description / icon / tier / sortOrder).
  */
 import { ref, computed } from "vue";
 import { achievementApi } from "@/entities/achievement";
 import type { AwardType } from "@/shared/api/models/achievements";
+import { describeFailure } from "@/shared/lib/errors";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import Form from "@/shared/ui/Form/Form.vue";
@@ -53,7 +53,7 @@ async function submit() {
   );
   saving.value = false;
   if (e) {
-    error.value = e.title ?? "Не удалось сохранить";
+    error.value = describeFailure(e, "Не удалось сохранить");
     return;
   }
   emit("success");

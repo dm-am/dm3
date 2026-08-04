@@ -59,7 +59,7 @@ internal class SubscriptionService : ISubscriptionService
         // Prevent self-subscription for User type
         if (targetType == SubscriptionTargetType.User && targetId == userId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Cannot subscribe to yourself");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя подписаться на себя");
         }
 
         // Check if already subscribed
@@ -90,14 +90,14 @@ internal class SubscriptionService : ISubscriptionService
 
         if (subscription == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Subscription not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.SubscriptionNotFound);
         }
 
         // Verify ownership
         var userId = _identityProvider.Current.User.UserId;
         if (subscription.SubscriberId != userId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Cannot modify another user's subscription");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя изменить чужую подписку");
         }
 
         var update = new UpdateSubscription
@@ -124,7 +124,7 @@ internal class SubscriptionService : ISubscriptionService
         var userId = _identityProvider.Current.User.UserId;
         if (subscription.SubscriberId != userId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Cannot unsubscribe another user");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя отписать другого пользователя");
         }
 
         await _repository.DeleteAsync(subscriptionId, ct);
@@ -163,10 +163,19 @@ internal class SubscriptionService : ISubscriptionService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GeneralUser>> GetTargetSubscribersAsync(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default)
+    public async Task<int> CountTargetSubscribersAsync(SubscriptionTargetType targetType, Guid targetId,
+        CancellationToken ct = default) =>
+        (await _repository.GetTargetSubscriberIdsAsync(targetType, targetId, ct)).Count();
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<GeneralUser>> GetTargetSubscribersAsync(SubscriptionTargetType targetType, Guid targetId,
+        PagingQuery query, CancellationToken ct = default)
     {
         var subscriberIds = await _repository.GetTargetSubscriberIdsAsync(targetType, targetId, ct);
-        var subscriberIdList = subscriberIds.ToList();
+        // The slice is taken before the lookups, not after: hydrating every
+        // subscriber of a popular account to answer with twenty of them is one
+        // round trip per subscriber for a page nobody asked for.
+        var subscriberIdList = subscriberIds.Skip(query.Skip).Take(query.Take).ToList();
 
         if (!subscriberIdList.Any())
         {

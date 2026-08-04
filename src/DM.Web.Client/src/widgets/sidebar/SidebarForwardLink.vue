@@ -21,7 +21,6 @@ defineProps<{
 <style scoped lang="sass">
 .muted
   color: $text-muted
-  user-select: none
 
 .forward
   font-weight: bold

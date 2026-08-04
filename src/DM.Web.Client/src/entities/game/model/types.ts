@@ -151,6 +151,22 @@ export type ApiCharacterStatus =
   | "Retired";
 
 /**
+ * Requested change to a character's place in the game
+ * (see src/DM.Domain.Game/Features/Characters/CharacterStatusTransition.cs).
+ *
+ * The transition is named rather than the target status: Retired is reached by
+ * dying, by being exiled and by leaving, and each is a different person's right.
+ */
+export type CharacterStatusTransition =
+  | "Accept"
+  | "Decline"
+  | "Kill"
+  | "Exile"
+  | "Leave"
+  | "Resurrect"
+  | "Return";
+
+/**
  * Character of the player targeted by the playerUsername search filter
  * (profile games table, "Игрок" mode)
  */
@@ -272,12 +288,8 @@ export interface CreateGameInput {
   info: string;
   /** Create the game as a draft (not visible to others) */
   draft?: boolean;
-  /**
-   * Game tag identifiers — backend Guids, NOT the numeric short ids served
-   * by /games/tags. The public tag list does not expose the Guids, so this
-   * field currently cannot be populated from TagSelector output.
-   */
-  tags?: string[];
+  /** Game tag short identifiers, the ones /games/tags serves */
+  tags?: number[];
   /** Attribute schema identifier */
   schemaId?: string;
   /** Assistant username */
@@ -427,8 +439,16 @@ export type Character = {
   picture: Served<UserPicture>;
   /** Character is NPC (controlled by game master) */
   isNpc: Served<boolean>;
-  privacy: CharacterPrivacySettings;
-  attributes: Served<CharacterAttribute[]>;
+  /**
+   * Editing policy. Detail-only, like the sheet below: the roster listing does
+   * not carry it, and read from a roster entry it is undefined.
+   */
+  privacy?: CharacterPrivacySettings;
+  /**
+   * The filled-in sheet. Absent from the roster listing, which answers names
+   * and portraits: the sheet is read one character at a time.
+   */
+  attributes?: Served<CharacterAttribute[]>;
   totalPostsCount: Served<number>;
   /**
    * Timestamp of the character's most recent post ("Последний ход" column).
@@ -471,11 +491,6 @@ export enum RoomAccessType {
   Private = "Private",
 }
 
-export interface RoomClaim {
-  character: Character;
-  claimedAt: string;
-}
-
 /**
  * Per-room access grant policy.
  *  - ReadOnly: can view the room but cannot post
@@ -500,18 +515,34 @@ export interface RoomAccess {
   user?: UserRef | null;
 }
 
-export interface PendingPost {
+/**
+ * An expectation that some character's player writes the next post in a room
+ * (DM.Web.API.Features.Game.Rooms.PostPendency). It stays in the payload once
+ * answered, with fulfilledUtc set, so every reader has to filter for itself.
+ * characterName is declared non-optional: the read path always carries it,
+ * and the DTO is nullable only because the same shape is a create body.
+ */
+export interface PostPendency {
   id: string;
+  roomId: string;
   characterId: string;
   characterName: string;
+  createdBy?: UserRef;
+  waitingFor?: UserRef | null;
   createdUtc: string;
-  awaitingUser: UserRef;
+  fulfilledUtc?: string | null;
 }
 
 export interface RoomSettings {
   viewPrivateText: boolean;
   viewDiceResults: boolean;
   diceEnabled: boolean;
+  /**
+   * Room is kept out of the game's room list for everybody who may not open
+   * it. The server is what drops it: a hidden room never reaches a viewer
+   * without access at all, so this is only ever read by the settings form.
+   */
+  hiddenWithoutAccess: boolean;
 }
 
 export type Room = {
@@ -526,18 +557,24 @@ export type Room = {
    * Absent on older payloads — treat missing as not archived.
    */
   isArchived?: boolean;
-  claims?: RoomClaim[];
+  /**
+   * Viewer may open the room. The rooms listing names every room of the game,
+   * closed ones included, and answers false for a private room the viewer may
+   * not enter; a read that returns a room at all returns one they may, and
+   * leaves this out.
+   */
+  canView?: boolean;
   /** Explicit per-room access grants (characters and/or readers) */
   accesses?: RoomAccess[];
-  pendings?: PendingPost[];
+  pendencies?: PostPendency[];
   unreadPostsCount: number;
   settings?: RoomSettings;
   /**
    * Parent game reference for this room. Post-listing endpoints
    * (rated posts, pulse) populate this with a full sidebar-tier
    * GameRef — master, assistants, active characters, recruitment,
-   * counts — so downstream GameLink / RoomLink components can
-   * render tooltips without a second network round-trip per post.
+   * counts — so GameLink renders its tooltip and RoomLink builds its
+   * route without a second network round-trip per post.
    * Mirrors the sidebar's data-flow (ActiveGames, RecruitingGames,
    * OwnedGames all pass full GameRef objects straight into GameLink).
    */

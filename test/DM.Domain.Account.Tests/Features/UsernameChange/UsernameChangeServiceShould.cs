@@ -222,7 +222,7 @@ public class UsernameChangeServiceShould : UnitTestBase
             () => _service.CompleteWithTokenAsync(tokenId, "newusername"));
 
         exception.StatusCode.Should().Be(HttpStatusCode.NotFound);
-        exception.Message.Should().Contain("expired");
+        exception.Message.Should().Contain("истек");
     }
 
     [Fact]

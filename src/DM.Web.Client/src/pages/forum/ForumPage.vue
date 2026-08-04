@@ -13,7 +13,11 @@ import { useRoute } from "vue-router";
 import { useBoardsStore } from "@/entities/forum";
 import { storeToRefs } from "pinia";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
-import { ErrorPage, getErrorConfig } from "@/shared/ui/ErrorPage";
+import {
+  ErrorPage,
+  errorCodeForStatus,
+  getErrorConfig,
+} from "@/shared/ui/ErrorPage";
 import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
 import BoardNavigation from "./BoardNavigation.vue";
 import { reportForumShellError } from "./forumShell";
@@ -27,10 +31,10 @@ const { trySelectBoardByAlias, fetchBoards } = boardsStore;
 // duplicate it, so the shell only shows the strip on board/topic levels.
 const boardAlias = computed(() => route.params.alias as string | undefined);
 
-// Error code when the requested board alias fails to resolve: 404 for a
-// genuinely missing board, 500 for anything else (network/server failure).
-// Distinguishes a missing board from a board that simply has no topics
-// (TopicsList shows empty state).
+// Error code when the requested board alias fails to resolve. Distinguishes a
+// missing board from a board that simply has no topics (TopicsList shows the
+// empty state). The mapping is shared with every other page that raises an
+// error page from a status, see errorCodeForStatus.
 const errorCode = ref<number | null>(null);
 
 // Leaf-reported page-level failure (topic not found, …): the shell hides
@@ -53,12 +57,6 @@ useDocumentTitle(() => {
   return boardAlias.value ? null : "Форум";
 });
 
-/** Maps a failed board lookup's HTTP status to an ErrorPage code. */
-function mapErrorCode(status: number | undefined): number {
-  if (status === 404) return 404;
-  return 500;
-}
-
 async function fetchData() {
   const alias = route.params.alias as string | undefined;
   errorCode.value = null;
@@ -80,7 +78,7 @@ async function fetchData() {
   // was resolving — that navigation's own fetchData owns all state now.
   if ((route.params.alias as string | undefined) !== alias) return;
   if (!ok) {
-    errorCode.value = mapErrorCode(status);
+    errorCode.value = errorCodeForStatus(status);
     return;
   }
   // Topics are loaded by TopicsList.vue via paramsKey watcher

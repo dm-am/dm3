@@ -68,6 +68,15 @@ jobs:
 
   zap-scan:
     runs-on: ubuntu-latest
+    env:
+      # docker/.env.example ends with Development for local work, and a scan of
+      # Development is a scan of a surface that never ships: Swagger is mapped
+      # only there and the content policy relaxes its script-src for it, so the
+      # tool both sees what production does not have and misses what it does.
+      # Through the environment rather than by rewriting a line of the file, the
+      # way the throwaway encryption key below is handed in: compose prefers the
+      # environment over .env.
+      ASPNETCORE_ENVIRONMENT: Production
     steps:
       - uses: actions/checkout@v4
 
@@ -91,11 +100,15 @@ jobs:
           cp docker/.env.example docker/.env
           cd docker && docker compose config --quiet
 
+      # --build on the migration line: its image is the API image, and that is
+      # now the tag the registry publishes. Compose pulls a missing image before
+      # it considers building one, so without this the schema would come from the
+      # published build and the scan would run against a different commit.
       - name: Start infrastructure with Docker Compose
         run: |
           cd docker
           docker compose up -d postgres mongo rabbitmq minio mailhog jaeger
-          docker compose up -d --wait migration
+          docker compose up -d --build --wait migration
 
       - name: Build and start API
         run: |

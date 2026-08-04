@@ -33,7 +33,7 @@ public class EmailAvailabilityResult
 public enum EmailUnavailableReason
 {
     /// <summary>
-    /// Email is used by an active user
+    /// Email is held by an account, deactivated accounts included
     /// </summary>
     Taken,
 

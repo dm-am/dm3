@@ -13,7 +13,7 @@ namespace DM.Domain.Personal.Features.Profiles;
 ///
 /// The payload contains only userId — the client reloads its own data,
 /// other users' avatars in the DOM update on the next render with new URLs
-/// (immutable hash-based keys → browser cache safe).
+/// (keys are never rewritten → browser cache safe).
 /// </summary>
 public interface IRealtimeAvatarBroadcaster
 {

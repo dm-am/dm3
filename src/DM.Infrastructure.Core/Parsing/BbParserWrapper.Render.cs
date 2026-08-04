@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using BBCodeParser.Nodes;
 using DM.Infrastructure.Core.Parsing.Visitors;

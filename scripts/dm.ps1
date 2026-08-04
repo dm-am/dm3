@@ -26,11 +26,157 @@ if (-not (Get-Command "docker" -ErrorAction SilentlyContinue)) {
     }
 }
 
+# Prepares docker/.env through docker/scripts/init-env.sh, the one script that
+# owns that file. It is a shell script because the server installer is one too,
+# and Git for Windows ships the interpreter for it - the same one this repository
+# already requires for its git hooks and for check-vulnerable-packages.sh. If it
+# is not on the machine, the command to run is printed rather than guessed at:
+# half-preparing the file is what produced a .env compose refused to interpolate.
+# Git for Windows first, and by path rather than by name.
+#
+# "bash" on PATH is C:\Windows\System32\bash.exe on every machine with the WSL
+# feature enabled, and that is a launcher for a Linux distribution rather than a
+# shell: with no distribution installed it answers
+# "execvpe(/bin/bash) failed: No such file or directory" and the caller is left
+# with a message about a file that has nothing to do with this repository. It
+# wins over Git for Windows whenever the session's PATH lists System32 first,
+# which a plain cmd.exe does.
+function Resolve-Bash {
+    $candidates = @(
+        (Join-Path $env:ProgramFiles "Git\bin\bash.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\Git\bin\bash.exe")
+    )
+    if (${env:ProgramFiles(x86)}) {
+        $candidates += (Join-Path ${env:ProgramFiles(x86)} "Git\bin\bash.exe")
+    }
+
+    foreach ($candidate in $candidates) {
+        if ($candidate -and (Test-Path $candidate)) { return $candidate }
+    }
+
+    # Anything else on PATH, as long as it is not one of the two launchers that
+    # only pretend to be one.
+    $onPath = Get-Command "bash" -ErrorAction SilentlyContinue
+    if ($onPath -and $onPath.Source -notmatch '\\(System32|WindowsApps)\\') {
+        return $onPath.Source
+    }
+
+    return $null
+}
+
+function Invoke-EnvironmentInit {
+    $bash = Resolve-Bash
+
+    if (-not $bash) {
+        Write-Host "bash not found; docker/.env is prepared by a shell script." -ForegroundColor Red
+        Write-Host "  Install Git for Windows, or run: bash docker/scripts/init-env.sh local" -ForegroundColor Yellow
+        return $false
+    }
+
+    $script = Join-Path $DockerDir "scripts/init-env.sh"
+    & $bash $script local
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "docker/scripts/init-env.sh failed with exit code $LASTEXITCODE" -ForegroundColor Red
+        return $false
+    }
+
+    return $true
+}
+
 # Check Docker daemon is running
 $dockerCheck = & $script:DockerPath info 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Docker daemon not running. Start Docker Desktop first." -ForegroundColor Red
     exit 1
+}
+
+# Environment check: docker compose refuses to do anything at all when a
+# required variable has no value, and the message it prints names the first
+# service it failed to interpolate rather than the file to edit. Worse, the
+# animated wrappers below cut a failure down to sixty characters, so the reason
+# does not survive to the screen. The list of names comes from .env.example
+# rather than from a copy here: a variable added to the stack is added there in
+# the same commit, and a second list would be one more thing to forget.
+function Assert-Environment {
+    $envFile = Join-Path $DockerDir ".env"
+    $exampleFile = Join-Path $DockerDir ".env.example"
+
+    if (-not (Test-Path $envFile)) {
+        Write-Host "  docker/.env is still missing after docker/scripts/init-env.sh ran." -ForegroundColor Red
+        Write-Host "  Run it by hand to see why: bash docker/scripts/init-env.sh local" -ForegroundColor DarkGray
+        Write-Host ""
+        exit 1
+    }
+    if (-not (Test-Path $exampleFile)) { return }
+
+    # Any name a shell would accept, not upper case only. The pattern used to
+    # start at [A-Z] and stop at [A-Z0-9_], which excluded the one variable that
+    # matters most - DM_CryptoConfiguration__KeyBase64 - so the file could be
+    # missing exactly the value compose dies on and this check passed it.
+    $names = { param($path)
+        Get-Content $path |
+            Where-Object { $_ -match '^[A-Za-z_][A-Za-z0-9_]*=' } |
+            ForEach-Object { ($_ -split '=', 2)[0] }
+    }
+
+    $declared = & $names $envFile
+    $expected = & $names $exampleFile
+    $missing = @($expected | Where-Object { $declared -notcontains $_ })
+
+    if ($missing.Count -gt 0) {
+        Write-Host "  docker/.env is missing $($missing.Count) variable(s) the stack needs:" -ForegroundColor Red
+        foreach ($name in $missing) {
+            $sample = (Get-Content $exampleFile | Where-Object { $_ -match "^$name=" } | Select-Object -First 1)
+            Write-Host "    $sample" -ForegroundColor DarkGray
+        }
+        Write-Host ""
+        Write-Host "  They are documented in docker/.env.example. Copy the lines above and set your own values." -ForegroundColor DarkGray
+        Write-Host ""
+        exit 1
+    }
+
+    # Presence is not enough. Compose marks the values it cannot start without
+    # as ${NAME:?...}, and an empty value fails that interpolation exactly as
+    # hard as a missing line - which is the state a hand-made .env arrives in,
+    # because .env.example ships the encryption key blank on purpose. The names
+    # are read out of the compose files rather than listed here: the file that
+    # declares the requirement is the one that should carry it.
+    $required = @(
+        Get-ChildItem -Path $DockerDir -Filter "docker-compose*.yml" |
+            Select-String -Pattern '\$\{([A-Za-z_][A-Za-z0-9_]*):\?' -AllMatches |
+            ForEach-Object { $_.Matches } |
+            ForEach-Object { $_.Groups[1].Value } |
+            Sort-Object -Unique
+    )
+
+    $values = @{}
+    foreach ($line in Get-Content $envFile) {
+        if ($line -match '^([A-Za-z_][A-Za-z0-9_]*)=(.*)$') { $values[$matches[1]] = $matches[2].Trim() }
+    }
+
+    $blank = @($required | Where-Object { $values.ContainsKey($_) -and -not $values[$_] })
+    if ($blank.Count -gt 0) {
+        Write-Host "  docker/.env declares $($blank.Count) variable(s) with no value, and the stack cannot start without them:" -ForegroundColor Red
+        foreach ($name in $blank) {
+            Write-Host "    $name=" -ForegroundColor DarkGray
+        }
+        Write-Host ""
+        Write-Host "  docker/scripts/init-env.sh fills the generated ones. The rest are yours to set." -ForegroundColor DarkGray
+        Write-Host ""
+        exit 1
+    }
+}
+
+# The environment is prepared and then checked, in that order and once per run.
+# The check used to run first and on its own, so a clone with no docker/.env was
+# told to copy the template by hand while the script that owns that file sat
+# unused two functions below - the documented first run, dead on Windows only.
+$script:EnvironmentReady = $false
+function Initialize-Environment {
+    if ($script:EnvironmentReady) { return }
+    if (-not (Invoke-EnvironmentInit)) { exit 1 }
+    Assert-Environment
+    $script:EnvironmentReady = $true
 }
 
 function Show-Help {
@@ -98,6 +244,31 @@ function Write-FailedStep {
     Write-Host "`r  [" -NoNewline
     Write-Host "-" -ForegroundColor Red -NoNewline
     Write-Host $text.Substring(4)
+}
+
+# Why a failure gets more than one line: the step line is a fixed width and the
+# reason a container refuses to start is not. This used to take the first
+# non-empty line of stdout and stderr concatenated in that order, cut to sixty
+# characters - so a failed build reported its first progress line, truncated,
+# and the actual error was discarded. Stderr leads because that is where every
+# tool here writes its diagnosis, and stdout is the fallback for the ones that
+# do not.
+function Write-ProcessFailure {
+    param([string]$StdOut, [string]$StdErr, [int]$MaxLines = 20)
+
+    $lines = @($StdErr -split "`n" | Where-Object { $_.Trim() -ne "" })
+    if ($lines.Count -eq 0) {
+        $lines = @($StdOut -split "`n" | Where-Object { $_.Trim() -ne "" })
+    }
+    if ($lines.Count -eq 0) { return }
+
+    if ($lines.Count -gt $MaxLines) {
+        Write-Host "      ... $($lines.Count - $MaxLines) earlier line(s) omitted" -ForegroundColor DarkGray
+        $lines = $lines[-$MaxLines..-1]
+    }
+    foreach ($line in $lines) {
+        Write-Host "      $($line.TrimEnd())" -ForegroundColor DarkGray
+    }
 }
 
 function Wait-ServicesHealthy {
@@ -203,6 +374,14 @@ function Invoke-WithAnimation {
         return $false
     }
 
+    # Both pipes are drained while the process is still running, not after it.
+    # A redirected pipe holds tens of kilobytes; the writer blocks once it is
+    # full, and a wait loop that reads nothing until HasExited turns that into a
+    # hang with no output and no exit — which is what "docker compose --build"
+    # did every time, because a build writes more than the buffer holds.
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+
     $frame = 0
     while (-not $process.HasExited) {
         Write-AnimatedStep -Label $Label -Current 0 -Total 1 -DotFrame $frame
@@ -210,25 +389,16 @@ function Invoke-WithAnimation {
         $frame++
     }
 
-    $stderr = $process.StandardError.ReadToEnd()
     $process.WaitForExit()
 
     if ($process.ExitCode -eq 0) {
         Write-CompletedStep -Label $Label -Total 1
         return $true
-    } else {
-        # Extract first meaningful error line
-        $errorLine = ($stderr -split "`n" | Where-Object { $_.Trim() -ne "" } | Select-Object -First 1)
-        if ($errorLine) {
-            $errorLine = $errorLine.Trim()
-            # Truncate if too long
-            if ($errorLine.Length -gt 60) { $errorLine = $errorLine.Substring(0, 57) + "..." }
-        } else {
-            $errorLine = "exit code $($process.ExitCode)"
-        }
-        Write-FailedStep -Label $Label -Current 0 -Total 1 -Detail $errorLine
-        return $false
     }
+
+    Write-FailedStep -Label $Label -Current 0 -Total 1 -Detail "exit code $($process.ExitCode)"
+    Write-ProcessFailure -StdOut $stdoutTask.Result -StdErr $stderrTask.Result
+    return $false
 }
 
 function Start-Services {
@@ -240,26 +410,6 @@ function Start-Services {
         Write-Host ""
     }
 
-    # Check .env file
-    $envFile = Join-Path $DockerDir ".env"
-    if (-not (Test-Path $envFile)) {
-        Write-Host "  Creating .env from template..." -ForegroundColor Yellow
-        Copy-Item (Join-Path $DockerDir ".env.example") $envFile
-    }
-
-    # The encryption key has no default in the repository on purpose, so the
-    # template ships it empty and the app refuses to start without it. Generate a
-    # per-machine key once instead of asking every developer to do it by hand.
-    $envContent = Get-Content $envFile -Raw
-    if ($envContent -match '(?m)^DM_CryptoConfiguration__KeyBase64=\s*$') {
-        $keyBytes = New-Object byte[] 32
-        [System.Security.Cryptography.RandomNumberGenerator]::Fill($keyBytes)
-        $key = [Convert]::ToBase64String($keyBytes)
-        $envContent = $envContent -replace '(?m)^DM_CryptoConfiguration__KeyBase64=\s*$', "DM_CryptoConfiguration__KeyBase64=$key"
-        Set-Content -Path $envFile -Value $envContent -Encoding utf8 -NoNewline
-        Write-Host "  Generated a local encryption key in docker/.env" -ForegroundColor Yellow
-    }
-
     Push-Location $DockerDir
     try {
         # Building (with animation)
@@ -267,12 +417,9 @@ function Start-Services {
             exit 1
         }
 
-        # Infrastructure - start containers (with animation)
-        if (-not (Invoke-WithAnimation -Label "Starting" -Command $script:DockerPath -Arguments "compose up -d postgres mongo rabbitmq minio imgproxy mailhog jaeger loki prometheus grafana")) {
-            Write-FailedStep -Label "Infrastructure" -Current 0 -Total 5
-            exit 1
-        }
-
+        # The list is declared before the step that reports it: the failure line
+        # used to carry a hand-typed total of five against six services, so a
+        # stack that started nothing at all said one of them had made it.
         $infraServices = @(
             @{ Name = "dm-pg"; Label = "Postgres" },
             @{ Name = "dm-mongo"; Label = "Mongo" },
@@ -281,13 +428,23 @@ function Start-Services {
             @{ Name = "dm-loki"; Label = "Loki" },
             @{ Name = "dm-rmq"; Label = "RabbitMQ" }
         )
+
+        # Infrastructure - start containers (with animation)
+        # alertmanager comes up with prometheus: started apart, prometheus
+        # evaluates its rules into nothing, which is the state the deployment
+        # spent its life in and the one a developer would never notice.
+        if (-not (Invoke-WithAnimation -Label "Starting" -Command $script:DockerPath -Arguments "compose up -d postgres mongo rabbitmq minio imgproxy mailhog jaeger loki prometheus alertmanager grafana")) {
+            Write-FailedStep -Label "Infrastructure" -Current 0 -Total $infraServices.Count
+            exit 1
+        }
+
         if (-not (Wait-ServicesHealthy -Label "Infrastructure" -Services $infraServices -TimeoutSeconds 120)) {
             Write-Host "    Logs: .\scripts\dm.ps1 logs" -ForegroundColor DarkGray
             exit 1
         }
 
-        # MinIO bucket создается автоматически API при старте
-        # (StorageBucketInitializer) — ручной mc-init не нужен.
+        # The MinIO bucket is created by the API on start, by
+        # StorageBucketInitializer. There is no mc-init step to run by hand.
 
         # Migration
         & $script:DockerPath compose up -d migration 2>&1 | Out-Null
@@ -301,18 +458,19 @@ function Start-Services {
         }
         if (-not $migrationOk) { exit 1 }
 
-        # Applications - start containers
-        & $script:DockerPath compose up -d dm-mail-worker dm-notification-worker dmapi 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            Write-FailedStep -Label "Applications" -Current 0 -Total 4
-            exit 1
-        }
-
         $appServices = @(
             @{ Name = "dm-api"; Label = "API" },
             @{ Name = "dm-mail-worker"; Label = "Mail" },
             @{ Name = "dm-notification-worker"; Label = "Notify" }
         )
+
+        # Applications - start containers
+        & $script:DockerPath compose up -d dm-mail-worker dm-notification-worker dmapi 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-FailedStep -Label "Applications" -Current 0 -Total $appServices.Count
+            exit 1
+        }
+
         if (-not (Wait-ServicesHealthy -Label "Applications" -Services $appServices -TimeoutSeconds 90)) {
             Write-Host "    Logs: .\scripts\dm.ps1 logs" -ForegroundColor DarkGray
             exit 1
@@ -347,7 +505,7 @@ function Stop-Services {
 
     Push-Location $DockerDir
     try {
-        if (-not (Invoke-WithAnimation -Label "Stopping" -Command $script:DockerPath -Arguments "compose down")) {
+        if (-not (Invoke-WithAnimation -Label "Stopping" -Command $script:DockerPath -Arguments "compose down --remove-orphans")) {
             exit 1
         }
         Write-Host ""
@@ -361,9 +519,14 @@ function Reset-Services {
     Write-Host "DM3 Reset" -ForegroundColor Cyan
     Write-Host ""
 
+    # --remove-orphans, because a service deleted from the compose file leaves
+    # its container behind and "down" walks past it: the search worker and its
+    # Elasticsearch were removed from the stack and survived every reset after
+    # that, holding their names and their place on the network. A reset that
+    # leaves containers of a service the project no longer has is not a reset.
     Push-Location $DockerDir
     try {
-        if (-not (Invoke-WithAnimation -Label "Clearing" -Command $script:DockerPath -Arguments "compose down -v")) {
+        if (-not (Invoke-WithAnimation -Label "Clearing" -Command $script:DockerPath -Arguments "compose down -v --remove-orphans")) {
             exit 1
         }
     } finally {
@@ -401,6 +564,14 @@ function Invoke-WithAnimationAndOutput {
         return $null
     }
 
+    # Both pipes are drained while the process is still running, not after it.
+    # A redirected pipe holds tens of kilobytes; the writer blocks once it is
+    # full, and a wait loop that reads nothing until HasExited turns that into a
+    # hang with no output and no exit — which is what "docker compose --build"
+    # did every time, because a build writes more than the buffer holds.
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+
     $frame = 0
     while (-not $process.HasExited) {
         Write-AnimatedStep -Label $Label -Current 0 -Total 1 -DotFrame $frame
@@ -408,24 +579,15 @@ function Invoke-WithAnimationAndOutput {
         $frame++
     }
 
-    $output = $process.StandardOutput.ReadToEnd()
-    $stderr = $process.StandardError.ReadToEnd()
     $process.WaitForExit()
 
     if ($process.ExitCode -eq 0) {
-        return $output
-    } else {
-        # Extract first meaningful error line
-        $errorLine = ($stderr -split "`n" | Where-Object { $_.Trim() -ne "" } | Select-Object -First 1)
-        if ($errorLine) {
-            $errorLine = $errorLine.Trim()
-            if ($errorLine.Length -gt 60) { $errorLine = $errorLine.Substring(0, 57) + "..." }
-        } else {
-            $errorLine = "exit code $($process.ExitCode)"
-        }
-        Write-FailedStep -Label $Label -Current 0 -Total 1 -Detail $errorLine
-        return $null
+        return $stdoutTask.Result
     }
+
+    Write-FailedStep -Label $Label -Current 0 -Total 1 -Detail "exit code $($process.ExitCode)"
+    Write-ProcessFailure -StdOut $stdoutTask.Result -StdErr $stderrTask.Result
+    return $null
 }
 
 function Get-SeedSummary {
@@ -448,8 +610,12 @@ function Invoke-Seed {
     Write-Host "DM3 Seed" -ForegroundColor Cyan
     Write-Host ""
 
-    # Check if API is running
-    $curlResult = curl.exe -s -o NUL -w "%{http_code}" "http://localhost:5000/v1/games/tags" 2>$null
+    # The liveness endpoint, not a product route. Seeding writes straight to
+    # Postgres and does not need the API at all, but the restart at the end of
+    # this function does - and a precondition pinned to /v1/games/tags made the
+    # whole command depend on one controller keeping its path and staying
+    # anonymous. /_health is what the container healthcheck and CI already ask.
+    $curlResult = curl.exe -s -o NUL -w "%{http_code}" "http://localhost:5000/_health" 2>$null
     if ($curlResult -ne "200") {
         Write-Host "  API not available. Run first: .\scripts\dm.ps1 start" -ForegroundColor Red
         Write-Host ""
@@ -480,7 +646,7 @@ function Invoke-Seed {
 
     # Wait for API to be ready
     $apiReady = Wait-SimpleStep -Label "API Ready" -TimeoutSeconds 30 -Check {
-        $checkResult = curl.exe -s -o NUL -w "%{http_code}" "http://localhost:5000/v1/games/tags" 2>$null
+        $checkResult = curl.exe -s -o NUL -w "%{http_code}" "http://localhost:5000/_health" 2>$null
         return $checkResult -eq "200"
     }
     if (-not $apiReady) { exit 1 }
@@ -509,10 +675,13 @@ function Show-Status {
         return
     }
 
-    # Group services
-    $infra = @("pg", "mongo", "rmq", "minio", "imgproxy")
+    # Group services. Loki and the MinIO initialiser were in none of the three
+    # lists, so a container the start command waits on was missing from the
+    # screen that exists to say what is up - which is why the last group below
+    # is not a list at all but everything the three did not claim.
+    $infra = @("pg", "mongo", "rmq", "minio", "minio-init", "imgproxy")
     $apps = @("api", "mail-worker", "notification-worker", "migration")
-    $tools = @("mailhog", "grafana", "prometheus", "jaeger")
+    $tools = @("mailhog", "grafana", "prometheus", "alertmanager", "jaeger", "loki")
 
     $all = @{}
     foreach ($line in $containers) {
@@ -520,8 +689,12 @@ function Show-Status {
         $name = $parts[0] -replace '^dm-', ''
         $status = $parts[1]
         $ports = if ($parts.Length -gt 2) { $parts[2] } else { "" }
+        # Any published address, not 0.0.0.0 alone: the stack binds its ports to
+        # 127.0.0.1 so that nothing outside the machine can reach them, and this
+        # column has been empty ever since that was done. The optional range is
+        # MinIO, which publishes 9000-9001 as one mapping.
         $port = ""
-        if ($ports -match '0\.0\.0\.0:(\d+)->') { $port = $matches[1] }
+        if ($ports -match ':(\d+)(?:-\d+)?->') { $port = $matches[1] }
 
         if ($status -match "Up.*healthy" -or $status -match "Exited \(0\)") {
             $icon = "+"; $color = "Green"
@@ -550,6 +723,15 @@ function Show-Status {
     Write-ServiceGroup "Infrastructure:" $infra
     Write-ServiceGroup "Applications:" $apps
     Write-ServiceGroup "Dev Tools:" $tools
+
+    # Whatever the three lists did not name: a container the project no longer
+    # declares, or one added to compose and not to a list here. Both are worth
+    # seeing, and the alternative is a status screen that hides them.
+    $grouped = $infra + $apps + $tools
+    $rest = @($all.Keys | Where-Object { $grouped -notcontains $_ } | Sort-Object)
+    if ($rest.Count -gt 0) {
+        Write-ServiceGroup "Other:" $rest
+    }
     Write-Host ""
 }
 
@@ -567,6 +749,11 @@ function Show-Logs {
 }
 
 # Main
+# Every command that touches compose gets the same preparation, including the
+# ones that only read: compose interpolates docker/.env before it will so much
+# as list containers, so "status" needs the file as much as "start" does.
+if ($Command -ne 'help') { Initialize-Environment }
+
 switch ($Command) {
     'start'  { Start-Services }
     'stop'   { Stop-Services }

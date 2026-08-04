@@ -41,6 +41,16 @@ public interface ITopicCommentService
     Task DeleteAsync(Guid commentId);
 
     /// <summary>
+    /// Find where the reader continues in a topic: the first comment he has not
+    /// read, or the topic's last comment when everything is read
+    /// </summary>
+    /// <param name="boardAlias">Board URL alias</param>
+    /// <param name="topicNumber">Topic number within the board</param>
+    /// <param name="excludeUserIds">Optional user IDs hidden from this reader</param>
+    Task<FirstUnreadComment> GetFirstUnreadAsync(string boardAlias, int topicNumber,
+        IReadOnlyCollection<Guid>? excludeUserIds = null);
+
+    /// <summary>
     /// Mark all topic comments as read
     /// </summary>
     Task MarkAsReadAsync(Guid topicId);

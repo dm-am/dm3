@@ -130,7 +130,7 @@ public class ModeratedProfileNoteServiceShould : UnitTestBase
         var act = () => _service.Update(updateNote);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("not found"));
+            .Where(e => e.Message.Contains("не найдена"));
     }
 
     [Fact]
@@ -149,7 +149,7 @@ public class ModeratedProfileNoteServiceShould : UnitTestBase
         var act = () => _service.Update(updateNote);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("only edit your own"));
+            .Where(e => e.Message.Contains("только свои заметки"));
     }
 
     [Fact]

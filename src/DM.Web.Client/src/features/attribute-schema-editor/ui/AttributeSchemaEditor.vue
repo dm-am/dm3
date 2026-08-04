@@ -13,7 +13,7 @@
  *  - a full-width "+ Новый атрибут" row-styled add button
  *  - a region that shows either the inline attribute edit form OR the
  *    character-creation preview (the edit form replaces the preview)
- *  - Сохранить / Отменить / Превью actions, with a data-loss confirm modal
+ *  - Сохранить / Отмена / Превью actions, with a data-loss confirm modal
  *    when the game already has characters
  */
 import { ref, computed, watch, nextTick, onMounted } from "vue";
@@ -25,6 +25,7 @@ import { Select } from "@/shared/ui/Select";
 import Button from "@/shared/ui/Button/Button.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { SvgIcon } from "@/shared/ui/Icon";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 import AttributeEditForm from "./AttributeEditForm.vue";
 import CharacterFormPreview from "./CharacterFormPreview.vue";
 import {
@@ -45,7 +46,7 @@ const props = withDefaults(
      * data-loss confirmation because schema edits can invalidate sheets.
      */
     hasCharacters?: boolean;
-    /** Show the Сохранить/Отменить/Превью action bar (hidden when the host
+    /** Show the Сохранить/Отмена/Превью action bar (hidden when the host
      * page drives persistence, e.g. inline in game creation). */
     showActions?: boolean;
     /** External save-in-flight indicator for the Сохранить button. */
@@ -300,7 +301,9 @@ defineExpose({ validate, requestSave });
                 :aria-label="`Дескриптор: ${spec.title || 'атрибут'}`"
                 @change="setDescriptor(spec.id)"
               />
-              <span v-else class="dash" aria-hidden="true">—</span>
+              <span v-else class="dash" aria-hidden="true">{{
+                VALUE_UNAVAILABLE
+              }}</span>
             </td>
             <td class="col-actions">
               <button
@@ -344,7 +347,7 @@ defineExpose({ validate, requestSave });
       <Button type="button" :loading="saving" @click="requestSave">
         Сохранить
       </Button>
-      <Button type="button" @click="emit('cancel')">Отменить</Button>
+      <Button type="button" @click="emit('cancel')">Отмена</Button>
       <Button type="button" @click="togglePreview">Превью</Button>
     </div>
 
@@ -433,7 +436,6 @@ input[type="radio"]
 
 .empty-cell
   padding: $big
-  text-align: center
   color: $text-muted
 
 .icon-btn

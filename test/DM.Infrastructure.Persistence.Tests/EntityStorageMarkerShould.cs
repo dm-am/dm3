@@ -24,24 +24,29 @@ public class EntityStorageMarkerShould
     /// their own, hence no marker. Adding to this list is a decision, which is
     /// why it is a list and not a heuristic.
     /// </summary>
+    /// <remarks>
+    /// Full type names, because a short one hands the exemption to whatever
+    /// future class happens to reuse it — the exemption has to name a type, not
+    /// a word.
+    /// </remarks>
     private static readonly HashSet<string> EmbeddedValues =
     [
         // Inside the Mongo user-settings document
-        "NotificationChannelPreference",
-        "PagingSettings",
+        "DM.Infrastructure.Persistence.Entities.Account.Settings.NotificationChannelPreference",
+        "DM.Infrastructure.Persistence.Entities.Account.Settings.PagingSettings",
         // Inside the attribute schema
-        "AttributeSpecification",
-        "BbCodeAttributeConstraints",
-        "ListAttributeConstraints",
-        "ListAttributeValue",
-        "NumberAttributeConstraints",
-        "StringAttributeConstraints",
+        "DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSpecification",
+        "DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.BbCodeAttributeConstraints",
+        "DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeConstraints",
+        "DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeValue",
+        "DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.NumberAttributeConstraints",
+        "DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.StringAttributeConstraints",
         // Inside the UserSessions document
-        "Session",
+        "DM.Infrastructure.Persistence.Entities.Account.Session",
         // Inside the Polls document
-        "PollOption",
+        "DM.Infrastructure.Persistence.Entities.Community.PollOption",
         // Inside the Dice document
-        "RollResult",
+        "DM.Infrastructure.Persistence.Entities.Game.Posts.RollResult",
     ];
 
     [Fact]
@@ -51,7 +56,7 @@ public class EntityStorageMarkerShould
             .GetTypes()
             .Where(t => t.IsClass && !t.IsAbstract && t.Namespace != null)
             .Where(t => t.Namespace!.Contains(".Entities"))
-            .Where(t => !EmbeddedValues.Contains(t.Name))
+            .Where(t => !EmbeddedValues.Contains(t.FullName!))
             .Where(t => t.GetCustomAttribute<TableAttribute>() == null &&
                         t.GetCustomAttribute<MongoCollectionNameAttribute>() == null)
             .Select(t => t.FullName!)

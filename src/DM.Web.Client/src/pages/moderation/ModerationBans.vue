@@ -9,7 +9,7 @@
 import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { moderationApi, type Ban } from "@/entities/moderation";
-import type { Paging as PagingModel } from "@/shared/api/models/common";
+import type { PagingInfo as PagingModel } from "@/shared/api/models/common";
 import { Paging } from "@/shared/ui/Paging";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
@@ -24,7 +24,7 @@ const PAGE_SIZE = 20;
 
 const route = useRoute();
 const toast = useToast();
-const { hasAccess, isSeniorModerator } = useRoleGate("Moderator");
+const { hasAccess, deniedText, isSeniorModerator } = useRoleGate("Moderator");
 
 const bans = ref<Ban[]>([]);
 const paging = ref<PagingModel | null>(null);
@@ -86,9 +86,7 @@ const isEmpty = computed(() => !loading.value && bans.value.length === 0);
   <div class="moderation-bans">
     <page-title>Последние баны</page-title>
 
-    <SecondaryText v-if="!hasAccess">
-      Страница доступна только модераторам
-    </SecondaryText>
+    <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
 
     <ErrorState v-else-if="loadError" :message="loadError" :retry="fetch" />
 

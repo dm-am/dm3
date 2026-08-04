@@ -31,9 +31,10 @@
 // Reduced-motion: handled by the global rule in Reset.sass
 // (animation-duration: 0.01ms !important on *, *::before, *::after).
 // No per-mixin @media needed.
-
-@keyframes skeleton-shimmer
-  0%
-    background-position: 200% 0
-  100%
-    background-position: -200% 0
+//
+// The shimmer frames themselves are declared in Reset.sass, not here (named in
+// prose: this directory is scanned for partials carrying the at-rule, and a
+// mention reads exactly like a declaration to a scan over the text). This file
+// is a partial: twenty components import it, and a rule declared in a partial
+// is re-emitted into every one of their scoped stylesheets. Mixins only — the
+// same discipline InputsGlobal.sass records the price of breaking.

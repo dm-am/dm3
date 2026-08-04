@@ -106,6 +106,11 @@ internal class GameCharacterStatusChangedNotificationGenerator : INotificationGe
             yield break;
         }
 
+        // No ActorId: a person did change the status, but the schema does not keep
+        // who. Characters store the status alone, with no author of the transition,
+        // and the statuses here are not one hand's work anyway — a master accepts
+        // and exiles, a player leaves and retires. MasterUsername below names the
+        // game's master for the text, not an actor to filter on.
         yield return new CreateNotification
         {
             UsersInterested = usersInterested,

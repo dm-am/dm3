@@ -1,4 +1,5 @@
 using DM.Infrastructure.Mail;
+using DM.Infrastructure.Messaging;
 using Jamq.Client.Abstractions.Consuming;
 using Jamq.Client.Rabbit.Consuming;
 using Microsoft.Extensions.Hosting;
@@ -22,7 +23,7 @@ internal class MailConsumer : BackgroundService
     private readonly ILogger<MailConsumer> _logger;
     private readonly IConsumerBuilder _consumerBuilder;
     private readonly IAsyncConnectionFactory _rabbitConnectionFactory;
-    private readonly RetryPolicy _consumeRetryPolicy;
+    private readonly AsyncRetryPolicy _consumeRetryPolicy;
 
     public MailConsumer(
         ILogger<MailConsumer> logger,
@@ -33,16 +34,21 @@ internal class MailConsumer : BackgroundService
         _consumerBuilder = consumerBuilder;
         _rabbitConnectionFactory = rabbitConnectionFactory;
 
-        _consumeRetryPolicy = Policy.Handle<Exception>().WaitAndRetry(5,
+        _consumeRetryPolicy = Policy.Handle<Exception>().WaitAndRetryAsync(5,
             attempt => TimeSpan.FromSeconds(1 << attempt),
             (exception, _) => _logger.LogWarning(exception, "Could not subscribe to the queue"));
     }
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogDebug("[🚴] Starting mail sending consumer");
 
-        ConfigureDLX();
+        // Yield before touching the broker: everything before the first await runs
+        // inside host startup, so a broker that is not up yet aborted the host before
+        // its own health check could report why, and the retry below held the start
+        // for a minute of Thread.Sleep first. The API consumer next door has done it
+        // this way all along.
+        await Task.Yield();
 
         var parameters = new RabbitConsumerParameters("dm.mail.sender", "dm.mail.sending", ProcessingOrder.Sequential)
         {
@@ -57,31 +63,17 @@ internal class MailConsumer : BackgroundService
             DeadLetterExchange = DeadLetterExchangeName,
         };
         var consumer = _consumerBuilder.BuildRabbit<EmailLetter, MailSendingProcessor>(parameters);
-        _consumeRetryPolicy.Execute(consumer.Subscribe);
+
+        // The dead-letter declaration is inside the policy with the subscription: it
+        // opens its own connection to the same broker, and it used to be the one call
+        // nothing retried, so an unreachable broker threw past Polly entirely.
+        await _consumeRetryPolicy.ExecuteAsync(_ =>
+        {
+            DeadLetterQueue.DeclareTerminal(_rabbitConnectionFactory, DeadLetterExchangeName);
+            consumer.Subscribe();
+            return Task.CompletedTask;
+        }, stoppingToken);
 
         _logger.LogDebug("[👂] Mail sending consumer is listening to {QueueName} queue", parameters.QueueName);
-        return Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// Declares the terminal destination for letters that could not be sent.
-    /// </summary>
-    /// <remarks>
-    /// The queue is terminal on purpose. It used to carry a 60-second TTL and a
-    /// dead-letter exchange pointing back at the sending exchange, which is an
-    /// unbounded retry loop with no attempt ceiling: the same unsendable letter
-    /// would return every minute forever. A poison message has to stop somewhere
-    /// a human can look at it.
-    /// </remarks>
-    private void ConfigureDLX()
-    {
-        var mailDLXQueue = $"{DeadLetterExchangeName}-dlq";
-
-        using var configuringConnection = _rabbitConnectionFactory.CreateConnection();
-        using var channel = configuringConnection.CreateModel();
-
-        channel.ExchangeDeclare(DeadLetterExchangeName, ExchangeType.Fanout, true);
-        channel.QueueDeclare(mailDLXQueue, true, false, false);
-        channel.QueueBind(mailDLXQueue, DeadLetterExchangeName, string.Empty);
     }
 }

@@ -77,10 +77,30 @@ public class Upload : ISoftDeletable
     public long SizeBytes { get; set; }
 
     /// <summary>
-    /// S3 object key. Hash-based, immutable: thumbnail keys are derived
-    /// by replacing the extension and adding a suffix (_m/_s). Used by
-    /// GC and cleanup logic; FilePath/MediumFilePath/SmallFilePath are public URLs
-    /// for rendering.
+    /// Intrinsic width of the stored file in pixels, measured after the upload
+    /// pipeline's downscale. Null for a row written before the pipeline recorded
+    /// it — a reader that needs the aspect ratio has to cope with not knowing it.
+    /// </summary>
+    /// <remarks>
+    /// Kept so a page can reserve the exact box the picture will occupy: the
+    /// source file preserves the aspect ratio, so without the pair every layout
+    /// showing it either guesses a square or reflows once the browser decodes.
+    /// </remarks>
+    public int? Width { get; set; }
+
+    /// <summary>
+    /// Intrinsic height of the stored file in pixels, on the same terms as
+    /// <see cref="Width"/>. The two are written together or not at all.
+    /// </summary>
+    public int? Height { get; set; }
+
+    /// <summary>
+    /// S3 object key. Random per upload, not a content hash: the same file
+    /// uploaded twice gets two keys, and nothing deduplicates by content. What
+    /// the key does guarantee is immutability — it is never reused, so the object
+    /// behind it never changes and may be cached forever. Used by GC and cleanup
+    /// logic; FilePath is the public URL for rendering. There are no derived
+    /// keys: thumbnail variants are made on-the-fly by imgproxy at serving time.
     /// </summary>
     [MaxLength(500)]
     public string ObjectKey { get; set; } = null!;
@@ -122,6 +142,7 @@ public class Upload : ISoftDeletable
 
     // Navigation properties for the target columns are intentionally not defined:
     // FK constraints are configured via OnModelCreating, and navigations
-    // on the Upload side are not needed (consumers always come from the owner side
-    // via User.AvatarUploadId / Character.AvatarUploadId).
+    // on the Upload side are not needed. The user avatar is reached from the owner
+    // side via User.AvatarUploadId; a character has no such column, so its portrait
+    // is read by querying Uploads on TargetCharacterId.
 }

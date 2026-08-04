@@ -12,7 +12,7 @@
  *   where the current user has the "Moderator" participation flag — the
  *   API serializes GameParticipation flags (Owner/Authority/Player/Reader/
  *   Moderator), NOT GameRole names, and Moderator is the game-mentor flag
- *   (see entities/game/model/store.ts). Draft/Active only; server order
+ *   (see entities/game/model/detailsStore.ts). Draft/Active only; server order
  *   (activatedUtc ?? createdUtc desc — GameRef carries no createdUtc, so
  *   the server default is the closest match to the doc's "created desc").
  *   Rows mirror the sidebar GameLink idiom: "- " prefix, title with hover
@@ -44,6 +44,7 @@ import { useAuthStore } from "@/entities/user";
 import { UserRole } from "@/shared/api/models/common";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import { Api } from "@/shared/api";
+import { useGuardedRequest } from "@/shared/lib/composables";
 import { CounterPair } from "@/shared/ui/CounterPair";
 import { Tooltip } from "@/shared/ui/Tooltip";
 
@@ -100,33 +101,48 @@ const {
 // --- Wait markers: character names awaiting the current user, per game ---
 
 const pendingNamesByGame = ref<Record<string, string[]>>({});
-let pendencyGeneration = 0;
 
-async function loadPendencies(games: GameRef[]) {
-  const generation = ++pendencyGeneration;
+// The shared guard through the shared composable, not a counter of its own: this
+// was `let pendencyGeneration`, bumped and compared by hand — the seventh copy of
+// the same six lines, and the one the name-based check never noticed because it
+// spelled its counter "generation". Neither flag is rendered: the panel hides
+// itself until the lists arrive and a game whose rooms fail to load simply has no
+// wait marker, which is what it did before.
+const { run: runPendencies } = useGuardedRequest({
+  message: "Не удалось загрузить ожидания хода",
+});
+
+function loadPendencies(games: GameRef[]) {
   const username = me.value;
   if (!username) {
     pendingNamesByGame.value = {};
-    return;
+    return Promise.resolve();
   }
 
-  const results: Record<string, string[]> = {};
-  await Promise.all(
-    games.slice(0, MAX_PENDENCY_GAMES).map(async (game) => {
-      const { data } = await gameApi.getRooms(game.id);
-      if (!data) return;
-      const names = data.resources
-        .flatMap((room) => room.pendings ?? [])
-        .filter((p) => p.awaitingUser?.username === username)
-        .map((p) => p.characterName);
-      if (names.length) results[game.id] = names;
-    }),
+  return runPendencies(
+    async () => {
+      const results: Record<string, string[]> = {};
+      await Promise.all(
+        games.slice(0, MAX_PENDENCY_GAMES).map(async (game) => {
+          const { data } = await gameApi.getRooms(game.id);
+          if (!data) return;
+          const names = data.resources
+            .flatMap((room) => room.pendencies ?? [])
+            .filter(
+              (p) => !p.fulfilledUtc && p.waitingFor?.username === username,
+            )
+            .map((p) => p.characterName);
+          if (names.length) results[game.id] = names;
+        }),
+      );
+      return { data: results, error: null };
+    },
+    // Applied only for the newest run — a slower earlier one used to be able to
+    // put another user's or another game list's markers on the panel.
+    (results) => {
+      pendingNamesByGame.value = results ?? {};
+    },
   );
-
-  // A newer run may have started while awaiting — drop stale results.
-  if (generation === pendencyGeneration) {
-    pendingNamesByGame.value = results;
-  }
 }
 
 function starTooltip(gameId: string): string {
@@ -146,7 +162,12 @@ interface BlogUserEntry {
 }
 
 const mentorBlogIds = ref<Set<string>>(new Set());
-let blogGeneration = 0;
+
+// The second of this file's two hand-rolled counters; see the note on the
+// pendency guard above.
+const { run: runMentorBlogs } = useGuardedRequest({
+  message: "Не удалось загрузить курируемые блоги",
+});
 
 const blogCandidates = computed<BlogRef[]>(() => {
   const username = me.value;
@@ -161,37 +182,40 @@ const blogCandidates = computed<BlogRef[]>(() => {
   );
 });
 
-async function resolveMentorBlogs(candidates: BlogRef[]) {
-  const generation = ++blogGeneration;
+function resolveMentorBlogs(candidates: BlogRef[]) {
   const username = me.value;
   if (!username || !candidates.length) {
     mentorBlogIds.value = new Set();
-    return;
+    return Promise.resolve();
   }
 
-  const ids = new Set<string>();
-  await Promise.all(
-    candidates.slice(0, MAX_BLOG_CANDIDATES).map(async (blog) => {
-      const { data } = await Api.get<ListEnvelope<BlogUserEntry>>(
-        `blogs/${blog.id}/users`,
-        { role: "mentor" },
+  return runMentorBlogs(
+    async () => {
+      const ids = new Set<string>();
+      await Promise.all(
+        candidates.slice(0, MAX_BLOG_CANDIDATES).map(async (blog) => {
+          const { data } = await Api.get<ListEnvelope<BlogUserEntry>>(
+            `blogs/${blog.id}/users`,
+            { role: "mentor" },
+          );
+          // The ?role=mentor filter already narrows the list to the mentor (if
+          // any); the wire role value is PascalCase ("Mentor",
+          // nameof(BlogRole.Mentor) in BlogUserApiService), so compare
+          // case-insensitively as defense in depth.
+          const isMine = data?.resources.some(
+            (entry) =>
+              entry.role?.toLowerCase() === "mentor" &&
+              entry.user?.username === username,
+          );
+          if (isMine) ids.add(blog.id);
+        }),
       );
-      // The ?role=mentor filter already narrows the list to the mentor (if
-      // any); the wire role value is PascalCase ("Mentor",
-      // nameof(BlogRole.Mentor) in BlogUserApiService), so compare
-      // case-insensitively as defense in depth.
-      const isMine = data?.resources.some(
-        (entry) =>
-          entry.role?.toLowerCase() === "mentor" &&
-          entry.user?.username === username,
-      );
-      if (isMine) ids.add(blog.id);
-    }),
+      return { data: ids, error: null };
+    },
+    (ids) => {
+      mentorBlogIds.value = ids ?? new Set();
+    },
   );
-
-  if (generation === blogGeneration) {
-    mentorBlogIds.value = ids;
-  }
 }
 
 // immediate for the same cached-store reason as the games watcher above.
@@ -304,10 +328,6 @@ const visible = computed(
 
 .muted
   color: $text-muted
-
-// Only the decorative "- " prefix (aria-hidden) is excluded from selection.
-.muted[aria-hidden="true"]
-  user-select: none
 
 .star
   color: $accent-red

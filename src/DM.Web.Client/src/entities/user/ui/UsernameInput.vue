@@ -31,7 +31,7 @@
         <span class="unavailable">{{ unavailableReason }}</span>
       </template>
       <template v-else>
-        <span class="hint">2–20 символов</span>
+        <span class="hint">2-20 символов</span>
       </template>
     </div>
   </div>
@@ -67,7 +67,7 @@ const validationError = ref<string | null>(null);
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Forbidden: control chars, HTML/URL unsafe, quotes, brackets, special chars, zero-width
-// See: docs/architecture/USERNAME_POLICY.md
+// See: docs/conventions/USERNAME_POLICY.md
 // Control characters are matched intentionally (forbidden in usernames).
 const forbiddenPattern =
   // eslint-disable-next-line no-control-regex

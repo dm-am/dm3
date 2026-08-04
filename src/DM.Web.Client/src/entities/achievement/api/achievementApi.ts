@@ -23,6 +23,23 @@ import type {
 import { Api } from "@/shared/api";
 
 /**
+ * Options that keep one call out of both caches.
+ *
+ * The four catalogues below are the endpoints the API declares
+ * `Cache-Control: public, max-age=300` on, and the client no longer puts
+ * `no-cache` on every request it makes. Their writes live under
+ * `v1/moderation/...`, a different address, so a POST there invalidates no
+ * stored copy of the list — a moderator who adds an award type and asks the
+ * catalogue to reload would be handed the browser's own five-minute-old copy,
+ * without the row just written, and would read it as the write having failed.
+ *
+ * `no-cache` on the request forbids the store and asks the origin, which is
+ * what the directive is for. What was wrong before was that it was on every
+ * request by default, deciding caching for endpoints it knew nothing about.
+ */
+const FRESH = { headers: { "Cache-Control": "no-cache" } };
+
+/**
  * API client for the award/achievement catalogs and user records.
  *
  * Endpoint structure:
@@ -41,12 +58,24 @@ import { Api } from "@/shared/api";
 export default new (class AchievementApi {
   // ---- Achievements: public read ----
 
-  public getAchievementCategories() {
-    return Api.get<AchievementCategoriesResponse>("achievement-categories");
+  /** @param fresh Skip the caches — for a reload after an edit. */
+  public getAchievementCategories(fresh = false) {
+    return Api.get<AchievementCategoriesResponse>(
+      "achievement-categories",
+      undefined,
+      undefined,
+      fresh ? FRESH : undefined,
+    );
   }
 
-  public getAchievementTypes() {
-    return Api.get<AchievementTypesResponse>("achievement-types");
+  /** @param fresh Skip the caches — for a reload after an edit. */
+  public getAchievementTypes(fresh = false) {
+    return Api.get<AchievementTypesResponse>(
+      "achievement-types",
+      undefined,
+      undefined,
+      fresh ? FRESH : undefined,
+    );
   }
 
   public getUserAchievements(username: string) {
@@ -87,12 +116,24 @@ export default new (class AchievementApi {
 
   // ---- Awards: public read ----
 
-  public getAwardTypes() {
-    return Api.get<AwardTypesResponse>("award-types");
+  /** @param fresh Skip the caches — for a reload after an edit. */
+  public getAwardTypes(fresh = false) {
+    return Api.get<AwardTypesResponse>(
+      "award-types",
+      undefined,
+      undefined,
+      fresh ? FRESH : undefined,
+    );
   }
 
-  public getContestSeries() {
-    return Api.get<ContestSeriesResponse>("contest-series");
+  /** @param fresh Skip the caches — for a reload after an edit. */
+  public getContestSeries(fresh = false) {
+    return Api.get<ContestSeriesResponse>(
+      "contest-series",
+      undefined,
+      undefined,
+      fresh ? FRESH : undefined,
+    );
   }
 
   public getUserAwards(username: string) {

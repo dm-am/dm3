@@ -40,8 +40,8 @@ const isAccessRecoveryAuthenticated = computed(
 
   <template v-if="isAccessRecovery">
     <LeadText
-      >Доступ можно восстановить прямо сейчас — а если не получится, напишите
-      нам через форму ниже</LeadText
+      >Доступ можно восстановить прямо сейчас, а если не получится, напишите нам
+      через форму ниже</LeadText
     >
     <div class="recovery-card">
       <router-link
@@ -55,13 +55,13 @@ const isAccessRecoveryAuthenticated = computed(
   </template>
 
   <LeadText v-else-if="isAccessRecoveryAuthenticated">
-    Вы уже авторизованы, поэтому доступ к аккаунту не потерян — изменить пароль
+    Вы уже авторизованы, поэтому доступ к аккаунту не потерян: изменить пароль
     или другие данные можно в
     <router-link to="/account">настройках аккаунта</router-link>
   </LeadText>
 
   <LeadText v-else
-    >Нашли ошибку или не можете разобраться — опишите проблему, и мы
+    >Если нашли ошибку или не можете разобраться, опишите проблему, и мы
     поможем</LeadText
   >
 
@@ -98,10 +98,10 @@ const isAccessRecoveryAuthenticated = computed(
     color: $link-hover
     text-decoration: underline
 
+// Inline flow, not flex: a flex item is blockified, so the note copied as
+// "Если удобнее, напишите нам в\nDiscord". The gap the flex drew is already a
+// real space in the markup, right after the icon.
 .discord-fallback
-  display: flex
-  align-items: center
-  gap: $minor
   margin-top: $medium
   color: $text-muted
   font-size: $secondary-font-size
@@ -115,5 +115,5 @@ const isAccessRecoveryAuthenticated = computed(
 .discord-icon
   width: 16px
   height: 16px
-  flex-shrink: 0
+  vertical-align: text-bottom
 </style>

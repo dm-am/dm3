@@ -16,6 +16,7 @@ import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import Form from "@/shared/ui/Form/Form.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
 import { Select, type SelectOption } from "@/shared/ui/Select";
+import { describeFailure } from "@/shared/lib/errors";
 
 const props = defineProps<{
   /** Existing series — used to suggest the next number per type. */
@@ -69,7 +70,7 @@ async function submit() {
   });
   saving.value = false;
   if (e) {
-    error.value = e.title ?? "Не удалось создать серию";
+    error.value = describeFailure(e, "Не удалось создать серию");
     return;
   }
   emit("success");

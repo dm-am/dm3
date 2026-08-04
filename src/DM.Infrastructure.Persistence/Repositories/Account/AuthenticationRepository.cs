@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
@@ -200,5 +201,33 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
         return Collection<UserSession>().FindOneAndUpdateAsync(
             Filter<UserSession>().Eq(u => u.Id, userId),
             Update<UserSession>().Set(u => u.Sessions, new List<DbSession>()));
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Two writes, in this order: pull the expired entries out of every document,
+    /// then delete the documents the pull emptied. Reversing them would leave the
+    /// documents emptied by this very pass behind until the next one.
+    /// </remarks>
+    public async Task<SessionPurgeResult> PurgeExpiredSessions(
+        DateTimeOffset now, CancellationToken cancellationToken = default)
+    {
+        var deadline = now.UtcDateTime;
+        var collection = Collection<UserSession>();
+
+        var pulled = await collection.UpdateManyAsync(
+            Filter<UserSession>().Empty,
+            Update<UserSession>().PullFilter(
+                u => u.Sessions,
+                session => session.ExpirationUtc < deadline),
+            cancellationToken: cancellationToken);
+
+        var emptied = await collection.DeleteManyAsync(
+            Filter<UserSession>().Or(
+                Filter<UserSession>().Eq(u => u.Sessions, null),
+                Filter<UserSession>().Size(u => u.Sessions, 0)),
+            cancellationToken: cancellationToken);
+
+        return new SessionPurgeResult(pulled.ModifiedCount, emptied.DeletedCount);
     }
 }

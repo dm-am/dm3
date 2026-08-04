@@ -72,7 +72,7 @@ internal class DiceRollRepository : MongoCollectionRepository<DbDiceRoll>, IDice
         EdgesCount = roll.EdgesCount,
         ExplosionCount = roll.ExplosionCount,
         Bonus = roll.Bonus,
-        comment = roll.Comment,
+        Comment = roll.Comment,
         Result = roll.Results.Select(r => new DbRollResult
         {
             Value = r.Value,
@@ -93,7 +93,7 @@ internal class DiceRollRepository : MongoCollectionRepository<DbDiceRoll>, IDice
         EdgesCount = db.EdgesCount,
         ExplosionCount = db.ExplosionCount,
         Bonus = db.Bonus,
-        Comment = db.comment ?? string.Empty,
+        Comment = db.Comment ?? string.Empty,
         Results = db.Result?.Select(r => new DiceRollResult
         {
             Value = r.Value,

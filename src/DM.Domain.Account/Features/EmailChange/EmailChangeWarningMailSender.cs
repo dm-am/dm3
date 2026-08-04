@@ -27,16 +27,16 @@ internal class EmailChangeWarningMailSender : IEmailChangeWarningMailSender
         var body = $@"
 <html>
 <body style='font-family: Arial, sans-serif; color: #333;'>
-    <h2 style='color: #d9534f;'>⚠️ Запрос на смену email</h2>
+    <h2 style='color: #d9534f;'>⚠️ Запрос на смену почты</h2>
     <p>Здравствуйте, {username}!</p>
-    <p>Мы получили запрос на смену email-адреса для вашего аккаунта на Dungeon Master.</p>
+    <p>Мы получили запрос на смену адреса почты для вашего аккаунта на Dungeon Master.</p>
     <table style='margin: 20px 0; border-collapse: collapse;'>
         <tr>
-            <td style='padding: 8px; border: 1px solid #ddd;'><strong>Текущий email:</strong></td>
+            <td style='padding: 8px; border: 1px solid #ddd;'><strong>Текущая почта:</strong></td>
             <td style='padding: 8px; border: 1px solid #ddd;'>{oldEmail}</td>
         </tr>
         <tr>
-            <td style='padding: 8px; border: 1px solid #ddd;'><strong>Новый email:</strong></td>
+            <td style='padding: 8px; border: 1px solid #ddd;'><strong>Новая почта:</strong></td>
             <td style='padding: 8px; border: 1px solid #ddd;'>{maskedNewEmail}</td>
         </tr>
     </table>
@@ -44,7 +44,7 @@ internal class EmailChangeWarningMailSender : IEmailChangeWarningMailSender
     <p style='color: #d9534f;'><strong>Если это были не вы</strong> — немедленно смените пароль и свяжитесь с поддержкой!</p>
     <hr style='border: none; border-top: 1px solid #eee; margin: 20px 0;'>
     <p style='color: #666; font-size: 12px;'>
-        Это автоматическое уведомление о безопасности. Мы отправляем его при любом запросе на смену email.
+        Это автоматическое уведомление о безопасности. Мы отправляем его при любом запросе на смену почты.
     </p>
 </body>
 </html>";
@@ -52,7 +52,7 @@ internal class EmailChangeWarningMailSender : IEmailChangeWarningMailSender
         await _mailSender.SendAsync(new EmailLetter
         {
             Address = oldEmail,
-            Subject = "⚠️ Запрос на смену email — Dungeon Master",
+            Subject = "Dungeon Master: запрос на смену адреса почты",
             Body = body,
             LinkedResources = [_emailAssetsProvider.GetLogo()]
         });

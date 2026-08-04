@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,6 +18,26 @@ internal class RealtimeNotificationProcessor(
     IHubContext<NotificationHub, INotificationHub> hubContext)
     : IProcessor<string, RealtimeNotification>
 {
+    /// <summary>
+    /// The events of the global chat itself, which go to every open connection.
+    /// </summary>
+    /// <remarks>
+    /// Global chat is public: these carry no stored recipient list and reach
+    /// every connection, including anonymous (guest) ones. Guests are never
+    /// registered in the user connection map, so this broadcast path is the only
+    /// event they can ever receive. Besides a new message it carries the start
+    /// and the end of a chat event: both change what the strip above the feed
+    /// says, for reader and participant alike, and neither is addressed to
+    /// anybody in particular. Addressing them through the map would deliver them
+    /// to nobody at all.
+    /// </remarks>
+    private static readonly HashSet<EventType> Broadcast =
+    [
+        EventType.NewGlobalChatMessage,
+        EventType.GlobalChatEventStarted,
+        EventType.GlobalChatEventEnded
+    ];
+
     public async Task<ProcessResult> Process(
         string key, RealtimeNotification message, CancellationToken cancellationToken)
     {
@@ -27,13 +48,8 @@ internal class RealtimeNotificationProcessor(
             Payload = message.Metadata
         };
 
-        if (message.EventType == EventType.NewGlobalChatMessage)
+        if (Broadcast.Contains(message.EventType))
         {
-            // Global chat is public: its message events carry no stored
-            // recipient list and go to every open connection, including
-            // anonymous (guest) ones. Guests are never registered in the
-            // user connection map, so this broadcast path is the only
-            // event they can ever receive.
             await hubContext.Clients.All.Send(notification);
         }
         else

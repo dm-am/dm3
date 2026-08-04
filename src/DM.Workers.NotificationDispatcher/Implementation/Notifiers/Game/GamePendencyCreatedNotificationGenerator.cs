@@ -64,6 +64,7 @@ internal class GamePendencyCreatedNotificationGenerator : BaseNotificationGenera
         yield return new CreateNotification
         {
             UsersInterested = new[] { recipientId },
+            ActorId = data.CreatedById,
             Metadata = new
             {
                 PendencyId = data.PendencyId.EncodeToReadable(),

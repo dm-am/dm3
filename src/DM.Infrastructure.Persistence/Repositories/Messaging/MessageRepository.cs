@@ -21,16 +21,19 @@ internal class MessageRepository : IMessageRepository
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
     private readonly ICursorService _cursorService;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public MessageRepository(
         DmDbContext dbContext,
         IMapper mapper,
-        ICursorService cursorService)
+        ICursorService cursorService,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _mapper = mapper;
         _cursorService = cursorService;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     private IQueryable<DbMessage> ChatMessages(Guid chatId) =>
@@ -335,7 +338,7 @@ internal class MessageRepository : IMessageRepository
             .ExecuteUpdateAsync(s => s
                 .SetProperty(m => m.IsRemoved, true)
                 .SetProperty(m => m.DeletedByUserId, deletedByUserId)
-                .SetProperty(m => m.DeletedUtc, DateTimeOffset.UtcNow), ct);
+                .SetProperty(m => m.DeletedUtc, _dateTimeProvider.Now), ct);
 
         // If this was the last message in chat, update LastMessageId
         if (messageInfo?.LastMessageId == messageId)

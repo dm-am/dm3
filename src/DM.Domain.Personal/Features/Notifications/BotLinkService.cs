@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
 using System.Threading;
@@ -101,10 +102,69 @@ internal class BotLinkService : IBotLinkService
         await _repository.ClearChannelPreferences(userId, channelType, ct);
     }
 
+    /// <inheritdoc />
+    public async Task<BotChannels> GetChannels(CancellationToken ct = default)
+    {
+        var userId = _identityProvider.Current.User.UserId;
+        var ids = await _repository.GetChannelIds(userId, ct);
+        var preferences = await _repository.GetChannelPreferences(userId, ct);
+
+        return new BotChannels(
+            Compose(ids.DiscordId, preferences.Discord),
+            Compose(ids.TelegramId, preferences.Telegram));
+    }
+
+    /// <inheritdoc />
+    public async Task UpdateChannelPreferences(
+        string channelType,
+        bool? enabled,
+        IReadOnlyCollection<NotificationCategory>? categories,
+        CancellationToken ct = default)
+    {
+        ValidateChannelType(channelType);
+        var userId = _identityProvider.Current.User.UserId;
+
+        var preferences = await _repository.GetChannelPreferences(userId, ct);
+        var current = channelType.Equals("discord", StringComparison.OrdinalIgnoreCase)
+            ? preferences.Discord
+            : preferences.Telegram;
+
+        // Preferences exist exactly while the channel is connected: linking writes
+        // them together with the external id and disconnecting clears them together
+        // with it. Their absence therefore means "there is nothing to configure", and
+        // that is said out loud instead of being answered with a 200 that changed
+        // nothing and a body showing the old values.
+        if (current == null)
+        {
+            throw new HttpException(HttpStatusCode.Conflict,
+                $"Канал {channelType} не подключен, настраивать нечего");
+        }
+
+        await _repository.SetChannelPreferences(
+            userId,
+            channelType,
+            new ChannelPreferences(enabled ?? current.Enabled, categories ?? current.EnabledCategories),
+            ct);
+    }
+
+    private static BotChannel? Compose(string? externalId, ChannelPreferences? preferences)
+    {
+        var connected = !string.IsNullOrEmpty(externalId);
+        if (!connected && preferences == null)
+        {
+            return null;
+        }
+
+        return new BotChannel(
+            connected,
+            preferences?.Enabled ?? false,
+            preferences?.EnabledCategories ?? Array.Empty<NotificationCategory>());
+    }
+
     private static void ValidateChannelType(string channelType)
     {
         if (!Array.Exists(ValidChannelTypes, t => t.Equals(channelType, StringComparison.OrdinalIgnoreCase)))
             throw new HttpException(HttpStatusCode.BadRequest,
-                $"Invalid channel type: {channelType}. Must be 'discord' or 'telegram'.");
+                $"Неизвестный канал: {channelType}. Доступны discord и telegram.");
     }
 }

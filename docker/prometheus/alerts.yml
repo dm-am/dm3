@@ -86,3 +86,79 @@ groups:
         annotations:
           summary: "Low disk space"
           description: "Root filesystem usage is above 85% for 10 minutes."
+
+  # The broker is the only place that knows a message exists between the service
+  # that sent it and the worker that will act on it. Every rule above is about a
+  # process answering, and all of them are true of a worker that has stopped
+  # consuming.
+  - name: dm-broker
+    rules:
+      - alert: BrokerDown
+        expr: up{job="rabbitmq"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RabbitMQ is down"
+          description: "The metrics endpoint of the broker has been unreachable for more than 1 minute."
+
+      # A renamed or removed scrape target produces no `up` series at all, so
+      # BrokerDown stays silent on exactly the change that breaks it.
+      - alert: BrokerScrapeTargetMissing
+        expr: absent(up{job="rabbitmq"})
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The broker scrape target is not configured"
+          description: "Prometheus has no target for the broker - check that rabbitmq_prometheus is enabled and that per-object metrics are on."
+
+      - alert: QueueWithoutConsumer
+        expr: rabbitmq_queue_consumers{queue=~"dm.notifications|dm.mail.sending"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Queue {{ $labels.queue }} has no consumer"
+          description: "Work is accumulating with nobody to process it. The worker process can be up and unsubscribed at the same time."
+
+      - alert: QueueBacklog
+        expr: rabbitmq_queue_messages_ready{queue=~"dm.*"} > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Queue {{ $labels.queue }} is backing up"
+          description: "More than 1000 messages have been waiting for 10 minutes."
+
+      - alert: DeadLetteredMessages
+        expr: rabbitmq_queue_messages_ready{queue=~".*-dlq"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dead-letter queue {{ $labels.queue }} is not empty"
+          description: "A message survived every retry and stopped here. Nothing else will look at it."
+
+      # The rules above see the queue; this one sees the outcome. A consumer that
+      # takes every message and throws on every message keeps its queue short and
+      # its subscription alive, so it is invisible from the broker side alone.
+      - alert: ConsumerFailingMessages
+        expr: sum by (queue) (rate(dm_messaging_failed_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consumer of {{ $labels.queue }} is failing messages"
+          description: "Messages are exhausting every retry. Each one is on its way to the dead-letter queue."
+
+      # Retries rise long before failures do: a queue being processed on the
+      # second attempt is a queue about to stop being processed.
+      - alert: ConsumerRetryingHeavily
+        expr: sum by (queue) (rate(dm_messaging_retried_total[5m])) > 0.1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consumer of {{ $labels.queue }} is retrying"
+          description: "Processing keeps failing and succeeding on a later attempt. The dependency behind it is unwell."

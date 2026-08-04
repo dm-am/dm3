@@ -51,9 +51,9 @@ internal class CharacterApiService : ICharacterApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<CharacterDetails>> Update(Guid characterId, CharacterDetails character)
+    public async Task<Envelope<CharacterDetails>> Update(Guid characterId, UpdateCharacterRequest request)
     {
-        var updateCharacter = _mapper.Map<UpdateCharacter>(character);
+        var updateCharacter = _mapper.Map<UpdateCharacter>(request);
         updateCharacter.CharacterId = characterId;
         var updatedCharacter = await _characterService.UpdateAsync(updateCharacter);
 
@@ -61,6 +61,19 @@ internal class CharacterApiService : ICharacterApiService
         // CharacterAttributeValueFiller (BbCode -> valueBbText, list modifiers/titles,
         // hidden-attribute redaction), matching the GET response shape.
         var filledCharacter = await _characterService.GetAsync(updatedCharacter.Id);
+        return new Envelope<CharacterDetails>(_mapper.Map<CharacterDetails>(filledCharacter));
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<CharacterDetails>> ChangeStatus(
+        Guid characterId, CharacterStatusChangeRequest request)
+    {
+        var changed = await _characterService.ChangeStatusAsync(characterId, request.Transition);
+
+        // Same re-fetch as Update, and for the same reason: the response has to go
+        // through the read path so attribute values come back in the shape a GET
+        // returns them.
+        var filledCharacter = await _characterService.GetAsync(changed.Id);
         return new Envelope<CharacterDetails>(_mapper.Map<CharacterDetails>(filledCharacter));
     }
 

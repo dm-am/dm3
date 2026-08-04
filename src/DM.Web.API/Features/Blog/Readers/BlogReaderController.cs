@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using DM.Web.API.Swagger;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Blog.Users;
@@ -68,6 +69,7 @@ public class BlogReaderController : ControllerBase
     [HttpPost(Name = nameof(SubscribeToBlog))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(BlogUser), StatusCodes.Status201Created)]
+    [CreatedWithoutLocation]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]

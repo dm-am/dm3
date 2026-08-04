@@ -19,9 +19,9 @@ public record BlogFilter
     public string? Search { get; init; }
 
     /// <summary>
-    /// Optional status filter
+    /// Optional status filter, OR between the values. Empty or null = all.
     /// </summary>
-    public ModuleStatus? Status { get; init; }
+    public IReadOnlyCollection<ModuleStatus>? Statuses { get; init; }
 
     /// <summary>
     /// Optional host usernames as the caller wrote them (owner or assistant, OR logic)
@@ -81,10 +81,11 @@ public record BlogFilter
     public IReadOnlyCollection<Guid>? ExcludeOwnerIds { get; init; }
 
     /// <summary>
-    /// Explicit premoderation filter. The service clears it below Mentor;
-    /// when set it replaces the default premoderation visibility restriction.
+    /// Explicit premoderation filter, OR between the values. The service clears
+    /// it below Mentor; when set it replaces the default premoderation
+    /// visibility restriction.
     /// </summary>
-    public PremoderationStatus? PremoderationStatus { get; init; }
+    public IReadOnlyCollection<PremoderationStatus>? PremoderationStatuses { get; init; }
 
     /// <summary>
     /// Current user id for premoderation visibility, filled by the service

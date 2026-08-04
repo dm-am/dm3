@@ -23,6 +23,20 @@ public sealed class AvatarPicture
     /// </summary>
     public string? SourceUrl { get; set; }
 
+    /// <summary>
+    /// Intrinsic width of the source file in pixels. Null when the upload row
+    /// carries no measurement — the thumbnails are square by construction, but
+    /// the original is not, and a consumer that lays out a box for it needs the
+    /// ratio before the picture arrives.
+    /// </summary>
+    public int? SourceWidth { get; set; }
+
+    /// <summary>
+    /// Intrinsic height of the source file in pixels; travels with
+    /// <see cref="SourceWidth"/> or not at all.
+    /// </summary>
+    public int? SourceHeight { get; set; }
+
     /// <summary>True if a source file exists.</summary>
     public bool HasUrl => SourceUrl != null;
 }

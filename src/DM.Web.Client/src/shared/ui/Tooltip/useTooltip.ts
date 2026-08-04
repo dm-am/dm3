@@ -1,8 +1,9 @@
 import { ref, onMounted, onUnmounted, type Ref } from "vue";
 import type { TooltipPlacement, TooltipPosition } from "./types";
-
-const TOOLTIP_OFFSET = 12;
-const VIEWPORT_PADDING = 8;
+// VIEWPORT_EDGE was VIEWPORT_PADDING here and `edge` in the date popover — one
+// distance under two private names, which is how two layers of the same site
+// end up keeping different margins from the same edge.
+import { TOOLTIP_OFFSET, VIEWPORT_EDGE } from "@/shared/lib/constants/geometry";
 
 export function useTooltip(
   triggerRef: Ref<HTMLElement | null>,
@@ -37,7 +38,7 @@ export function useTooltip(
         top = triggerRect.top - tooltipRect.height - TOOLTIP_OFFSET;
         left = triggerRect.left + (triggerRect.width - tooltipRect.width) / 2;
         // Flip to bottom if not enough space
-        if (top < VIEWPORT_PADDING) {
+        if (top < VIEWPORT_EDGE) {
           top = triggerRect.bottom + TOOLTIP_OFFSET;
           finalPlacement = "bottom";
         }
@@ -47,7 +48,7 @@ export function useTooltip(
         top = triggerRect.bottom + TOOLTIP_OFFSET;
         left = triggerRect.left + (triggerRect.width - tooltipRect.width) / 2;
         // Flip to top if not enough space
-        if (top + tooltipRect.height > viewportHeight - VIEWPORT_PADDING) {
+        if (top + tooltipRect.height > viewportHeight - VIEWPORT_EDGE) {
           top = triggerRect.top - tooltipRect.height - TOOLTIP_OFFSET;
           finalPlacement = "top";
         }
@@ -57,7 +58,7 @@ export function useTooltip(
         top = triggerRect.top + (triggerRect.height - tooltipRect.height) / 2;
         left = triggerRect.left - tooltipRect.width - TOOLTIP_OFFSET;
         // Flip to right if not enough space
-        if (left < VIEWPORT_PADDING) {
+        if (left < VIEWPORT_EDGE) {
           left = triggerRect.right + TOOLTIP_OFFSET;
           finalPlacement = "right";
         }
@@ -67,7 +68,7 @@ export function useTooltip(
         top = triggerRect.top + (triggerRect.height - tooltipRect.height) / 2;
         left = triggerRect.right + TOOLTIP_OFFSET;
         // Flip to left if not enough space
-        if (left + tooltipRect.width > viewportWidth - VIEWPORT_PADDING) {
+        if (left + tooltipRect.width > viewportWidth - VIEWPORT_EDGE) {
           left = triggerRect.left - tooltipRect.width - TOOLTIP_OFFSET;
           finalPlacement = "left";
         }
@@ -76,8 +77,8 @@ export function useTooltip(
 
     // Clamp horizontal position to viewport
     const clampedLeft = Math.max(
-      VIEWPORT_PADDING,
-      Math.min(left, viewportWidth - tooltipRect.width - VIEWPORT_PADDING),
+      VIEWPORT_EDGE,
+      Math.min(left, viewportWidth - tooltipRect.width - VIEWPORT_EDGE),
     );
 
     // Calculate arrow offset (how much tooltip shifted from ideal centered position)
@@ -89,8 +90,8 @@ export function useTooltip(
 
     // Clamp vertical position to viewport
     top = Math.max(
-      VIEWPORT_PADDING,
-      Math.min(top, viewportHeight - tooltipRect.height - VIEWPORT_PADDING),
+      VIEWPORT_EDGE,
+      Math.min(top, viewportHeight - tooltipRect.height - VIEWPORT_EDGE),
     );
 
     return { top, left: clampedLeft, placement: finalPlacement, arrowOffset };

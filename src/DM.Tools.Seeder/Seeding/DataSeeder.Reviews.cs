@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Community.Features.Polls;
+using DM.Domain.Community.Features.Statistics;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Identity;
 using DM.Domain.Personal.Features.Profiles;
@@ -60,7 +61,7 @@ internal sealed partial class DataSeeder
             result.Details.Add($"Testimonials already exist ({existingTestimonialsCount}), skipping reviews seeding");
         }
 
-        var experiencedUsers = users.Where(u => u.QuantityRating >= 100).ToList();
+        var experiencedUsers = users.Where(u => !ProbationPolicy.IsNewbie(u.QuantityRating)).ToList();
         if (experiencedUsers.Count == 0) experiencedUsers = users.Take(3).ToList();
 
         // Testimonials - website reviews (Text, DaysAgo) tuples for diverse lengths, styles, and dates
@@ -126,8 +127,13 @@ internal sealed partial class DataSeeder
         var existingGameReviewsCount = await _dbContext.GameReviews.CountAsync();
         if (gameIds.Count > 0 && experiencedUsers.Count >= 2 && existingGameReviewsCount == 0)
         {
+            // Two of them get a review, so which two is a decision, and a LIMIT
+            // over an unordered result hands that decision to the query plan.
+            // Ordered by the serial number: the order the games were created in,
+            // and a number, so no collation gets a say either.
             var games = await _dbContext.Set<DbGame>()
                 .Where(g => gameIds.Contains(g.GameId) && g.Status != ModuleStatus.Draft)
+                .OrderBy(g => g.SerialNumber)
                 .ToListAsync();
 
             foreach (var game in games.Take(2))
@@ -651,14 +657,18 @@ internal sealed partial class DataSeeder
                         now: chuckChar.CreatedUtc);
                     _dbContext.Set<DM.Infrastructure.Persistence.Entities.Shared.Upload>().Add(chuckUpload);
 
-                    // Chuck's magnum opus about grapefruit
+                    // Chuck's magnum opus about grapefruit. Eight hours back, which is
+                    // inside the seven-day window the homepage block reads. No clamping:
+                    // the window is rolling, so there is no boundary to land on the
+                    // wrong side of.
+                    var chuckPostCreatedUtc = now.AddHours(-8);
                     var chuckPost = new Post
                     {
                         PostId = _guidFactory.Create(),
                         RoomId = chuckRoom.RoomId,
                         CharacterId = chuckChar.CharacterId,
                         AuthorId = chuckPlayer.UserId,
-                        CreatedUtc = now.AddHours(-8),
+                        CreatedUtc = chuckPostCreatedUtc,
                         GameText = """
                             Чак сел на поваленное бревно, достал из мешка грейпфрут и некоторое время просто держал его в руках. Тяжелый. Теплый от солнца. Идеальный.
 
@@ -689,11 +699,45 @@ internal sealed partial class DataSeeder
                     result.PostsCreated++;
                     chuckPlayer.QuantityRating++;
 
-                    // 7 positive reviews — net +7, guarantees "Best of week" (> Elvira +5)
+                    // The showcase post has to outscore everything the seed puts
+                    // inside the weekly window, and the loudest thing in there is
+                    // leaderboard coverage: it tops one post at BoardSize + 2 and
+                    // steps down from there (EnsureLeaderboardCoverage).
+                    //
+                    // Coverage was written to keep its reviews before the week
+                    // start, and in the first seven days of a month it cannot: a
+                    // review has to sit inside its month window for the boards to
+                    // count it, the window opens on the first, and the rolling
+                    // week reaches back into the month before. The two demands
+                    // contradict each other there, so the widget was showing a
+                    // filler post that reads "Отличный отыгрыш!" instead of this
+                    // one for a week out of every four.
+                    //
+                    // Hence one above the coverage top, read from the same
+                    // constant rather than written out: a board that grows moves
+                    // this with it, and a number here would go stale silently.
+                    var chuckReviewCount = LeaderboardBoards.BoardSize + 3;
+
+                    // Reviewers are drawn from everyone but the author. The
+                    // experienced ones first, so the showcase reads as praise
+                    // from people who have played, and the rest only if there
+                    // are not enough of them: how many users clear the newbie
+                    // threshold depends on how many posts the game pass seeded,
+                    // and a pool that quietly comes up short would put this post
+                    // level with the filler instead of above it.
                     var chuckReviewers = experiencedUsers
+                        .Concat(users.Except(experiencedUsers))
                         .Where(u => u.UserId != chuckPlayer.UserId)
-                        .Take(7)
+                        .Take(chuckReviewCount)
                         .ToList();
+
+                    if (chuckReviewers.Count < chuckReviewCount)
+                    {
+                        throw new InvalidOperationException(
+                            $"Showcase post needs {chuckReviewCount} distinct reviewers to outscore " +
+                            $"leaderboard coverage, and the seed has {chuckReviewers.Count}. " +
+                            "Add users, or the home page shows a filler post as the best of the week.");
+                    }
                     var chuckReviewTexts = new[]
                     {
                         "Лучший пост, что я читал за последний год. Грейпфрут — это философия.",
@@ -703,7 +747,22 @@ internal sealed partial class DataSeeder
                         "Персонаж раскрыт на все сто. Глубина, юмор, драма — все в одном посте.",
                         "Отыгрыш уровня бог. Сцена с трактирщиком — шедевр.",
                         "Жду продолжения грейпфрутовой саги. Это лучше 'Властелина Колец'.",
+                        "Прочитал трижды. На третий раз пошел за грейпфрутом.",
+                        "Вот так и надо писать посты. Без пафоса, а берет за душу.",
+                        "Мастер, дайте этому человеку премию. И еще грейпфрутов.",
+                        "Никогда не думал, что буду сопереживать цитрусовым. А вот.",
+                        "Половина игры ради таких постов и существует.",
+                        "Сохранил себе. Буду показывать новичкам как образец.",
+                        "Тот случай, когда пост лучше самого модуля. Без обид, мастер.",
+                        "Читал в метро, чуть не проехал станцию.",
+                        "Единственная претензия: слишком коротко.",
                     };
+                    // Reviews land strictly between the post and `now`: dating
+                    // them 2..11 hours back could put them BEFORE a post placed
+                    // eight hours back, and the fireplace review at `now` has to
+                    // stay the freshest one on the site ("последний оцененный").
+                    var chuckReviewSpanMinutes =
+                        (int)Math.Max(2, (now - chuckPostCreatedUtc).TotalMinutes);
                     for (var i = 0; i < chuckReviewers.Count; i++)
                     {
                         _dbContext.PostReviews.Add(new DM.Infrastructure.Persistence.Entities.Game.PostReview
@@ -713,14 +772,14 @@ internal sealed partial class DataSeeder
                             PostId = chuckPost.PostId,
                             PostAuthorId = chuckPlayer.UserId,
                             GameId = chuckGameId,
-                            CreatedUtc = now.AddHours(-_random.Next(2, 12)),
+                            CreatedUtc = chuckPostCreatedUtc.AddMinutes(_random.Next(1, chuckReviewSpanMinutes)),
                             Text = chuckReviewTexts[i],
                             SignValue = (short)ReviewSign.Positive,
                             IsRemoved = false
                         });
                         result.ReviewsCreated++;
                     }
-                    chuckPlayer.QualityRating += 7;
+                    chuckPlayer.QualityRating += chuckReviewers.Count;
                 }
             }
         }

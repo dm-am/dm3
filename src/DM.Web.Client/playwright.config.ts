@@ -1,14 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-
-/**
- * Port of the preview server the suite runs against.
- *
- * Not a free choice: the API validates Origin twice (CORS allowlist and the
- * CSRF middleware), and its allowlist holds 5173, 5174 and 8080 only. On any
- * other port every request from the page is rejected and the whole tier reads
- * red for a reason that has nothing to do with the tests.
- */
-const PREVIEW_PORT = 5174;
+import { APP_BASE_URL, PREVIEW_PORT } from "./e2e/fixtures/auth";
 
 /**
  * An external target under test (staging, a container, a manually started
@@ -16,7 +7,7 @@ const PREVIEW_PORT = 5174;
  */
 const externalBaseUrl = process.env.E2E_BASE_URL;
 
-const baseURL = externalBaseUrl || `http://localhost:${PREVIEW_PORT}`;
+const baseURL = APP_BASE_URL;
 
 export default defineConfig({
   testDir: "./e2e/tests",
@@ -28,7 +19,15 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: [["html"], ["list"]],
+  // Машиночитаемый отчет рядом с человекочитаемым: с retries: 2 тест, прошедший
+  // с третьей попытки, оставляет джобу зеленой, и единственным следом флейка был
+  // HTML-артефакт, который надо скачать и открыть. Из этого файла шаг CI печатает
+  // список флейков в сводку прогона.
+  reporter: [
+    ["html"],
+    ["list"],
+    ["json", { outputFile: "playwright-report/results.json" }],
+  ],
   use: {
     baseURL,
     trace: "on-first-retry",

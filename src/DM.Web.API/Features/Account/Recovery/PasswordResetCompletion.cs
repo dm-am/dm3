@@ -6,8 +6,9 @@ namespace DM.Web.API.Features.Account.Recovery;
 /// DTO for completing password reset via token
 /// </summary>
 /// <remarks>
-/// Token is passed in URL path.
-/// Used with POST /v1/account/password-reset/{token}.
+/// The token is the credential of the call and travels in the X-Dm-Account-Token
+/// header, not in the path.
+/// Used with POST /v1/account/password-reset.
 /// </remarks>
 public class PasswordResetCompletion
 {

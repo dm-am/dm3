@@ -5,7 +5,9 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Uploads;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using DbUpload = DM.Infrastructure.Persistence.Entities.Shared.Upload;
 
 namespace DM.Infrastructure.Persistence.Repositories.General;
@@ -69,7 +71,7 @@ internal class UploadRepository : IUploadRepository
     }
 
     /// <inheritdoc />
-    public async Task SoftDeleteAsync(Guid uploadId, DateTimeOffset deletedUtc)
+    public async Task SoftDeleteAsync(Guid uploadId, Guid? deletedByUserId, DateTimeOffset deletedUtc)
     {
         var upload = await _dbContext.Uploads.FirstOrDefaultAsync(u => u.UploadId == uploadId);
         if (upload == null)
@@ -80,11 +82,13 @@ internal class UploadRepository : IUploadRepository
             return;
         }
 
-        upload.IsRemoved = true;
         // DeletedUtc is what starts the grace period the orphan sweeper waits
         // out before deleting the object from S3; without it the row is hidden
-        // from the site but the file stays in the bucket forever.
-        upload.DeletedUtc = deletedUtc;
+        // from the site but the file stays in the bucket forever. The author
+        // travels with it: deleting somebody else's file is a moderation action,
+        // and the column that would answer who did it was left empty here while
+        // the request had the identity in hand.
+        SoftDelete.Mark(upload, deletedByUserId, deletedUtc);
         await _dbContext.SaveChangesAsync();
     }
 
@@ -101,6 +105,8 @@ internal class UploadRepository : IUploadRepository
             FileName = upload.FileName,
             ContentType = upload.ContentType,
             SizeBytes = upload.SizeBytes,
+            Width = upload.Width,
+            Height = upload.Height,
             ObjectKey = upload.ObjectKey,
             FilePath = upload.Url,
             CreatedUtc = upload.CreatedUtc,
@@ -110,14 +116,23 @@ internal class UploadRepository : IUploadRepository
 
         try
         {
-            await _dbContext.Uploads.AddAsync(entity);
-            await _dbContext.SaveChangesAsync();
+            if (upload.Type == UploadType.CharacterAvatar)
+            {
+                await ReplaceCharacterPortraitAsync(entity);
+            }
+            else
+            {
+                await _dbContext.Uploads.AddAsync(entity);
+                await _dbContext.SaveChangesAsync();
+            }
         }
-        catch (DbUpdateException ex)
+        catch (Exception ex) when (ex is DbUpdateException or NpgsqlException)
         {
             // The caller has an object in the bucket that this row was supposed
             // to point at. Translate here so it can recognise a refused write
-            // without depending on EF.
+            // without depending on EF. Both shapes, because the replacement path
+            // retires the previous row with ExecuteUpdate, which reports a refusal
+            // as the provider exception instead of wrapping it.
             throw new StorageException("Failed to store the upload record", ex);
         }
 
@@ -125,6 +140,60 @@ internal class UploadRepository : IUploadRepository
         // file it is, and a lookup purely to echo the username back would cost
         // a query per upload.
         return ToStored(entity);
+    }
+
+    /// <summary>
+    /// Inserts a character portrait and retires the one it replaces, both in the
+    /// same transaction.
+    /// </summary>
+    /// <remarks>
+    /// A character carries no column pointing at its portrait: the portrait is
+    /// whichever live CharacterAvatar row points at the character, so a second one
+    /// is not an extra picture but a second answer to one question. The schema
+    /// holds that rule now (unique partial index over the live portraits), and the
+    /// rule decides the order here: the previous row has to go before the new one
+    /// lands, not be collected after it, or the index refuses the insert and a
+    /// legitimate replacement answers 500. Together, because retiring on its own
+    /// would answer a refused insert by leaving the character with no portrait.
+    ///
+    /// The file behind the retired row stays in the bucket until the orphan
+    /// sweeper is done waiting out its grace period, which is the recovery window
+    /// every other soft-deleted upload gets.
+    /// </remarks>
+    /// <param name="entity">Row of the new portrait, target column already assigned.</param>
+    private async Task ReplaceCharacterPortraitAsync(DbUpload entity)
+    {
+        // The strategy wrapper is required because the API host configures
+        // EnableRetryOnFailure.
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        var attempted = false;
+        await strategy.ExecuteAsync(async () =>
+        {
+            if (attempted)
+            {
+                // A retry replays this block; the row the failed attempt left
+                // tracked would otherwise be inserted twice or not at all.
+                _dbContext.ChangeTracker.Clear();
+            }
+
+            attempted = true;
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
+            // The soft-delete filter keeps this to the live rows, so a portrait
+            // retired earlier does not get its grace period restarted. The stamp is
+            // the new upload's own moment: that is when the old one was superseded.
+            await _dbContext.Uploads
+                .Where(u => u.TargetCharacterId == entity.TargetCharacterId
+                    && u.Type == UploadType.CharacterAvatar)
+                .ExecuteUpdateAsync(u => u
+                    .SetProperty(x => x.IsRemoved, true)
+                    .SetProperty(x => x.DeletedUtc, (DateTimeOffset?)entity.CreatedUtc));
+
+            _dbContext.Uploads.Add(entity);
+            await _dbContext.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+        });
     }
 
     /// <summary>

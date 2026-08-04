@@ -55,6 +55,12 @@ const contentClass = computed(() => {
   position: relative
   padding: $medium
   width: 580px
+  // The width tiers are fixed numbers, and seventeen files open a dialog on
+  // them — moderation forms among them, which a phone reaches. On a 375px
+  // viewport 580 is not a dialog, it is a page running off both edges. The cap
+  // leaves the page's own margin on either side and applies to the narrow tier
+  // too, which shares this class; the auto tier declares its own below.
+  max-width: calc(100vw - #{$medium} * 2)
   background-color: $bg-page
   border-radius: $border-radius
 

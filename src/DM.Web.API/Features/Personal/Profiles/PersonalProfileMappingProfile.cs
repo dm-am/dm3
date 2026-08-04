@@ -12,14 +12,11 @@ namespace DM.Web.API.Features.Personal.Profiles;
 /// </summary>
 internal class PersonalProfileMappingProfile : Profile
 {
-    private const int NewbieThreshold = 100;
-
     public PersonalProfileMappingProfile()
     {
         // UserDetails (domain) -> PersonalProfile (API)
         CreateMap<UserDetails, PersonalProfile>()
             .ForMember(d => d.Id, o => o.MapFrom(s => s.UserId))
-            .ForMember(d => d.IsNewbie, o => o.MapFrom(s => s.QuantityRating < NewbieThreshold))
             .ForMember(d => d.Rating, o => o.MapFrom(s => new Rating
             {
                 TotalPosts = s.QuantityRating,
@@ -51,6 +48,8 @@ internal class PersonalProfileMappingProfile : Profile
             .ForMember(d => d.ReviewsReceived, o => o.MapFrom(s => s.PostReviewsReceivedCount))
             .ForMember(d => d.EndorsementsGiven, o => o.MapFrom(s => s.EndorsementsGivenCount))
             .ForMember(d => d.EndorsementsReceived, o => o.MapFrom(s => s.EndorsementsReceivedCount))
+            .ForMember(d => d.GameReviewsGiven, o => o.MapFrom(s => s.GameReviewsGivenCount))
+            .ForMember(d => d.GameReviewsReceived, o => o.MapFrom(s => s.GameReviewsReceivedCount))
             .ForMember(d => d.TopicsAuthored, o => o.MapFrom(s => s.TopicsAuthoredCount))
             .ForMember(d => d.CommentsAuthored, o => o.MapFrom(s => s.CommentsAuthoredCount))
             .ForMember(d => d.GlobalChatMessages, o => o.MapFrom(s => s.GlobalChatMessagesCount))

@@ -5,6 +5,14 @@ export type {
   UseApiResourceReturn,
 } from "./useApiResource";
 
+// One local request with its own loading/error and a race guard — the shape a
+// screen uses when its answer is not worth a store.
+export { useGuardedRequest } from "./useGuardedRequest";
+export type {
+  UseGuardedRequestOptions,
+  UseGuardedRequestReturn,
+} from "./useGuardedRequest";
+
 // Async operations
 export { useAsyncAction } from "./useAsyncAction";
 export type { AsyncActionState } from "./useAsyncAction";
@@ -29,6 +37,9 @@ export type { ExpandableHandle } from "./useExpandableRegistry";
 
 // Data fetching patterns
 export { useFetchData } from "./useFetchData";
+
+// Per-viewer data: the one place that knows what "the viewer changed" means
+export { useViewerChange } from "./useViewerChange";
 
 // Authentication and validation
 export { useHibpCheck } from "./useHibpCheck";
@@ -73,7 +84,12 @@ export { useToast } from "./useToast";
 export type { ToastType, Toast } from "./useToast";
 
 // Document title (per-route + dynamic page titles)
-export { useDocumentTitle, formatDocumentTitle } from "./useDocumentTitle";
+export {
+  useDocumentTitle,
+  formatDocumentTitle,
+  joinTitleSegments,
+  TITLE_SEPARATOR,
+} from "./useDocumentTitle";
 
 // Expandable content section — THE building block: unified reveal animation
 // + "Развернуть/Свернуть все" registry + manual-toggle semantics in one call.

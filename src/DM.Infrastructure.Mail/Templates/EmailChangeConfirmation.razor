@@ -1,0 +1,32 @@
+@*
+    Письмо подтверждения новой почты. Уходит на новый адрес; на старый уходит
+    предупреждение, это отдельное письмо.
+*@
+<EmailLayout Title="Подтвердите новую почту">
+    <p style="@EmailConstants.ParagraphStyles">
+        Здравствуйте, @Model.Username!
+    </p>
+
+    <p style="@EmailConstants.ParagraphStyles">
+        Вы попросили привязать этот адрес к учетной записи на Dungeon Master.
+    </p>
+
+    <a href="@Model.ConfirmationLinkUrl" style="@EmailConstants.ButtonStyles">Подтвердить адрес</a>
+
+    <p style="@EmailConstants.ParagraphStyles">
+        Если кнопка не работает, откройте ссылку вручную:<br/>
+        <a href="@Model.ConfirmationLinkUrl">@Model.ConfirmationLinkUrl</a>
+    </p>
+
+    <p style="@EmailConstants.ParagraphStyles">
+        Пока адрес не подтвержден, почтой учетной записи остается прежний.
+    </p>
+</EmailLayout>
+
+@code {
+
+    /// <summary>Данные письма</summary>
+    [Parameter]
+    public EmailChangeConfirmationViewModel Model { get; set; } = null!;
+
+}

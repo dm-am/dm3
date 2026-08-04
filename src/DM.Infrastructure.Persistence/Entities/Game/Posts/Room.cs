@@ -81,6 +81,13 @@ public class Room : ISoftDeletable
     /// </summary>
     public bool IsArchived { get; set; }
 
+    /// <summary>
+    /// Room is kept out of the game's room list for everybody who may not open
+    /// it. Off by default: a room is most often closed for a technical reason
+    /// rather than a story one, and its name alone gives nothing away.
+    /// </summary>
+    public bool HiddenWithoutAccess { get; set; }
+
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
 

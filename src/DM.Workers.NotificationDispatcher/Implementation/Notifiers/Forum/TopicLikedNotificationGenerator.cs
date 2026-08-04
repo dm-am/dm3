@@ -34,15 +34,27 @@ internal class TopicLikedNotificationGenerator : BaseNotificationGenerator
             select new
             {
                 like.User!.Username,
+                LikerId = like.UserId,
                 topic.TopicId,
                 topic.AuthorId,
                 topic.Title
             })
-            .FirstAsync();
+            .FirstOrDefaultAsync();
+
+        // The event carries no idempotency key and is replayed by the retry
+        // middleware, by which time the like can be withdrawn or the topic
+        // removed. FirstAsync threw on that, the middleware replayed the whole
+        // delivery, and the queue stopped draining. Every other generator here
+        // answers a missing row with nothing, which is what this now does.
+        if (likedTopicData == null)
+        {
+            yield break;
+        }
 
         yield return new CreateNotification
         {
-            UsersInterested = new[] {likedTopicData.AuthorId},
+            UsersInterested = new[] { likedTopicData.AuthorId },
+            ActorId = likedTopicData.LikerId,
             Metadata = new
             {
                 AuthorUsername = likedTopicData.Username,

@@ -5,3 +5,15 @@ dist
 .DS_Store
 .vscode
 *.local
+
+# Test and report artefacts. The context is what the build uploads and what the
+# cache key of its layers is computed from, so an e2e run that rewrites
+# playwright-report invalidated the layers of an image none of it belongs in.
+# The image runs vite build and nothing else, so none of this is needed to
+# compile the bundle. Keeping e2e out is why the Dockerfile calls build-only:
+# the type check that "build" runs also reads tsconfig.e2e.json.
+coverage
+e2e
+playwright-report
+test-results
+.env.preview

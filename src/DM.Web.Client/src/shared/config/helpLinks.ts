@@ -45,7 +45,7 @@ export const HELP_LINKS: HelpLink[] = [
     key: "bug",
     icon: "bug",
     problem: "Вижу ошибку",
-    solution: "форма ошибок",
+    solution: "форма поддержки",
     url: "/support",
   },
   {

@@ -104,7 +104,7 @@ internal class BlogService : IBlogService
         var resolvedFilter = filter with
         {
             HostUserIds = hostUserIds,
-            PremoderationStatus = identity.User.Role < UserRole.Mentor ? null : filter.PremoderationStatus,
+            PremoderationStatuses = identity.User.Role < UserRole.Mentor ? null : filter.PremoderationStatuses,
             CurrentUserId = identity.User.UserId
         };
 
@@ -132,7 +132,7 @@ internal class BlogService : IBlogService
         var user = await _userLookupService.GetAsync(username);
         if (user == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, $"User {username} not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(username));
         }
 
         // Premoderation-pending blogs are hidden from other viewers just like
@@ -152,7 +152,7 @@ internal class BlogService : IBlogService
         var blog = await _repository.Get(blogId, ct);
         if (blog == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Blog not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
         }
 
         if (blog.DraftVisibility == DraftVisibility.Private)
@@ -173,7 +173,7 @@ internal class BlogService : IBlogService
         var blog = await _repository.GetByPublicId(publicId, ct);
         if (blog == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Blog not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
         }
 
         if (blog.DraftVisibility == DraftVisibility.Private)
@@ -194,7 +194,7 @@ internal class BlogService : IBlogService
         var blog = await _repository.GetByOwnerUsernameAsync(username, ct);
         if (blog == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, $"Blog for user {username} not found");
+            throw new HttpException(HttpStatusCode.NotFound, $"Блог пользователя {username} не найден");
         }
 
         if (blog.DraftVisibility == DraftVisibility.Private)
@@ -215,7 +215,7 @@ internal class BlogService : IBlogService
         var blog = await _repository.Get(blogId, ct);
         if (blog == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Blog not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
         }
 
         return blog;
@@ -330,7 +330,7 @@ internal class BlogService : IBlogService
         var publication = await _repository.GetPublication(publicationId, ct);
         if (publication == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Publication not found");
+            throw new HttpException(HttpStatusCode.NotFound, "Публикация не найдена");
         }
 
         if (!publication.IsPublished)
@@ -419,7 +419,8 @@ internal class BlogService : IBlogService
             Preview = updatePublication.Preview,
             CommentsEnabled = updatePublication.CommentsEnabled,
             IsPublished = updatePublication.IsPublished,
-            UpdatedUtc = _dateTimeProvider.Now
+            UpdatedUtc = _dateTimeProvider.Now,
+            ModifiedByUserId = _identityProvider.Current.User.UserId
         };
         var updatedPublication = await _repository.UpdatePublication(entity, ct);
         await _eventProducer.SendAsync(EventType.ChangedPublication, updatedPublication.Id);
@@ -465,7 +466,7 @@ internal class BlogService : IBlogService
         var (rubric, blogId) = await _repository.GetRubric(updateRubric.RubricId, ct);
         if (rubric == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Rubric not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RubricNotFound);
         }
 
         var blog = await GetAsync(blogId, ct);
@@ -500,7 +501,7 @@ internal class BlogService : IBlogService
         var (rubric, blogId) = await _repository.GetRubric(rubricId, ct);
         if (rubric == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Rubric not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RubricNotFound);
         }
 
         var blog = await GetAsync(blogId, ct);
@@ -529,13 +530,13 @@ internal class BlogService : IBlogService
         // Cannot subscribe to own blog
         if (blog.Author.UserId == userId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Cannot subscribe to your own blog");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя подписаться на собственный блог");
         }
 
         // Check draft visibility (drafts with private visibility require invitation)
         if (blog.DraftVisibility == DraftVisibility.Private)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "This draft blog has private visibility. You need an invitation to subscribe.");
+            throw new HttpException(HttpStatusCode.Forbidden, "Этот блог доступен только по приглашению");
         }
 
         // Use BlogSubscriptionService for readers
@@ -552,7 +553,7 @@ internal class BlogService : IBlogService
         // Owner cannot unsubscribe from their own blog
         if (blog.Author.UserId == userId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Blog owner cannot unsubscribe from their own blog");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя отписаться от собственного блога");
         }
 
         // Use BlogSubscriptionService for readers
@@ -568,14 +569,14 @@ internal class BlogService : IBlogService
         // Owner cannot leave their own blog
         if (blog.Author.UserId == userId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Blog owner cannot leave their own blog");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя покинуть собственный блог");
         }
 
         // Remove as assistant
         var removed = await _repository.RemoveAssistant(blogId, userId, ct);
         if (!removed)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "You are not an assistant in this blog");
+            throw new HttpException(HttpStatusCode.NotFound, "Вы не ассистент в этом блоге");
         }
     }
 
@@ -603,7 +604,7 @@ internal class BlogService : IBlogService
         var removed = await _repository.RemoveAssistantByUsername(blogId, username, ct);
         if (!removed)
         {
-            throw new HttpException(HttpStatusCode.NotFound, $"Assistant '{username}' not found in this blog");
+            throw new HttpException(HttpStatusCode.NotFound, $"Ассистент {username} в этом блоге не найден");
         }
     }
 
@@ -645,7 +646,7 @@ internal class BlogService : IBlogService
             : await _repository.GetByPublicId(id, ct);
         if (blog == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Blog not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
         }
 
         var blogId = blog.Id;
@@ -658,7 +659,7 @@ internal class BlogService : IBlogService
                 if (blog.PremoderationStatus != PremoderationStatus.AwaitingEdits)
                 {
                     throw new HttpException(HttpStatusCode.BadRequest,
-                        $"Cannot send to premoderation from status '{blog.PremoderationStatus}'");
+                        RefusalMessage.CannotSubmitForPremoderation(blog.PremoderationStatus));
                 }
                 update.PremoderationStatus = PremoderationStatus.AwaitingApproval;
                 update.MentorId = currentUserId;
@@ -669,7 +670,7 @@ internal class BlogService : IBlogService
                 if (blog.PremoderationStatus != PremoderationStatus.AwaitingApproval)
                 {
                     throw new HttpException(HttpStatusCode.BadRequest,
-                        $"Cannot remove from premoderation from status '{blog.PremoderationStatus}'");
+                        RefusalMessage.CannotWithdrawFromPremoderation(blog.PremoderationStatus));
                 }
                 update.PremoderationStatus = PremoderationStatus.Approved;
                 update.MentorId = null;
@@ -677,7 +678,7 @@ internal class BlogService : IBlogService
                 break;
 
             default:
-                throw new HttpException(HttpStatusCode.BadRequest, "Unknown premoderation transition");
+                throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.UnknownPremoderationTransition);
         }
 
         var result = await _repository.UpdateBlog(update, ct);
@@ -701,7 +702,7 @@ internal class BlogService : IBlogService
             : await _repository.GetByPublicId(id, ct);
         if (blog == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Blog not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
         }
 
         var blogId = blog.Id;
@@ -762,7 +763,7 @@ internal class BlogService : IBlogService
                 break;
 
             default:
-                throw new HttpException(HttpStatusCode.BadRequest, "Unknown status transition");
+                throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.UnknownStatusTransition);
         }
 
         var result = await _repository.UpdateBlog(update, ct);
@@ -780,7 +781,7 @@ internal class BlogService : IBlogService
 
     private static HttpException IllegalTransition(BlogStatusTransition transition, Blog blog) =>
         new(HttpStatusCode.BadRequest,
-            $"Transition '{transition}' is not allowed from status '{blog.Status}'" +
+            $"Переход \"{transition}\" недоступен из статуса \"{blog.Status}\"" +
             (blog.Status == ModuleStatus.Closed ? $" ({blog.ClosedReason})" : ""));
 
     // ═══ PRIVATE HELPERS ═══

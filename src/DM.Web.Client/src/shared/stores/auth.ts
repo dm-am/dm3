@@ -16,7 +16,7 @@ import { Theme } from "@/shared/api/models/personal";
 import { ref, computed } from "vue";
 import { useUiStore } from "./ui";
 
-export const useAuthStore = defineStore("root", () => {
+export const useAuthStore = defineStore("auth", () => {
   const userKey = "user";
 
   // Initialize user from localStorage immediately when creating the store

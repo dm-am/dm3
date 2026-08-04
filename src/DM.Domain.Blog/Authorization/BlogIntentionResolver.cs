@@ -108,7 +108,7 @@ internal class BlogIntentionResolver : IIntentionResolver<BlogIntention, BlogDto
                 user.IsAuthenticated &&
                 !target.BlacklistedUserIds.Contains(user.UserId) &&
                 (target.DraftVisibility == DraftVisibility.Public || isOwner || isAssistant || isSubscriber || isMentor || user.Role >= UserRole.Admin) &&
-                user.MaySpeak(inOwnSpace: isOwner || isAssistant || isMentor),
+                user.MaySpeak(inOwnSpace: target.IsOwnBlog(user.UserId)),
 
             _ => false
         };

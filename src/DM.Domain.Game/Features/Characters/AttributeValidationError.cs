@@ -34,6 +34,14 @@ public static class AttributeValidationError
         $"These specifications were not found, but required: {string.Join(", ", specifications.Select(s => $"{s.Id.EncodeToReadable()} ({s.Title})"))}";
 
     /// <summary>
+    /// One specification carries more than one submitted value
+    /// </summary>
+    /// <param name="specifications">Repeated specifications</param>
+    /// <returns>Error message listing repeated specifications</returns>
+    public static string ManyDuplicated(IEnumerable<Guid> specifications) =>
+        $"These specifications were submitted more than once: {string.Join(", ", specifications.Select(s => s.EncodeToReadable()))}";
+
+    /// <summary>
     /// Number should be a valid number
     /// </summary>
     public static string NotANumber => "Value should be a number";

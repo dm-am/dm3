@@ -1,13 +1,20 @@
 // =============================================================================
 // BREAKPOINT SCALE
 // =============================================================================
-// Centralized breakpoint tokens for responsive layout. New media queries
-// should use these instead of ad-hoc pixel values. See UI_STANDARDS.md for
-// documentation ("Брейкпоинты" section).
+// The breakpoints of the layout, all of them. See UI_STANDARDS.md
+// ("Брейкпоинты").
 //
-// NOTE: many existing components still hardcode 768/640/600 etc. — those are
-// intentionally left as-is (future consolidation), this scale is authoritative
-// only where it is actually used (the page shell + off-canvas drawer for now).
+// It became authoritative by being the only source there is. The literals it
+// used to tolerate had grown into six competing values under three names:
+// between 600 and 640 three neighbouring blocks reflowed at three different
+// widths, so a tablet in portrait broke the page in three jerks instead of one,
+// and DataTable and its own skeleton each held a private copy of 768 — change
+// one and the table parts from its placeholder on a phone.
+//
+// The header's three compression steps (1699/1489/1339) are NOT here on
+// purpose: they squeeze one menu progressively, they do not switch a layout.
+// Header.vue says so where they are written, and styleSystem.spec.ts names that
+// file as the one place a literal width may still stand.
 // =============================================================================
 
 // Shell breakpoint — below this both page sidebars leave the 3-column flow;

@@ -17,6 +17,7 @@ import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { PeriodDigestBoards } from "@/features/leaderboard/@x/topic";
 import TopicCard from "./TopicCard.vue";
 import { notifyFailure } from "@/shared/lib/errors";
+import { TOPIC_TITLE_MAX_LENGTH } from "@/shared/lib/constants/forum";
 
 const props = withDefaults(
   defineProps<{
@@ -71,10 +72,20 @@ const topicRoute = computed(() => ({
   params: { alias: props.topic.board?.alias, num: props.topic.topicNumber },
 }));
 
-// The unread deep link is an authenticated-only affordance: guests never
-// receive unread counters, so the card falls back to the plain comments link.
+// Where the reader continues: a resolver route that asks the server for the
+// comment he stopped at and replaces itself with the topic route pointing at
+// it. Authenticated-only, a guest has no read marker of his own, so for him
+// the counter keeps the plain link to the topic.
 const unreadRoute = computed(() =>
-  currentUser.value ? { ...topicRoute.value, query: { unread: 1 } } : null,
+  currentUser.value
+    ? {
+        name: "topic-unread",
+        params: {
+          alias: props.topic.board?.alias,
+          num: props.topic.topicNumber,
+        },
+      }
+    : null,
 );
 
 const isModerator = computed(() => userIsModerator(currentUser.value));
@@ -148,7 +159,7 @@ async function startEdit() {
   const { data, error } = await forumApi.getTopicForUpdate(props.topic.id);
   editLoading.value = false;
   if (error) {
-    notifyFailure(error, "Не удалось загрузить текст темы");
+    notifyFailure(error, "Не удалось загрузить текст топика");
     return;
   }
   editTitle.value = props.topic.title;
@@ -175,19 +186,19 @@ function saveEdit() {
 
 <template>
   <div v-if="isEditing" class="topic-edit">
-    <label class="edit-label">Заголовок темы</label>
+    <label class="edit-label">Заголовок топика</label>
     <input
       v-model="editTitle"
       type="text"
       class="edit-title"
-      maxlength="130"
-      placeholder="Заголовок темы"
+      :maxlength="TOPIC_TITLE_MAX_LENGTH"
+      placeholder="Заголовок топика"
     />
     <label class="edit-label">Текст</label>
     <BBCodeEditor
       v-model="editText"
       context="common"
-      placeholder="Текст темы..."
+      placeholder="Текст топика..."
       :min-height="120"
       :max-height="400"
       :is-moderator="isModerator"
@@ -201,7 +212,7 @@ function saveEdit() {
       >
         Сохранить
       </button>
-      <button class="edit-btn" @click="cancelEdit">Отменить</button>
+      <button class="edit-btn" @click="cancelEdit">Отмена</button>
     </div>
   </div>
 

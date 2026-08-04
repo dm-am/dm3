@@ -35,9 +35,17 @@ public interface ICharacterApiService
     /// Update existing character
     /// </summary>
     /// <param name="characterId">Character identifier</param>
-    /// <param name="character">Character API model</param>
+    /// <param name="request">Editable character fields</param>
     /// <returns>Envelope containing the updated character</returns>
-    Task<Envelope<CharacterDetails>> Update(Guid characterId, CharacterDetails character);
+    Task<Envelope<CharacterDetails>> Update(Guid characterId, UpdateCharacterRequest request);
+
+    /// <summary>
+    /// Move a character to another place in the game
+    /// </summary>
+    /// <param name="characterId">Character identifier</param>
+    /// <param name="request">Requested transition</param>
+    /// <returns>Updated character</returns>
+    Task<Envelope<CharacterDetails>> ChangeStatus(Guid characterId, CharacterStatusChangeRequest request);
 
     /// <summary>
     /// Delete existing character

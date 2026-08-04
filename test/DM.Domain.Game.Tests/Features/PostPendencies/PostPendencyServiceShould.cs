@@ -16,6 +16,7 @@ using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.PostPendencies;
 using DM.Domain.Game.Features.Rooms;
 using DM.Testing.Dsl;
+using GameDto = DM.Domain.Game.Features.Games.Game;
 using DM.Testing;
 using FluentAssertions;
 using FluentValidation;
@@ -81,7 +82,7 @@ public class PostPendencyServiceShould : UnitTestBase
         var createPendency = new CreatePostPendency { RoomId = Guid.NewGuid(), WaitingForUsername = "targetuser" };
         var room = CreateRoomWithAccesses(targetUserId);
 
-        _roomService.Setup(s => s.GetAsync(It.IsAny<Guid>())).ReturnsAsync(room);
+        _roomService.Setup(s => s.GetWithGameAsync(It.IsAny<Guid>())).ReturnsAsync(room);
         _userLookupService.Setup(s => s.FindUserIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((true, targetUserId));
         _repository.Setup(r => r.Create(It.IsAny<CreatePostPendencyEntity>()))
@@ -99,8 +100,9 @@ public class PostPendencyServiceShould : UnitTestBase
         var currentUserId = _identityProvider.Object.Current.User.UserId;
         var createPendency = new CreatePostPendency { RoomId = Guid.NewGuid(), WaitingForUsername = "targetuser" };
 
-        var room = new Room
+        var room = new RoomToUpdate
         {
+            Game = new GameDto(),
             Pendencies = new List<PostPendency>
             {
                 new PostPendency
@@ -115,7 +117,7 @@ public class PostPendencyServiceShould : UnitTestBase
             }
         };
 
-        _roomService.Setup(s => s.GetAsync(It.IsAny<Guid>())).ReturnsAsync(room);
+        _roomService.Setup(s => s.GetWithGameAsync(It.IsAny<Guid>())).ReturnsAsync(room);
         _userLookupService.Setup(s => s.FindUserIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((true, waitingForUserId));
 
@@ -133,7 +135,7 @@ public class PostPendencyServiceShould : UnitTestBase
         var createPendency = new CreatePostPendency { RoomId = Guid.NewGuid(), WaitingForUsername = "targetuser" };
         var room = CreateRoomWithAccesses(targetUserId);
 
-        _roomService.Setup(s => s.GetAsync(It.IsAny<Guid>())).ReturnsAsync(room);
+        _roomService.Setup(s => s.GetWithGameAsync(It.IsAny<Guid>())).ReturnsAsync(room);
         _userLookupService.Setup(s => s.FindUserIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((true, targetUserId));
         _repository.Setup(r => r.Create(It.IsAny<CreatePostPendencyEntity>()))
@@ -174,10 +176,16 @@ public class PostPendencyServiceShould : UnitTestBase
         _producer.Verify(p => p.SendAsync(EventType.RoomPendencyDeleted, pendencyId), Times.Once);
     }
 
-    private Room CreateRoomWithAccesses(Guid? userId = null)
+    /// <summary>
+    /// The projection that carries the game, which is what the permission rule
+    /// reads: asked with the flat one the manager finds no resolver and refuses
+    /// everybody.
+    /// </summary>
+    private RoomToUpdate CreateRoomWithAccesses(Guid? userId = null)
     {
-        return new Room
+        return new RoomToUpdate
         {
+            Game = new GameDto(),
             Pendencies = new List<PostPendency>(),
             Accesses = new List<RoomAccess>
             {

@@ -47,10 +47,15 @@ internal class LoginAttemptTracker : ILoginAttemptTracker
         var lockoutEnd = lockoutStart.Value.AddMinutes(_config.AccountLockoutDurationMinutes);
         var isLocked = _dateTimeProvider.Now.UtcDateTime < lockoutEnd;
 
-        // Clear expired lockout
+        // Clear the expired lockout of this pair, and of this pair only. Done by
+        // email it deleted the records of every other address too, and with them
+        // their lockout starts and their accumulated delay: one expiry anywhere
+        // handed a spread-out attempt a fresh window of fifteen tries from each
+        // of its addresses. Clearing the account everywhere is what proving the
+        // password earns, and it stays on the successful-login path.
         if (!isLocked)
         {
-            await _repository.ResetAttempts(origin.Email);
+            await _repository.ResetAttempts(origin);
         }
 
         return isLocked;

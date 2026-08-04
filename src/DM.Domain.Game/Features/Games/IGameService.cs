@@ -99,8 +99,10 @@ public interface IGameService
 
     /// <summary>
     /// Apply a premoderation transition (send to / remove from premoderation).
-    /// Gated Mentor+. The public id is resolved via the repository (ungated) so
-    /// a premoderation-pending game stays reachable for the non-curator mentor.
+    /// Gated Mentor+. Either id form is resolved by the repository, whose
+    /// accessibility scope admits the game's leads and the mentor assigned to
+    /// the game, so a mentor who does not curate it is refused here exactly as
+    /// on the read path.
     /// </summary>
     /// <param name="id">Game public id (5 letters) or GUID</param>
     /// <param name="transition">Requested transition</param>

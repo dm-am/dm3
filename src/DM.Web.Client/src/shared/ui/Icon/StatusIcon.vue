@@ -56,7 +56,7 @@ defineProps<{
     transform: scale(1) translateY(0)
 
 // Mobile adjustments
-@media (max-width: 480px)
+@media (max-width: $bp-narrow)
   .status-icon
     width: 36px
     height: 36px

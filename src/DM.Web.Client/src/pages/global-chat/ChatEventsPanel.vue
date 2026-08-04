@@ -4,51 +4,60 @@
  * layered over the scrolling feed.
  *
  * The line always leads with ONE focal event — the live one if something is
- * running, otherwise the nearest scheduled one — shown in full: a bold "Идет:"
- * label (live only), the title, and the muted time ("до HH:mm" live /
- * "DD.MM в HH:mm" scheduled, + ", закрытый" for invite-only events). Every
- * other upcoming event is demoted to one quiet count link "+N запланировано"
+ * running, otherwise the nearest scheduled one — shown in full: the state word
+ * ("Идет:" / "Скоро:"), the title, and the muted time ("до HH:mm" live /
+ * "DD.MM в HH:mm" scheduled, + ", закрытый" for invite-only events). The word
+ * is not decoration: a scheduled event used to differ from a running one by
+ * font weight alone, so the nearest one read as happening now. Every other
+ * upcoming event is demoted to one quiet count link "+N запланировано"
  * ("+N ..., ближайший DD.MM" while a live event holds the line); clicking it
  * unrolls the full upcoming list. There is no arrow browsing — the focal event
  * is derived (live ?? nearest), so there is no index to desync when an event
  * starts or ends in realtime.
  *
- * The right edge carries two quiet controls: "описание" toggles the description
- * overlay for the focal event, and "К дате" opens the archive-date calendar
- * (chat-history navigation, independent of events).
+ * The strip is written in the site's one strip idiom: literal " | " text nodes
+ * between items, every item a link-button. Search and the archive date are not
+ * here — they live on the search row above the chat frame, in the filter-bar
+ * idiom.
  *
- * Three floating layers hang below the strip — the upcoming list, the
- * description overlay, and the calendar — mutually exclusive, each kept mounted
- * and toggled by an ".open" class so they animate open/closed with the site's
- * one reveal idiom ($expand-duration/$expand-easing), and marked `inert` while
- * closed so their content is out of the tab order and the a11y tree. They float
- * over the feed (absolute, below the strip), so the message list never shifts.
+ * The card is also where the focal event's one action lives (join, leave, and
+ * the organizer's start/end — see features/chat-event-actions): the strip is a
+ * summary, one line and the same line for every reader, while the label of an
+ * action depends on who is looking and is decided by the participants list,
+ * which arrives with the card and not with the strip's summary.
  *
- * Copy-friendly: the focal composite is one inline-flow run with real spaces,
- * so selecting the line copies exactly "Идет: Title, до 22:48" as one string.
+ * Two floating layers hang below the strip — the upcoming list and the
+ * description card — mutually exclusive, each kept mounted and toggled by an
+ * ".open" class so they animate open/closed with the site's one reveal idiom
+ * ($expand-duration/$expand-easing), and marked `inert` while closed so their
+ * content is out of the tab order and the a11y tree. They float over the feed
+ * (absolute, below the strip), so the message list never shifts. Both are
+ * content rather than tools, so they answer the page-wide "Развернуть все".
+ *
+ * Copy-friendly: the whole line is one inline-flow run with real spaces, so
+ * selecting it copies exactly "Идет: Title, до 22:48 | описание | +2
+ * запланировано, ближайший 05.08" — one string, the way it reads.
+ * onelineCopy.spec.ts holds that shape; a flex row put a line break at every
+ * item boundary instead.
  */
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  onUnmounted,
+  ref,
+  watch,
+} from "vue";
 import dayjs from "dayjs";
 import { storeToRefs } from "pinia";
 import { useGlobalChatStore } from "@/entities/global-chat";
-import { SvgIcon } from "@/shared/ui/Icon";
-import { CalendarGrid } from "@/shared/ui/DatePicker";
-import { ContentText } from "@/shared/ui";
-
-const props = withDefaults(
-  defineProps<{
-    /** Currently selected archive date, YYYY-MM-DD (highlights in the calendar). */
-    selectedDate?: string;
-    /** Latest selectable date, YYYY-MM-DD. */
-    maxDate?: string;
-  }>(),
-  { selectedDate: "", maxDate: "" },
-);
-
-const emit = defineEmits<{
-  "date-picked": [value: string];
-  "open-search": [];
-}>();
+import { ChatEventActions } from "@/features/chat-event-actions";
+import {
+  notifyExpandableChanged,
+  refreshExpandableStates,
+  registerExpandable,
+} from "@/shared/lib/composables";
+import { ContentText } from "@/shared/ui/Content";
 
 const store = useGlobalChatStore();
 const { liveEvent, upcomingEvents, eventDetails } = storeToRefs(store);
@@ -70,12 +79,21 @@ const isPrimaryLive = computed(
     primaryEvent.value.id === liveEvent.value.id,
 );
 
+// The word the line leads with. Mandatory for both states: weight alone (600
+// live / 500 scheduled) is a difference no reader can name, and a scheduled
+// event without a word reads as one that is already running.
+const stateWord = computed(() => (isPrimaryLive.value ? "Идет" : "Скоро"));
+
 // Everything not on the focal line, collapsed behind the count: all upcoming
 // while a live event leads, otherwise the upcoming after the shown nearest one.
 const restEvents = computed(() =>
   liveEvent.value ? upcomingEvents.value : upcomingEvents.value.slice(1),
 );
 const restCount = computed(() => restEvents.value.length);
+
+// "+2" and " запланировано" are two parts on purpose: a narrow screen keeps the
+// number and drops the noun, so the count never eats the title's width.
+const countLabel = computed(() => `+${restCount.value}`);
 
 // "..., ближайший DD.MM" is shown only while a live event holds the line — when
 // an upcoming event is the focal one, it already IS the nearest.
@@ -123,31 +141,73 @@ const primaryMeta = computed(() => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// Floating layers — mutually exclusive, animated, focus-returning
+// Floating layers — mutually exclusive, animated, focus-returning. One ref
+// holds which one is up, because two booleans can disagree and these two
+// layers never may: they occupy the same place over the feed.
 // ─────────────────────────────────────────────────────────────
-const overlayOpen = ref(false);
-const listOpen = ref(false);
-const calendarOpen = ref(false);
+type RevealId = "description" | "upcoming";
+
+const openReveal = ref<RevealId | null>(null);
+const descriptionOpen = computed(() => openReveal.value === "description");
+const upcomingOpen = computed(() => openReveal.value === "upcoming");
 let lastTrigger: HTMLElement | null = null;
 
-function closeAll() {
-  overlayOpen.value = false;
-  listOpen.value = false;
-  calendarOpen.value = false;
+/**
+ * Close whatever is up. `manual` tells the registry a person did it (which
+ * clears a pending bulk action); a layer closing because its subject went
+ * away only refreshes the aggregate state.
+ */
+function closeAll(manual = false) {
+  if (!openReveal.value) return;
+  openReveal.value = null;
+  if (manual) notifyExpandableChanged();
+  else refreshExpandableStates();
 }
 
-function toggle(which: "overlay" | "list" | "calendar", e: MouseEvent) {
-  const flag =
-    which === "overlay"
-      ? overlayOpen
-      : which === "list"
-        ? listOpen
-        : calendarOpen;
-  const willOpen = !flag.value;
-  closeAll();
-  flag.value = willOpen;
+function toggle(which: RevealId, e: MouseEvent) {
+  const willOpen = openReveal.value !== which;
+  openReveal.value = willOpen ? which : null;
   lastTrigger = willOpen ? (e.currentTarget as HTMLElement) : null;
+  notifyExpandableChanged();
 }
+
+// ─────────────────────────────────────────────────────────────
+// Page-wide "Развернуть все / Свернуть все". Both layers are CONTENT — the
+// focal event's card and the list of upcoming ones — so they belong to the
+// registry; search and the archive date are tools and stay out of it by the
+// same rule. One handle for the pair, because they are mutually exclusive:
+// two handles could never be "all expanded" at once and the ScrollNav label
+// would be stuck on "Развернуть все" forever. Registered only while there is
+// an event to reveal, or the button would appear over an empty strip and do
+// nothing when pressed.
+// ─────────────────────────────────────────────────────────────
+let unregisterReveal: (() => void) | null = null;
+
+function syncRevealRegistration() {
+  const hasSubject = !!primaryEvent.value;
+  if (hasSubject && !unregisterReveal) {
+    unregisterReveal = registerExpandable({
+      id: Symbol("chat-events-panel"),
+      isExpanded: () => openReveal.value !== null,
+      // Pure state changes: notifyExpandableChanged() belongs to a manual
+      // click only — calling it here would clear the bulk action mid-loop.
+      expand: () => {
+        if (!openReveal.value) openReveal.value = "description";
+      },
+      collapse: () => {
+        openReveal.value = null;
+      },
+    });
+  } else if (!hasSubject && unregisterReveal) {
+    unregisterReveal();
+    unregisterReveal = null;
+  }
+}
+
+// Register synchronously in setup, so the ScrollNav button appears in the same
+// frame as the strip it belongs to.
+syncRevealRegistration();
+onBeforeUnmount(() => unregisterReveal?.());
 
 // Overlay details for the focal event.
 const overlayDetails = computed(() =>
@@ -177,27 +237,20 @@ const overlayOrganizer = computed(
 );
 
 // Lazily fill the details cache for the focal event — covers first open and the
-// focal event changing (a live one starting/ending) while the overlay stays up.
-watch([primaryEvent, overlayOpen], ([ev, open]) => {
+// focal event changing (a live one starting/ending) while the card stays up.
+watch([primaryEvent, descriptionOpen], ([ev, open]) => {
   if (open && ev) void store.fetchEventDetails(ev.id);
-  else if (open && !ev) overlayOpen.value = false;
 });
 
-// Close the list / overlay if their subject disappears out from under them.
-watch(restCount, (n) => {
-  if (n === 0) listOpen.value = false;
-});
+// Close a layer whose subject disappeared out from under it, and hand the
+// registry the strip's new shape in the same step.
 watch(primaryEvent, (ev) => {
-  if (!ev) {
-    overlayOpen.value = false;
-    calendarOpen.value = false;
-  }
+  if (!ev) closeAll();
+  syncRevealRegistration();
 });
-
-function onDatePicked(value: string) {
-  calendarOpen.value = false;
-  emit("date-picked", value);
-}
+watch(restCount, (n) => {
+  if (n === 0 && upcomingOpen.value) closeAll();
+});
 
 // ─────────────────────────────────────────────────────────────
 // Dismissal: Escape and click outside close whatever is open; Escape returns
@@ -205,15 +258,17 @@ function onDatePicked(value: string) {
 // clicked, so it keeps its own focus).
 // ─────────────────────────────────────────────────────────────
 function onDocClick(e: MouseEvent) {
-  if (rootRef.value && !rootRef.value.contains(e.target as Node)) closeAll();
+  if (rootRef.value && !rootRef.value.contains(e.target as Node))
+    closeAll(true);
 }
 
 function onKeydown(e: KeyboardEvent) {
   if (e.key !== "Escape") return;
-  const wasOpen = overlayOpen.value || listOpen.value || calendarOpen.value;
-  closeAll();
-  if (wasOpen && lastTrigger) {
-    lastTrigger.focus();
+  const trigger = lastTrigger;
+  const wasOpen = openReveal.value !== null;
+  closeAll(true);
+  if (wasOpen && trigger) {
+    trigger.focus();
     lastTrigger = null;
   }
 }
@@ -231,68 +286,48 @@ onUnmounted(() => {
 <template>
   <div ref="rootRef" class="chat-events-panel">
     <div class="panel-row">
-      <!-- Focal event composite (or the empty placeholder), then the quiet
-           count of everything else. -->
+      <!-- Focal event composite (or the empty placeholder), the description
+           item, then the quiet count of everything else. The separators are
+           literal " | " text nodes, and every label a reader would copy is
+           written as a literal interpolation: a bare word after the tag picks
+           up the formatter's line break as a leading space, which is how the
+           strip used to copy as "|  +2". -->
       <div class="row-main">
         <template v-if="primaryEvent">
           <span class="row-text" aria-live="polite"
-            ><span v-if="isPrimaryLive" class="row-status">Идет:{{ " " }}</span
+            ><span class="row-status">{{ stateWord }}:{{ " " }}</span
             ><span class="row-title" :class="{ upcoming: !isPrimaryLive }">{{
               primaryEvent.title
             }}</span
             ><span class="row-meta">{{ primaryMeta }}</span></span
+          ><span class="row-sep" aria-hidden="true">{{ " | " }}</span
           ><button
             type="button"
-            class="disc-toggle"
-            :class="{ open: overlayOpen }"
-            :aria-expanded="overlayOpen"
+            class="strip-item"
+            :class="{ act: descriptionOpen }"
+            :aria-expanded="descriptionOpen"
             aria-controls="chat-event-overlay"
-            aria-label="Описание"
-            title="Описание"
-            @click="toggle('overlay', $event)"
+            @click="toggle('description', $event)"
           >
-            <SvgIcon name="chevronDown" /></button
+            {{ "описание" }}</button
           ><span v-if="restCount > 0" class="row-more"
-            ><span class="row-sep" aria-hidden="true">|{{ " " }}</span
+            ><span class="row-sep" aria-hidden="true">{{ " | " }}</span
             ><button
               type="button"
-              class="rest-toggle"
-              :class="{ act: listOpen }"
-              :aria-expanded="listOpen"
+              class="strip-item"
+              :class="{ act: upcomingOpen }"
+              :aria-expanded="upcomingOpen"
               aria-controls="chat-event-list"
-              @click="toggle('list', $event)"
+              @click="toggle('upcoming', $event)"
             >
-              +{{ restCount }} запланировано</button
+              {{ countLabel
+              }}<span class="rest-word">{{ " запланировано" }}</span></button
             ><span v-if="nearestText" class="rest-near">{{
               nearestText
             }}</span></span
           >
         </template>
         <span v-else class="row-none">Нет запланированных эвентов</span>
-      </div>
-
-      <!-- Right control: archive date only. The description is disclosed from
-           the event line itself (the chevron), not a text link here. -->
-      <div class="row-aside">
-        <button
-          type="button"
-          class="panel-link search-toggle"
-          aria-label="Поиск по сообщениям"
-          title="Поиск (Ctrl+F)"
-          @click="emit('open-search')"
-        >
-          <SvgIcon name="search" class="calendar-icon" />Поиск
-        </button>
-        <span class="aside-sep" aria-hidden="true">|</span>
-        <button
-          type="button"
-          class="panel-link calendar-toggle"
-          :class="{ act: calendarOpen }"
-          :aria-expanded="calendarOpen"
-          @click="toggle('calendar', $event)"
-        >
-          <SvgIcon name="calendar" class="calendar-icon" />К дате
-        </button>
       </div>
     </div>
 
@@ -301,8 +336,8 @@ onUnmounted(() => {
       v-if="restCount > 0"
       id="chat-event-list"
       class="event-reveal rest-list"
-      :class="{ open: listOpen }"
-      :inert="!listOpen"
+      :class="{ open: upcomingOpen }"
+      :inert="!upcomingOpen"
     >
       <div class="reveal-clip">
         <div class="reveal-inner">
@@ -317,13 +352,13 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Description overlay for the focal event. -->
+    <!-- Description card for the focal event. -->
     <div
       v-if="primaryEvent"
       id="chat-event-overlay"
       class="event-reveal event-overlay"
-      :class="{ open: overlayOpen }"
-      :inert="!overlayOpen"
+      :class="{ open: descriptionOpen }"
+      :inert="!descriptionOpen"
     >
       <div class="reveal-clip">
         <div class="reveal-inner">
@@ -344,32 +379,25 @@ onUnmounted(() => {
               ></span
             >
           </div>
+          <!-- The one action this viewer may take. It lives in the card and
+               not on the strip: the label is per-viewer, and it is decided by
+               the participants list, which only the card's own request
+               brings. Above the description, so a long description never
+               pushes it out of the card's scroll. -->
+          <ChatEventActions :event-id="primaryEvent.id" />
           <content-text
             v-if="overlayDetails?.description"
             class="overlay-description"
             :html="overlayDetails.description"
           />
           <secondary-text v-else-if="!overlayDetails" class="overlay-loading"
-            >Описание загружается…</secondary-text
+            >Описание загружается...</secondary-text
           >
           <secondary-text v-else class="overlay-loading"
             >Без описания</secondary-text
           >
         </div>
       </div>
-    </div>
-
-    <!-- Archive-date calendar for "К дате" (fixed-size: fades/settles in). -->
-    <div
-      class="calendar-popover"
-      :class="{ open: calendarOpen }"
-      :inert="!calendarOpen"
-    >
-      <CalendarGrid
-        :model-value="props.selectedDate"
-        :max="props.maxDate"
-        @update:model-value="onDatePicked"
-      />
     </div>
   </div>
 </template>
@@ -389,8 +417,9 @@ onUnmounted(() => {
   border-bottom: 1px dashed $border
   font-size: $secondary-font-size
 
-// Self-sizing flex row: the focal text (grows, ellipsis) on the left, the
-// control cluster (fixed) on the right. No absolute aside, no magic reserve.
+// The strip's own box: one row, vertically centred, never scrolled. It holds a
+// single child now that search and the archive date sit above the frame, so the
+// flex here only centres and pads — the line itself is inline flow inside it.
 .panel-row
   display: flex
   align-items: center
@@ -400,20 +429,21 @@ onUnmounted(() => {
   line-height: 1.4
   white-space: nowrap
 
+// Inline flow, not flex: a flex item is blockified, so the strip copied as
+// "Идет: ...\n\n| +2 запланировано". Inline parts copy as one line, and the
+// visible gaps are the spaces of the literal " | " nodes rather than geometry.
+// The ellipsis moves up here with the flow: the strip clips at its own right
+// edge instead of the focal text clipping inside a flex track, which is what
+// makes the title the LAST thing a narrow screen gives up.
 .row-main
-  display: flex
-  align-items: center
-  gap: $minor
+  display: block
   flex: 1 1 auto
-  min-width: 0
-
-// The focal composite: one selectable inline run (status + title + meta),
-// ellipsis-clipped so the title truncates before the count is ever lost.
-.row-text
-  flex: 0 1 auto
   min-width: 0
   overflow: hidden
   text-overflow: ellipsis
+
+// The focal composite: one selectable inline run (status + title + meta).
+.row-text
   white-space: nowrap
 
 .row-status
@@ -429,41 +459,8 @@ onUnmounted(() => {
 .row-meta
   color: $text-muted
 
-// Description disclosure — a quiet chevron on the event line that reveals the
-// focal event's own description; it rotates as the overlay opens. An icon
-// control (not a text link), so it darkens on hover rather than turning blue.
-.disc-toggle
-  flex: 0 0 auto
-  display: inline-flex
-  align-items: center
-  justify-content: center
-  width: 20px
-  height: 20px
-  padding: 0
-  border: none
-  background: none
-  color: $text-muted
-  cursor: pointer
-  line-height: 0
-  svg
-    width: 14px
-    height: 14px
-    transition: transform $expand-duration $expand-easing
-  &.open
-    color: $text
-    svg
-      transform: rotate(180deg)
-  &:hover
-    color: $text
-  &:focus:not(:focus-visible)
-    outline: none
-  &:focus-visible
-    outline: 2px solid $border-focus
-    outline-offset: 2px
-
-// The quiet count of everything else — never truncated.
+// The quiet count of everything else.
 .row-more
-  flex: 0 0 auto
   color: $text-muted
 
 .row-sep
@@ -472,10 +469,13 @@ onUnmounted(() => {
 .rest-near
   color: $text-muted
 
-// Count of the remaining events. Calm at rest ($text-muted, blends into the
-// info line), link-blue + underline on hover, and $link/600 while its list is
-// open — so blue appears on intent, not scattered across the strip.
-.rest-toggle
+// Items of the strip: the description and the count of the remaining events.
+// Both are link-buttons, the site's one strip idiom — the chevron that used to
+// sit here was the single non-link element of the line, which made the "|"
+// next to it read as a separator for an icon. Calm at rest ($text-muted, so
+// the line stays one colour), link-blue + underline on hover, $link/600 while
+// the layer it opened is up: blue appears on intent, not scattered.
+.strip-item
   +inline-link-button
   &
     font-size: $secondary-font-size
@@ -495,44 +495,15 @@ onUnmounted(() => {
 .row-none
   color: $text-muted
 
-// Right-side control cluster: never wraps the text.
-.row-aside
-  flex: none
-  display: flex
-  align-items: center
-  gap: $small
+// On a phone the line gives up words before it gives up the title: first the
+// date of the nearest event, then the noun of the count, which leaves "+2".
+// Measured at 375px, where the running event's title had no width left at all.
+@media (max-width: $bp-mobile)
+  .rest-near
+    display: none
 
-// "К дате" archive-date control — same calm treatment as the count: muted at
-// rest, link-blue + underline on hover, $link while its calendar is open.
-.panel-link
-  +inline-link-button
-  &
-    font-size: $secondary-font-size
-    white-space: nowrap
-    color: $text-muted
-  &:hover:not(:disabled)
-    color: $link
-  &.act
-    color: $link
-  &:focus:not(:focus-visible)
-    outline: none
-  &:focus-visible
-    outline: 2px solid $border-focus
-    outline-offset: 2px
-
-.calendar-toggle,
-.search-toggle
-  display: inline-flex
-  align-items: center
-  gap: $minor
-
-.aside-sep
-  color: $text-muted
-
-.calendar-icon
-  width: 14px
-  height: 14px
-  flex-shrink: 0
+  .rest-word
+    display: none
 
 // ─────────────────────────────────────────────────────────────
 // Floating reveals — the upcoming list and the description overlay float over
@@ -601,21 +572,4 @@ onUnmounted(() => {
 .overlay-loading
   display: block
   margin-top: $small
-
-// Calendar popover ("К дате"): same floating-overlay reveal as the description
-// and list layers — opacity + a small drop on the $expand tokens — so all three
-// layers settle in identically.
-.calendar-popover
-  position: absolute
-  top: calc(100% + #{$tiny})
-  right: $small
-  z-index: $z-dropdown
-  opacity: 0
-  transform: translateY(-$small)
-  pointer-events: none
-  transition: opacity $expand-duration $expand-easing, transform $expand-duration $expand-easing
-  &.open
-    opacity: 1
-    transform: translateY(0)
-    pointer-events: auto
 </style>

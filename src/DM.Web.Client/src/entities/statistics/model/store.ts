@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import type { LiveStats } from "@/shared/api/models/community";
+import { unwrapResource } from "@/shared/api";
 import { statisticsApi } from "../api";
 
 /**
@@ -54,10 +55,7 @@ export const useStatisticsStore = defineStore("statistics", () => {
       // Keep previously loaded stats (if any) — the next poll may recover.
       error.value = "Не удалось загрузить статистику";
     } else if (response.data) {
-      // API returns Envelope<LiveStats> with { resource: LiveStats };
-      // handle both wrapped and unwrapped response formats
-      const data = response.data as { resource: LiveStats } | LiveStats;
-      stats.value = "resource" in data ? data.resource : data;
+      stats.value = unwrapResource<LiveStats>(response.data);
     }
     loading.value = false;
     loaded.value = true;

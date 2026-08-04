@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using DM.Web.API.Swagger;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Features.Community.Awards;
 using DM.Web.API.Shared.Authentication;
@@ -43,6 +44,7 @@ public class UserAwardController : ControllerBase
     /// <response code="404">User, type or series not found.</response>
     [HttpPost("users/{username}/awards", Name = nameof(GrantUserAward))]
     [ProducesResponseType(typeof(Envelope<UserAward>), StatusCodes.Status201Created)]
+    [CreatedWithoutLocation]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]

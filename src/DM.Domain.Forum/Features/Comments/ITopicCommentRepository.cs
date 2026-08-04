@@ -34,6 +34,23 @@ public interface ITopicCommentRepository
     Task<Comment?> Get(Guid commentId);
 
     /// <summary>
+    /// Find the first comment of the topic the reader has not seen yet
+    /// </summary>
+    /// <param name="topicId">Topic identifier</param>
+    /// <param name="lastReadUtc">Moment the reader last marked the topic as read</param>
+    /// <param name="excludeUserIds">Optional user IDs hidden from this reader</param>
+    Task<FirstUnreadComment?> FindFirstUnread(Guid topicId, DateTimeOffset lastReadUtc,
+        IReadOnlyCollection<Guid>? excludeUserIds = null);
+
+    /// <summary>
+    /// Get the last comment of the topic
+    /// </summary>
+    /// <param name="topicId">Topic identifier</param>
+    /// <param name="excludeUserIds">Optional user IDs hidden from this reader</param>
+    Task<FirstUnreadComment?> GetLastComment(Guid topicId,
+        IReadOnlyCollection<Guid>? excludeUserIds = null);
+
+    /// <summary>
     /// Create comment for topic
     /// </summary>
     /// <param name="createComment">Comment creation data</param>
@@ -53,9 +70,18 @@ public interface ITopicCommentRepository
     Task<TopicCommentToDelete?> GetForDelete(Guid commentId);
 
     /// <summary>
-    /// Gets second last comment identifier of the topic
+    /// The newest live comment of the topic other than <paramref name="exceptCommentId" />:
+    /// the successor of the comment being deleted.
     /// </summary>
-    Task<Guid?> GetSecondLastCommentId(Guid topicId);
+    /// <remarks>
+    /// Named by exclusion rather than by position. "The second one down the list" is the
+    /// same row only while the comment being deleted is first on that list, and two
+    /// comments can share a timestamp — the DM2 import produces that by the thousand —
+    /// so the row leaving could sort second and be handed back as its own successor. The
+    /// topic would then point at a soft-deleted comment, which every read filters out,
+    /// and the topic drops to the bottom of the activity order.
+    /// </remarks>
+    Task<Guid?> GetNewestCommentIdExcept(Guid topicId, Guid exceptCommentId);
 
     /// <summary>
     /// Delete comment (soft delete)
@@ -142,4 +168,32 @@ public class DeleteTopicCommentEntity
     /// New last comment ID (if this was the last comment)
     /// </summary>
     public Guid? NewLastCommentId { get; set; }
+
+    /// <summary>
+    /// User who removed the comment
+    /// </summary>
+    public Guid DeletedByUserId { get; set; }
+
+    /// <summary>
+    /// When the comment was removed
+    /// </summary>
+    public DateTimeOffset DeletedUtc { get; set; }
+}
+
+/// <summary>
+/// Where a reader continues in a topic: a comment and its place in the order
+/// the discussion is paged by, so the caller can open the page holding it and
+/// scroll to the comment itself
+/// </summary>
+public class FirstUnreadComment
+{
+    /// <summary>
+    /// Comment identifier; absent when the topic has no comments at all
+    /// </summary>
+    public Guid? CommentId { get; set; }
+
+    /// <summary>
+    /// Position of that comment in the topic (1-based), for paging
+    /// </summary>
+    public int CommentNumber { get; set; }
 }

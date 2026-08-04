@@ -2,7 +2,6 @@
 import { ref, reactive, toRef, watch } from "vue";
 import { useExpandableSection } from "@/shared/lib/composables";
 import { useModal } from "vue-final-modal";
-import { symbols } from "@/shared/lib/utils/icons";
 import type {
   ViolationSummary,
   ModerationPermissions,
@@ -17,6 +16,18 @@ import { WarningDialog, BanDialog } from "@/features/moderation-actions";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import Button from "@/shared/ui/Button/Button.vue";
 import { formatDate, formatDateFull } from "@/shared/lib/utils/datetime";
+import { pluralize } from "@/shared/lib/utils/pluralize";
+
+/** "1 активный балл" / "3 активных балла" / "5 активных баллов". */
+function activePointsLabel(points: number): string {
+  const noun = pluralize(
+    points,
+    "активный балл",
+    "активных балла",
+    "активных баллов",
+  );
+  return `${points} ${noun}`;
+}
 
 // NOTE: moderationApi.getWarnings/getBans hit the PUBLIC endpoints
 // (GET users/{username}/warnings|bans), which only return aggregate
@@ -144,11 +155,13 @@ const { open: openBanDialog, close: closeBanDialog } = useModal({
           v-if="violations.activeWarningPoints > 0"
           class="mod-warning-points"
         >
-          ({{ violations.activeWarningPoints }} активных баллов)
+          ({{ activePointsLabel(violations.activeWarningPoints) }})
         </span>
-        <span class="mod-expand-icon" aria-hidden="true">{{
-          showWarnings ? symbols.triangleDown : symbols.triangleRight
-        }}</span>
+        <span
+          class="mod-expand-icon expand-marker"
+          :class="{ expanded: showWarnings }"
+          aria-hidden="true"
+        />
       </button>
 
       <div
@@ -157,7 +170,7 @@ const { open: openBanDialog, close: closeBanDialog } = useModal({
         v-bind="warningsZoneBindings"
       >
         <div v-if="showWarnings" class="mod-violations_list">
-          <secondary-text v-if="loadingWarnings">Загрузка…</secondary-text>
+          <secondary-text v-if="loadingWarnings">Загрузка...</secondary-text>
           <template v-else-if="warningsList">
             <secondary-text v-if="warningsList.length === 0">
               Нет предупреждений
@@ -195,17 +208,19 @@ const { open: openBanDialog, close: closeBanDialog } = useModal({
           (активный бан{{
             violations.currentBanEndUtc
               ? " до " + formatDate(violations.currentBanEndUtc)
-              : " — перманентный"
+              : ", перманентный"
           }})
         </span>
-        <span class="mod-expand-icon" aria-hidden="true">{{
-          showBans ? symbols.triangleDown : symbols.triangleRight
-        }}</span>
+        <span
+          class="mod-expand-icon expand-marker"
+          :class="{ expanded: showBans }"
+          aria-hidden="true"
+        />
       </button>
 
       <div ref="bansZoneRef" class="expand-zone" v-bind="bansZoneBindings">
         <div v-if="showBans" class="mod-violations_list">
-          <secondary-text v-if="loadingBans">Загрузка…</secondary-text>
+          <secondary-text v-if="loadingBans">Загрузка...</secondary-text>
           <template v-else-if="bansList">
             <secondary-text v-if="bansList.length === 0">
               Нет банов

@@ -33,6 +33,7 @@ public class PasswordChangeServiceShould : UnitTestBase
     private readonly Mock<ICompromisedPasswordChecker> _compromisedPasswordChecker;
     private readonly Mock<IEventProducer> _eventProducer;
     private readonly Mock<IPasswordChangeMailSender> _notificationSender;
+    private readonly Mock<ISecurityAuditService> _auditService;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
     private readonly PasswordChangeService _service;
 
@@ -46,6 +47,7 @@ public class PasswordChangeServiceShould : UnitTestBase
         _compromisedPasswordChecker = Mock<ICompromisedPasswordChecker>();
         _eventProducer = Mock<IEventProducer>();
         _notificationSender = Mock<IPasswordChangeMailSender>();
+        _auditService = Mock<ISecurityAuditService>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
         var config = Options.Create(new TokenConfiguration
         {
@@ -68,6 +70,7 @@ public class PasswordChangeServiceShould : UnitTestBase
             _identityProvider.Object,
             _eventProducer.Object,
             _notificationSender.Object,
+            _auditService.Object,
             _dateTimeProvider.Object,
             config);
     }

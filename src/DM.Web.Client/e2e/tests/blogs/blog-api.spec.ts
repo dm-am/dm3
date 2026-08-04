@@ -1,4 +1,4 @@
-import { test, expect, APIRequestContext } from "@playwright/test";
+import { test, expect, type APIRequestContext } from "@playwright/test";
 import { authenticatedContext } from "../../fixtures/auth";
 
 const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
@@ -17,6 +17,33 @@ test.afterAll(async () => {
     await authContext.dispose();
   }
 });
+
+/**
+ * Creates the blog a suite works on, and fails the run when it cannot.
+ *
+ * A single resource travels inside an envelope (API_DESIGN.md): the body is
+ * `{ resource: { id, ... } }`, so `(await response.json()).id` is undefined.
+ * Both setup hooks read it that way behind an `if (response.ok())`, and the
+ * three tests that followed answered the undefined id with `test.skip()` — a
+ * setup that had failed therefore reported as a green suite. An unmet
+ * precondition is a failure here, not a reason to stand down.
+ */
+async function createSuiteBlog(title: string): Promise<string> {
+  const response = await authContext.post(`${API_URL}/v1/blogs`, {
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: {
+      title,
+      isPublic: true,
+      commentsEnabled: true,
+    },
+  });
+
+  expect(response.status()).toBe(201);
+  const { resource } = await response.json();
+  return resource.id;
+}
 
 test.describe("Blog API", () => {
   test("should get public blogs list", async ({ request }) => {
@@ -43,7 +70,7 @@ test.describe("Blog API", () => {
     });
 
     expect(createResponse.status()).toBe(201);
-    const created = await createResponse.json();
+    const { resource: created } = await createResponse.json();
     expect(created).toHaveProperty("id");
     expect(created.title).toBe("Test Blog");
 
@@ -53,7 +80,7 @@ test.describe("Blog API", () => {
     const getResponse = await authContext.get(`${API_URL}/v1/blogs/${blogId}`);
 
     expect(getResponse.ok()).toBeTruthy();
-    const blog = await getResponse.json();
+    const { resource: blog } = await getResponse.json();
     expect(blog.title).toBe("Test Blog");
 
     // Delete blog
@@ -79,7 +106,7 @@ test.describe("Blog API", () => {
     });
 
     expect(createResponse.status()).toBe(201);
-    const blogId = (await createResponse.json()).id;
+    const blogId = (await createResponse.json()).resource.id;
 
     // Update blog
     const updateResponse = await authContext.patch(
@@ -96,7 +123,7 @@ test.describe("Blog API", () => {
     );
 
     expect(updateResponse.ok()).toBeTruthy();
-    const updated = await updateResponse.json();
+    const { resource: updated } = await updateResponse.json();
     expect(updated.title).toBe("Updated Blog Title");
 
     // Cleanup
@@ -125,20 +152,7 @@ test.describe("Blog Publications API", () => {
 
   test.beforeAll(async () => {
     // Create a test blog for publications
-    const createResponse = await authContext.post(`${API_URL}/v1/blogs`, {
-      headers: {
-        "Content-Type": "application/json",
-      },
-      data: {
-        title: "Publications Test Blog",
-        isPublic: true,
-        commentsEnabled: true,
-      },
-    });
-
-    if (createResponse.ok()) {
-      testBlogId = (await createResponse.json()).id;
-    }
+    testBlogId = await createSuiteBlog("Publications Test Blog");
   });
 
   test.afterAll(async () => {
@@ -148,11 +162,6 @@ test.describe("Blog Publications API", () => {
   });
 
   test("should create and get a publication", async () => {
-    if (!testBlogId) {
-      test.skip();
-      return;
-    }
-
     // Create publication
     const createResponse = await authContext.post(
       `${API_URL}/v1/blogs/${testBlogId}/publications`,
@@ -171,35 +180,31 @@ test.describe("Blog Publications API", () => {
     );
 
     expect(createResponse.status()).toBe(201);
-    const created = await createResponse.json();
+    const { resource: created } = await createResponse.json();
     expect(created).toHaveProperty("id");
     expect(created.title).toBe("Test Publication");
 
     const publicationId = created.id;
 
-    // Get publication
+    // Get publication. A publication is addressed on its own, not under its
+    // blog: /v1/publications/{id}.
     const getResponse = await authContext.get(
-      `${API_URL}/v1/blogs/publications/${publicationId}`,
+      `${API_URL}/v1/publications/${publicationId}`,
     );
 
     expect(getResponse.ok()).toBeTruthy();
-    const publication = await getResponse.json();
+    const { resource: publication } = await getResponse.json();
     expect(publication.title).toBe("Test Publication");
 
     // Delete publication
     const deleteResponse = await authContext.delete(
-      `${API_URL}/v1/blogs/publications/${publicationId}`,
+      `${API_URL}/v1/publications/${publicationId}`,
     );
 
     expect(deleteResponse.status()).toBe(204);
   });
 
   test("should list publications in a blog", async () => {
-    if (!testBlogId) {
-      test.skip();
-      return;
-    }
-
     const response = await authContext.get(
       `${API_URL}/v1/blogs/${testBlogId}/publications`,
     );
@@ -216,20 +221,7 @@ test.describe("Blog Rubrics API", () => {
 
   test.beforeAll(async () => {
     // Create a test blog for rubrics
-    const createResponse = await authContext.post(`${API_URL}/v1/blogs`, {
-      headers: {
-        "Content-Type": "application/json",
-      },
-      data: {
-        title: "Rubrics Test Blog",
-        isPublic: true,
-        commentsEnabled: true,
-      },
-    });
-
-    if (createResponse.ok()) {
-      testBlogId = (await createResponse.json()).id;
-    }
+    testBlogId = await createSuiteBlog("Rubrics Test Blog");
   });
 
   test.afterAll(async () => {
@@ -239,11 +231,6 @@ test.describe("Blog Rubrics API", () => {
   });
 
   test("should create and delete a rubric", async () => {
-    if (!testBlogId) {
-      test.skip();
-      return;
-    }
-
     // Create rubric
     const createResponse = await authContext.post(
       `${API_URL}/v1/blogs/${testBlogId}/rubrics`,
@@ -259,7 +246,7 @@ test.describe("Blog Rubrics API", () => {
     );
 
     expect(createResponse.status()).toBe(201);
-    const created = await createResponse.json();
+    const { resource: created } = await createResponse.json();
     expect(created).toHaveProperty("id");
     expect(created.title).toBe("Test Rubric");
 

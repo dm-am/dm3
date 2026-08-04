@@ -63,7 +63,7 @@ internal class AttributeSchemaService : IAttributeSchemaService
         var attributeSchema = await _repository.GetSchema(schemaId);
         if (attributeSchema == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Schema not found");
+            throw new HttpException(HttpStatusCode.NotFound, "Схема атрибутов не найдена");
         }
         return attributeSchema;
     }
@@ -79,7 +79,7 @@ internal class AttributeSchemaService : IAttributeSchemaService
 
         if (!allowed)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Not allowed to read this schema");
+            throw new HttpException(HttpStatusCode.Forbidden, "Эта схема атрибутов вам недоступна");
         }
 
         return schema;
@@ -105,6 +105,18 @@ internal class AttributeSchemaService : IAttributeSchemaService
     {
         var schema = await GetAsync(schemaId);
         _intentionManager.ThrowIfForbidden(AttributeSchemaIntention.Delete, schema);
+
+        // Nothing below enforces this reference: the schema is a Mongo document
+        // and the game row pointing at it is in Postgres. Reads of a game resolve
+        // the reference and turn a schema that is gone into a 404 for the whole
+        // game, so deleting a public schema closes every game built on it - other
+        // people's games, whose masters can repair nothing.
+        if (await _repository.IsUsedByAnyGame(schemaId))
+        {
+            throw new HttpException(HttpStatusCode.Conflict,
+                "Схема используется в игре, ее нельзя удалить");
+        }
+
         await _repository.Delete(schemaId);
     }
 

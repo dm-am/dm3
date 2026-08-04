@@ -8,6 +8,7 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Moderation.Features.Warnings;
 using DM.Domain.Core.Users;
@@ -48,6 +49,7 @@ internal class TicketService : ITicketService
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IEventProducer _eventProducer;
 
     /// <inheritdoc />
     public TicketService(
@@ -60,7 +62,8 @@ internal class TicketService : ITicketService
         IUserLookupService userLookupService,
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        IEventProducer eventProducer)
     {
         _createValidator = createValidator;
         _createIntakeValidator = createIntakeValidator;
@@ -72,6 +75,7 @@ internal class TicketService : ITicketService
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
+        _eventProducer = eventProducer;
     }
 
     /// <summary>
@@ -88,7 +92,7 @@ internal class TicketService : ITicketService
         };
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Ticket>> GetTickets(
+    public async Task<(IEnumerable<Ticket> tickets, PagingResult paging)> GetTickets(PagingQuery query,
         TicketStatus? status = null, TicketSubtype? subtype = null, CancellationToken ct = default)
     {
         var visibleSubtypes = GetVisibleSubtypes(_identityProvider.Current.User.Role);
@@ -99,7 +103,7 @@ internal class TicketService : ITicketService
             if (visibleSubtypes != null && !visibleSubtypes.Contains(subtype.Value))
             {
                 // Requested subtype is outside of the caller visibility scope
-                return [];
+                return ([], PagingResult.Empty(query.Take));
             }
 
             filter = [subtype.Value];
@@ -109,7 +113,7 @@ internal class TicketService : ITicketService
             filter = visibleSubtypes;
         }
 
-        return await _ticketRepository.GetTickets(status, filter, ct);
+        return await _ticketRepository.GetTickets(query, status, filter, ct);
     }
 
     /// <inheritdoc />
@@ -142,7 +146,7 @@ internal class TicketService : ITicketService
         // oracle for out-of-scope tickets probed by GUID.
         if (ticket == null)
         {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, "Ticket not found");
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
         }
 
         // The reporter can always read their own ticket.
@@ -159,7 +163,7 @@ internal class TicketService : ITicketService
             return ticket;
         }
 
-        throw new HttpException(System.Net.HttpStatusCode.NotFound, "Ticket not found");
+        throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
     }
 
     /// <inheritdoc />
@@ -172,7 +176,7 @@ internal class TicketService : ITicketService
 
         if (targetUser.UserId == currentUser.UserId)
         {
-            throw new HttpException(System.Net.HttpStatusCode.BadRequest, "Cannot report yourself");
+            throw new HttpException(System.Net.HttpStatusCode.BadRequest, "Нельзя пожаловаться на себя");
         }
 
         var entity = new CreateTicketEntity
@@ -192,7 +196,7 @@ internal class TicketService : ITicketService
             Comment = ModBlockSanitizer.SanitizeForAuthor(createTicket.Comment, currentUser.Role)
         };
 
-        return await _ticketRepository.Create(entity, ct);
+        return await CreateAndAnnounce(entity, ct);
     }
 
     /// <inheritdoc />
@@ -248,7 +252,7 @@ internal class TicketService : ITicketService
             Comment = createTicketIntake.Subject
         };
 
-        return await _ticketRepository.Create(entity, ct);
+        return await CreateAndAnnounce(entity, ct);
     }
 
     /// <inheritdoc />
@@ -259,7 +263,7 @@ internal class TicketService : ITicketService
 
         if (ticket == null)
         {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, "Ticket not found");
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
         }
 
         // Out-of-scope subtypes are invisible to this role: 404 (not 403) so a
@@ -267,12 +271,12 @@ internal class TicketService : ITicketService
         var visible = GetVisibleSubtypes(currentUser.Role);
         if (visible != null && !visible.Contains(ticket.Subtype))
         {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, "Ticket not found");
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
         }
 
         if (ticket.Status is TicketStatus.Closed or TicketStatus.Spam)
         {
-            throw new HttpException(System.Net.HttpStatusCode.BadRequest, "Cannot assign a closed ticket");
+            throw new HttpException(System.Net.HttpStatusCode.BadRequest, "Закрытое обращение нельзя взять в работу");
         }
 
         var updateEntity = new UpdateTicketEntity
@@ -294,7 +298,7 @@ internal class TicketService : ITicketService
 
         if (ticket == null)
         {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, "Ticket not found");
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
         }
 
         // Out-of-scope subtypes are invisible to this role: 404 (not 403) so a
@@ -302,12 +306,12 @@ internal class TicketService : ITicketService
         var visible = GetVisibleSubtypes(currentUser.Role);
         if (visible != null && !visible.Contains(ticket.Subtype))
         {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, "Ticket not found");
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
         }
 
         if (ticket.Status is TicketStatus.Closed or TicketStatus.Spam)
         {
-            throw new HttpException(System.Net.HttpStatusCode.BadRequest, "Ticket is already closed");
+            throw new HttpException(System.Net.HttpStatusCode.BadRequest, "Обращение уже закрыто");
         }
 
         var now = _dateTimeProvider.Now;
@@ -323,7 +327,7 @@ internal class TicketService : ITicketService
         if ((resolveTicket.IssueWarning || resolveTicket.IssueBan) && ticket.TargetUsername == null)
         {
             throw new HttpException(System.Net.HttpStatusCode.BadRequest,
-                "Cannot issue a warning or ban: the ticket has no target user");
+                "В обращении не указан пользователь: некому выдать предупреждение или бан");
         }
 
         // Issue warning if requested. Routed through IWarningService so it
@@ -352,7 +356,7 @@ internal class TicketService : ITicketService
             if (currentUser.Role < UserRole.SeniorModerator)
             {
                 throw new HttpException(System.Net.HttpStatusCode.Forbidden,
-                    "Only senior moderators can issue bans");
+                    "Выдавать баны может только старший модератор");
             }
 
             var ban = await _banService.CreateBan(new CreateBan
@@ -382,6 +386,21 @@ internal class TicketService : ITicketService
     {
         var visibleSubtypes = GetVisibleSubtypes(_identityProvider.Current.User.Role);
         return await _ticketRepository.GetTicketCounts(visibleSubtypes, ct);
+    }
+
+    /// <summary>
+    /// Stores a ticket and announces it.
+    /// </summary>
+    /// <remarks>
+    /// Both intake paths go through here so that a new way of filing a ticket
+    /// cannot be added without the moderators hearing about it. The queue is the
+    /// only other place a ticket shows up, and nobody is asked to watch it.
+    /// </remarks>
+    private async Task<Ticket> CreateAndAnnounce(CreateTicketEntity entity, CancellationToken ct)
+    {
+        var ticket = await _ticketRepository.Create(entity, ct);
+        await _eventProducer.SendAsync(EventType.TicketCreated, ticket.TicketId);
+        return ticket;
     }
 
     private static string? NormalizeOptional(string? value) =>

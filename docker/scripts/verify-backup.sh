@@ -1,6 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
+# Cron дает почти пустое окружение: без этого ночной запуск не видел ни пароля
+# MinIO, ни ключей offsite-репликации.
+# shellcheck source=/dev/null
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_env.sh"
+
 MAX_AGE_HOURS="${MAX_AGE_HOURS:-48}"
 MIN_SIZE_BYTES="${MIN_SIZE_BYTES:-1024}"
 EXIT_CODE=0
@@ -56,6 +61,50 @@ check_backup_dir() {
     fi
 }
 
+# MinIO пишет не файл, а каталог на запуск: mc mirror раскладывает объекты
+# бакета как есть. Проверка по -type f его не видела вовсе, поэтому сторож
+# рапортовал "All backups OK", пока бэкапов загрузок не существовало ни одного.
+check_backup_tree() {
+    local DIR="$1"
+    local LABEL="$2"
+
+    if [ ! -d "$DIR" ]; then
+        echo "WARNING: $LABEL backup directory not found: $DIR"
+        EXIT_CODE=1
+        return
+    fi
+
+    LATEST=$(find "$DIR" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' 2>/dev/null |
+        sort -rn | head -1)
+
+    if [ -z "$LATEST" ]; then
+        echo "ERROR: No $LABEL backups found in $DIR"
+        EXIT_CODE=2
+        return
+    fi
+
+    LATEST_DIR=$(echo "$LATEST" | cut -d' ' -f2-)
+    LATEST_TIME=$(echo "$LATEST" | cut -d' ' -f1 | cut -d. -f1)
+    AGE_HOURS=$(( ($(date +%s) - LATEST_TIME) / 3600 ))
+    SIZE=$(du -sb "$LATEST_DIR" | cut -f1)
+    FILES=$(find "$LATEST_DIR" -type f | wc -l)
+
+    echo "$LABEL: $LATEST_DIR (${AGE_HOURS}h old, ${SIZE} bytes, ${FILES} files)"
+
+    if [ "$AGE_HOURS" -gt "$MAX_AGE_HOURS" ]; then
+        echo "ERROR: $LABEL backup is older than ${MAX_AGE_HOURS}h"
+        EXIT_CODE=2
+    fi
+
+    # Пустой каталог — это успешно отработавший mirror по пустому бакету или
+    # молча провалившийся по непустому. Отличить их отсюда нельзя, поэтому
+    # предупреждение, а не ошибка.
+    if [ "$FILES" -eq 0 ]; then
+        echo "WARNING: $LABEL backup contains no files"
+        [ "$EXIT_CODE" -eq 0 ] && EXIT_CODE=1
+    fi
+}
+
 echo "=== Backup Verification ==="
 echo "Max age: ${MAX_AGE_HOURS}h | Min size: ${MIN_SIZE_BYTES} bytes"
 echo ""
@@ -63,6 +112,8 @@ echo ""
 check_backup_dir "${PG_BACKUP_DIR:-/var/backups/postgresql}" "PostgreSQL" "*.sql.gz"
 echo ""
 check_backup_dir "${MONGO_BACKUP_DIR:-/var/backups/mongodb}" "MongoDB" "*.archive.gz"
+echo ""
+check_backup_tree "${MINIO_BACKUP_DIR:-/var/backups/minio}" "MinIO"
 echo ""
 
 echo "=== Result ==="

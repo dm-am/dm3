@@ -22,7 +22,7 @@
   <LatestRatedPost />
   <DashSeparator />
   <p class="discovery">
-    Хотите увидеть, как еще играют на площадке? Загляните в Пульс — там вы
+    Хотите увидеть, как еще играют на площадке? Загляните в Пульс, там вы
     найдете
     <router-link to="/pulse"><strong>последние оцененные</strong></router-link>
     и

@@ -59,7 +59,7 @@ function pagingAnchor(): HTMLElement | null {
 
   <LeadText>
     Узнайте мнение игроков о Dungeon Master, а при желании поделитесь и
-    собственным —
+    собственным:
     <router-link :to="TESTIMONIALS_FORUM_TOPIC"
       >в топике с отзывами</router-link
     >
@@ -139,9 +139,9 @@ function pagingAnchor(): HTMLElement | null {
     <!-- Out-of-range page: paging exists but this page has no resources -->
     <div v-else-if="currentPageOutOfRange" class="empty-state">
       <secondary-text>
-        На этой странице отзывов нет —
+        На этой странице отзывов нет.
         <router-link :to="{ name: 'testimonials' }"
-          >вернуться на первую страницу</router-link
+          >Вернуться на первую страницу</router-link
         >
       </secondary-text>
     </div>

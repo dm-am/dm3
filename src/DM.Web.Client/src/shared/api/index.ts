@@ -15,6 +15,9 @@ export {
   type RenderAudience,
 } from "./audience";
 
+// Token-gated endpoints: the credential travels in a header, never in the URL
+export { X_DM_ACCOUNT_TOKEN, X_DM_TICKET_TOKEN } from "./tokenHeaders";
+
 // Envelope unwrap helper (single-resource responses)
 export { unwrapResource } from "./envelope";
 
@@ -32,6 +35,9 @@ export {
 // name: a parallel PascalCase set used to exist "for backward compatibility"
 // with nothing, and both halves accumulated real consumers.
 export { default as uploadApi } from "./uploadApi";
+
+// Comments query — one shape and one wire conversion for every discussion
+export { toCommentsQueryParams, type CommentsQuery } from "./commentsQuery";
 
 // Re-export models
 export * from "./models";

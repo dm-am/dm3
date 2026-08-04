@@ -89,7 +89,7 @@ internal class UserService : IUserService
         var user = await _repository.GetUserAsync(username);
         if (user == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, $"Пользователь {username} не найден");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.UserNotFoundByUsername(username));
         }
 
         return user;
@@ -101,7 +101,7 @@ internal class UserService : IUserService
         var user = await _repository.GetUserAsync(userId);
         if (user == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, $"Пользователь с ID {userId} не найден");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.UserNotFoundById(userId));
         }
 
         return user;
@@ -113,7 +113,7 @@ internal class UserService : IUserService
         var identity = _identityProvider.Current;
         if (!identity.User.IsAuthenticated)
         {
-            throw new HttpException(HttpStatusCode.Unauthorized, "User is not authenticated");
+            throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
         }
 
         return await GetAsync(identity.User.UserId);
@@ -130,7 +130,7 @@ internal class UserService : IUserService
 
         if (user == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, $"Пользователь {username} не найден");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.UserNotFoundByUsername(username));
         }
 
         return user;
@@ -146,7 +146,7 @@ internal class UserService : IUserService
 
         if (user == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, $"Пользователь с ID {userId} не найден");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.UserNotFoundById(userId));
         }
 
         return user;
@@ -200,7 +200,7 @@ internal class UserService : IUserService
                 throw new HttpBadRequestException(
                     new Dictionary<string, string>
                     {
-                        [nameof(updateUser.AvatarUploadId)] = "Avatar upload not found or not confirmed"
+                        [nameof(updateUser.AvatarUploadId)] = "Загруженный аватар не найден или не подтвержден"
                     });
             }
 
@@ -208,7 +208,7 @@ internal class UserService : IUserService
 
             // Link upload to user entity and mark old uploads as obsolete
             await _repository.LinkAvatarUpload(user.UserId, confirmedUploadId.Value);
-            await _uploadsCleanup.CollectObsoleteAsync(user.UserId);
+            await _uploadsCleanup.CollectObsoleteAsync(user.UserId, UploadType.UserAvatar);
 
             // Broadcast to open tabs so avatars in chats/comments
             // refresh without a reload. Best-effort, do not fail if SignalR is down.
@@ -269,7 +269,7 @@ internal class UserService : IUserService
         await _repository.UnlinkAvatarUpload(userId);
 
         // Best-effort cleanup (S3 + DB cleanup is done by the background GC worker).
-        await _uploadsCleanup.CollectObsoleteAsync(userId);
+        await _uploadsCleanup.CollectObsoleteAsync(userId, UploadType.UserAvatar);
 
         await _cache.InvalidateAsync($"user_details_{userId}");
         await _cache.InvalidateAsync($"user_{user.Username}");
@@ -294,4 +294,8 @@ internal class UserService : IUserService
         var userId = await _repository.FindUserIdAsync(username);
         return userId.HasValue ? (true, userId.Value) : (false, Guid.Empty);
     }
+
+    /// <inheritdoc />
+    public Task<IEnumerable<UserReference>> GetReferencesAsync(IEnumerable<Guid> userIds) =>
+        _repository.GetUserReferencesAsync(userIds);
 }

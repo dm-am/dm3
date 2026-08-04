@@ -50,6 +50,14 @@ public interface ICharacterService
     /// <param name="updateCharacter">Update character model</param>
     Task<Character> UpdateAsync(UpdateCharacter updateCharacter);
 
+    /// <summary>
+    /// Move a character to another place in the game
+    /// </summary>
+    /// <param name="characterId">Character identifier</param>
+    /// <param name="transition">Requested transition</param>
+    /// <returns>Updated character</returns>
+    Task<Character> ChangeStatusAsync(Guid characterId, CharacterStatusTransition transition);
+
     #endregion
 
     #region Delete

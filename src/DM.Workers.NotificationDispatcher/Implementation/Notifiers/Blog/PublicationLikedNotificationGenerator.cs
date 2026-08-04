@@ -34,6 +34,7 @@ internal class PublicationLikedNotificationGenerator : BaseNotificationGenerator
             where like.LikeId == entityId && like.EntityType == LikeEntityType.Publication
             select new
             {
+                LikerId = like.UserId,
                 LikerUsername = like.User!.Username,
                 publication.PublicationId,
                 publication.AuthorId,
@@ -51,6 +52,7 @@ internal class PublicationLikedNotificationGenerator : BaseNotificationGenerator
         yield return new CreateNotification
         {
             UsersInterested = [likedPublicationData.AuthorId],
+            ActorId = likedPublicationData.LikerId,
             Metadata = new
             {
                 LikerUsername = likedPublicationData.LikerUsername,

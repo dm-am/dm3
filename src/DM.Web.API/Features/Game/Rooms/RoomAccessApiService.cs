@@ -33,9 +33,9 @@ internal class RoomAccessApiService : IRoomAccessApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<RoomAccess>> Update(Guid accessId, RoomAccess access)
+    public async Task<Envelope<RoomAccess>> Update(Guid accessId, UpdateRoomAccessRequest request)
     {
-        var updateRoomAccess = _mapper.Map<UpdateRoomAccess>(access);
+        var updateRoomAccess = _mapper.Map<UpdateRoomAccess>(request);
         updateRoomAccess.AccessId = accessId;
         var updatedRoomAccess = await _roomAccessService.UpdateAsync(updateRoomAccess);
         return new Envelope<RoomAccess>(_mapper.Map<RoomAccess>(updatedRoomAccess));

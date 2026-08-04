@@ -42,18 +42,18 @@ const {
             :errors="errorMessage ? [errorMessage] : []"
           >
             <template #hint
-              >Опишите впечатления от игры — что понравилось, что можно
+              >Опишите впечатления от игры: что понравилось, что можно
               улучшить</template
             >
             <text-area
               v-model="testimonialText"
-              placeholder="Расскажите, что вам нравится в Dungeon Master…"
+              placeholder="Расскажите, что вам нравится в Dungeon Master..."
               :max-length="1000"
             />
           </form-field>
           <div class="form-actions">
             <Button :disabled="isSubmitting" @click="submitTestimonial">
-              {{ isSubmitting ? "Сохранение…" : "Добавить отзыв" }}
+              {{ isSubmitting ? "Сохранение..." : "Добавить отзыв" }}
             </Button>
           </div>
         </div>

@@ -59,6 +59,9 @@ internal class GamePendencyReminderNotificationGenerator : BaseNotificationGener
         // Calculate how long the pendency has been waiting
         var daysPending = (int)(DateTimeOffset.UtcNow - data.CreatedUtc).TotalDays;
 
+        // No ActorId: nobody performed this. The reminder comes from the schedule
+        // that watches an unanswered pendency, and CreatedByUsername below names
+        // whoever wrote the pendency down for the text, not an actor to filter on.
         yield return new CreateNotification
         {
             UsersInterested = new[] { recipientId },

@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Configuration;
+using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
+using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Core.Identity;
 using DM.Domain.Game.Authorization;
@@ -28,7 +29,7 @@ internal class GameReviewService : IGameReviewService
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IProbationConfiguration _probationConfig;
+    private readonly IGameBlacklistRepository _blacklistRepository;
 
     public GameReviewService(
         IValidator<CreateGameReview> createValidator,
@@ -38,7 +39,7 @@ internal class GameReviewService : IGameReviewService
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
-        IProbationConfiguration probationConfig)
+        IGameBlacklistRepository blacklistRepository)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -47,7 +48,7 @@ internal class GameReviewService : IGameReviewService
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
-        _probationConfig = probationConfig;
+        _blacklistRepository = blacklistRepository;
     }
 
     /// <inheritdoc />
@@ -60,11 +61,20 @@ internal class GameReviewService : IGameReviewService
         var authorId = author.UserId;
         var gameId = createReview.GameId;
 
+        // The blacklist closes writing, and a review is writing. Reading the game
+        // is open to a blacklisted user, so they reach the review form, and the
+        // eligibility below (a post in the game) survives being removed from it,
+        // which is the exact sequence a blacklist is put up for.
+        if (await _blacklistRepository.IsBlocked(gameId, authorId))
+        {
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
+        }
+
         // Newbies cannot create game reviews
         if (await IsNewbieAsync(authorId))
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "You need at least 100 game posts to create game reviews");
+                $"Писать рецензии можно после {ProbationPolicy.NewbiePostThreshold} постов в играх");
         }
 
         // Check if user can review this game (has at least one post in the game)
@@ -72,13 +82,13 @@ internal class GameReviewService : IGameReviewService
         if (!canReview)
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "You can only review games where you have at least one post");
+                "Рецензию можно написать только на игру, где у вас есть хотя бы один пост");
         }
 
         // Check if already reviewed
         if (await ExistsAsync(authorId, gameId))
         {
-            throw new HttpException(HttpStatusCode.Conflict, "You have already reviewed this game");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyReviewedGame);
         }
 
         var entity = new CreateGameReviewEntity
@@ -98,7 +108,7 @@ internal class GameReviewService : IGameReviewService
         }
         catch (DuplicateEntityException)
         {
-            throw new HttpException(HttpStatusCode.Conflict, "You have already reviewed this game");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyReviewedGame);
         }
     }
 
@@ -108,7 +118,7 @@ internal class GameReviewService : IGameReviewService
         var review = await _repository.GetAsync(id);
         if (review == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Review not found");
+            throw new HttpException(HttpStatusCode.NotFound, "Рецензия не найдена");
         }
 
         return review;
@@ -159,7 +169,7 @@ internal class GameReviewService : IGameReviewService
         if (currentUser.Role != UserRole.Admin && !CanEdit(review))
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "Reviews can only be edited within 24 hours of creation");
+                "Рецензию можно править в течение суток после публикации");
         }
 
         if (string.IsNullOrEmpty(updateReview.Text))
@@ -204,9 +214,6 @@ internal class GameReviewService : IGameReviewService
         return now <= editDeadline;
     }
 
-    private async Task<bool> IsNewbieAsync(Guid userId)
-    {
-        var postCount = await _repository.GetUserPostCountAsync(userId);
-        return postCount < _probationConfig.NewbiePostThreshold;
-    }
+    private async Task<bool> IsNewbieAsync(Guid userId) =>
+        ProbationPolicy.IsNewbie(await _repository.GetUserPostCountAsync(userId));
 }

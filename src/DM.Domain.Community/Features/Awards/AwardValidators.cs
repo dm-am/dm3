@@ -21,7 +21,7 @@ internal class CreateAwardTypeValidator : AbstractValidator<CreateAwardType>
             .MaximumLength(1000).WithMessage(ValidationError.Long);
 
         RuleFor(t => t.Tier)
-            .InclusiveBetween(1, 4).WithMessage(ValidationError.Invalid)
+            .InclusiveBetween(AwardType.MinTier, AwardType.MaxTier).WithMessage(ValidationError.Invalid)
             .When(t => t.Tier.HasValue);
 
         RuleFor(t => t.SortOrder)
@@ -48,7 +48,7 @@ internal class UpdateAwardTypeValidator : AbstractValidator<UpdateAwardType>
             .When(t => t.Description != null);
 
         RuleFor(t => t.Tier)
-            .InclusiveBetween(1, 4).WithMessage(ValidationError.Invalid)
+            .InclusiveBetween(AwardType.MinTier, AwardType.MaxTier).WithMessage(ValidationError.Invalid)
             .When(t => t.Tier.HasValue);
 
         RuleFor(t => t.SortOrder)

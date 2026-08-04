@@ -20,9 +20,10 @@
         <ProjectReference Include="..\..\src\DM.Infrastructure.Core\DM.Infrastructure.Core.csproj" />
         <ProjectReference Include="..\DM.Testing\DM.Testing.csproj" />
       <ProjectReference Include="..\..\src\DM.Infrastructure.Messaging\DM.Infrastructure.Messaging.csproj" />
-      <!-- The notification dispatcher has no dedicated test project: its queue binding is
-           derived from the generator types, and that derivation is what these
-           tests hold in place. -->
+      <!-- The notification dispatcher has no dedicated test project: its queue binding,
+           derived from the generator types, and the failure containment of its processor
+           are what these tests hold in place. The dispatcher grants this assembly access
+           to its internals in return. -->
       <ProjectReference Include="..\..\src\DM.Workers.NotificationDispatcher\DM.Workers.NotificationDispatcher.csproj" />
     </ItemGroup>
 

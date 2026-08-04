@@ -8,6 +8,7 @@ import { ref, computed } from "vue";
 import dayjs from "dayjs";
 import type { Poll } from "@/entities/poll";
 import { usePollsStore } from "@/entities/poll";
+import { describeFailure } from "@/shared/lib/errors";
 import Button from "@/shared/ui/Button/Button.vue";
 
 const props = defineProps<{
@@ -56,11 +57,9 @@ async function saveEdit() {
   isSubmitting.value = false;
 
   if (error) {
-    if (error.status === 403) {
-      editError.value = "Недостаточно прав";
-    } else {
-      editError.value = "Не удалось сохранить";
-    }
+    // The server names which refusal a 403 was; this sentence is for a failure
+    // that named nothing.
+    editError.value = describeFailure(error, "Не удалось сохранить");
   } else {
     emit("saved");
   }
@@ -107,7 +106,7 @@ async function saveEdit() {
     </div>
     <div class="edit-actions">
       <Button :disabled="isSubmitting" @click="saveEdit">
-        {{ isSubmitting ? "Сохранение…" : "Сохранить" }}
+        {{ isSubmitting ? "Сохранение..." : "Сохранить" }}
       </Button>
       <Button @click="emit('cancel')">Отмена</Button>
       <span v-if="editError" class="edit-error">{{ editError }}</span>
@@ -139,7 +138,7 @@ async function saveEdit() {
   font-size: inherit
   box-sizing: border-box
 
-  &:focus
+  &:focus:not(:focus-visible)
     outline: none
     border-style: solid
     border-color: $border-focus

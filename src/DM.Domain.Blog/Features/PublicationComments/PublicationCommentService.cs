@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
@@ -67,20 +66,16 @@ internal class PublicationCommentService : IPublicationCommentService
         var currentUser = _identityProvider.Current.User;
         if (blog.BlacklistedUserIds.Contains(currentUser.UserId))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You are blacklisted from this blog");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromBlog);
         }
 
         // Ban check lives here rather than in PublicationIntentionResolver: the
         // rule is about whose blog this is, and the publication carries no blog
         // ownership. The blog is loaded above anyway. The rule itself is not
-        // duplicated — AccessRestrictions.MaySpeak owns it.
-        var isOwnBlog = blog.Author.UserId == currentUser.UserId ||
-            blog.Assistants.Any(a => a.UserId == currentUser.UserId) ||
-            blog.Mentor?.UserId == currentUser.UserId;
-        if (!currentUser.MaySpeak(inOwnSpace: isOwnBlog))
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, "Commenting is not available while you are banned");
-        }
+        // duplicated: BlogRoleExtensions.IsOwnBlog owns "whose blog this is", and
+        // AccessRestrictions owns what a ban does with the answer, refusal
+        // included.
+        currentUser.ThrowIfMayNotComment(inOwnSpace: blog.IsOwnBlog(currentUser.UserId));
 
         // Strip [mod] authored by a non-moderator (it renders as a green mod
         // block on the Comment surface); Moderator+ may author it.
@@ -116,7 +111,7 @@ internal class PublicationCommentService : IPublicationCommentService
     public async Task<Comment> GetAsync(Guid commentId)
     {
         return await _repository.Get(commentId) ??
-               throw new HttpException(HttpStatusCode.NotFound, $"Comment {commentId} not found");
+               throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));
     }
 
     /// <inheritdoc />
@@ -127,11 +122,25 @@ internal class PublicationCommentService : IPublicationCommentService
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Edit, comment);
 
+        // Rewriting a comment publishes text exactly as writing one does, so the
+        // ban is asked here too, on the same terms as in CreateAsync. Only the
+        // author is asked, a moderator editing somebody else's comment is
+        // moderating and a ban takes no moderator tool away. Reaching the blog
+        // from a comment costs two reads, so they are made only for somebody the
+        // ban actually restricts.
+        var currentUser = _identityProvider.Current.User;
+        if (comment.Author?.UserId == currentUser.UserId && !currentUser.MaySpeak())
+        {
+            var publication = await _blogService.GetPublication(comment.EntityId);
+            var blog = await _blogService.GetBlogAsync(publication.BlogId);
+            currentUser.ThrowIfMayNotComment(inOwnSpace: blog.IsOwnBlog(currentUser.UserId));
+        }
+
         var text = updateComment.Text?.Trim();
         if (!string.IsNullOrEmpty(text))
         {
             // Strip [mod] authored by a non-moderator before comparing/saving.
-            text = ModBlockSanitizer.SanitizeForAuthor(text, _identityProvider.Current.User.Role);
+            text = ModBlockSanitizer.SanitizeForAuthor(text, currentUser.Role);
         }
         if (string.IsNullOrEmpty(text) || text == comment.Text)
         {
@@ -157,7 +166,7 @@ internal class PublicationCommentService : IPublicationCommentService
         var comment = await _repository.GetForDelete(commentId);
         if (comment == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, $"Comment {commentId} not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));
         }
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Delete, (Comment)comment);
@@ -165,7 +174,7 @@ internal class PublicationCommentService : IPublicationCommentService
         Guid? newLastCommentId = null;
         if (comment.IsLastComment)
         {
-            newLastCommentId = await _repository.GetSecondLastCommentId(comment.PublicationId);
+            newLastCommentId = await _repository.GetNewestCommentIdExcept(comment.PublicationId, commentId);
         }
 
         var entity = new DeletePublicationCommentEntity

@@ -53,7 +53,7 @@ public class GameCommentController : ControllerBase
     /// - **skip**: Number of items to skip (pagination)
     /// - **take**: Number of items to return (max 100, default 20)
     /// - **search**: Text search in comment content (case-insensitive)
-    /// - **authors**: Filter by author usernames (comma-separated, OR logic)
+    /// - **authors**: Filter by author usernames, repeated per author (`authors=alice&amp;authors=bob`), OR logic
     /// - **createdFromUtc**: Filter by creation date start (ISO 8601)
     /// - **createdToUtc**: Filter by creation date end (ISO 8601)
     /// - **sortBy**: Sort field - "created" (default) or "likes"
@@ -94,7 +94,7 @@ public class GameCommentController : ControllerBase
     {
         var gameId = await _gameApiService.ResolveId(id);
         var result = await _commentApiService.Create(gameId, request);
-        return CreatedAtRoute(nameof(GetGameComment), new {id = result.Resource.Id}, result);
+        return CreatedAtRoute(nameof(GetGameComment), new { id = result.Resource.Id }, result);
     }
 
     /// <summary>
@@ -112,7 +112,7 @@ public class GameCommentController : ControllerBase
     /// Update game comment
     /// </summary>
     /// <param name="id">Comment identifier</param>
-    /// <param name="comment">Updated comment details</param>
+    /// <param name="request">Updated comment text</param>
     /// <response code="200">Returns the updated comment</response>
     /// <response code="400">Some changed comment properties were invalid or passed id was not recognized</response>
     /// <response code="401">User must be authenticated</response>
@@ -125,8 +125,8 @@ public class GameCommentController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PatchGameComment(Guid id, [FromBody] Comment comment) =>
-        Ok(await _commentApiService.Update(id, comment));
+    public async Task<IActionResult> PatchGameComment(Guid id, [FromBody] UpdateCommentRequest request) =>
+        Ok(await _commentApiService.Update(id, request));
 
     /// <summary>
     /// Delete game comment
@@ -152,23 +152,20 @@ public class GameCommentController : ControllerBase
     /// Add new like to game comment
     /// </summary>
     /// <param name="id">Comment identifier</param>
-    /// <response code="201">Resource created successfully</response>
+    /// <response code="200">Like added, returns user who liked</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to like the comment</response>
     /// <response code="409">User already liked this comment</response>
     /// <response code="404">Comment not found</response>
     [HttpPost("comments/{id}/likes", Name = nameof(PostGameCommentLike))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PostGameCommentLike(Guid id)
-    {
-        var result = await _likeApiService.LikeComment(id);
-        return CreatedAtRoute(nameof(GetGameComment), new {id}, result);
-    }
+    public async Task<IActionResult> PostGameCommentLike(Guid id) =>
+        Ok(await _likeApiService.LikeComment(id));
 
     /// <summary>
     /// Delete like from game comment

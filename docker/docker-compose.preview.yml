@@ -1,6 +1,8 @@
 # Preview deployment with nginx basic auth
 # Usage:
-#   1. Generate password: docker run --rm httpd htpasswd -nb preview yourpassword > docker/nginx/.htpasswd
+#   1. Generate the credentials: bash docker/scripts/init-htpasswd.sh
+#      The repository ships no password, and without that file docker creates a
+#      directory in its place and nginx does not start.
 #   2. Run: docker compose -f docker/docker-compose.yml -f docker/docker-compose.preview.yml up -d
 
 networks:
@@ -10,7 +12,7 @@ networks:
 services:
   nginx:
     container_name: 'dm-nginx'
-    image: 'nginx:alpine'
+    image: 'nginx:1.27-alpine'
     ports:
       - '80:80'
     volumes:
@@ -37,12 +39,30 @@ services:
     environment:
       DM_CdnConfiguration__PublicUrl: ""
 
+      # nginx fronts the API here, so the endpoint is a same-origin path and the
+      # /img/ location routes it to imgproxy. An absolute endpoint has to name the
+      # host the stand answers on, and the base default names localhost, which in
+      # a visitor's browser is the visitor's own machine. The container publishes
+      # on 127.0.0.1 and has no route through the edge otherwise.
+      DM_ImageProxyConfiguration__Endpoint: '/img'
+
+      # Этот overlay — единственное место, где перед API появляется nginx, и
+      # единственное, где forwarded-заголовкам можно верить. Без этих переменных
+      # ReverseProxyExtensions выставляет ForwardedHeaders.None, и RemoteIpAddress
+      # каждого запроса — адрес контейнера nginx, один для всех: лимитер в 100
+      # запросов в минуту становится общим бюджетом сайта, политика Auth — пятью
+      # попытками входа в минуту на всех, а журнал входов пишет всем один адрес.
+      # Доверяется подсеть сети dm-full-app из docker-compose.yml, а не loopback:
+      # фреймворковый дефолт здесь не подходит, nginx приходит из своего контейнера.
+      DM_ReverseProxyConfiguration__TrustedNetworks__0: '172.28.0.0/16'
+      DM_ReverseProxyConfiguration__ProxyCount: '1'
+
   dmfront:
     container_name: 'dm-front'
-    # Same shape as dmapi: pull the published image by default, build only when
-    # FRONT_IMAGE names a local tag. Publishing an image that no deployment ever
-    # pulls is how the API image went unused for months.
-    image: ${FRONT_IMAGE:-ghcr.io/dm-am/dm-front:latest}
+    # Same shape as dmapi: the image CI published, under the tag IMAGE_TAG names.
+    # Publishing an image that no deployment ever pulls is how the API image went
+    # unused for months.
+    image: ghcr.io/dm-am/dm-front:${IMAGE_TAG:-latest}
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
     build:

@@ -9,37 +9,18 @@
  */
 import { ref, watch, computed } from "vue";
 import { FilterApplyButton } from "../primitives";
+import type { NumericRangePickerProps } from "../types";
 
 defineOptions({ name: "NumericRangePicker" });
 
-const props = withDefaults(
-  defineProps<{
-    /** Minimum value (null = unset) */
-    minValue: number | null;
-    /** Maximum value (null = unset) */
-    maxValue: number | null;
-    /** Label for min input */
-    minLabel?: string;
-    /** Label for max input */
-    maxLabel?: string;
-    /** Placeholder for min input */
-    minPlaceholder?: string;
-    /** Placeholder for max input */
-    maxPlaceholder?: string;
-    /** Allow negative numbers */
-    allowNegative?: boolean;
-    /** Step for +/− buttons */
-    step?: number;
-  }>(),
-  {
-    minLabel: "От",
-    maxLabel: "До",
-    minPlaceholder: "",
-    maxPlaceholder: "",
-    allowNegative: false,
-    step: 1,
-  },
-);
+const props = withDefaults(defineProps<NumericRangePickerProps>(), {
+  minLabel: "От",
+  maxLabel: "До",
+  minPlaceholder: "",
+  maxPlaceholder: "",
+  allowNegative: false,
+  step: 1,
+});
 
 const emit = defineEmits<{
   apply: [min: number | null, max: number | null];

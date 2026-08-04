@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.PostPendencies;
 using Microsoft.EntityFrameworkCore;
@@ -66,5 +69,36 @@ internal class PostPendencyRepository : IPostPendencyRepository
             _dbContext.PostPendencies.Remove(pendency);
             await _dbContext.SaveChangesAsync();
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyCollection<Guid>> ClaimPendingReminders(
+        DateTimeOffset createdBefore,
+        DateTimeOffset lastReminderBefore,
+        DateTimeOffset remindedUtc,
+        CancellationToken cancellationToken = default)
+    {
+        var due = await _dbContext.PostPendencies
+            .TagWith("DM.PostPendency.ClaimPendingReminders")
+            .Where(p =>
+                p.FulfilledUtc == null &&
+                p.CreatedUtc < createdBefore &&
+                (p.LastReminderUtc == null || p.LastReminderUtc < lastReminderBefore) &&
+                p.Room.Game!.Status == ModuleStatus.Active)
+            .ToListAsync(cancellationToken);
+
+        if (due.Count == 0)
+        {
+            return Array.Empty<Guid>();
+        }
+
+        foreach (var pendency in due)
+        {
+            pendency.LastReminderUtc = remindedUtc;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return due.Select(p => p.PendencyId).ToList();
     }
 }

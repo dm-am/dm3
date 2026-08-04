@@ -102,9 +102,9 @@ async function confirmRemove() {
     </div>
 
     <div class="role-block">
-      <div class="role-label">Ментор (премодерация)</div>
+      <div class="role-label">Наставник (премодерация)</div>
       <UserLink v-if="mentor" :user="mentor" />
-      <SecondaryText v-else>Ментор не назначен</SecondaryText>
+      <SecondaryText v-else>Наставник не назначен</SecondaryText>
     </div>
 
     <ConfirmDialog

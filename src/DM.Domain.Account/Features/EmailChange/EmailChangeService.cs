@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Account.Configuration;
+using DM.Domain.Account.Features.Security;
 using DM.Domain.Account.Features.Tokens;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
@@ -23,6 +24,7 @@ internal class EmailChangeService : IEmailChangeService
     private readonly IEmailChangeMailSender _mailSender;
     private readonly IEmailChangeWarningMailSender _warningMailSender;
     private readonly IEventProducer _eventProducer;
+    private readonly ISecurityAuditService _auditService;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly TokenConfiguration _tokenConfig;
 
@@ -35,6 +37,7 @@ internal class EmailChangeService : IEmailChangeService
         IEmailChangeMailSender mailSender,
         IEmailChangeWarningMailSender warningMailSender,
         IEventProducer eventProducer,
+        ISecurityAuditService auditService,
         IDateTimeProvider dateTimeProvider,
         IOptions<TokenConfiguration> tokenOptions)
     {
@@ -45,6 +48,7 @@ internal class EmailChangeService : IEmailChangeService
         _mailSender = mailSender;
         _warningMailSender = warningMailSender;
         _eventProducer = eventProducer;
+        _auditService = auditService;
         _dateTimeProvider = dateTimeProvider;
         _tokenConfig = tokenOptions.Value;
     }
@@ -56,7 +60,8 @@ internal class EmailChangeService : IEmailChangeService
         var user = await _repository.FindUser(emailChange.Username);
         if (user == null)
         {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, $"User {emailChange.Username} not found");
+            throw new HttpException(System.Net.HttpStatusCode.NotFound,
+                RefusalMessage.UserNotFoundByUsername(emailChange.Username));
         }
 
         var token = _tokenFactory.Create(user.UserId, TokenType.EmailChange);
@@ -73,6 +78,11 @@ internal class EmailChangeService : IEmailChangeService
         {
             await _warningMailSender.SendAsync(user.Email, emailChange.Username, emailChange.Email);
         }
+
+        // The security journal, alongside the warning letter and for the same
+        // reason: every recovery path in the product goes through the address on
+        // the account, so its change is the first thing a hijacked account shows.
+        await _auditService.LogAsync(user.UserId, SecurityEventType.EmailChange);
 
         await _eventProducer.SendAsync(EventType.EmailChanged, user.UserId);
 
@@ -92,8 +102,7 @@ internal class EmailChangeService : IEmailChangeService
 
         if (!foundTokenId.HasValue)
         {
-            throw new HttpException(HttpStatusCode.NotFound,
-                "Email change confirmation token is invalid or expired");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.LinkInvalidOrExpired);
         }
 
         await _confirmationRepository.MarkTokenUsed(foundTokenId.Value);

@@ -52,7 +52,8 @@ internal class AttributeSchemaRepository :
     public async Task<IEnumerable<AttributeSchema>> GetSchemata(Guid userId)
     {
         var schemata = await Collection
-            .Find(Filter.Eq(s => s.Type, SchemaType.Public) | Filter.Eq(s => s.UserId, userId))
+            .Find(Filter.Eq(s => s.IsRemoved, false) &
+                  (Filter.Eq(s => s.Type, SchemaType.Public) | Filter.Eq(s => s.UserId, userId)))
             .ToListAsync();
 
         if (!schemata.Any())
@@ -84,7 +85,7 @@ internal class AttributeSchemaRepository :
     public async Task<AttributeSchema?> GetSchema(Guid schemaId)
     {
         var schema = await Collection
-            .Find(Filter.Eq(s => s.Id, schemaId))
+            .Find(Filter.Eq(s => s.Id, schemaId) & Filter.Eq(s => s.IsRemoved, false))
             .FirstOrDefaultAsync();
 
         if (schema == null)
@@ -185,8 +186,13 @@ internal class AttributeSchemaRepository :
         return result;
     }
 
+    // Soft delete: the class declares IRemovable, and a Postgres game row can
+    // still point at this id, so the document has to outlive the delete for the
+    // dangling reference to be repairable. Both reads filter the flag instead.
     public async Task Delete(Guid schemaId) =>
-        await Collection.DeleteOneAsync(Filter.Eq(s => s.Id, schemaId));
+        await Collection.UpdateOneAsync(
+            Filter.Eq(s => s.Id, schemaId),
+            Builders<DbAttributeSchema>.Update.Set(s => s.IsRemoved, true));
 
     public async Task<bool> IsUsedByUserGame(Guid schemaId, Guid userId) =>
         await _dbContext.Games
@@ -196,12 +202,26 @@ internal class AttributeSchemaRepository :
                             g.Assistants.Any(a => a.UserId == userId) ||
                             g.Characters.Any(c => c.AuthorId == userId)));
 
+    // Deliberately not narrowed to a user: the reference that breaks belongs to
+    // somebody else's game, and the schema author is exactly the person the
+    // caller-narrowed query answers "no" for.
+    public async Task<bool> IsUsedByAnyGame(Guid schemaId) =>
+        await _dbContext.Games
+            .TagWith("DM.AttributeSchema.IsUsedByAnyGame")
+            .AnyAsync(g => g.AttributeSchemaId == schemaId && !g.IsRemoved);
+
     // --- HELPERS ---
 
     /// <summary>
     /// Build strongly-typed persistence constraints from a write-side specification
     /// </summary>
-    private static DbConstraints BuildConstraints(DtoSpecificationInput spec, bool required) =>
+    /// <remarks>
+    /// Internal rather than private so the round trip of an absent limit can be
+    /// asserted end to end. The absence is written here and read back by the
+    /// mapping profile, and a test that sees only one of the two halves stays
+    /// green while the other half turns the absence back into a zero.
+    /// </remarks>
+    internal static DbConstraints BuildConstraints(DtoSpecificationInput spec, bool required) =>
         spec.Type switch
         {
             AttributeSpecificationType.Number =>
@@ -215,7 +235,7 @@ internal class AttributeSchemaRepository :
             AttributeSpecificationType.BbCode =>
                 new DbBbCodeConstraints { Required = required, MaxLength = spec.MaxLength },
             _ =>
-                new DbStringConstraints { Required = required, MaxLength = spec.MaxLength ?? 0 }
+                new DbStringConstraints { Required = required, MaxLength = spec.MaxLength }
         };
 
     private static List<DbListAttributeValue> MapValues(IEnumerable<DtoListValue> values) =>

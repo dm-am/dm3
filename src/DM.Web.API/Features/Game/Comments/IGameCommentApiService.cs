@@ -14,14 +14,6 @@ namespace DM.Web.API.Features.Game.Comments;
 public interface IGameCommentApiService
 {
     /// <summary>
-    /// Get game discussion with permission flags
-    /// </summary>
-    /// <param name="gameId">Game identifier</param>
-    /// <param name="query">Query with filtering, sorting and paging</param>
-    /// <returns>Discussion response with comments and metadata</returns>
-    Task<DiscussionResponse> GetDiscussion(Guid gameId, GameCommentsQuery query);
-
-    /// <summary>
     /// Get game comments
     /// </summary>
     /// <param name="gameId">Game identifier</param>
@@ -48,9 +40,9 @@ public interface IGameCommentApiService
     /// Update comment by API DTO model
     /// </summary>
     /// <param name="commentId">Comment identifier</param>
-    /// <param name="comment">Comment DTO model</param>
+    /// <param name="request">Updated comment text</param>
     /// <returns>Envelope containing the updated comment</returns>
-    Task<Envelope<Comment>> Update(Guid commentId, Comment comment);
+    Task<Envelope<Comment>> Update(Guid commentId, UpdateCommentRequest request);
 
     /// <summary>
     /// Delete comment

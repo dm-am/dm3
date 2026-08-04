@@ -19,7 +19,7 @@ import { warningTypeLabel } from "./lib/labels";
 import { notifyFailure } from "@/shared/lib/errors";
 
 const toast = useToast();
-const { hasAccess } = useRoleGate("Moderator");
+const { hasAccess, deniedText } = useRoleGate("Moderator");
 
 const warnings = ref<Warning[]>([]);
 const loading = ref(false);
@@ -68,9 +68,7 @@ const isEmpty = computed(() => !loading.value && warnings.value.length === 0);
   <div class="moderation-warnings">
     <page-title>Последние предупреждения</page-title>
 
-    <SecondaryText v-if="!hasAccess">
-      Страница доступна только модераторам
-    </SecondaryText>
+    <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
 
     <ErrorState v-else-if="loadError" :message="loadError" :retry="fetch" />
 

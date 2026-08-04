@@ -24,14 +24,27 @@ internal class SuspiciousLoginDetector : ISuspiciousLoginDetector
         // Get recent login history
         var loginHistory = await _auditService.GetLoginHistoryAsync(userId, 20);
 
-        if (!loginHistory.Any())
+        // The login being judged is already in this trail: it is written before
+        // the caller gets here, so left in it makes its own address known to
+        // itself and the answer is false for every login there has ever been. It
+        // is the newest entry, because the trail comes back newest first.
+        //
+        // Only earlier successes count as evidence that an address is the
+        // owner's. A failure records whoever was guessing, so treating failures
+        // as history lets one wrong password launder the next one into "known".
+        var previousLogins = loginHistory
+            .Where(e => e.EventType == SecurityEventType.LoginSuccess)
+            .Skip(1)
+            .ToList();
+
+        if (previousLogins.Count == 0)
         {
             // First login - not suspicious
             return false;
         }
 
         // Check if this IP has been seen before
-        var knownIps = loginHistory
+        var knownIps = previousLogins
             .Where(e => !string.IsNullOrEmpty(e.IpAddress))
             .Select(e => e.IpAddress)
             .Distinct()

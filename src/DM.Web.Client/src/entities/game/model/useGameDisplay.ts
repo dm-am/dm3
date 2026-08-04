@@ -1,6 +1,5 @@
 import { ref, onUnmounted } from "vue";
-import type { Game, GameRef, Room } from "./types";
-import { GameParticipation, RoomAccessPolicy, RoomAccessType } from "./types";
+import type { Game, GameRef } from "./types";
 import { formatDate, formatDateFull } from "@/shared/lib/utils/datetime";
 import { useAuthStore } from "@/shared/stores/auth";
 
@@ -138,7 +137,7 @@ export function useGameDisplay() {
   /**
    * Build game tooltip with labels (multiline):
    * Мастер: Username
-   * Ассистент(ы): A, B
+   * Ассистент: A / Ассистенты: A, B
    * Персонажи: X/Y
    * Читатели: Z
    */
@@ -150,7 +149,7 @@ export function useGameDisplay() {
       parts.push(`Мастер: ${game.master.username}`);
     }
 
-    // Ассистент(ы): Username, ... (if any)
+    // Ассистент / Ассистенты: Username, ... (if any)
     const assistants = game.assistants?.filter((a) => a?.username) ?? [];
     if (assistants.length > 0) {
       const label = assistants.length === 1 ? "Ассистент" : "Ассистенты";
@@ -163,152 +162,6 @@ export function useGameDisplay() {
     // Читатели: Z
     const totalReaders = game.subscribersCount ?? 0;
     parts.push(`Читатели: ${totalReaders}`);
-
-    return parts.join("\n");
-  }
-
-  /**
-   * Collect participant lines for a room tooltip.
-   *
-   * The tooltip lists ONLY player characters (PC). NPCs are GM-run
-   * entities that don't participate in the "who can write here" sense
-   * the user is after, so they're filtered out of every code path:
-   *
-   * - Open rooms: sourced from game.activeCharacters (backend already
-   *   filters `!c.IsNpc` in GameRepository.EnrichGamesAsync, so the
-   *   list is PC-only by construction).
-   * - Private rooms: sourced from room.accesses — each grant is
-   *   either a character (character + owner pair) or a reader (user
-   *   only, rendered as "- username — читатель"). Characters whose
-   *   `isNpc` flag is true are skipped here. If `room.accesses` is
-   *   missing, falls back to `room.claims` for character-based
-   *   entries, same NPC filter applied.
-   */
-  function collectRoomParticipants(
-    room: Room,
-    game?: Game | GameRef,
-  ): string[] {
-    const lines: string[] = [];
-
-    if (room.access === RoomAccessType.Private) {
-      const accesses = room.accesses ?? [];
-      if (accesses.length > 0) {
-        for (const a of accesses) {
-          if (a.character?.name) {
-            // PC-only: skip NPCs (GM-run characters should not appear
-            // in the "who can post here" tooltip).
-            if (a.character.isNpc) continue;
-            // Characters: Full = can read + post, ReadOnly = read only.
-            // Full is the common case, so we mark only ReadOnly explicitly.
-            const owner = a.character.author?.username ?? "?";
-            const suffix =
-              a.policy === RoomAccessPolicy.ReadOnly ? " — чтение" : "";
-            lines.push(`- ${a.character.name} (${owner})${suffix}`);
-          } else if (a.user?.username) {
-            // Readers are always ReadOnly by definition.
-            lines.push(`- ${a.user.username} — читатель`);
-          }
-        }
-        return lines;
-      }
-      // Fallback: claims-only (no accesses returned).
-      // Claims do not carry policy info, so everything is rendered plainly.
-      for (const c of room.claims ?? []) {
-        if (c.character?.isNpc) continue; // PC-only
-        const name = c.character?.name ?? "?";
-        const owner = c.character?.author?.username ?? "?";
-        lines.push(`- ${name} (${owner})`);
-      }
-      return lines;
-    }
-
-    // Open rooms: list all active characters in the game. Backend
-    // filters NPCs in the ActiveCharacters batch query, so this list
-    // is already PC-only.
-    for (const c of game?.activeCharacters ?? []) {
-      lines.push(`- ${c.name} (${c.ownerUsername})`);
-    }
-    return lines;
-  }
-
-  /**
-   * Whether the current viewer (identified by username) has access to a
-   * room. Open rooms are accessible to everyone. Private rooms are
-   * accessible to:
-   *   - game master / assistants / mentor (via game.participation)
-   *   - owners of characters listed in room.claims
-   *   - characters' owners and readers listed in room.accesses
-   */
-  function canViewRoom(
-    room: Room,
-    game?: Game | GameRef,
-    viewerUsername?: string,
-  ): boolean {
-    if (room.access !== RoomAccessType.Private) return true;
-
-    const participation = game?.participation;
-    if (
-      participation?.includes(GameParticipation.Owner) ||
-      participation?.includes(GameParticipation.Authority) ||
-      participation?.includes(GameParticipation.Moderator)
-    ) {
-      return true;
-    }
-
-    if (!viewerUsername) return false;
-
-    // Explicit accesses: reader user OR character's owner
-    if (
-      room.accesses?.some(
-        (a) =>
-          a.user?.username === viewerUsername ||
-          a.character?.author?.username === viewerUsername,
-      )
-    ) {
-      return true;
-    }
-
-    // Claims fallback (character owners only)
-    return (
-      room.claims?.some(
-        (c) => c.character?.author?.username === viewerUsername,
-      ) ?? false
-    );
-  }
-
-  /**
-   * Build room tooltip with participants list and access type.
-   * Unified format used across the whole app (sidebar, featured posts,
-   * Pulse, game page). Matches the characters tooltip on the games table:
-   *
-   *   Персонажи:
-   *   - CharName (ownerUsername)
-   *   - CharName (ownerUsername)
-   *
-   *   Доступ: открытый
-   *
-   * Returns an empty string when the viewer should not see a tooltip
-   * (i.e. private room without access) — callers should skip rendering
-   * the Tooltip wrapper when this returns empty.
-   */
-  function buildRoomTooltip(
-    room: Room,
-    game?: Game | GameRef,
-    viewerUsername?: string,
-  ): string {
-    if (!canViewRoom(room, game, viewerUsername)) return "";
-
-    const parts: string[] = [];
-
-    const participantLines = collectRoomParticipants(room, game);
-    if (participantLines.length > 0) {
-      parts.push("Персонажи:");
-      parts.push(...participantLines);
-      parts.push(""); // blank line separator before "Доступ"
-    }
-
-    const isPrivate = room.access === RoomAccessType.Private;
-    parts.push(`Доступ: ${isPrivate ? "закрытый" : "открытый"}`);
 
     return parts.join("\n");
   }
@@ -461,8 +314,6 @@ export function useGameDisplay() {
     formatPcCount,
     buildTooltip,
     buildStatusTooltip,
-    buildRoomTooltip,
-    canViewRoom,
     getUnreadPosts,
     getUnreadComments,
     formatUnreadPostsTooltip,

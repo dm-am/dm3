@@ -70,7 +70,9 @@ export const ROLE_FULL_NAMES: Partial<Record<UserRole, string>> = {
 };
 
 export interface RoleInfo {
-  /** Plural section title (RulesStaffTable: "Администраторы", "Модераторы") */
+  /** Section title as the staff table prints it: plural for the roles it groups
+   * ("Администраторы", "Модераторы"), singular for the three that are not a group
+   * ("Пользователь", "Гость", "Система") */
   title: string;
   /** Plural community nickname (RulesStaffTable groups) */
   nickname: string;

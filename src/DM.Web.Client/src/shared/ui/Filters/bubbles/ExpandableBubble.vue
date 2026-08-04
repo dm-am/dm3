@@ -7,23 +7,13 @@
 import { ref, computed } from "vue";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { symbols } from "@/shared/lib/utils/icons";
-import type { BubbleValue } from "../types";
+import type { ExpandableBubbleProps } from "../types";
 
 defineOptions({ name: "ExpandableBubble" });
 
-const props = withDefaults(
-  defineProps<{
-    /** Prefix text (e.g., "Авторы:") */
-    prefix: string;
-    /** All values */
-    values: BubbleValue[];
-    /** Maximum visible values before collapse */
-    maxVisible?: number;
-  }>(),
-  {
-    maxVisible: 1,
-  },
-);
+const props = withDefaults(defineProps<ExpandableBubbleProps>(), {
+  maxVisible: 1,
+});
 
 const emit = defineEmits<{
   remove: [id: string];
@@ -156,6 +146,7 @@ onUnmounted(() => {
       type="button"
       class="bubble-expand-btn"
       :class="{ active: showDropdown }"
+      :aria-label="`Показать еще ${remainingCount}`"
       aria-haspopup="menu"
       :aria-expanded="showDropdown"
       @click.stop="toggleDropdown"

@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using AutoMapper;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Posts;
@@ -63,12 +64,14 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.TotalPostsCount, s => s.MapFrom(r => r.Posts
                 .Count(p => !p.IsRemoved)))
             .ForMember(d => d.UnreadPostsCount, opt => opt.Ignore())
+            .ForMember(d => d.CanView, opt => opt.Ignore()) // Set in repository
             .ForMember(d => d.Description, opt => opt.Ignore()) // Set in repository
             .ForMember(d => d.Settings, s => s.MapFrom(r => new RoomSettings
             {
                 ViewPrivateText = r.ViewPrivateText,
                 ViewDiceResults = r.ViewDiceResults,
-                DiceEnabled = r.DiceEnabled
+                DiceEnabled = r.DiceEnabled,
+                HiddenWithoutAccess = r.HiddenWithoutAccess
             }));
 
         CreateMap<DbRoom, RoomOrderInfo>()
@@ -94,6 +97,7 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.Id, s => s.MapFrom(p => p.PendencyId))
             .ForMember(d => d.RoomId, s => s.MapFrom(p => p.RoomId))
             .ForMember(d => d.CharacterId, s => s.MapFrom(p => p.CharacterId))
+            .ForMember(d => d.CharacterName, s => s.MapFrom(p => p.Character.Name))
             .ForMember(d => d.CreatedBy, s => s.MapFrom(p => p.CreatedBy))
             .ForMember(d => d.WaitingForUser, s => s.MapFrom(p => p.WaitingForUser))
             .ForMember(d => d.CreatedUtc, s => s.MapFrom(p => p.CreatedUtc))
@@ -111,12 +115,17 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.RoomId, s => s.MapFrom(p => p.RoomId))
             .ForMember(d => d.SharePrivateWithAll, s => s.MapFrom(p => p.SharePrivateWithAll))
             .ForMember(d => d.RoomViewPrivateText, s => s.MapFrom(p => p.Room.ViewPrivateText))
-            // Game leads = master + all assistants, projected directly
-            // (mentors are NOT leads and are intentionally excluded).
-            .ForMember(d => d.GameLeadUserIds, s => s.MapFrom(p =>
-                new[] { p.Room.Game.MasterId }
-                    .Concat(p.Room.Game.Assistants.Select(a => a.UserId))
-                    .ToList()))
+            // Game leads = master + all assistants (mentors are NOT leads and are
+            // intentionally excluded). Projected as two members and joined by the
+            // model: concatenating the assistants onto a one-element array inside
+            // the projection is what Npgsql refused to translate, and it refused
+            // the whole query, so every post read answered 500.
+            .ForMember(d => d.GameMasterUserId, s => s.MapFrom(p => p.Room.Game.MasterId))
+            .ForMember(d => d.GameAssistantUserIds, s => s.MapFrom(p =>
+                p.Room.Game.Assistants.Select(a => a.UserId)))
+            // Composed by the model from the two above; a read-only collection is
+            // still a destination member as far as configuration validation goes.
+            .ForMember(d => d.GameLeadUserIds, opt => opt.Ignore())
             // PrivateAddressee snapshot comes from the JSONB column on the
             // post. ProjectTo carries it over as raw JSON; API-layer
             // mapping profile parses it into a Dictionary at render time.
@@ -212,7 +221,7 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.JoinedUtc, s => s.MapFrom(a => a.JoinedUtc))
             .ForMember(d => d.LastActivityUtc, s => s.MapFrom(a => a.User.LastActivityUtc))
             .ForMember(d => d.Role, s => s.MapFrom(a => a.User.Role))
-            .ForMember(d => d.IsNewbie, s => s.MapFrom(a => a.User.QuantityRating < 100));
+            .ForMember(d => d.IsNewbie, s => s.MapFrom(a => a.User.IsNewbie));
 
         CreateMap<DbGame, GameDto>()
             .Include<DbGame, GameDetails>()

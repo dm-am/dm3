@@ -113,9 +113,14 @@ useFlipReorder({
   // (5 short items, tons of room) uses the larger $font-size — full size
   // unification is impossible without wrapping this longer strip.
   font-size: 15px
-  // FORUM-2: visually tightens the literal " | " spaces; the copy still
-  // reads "Общий | Игровые системы | ..." with real spaces (FORUM-1).
-  word-spacing: -1.5px
+  // The visible width of the literal " | " spaces, and the only knob that
+  // widens the strip without touching the copy: it stays "Общий | Игровые
+  // системы | ..." with one ordinary space on each side (FORUM-1). Two literal
+  // spaces in the markup do nothing (they collapse in both the paint and the
+  // clipboard) and a flex gap breaks the copy into a column. At +2px the
+  // effective space goes from 2.3px to 5.8px, and the 11-board strip still
+  // holds one line down to a 1869px window.
+  word-spacing: 2px
 
 .board-link
   display: inline-block

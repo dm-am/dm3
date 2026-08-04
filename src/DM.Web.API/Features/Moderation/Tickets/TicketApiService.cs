@@ -5,6 +5,7 @@ using AutoMapper;
 using DM.Domain.Moderation.Features.Tickets;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.Dto;
+using DM.Domain.Core.Dto;
 
 namespace DM.Web.API.Features.Moderation.Tickets;
 
@@ -22,10 +23,10 @@ internal class TicketApiService : ITicketApiService
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<Ticket>> GetTickets(TicketStatus? status = null, TicketSubtype? subtype = null)
+    public async Task<ListEnvelope<Ticket>> GetTickets(PagingQuery query, TicketStatus? status = null, TicketSubtype? subtype = null)
     {
-        var tickets = await _ticketService.GetTickets(status, subtype);
-        return new ListEnvelope<Ticket>(tickets.Select(_mapper.Map<Ticket>));
+        var (tickets, paging) = await _ticketService.GetTickets(query, status, subtype);
+        return new ListEnvelope<Ticket>(tickets.Select(_mapper.Map<Ticket>), new PagingInfo(paging));
     }
 
     /// <inheritdoc />

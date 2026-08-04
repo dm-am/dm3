@@ -2,14 +2,7 @@
 
     <PropertyGroup>
         <TargetFramework>net8.0</TargetFramework>
-        <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-        <LangVersion>preview</LangVersion>
     </PropertyGroup>
-
-    <ItemGroup>
-        <InternalsVisibleTo Include="DM.Infrastructure.Messaging.Tests" />
-    </ItemGroup>
 
     <ItemGroup>
       <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
@@ -17,6 +10,7 @@
       <PackageReference Include="Autofac" />
       <PackageReference Include="Jamq.Client.Abstractions" />
       <PackageReference Include="Jamq.Client.Rabbit" />
+      <PackageReference Include="Jamq.Client.Rabbit.DependencyInjection" />
       <PackageReference Include="Microsoft.Extensions.Configuration" />
       <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
       <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />

@@ -53,7 +53,7 @@ public class BotLinkServiceShould : UnitTestBase
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest)
-            .Where(e => e.Message.Contains("Invalid channel type"));
+            .Where(e => e.Message.Contains("Неизвестный канал"));
     }
 
     [Fact]
@@ -156,7 +156,7 @@ public class BotLinkServiceShould : UnitTestBase
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest)
-            .Where(e => e.Message.Contains("Invalid channel type"));
+            .Where(e => e.Message.Contains("Неизвестный канал"));
     }
 
     [Fact]

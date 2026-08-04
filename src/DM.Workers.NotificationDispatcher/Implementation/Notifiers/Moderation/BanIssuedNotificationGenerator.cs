@@ -29,7 +29,9 @@ internal class BanIssuedNotificationGenerator : BaseNotificationGenerator
     public override async IAsyncEnumerable<CreateNotification> Generate(Guid entityId)
     {
         var banData = await _dbContext.Bans
-            .Where(b => b.BanId == entityId && !b.IsRemoved)
+            // A ban keeps its row when it is lifted, so there is nothing to filter out:
+            // the notification is about the moment it was issued.
+            .Where(b => b.BanId == entityId)
             .Select(b => new
             {
                 b.BanId,
@@ -51,6 +53,9 @@ internal class BanIssuedNotificationGenerator : BaseNotificationGenerator
         yield return new CreateNotification
         {
             UsersInterested = new[] { banData.TargetUserId },
+            // No ActorId although the moderator is right there in banData.AuthorId:
+            // this is the notification that tells a person they are banned, and
+            // blacklisting the moderator must not be a way to stop it arriving.
             Metadata = new
             {
                 BanId = banData.BanId,

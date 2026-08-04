@@ -140,7 +140,7 @@ function rickroll(event: MouseEvent) {
 .legal-first
   margin-bottom: $small
 
-@media (max-width: $min-width)
+@media (max-width: $bp-shell)
   .footer
     flex-direction: column
     align-items: stretch

@@ -1,0 +1,39 @@
+@*
+    Каркас письма: логотип, колонка чтения, подпись под чертой.
+
+    Логотип идет ссылкой cid:logo — картинка прикреплена к письму как inline-часть
+    multipart/related, а не забирается по URL. Так она видна в клиенте, который по
+    умолчанию не грузит внешние изображения, и просмотр письма не сообщает нам, что
+    его открыли.
+
+    Два параметра, а не один с именем Model, поэтому сканер шаблонов проходит мимо
+    этого компонента и не считает его шаблоном письма.
+*@
+<html lang="ru">
+<body style="@EmailConstants.BodyStyles">
+<div style="@EmailConstants.ContainerStyles">
+    <img src="cid:logo" alt="Dungeon Master" width="180" style="@EmailConstants.LogoStyles"/>
+
+    <h1 style="@EmailConstants.HeadingStyles">@Title</h1>
+
+    @ChildContent
+
+    <hr style="@EmailConstants.RuleStyles"/>
+    <p style="@EmailConstants.FooterStyles">
+        Письмо отправлено автоматически, отвечать на него не нужно.
+    </p>
+</div>
+</body>
+</html>
+
+@code {
+
+    /// <summary>Заголовок письма</summary>
+    [Parameter]
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>Тело письма</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+}

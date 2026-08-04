@@ -119,7 +119,7 @@ internal class TopicService : ITopicService
                 await _repository.Exists(topicId, ct)
                     ? HttpStatusCode.Gone
                     : HttpStatusCode.NotFound,
-                "Topic not found");
+                "Топик не найден");
         }
 
         if (identity.User.IsAuthenticated)
@@ -152,7 +152,7 @@ internal class TopicService : ITopicService
                 await _repository.ExistsByBoardAndNumber(board.Id, topicNumber, ct)
                     ? HttpStatusCode.Gone
                     : HttpStatusCode.NotFound,
-                $"Topic #{topicNumber} not found in board {boardAlias}");
+                $"Топик #{topicNumber} не найден в разделе {boardAlias}");
         }
 
         if (identity.User.IsAuthenticated)
@@ -315,7 +315,7 @@ internal class TopicService : ITopicService
     private static bool IsCacheableListingQuery(TopicsQuery query) =>
         query.IsAttached != true &&
         string.IsNullOrEmpty(query.Search) &&
-        (query.Authors == null || query.Authors.Count == 0) &&
+        (query.AuthorUsernames == null || query.AuthorUsernames.Count == 0) &&
         !query.CreatedFromUtc.HasValue &&
         !query.CreatedToUtc.HasValue &&
         string.IsNullOrEmpty(query.SortBy) &&
@@ -354,7 +354,19 @@ internal class TopicService : ITopicService
         }
         else
         {
-            // Non-admin users cannot change these fields
+            // Asking for one of these is refused; round-tripping the value the topic
+            // already has is not. All three used to be dropped in silence, so a user
+            // closing somebody else's topic got 200 and an open topic back, and a
+            // user moving their own topic to another board got 200 and the topic
+            // still in the old one -- the move is reachable from HTTP through
+            // UpdateTopicRequest.Board.
+            if ((updateTopic.IsClosed.HasValue && updateTopic.IsClosed != oldTopic.IsClosed) ||
+                (updateTopic.IsAttached.HasValue && updateTopic.IsAttached != oldTopic.IsAttached) ||
+                (updateTopic.BoardTitle != default && oldTopic.Board.Title != updateTopic.BoardTitle))
+            {
+                _intentionManager.ThrowIfForbidden(ForumIntention.AdministrateTopics, oldTopic.Board);
+            }
+
             updateTopic.IsClosed = null;
             updateTopic.IsAttached = null;
         }
@@ -371,12 +383,26 @@ internal class TopicService : ITopicService
             Title = updateTopic.Title,
             Text = bodyText,
             IsClosed = updateTopic.IsClosed,
-            IsAttached = updateTopic.IsAttached
+            IsAttached = updateTopic.IsAttached,
+            // The editor is not necessarily the author: TopicIntention.Edit is
+            // open to moderators and administrators too. The ChangedTopic
+            // notification takes its actor from this history, so a topic changed
+            // by somebody a subscriber has blocked stops being delivered.
+            EditorUserId = _identityProvider.Current.User.UserId
         };
-        var topic = await _repository.Update(updateEntity, newBoardId);
-        await _invokedEventProducer.SendAsync(EventType.ChangedTopic, topic.Id);
+        var updated = await _repository.Update(updateEntity, newBoardId);
 
-        return topic;
+        // Announced only when the row moved. A PATCH that hands back the values the
+        // topic already holds is answered, but there is nothing to tell subscribers
+        // about — and the notification's actor is read from the edit history, which
+        // such a request leaves untouched, so the announcement would have named
+        // whoever edited the topic last and been filtered against his blacklist.
+        if (updated.Changed)
+        {
+            await _invokedEventProducer.SendAsync(EventType.ChangedTopic, updated.Topic.Id);
+        }
+
+        return updated.Topic;
     }
 
     /// <inheritdoc />
@@ -385,7 +411,7 @@ internal class TopicService : ITopicService
         var topic = await GetAsync(topicId, ct);
         _intentionManager.ThrowIfForbidden(ForumIntention.AdministrateTopics, topic.Board);
 
-        await _repository.Delete(topicId);
+        await _repository.Delete(topicId, _identityProvider.Current.User.UserId);
         await _unreadCountersRepository.DeleteAsync(topicId, UnreadEntryType.Message);
         await _invokedEventProducer.SendAsync(EventType.DeletedTopic, topicId);
     }

@@ -15,7 +15,11 @@ import {
   isUserOnline,
   type MessageOrSeparator,
 } from "@/shared/lib/utils/chat";
-import { useVirtualScroll } from "@/shared/lib/composables";
+import {
+  joinTitleSegments,
+  useDocumentTitle,
+  useVirtualScroll,
+} from "@/shared/lib/composables";
 import { ChatMessage } from "@/widgets/chat-message";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import type { ChatId, Message, MessageId } from "@/entities/message";
@@ -23,8 +27,10 @@ import dayjs from "dayjs";
 import { symbols } from "@/shared/lib/utils/icons";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import { messagingApi } from "@/entities/message";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
+import { notifyFailure } from "@/shared/lib/errors";
 import { useMessageToolbar } from "@/shared/lib/composables/useMessageToolbar";
 import {
   useAnchoredInfiniteScroll,
@@ -45,6 +51,12 @@ const {
   hasMoreAfter,
   errorBefore,
 } = storeToRefs(messagingStore);
+
+// The interlocutor first: three messenger routes shared one tab name, and the
+// name of the person is the only thing that tells two correspondences apart.
+useDocumentTitle(() =>
+  joinTitleSegments(interlocutor.value?.username, "Личные сообщения"),
+);
 
 const MAX_MESSAGE_HEIGHT = 200;
 
@@ -302,7 +314,13 @@ function cancelEdit() {
 // must not read back its own stale editText seed.
 async function saveEditWithText(msgId: string, text: string) {
   if (text.trim()) {
-    await messagingStore.updateMessage(msgId, text);
+    const { error } = await messagingStore.updateMessage(msgId, text);
+    // The editor stays open with the text still in it: a closed editor over
+    // the unchanged message says the edit went through.
+    if (error) {
+      notifyFailure(error, "Не удалось сохранить сообщение");
+      return;
+    }
   }
   cancelEdit();
 }
@@ -345,8 +363,21 @@ async function handleSend() {
   if (!newMessage.value.trim() || sending.value || !selectedChat.value) return;
   const text = newMessage.value;
   newMessage.value = "";
+  const { error } = await messagingStore.sendMessage(
+    selectedChat.value.id,
+    text,
+  );
+  // Give the text back on failure. Emptying the field before the request is
+  // what makes sending feel instant; losing what was written when it fails is
+  // not part of that bargain. The editor's own clear() waits for the send to
+  // land — it also drops the saved draft, and that copy is the one that
+  // outlives the tab.
+  if (error) {
+    newMessage.value = text;
+    notifyFailure(error, "Не удалось отправить сообщение");
+    return;
+  }
   editorRef.value?.clear();
-  await messagingStore.sendMessage(selectedChat.value.id, text);
   scrollToBottom();
 }
 
@@ -359,10 +390,12 @@ function cancelDelete() {
 }
 
 async function confirmDelete() {
-  if (confirmingDeleteId.value) {
-    await messagingStore.deleteMessage(confirmingDeleteId.value);
-    confirmingDeleteId.value = null;
-  }
+  if (!confirmingDeleteId.value) return;
+  const { error } = await messagingStore.deleteMessage(
+    confirmingDeleteId.value,
+  );
+  confirmingDeleteId.value = null;
+  if (error) notifyFailure(error, "Не удалось удалить сообщение");
 }
 
 function goBack() {
@@ -373,15 +406,19 @@ function goBack() {
 // chat (?msg changes but params.id does not).
 watch(() => [route.params.id, route.query.msg], loadChat, { immediate: true });
 
-// Watch for new messages to init interactive BBCode elements
+// New messages bring new BBCode into the feed. Only the LENGTH is watched, the
+// way the global chat next door already does it: a deep watch walked every
+// message object on every nested mutation — a like, a read flag — and then
+// re-scanned the whole container, while each ChatMessage already initialises
+// its own markup through TruncatedContent's on-content-mounted. In a chat with
+// five hundred loaded messages that ran on every incoming push.
 watch(
-  messagesList,
+  () => messagesList.value?.length,
   () => {
     nextTick(() => {
       initBbcodeInteractive(messagesContainer.value);
     });
   },
-  { deep: true },
 );
 
 onMounted(() => {
@@ -612,6 +649,7 @@ onUnmounted(() => {
         <button
           v-if="hasMoreAfter"
           class="scroll-to-latest"
+          aria-label="К последним сообщениям"
           @click="jumpToLatest"
         >
           <SvgIcon name="chevronDown" />
@@ -627,7 +665,7 @@ onUnmounted(() => {
               v-model="newMessage"
               context="message"
               placeholder="Написать сообщение..."
-              :draft-key="`chat_${selectedChat?.id}`"
+              :draft-key="composerDraftKey('chat', 'message', selectedChat?.id)"
               :disabled="sending"
               :min-height="60"
               :max-height="200"
@@ -670,6 +708,7 @@ onUnmounted(() => {
             <Tooltip text="Подтвердить удаление">
               <button
                 class="toolbar-btn toolbar-btn-delete-confirm"
+                aria-label="Подтвердить удаление"
                 @click="confirmDelete"
               >
                 <SvgIcon name="trash" />
@@ -693,19 +732,27 @@ onUnmounted(() => {
               <button
                 class="toolbar-btn"
                 :class="{ active: isLikedByMe(hoveredMessage) }"
+                :aria-label="
+                  isLikedByMe(hoveredMessage) ? 'Убрать лайк' : 'Нравится'
+                "
                 @click="toggleLike(hoveredMessage)"
               >
                 <SvgIcon name="heartEmpty" />
               </button>
             </Tooltip>
             <Tooltip v-if="canEditMessage(hoveredMessage)" text="Редактировать">
-              <button class="toolbar-btn" @click="startEdit(hoveredMessage)">
+              <button
+                class="toolbar-btn"
+                aria-label="Редактировать"
+                @click="startEdit(hoveredMessage)"
+              >
                 <SvgIcon name="pencil" />
               </button>
             </Tooltip>
             <Tooltip v-if="canDeleteMessage(hoveredMessage)" text="Удалить">
               <button
                 class="toolbar-btn"
+                aria-label="Удалить"
                 @click="requestDelete(hoveredMessage.id)"
               >
                 <SvgIcon name="trash" />
@@ -790,7 +837,6 @@ onUnmounted(() => {
 
 .empty-messages,
 .not-found
-  text-align: center
   padding: $big
 
 .scroll-sentinel
@@ -870,7 +916,7 @@ onUnmounted(() => {
   // tabindex="0" makes the whole row focusable so keyboard users can reach
   // the hover-only toolbar (focusin -> handleMessageFocusIn); outline only
   // on :focus-visible so mouse clicks don't leave a visible ring.
-  &:focus
+  &:focus:not(:focus-visible)
     outline: none
   &:focus-visible
     outline: 2px solid $border-focus

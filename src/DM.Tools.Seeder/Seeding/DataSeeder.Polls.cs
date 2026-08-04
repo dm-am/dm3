@@ -50,6 +50,12 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
+    /// <summary>
+    /// Everyone except the account the stand is looked at through.
+    /// </summary>
+    private static IEnumerable<DbUser> OtherThanPrimary(IEnumerable<DbUser> users) =>
+        users.Where(u => u.Username != "SolohinLex");
+
     private async Task CreatePolls(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
     {
         // Polls live in MongoDB and survive a relational re-seed, while their
@@ -176,8 +182,14 @@ internal sealed partial class DataSeeder
         await _pollRepository.Create(activePoll2);
         result.PollsCreated++;
 
-        // Add votes to active poll 2
-        var votersForActive2 = users.Skip(2).Take(Math.Min(4, users.Count - 2)).ToList();
+        // Add votes to active poll 2. Never the primary account: an open poll
+        // it has already voted in shows the retraction and not the vote, and
+        // that account is the one every developer and the browser tier log in
+        // as - so the control the block exists for was on no screen at all.
+        // By name rather than by position: the list is ordered by role and then
+        // by username, and Skip(n) stopped excluding it the moment another
+        // account sorted above it.
+        var votersForActive2 = OtherThanPrimary(users).Take(4).ToList();
         var optionIds2 = activePoll2.Options.Select(o => o.Id).ToList();
         for (var i = 0; i < votersForActive2.Count; i++)
         {
@@ -207,7 +219,7 @@ internal sealed partial class DataSeeder
         await _pollRepository.Create(activePoll3);
         result.PollsCreated++;
 
-        var votersForActive3 = users.Skip(1).Take(Math.Min(5, users.Count - 1)).ToList();
+        var votersForActive3 = OtherThanPrimary(users).Take(5).ToList();
         var optionIds3 = activePoll3.Options.Select(o => o.Id).ToList();
         for (var i = 0; i < votersForActive3.Count; i++)
         {

@@ -10,9 +10,13 @@ namespace DM.Domain.Community.Features.UserEndorsements;
 /// <param name="IsRemoved">Updated removed status (null to keep current)</param>
 /// <param name="ModifiedUtc">Modification timestamp</param>
 /// <param name="ModifiedByUserId">User who modified the endorsement</param>
+/// <param name="DeletedUtc">Moment of removal, set together with IsRemoved</param>
+/// <param name="DeletedByUserId">User who removed the endorsement</param>
 public record UpdateUserEndorsementEntity(
     Guid EndorsementId,
     string? Text = null,
     bool? IsRemoved = null,
     DateTimeOffset? ModifiedUtc = null,
-    Guid? ModifiedByUserId = null);
+    Guid? ModifiedByUserId = null,
+    DateTimeOffset? DeletedUtc = null,
+    Guid? DeletedByUserId = null);

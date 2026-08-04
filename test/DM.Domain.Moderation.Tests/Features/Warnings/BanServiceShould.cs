@@ -8,6 +8,7 @@ using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
@@ -26,6 +27,7 @@ public class BanServiceShould : UnitTestBase
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<IGuidFactory> _guidFactory;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly Mock<IEventProducer> _eventProducer;
     private readonly BanService _service;
     private readonly Guid _moderatorUserId = Guid.NewGuid();
     private readonly Guid _targetUserId = Guid.NewGuid();
@@ -39,6 +41,7 @@ public class BanServiceShould : UnitTestBase
         _identityProvider = Mock<IIdentityProvider>();
         _guidFactory = Mock<IGuidFactory>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
+        _eventProducer = Mock<IEventProducer>();
 
         // Ban creation and lifting require SeniorModerator, so tests default to it
         SetCurrentUser(UserRole.SeniorModerator);
@@ -56,7 +59,8 @@ public class BanServiceShould : UnitTestBase
             _identityProvider.Object,
             _guidFactory.Object,
             _dateTimeProvider.Object,
-            createValidator.Object);
+            createValidator.Object,
+            _eventProducer.Object);
     }
 
     private void SetCurrentUser(UserRole role)
@@ -73,11 +77,43 @@ public class BanServiceShould : UnitTestBase
     public async Task ReturnEmptyListWhenGettingBansForNonexistentUser()
     {
         _userLookupService.Setup(s => s.GetAsync("Unknown"))
-            .ThrowsAsync(new Exception());
+            .ThrowsAsync(new HttpException(HttpStatusCode.Gone, "Пользователь не найден"));
 
         var result = await _service.GetUserBans("Unknown");
 
         result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task LetAStorageFailureThroughInsteadOfReportingACleanRecord()
+    {
+        // The catch in GetUserBans answers one question - does this user exist
+        // - and an empty list is the answer to it. A dropped connection is not
+        // that answer: it used to reach the moderator's page as "no bans",
+        // which is exactly what an unblemished profile looks like.
+        _userLookupService.Setup(s => s.GetAsync("Target"))
+            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _banRepository.Setup(r => r.GetUserBans(_targetUserId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("connection reset"));
+
+        var act = () => _service.GetUserBans("Target");
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task LetAStorageFailureThroughWhenReadingTheActiveBan()
+    {
+        // Same rule on the public route: "we could not check" must not leave
+        // the service as "not banned".
+        _userLookupService.Setup(s => s.GetAsync("Target"))
+            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _banRepository.Setup(r => r.GetActiveBan(_targetUserId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("connection reset"));
+
+        var act = () => _service.GetActiveBan("Target");
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Fact]
@@ -161,7 +197,7 @@ public class BanServiceShould : UnitTestBase
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict)
-            .Where(e => e.Message.Contains("already banned"));
+            .Where(e => e.Message.Contains("уже забанен"));
     }
 
     [Fact]
@@ -194,6 +230,50 @@ public class BanServiceShould : UnitTestBase
         capturedEntity.StartedUtc.Should().Be(_now);
         capturedEntity.EndedUtc.Should().Be(_now.AddHours(24));
         capturedEntity.IsVoluntary.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AnnounceAnIssuedBan()
+    {
+        var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
+        _userLookupService.Setup(s => s.GetAsync("Target")).ReturnsAsync(targetUser);
+        _banRepository.Setup(r => r.GetActiveBan(_targetUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Ban?)null);
+        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Ban { BanId = _banId });
+
+        await _service.CreateBan(new CreateBan
+        {
+            Username = "Target",
+            DurationHours = 24,
+            Comment = "Spam",
+            IsVoluntary = false
+        });
+
+        _eventProducer.Verify(p => p.SendAsync(EventType.BanIssued, _banId), Times.Once);
+    }
+
+    [Fact]
+    public async Task NotAnnounceAVoluntarySelfBan()
+    {
+        // The ban notification exists to tell a person about something he did not
+        // do. Its only recipient is the target, who here is the author as well.
+        var targetUser = new GeneralUser { UserId = _moderatorUserId, Username = "Moderator" };
+        _userLookupService.Setup(s => s.GetAsync("Moderator")).ReturnsAsync(targetUser);
+        _banRepository.Setup(r => r.GetActiveBan(_moderatorUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Ban?)null);
+        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Ban { BanId = _banId });
+
+        await _service.CreateBan(new CreateBan
+        {
+            Username = "Moderator",
+            DurationHours = 48,
+            Comment = "Перерыв",
+            IsVoluntary = true
+        });
+
+        _eventProducer.Verify(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>()), Times.Never);
     }
 
     [Fact]
@@ -351,7 +431,7 @@ public class BanServiceShould : UnitTestBase
 
         await _service.LiftBan(_banId);
 
-        _banRepository.Verify(r => r.Remove(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+        _banRepository.Verify(r => r.Lift(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -365,7 +445,7 @@ public class BanServiceShould : UnitTestBase
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-        _banRepository.Verify(r => r.Remove(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        _banRepository.Verify(r => r.Lift(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -377,7 +457,7 @@ public class BanServiceShould : UnitTestBase
 
         await _service.LiftBan(_banId);
 
-        _banRepository.Verify(r => r.Remove(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+        _banRepository.Verify(r => r.Lift(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -388,7 +468,7 @@ public class BanServiceShould : UnitTestBase
 
         await _service.LiftBan(_banId);
 
-        _banRepository.Verify(r => r.Remove(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+        _banRepository.Verify(r => r.Lift(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
     // --- Кто кого может банить (BE-18, BE-19) ---
 
@@ -404,7 +484,10 @@ public class BanServiceShould : UnitTestBase
 
     private static CreateBan BanRequest() => new()
     {
-        Username = "Target", DurationHours = 24, Comment = "Spam", IsVoluntary = false
+        Username = "Target",
+        DurationHours = 24,
+        Comment = "Spam",
+        IsVoluntary = false
     };
 
     [Theory]
@@ -481,7 +564,7 @@ public class BanServiceShould : UnitTestBase
 
         await _service.LiftBan(_banId, "Разобрались");
 
-        _banRepository.Verify(r => r.Remove(_banId, _moderatorUserId, _now, "Разобрались",
+        _banRepository.Verify(r => r.Lift(_banId, _moderatorUserId, _now, "Разобрались",
             It.IsAny<CancellationToken>()), Times.Once);
     }
 }

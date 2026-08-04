@@ -15,17 +15,17 @@ namespace DM.Web.API.Features.Community.Polls;
 internal class PollApiService : IPollApiService
 {
     private readonly IPollService pollService;
-    private readonly IUserReadRepository userRepository;
+    private readonly IUserLookupService userLookupService;
     private readonly IMapper mapper;
 
     /// <inheritdoc />
     public PollApiService(
         IPollService pollService,
-        IUserReadRepository userRepository,
+        IUserLookupService userLookupService,
         IMapper mapper)
     {
         this.pollService = pollService;
-        this.userRepository = userRepository;
+        this.userLookupService = userLookupService;
         this.mapper = mapper;
     }
 
@@ -130,7 +130,7 @@ internal class PollApiService : IPollApiService
         Dictionary<Guid, Domain.Core.Dto.UserReference> usersDict = new();
         if (allUserIds.Count > 0)
         {
-            var users = await userRepository.GetUserReferencesAsync(allUserIds);
+            var users = await userLookupService.GetReferencesAsync(allUserIds);
             usersDict = users.ToDictionary(u => u.UserId);
         }
 
@@ -181,7 +181,7 @@ internal class PollApiService : IPollApiService
 
             if (allUserIds.Count > 0)
             {
-                var users = await userRepository.GetUserReferencesAsync(allUserIds);
+                var users = await userLookupService.GetReferencesAsync(allUserIds);
                 var usersDict = users.ToDictionary(u => u.UserId);
 
                 votersByOptionId = poll.Options.ToDictionary(

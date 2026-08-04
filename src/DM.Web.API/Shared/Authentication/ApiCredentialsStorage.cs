@@ -16,7 +16,10 @@ namespace DM.Web.API.Shared.Authentication;
 /// <remarks>
 /// Security features:
 /// - HttpOnly: Cookie cannot be accessed by JavaScript (XSS protection)
-/// - Secure: Cookie only sent over HTTPS (in production)
+/// - Secure: set from the transport of the request, so the cookie is marked
+///   Secure on https and plain on http. A Secure cookie handed out over http is
+///   dropped by the browser without an error: the login answers 200 and the next
+///   request arrives anonymous
 /// - SameSite=Lax: Cookie withheld from cross-site subrequests, but still sent
 ///   on top-level navigation, which activation and password-reset links from
 ///   email depend on. CSRF is covered by the origin check middleware.
@@ -54,14 +57,7 @@ internal class ApiCredentialsStorage : ICredentialsStorage
     {
         var isPersistent = identity.Session?.Persistent ?? false;
 
-        var cookieOptions = new CookieOptions
-        {
-            HttpOnly = true,
-            Secure = !httpContext.Request.Host.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase),
-            SameSite = SameSiteMode.Lax, // Sent on top-level navigation so email links keep the session
-            Path = "/",
-            IsEssential = true
-        };
+        var cookieOptions = SessionCookieOptions(httpContext);
 
         // Persistent sessions ("Remember Me"): cookie survives browser restart
         // Non-persistent sessions: session cookie, deleted when browser closes
@@ -77,17 +73,34 @@ internal class ApiCredentialsStorage : ICredentialsStorage
     /// <inheritdoc />
     public Task Unload(HttpContext httpContext)
     {
-        var cookieOptions = new CookieOptions
-        {
-            HttpOnly = true,
-            Secure = !httpContext.Request.Host.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase),
-            SameSite = SameSiteMode.Lax, // Sent on top-level navigation so email links keep the session
-            Path = "/",
-            Expires = DateTimeOffset.UnixEpoch,
-            IsEssential = true
-        };
+        var cookieOptions = SessionCookieOptions(httpContext);
+        cookieOptions.Expires = DateTimeOffset.UnixEpoch;
 
         httpContext.Response.Cookies.Delete(AuthCookieName, cookieOptions);
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// Attributes every write of the session cookie repeats
+    /// </summary>
+    /// <remarks>
+    /// One place on purpose: a browser overwrites a cookie only when the incoming
+    /// attributes match the stored ones, so the login and the logout halves
+    /// diverging leaves a session that logging out cannot clear.
+    /// </remarks>
+    private static CookieOptions SessionCookieOptions(HttpContext httpContext) => new()
+    {
+        HttpOnly = true,
+        // Same-as-request, which is the framework's own cookie policy. The host
+        // name says nothing about the transport: the deployed stand answers plain
+        // http on a domain, and a Secure cookie there is dropped by the browser
+        // without a word, so the login returns 200 and the next request arrives
+        // anonymous. IsHttps reads X-Forwarded-Proto once a trusted proxy is
+        // configured, so a stand that gains TLS starts marking the cookie Secure
+        // with no code change.
+        Secure = httpContext.Request.IsHttps,
+        SameSite = SameSiteMode.Lax, // Sent on top-level navigation so email links keep the session
+        Path = "/",
+        IsEssential = true
+    };
 }

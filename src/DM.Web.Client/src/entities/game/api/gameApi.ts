@@ -24,16 +24,15 @@ import type {
   Tag,
   Character,
   CharacterInput,
-  ApiCharacterStatus,
+  CharacterStatusTransition,
   Room,
   RoomAccess,
-  PendingPost,
+  PostPendency,
   Post,
   Invitation,
   PostReview,
   FirstUnreadPostResult,
   FirstUnreadCommentResult,
-  ChatRoom,
   CreateRoomInput,
   PostPendencyInput,
   CreatePostInput,
@@ -42,8 +41,11 @@ import type {
   GamePremoderationTransition,
 } from "../model/types";
 import type { GameReview } from "@/shared/api/models/game/reviews";
-import { Api } from "@/shared/api";
+import { Api, toCommentsQueryParams, type CommentsQuery } from "@/shared/api";
 import { RENDER_AUDIENCE } from "@/shared/api/audience";
+
+/** Request options that put a read past both caches. */
+const FRESH = { headers: { "Cache-Control": "no-cache" } };
 
 /**
  * Search params for games API
@@ -165,9 +167,8 @@ class GameApi {
       queryParams.masterUsernames = params.masterUsernames;
     if (params.assistantUsernames?.length)
       queryParams.assistantUsernames = params.assistantUsernames;
-    // Map hostUsernames to authorUsernames for backend
     if (params.hostUsernames?.length)
-      queryParams.authorUsernames = params.hostUsernames;
+      queryParams.hostUsernames = params.hostUsernames;
     if (params.playerUsername)
       queryParams.playerUsername = params.playerUsername;
     if (params.playerParticipation)
@@ -274,7 +275,7 @@ class GameApi {
    * @param params.sortBy - Sort field: rating, lastreview, created
    * @param params.sortOrder - Sort direction: asc, desc
    * @param params.hasReviews - Only posts with reviews
-   * @param params.lastReviewedAfter - Posts reviewed after this ISO date
+   * @param params.lastReviewedFromUtc - Posts reviewed at or after this ISO date
    * @param params.search - Search text in post content (ILIKE)
    * @param params.minRating - Minimum rating filter
    * @param params.gameId - Filter by game ID
@@ -285,19 +286,19 @@ class GameApi {
     sortBy?: "rating" | "lastreview" | "reviewcount" | "created";
     sortOrder?: "asc" | "desc";
     hasReviews?: boolean;
-    lastReviewedAfter?: string;
+    lastReviewedFromUtc?: string;
     search?: string;
     minRating?: number;
     maxRating?: number;
-    /** Comma-separated POST author usernames. */
-    authorUsernames?: string;
+    /** POST author usernames; repeated on the wire, one parameter each. */
+    authorUsernames?: string[];
     /**
      * Restrict to posts that have at least one review by this user.
      * Used by the profile page "Оценил чужих постов".
      */
     reviewerUsername?: string;
-    createdAfter?: string;
-    createdBefore?: string;
+    createdFromUtc?: string;
+    createdToUtc?: string;
     gameId?: string;
     take?: number;
     skip?: number;
@@ -313,6 +314,16 @@ class GameApi {
 
   public getCharacters(gameId: string) {
     return Api.get<ListEnvelope<Character>>(`games/${gameId}/characters`);
+  }
+
+  /**
+   * Get a single character with its filled-in sheet, for reading. The default
+   * Display audience is what separates it from getCharacterForEdit below:
+   * BbCode attribute values arrive as server-rendered HTML in valueBbText, so
+   * the page binds them through ContentText and never renders raw markup.
+   */
+  public getCharacter(characterId: string) {
+    return Api.get<Envelope<Character>>(`characters/${characterId}`);
   }
 
   public getRooms(gameId: string) {
@@ -383,21 +394,10 @@ class GameApi {
   }
 
   // Game comments
-  public getGameComments(gameId: string, paging?: PagingQuery) {
-    // Convert page number to skip/take for backend
-    const queryParams: Record<string, number | undefined> = {};
-    const pageSize = paging?.take ?? 20;
-    queryParams.take = pageSize;
-
-    if (paging?.number && paging.number > 1) {
-      queryParams.skip = (paging.number - 1) * pageSize;
-    } else if (paging?.skip) {
-      queryParams.skip = paging.skip;
-    }
-
+  public getGameComments(gameId: string, query?: CommentsQuery) {
     return Api.get<ListEnvelope<Comment>>(
       `games/${gameId}/comments`,
-      queryParams,
+      toCommentsQueryParams(query),
     );
   }
 
@@ -470,8 +470,21 @@ class GameApi {
     return Api.get<ListEnvelope<AttributeSchema>>("schemas");
   }
 
-  public getTags() {
-    return Api.get<ListEnvelope<Tag>>("games/tags");
+  /**
+   * The public tag catalogue.
+   *
+   * @param fresh Skip the caches — for a reload after a moderator edited the
+   * catalogue. The endpoint answers `public, max-age=300` and is written
+   * through `moderation/tags`, a different address, so nothing invalidates the
+   * stored copy of this one.
+   */
+  public getTags(fresh = false) {
+    return Api.get<ListEnvelope<Tag>>(
+      "games/tags",
+      undefined,
+      undefined,
+      fresh ? FRESH : undefined,
+    );
   }
 
   public createSchema(schema: AttributeSchema) {
@@ -515,24 +528,22 @@ class GameApi {
   }
 
   /**
-   * Change a character's lifecycle status (retire / leave / exile / return to
-   * active) without touching its attributes. Attributes and privacy are
-   * intentionally omitted: the backend treats an absent `attributes` as "leave
-   * unchanged" (an empty array would clear them), and a status-only edit must
-   * never round-trip the server-rendered BbCode attribute values. `name` is
-   * resent from the loaded character to satisfy update validation.
+   * Move a character to another place in the game: accept or decline an
+   * application, retire it by death, exile or departure, or bring it back.
+   *
+   * The caller names the transition rather than a target status, because Retired
+   * is reached three ways and each is a different person's right. The form is not
+   * involved: this used to be a PATCH of the whole character, which meant resending
+   * the name to satisfy validation and taking care not to round-trip the
+   * server-rendered attribute values.
    */
-  public updateCharacterStatus(
+  public changeCharacterStatus(
     characterId: string,
-    status: {
-      name: string;
-      status: ApiCharacterStatus;
-      isDead?: boolean;
-      isPlayerLeft?: boolean;
-      isPlayerExiled?: boolean;
-    },
+    transition: CharacterStatusTransition,
   ) {
-    return Api.patch<Character>(`characters/${characterId}`, status);
+    return Api.post<Character>(`characters/${characterId}/status`, {
+      transition,
+    });
   }
 
   /** Soft-delete a character (master or owner). */
@@ -592,10 +603,6 @@ class GameApi {
   }
 
   // === Chat rooms (message-based OOC rooms, cursor pagination) ===
-
-  public getChatRooms(gameId: string) {
-    return Api.get<ListEnvelope<ChatRoom>>(`games/${gameId}/chat-rooms`);
-  }
 
   /**
    * Get chat room messages with CURSOR pagination (not skip/take).
@@ -693,7 +700,7 @@ class GameApi {
   // === Post pendencies (turn-tracking) ===
 
   public createPendency(roomId: string, pendency: PostPendencyInput) {
-    return Api.post<Envelope<PendingPost>>(
+    return Api.post<Envelope<PostPendency>>(
       `rooms/${roomId}/pendencies`,
       pendency,
     );

@@ -5,17 +5,21 @@ import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
 import { useAuthStore } from "@/entities/user";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
+import { useZoneSection } from "@/shared/lib/composables/useZoneSection";
 import { useScrollToElement } from "@/shared/lib/composables/useScrollToElement";
 import { gameApi, type DiceRollInput } from "@/entities/game";
-import Paging from "@/shared/ui/Paging/Paging.vue";
+import PagingWithSeparators from "@/shared/ui/Paging/PagingWithSeparators.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
+import { ErrorState } from "@/shared/ui/ErrorState";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { symbols } from "@/shared/lib/utils/icons";
 import { Select, type SelectOption } from "@/shared/ui/Select";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import { GamePost } from "@/widgets/game-post";
 import { GamePostSkeleton } from "@/shared/ui/Skeleton";
+import { notifyFailure } from "@/shared/lib/errors";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
@@ -51,6 +55,11 @@ const room = computed(
     currentRoom.value,
 );
 
+// The room IS the section here, and its name is data — meta.section cannot
+// spell it. Announced to the shell, which is the only place that writes a
+// heading or a tab name in this zone.
+useZoneSection(() => room.value?.title);
+
 // Scroll to target element when posts are loaded
 const postsLoaded = computed(
   () => posts.value.length > 0 && !postsLoading.value,
@@ -74,10 +83,32 @@ watch(
 
 const gameId = computed(() => route.params.id as string);
 
+/** Position of a post in the whole room, not on the page it is shown on. */
+function postNumber(index: number): number {
+  const paging = postsPaging.value;
+  if (!paging) return index + 1;
+  return (paging.current - 1) * paging.size + index + 1;
+}
+
 // Paging scrolls the posts list back into view (not the page top)
 const postsListRef = ref<HTMLElement | null>(null);
 function pagingAnchor(): HTMLElement | null {
   return postsListRef.value;
+}
+
+// One target for both paging blocks, above and below the posts.
+const pagingTarget = computed(() => ({
+  name: "game-room",
+  params: { id: game.value?.publicId || game.value?.id, num: roomNum.value },
+}));
+
+/** Re-read the page of posts that is on screen (the error banner's retry). */
+function reloadPosts() {
+  return gameStore.loadPostsByRoomNumber(
+    gameId.value,
+    roomNum.value,
+    getPage(),
+  );
 }
 
 useFetchData(
@@ -204,7 +235,7 @@ function formatDicePreview(roll: DiceRollInput): string {
   const count = roll.count && roll.count > 1 ? roll.count : "";
   const bonus = roll.bonus ? ` ${roll.bonus > 0 ? "+" : ""}${roll.bonus}` : "";
   const explode = roll.explosion ? ` (взрыв ${roll.explosion})` : "";
-  const hidden = roll.public === false ? " · скрытый" : "";
+  const hidden = roll.public === false ? " (скрытый)" : "";
   return `${count}d${roll.dice}${bonus}${explode}${hidden}`;
 }
 
@@ -252,7 +283,7 @@ async function submitPost() {
 // ───────────────────────────────────────────────────────────────────────────
 // Master / assistant turn tracking (pendencies)
 // ───────────────────────────────────────────────────────────────────────────
-const pendings = computed(() => room.value?.pendings ?? []);
+const pendencies = computed(() => room.value?.pendencies ?? []);
 const newPendencyCharacterId = ref("");
 const pendencyBusy = ref(false);
 
@@ -277,19 +308,33 @@ async function addPendency() {
   if (!newPendencyCharacterId.value || pendencyBusy.value || !room.value?.id)
     return;
   pendencyBusy.value = true;
-  const { error } = await gameApi.createPendency(room.value.id as string, {
-    characterId: newPendencyCharacterId.value,
-  });
-  if (!error) await gameStore.loadRooms(gameId.value);
-  pendencyBusy.value = false;
+  try {
+    const { error } = await gameApi.createPendency(room.value.id as string, {
+      characterId: newPendencyCharacterId.value,
+    });
+    if (error) {
+      notifyFailure(error, "Не удалось добавить ожидание хода");
+      return;
+    }
+    await gameStore.loadRooms(gameId.value);
+  } finally {
+    pendencyBusy.value = false;
+  }
 }
 
 async function dismissPendency(pendencyId: string) {
   if (pendencyBusy.value) return;
   pendencyBusy.value = true;
-  const { error } = await gameApi.deletePendency(pendencyId);
-  if (!error) await gameStore.loadRooms(gameId.value);
-  pendencyBusy.value = false;
+  try {
+    const { error } = await gameApi.deletePendency(pendencyId);
+    if (error) {
+      notifyFailure(error, "Не удалось снять ожидание хода");
+      return;
+    }
+    await gameStore.loadRooms(gameId.value);
+  } finally {
+    pendencyBusy.value = false;
+  }
 }
 </script>
 
@@ -297,65 +342,82 @@ async function dismissPendency(pendencyId: string) {
   <div class="game-room">
     <!-- Back link -->
     <router-link
-      :to="{ name: 'game-rooms', params: { id: game?.id } }"
+      :to="{ name: 'game', params: { id: gameId } }"
       class="back-link"
     >
       <SvgIcon name="chevronLeft" />
-      Назад к комнатам
+      Назад к игре
     </router-link>
 
-    <!-- Room header -->
-    <block-title v-if="room">
-      {{ room.title }}
-    </block-title>
+    <!-- Room header. An archived room says so beside its title, in the same
+         marker the chat room uses — never as a suffix inside the room name. -->
+    <block-title v-if="room"
+      >{{ room.title
+      }}<template v-if="room.isArchived"
+        >{{ " " }}<span class="archived-tag">архив</span></template
+      ></block-title
+    >
 
-    <!-- Error -->
-    <div v-if="postsError" class="posts-error">
-      {{ postsError }}
-    </div>
+    <!-- Error — an independent banner, the way the pulse feed draws one: a
+         failed refetch keeps the posts that are already on screen instead of
+         replacing them with a red line. -->
+    <ErrorState
+      v-if="postsError"
+      class="error-banner"
+      :message="postsError"
+      :retry="reloadPosts"
+    />
 
     <!-- Loading -->
     <GamePostSkeleton
-      v-else-if="postsLoading && posts.length === 0"
+      v-if="postsLoading && posts.length === 0"
       :count="3"
       :show-navigation="false"
     />
 
     <!-- Empty -->
-    <div v-else-if="posts.length === 0" class="posts-empty">
+    <div v-else-if="!postsError && posts.length === 0" class="posts-empty">
       <secondary-text>В этой комнате пока нет постов</secondary-text>
     </div>
 
-    <!-- Posts list -->
-    <div v-else ref="postsListRef" class="posts-list">
-      <game-post
-        v-for="post in posts"
-        :key="post.id"
-        :post="post"
-        :data-id="post.id"
-        editable
-        @deleted="handlePostDeleted"
+    <!-- Posts list, between the two paging blocks -->
+    <template v-else>
+      <PagingWithSeparators
+        v-if="postsPaging"
+        :paging="postsPaging"
+        :to="pagingTarget"
+        :use-query="true"
+        query-key="number"
+        :scroll-anchor="pagingAnchor"
       />
-    </div>
 
-    <!-- Paging -->
-    <Paging
-      v-if="postsPaging"
-      :paging="postsPaging"
-      :to="{
-        name: 'game-room',
-        params: { id: game?.publicId || game?.id, num: roomNum },
-      }"
-      :use-query="true"
-      query-key="number"
-      :scroll-anchor="pagingAnchor"
-    />
+      <div ref="postsListRef" class="posts-list">
+        <game-post
+          v-for="(post, index) in posts"
+          :key="post.id"
+          :post="post"
+          :data-id="post.id"
+          :number="postNumber(index)"
+          editable
+          @deleted="handlePostDeleted"
+        />
+      </div>
+
+      <PagingWithSeparators
+        v-if="postsPaging"
+        :paging="postsPaging"
+        :to="pagingTarget"
+        :use-query="true"
+        query-key="number"
+        :scroll-anchor="pagingAnchor"
+      />
+    </template>
 
     <!-- Master / assistant turn tracking -->
     <section v-if="canManageTurns" class="turns">
       <div class="turns-title">Ожидание хода</div>
-      <ul v-if="pendings.length" class="pending-list">
-        <li v-for="p in pendings" :key="p.id" class="pending-item">
+      <ul v-if="pendencies.length" class="pending-list">
+        <li v-for="p in pendencies" :key="p.id" class="pending-item">
           <span class="pending-name">{{ p.characterName }}</span>
           <button
             type="button"
@@ -407,7 +469,7 @@ async function dismissPendency(pendencyId: string) {
         v-model="gameText"
         context="post"
         placeholder="Игровой текст поста..."
-        :draft-key="`post_game_${room?.id}`"
+        :draft-key="composerDraftKey('room', 'post', room?.id)"
         :disabled="submitting"
         :min-height="120"
         :is-moderator="canManageTurns"
@@ -419,7 +481,7 @@ async function dismissPendency(pendencyId: string) {
         v-model="metagameText"
         context="post"
         placeholder="Метаигровой комментарий (необязательно)..."
-        :draft-key="`post_meta_${room?.id}`"
+        :draft-key="composerDraftKey('room', 'metagame', room?.id)"
         :disabled="submitting"
         :min-height="60"
         :max-height="200"
@@ -532,13 +594,22 @@ async function dismissPendency(pendencyId: string) {
   &:hover
     text-decoration: underline
 
-.posts-error,
 .posts-empty
   padding: $big
-  text-align: center
 
-.posts-error
-  color: $accent-red
+// Muted "архив" tag beside an archived room's title — the same marker the chat
+// room draws, archive is conveyed by it and by the muted colour, never by a
+// suffix inside the room name. The gap in front of it is the " " text node in
+// the title, not a margin: a margin is drawn but not copied, and the title
+// would reach the clipboard glued.
+.archived-tag
+  font-size: $secondary-font-size
+  font-weight: normal
+  color: $text-muted
+  text-transform: uppercase
+
+.error-banner
+  margin-bottom: $medium
 
 .posts-list
   display: flex

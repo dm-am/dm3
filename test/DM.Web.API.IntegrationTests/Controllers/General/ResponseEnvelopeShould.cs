@@ -1,6 +1,9 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using DM.Web.API.Swagger;
 using FluentAssertions;
 using Xunit;
 
@@ -15,23 +18,136 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// </summary>
 public class ResponseEnvelopeShould : IntegrationTestBase
 {
+    // System is needed for StringComparison in the enumeration below.
     public ResponseEnvelopeShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    [Theory]
-    [InlineData("/v1/users/me/notifications")]
-    [InlineData("/v1/users/me/subscriptions")]
-    [InlineData("/v1/users/me/notepad")]
-    public async Task WrapAListInResources(string url)
-    {
-        var response = await Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Get, url));
+    private const string ListEnvelopeSchema = "DM.Web.API.Shared.Dto.ListEnvelope`1";
+    private const string EnvelopeSchema = "DM.Web.API.Shared.Dto.Envelope`1";
 
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var root = await ReadRoot(response);
-        root.ValueKind.Should().Be(JsonValueKind.Object, "a list response is an envelope, not a bare array");
-        root.TryGetProperty("resources", out var resources).Should().BeTrue();
-        resources.ValueKind.Should().Be(JsonValueKind.Array);
+    /// <summary>
+    /// Every GET that declares an envelope puts one on the wire.
+    /// </summary>
+    /// <remarks>
+    /// Three URLs stood here, and they were the three that had already broken.
+    /// The rule behind them covers 75 list declarations and 130 single ones, and
+    /// the contract snapshot cannot hold it: the snapshot records the declared
+    /// schema, and the defect is that the declaration and the body disagree. So
+    /// the check calls the endpoint, and enumerates from the published document
+    /// the way DescribeEveryFailureResponseAsAProblemDocument does - an endpoint
+    /// added tomorrow is covered without anybody remembering a list.
+    ///
+    /// Only operations that need no argument are called, and only a 200 is
+    /// examined: an endpoint answering 404 because the seed holds no such row
+    /// says nothing about the shape of a body it did not send. The floor is what
+    /// keeps that from quietly becoming "nothing was checked".
+    /// </remarks>
+    [Fact]
+    public async Task WrapEveryDeclaredEnvelopeOnTheWire()
+    {
+        var declared = new List<(string Url, string Property)>();
+
+        foreach (var group in SwaggerExtensions.ApiGroups)
+        {
+            var document = await Client.GetAsync($"/swagger/{group}/swagger.json");
+            document.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            using var json = JsonDocument.Parse(await document.Content.ReadAsStringAsync());
+            foreach (var path in json.RootElement.GetProperty("paths").EnumerateObject())
+            {
+                var shared = RequiredParameterCount(path.Value);
+                foreach (var operation in path.Value.EnumerateObject())
+                {
+                    if (operation.Name != "get" || operation.Value.ValueKind != JsonValueKind.Object)
+                    {
+                        continue;
+                    }
+
+                    if (shared + RequiredParameterCount(operation.Value) > 0 ||
+                        !operation.Value.TryGetProperty("responses", out var responses) ||
+                        !responses.TryGetProperty("200", out var success))
+                    {
+                        continue;
+                    }
+
+                    var schema = SchemaNameOf(success);
+                    if (schema == null)
+                    {
+                        continue;
+                    }
+
+                    if (schema.StartsWith(ListEnvelopeSchema, StringComparison.Ordinal))
+                    {
+                        declared.Add((path.Name, "resources"));
+                    }
+                    else if (schema.StartsWith(EnvelopeSchema, StringComparison.Ordinal))
+                    {
+                        declared.Add((path.Name, "resource"));
+                    }
+                }
+            }
+        }
+
+        declared.Should().HaveCountGreaterThan(30, "the API declares envelopes on argument-free listings");
+
+        var wrong = new List<string>();
+        var examined = 0;
+
+        foreach (var (url, property) in declared)
+        {
+            var response = await Client.SendAsync(CreateAdminRequest(HttpMethod.Get, url));
+            if (response.StatusCode != HttpStatusCode.OK)
+            {
+                continue;
+            }
+
+            examined++;
+            var root = await ReadRoot(response);
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty(property, out _))
+            {
+                wrong.Add($"GET {url} declares an envelope and answered without \"{property}\"");
+            }
+        }
+
+        examined.Should().BeGreaterThan(20, "the probe has to reach the wire, not only the document");
+        wrong.Should().BeEmpty(
+            "the client believes the attribute: a bare array under a ListEnvelope declaration " +
+            "renders an empty screen and fails nothing");
+    }
+
+    /// <summary>Required parameters declared on a path item or an operation.</summary>
+    private static int RequiredParameterCount(JsonElement node)
+    {
+        if (!node.TryGetProperty("parameters", out var parameters) ||
+            parameters.ValueKind != JsonValueKind.Array)
+        {
+            return 0;
+        }
+
+        return parameters.EnumerateArray().Count(parameter =>
+            parameter.TryGetProperty("required", out var required) &&
+            required.ValueKind == JsonValueKind.True);
+    }
+
+    /// <summary>Schema id a response body points at, if it declares one.</summary>
+    private static string? SchemaNameOf(JsonElement response)
+    {
+        if (!response.TryGetProperty("content", out var content))
+        {
+            return null;
+        }
+
+        foreach (var mediaType in content.EnumerateObject())
+        {
+            if (mediaType.Value.TryGetProperty("schema", out var schema) &&
+                schema.TryGetProperty("$ref", out var reference))
+            {
+                return reference.GetString()?.Split('/').Last();
+            }
+        }
+
+        return null;
     }
 
     [Fact]

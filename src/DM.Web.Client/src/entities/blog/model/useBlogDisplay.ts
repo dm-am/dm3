@@ -85,7 +85,7 @@ export function useBlogDisplay() {
   /**
    * Build blog tooltip with labels (multiline):
    *   "Автор: Username"
-   *   "Ассистент(ы): A, B"
+   *   "Ассистент: A" / "Ассистенты: A, B"
    *   "Читатели: Z"
    */
   function buildTooltip(blog: Blog | BlogRef): string {
@@ -96,7 +96,7 @@ export function useBlogDisplay() {
       parts.push(`Автор: ${blog.author.username}`);
     }
 
-    // "Ассистент(ы): Username, ..." (if any)
+    // "Ассистент" / "Ассистенты": Username, ... (if any)
     const assistants = blog.assistants?.filter((a) => a?.username) ?? [];
     if (assistants.length > 0) {
       const label = assistants.length === 1 ? "Ассистент" : "Ассистенты";

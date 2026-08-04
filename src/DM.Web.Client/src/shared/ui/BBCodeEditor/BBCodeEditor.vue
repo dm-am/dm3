@@ -1,6 +1,7 @@
 ﻿<script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
 import { symbols } from "@/shared/lib/utils/icons";
+import { pluralize } from "@/shared/lib/utils/pluralize";
 import { useEditor, EditorContent } from "@tiptap/vue-3";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -46,7 +47,7 @@ const props = withDefaults(
   }>(),
   {
     context: "common",
-    placeholder: "Введите текст…",
+    placeholder: "Введите текст...",
     draftKey: "",
     disabled: false,
     minHeight: 80,
@@ -203,9 +204,28 @@ const isOverLimit = computed(
   () => props.maxLength > 0 && charCount.value > props.maxLength,
 );
 
+// The two items of the status line are built here, not glued in the template:
+// an item spelled out of adjacent mustaches has no single text node to select,
+// and the noun after a count comes from pluralize — shared/lib/utils/pluralize
+// owns that rule, and the ternary that used to stand here said "22 слов".
+const wordCountLabel = computed(
+  () =>
+    `${wordCount.value} ${pluralize(wordCount.value, "слово", "слова", "слов")}`,
+);
+
+const charCountLabel = computed(() => {
+  // The noun agrees with the number standing right before it, which is the
+  // limit when there is one: "12 / 500 символов", but "1 символ". Only one of
+  // the editor's twenty-odd embed sites passes a limit, so the counter of every
+  // other one opened on "1 символов".
+  const counted = props.maxLength > 0 ? props.maxLength : charCount.value;
+  const limit = props.maxLength > 0 ? ` / ${props.maxLength}` : "";
+  return `${charCount.value}${limit} ${pluralize(counted, "символ", "символа", "символов")}`;
+});
+
 // Draft status text
 const draftStatusText = computed(() => {
-  if (draftStatus.value === "saving") return "Сохранение…";
+  if (draftStatus.value === "saving") return "Сохранение...";
   if (draftStatus.value === "saved" && draftSavedAt.value) {
     const seconds = Math.floor((Date.now() - draftSavedAt.value) / 1000);
     if (seconds < 5) return "Сохранено";
@@ -427,7 +447,7 @@ function autoResizeTextarea() {
 // Design decision: These toggle functions intentionally follow a similar pattern
 // but are NOT abstracted into a configuration-driven helper. Reasons:
 //
-// 1. EXCEPTIONS: 5 functions (link, image, private, cut, tab) have significantly
+// 1. EXCEPTIONS: 4 functions (link, image, private, tab) have significantly
 //    different behavior (dialogs, self-closing tags, parameters) that would
 //    create a leaky abstraction if forced into a common pattern.
 //
@@ -439,8 +459,6 @@ function autoResizeTextarea() {
 //
 // 4. LOW CHANGE FREQUENCY: Tags rarely change after initial implementation.
 //    The maintenance burden of duplication is minimal.
-//
-// See BBCODE_PIPELINE.md "Why Toolbar Functions Are Not Fully Abstracted" for details.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function toggleBold() {
@@ -783,20 +801,46 @@ function clearDraft() {
   }
 }
 
+/** Put text into whichever mode is showing, and hand it to the parent. */
+function applyContent(content: string) {
+  emit("update:modelValue", content);
+  if (mode.value === "wysiwyg" && editor.value) {
+    const html = bbcodeToHtml(content);
+    editor.value.commands.setContent(html, { emitUpdate: false });
+  } else {
+    bbcodeText.value = content;
+    nextTick(() => autoResizeTextarea());
+  }
+}
+
 function restoreDraft() {
   const draft = loadDraft();
-  if (draft) {
-    emit("update:modelValue", draft);
-    if (mode.value === "wysiwyg" && editor.value) {
-      const html = bbcodeToHtml(draft);
-      editor.value.commands.setContent(html, { emitUpdate: false });
-    } else {
-      bbcodeText.value = draft;
-      nextTick(() => autoResizeTextarea());
-    }
-  }
+  if (draft) applyContent(draft);
   hasDraft.value = false;
 }
+
+/**
+ * The composer belongs to one subject at a time, and the key says which one.
+ * Pages keep the composer across a change of subject — the router reuses the
+ * component and reloads its data underneath — so nothing else empties the box
+ * when the reader opens another game, another dialogue, another room. Left
+ * alone, what was typed for the previous subject stays on screen and is saved
+ * under the new subject's key.
+ *
+ * An empty previous key means nothing was being drafted (the subject had not
+ * loaded yet), so that transition only picks up the new subject's draft.
+ */
+watch(
+  () => props.draftKey,
+  (key, previous) => {
+    lastSavedDraft = "";
+    draftStatus.value = "idle";
+    draftSavedAt.value = null;
+    if (previous) applyContent("");
+    const draft = key ? loadDraft() : null;
+    hasDraft.value = Boolean(draft?.trim());
+  },
+);
 
 // Check for existing draft on mount
 onMounted(() => {
@@ -1247,6 +1291,9 @@ defineExpose({
             <small>[bbcode]</small>
           </button>
         </Tooltip>
+        <!-- Zero-width preserved space: the pair copies as "[bbcode] wysiwyg"
+             and gains no gap on screen (the global .copy-space, Reset.sass). -->
+        <span class="copy-space">{{ " " }}</span>
         <Tooltip text="Визуальный редактор">
           <button
             type="button"
@@ -1461,36 +1508,26 @@ defineExpose({
       role="status"
       aria-live="polite"
     >
-      <span class="status-item"
-        >{{ wordCount }}
-        {{
-          wordCount === 1
-            ? "слово"
-            : wordCount >= 2 && wordCount <= 4
-              ? "слова"
-              : "слов"
-        }}</span
-      >
-      <span class="status-separator">|</span>
-      <span class="status-item" :class="{ 'over-limit': isOverLimit }">
-        {{ charCount }}{{ maxLength > 0 ? ` / ${maxLength}` : "" }} символов
-      </span>
-      <span v-if="hasDraft && draftKey" class="status-separator">|</span>
-      <span v-if="hasDraft && draftKey" class="status-item draft-available"
+      <span class="status-item">{{ wordCountLabel }}</span
+      ><span class="status-separator">{{ " | " }}</span
+      ><span class="status-item" :class="{ 'over-limit': isOverLimit }">{{
+        charCountLabel
+      }}</span
+      ><span v-if="hasDraft && draftKey" class="status-separator">{{
+        " | "
+      }}</span
+      ><span v-if="hasDraft && draftKey" class="status-item draft-available"
         >Есть черновик</span
-      >
-      <span
+      ><span
         v-if="draftStatusText && draftKey && !hasDraft"
         class="status-separator"
-        >|</span
-      >
-      <span
+        >{{ " | " }}</span
+      ><span
         v-if="draftStatusText && draftKey && !hasDraft"
         class="status-item draft-status"
         :class="{ saving: draftStatus === 'saving' }"
+        >{{ draftStatusText }}</span
       >
-        {{ draftStatusText }}
-      </span>
     </div>
 
     <!-- BBCode validation errors - outside resizable area -->
@@ -1556,12 +1593,20 @@ defineExpose({
 .toolbar-spacer
   flex: 1
 
+// Inline flow, not flex, for the same reason as the status bar: flex items
+// copy one per line, and this pair copied as "[bbcode]\nwysiwyg". font-size: 0
+// removes the container's own line-box strut, so the tabs keep exactly the
+// height the flex row gave them (each button restates its own font size).
 .mode-tabs
-  display: flex
+  display: block
+  white-space: nowrap
+  font-size: 0
   border-bottom: 2px solid $border
   position: relative
 
 .mode-tab
+  display: inline-block
+  vertical-align: top
   padding: $tiny $small
   border: none
   background: none
@@ -1708,16 +1753,19 @@ defineExpose({
     background-color: $selection-bg
     color: $selection-text
 
-// Status bar - outside the bordered container
+// Status bar - outside the bordered container. Inline flow, not flex: a flex
+// item is blockified, and the strip copied as "0 слов\n|\n0 / 10000 символов"
+// on every form of the site. The separator carries a real " | " text node, so
+// the copy reads as one line; the former gap: $small is that pair of spaces
+// plus the separator's own padding.
 .status-bar
-  display: flex
-  align-items: center
-  gap: $small
+  display: block
   padding: $tiny 0
   font-size: 11px
   color: $text-muted
 
 .status-separator
+  padding: 0 $minor
   opacity: 0.5
 
 .status-item
@@ -1731,9 +1779,6 @@ defineExpose({
   color: $accent-red
 
 .draft-status
-  display: flex
-  align-items: center
-  gap: 4px
   color: $accent-green
 
   &.saving
@@ -1889,12 +1934,12 @@ defineExpose({
   transform: translate(-50%, -50%) scale(0.95)
 
 // Help dialog mobile
-@media (max-width: 600px)
+@media (max-width: $bp-mobile)
   :global(.help-grid)
     grid-template-columns: 1fr
 
 // Mobile responsive
-@media (max-width: 768px)
+@media (max-width: $bp-tablet)
   .editor-toolbar
     padding: $small
     gap: 2px
@@ -1916,8 +1961,7 @@ defineExpose({
     margin-left: auto
 
   .status-bar
-    flex-wrap: wrap
-    justify-content: center
+    text-align: center
     padding: 6px $small
 
   .help-table
@@ -1929,7 +1973,7 @@ defineExpose({
     th:last-child
       display: none
 
-@media (max-width: 480px)
+@media (max-width: $bp-narrow)
   .editor-toolbar
     justify-content: center
 

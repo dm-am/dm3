@@ -121,7 +121,8 @@ import {
   GameParticipation,
   type GameRef,
 } from "@/entities/game";
-import { computed, watch } from "vue";
+import { computed } from "vue";
+import { useViewerChange } from "@/shared/lib/composables";
 
 import { onMounted } from "vue";
 
@@ -187,18 +188,16 @@ onMounted(() => {
   }
 });
 
-watch(
-  () => userStore.user?.username,
-  (newUsername, oldUsername) => {
-    if (!oldUsername && newUsername) {
-      // User just logged in (already handled on mount if hydrated,
-      // but this covers the login-without-reload path).
-      store.fetchParticipatingGames();
-    } else if (oldUsername && !newUsername) {
-      store.resetParticipatingGames();
-    }
-  },
-);
+// Reset first in both directions, then load for whoever is here now. The old
+// pair of branches asked whether a name had appeared or disappeared, and a
+// second tab signing another account in moves it from A to B in one step: the
+// list of the previous viewer, private games included, stayed under the new
+// name. Resetting before the fetch matters for the same reason - the request
+// takes time, and the old rows must not be on screen while it runs.
+useViewerChange((username) => {
+  store.resetParticipatingGames();
+  if (username) store.fetchParticipatingGames();
+});
 </script>
 
 <style scoped lang="sass">

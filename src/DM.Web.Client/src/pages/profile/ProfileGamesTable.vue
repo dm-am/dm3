@@ -36,7 +36,8 @@ import { UserLink } from "@/entities/user";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import { buildReadersTooltip } from "@/shared/lib/utils/tooltipBuilders";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
-import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 const props = defineProps<{
   /** Profile owner whose games we list. */
@@ -117,43 +118,38 @@ const apiParams = computed(() => {
 });
 
 const envelope = ref<ListEnvelope<Game> | null>(null);
-const loading = ref(false);
-const error = ref(false);
 
-// Discards stale responses when a fast search/page/role change races an
-// in-flight request — otherwise a slow earlier reply can overwrite a
-// newer one and show the wrong page/filter results.
-const guard = createRequestGuard();
+// clearErrorOnStart: what this table did before the composable — the error line
+// goes away while the next page loads.
+const { loading, error, run } = useGuardedRequest({
+  message: "Не удалось загрузить игры",
+  clearErrorOnStart: true,
+});
 
-async function fetchGames() {
-  const requestId = guard.next();
+function fetchGames() {
   const roleAtRequest = role.value;
-  loading.value = true;
-  error.value = false;
-  const { data, error: apiError } = await gameApi.searchGames(apiParams.value);
-  if (!guard.isCurrent(requestId)) return;
-  loading.value = false;
-  if (apiError) {
-    error.value = true;
-    return;
-  }
-  envelope.value = data ?? null;
+  return run(
+    () => gameApi.searchGames(apiParams.value),
+    (data) => {
+      envelope.value = data;
 
-  // Self-contained auto-switch (#65): if the *initial default* "Ведущий"
-  // fetch comes back empty and the user hasn't touched the toggle yet, flip
-  // once to "Игрок" so a profile with no hosted games doesn't land on a
-  // dead tab. Restricted to the unfiltered first load (no search typed
-  // yet) — an empty search result for "host" must not trigger this, only
-  // a genuinely empty default fetch. Any later manual toggle, or an empty
-  // "player" result, must NOT bounce back.
-  if (
-    roleAtRequest === "host" &&
-    !roleTouchedManually.value &&
-    !search.value &&
-    (data?.paging?.total ?? 0) === 0
-  ) {
-    role.value = "player";
-  }
+      // Self-contained auto-switch (#65): if the *initial default* "Ведущий"
+      // fetch comes back empty and the user hasn't touched the toggle yet, flip
+      // once to "Игрок" so a profile with no hosted games doesn't land on a
+      // dead tab. Restricted to the unfiltered first load (no search typed
+      // yet) — an empty search result for "host" must not trigger this, only
+      // a genuinely empty default fetch. Any later manual toggle, or an empty
+      // "player" result, must NOT bounce back.
+      if (
+        roleAtRequest === "host" &&
+        !roleTouchedManually.value &&
+        !search.value &&
+        (data?.paging?.total ?? 0) === 0
+      ) {
+        role.value = "player";
+      }
+    },
+  );
 }
 
 const games = computed(() => envelope.value?.resources ?? []);
@@ -238,7 +234,7 @@ const columns = computed<Column[]>(() =>
     ? [
         { key: "title", label: "Название", width: "28%", align: "left" },
         { key: "master", label: "Ведущие", width: "18%", align: "left" },
-        { key: "status", label: "Статус игры", width: "18%", align: "left" },
+        { key: "status", label: "Статус игры", width: "16.3%", align: "left" },
         {
           key: "character",
           label: "Статус персонажа",
@@ -248,8 +244,8 @@ const columns = computed<Column[]>(() =>
         },
         {
           key: "reviews",
-          label: "Отзывы",
-          width: "6%",
+          label: "Рецензии",
+          width: "7.7%",
           align: "center",
           hideOnMobile: true,
         },
@@ -258,11 +254,11 @@ const columns = computed<Column[]>(() =>
     : [
         { key: "title", label: "Название", width: "38%", align: "left" },
         { key: "master", label: "Ведущие", width: "23%", align: "left" },
-        { key: "status", label: "Статус игры", width: "23%", align: "left" },
+        { key: "status", label: "Статус игры", width: "21.3%", align: "left" },
         {
           key: "reviews",
-          label: "Отзывы",
-          width: "6%",
+          label: "Рецензии",
+          width: "7.7%",
           align: "center",
           hideOnMobile: true,
         },
@@ -270,7 +266,7 @@ const columns = computed<Column[]>(() =>
       ],
 );
 
-// Character status wording — the exact GLOSSARY.md terms (CharacterStatus
+// Character status wording — the captions of the CharacterCard badge (CharacterStatus
 // refined by the "out of game" flags). Standalone cell value, so it is
 // capitalized; no color coding.
 function characterStatusLabel(ch: PlayerCharacterInfo): string {
@@ -279,8 +275,8 @@ function characterStatusLabel(ch: PlayerCharacterInfo): string {
       return "В игре";
     case "Retired":
       if (ch.isDead) return "Персонаж мертв";
-      if (ch.isPlayerExiled) return "Игрок выведен из игры";
-      return "Игрок покинул игру";
+      if (ch.isPlayerExiled) return "Выведен из игры";
+      return "Покинул игру";
     case "UnderReview":
       return "Заявка на рассмотрении";
     default:
@@ -323,11 +319,7 @@ function pagingAnchor(): HTMLElement | null {
       />
     </div>
 
-    <ErrorState
-      v-if="error"
-      message="Не удалось загрузить игры"
-      :retry="fetchGames"
-    />
+    <ErrorState v-if="error" :message="error" :retry="fetchGames" />
 
     <DataTable
       v-if="!error || games.length > 0"
@@ -391,7 +383,7 @@ function pagingAnchor(): HTMLElement | null {
             >{{ " " }}[+{{ row.playerCharacters.length - 1 }}]</span
           >
         </template>
-        <span v-else class="character-none">—</span>
+        <span v-else class="character-none">{{ VALUE_UNAVAILABLE }}</span>
       </template>
 
       <template #cell-status="{ row }">
@@ -412,25 +404,15 @@ function pagingAnchor(): HTMLElement | null {
 
       <!-- Reviews column, same format as /games -->
       <template #cell-reviews="{ row }">
-        <span class="reviews-cell">
-          <router-link
-            :to="{
-              name: 'game-reviews',
-              params: { id: row.publicId || row.id },
-            }"
-            class="review-link"
-            >{{ row.gameReviewsCount ?? 0 }}</router-link
-          >
-          <span class="muted">/</span>
-          <router-link
-            :to="{
-              name: 'game-post-reviews',
-              params: { id: row.publicId || row.id },
-            }"
-            class="review-link"
-            >{{ row.postReviewsCount ?? 0 }}</router-link
-          >
-        </span>
+        <router-link
+          :to="{
+            name: 'game-reviews',
+            params: { id: row.publicId || row.id },
+          }"
+          class="review-link"
+          :aria-label="`Рецензии: ${row.gameReviewsCount ?? 0}`"
+          >{{ row.gameReviewsCount ?? 0 }}</router-link
+        >
       </template>
 
       <template #cell-readers="{ row }">
@@ -507,12 +489,6 @@ function pagingAnchor(): HTMLElement | null {
 .slots-indicator
   color: $text-muted
   cursor: help
-
-.muted
-  color: $text-muted
-
-.reviews-cell
-  white-space: nowrap
 
 .review-link
   color: $link

@@ -44,15 +44,15 @@ internal class GameMappingProfile : Profile
                     ? new HashSet<int>(s.ExcludedTags)
                     : null))
             .ForMember(d => d.OwnerUsernames, o => o.MapFrom(s =>
-                s.AuthorUsernames != null && s.AuthorUsernames.Any(u => !string.IsNullOrWhiteSpace(u))
-                    ? new HashSet<string>(s.AuthorUsernames.Where(u => !string.IsNullOrWhiteSpace(u)))
+                s.HostUsernames != null && s.HostUsernames.Any(u => !string.IsNullOrWhiteSpace(u))
+                    ? new HashSet<string>(s.HostUsernames.Where(u => !string.IsNullOrWhiteSpace(u)))
                     : null))
             .ForMember(d => d.PremoderationStatuses, o => o.MapFrom(s =>
                 s.PremoderationStatuses != null && s.PremoderationStatuses.Any()
                     ? new HashSet<PremoderationStatus>(s.PremoderationStatuses)
                     : null));
-            // RecruitmentFilter, ClosedReasonFilter, PlayerUsername,
-            // PlayerParticipation map by convention
+        // RecruitmentFilter, ClosedReasonFilter, PlayerUsername,
+        // PlayerParticipation map by convention
 
         CreateMap<DtoGameRecruitment, GameRecruitment>();
         CreateMap<DtoActiveCharacterInfo, ActiveCharacterInfo>();
@@ -147,11 +147,18 @@ internal class GameMappingProfile : Profile
             // API exposes only the `Draft` bool, not draft visibility; the
             // enum defaults to Private server-side until the API surfaces it.
             .ForMember(g => g.DraftVisibility, opt => opt.Ignore())
-            .ForMember(g => g.AssistantUsername, opt => opt.Ignore())
+            // Tags and AssistantUsername map by convention. An Ignore on either
+            // is not a mapping detail: both are the master's input on the
+            // creation form, and dropping them leaves a working control that
+            // changes nothing and says nothing.
             .ForMember(g => g.CopyBlacklist, opt => opt.Ignore());
 
-        // For game update, use GameDetails (has PrivacySettings)
-        CreateMap<GameDetails, DtoUpdateGame>()
+        // Request DTO in, write model out. The source used to be GameDetails —
+        // the response — and every field of it that must not be writable needed
+        // its own Ignore() below. Now the request names the editable fields and
+        // nothing else, so a field added to the response cannot become writable
+        // by being added.
+        CreateMap<UpdateGameRequest, DtoUpdateGame>()
             .ForMember(g => g.SystemName, s => s.MapFrom(g => g.System))
             .ForMember(g => g.NarrativeSetting, s => s.MapFrom(g => g.Setting))
             .ForMember(g => g.AssistantUsername, opt => opt.Ignore())
@@ -165,10 +172,8 @@ internal class GameMappingProfile : Profile
             // Draft visibility is not part of the update contract (API has no
             // such field); leave null so the domain keeps the current value.
             .ForMember(g => g.DraftVisibility, opt => opt.Ignore())
-            .ForMember(g => g.PremoderationStatus, opt => opt.Ignore())
-            .ForMember(g => g.ClosedReason, opt => opt.Ignore())
-            .ForMember(g => g.ActivatedUtc, opt => opt.Ignore())
-            .ForMember(g => g.ClosedUtc, opt => opt.Ignore())
+            .ForMember(g => g.MentorId, opt => opt.Ignore())
+            .ForMember(g => g.RecruitmentStartedUtc, opt => opt.Ignore())
             .ForMember(g => g.IsRemoved, opt => opt.Ignore())
             .ForMember(g => g.Tags, opt => opt.Ignore());
     }

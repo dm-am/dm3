@@ -13,8 +13,7 @@ namespace DM.Workers.NotificationDispatcher.Implementation.Notifiers.Blog;
 /// <summary>
 /// Notification generator when a blog transitions to Active status. Mirrors
 /// <c>GameActivatedNotificationGenerator</c>: notifies subscribers of the
-/// blog author + assistants (with <see cref="SubscriptionSettings.AuthorBlogEvents"/>)
-/// and direct blog readers (with <see cref="SubscriptionSettings.StatusChanges"/>).
+/// blog author + assistants (with <see cref="SubscriptionSettings.AuthorBlogEvents"/>).
 /// </summary>
 internal class BlogActivatedNotificationGenerator : BaseNotificationGenerator
 {
@@ -70,11 +69,13 @@ internal class BlogActivatedNotificationGenerator : BaseNotificationGenerator
             usersInterested.UnionWith(assistantSubscriptions.Select(s => s.SubscriberId));
         }
 
-        var readerSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
-            SubscriptionTargetType.Blog,
-            blogData.BlogId,
-            SubscriptionSettings.StatusChanges);
-        usersInterested.UnionWith(readerSubscriptions.Select(s => s.SubscriberId));
+        // Readers of this blog are deliberately absent. They are subscribed to the
+        // blog itself, so BlogStatusChangedNotificationGenerator answers the same
+        // event and already tells them it went active under the event type of the
+        // activation. This notification renames the event to
+        // NewBlogFromSubscribedAuthor, which is only true for the audience that
+        // could not see the blog while it was a draft; delivered to a reader it was
+        // a second copy of one activation calling a blog they already follow new.
 
         // Exclude the team — they're notified through team-targeted generators.
         usersInterested.Remove(blogData.AuthorId);
@@ -88,10 +89,15 @@ internal class BlogActivatedNotificationGenerator : BaseNotificationGenerator
             yield break;
         }
 
+        // The author is the actor: the recipients subscribed to him, not to the blog,
+        // and the notification reports his blog opening under his name. Whoever of the
+        // team flipped the switch, a subscriber who blocked the author is not told
+        // about a new blog of his.
         yield return new CreateNotification
         {
             EventType = EventType.NewBlogFromSubscribedAuthor,
             UsersInterested = usersInterested.ToArray(),
+            ActorId = blogData.AuthorId,
             Metadata = new
             {
                 BlogId = blogData.BlogId.EncodeToReadable(blogData.Title),

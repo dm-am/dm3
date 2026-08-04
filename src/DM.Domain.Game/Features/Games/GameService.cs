@@ -112,16 +112,10 @@ internal class GameService : IGameService
         await _creationValidator.ValidateAndAuthorize(createGame);
         var userId = _identityProvider.Current.User.UserId;
 
-        IEnumerable<Guid> validTagIds;
-        if (createGame.Tags != null && createGame.Tags.Any())
-        {
-            var availableTags = (await _dataResolver.GetAvailableTagIds()).ToHashSet();
-            validTagIds = createGame.Tags.Where(availableTags.Contains).ToList();
-        }
-        else
-        {
-            validTagIds = Enumerable.Empty<Guid>();
-        }
+        // The master picks tags by short id — the alias the tag list serves and
+        // the game filters take. The link table keys on the tags' own
+        // identifiers, so the translation happens where the catalog is read.
+        var validTagIds = await _dataResolver.ResolveTagIds(createGame.Tags);
 
         if (createGame.AttributeSchemaId.HasValue)
         {
@@ -350,7 +344,7 @@ internal class GameService : IGameService
         var game = await _repository.GetGame(gameId, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, "Game not found");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
@@ -370,7 +364,7 @@ internal class GameService : IGameService
 
         // Same answer as the aggregate read gives for an id that addresses
         // nothing visible, so a caller cannot tell which path it took.
-        return gameId ?? throw new HttpException(HttpStatusCode.Gone, "Game not found");
+        return gameId ?? throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
     }
 
     public async Task<Game> GetByPublicIdAsync(string publicId)
@@ -379,7 +373,7 @@ internal class GameService : IGameService
         var game = await _repository.GetGameByPublicId(publicId, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, "Game not found");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
@@ -398,7 +392,7 @@ internal class GameService : IGameService
         var game = await _repository.GetGameDetails(gameId, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, "Game not found");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
@@ -423,7 +417,7 @@ internal class GameService : IGameService
         var game = await _repository.GetGameDetailsByPublicId(publicId, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, "Game not found");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
@@ -493,75 +487,30 @@ internal class GameService : IGameService
 
         var invokedEvents = new List<EventType> { EventType.ChangedGame };
 
-        // Only a status transition out of Closed clears the closing date. It cannot
-        // be inferred from ClosedUtc being null: the API never sends that field
-        // (the mapping ignores it), so "null" meant "not provided" on every request
-        // and any edit of a closed game erased when it was closed.
-        var reopened = false;
-
-        if (updateGame.Status.HasValue && updateGame.Status != game.Status)
-        {
-            var (intention, eventType) = _intentionConverter.Convert(updateGame.Status.Value);
-            if (_intentionManager.IsAllowed(intention, game))
-            {
-                invokedEvents.Add(eventType);
-
-                if (!game.ActivatedUtc.HasValue && updateGame.Status == ModuleStatus.Active)
-                {
-                    updateGame.ActivatedUtc = _dateTimeProvider.Now;
-                }
-
-                if (updateGame.Status == ModuleStatus.Closed)
-                {
-                    updateGame.ClosedUtc = _dateTimeProvider.Now;
-                    updateGame.IsRecruitmentOpen = false;
-                }
-
-                if (game.Status == ModuleStatus.Closed && updateGame.Status != ModuleStatus.Closed)
-                {
-                    reopened = true;
-                    updateGame.ClosedUtc = null;
-                    updateGame.ClosedReason = ClosedReason.None;
-                }
-            }
-            else
-            {
-                updateGame.Status = null;
-            }
-        }
-
-        if (updateGame.PremoderationStatus.HasValue && updateGame.PremoderationStatus != game.PremoderationStatus)
-        {
-            if (_intentionManager.IsAllowed(GameIntention.SetStatusModeration, game))
-            {
-                if (updateGame.PremoderationStatus == PremoderationStatus.Approved ||
-                    updateGame.PremoderationStatus == PremoderationStatus.AwaitingEdits)
-                {
-                    updateGame.MentorId = _identityProvider.Current.User.UserId;
-                }
-
-                if (updateGame.PremoderationStatus == PremoderationStatus.Approved &&
-                    game.PremoderationStatus != PremoderationStatus.Approved)
-                {
-                    updateGame.MentorId = null;
-                }
-            }
-            else
-            {
-                updateGame.PremoderationStatus = null;
-            }
-        }
+        // No status and no premoderation status here: a game moves through them by
+        // ChangeStatusAsync and ChangePremoderationAsync, which name the transition
+        // and refuse an illegal one with 400 and a forbidden one with 403. This path
+        // used to accept both fields, ask IsAllowed and, on a no, drop the field and
+        // answer 200 with the game unchanged - one product transition through two
+        // doors with different rules, and the quiet door was indistinguishable from
+        // success. The premoderation arm was unreachable on top of that: it required
+        // a target state its only legal transition never starts from.
 
         // Check if recruitment is being opened (was closed, now opening)
         var isOpeningRecruitment = !game.Recruitment.IsOpen &&
                                    updateGame.IsRecruitmentOpen == true;
 
+        // Opening recruitment is not a status transition, so no status event
+        // carries it: this is the only thing that reaches the people who asked to
+        // hear when a game starts looking for players.
+        if (isOpeningRecruitment)
+        {
+            invokedEvents.Add(EventType.GameRecruitmentOpened);
+        }
+
         var updateEntity = new UpdateGameEntity
         {
             GameId = updateGame.GameId,
-            Status = updateGame.Status,
-            PremoderationStatus = updateGame.PremoderationStatus,
-            ClosedReason = updateGame.ClosedReason,
             IsRecruitmentOpen = updateGame.IsRecruitmentOpen,
             IncrementRecruitmentCount = isOpeningRecruitment,
             RecruitmentPcLimit = updateGame.RecruitmentPcLimit,
@@ -574,10 +523,7 @@ internal class GameService : IGameService
             HidePostStats = updateGame.HidePostStats,
             CommentsAccessMode = updateGame.CommentsAccessMode,
             TagIds = updateGame.Tags,
-            UpdatedUtc = _dateTimeProvider.Now,
-            ActivatedUtc = updateGame.ActivatedUtc,
-            ClosedUtc = updateGame.ClosedUtc,
-            ClearClosedUtc = reopened
+            UpdatedUtc = _dateTimeProvider.Now
         };
 
         var result = await _repository.Update(updateEntity);
@@ -650,7 +596,7 @@ internal class GameService : IGameService
                 break;
 
             default:
-                throw new HttpException(HttpStatusCode.BadRequest, "Unknown status transition");
+                throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.UnknownStatusTransition);
         }
 
         var result = await _repository.Update(update);
@@ -660,12 +606,13 @@ internal class GameService : IGameService
 
     public async Task<GameDetails> ChangePremoderationAsync(string id, GamePremoderationTransition transition)
     {
-        // Site-wide Mentor+ gate (parameterless intention). The per-game read
-        // path hides premoderation-pending games from non-curators, so resolve
-        // the id and fetch via the repository (which admits the assigned mentor)
-        // rather than the Read-gated GetDetailsAsync / GetDetailsByPublicIdAsync
-        // — otherwise the very game this endpoint exists to moderate would be
-        // hidden from the mentor.
+        // Site-wide Mentor+ gate (parameterless intention): the role decides who
+        // may move a game through premoderation, not the per-game read gate. The
+        // fetch goes straight to the repository, which takes either id form and
+        // skips the schema, subscriber and unread-counter reads GetDetailsAsync
+        // adds and this write never uses. Admission is the same either way: the
+        // repository applies the accessibility scope, so a mentor who is not the
+        // assigned curator is refused here exactly as on the read path.
         _intentionManager.ThrowIfForbidden(GameIntention.SetStatusModeration);
 
         var currentUserId = _identityProvider.Current.User.UserId;
@@ -674,7 +621,7 @@ internal class GameService : IGameService
             : await _repository.GetGameDetailsByPublicId(id, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, "Game not found");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
         }
 
         var gameId = game.Id;
@@ -686,7 +633,7 @@ internal class GameService : IGameService
                 if (game.PremoderationStatus != PremoderationStatus.AwaitingEdits)
                 {
                     throw new HttpException(HttpStatusCode.BadRequest,
-                        $"Cannot send to premoderation from status '{game.PremoderationStatus}'");
+                        RefusalMessage.CannotSubmitForPremoderation(game.PremoderationStatus));
                 }
                 update.PremoderationStatus = PremoderationStatus.AwaitingApproval;
                 update.MentorId = currentUserId;
@@ -697,7 +644,7 @@ internal class GameService : IGameService
                 if (game.PremoderationStatus != PremoderationStatus.AwaitingApproval)
                 {
                     throw new HttpException(HttpStatusCode.BadRequest,
-                        $"Cannot remove from premoderation from status '{game.PremoderationStatus}'");
+                        RefusalMessage.CannotWithdrawFromPremoderation(game.PremoderationStatus));
                 }
                 update.PremoderationStatus = PremoderationStatus.Approved;
                 update.MentorId = null;
@@ -705,7 +652,7 @@ internal class GameService : IGameService
                 break;
 
             default:
-                throw new HttpException(HttpStatusCode.BadRequest, "Unknown premoderation transition");
+                throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.UnknownPremoderationTransition);
         }
 
         var result = await _repository.Update(update);
@@ -740,7 +687,7 @@ internal class GameService : IGameService
 
     private static HttpException IllegalTransition(GameStatusTransition transition, Game game) =>
         new(HttpStatusCode.BadRequest,
-            $"Transition '{transition}' is not allowed from status '{game.Status}'" +
+            $"Переход \"{transition}\" недоступен из статуса \"{game.Status}\"" +
             (game.Status == ModuleStatus.Closed ? $" ({game.ClosedReason})" : ""));
 
     #endregion
@@ -767,11 +714,11 @@ internal class GameService : IGameService
             if (totalPosts >= 10 || hasRatedPosts)
             {
                 throw new HttpException(HttpStatusCode.Forbidden,
-                    "The game can no longer be deleted: it has 10 or more posts, or some posts are rated");
+                    "Игру уже нельзя удалить: в ней 10 или больше постов или есть оцененные посты");
             }
         }
 
-        await _repository.Delete(gameId);
+        await _repository.Delete(gameId, _identityProvider.Current.User.UserId);
         await _producer.SendAsync(EventType.DeletedGame, gameId);
     }
 
@@ -792,7 +739,7 @@ internal class GameService : IGameService
 
         if (!await _userRepository.IsAssistantByUsername(gameId, username))
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Assistant not found in this game");
+            throw new HttpException(HttpStatusCode.NotFound, "Помощник не найден в этой игре");
         }
 
         await _userRepository.RemoveAssistantByUsername(gameId, username);
@@ -810,7 +757,7 @@ internal class GameService : IGameService
         // Cannot leave own game
         if (game.Master.UserId == userId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Cannot leave own game");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя покинуть свою игру");
         }
 
         var isReader = await _userRepository.IsReader(userId, gameId);
@@ -820,7 +767,7 @@ internal class GameService : IGameService
         // Check if user is a member of the game
         if (!isReader && !isAssistant && charactersLeft == 0)
         {
-            throw new HttpException(HttpStatusCode.Conflict, "User is not a member of this game");
+            throw new HttpException(HttpStatusCode.Conflict, "Вы не участвуете в этой игре");
         }
 
         // Remove reader subscription

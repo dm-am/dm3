@@ -4,6 +4,7 @@ using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using DM.Domain.Core.Dto;
 
 namespace DM.Web.API.Features.Community.Users;
 
@@ -80,6 +81,7 @@ public class UserController : ControllerBase
     /// the /v1/account/security endpoints.
     /// </remarks>
     /// <param name="username">User username</param>
+    /// <param name="q">Paging parameters</param>
     /// <response code="200">Login history retrieved successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to view login history</response>
@@ -90,5 +92,6 @@ public class UserController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetLoginHistory(string username) => Ok(await _userApiService.GetLoginHistory(username));
+    public async Task<IActionResult> GetLoginHistory(string username, [FromQuery] PagingQuery q) =>
+        Ok(await _userApiService.GetLoginHistory(username, q));
 }

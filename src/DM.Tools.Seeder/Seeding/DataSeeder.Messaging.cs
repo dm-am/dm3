@@ -18,6 +18,8 @@ using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Core.Storage;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.MongoIntegration;
+using DbUserSettings = DM.Infrastructure.Persistence.Entities.Account.Settings.UserSettings;
+using DM.Infrastructure.Persistence.Entities.Account.Settings;
 using DM.Infrastructure.Persistence.Entities.Blog;
 using DM.Infrastructure.Persistence.Entities.Forum;
 using DM.Infrastructure.Persistence.Entities.Game.Characters;
@@ -44,12 +46,223 @@ using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 using DbUsernameHistory = DM.Infrastructure.Persistence.Entities.Account.UsernameHistory;
 using DbUserContact = DM.Infrastructure.Persistence.Entities.Account.UserContact;
+using MongoDB.Driver;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
+    /// <summary>
+    /// Bot channels connected on the stand, the way a real link connects them.
+    /// </summary>
+    /// <remarks>
+    /// A channel counts as connected when two things are written together: the
+    /// external id on the account and the delivery preferences in the settings
+    /// document. BotLinkService reads the second one as the answer to "is this
+    /// connected", so writing one without the other produces an account that
+    /// shows a connected channel and refuses to configure it.
+    ///
+    /// Nothing is delivered anywhere by this: NotificationBotSender sends only
+    /// when a bot token is configured, and the stand has none. What it buys is a
+    /// settings page that can be opened, read and changed on a seeded site
+    /// instead of one that answers 409 to every account.
+    ///
+    /// Two accounts and one channel each, so both states are on the stand at
+    /// once: the primary account has Discord and no Telegram, the moderator has
+    /// Telegram and no Discord.
+    /// </remarks>
+    private async Task ConnectBotChannels(List<DbUser> users, ComprehensiveSeedResult result)
+    {
+        var connections = new[]
+        {
+            (Username: "SolohinLex", Channel: "discord", ExternalId: "310000000000000001"),
+            (Username: "TestModerator", Channel: "telegram", ExternalId: "710000001"),
+        };
+
+        var settings = _mongoClient.GetCollection<DbUserSettings>();
+        var connected = 0;
+
+        foreach (var (username, channel, externalId) in connections)
+        {
+            var user = users.FirstOrDefault(u => u.Username == username);
+            if (user == null)
+            {
+                continue;
+            }
+
+            if (channel == "discord")
+            {
+                if (user.DiscordId != null) continue;
+                user.DiscordId = externalId;
+            }
+            else
+            {
+                if (user.TelegramId != null) continue;
+                user.TelegramId = externalId;
+            }
+
+            // The defaults a link writes: on, and the three categories a person
+            // gets by default. Mirrored from BotLinkRepository rather than
+            // invented, so a seeded account and a linked one read the same.
+            var preferences = new NotificationChannelPreference
+            {
+                Enabled = true,
+                EnabledCategories = new HashSet<NotificationCategory>
+                {
+                    NotificationCategory.Messages,
+                    NotificationCategory.Games,
+                    NotificationCategory.Security
+                }
+            };
+
+            var defaults = DbUserSettings.CreateDefault(user.UserId);
+            var update = channel == "discord"
+                ? Builders<DbUserSettings>.Update.Set(s => s.DiscordPreferences, preferences)
+                : Builders<DbUserSettings>.Update.Set(s => s.TelegramPreferences, preferences);
+
+            await settings.UpdateOneAsync(
+                Builders<DbUserSettings>.Filter.Eq(s => s.UserId, user.UserId),
+                Builders<DbUserSettings>.Update.Combine(
+                    update,
+                    Builders<DbUserSettings>.Update.SetOnInsert(s => s.Theme, defaults.Theme),
+                    Builders<DbUserSettings>.Update.SetOnInsert(s => s.Paging, defaults.Paging)),
+                new UpdateOptions { IsUpsert = true });
+
+            connected++;
+        }
+
+        if (connected == 0)
+        {
+            result.Skipped++;
+            return;
+        }
+
+        await _dbContext.SaveChangesAsync();
+        result.Details.Add($"Connected {connected} bot channel(s)");
+    }
+
+    /// <summary>
+    /// Private correspondence for the development accounts.
+    /// </summary>
+    /// <remarks>
+    /// The seeded site had a messenger with nothing in it: only the global chat
+    /// was written, so every account opened "Нет переписок" and the whole
+    /// surface - the list, the previews, opening a conversation, editing a
+    /// message - could only be looked at by writing to somebody first.
+    ///
+    /// Every chat gets messages and a last-message pointer, because a chat
+    /// without one is not shown: the list reads only conversations somebody has
+    /// written in. The pointer itself is set after the batch save, the way the
+    /// game rooms do it, since Chat.LastMessageId and Message.ChatId reference
+    /// each other and EF refuses to order the inserts otherwise.
+    /// </remarks>
+    private async Task CreateDirectChats(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
+    {
+        var primary = users.FirstOrDefault(u => u.Username == "SolohinLex");
+        if (primary == null)
+        {
+            return;
+        }
+
+        var existing = await _dbContext.Set<Chat>().AnyAsync(c => c.Type == ChatType.Direct);
+        if (existing)
+        {
+            result.Skipped++;
+            result.Details.Add("Direct chats already exist, skipping");
+            return;
+        }
+
+        // Named accounts rather than a random draw: the e2e suite signs in as
+        // the first two and asserts on what they can see.
+        var companions = new[] { "TestUser", "TestModerator" }
+            .Select(name => users.FirstOrDefault(u => u.Username == name))
+            .Where(u => u != null)
+            .Concat(users.Where(u => u.UserId != primary.UserId).Take(2))
+            .Distinct()
+            .Where(u => u!.UserId != primary.UserId)
+            .Take(3)
+            .ToList();
+
+        var conversations = new[]
+        {
+            new[]
+            {
+                "Привет! Видел твою заявку в игру, беру.",
+                "Спасибо! Когда стартуем?",
+                "На выходных, я напишу в комнате.",
+            },
+            new[]
+            {
+                "Подскажи, где смотреть правила по броскам?",
+                "В заметках игры, раздел про механику.",
+            },
+            new[]
+            {
+                "Отличный пост вышел, поздравляю с наградой.",
+                "Спасибо, старался!",
+            },
+        };
+
+        var pending = new List<(Chat Chat, Guid LastMessageId)>();
+
+        for (var index = 0; index < companions.Count; index++)
+        {
+            var companion = companions[index]!;
+            var chat = new Chat
+            {
+                ChatId = _guidFactory.Create(),
+                Type = ChatType.Direct
+            };
+            _dbContext.Set<Chat>().Add(chat);
+
+            foreach (var participant in new[] { primary, companion })
+            {
+                _dbContext.Set<UserChatLink>().Add(new UserChatLink
+                {
+                    UserChatLinkId = _guidFactory.Create(),
+                    UserId = participant.UserId,
+                    ChatId = chat.ChatId,
+                    IsRemoved = false
+                });
+            }
+
+            var script = conversations[index % conversations.Length];
+            Guid lastMessageId = default;
+
+            for (var line = 0; line < script.Length; line++)
+            {
+                var author = line % 2 == 0 ? primary : companion;
+                var message = new Message
+                {
+                    MessageId = _guidFactory.Create(),
+                    UserId = author.UserId,
+                    ChatId = chat.ChatId,
+                    CreatedUtc = now.AddHours(-(companions.Count - index) * 6 + line),
+                    Text = script[line],
+                    IsRemoved = false
+                };
+
+                _dbContext.Set<Message>().Add(message);
+                lastMessageId = message.MessageId;
+                result.MessagesCreated++;
+            }
+
+            pending.Add((chat, lastMessageId));
+        }
+
+        await _dbContext.SaveChangesAsync();
+
+        foreach (var (chat, lastMessageId) in pending)
+        {
+            chat.LastMessageId = lastMessageId;
+        }
+
+        await _dbContext.SaveChangesAsync();
+
+        result.Details.Add($"Created {pending.Count} direct chats for {primary.Username}");
+    }
+
     private async Task CreateGlobalChatMessages(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
     {
         var globalChatId = Chat.GlobalChatId;

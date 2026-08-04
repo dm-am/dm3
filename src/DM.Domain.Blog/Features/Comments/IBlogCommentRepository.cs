@@ -61,9 +61,16 @@ public interface IBlogCommentRepository
     Task<BlogCommentToDelete?> GetForDelete(Guid commentId, CancellationToken ct = default);
 
     /// <summary>
-    /// Get the second last comment ID (for updating LastCommentId when deleting the last comment)
+    /// The newest live comment of the blog other than <paramref name="exceptCommentId" />:
+    /// the successor of the comment being deleted.
     /// </summary>
-    Task<Guid?> GetSecondLastCommentId(Guid blogId, CancellationToken ct = default);
+    /// <remarks>
+    /// Named by exclusion rather than by position — see the note on the forum's
+    /// counterpart. Two comments can share a timestamp, and then "the second one down the
+    /// list" can be the row that is leaving, which would leave the blog pointing at a
+    /// soft-deleted comment.
+    /// </remarks>
+    Task<Guid?> GetNewestCommentIdExcept(Guid blogId, Guid exceptCommentId, CancellationToken ct = default);
 
     /// <summary>
     /// Delete comment (soft delete)

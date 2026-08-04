@@ -9,18 +9,19 @@ export enum SubscriptionTargetType {
 /**
  * Subscription notification settings (bit flags).
  *
- * The same bit positions carry different semantics depending on the
- * subscription's `targetType`:
- * - Game / Blog / Topic targets — per-entity content flags
- *   (`NewPosts`, `NewPublications`, `NewComments`, `StatusChanges`,
- *   `CharacterUpdates`).
- * - User target — per-author-category flags (`AuthorGameEvents`,
- *   `AuthorBlogEvents`, `AuthorTopicEvents`), gated by the three
- *   checkboxes in the subscribe popover.
+ * The three groups occupy disjoint bit ranges: no position ever carries two
+ * meanings, so a value is readable without knowing the `targetType`.
+ * - Bits 0-5 — per-entity content flags (`NewPosts`, `NewPublications`,
+ *   `NewComments`, `NewTopics`, `StatusChanges`, `CharacterUpdates`), read
+ *   for Game / Blog / Topic targets.
+ * - Bits 7-8 — channel flags (`InApp`, `Email`), orthogonal and read for
+ *   every target type.
+ * - Bits 9-11 — per-author-category flags (`AuthorGameEvents`,
+ *   `AuthorBlogEvents`, `AuthorTopicEvents`), read for the User target and
+ *   surfaced as the three checkboxes in the subscribe popover.
  *
- * Channel flags (`InApp`, `Email`) are orthogonal and apply to all
- * target types. Bit 6 is intentionally left vacant — it used to hold
- * the now-removed `AuthorNewContent` catch-all.
+ * Bit 6 stays vacant: it held the now-removed `AuthorNewContent` catch-all
+ * and is not recycled, so no bit ever means two things.
  */
 export enum SubscriptionSettings {
   None = 0,
@@ -58,6 +59,14 @@ export interface Subscription {
   id: string;
   targetType: SubscriptionTargetType;
   targetId: string;
+  /**
+   * Name of what was subscribed to, resolved server-side. Absent when the
+   * target is gone. Without it the page had nothing but the identifier to
+   * print, and printed it: a column of GUIDs.
+   */
+  targetTitle?: string;
+  /** Username of a User target — the profile route is addressed by name. */
+  targetUsername?: string;
   settings: SubscriptionSettings;
   createdUtc: string;
 }

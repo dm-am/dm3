@@ -12,9 +12,9 @@ public class RegistrationRequest
     /// Valid email address for account verification
     /// </summary>
     /// <example>user@example.com</example>
-    [Required(ErrorMessage = "Email обязателен")]
-    [EmailAddress(ErrorMessage = "Неверный формат email")]
-    [StringLength(100, ErrorMessage = "Email не должен превышать 100 символов")]
+    [Required(ErrorMessage = "Почта обязательна")]
+    [EmailAddress(ErrorMessage = "Неверный формат почты")]
+    [StringLength(100, ErrorMessage = "Почта не должна превышать 100 символов")]
     public string Email { get; set; } = "";
 
     /// <summary>

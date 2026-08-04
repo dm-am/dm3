@@ -5,7 +5,6 @@ using System.Net;
 using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Account.Features.Authentication;
-using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Personal.Features.Profiles;
@@ -15,7 +14,6 @@ using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Authentication.Credentials;
 using DM.Web.API.Shared.Http;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
 using User = DM.Web.API.Features.Community.Users.User;
 
 namespace DM.Web.API.Features.Account.Authentication;
@@ -27,10 +25,7 @@ internal class AuthenticationApiService : IAuthenticationApiService
     private readonly IAuthenticationService _coreAuthenticationService;
     private readonly IIdentityProvider _identityProvider;
     private readonly IUserService _userService;
-    private readonly ILoginRecordRepository _loginRecordRepository;
-    private readonly IGuidFactory _guidFactory;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly ILogger<AuthenticationApiService> _logger;
+    private readonly ILoginRecordService _loginRecordService;
     private readonly IMapper _mapper;
 
     /// <summary>
@@ -41,20 +36,14 @@ internal class AuthenticationApiService : IAuthenticationApiService
         IAuthenticationService coreAuthenticationService,
         IIdentityProvider identityProvider,
         IUserService userService,
-        ILoginRecordRepository loginRecordRepository,
-        IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider,
-        ILogger<AuthenticationApiService> logger,
+        ILoginRecordService loginRecordService,
         IMapper mapper)
     {
         _authenticationService = authenticationService;
         _coreAuthenticationService = coreAuthenticationService;
         _identityProvider = identityProvider;
         _userService = userService;
-        _loginRecordRepository = loginRecordRepository;
-        _guidFactory = guidFactory;
-        _dateTimeProvider = dateTimeProvider;
-        _logger = logger;
+        _loginRecordService = loginRecordService;
         _mapper = mapper;
     }
 
@@ -96,9 +85,13 @@ internal class AuthenticationApiService : IAuthenticationApiService
                 {
                     ["password"] = "Неверная почта или пароль"
                 });
+            // "Забанен", not "заблокирован": the security history captions the
+            // lockout after failed attempts "Аккаунт заблокирован", and that is
+            // the AccountLocked branch of this very switch. One word, one
+            // meaning — the rest of the product calls this a ban.
             case AuthenticationError.Banned:
                 throw new HttpException(HttpStatusCode.Forbidden,
-                    "Аккаунт заблокирован.");
+                    "Аккаунт забанен");
             case AuthenticationError.PendingRegistration:
                 throw new HttpBadRequestException(new Dictionary<string, string>
                 {
@@ -107,7 +100,7 @@ internal class AuthenticationApiService : IAuthenticationApiService
                 });
             case AuthenticationError.Removed:
                 throw new HttpException(HttpStatusCode.Forbidden,
-                    "Аккаунт удален.");
+                    "Аккаунт удален");
             case AuthenticationError.Forbidden:
                 throw new HttpException(HttpStatusCode.Forbidden,
                     "Ошибка авторизации.");
@@ -119,42 +112,19 @@ internal class AuthenticationApiService : IAuthenticationApiService
         }
     }
 
-    private async Task RecordLoginAttempt(string email, HttpContext httpContext, bool isSuccessful)
-    {
-        try
-        {
-            // For successful logins, we have the user in identity provider
-            Guid? userId = isSuccessful
-                ? _identityProvider.Current.User.UserId
-                : await TryResolveUserId(email);
-
-            if (!userId.HasValue)
-                return;
-
-            var ipAddress = httpContext.GetClientAddress();
-            var userAgent = httpContext.Request.Headers.UserAgent.ToString();
-
-            await _loginRecordRepository.Record(new UserLoginRecord
-            {
-                UserLoginRecordId = _guidFactory.Create(),
-                UserId = userId.Value,
-                IpAddress = ipAddress,
-                UserAgent = userAgent.Length > 500 ? userAgent[..500] : userAgent,
-                LoginUtc = _dateTimeProvider.Now,
-                IsSuccessful = isSuccessful
-            });
-        }
-        catch (Exception ex)
-        {
-            // Login recording is non-critical — never block the login flow.
-            // The address is not in the message: it identifies a person and the log store
-            // has no retention. The trace id and the security audit log carry the rest.
-            _logger.LogWarning(ex, "Failed to record login attempt");
-        }
-    }
-
-    private Task<Guid?> TryResolveUserId(string email) =>
-        _loginRecordRepository.TryResolveUserId(email);
+    /// <summary>
+    /// Hands the attempt to the account layer with the two facts only the request
+    /// carries. Which identity a failure is filed under, how much of the user agent
+    /// is kept and what a failed write costs are decisions about the account, and
+    /// they lived here until the layer below had no say in them at all.
+    /// </summary>
+    private Task RecordLoginAttempt(string email, HttpContext httpContext, bool isSuccessful) =>
+        _loginRecordService.RecordAttempt(
+            isSuccessful ? _identityProvider.Current.User.UserId : (Guid?)null,
+            email,
+            httpContext.GetClientAddress(),
+            httpContext.Request.Headers.UserAgent.ToString(),
+            isSuccessful);
 
     /// <inheritdoc />
     public Task Logout(HttpContext httpContext) => _authenticationService.Logout(httpContext);

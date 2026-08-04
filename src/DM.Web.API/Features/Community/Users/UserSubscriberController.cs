@@ -4,6 +4,7 @@ using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Personal.Subscriptions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using DM.Domain.Core.Dto;
 
 namespace DM.Web.API.Features.Community.Users;
 
@@ -35,13 +36,14 @@ public class UserSubscriberController : ControllerBase
     /// Returns list of users who are subscribed to the specified user.
     /// </remarks>
     /// <param name="username">Username of the target user</param>
+    /// <param name="q">Paging parameters</param>
     /// <response code="200">List of subscribers</response>
     /// <response code="404">User not found</response>
     [HttpGet("{username}/subscribers", Name = nameof(GetUserSubscribers))]
     [ProducesResponseType(typeof(ListEnvelope<User>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetUserSubscribers(string username) =>
-        Ok(new ListEnvelope<User>(await _userSubscriberApiService.GetSubscribersAsync(username)));
+    public async Task<IActionResult> GetUserSubscribers(string username, [FromQuery] PagingQuery q) =>
+        Ok(await _userSubscriberApiService.GetSubscribersAsync(username, q));
 
     /// <summary>
     /// Subscribe to a user
@@ -92,6 +94,7 @@ public class UserSubscriberController : ControllerBase
     /// </remarks>
     /// <param name="username">Username to check</param>
     /// <response code="200">Subscription status with details if subscribed</response>
+    /// <response code="204">Current user is not subscribed</response>
     /// <response code="404">User not found</response>
     [HttpGet("{username}/subscribers/me", Name = nameof(GetMySubscriptionStatus))]
     [AuthenticationRequired]

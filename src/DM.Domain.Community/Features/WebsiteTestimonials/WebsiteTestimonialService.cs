@@ -59,7 +59,7 @@ internal class WebsiteTestimonialService : IWebsiteTestimonialService
         var existing = await _repository.GetByAuthor(currentUserId);
         if (existing != null)
         {
-            throw new HttpException(HttpStatusCode.Gone, "User already has a testimonial");
+            throw new HttpException(HttpStatusCode.Gone, "У вас уже есть отзыв");
         }
 
         var entity = new CreateWebsiteTestimonialEntity
@@ -82,7 +82,7 @@ internal class WebsiteTestimonialService : IWebsiteTestimonialService
         var testimonial = await _repository.Get(id);
         if (testimonial == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Website testimonial not found");
+            throw new HttpException(HttpStatusCode.NotFound, "Отзыв не найден");
         }
 
         return testimonial;
@@ -122,6 +122,6 @@ internal class WebsiteTestimonialService : IWebsiteTestimonialService
     {
         var testimonial = await GetAsync(id);
         _intentionManager.ThrowIfForbidden(WebsiteTestimonialIntention.Delete, testimonial);
-        await _repository.Delete(id);
+        await _repository.Delete(id, _identityProvider.Current.User.UserId);
     }
 }

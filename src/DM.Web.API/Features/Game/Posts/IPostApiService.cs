@@ -38,9 +38,9 @@ public interface IPostApiService
     /// Update existing post
     /// </summary>
     /// <param name="postId">Post identifier</param>
-    /// <param name="post">Post model</param>
+    /// <param name="request">Editable post fields</param>
     /// <returns>Envelope containing the updated post</returns>
-    Task<Envelope<Post>> Update(Guid postId, Post post);
+    Task<Envelope<Post>> Update(Guid postId, UpdatePostRequest request);
 
     /// <summary>
     /// Delete existing post

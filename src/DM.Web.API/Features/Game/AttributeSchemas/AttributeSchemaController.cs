@@ -100,12 +100,14 @@ public class AttributeSchemaController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to delete this attribute schema</response>
     /// <response code="404">Schema not found</response>
+    /// <response code="409">Schema is used by a game</response>
     [HttpDelete("{id}", Name = nameof(DeleteSchema))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> DeleteSchema(Guid id)
     {
         await _schemaApiService.Delete(id);

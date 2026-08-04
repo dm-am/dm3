@@ -25,7 +25,7 @@ import type {
   UpdateBlogInput,
   UpdatePublicationInput,
 } from "../model/types";
-import { Api } from "@/shared/api";
+import { Api, toCommentsQueryParams, type CommentsQuery } from "@/shared/api";
 import { RENDER_AUDIENCE } from "@/shared/api/audience";
 
 /**
@@ -72,7 +72,7 @@ export default new (class {
    */
   public getActiveBlogs() {
     return Api.get<ListEnvelope<BlogRef>>("blogs", {
-      status: "Active",
+      statuses: ["Active"],
       take: 5,
       projection: "ref",
     });
@@ -239,10 +239,10 @@ export default new (class {
 
   // === Blog discussion comments (BlogCommentController) ===
 
-  public getBlogComments(blogId: string, paging?: PagingQuery) {
+  public getBlogComments(blogId: string, query?: CommentsQuery) {
     return Api.get<ListEnvelope<Comment>>(
       `blogs/${blogId}/comments`,
-      toSkipTake(paging),
+      toCommentsQueryParams(query),
     );
   }
 

@@ -26,7 +26,7 @@ internal class ChatFactory : IChatFactory
         if (userId == otherUserId)
         {
             throw new HttpException(HttpStatusCode.BadRequest,
-                "Cannot create a direct chat with yourself");
+                "Нельзя начать чат с самим собой");
         }
 
         var chatId = _guidFactory.Create();

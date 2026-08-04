@@ -2,21 +2,84 @@
 set -euo pipefail
 
 # DM3 server setup script for clean Ubuntu
-# Usage: curl -sSL https://raw.githubusercontent.com/dm-am/dm3/dev/docker/setup-server.sh | bash
+# Usage: DM_REF=<tag>
+#   curl -sSL https://raw.githubusercontent.com/dm-am/dm3/$DM_REF/docker/setup-server.sh | DM_REF=$DM_REF bash
+# The ref is written once and used twice: the script that is downloaded and the
+# tree that is cloned are then the same thing by construction.
 
 INSTALL_DIR="/opt/dm3"
+# What to install from, and with it the tag of the images this stand runs:
+# latest is published only from main, so a stand cloned from dev has to ask for
+# the dev images or it runs main's containers against dev's compose files.
+#
+# A tag is the intended value. A branch moves: two operators running the same
+# command a day apart get two different stands, and neither can say which. The
+# name is DM_REF and not DM_BRANCH because a tag is not a branch; the old name
+# still works so a recorded command keeps running.
+DM_REF="${DM_REF:-${DM_BRANCH:-dev}}"
+DM_BRANCH="$DM_REF"
 
 echo "=== Установка Docker ==="
 sudo apt update
-sudo apt install -y docker.io docker-compose-plugin git iptables-persistent
+sudo apt install -y docker.io docker-compose-plugin git iptables-persistent openssl
 
 echo "=== Настройка Docker для текущего пользователя ==="
 sudo usermod -aG docker "$USER"
 
+echo "=== Ротация журналов Docker ==="
+# The default json-file driver keeps every line forever, and Serilog writes to
+# the console beside Loki - so each line is stored twice, once under Loki's own
+# retention and once in a file that grows until the disk is full. On a
+# preview-class VPS the first service to die on a full disk is Postgres.
+#
+# Given to the daemon rather than to each compose service: the daemon also
+# covers the one-off containers the backup script and the credential generator
+# start, and this is already the layer the installer owns - it writes the
+# firewall rules, the unit, the crontab and a logrotate policy for the backup
+# log. Log options apply to containers created after they are set, and nothing
+# has been started yet.
+DOCKER_DAEMON_CONFIG=/etc/docker/daemon.json
+if [ -f "$DOCKER_DAEMON_CONFIG" ]; then
+    echo "$DOCKER_DAEMON_CONFIG уже существует, ротацию журналов проверить вручную:"
+    echo "  log-driver json-file, log-opts max-size 10m, max-file 3"
+else
+    sudo mkdir -p "$(dirname "$DOCKER_DAEMON_CONFIG")"
+    sudo tee "$DOCKER_DAEMON_CONFIG" > /dev/null <<'JSON'
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  }
+}
+JSON
+    sudo systemctl restart docker
+fi
+
 echo "=== Клонирование репозитория ==="
 sudo mkdir -p "$INSTALL_DIR"
 sudo chown "$USER:$USER" "$INSTALL_DIR"
-git clone https://github.com/dm-am/dm3.git "$INSTALL_DIR"
+git clone --branch "$DM_REF" https://github.com/dm-am/dm3.git "$INSTALL_DIR"
+
+# Which commit this stand actually is. A ref that turns out to be a branch is
+# said out loud: the operator piped a script into sudo from a moving target, and
+# the only honest thing the installer can do is name what arrived.
+INSTALLED_COMMIT="$(git -C "$INSTALL_DIR" rev-parse --short HEAD)"
+if git -C "$INSTALL_DIR" show-ref --verify --quiet "refs/tags/$DM_REF"; then
+    echo "Установлено из тега $DM_REF ($INSTALLED_COMMIT)."
+else
+    echo "ВНИМАНИЕ: $DM_REF это ветка, а не тег. Установлен коммит $INSTALLED_COMMIT," >&2
+    echo "и завтра та же команда даст другой. Для воспроизводимой установки:" >&2
+    echo "  DM_REF=<тег> curl -sSL .../setup-server.sh | bash" >&2
+fi
+
+echo "=== Подготовка docker/.env ==="
+# Everything below needs this file: the backup scripts source it, and the
+# compose files declare the encryption key, both Mongo passwords and both MinIO
+# accounts through ${...:?}, which stops interpolation before the first
+# container. Nothing created it, so the installer died on its last line with the
+# unit and the nightly jobs already enabled.
+bash "$INSTALL_DIR/docker/scripts/init-env.sh" server "$DM_BRANCH"
 
 echo "=== Открытие портов (firewall) ==="
 sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT
@@ -24,13 +87,10 @@ sudo iptables -I INPUT -p tcp --dport 443 -j ACCEPT
 sudo netfilter-persistent save
 
 echo "=== Настройка preview-пароля ==="
-if [ -z "${DM_PREVIEW_PASSWORD:-}" ]; then
-    echo "ОШИБКА: DM_PREVIEW_PASSWORD не задан." >&2
-    echo "Для установки: export DM_PREVIEW_PASSWORD=ваш_пароль" >&2
-    exit 1
-fi
-
-docker run --rm httpd htpasswd -nb preview "$DM_PREVIEW_PASSWORD" > "$INSTALL_DIR/docker/nginx/.htpasswd"
+# A clone carries no credentials: the file is generated here, on the server, and
+# the check for an unset password lives in the generator so that the operator
+# changing the password later gets the same one.
+bash "$INSTALL_DIR/docker/scripts/init-htpasswd.sh"
 
 echo "=== Установка systemd-сервиса ==="
 sudo cp "$INSTALL_DIR/docker/dm3.service" /etc/systemd/system/dm3.service
@@ -42,16 +102,25 @@ sudo bash "$INSTALL_DIR/docker/scripts/install-cron.sh" "$INSTALL_DIR"
 
 echo "=== Запуск приложения ==="
 cd "$INSTALL_DIR/docker"
-sudo docker compose -f docker-compose.yml -f docker-compose.preview.yml up -d --build
+# No --build: CI builds the four images and pushes them, the server pulls them.
+# Building the solution here costs gigabytes of disk and peak memory on a
+# preview-class VPS, and it leaves a locally built image under the tag the
+# registry publishes - which no later "up" refreshes, so the published images
+# were consumed by nobody. The production profile adds watchtower, the updater
+# the guides name; without a profile it was declared and never started.
+sudo docker compose --profile production -f docker-compose.yml -f docker-compose.preview.yml up -d
 
 echo ""
 echo "=== Готово! ==="
 echo "Приложение доступно по адресу: http://$(curl -s ifconfig.me)"
 echo "Логин: preview"
-echo "Пароль: ${DM_PREVIEW_PASSWORD}"
+# Пароль здесь не печатается: его задал оператор минуту назад, а напечатанный
+# остается в терминале, в истории сессии и в логе установки, если она шла через
+# tee. Вдобавок под set -u эта строка роняла установщик на последнем шаге, если
+# пароль вводили в промпт init-htpasswd.sh, а не экспортировали.
 echo ""
 echo "Для смены пароля:"
-echo "  docker run --rm httpd htpasswd -nb preview НОВЫЙ_ПАРОЛЬ > $INSTALL_DIR/docker/nginx/.htpasswd"
+echo "  bash $INSTALL_DIR/docker/scripts/init-htpasswd.sh"
 echo "  cd $INSTALL_DIR/docker && sudo docker compose restart nginx"
 echo ""
 echo "Сервис автозапуска: systemctl status dm3"

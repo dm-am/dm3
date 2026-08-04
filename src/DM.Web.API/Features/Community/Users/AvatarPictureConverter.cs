@@ -45,6 +45,12 @@ internal class AvatarPictureConverter : ITypeConverter<AvatarPicture, UserPictur
             SmallUrl = _imgproxy.BuildSquareThumbnail(source.SourceObjectKey, SmallSize),
             MediumUrl = _imgproxy.BuildSquareThumbnail(source.SourceObjectKey, MediumSize),
             OriginalUrl = source.SourceUrl,
+            // Only for the original. The two thumbnails are square center-crops
+            // at a size the caller picks, so their dimensions are not news; the
+            // original keeps the uploaded aspect ratio and is the one a layout
+            // cannot size without being told.
+            OriginalWidth = source.SourceWidth,
+            OriginalHeight = source.SourceHeight,
         };
     }
 }

@@ -38,7 +38,8 @@ public class BlogIntentionResolverShould
         bool commentsEnabled = true,
         IEnumerable<BlogAssistantInfo>? assistants = null,
         bool viewerIsSubscriber = false,
-        GeneralUser? mentor = null)
+        GeneralUser? mentor = null,
+        IReadOnlySet<Guid>? blacklistedUserIds = null)
     {
         return new BlogDto
         {
@@ -49,8 +50,33 @@ public class BlogIntentionResolverShould
             CommentsEnabled = commentsEnabled,
             Assistants = assistants ?? Array.Empty<BlogAssistantInfo>(),
             IsViewerSubscriber = viewerIsSubscriber,
-            PendingInvitedUserIds = Array.Empty<Guid>()
+            PendingInvitedUserIds = Array.Empty<Guid>(),
+            BlacklistedUserIds = blacklistedUserIds ?? new HashSet<Guid>()
         };
+    }
+
+    [Fact]
+    public void AllowBlacklistedUserToViewTheBlog()
+    {
+        var user = CreateUser(_otherUserId);
+        var blog = CreateBlog(
+            draftVisibility: DraftVisibility.Public,
+            blacklistedUserIds: new HashSet<Guid> { _otherUserId });
+
+        // Same rule as the game side: the blacklist closes writing and not
+        // reading. The blog is public to everybody else, so hiding it from one
+        // person would promise a privacy it does not have.
+        _resolver.IsAllowed(user, BlogIntention.ViewDraft, blog).Should().BeTrue();
+    }
+
+    [Fact]
+    public void DenyBlacklistedUserToComment()
+    {
+        var user = CreateUser(_otherUserId);
+        var blog = CreateBlog(blacklistedUserIds: new HashSet<Guid> { _otherUserId });
+
+        // The other half: reading is open, writing is not
+        _resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeFalse();
     }
 
     [Fact]

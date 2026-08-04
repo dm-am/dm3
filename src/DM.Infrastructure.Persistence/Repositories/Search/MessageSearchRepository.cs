@@ -43,7 +43,11 @@ internal class MessageSearchRepository : IMessageSearchRepository
         var limit = query.EffectiveLimit;
         var freeText = query.Text?.Trim() ?? "";
         var hasText = freeText.Length > 0;
-        var from = query.FromUsername;
+        // The from: operator names one author, so this is an equality on the login,
+        // not a pattern: ILIKE reads "_" and "%" in it as wildcards and cannot use
+        // the lower("Username") index either. Lowered once, here, for all three
+        // branches below.
+        var fromLower = query.FromUsername?.ToLowerInvariant();
         var after = query.After;
         var before = query.Before;
         var globalChatId = DbChat.GlobalChatId;
@@ -78,8 +82,8 @@ internal class MessageSearchRepository : IMessageSearchRepository
             if (hasText)
                 q = q.Where(m => EF.Property<NpgsqlTsVector>(m, "SearchVector")
                     .Matches(EF.Functions.WebSearchToTsQuery(SearchConfig, freeText)));
-            if (!string.IsNullOrEmpty(from))
-                q = q.Where(m => EF.Functions.ILike(m.Author.Username, from));
+            if (!string.IsNullOrEmpty(fromLower))
+                q = q.Where(m => m.Author.Username.ToLower() == fromLower);
             if (after.HasValue) q = q.Where(m => m.CreatedUtc >= after.Value);
             if (before.HasValue) q = q.Where(m => m.CreatedUtc <= before.Value);
             if (cursorTs.HasValue)
@@ -109,8 +113,8 @@ internal class MessageSearchRepository : IMessageSearchRepository
             if (hasText)
                 q = q.Where(m => EF.Property<NpgsqlTsVector>(m, "SearchVector")
                     .Matches(EF.Functions.WebSearchToTsQuery(SearchConfig, freeText)));
-            if (!string.IsNullOrEmpty(from))
-                q = q.Where(m => EF.Functions.ILike(m.Author.Username, from));
+            if (!string.IsNullOrEmpty(fromLower))
+                q = q.Where(m => m.Author.Username.ToLower() == fromLower);
             if (after.HasValue) q = q.Where(m => m.CreatedUtc >= after.Value);
             if (before.HasValue) q = q.Where(m => m.CreatedUtc <= before.Value);
             if (cursorTs.HasValue)
@@ -140,8 +144,8 @@ internal class MessageSearchRepository : IMessageSearchRepository
             if (hasText)
                 q = q.Where(p => EF.Property<NpgsqlTsVector>(p, "SearchVector")
                     .Matches(EF.Functions.WebSearchToTsQuery(SearchConfig, freeText)));
-            if (!string.IsNullOrEmpty(from))
-                q = q.Where(p => EF.Functions.ILike(p.Author.Username, from));
+            if (!string.IsNullOrEmpty(fromLower))
+                q = q.Where(p => p.Author.Username.ToLower() == fromLower);
             if (after.HasValue) q = q.Where(p => p.CreatedUtc >= after.Value);
             if (before.HasValue) q = q.Where(p => p.CreatedUtc <= before.Value);
             if (cursorTs.HasValue)

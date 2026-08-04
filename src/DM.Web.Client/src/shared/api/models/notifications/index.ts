@@ -9,37 +9,62 @@ import type {
   PublicationId,
 } from "../common";
 
+/**
+ * The event a notification is about, spelled the way the server spells it.
+ *
+ * The value is the member name because that is what arrives. Both transports
+ * write the event through JsonStringEnumConverter now — the notification list
+ * over REST and the hub over the socket — so `eventType` reads "NewMessage"
+ * whichever one delivered it. It used to be a number here, and a second numeric
+ * copy lived in a sibling file where NewPoll had drifted to 51: the server's
+ * slot for DeletedPublicationComment. Names cannot drift the way numbers did,
+ * and one table cannot disagree with itself.
+ *
+ * Only events the client acts on are listed. A member no screen reads is a name
+ * kept in step with nothing, and every member here is held to a real server
+ * event by NotificationVocabularyShould in DM.Architecture.Tests.
+ *
+ * @see src/DM.Domain.Core/Enums/EventType.cs
+ */
 export enum NotificationType {
-  // Blog notifications (41-52)
-  NewPublication = 41,
-  LikedPublication = 44,
-  NewBlogComment = 45,
-  LikedBlogComment = 48,
-  BlogInvitationCreated = 53,
-  BlogInvitationAccepted = 54,
-  BlogInvitationRejected = 55,
+  // Messaging
+  NewMessage = "NewMessage",
+  NewGlobalChatMessage = "NewGlobalChatMessage",
+  GlobalChatEventStarted = "GlobalChatEventStarted",
+  GlobalChatEventEnded = "GlobalChatEventEnded",
 
-  // Subscription notifications (71-79)
-  NewTopicInSubscribedBoard = 71,
-  NewCommentInSubscribedTopic = 72,
-  NewGameFromSubscribedAuthor = 73,
-  NewPostInSubscribedGame = 74,
-  UserMentioned = 75,
-  // 76 vacated (was NewPublicationFromSubscribedAuthor — per-publication
-  // notifications for user subscriptions were dropped in favor of
-  // blog-level signals).
-  NewTopicFromSubscribedAuthor = 77,
-  NewBlogFromSubscribedAuthor = 78,
+  // Community
+  UserAvatarChanged = "UserAvatarChanged",
+  UserMentioned = "UserMentioned",
 
-  // Forum notifications (101-114)
-  NewForumTopic = 101,
-  LikedTopic = 104,
-  NewForumComment = 111,
-  LikedForumComment = 114,
+  // Blog
+  NewPublication = "NewPublication",
+  LikedPublication = "LikedPublication",
+  NewBlogComment = "NewBlogComment",
+  LikedBlogComment = "LikedBlogComment",
+  BlogInvitationCreated = "BlogInvitationCreated",
+  BlogInvitationAccepted = "BlogInvitationAccepted",
+  BlogInvitationRejected = "BlogInvitationRejected",
 
-  // Game notifications (301+)
-  NewGame = 301,
-  NewCharacter = 361,
+  // Subscriptions
+  NewTopicInSubscribedBoard = "NewTopicInSubscribedBoard",
+  NewCommentInSubscribedTopic = "NewCommentInSubscribedTopic",
+  NewGameFromSubscribedAuthor = "NewGameFromSubscribedAuthor",
+  NewPostInSubscribedGame = "NewPostInSubscribedGame",
+  NewTopicFromSubscribedAuthor = "NewTopicFromSubscribedAuthor",
+  NewBlogFromSubscribedAuthor = "NewBlogFromSubscribedAuthor",
+
+  // Forum. Spelled the way the server spells them: the two halves of the title
+  // table are paired by member name, and an event that is a "forum topic" here
+  // and a "topic" there cannot be paired at all.
+  NewTopic = "NewTopic",
+  LikedTopic = "LikedTopic",
+  NewTopicComment = "NewTopicComment",
+  LikedTopicComment = "LikedTopicComment",
+
+  // Games
+  NewGame = "NewGame",
+  NewCharacter = "NewCharacter",
 }
 
 export type NotificationId = Id<string>;
@@ -48,6 +73,20 @@ export type UserNotification = {
   eventType: Served<NotificationType>;
   payload: Served<any>;
 };
+
+/**
+ * One notification as the hub pushes it: the same three fields the list returns
+ * over REST, in the same JSON. It used to live in a file of its own next to a
+ * second copy of the event vocabulary, which is how the two came apart.
+ */
+export interface SignalRNotification {
+  id: string;
+  eventType: NotificationType;
+  payload: Record<string, unknown>;
+}
+
+/** Notification handler callback type */
+export type NotificationHandler = (notification: SignalRNotification) => void;
 
 export type NewCharacterData = {
   authorUsername: Served<Username>;

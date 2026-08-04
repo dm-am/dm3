@@ -171,9 +171,19 @@ internal class GameReviewRepository : IGameReviewRepository
     }
 
     /// <inheritdoc />
-    public Task<int> GetUserPostCountAsync(Guid userId) => _dbContext.Posts
+    /// <remarks>
+    /// The denormalised counter, not a COUNT over posts: posts are counted under
+    /// the !IsRemoved filter while the counter is decremented on removal, so the
+    /// two are different numbers, and the badge on the profile is computed from
+    /// the counter. Counting here and reading the counter for post reviews and
+    /// endorsements let one user be a newbie for one of the three and not for the
+    /// others.
+    /// </remarks>
+    public Task<int> GetUserPostCountAsync(Guid userId) => _dbContext.Users
         .TagWith("DM.GameReview.UserPostCount")
-        .CountAsync(p => p.AuthorId == userId);
+        .Where(u => u.UserId == userId)
+        .Select(u => u.QuantityRating)
+        .FirstOrDefaultAsync();
 
     // ═══ PRIVATE ═══
 

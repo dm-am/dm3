@@ -46,16 +46,29 @@ internal class ChatRepository : IChatRepository
 
     // ═══ READ ═══
 
+    /// <summary>
+    /// A conversation the list shows: one the user takes part in and somebody
+    /// has written in.
+    /// </summary>
+    /// <remarks>
+    /// Both reads have to agree on this, and they did not: the count took every
+    /// chat and the page took only the ones with a message. Opening a person
+    /// from the search box creates an empty chat on the spot, so the list said
+    /// "Нет переписок" over a total of one, and further along it paged to
+    /// screens with nothing on them.
+    /// </remarks>
+    private static Expression<Func<DbChat, bool>> Started(Guid userId) =>
+        c => c.UserLinks.Any(l => !l.IsRemoved && l.UserId == userId) && c.LastMessageId.HasValue;
+
     /// <inheritdoc />
     public Task<int> Count(Guid userId) => _dbContext.Chats
-        .Where(UserParticipates(userId))
+        .Where(Started(userId))
         .CountAsync();
 
     /// <inheritdoc />
     public async Task<IEnumerable<DtoChat>> Get(Guid userId, PagingData paging) =>
         await _dbContext.Chats
-            .Where(UserParticipates(userId))
-            .Where(c => c.LastMessageId.HasValue)
+            .Where(Started(userId))
             .OrderByDescending(c => c.LastMessage!.CreatedUtc)
             .Page(paging)
             .ProjectTo<DtoChat>(_mapper.ConfigurationProvider)
@@ -86,7 +99,12 @@ internal class ChatRepository : IChatRepository
 
     /// <inheritdoc />
     public async Task<Guid?> FindUser(string username) => (await _dbContext.Users
-        .Where(u => EF.Functions.ILike(u.Username, username) && !u.IsRemoved)
+        // Equality over lower(), not ILIKE. This resolves the person a direct chat
+        // is opened with, and "_" is a legal login character that ILIKE reads as
+        // "any character": the caller would be handed a private chat with whoever
+        // the plan reached first and would write into it. The form also reaches
+        // IX_Users_Username_Lower, which ILIKE cannot use at all.
+        .Where(u => u.Username.ToLower() == username.ToLower() && !u.IsRemoved)
         .Select(u => new { u.UserId })
         .FirstOrDefaultAsync())?.UserId;
 
@@ -103,13 +121,17 @@ internal class ChatRepository : IChatRepository
     /// <inheritdoc />
     public async Task<DtoChat> Create(CreateChatEntity chat, IEnumerable<CreateChatLinkEntity> chatLinks)
     {
+        var serialNumber = await SerialNumberAllocator.NextAsync<DbChat>(_dbContext);
+
         var dbChat = new DbChat
         {
             ChatId = chat.ChatId,
             Type = chat.Type,
             Title = chat.Title,
-            // Unique placeholder until the serial exists; replaced below.
-            PublicId = $"t{chat.ChatId:N}"[..10]
+            // Taken from the sequence before the insert, so the row is written with the
+            // address it keeps — same shape as games and blogs, and for the same reason.
+            SerialNumber = serialNumber,
+            PublicId = _publicIdService.Encode(serialNumber)
         };
 
         var dbChatLinks = chatLinks.Select(l => new UserChatLink
@@ -122,11 +144,6 @@ internal class ChatRepository : IChatRepository
 
         _dbContext.Chats.Add(dbChat);
         _dbContext.UserChatLinks.AddRange(dbChatLinks);
-        await _dbContext.SaveChangesAsync();
-
-        // SerialNumber is database-generated, so the readable id can only be
-        // produced after the insert — same two-phase shape as games and blogs.
-        dbChat.PublicId = _publicIdService.Encode(dbChat.SerialNumber);
         await _dbContext.SaveChangesAsync();
 
         return await _dbContext.Chats
@@ -188,19 +205,19 @@ internal class ChatRepository : IChatRepository
     /// <inheritdoc />
     public async Task<DtoChat> CreateGameRoomChat(CreateChatEntity chat)
     {
+        var serialNumber = await SerialNumberAllocator.NextAsync<DbChat>(_dbContext);
+
         var dbChat = new DbChat
         {
             ChatId = chat.ChatId,
             Type = chat.Type,
             Title = chat.Title,
             RoomId = chat.RoomId,
-            PublicId = $"t{chat.ChatId:N}"[..10]
+            SerialNumber = serialNumber,
+            PublicId = _publicIdService.Encode(serialNumber)
         };
 
         _dbContext.Chats.Add(dbChat);
-        await _dbContext.SaveChangesAsync();
-
-        dbChat.PublicId = _publicIdService.Encode(dbChat.SerialNumber);
         await _dbContext.SaveChangesAsync();
 
         return await _dbContext.Chats

@@ -2,9 +2,8 @@
  * Monotonically increasing request counter used to discard stale async
  * responses (out-of-order network replies racing a newer request).
  *
- * The blogs store pioneered this pattern inline (`currentRequestId`); this
- * is the SSOT extraction so every search store shares the same guard logic
- * instead of copy-pasting the counter.
+ * One guard shared by every search store instead of a counter per store: a store
+ * that skips the check renders whichever reply happens to land last.
  *
  * @example
  * ```ts

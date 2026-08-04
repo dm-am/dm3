@@ -44,8 +44,15 @@ Grafana → Explore → датасорс Loki. Отдельного UI у лог
 # Ошибки API за последний час (интервал задается в UI)
 {app="DM.API"} | json | level = "Error"
 
-# Все, что писалось про конкретный корреляционный токен
-{app=~"DM.+"} |= "1b2c3d4e"
+# Все, что писалось про конкретный корреляционный токен. Только API: токен
+# ограничен HTTP-запросом и через очередь не передается, поэтому строк
+# воркеров по нему не будет
+{app="DM.API"} |= "1b2c3d4e"
+
+# Сквозной поиск по всем приложениям — по TraceId: контекст трейса едет в
+# заголовках сообщения. TraceId лежит в той же строке лога, что и токен,
+# поэтому переход от токена к TraceId делается запросом выше
+{app=~"DM.+"} |= "4bf92f3577b34da6a3ce929d0e0e4736"
 
 # Поток одного воркера
 {app="DM.Notifications.Consumer"}
@@ -60,7 +67,6 @@ Grafana → Explore → датасорс Loki. Отдельного UI у лог
 ### Инструментация
 
 - ASP.NET Core
-- gRPC
 - HTTP client
 - EF Core
 - MongoDB
@@ -75,7 +81,7 @@ Grafana → Explore → датасорс Loki. Отдельного UI у лог
 
 ### Поиск trace
 
-1. Выбрать Service: `dm-api`
+1. Выбрать Service: `DM.API` — имя приложения, а не имя контейнера
 2. Найти по TraceId из логов
 3. Просмотреть spans и зависимости
 
@@ -85,9 +91,8 @@ Grafana → Explore → датасорс Loki. Отдельного UI у лог
 
 ### Endpoint
 
-`/metrics` и `/_health` — на каждом .NET сервисе. Хост, отдающий gRPC, слушает
-cleartext HTTP/2 и не отвечает HTTP/1.1-клиенту, поэтому health и метрики у него
-на отдельном порту.
+`/metrics` и `/_health` — на каждом .NET сервисе, на том же порту, что и
+основной трафик.
 
 ### Scrape targets
 
@@ -104,7 +109,7 @@ cleartext HTTP/2 и не отвечает HTTP/1.1-клиенту, поэтом�
 | Targets | http://localhost:9090/targets |
 
 > **Доступ только с самой машины.** Все служебные интерфейсы — Prometheus,
-> Grafana, Loki, Jaeger, консоль MinIO, порты воркеров —
+> Alertmanager, Grafana, Loki, Jaeger, консоль MinIO, порты воркеров —
 > публикуются на `127.0.0.1`, а не наружу. Правила брандмауэра тут не помощник:
 > опубликованный докером порт идет через цепочки nat/DOCKER и FORWARD, минуя
 > INPUT, поэтому единственная надежная граница — сам адрес привязки. С удаленной
@@ -117,15 +122,20 @@ cleartext HTTP/2 и не отвечает HTTP/1.1-клиенту, поэтом�
 ### Полезные запросы PromQL
 
 ```promql
-# Количество запросов в секунду
-rate(http_requests_total[5m])
+# Запросов в секунду по маршрутам
+sum(rate(http_server_request_duration_seconds_count{job="dm-api"}[5m])) by (http_route)
 
-# Средняя latency
-histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+# p95 latency
+histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{job="dm-api"}[5m])) by (le))
 
-# Ошибки 5xx
-sum(rate(http_requests_total{status=~"5.."}[5m]))
+# Ошибки 5xx в секунду
+sum(rate(http_server_request_duration_seconds_count{job="dm-api",http_response_status_code=~"5.."}[5m]))
 ```
+
+Имена серий задает инструментация OpenTelemetry, а не старая схема
+`http_requests_total`. Готовые выражения проще копировать из панелей в
+[`docker/grafana/dashboards/`](../../docker/grafana/dashboards/), чем писать
+заново.
 
 ---
 
@@ -143,7 +153,7 @@ sum(rate(http_requests_total{status=~"5.."}[5m]))
 |-----------|----------------|
 | API Overview | Requests, latency, errors |
 | Infrastructure | CPU, memory, disk |
-| Consumers | Message rates, processing time |
+| Consumers | Очереди: глубина, dead-letter, наличие потребителя |
 
 Dashboards настроены автоматически (auto-provisioned).
 
@@ -153,34 +163,34 @@ Dashboards настроены автоматически (auto-provisioned).
 
 ### Правила
 
-7 правил в `docker/prometheus/alerts.yml`:
+**Источник истины:** [`docker/prometheus/alerts.yml`](../../docker/prometheus/alerts.yml).
 
-| Правило | Условие |
-|---------|---------|
-| ApiDown | dm-api не отвечает > 1 мин |
-| HighErrorRate | > 1% ошибок за 5 мин |
-| HighLatency | p95 > 2 сек за 5 мин |
-| ConsumerDown | Consumer не отвечает > 5 мин |
-| PostgresDown | PostgreSQL не отвечает > 1 мин |
-| HighMemoryUsage | > 85% памяти |
-| DiskSpaceLow | < 10% свободного места |
+Пороги и окна `for` живут только там. Продублированные здесь, они расходятся с
+файлом молча, и тот, кто сверялся с документом, узнает настоящий порог в момент
+инцидента. У каждого правила есть `summary` и `description` — читать их в файле.
 
-### Настройка уведомлений
+### Получатель
 
-1. Открыть Grafana → Alerting → Notification channels
-2. Добавить канал (Telegram, Discord, Email)
-3. Привязать к правилам
+Правила вычисляет Prometheus, а не Grafana: канал уведомлений, привязанный к ним из
+интерфейса Grafana, там не заводится — этих правил в Grafana нет. Сработавшее правило
+уходит в alertmanager (секция `alerting` в `docker/prometheus.yml`), а куда дальше,
+решает [`docker/prometheus/alertmanager.yml`](../../docker/prometheus/alertmanager.yml):
+маршрут, группировка и получатель живут только там.
 
-### Telegram бот (рекомендуется)
+Транспорт — почта, тот же relay, что и у писем приложения: `MAIL_HOST` и `MAIL_PORT`.
+Отдельного секрета у алертов нет, поэтому доставка работает сразу, без разового шага
+настройки. На стенде relay это MailHog, и письмо видно на http://localhost:8025.
 
-```yaml
-# docker/prometheus/alertmanager.yml
-receivers:
-  - name: telegram
-    telegram_configs:
-      - bot_token: '<BOT_TOKEN>'
-        chat_id: <CHAT_ID>
-```
+Что задает развертывание, файлом окружения рядом с compose (список с дефолтами — в
+`docker/.env.example`): адрес получателя и отправителя, логин с паролем relay, если
+он их спрашивает, и требование STARTTLS. Alertmanager не подставляет переменные
+окружения сам, поэтому конфигурация собирается из шаблона при старте контейнера
+(`docker/alertmanager-init.sh`) — значения в самом файле не пишутся.
+
+| Что | URL |
+|-----|-----|
+| Alertmanager | http://localhost:9093 |
+| MailHog (стенд) | http://localhost:8025 |
 
 ---
 
@@ -197,7 +207,7 @@ receivers:
 
 1. Проверить что Jaeger запущен: `docker ps | grep jaeger`
 2. Проверить OTLP endpoint: `curl http://localhost:4317`
-3. Проверить env var: `OTEL_EXPORTER_OTLP_ENDPOINT`
+3. Проверить переменную окружения: `DM_ConnectionStrings__TracingEndpoint`
 
 ### Grafana dashboards пустые
 

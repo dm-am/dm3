@@ -26,6 +26,7 @@ internal class PasswordChangeService : IPasswordChangeService
     private readonly ICompromisedPasswordChecker _compromisedPasswordChecker;
     private readonly IEventProducer _eventProducer;
     private readonly IPasswordChangeMailSender _notificationSender;
+    private readonly ISecurityAuditService _auditService;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly TokenConfiguration _tokenConfig;
 
@@ -39,6 +40,7 @@ internal class PasswordChangeService : IPasswordChangeService
         IIdentityProvider identityProvider,
         IEventProducer eventProducer,
         IPasswordChangeMailSender notificationSender,
+        ISecurityAuditService auditService,
         IDateTimeProvider dateTimeProvider,
         IOptions<TokenConfiguration> tokenOptions)
     {
@@ -50,6 +52,7 @@ internal class PasswordChangeService : IPasswordChangeService
         _compromisedPasswordChecker = compromisedPasswordChecker;
         _eventProducer = eventProducer;
         _notificationSender = notificationSender;
+        _auditService = auditService;
         _dateTimeProvider = dateTimeProvider;
         _tokenConfig = tokenOptions.Value;
     }
@@ -77,7 +80,7 @@ internal class PasswordChangeService : IPasswordChangeService
         // For OldPassword flow (no token), require authentication
         if (!passwordChange.Token.HasValue && !_identityProvider.Current.User.IsAuthenticated)
         {
-            throw new HttpException(System.Net.HttpStatusCode.Unauthorized, "Authentication required");
+            throw new HttpException(System.Net.HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
         }
 
         // Check that either token or oldPassword is provided (after auth check)
@@ -85,7 +88,7 @@ internal class PasswordChangeService : IPasswordChangeService
         {
             throw new HttpBadRequestException(new Dictionary<string, string>
             {
-                [nameof(passwordChange.OldPassword)] = "Either a password reset token or the current password must be provided"
+                [nameof(passwordChange.OldPassword)] = "Введите текущий пароль"
             });
         }
 
@@ -96,7 +99,7 @@ internal class PasswordChangeService : IPasswordChangeService
 
         if (user == null)
         {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, "User not found");
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.UserNotFound);
         }
 
         // Check if new password matches current password
@@ -113,7 +116,7 @@ internal class PasswordChangeService : IPasswordChangeService
         {
             throw new HttpBadRequestException(new Dictionary<string, string>
             {
-                [nameof(passwordChange.NewPassword)] = "Этот пароль был скомпрометирован в результате утечки данных. Пожалуйста, выберите другой пароль."
+                [nameof(passwordChange.NewPassword)] = RefusalMessage.PasswordBreached
             });
         }
 
@@ -122,13 +125,21 @@ internal class PasswordChangeService : IPasswordChangeService
 
         // When changing via token, user is not authenticated - logout all sessions
         // When changing via old password, user is authenticated - keep current session
+        //
+        // The security journal is written in the same two branches, with two
+        // types, because "changed from inside a session" and "reset through a
+        // link out of the mailbox" are different events to the person working out
+        // afterwards whether it was him. Nothing wrote either of them, so the
+        // journal answered "nothing happened" to the one question it exists for.
         if (passwordChange.Token.HasValue)
         {
             await _authenticationService.LogoutAll(user.UserId);
+            await _auditService.LogAsync(user.UserId, SecurityEventType.PasswordResetComplete);
         }
         else
         {
             await _authenticationService.LogoutElsewhere();
+            await _auditService.LogAsync(user.UserId, SecurityEventType.PasswordChange);
         }
 
         // Audit logging: record password change event

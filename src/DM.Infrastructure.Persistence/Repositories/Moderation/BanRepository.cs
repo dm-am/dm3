@@ -31,7 +31,7 @@ internal class BanRepository : IBanRepository
     public async Task<IEnumerable<Ban>> GetUserBans(Guid userId, CancellationToken ct = default)
     {
         return await _dbContext.Bans
-            .Where(b => b.TargetUserId == userId && !b.IsRemoved)
+            .Where(b => b.TargetUserId == userId)
             .OrderByDescending(b => b.StartedUtc)
             .ProjectTo<Ban>(_mapper.ConfigurationProvider)
             .ToListAsync(ct);
@@ -42,7 +42,7 @@ internal class BanRepository : IBanRepository
     {
         var now = _dateTimeProvider.Now;
         return await _dbContext.Bans
-            .Where(b => b.TargetUserId == userId && !b.IsRemoved && b.StartedUtc <= now && b.EndedUtc > now)
+            .Where(b => b.TargetUserId == userId && b.LiftedUtc == null && b.StartedUtc <= now && b.EndedUtc > now)
             .OrderByDescending(b => b.EndedUtc)
             .ProjectTo<Ban>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
@@ -69,8 +69,7 @@ internal class BanRepository : IBanRepository
             EndedUtc = entity.EndedUtc,
             Comment = entity.Comment,
             AccessRestrictionPolicy = entity.AccessRestrictionPolicy,
-            IsVoluntary = entity.IsVoluntary,
-            IsRemoved = false
+            IsVoluntary = entity.IsVoluntary
         };
 
         _dbContext.Bans.Add(ban);
@@ -80,15 +79,16 @@ internal class BanRepository : IBanRepository
     }
 
     /// <inheritdoc />
-    public async Task Remove(Guid banId, Guid liftedByUserId, DateTimeOffset liftedUtc, string? reason,
+    public async Task Lift(Guid banId, Guid liftedByUserId, DateTimeOffset liftedUtc, string? reason,
         CancellationToken ct = default)
     {
         var ban = await _dbContext.Bans.FindAsync(new object[] { banId }, ct);
         if (ban != null)
         {
-            ban.IsRemoved = true;
             // Lifting a ban used to leave no trace at all: the reason reached the
             // service and was dropped, so nobody could tell who had lifted what.
+            // Then the trace was written and soft-deleted in the same call, which
+            // hid the row from every query that could have read it back.
             ban.LiftedByUserId = liftedByUserId;
             ban.LiftedUtc = liftedUtc;
             ban.LiftReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
@@ -97,19 +97,11 @@ internal class BanRepository : IBanRepository
     }
 
     /// <inheritdoc />
-    public async Task<bool> IsUserBanned(Guid userId, CancellationToken ct = default)
-    {
-        var now = _dateTimeProvider.Now;
-        return await _dbContext.Bans
-            .AnyAsync(b => b.TargetUserId == userId && !b.IsRemoved && b.StartedUtc <= now && b.EndedUtc > now, ct);
-    }
-
-    /// <inheritdoc />
     public async Task<IEnumerable<Ban>> GetAllActiveBans(CancellationToken ct = default)
     {
         var now = _dateTimeProvider.Now;
         return await _dbContext.Bans
-            .Where(b => !b.IsRemoved && b.StartedUtc <= now && b.EndedUtc > now)
+            .Where(b => b.LiftedUtc == null && b.StartedUtc <= now && b.EndedUtc > now)
             .OrderByDescending(b => b.StartedUtc)
             .ProjectTo<Ban>(_mapper.ConfigurationProvider)
             .ToListAsync(ct);

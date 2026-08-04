@@ -43,4 +43,21 @@ public interface IUserBlacklistChecker
     /// <param name="ct">Cancellation token</param>
     /// <returns>Collection of blocked user IDs if flag is enabled, empty otherwise</returns>
     Task<IReadOnlySet<Guid>> GetBlockedUserIdsIfFlagEnabledAsync(Guid ownerId, UserBlacklistSettings flag, CancellationToken ct = default);
+
+    /// <summary>
+    /// Of the given users, which ones have this user on their blacklist
+    /// </summary>
+    /// <remarks>
+    /// The inverse of the reads above, and the shape a fan-out needs: a
+    /// notification about one person's action is addressed to many, and asking
+    /// per recipient costs one statement per recipient. A new publication
+    /// notifies every subscriber of the blog, so the per-recipient read turns one
+    /// event into a query for each of them.
+    /// </remarks>
+    /// <param name="blockedUserId">The user who might be blocked</param>
+    /// <param name="ownerIds">Blacklist owners to look at</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>The subset of <paramref name="ownerIds"/> that blocks the user</returns>
+    Task<IReadOnlySet<Guid>> GetOwnersBlockingAsync(
+        Guid blockedUserId, IReadOnlyCollection<Guid> ownerIds, CancellationToken ct = default);
 }

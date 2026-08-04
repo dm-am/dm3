@@ -60,27 +60,3 @@ public class CreateInvitationRequest
     [System.ComponentModel.DataAnnotations.Required]
     public string Username { get; set; } = string.Empty;
 }
-
-/// <summary>
-/// Request to create an assistant invitation
-/// </summary>
-public class CreateAssistantInvitationRequest
-{
-    /// <summary>
-    /// Username of user to invite
-    /// </summary>
-    [System.ComponentModel.DataAnnotations.Required]
-    public string Username { get; set; } = string.Empty;
-}
-
-/// <summary>
-/// Request to create a reader invitation
-/// </summary>
-public class CreateReaderInvitationRequest
-{
-    /// <summary>
-    /// Username of user to invite
-    /// </summary>
-    [System.ComponentModel.DataAnnotations.Required]
-    public string Username { get; set; } = string.Empty;
-}

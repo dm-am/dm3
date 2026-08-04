@@ -7,7 +7,7 @@ import { Tooltip } from "@/shared/ui/Tooltip";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { LoginPrompt } from "@/features/auth";
-import { ContentText } from "@/shared/ui";
+import { ContentText } from "@/shared/ui/Content";
 import Paging from "@/shared/ui/Paging/Paging.vue";
 import { useBoardsStore, type Topic } from "@/entities/forum";
 import { UserLink, userIsModerator } from "@/entities/user";
@@ -21,6 +21,9 @@ import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
 import { useAnimatedHeightToggle } from "@/shared/lib/composables";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
+import { describeFailure, notifyFailure } from "@/shared/lib/errors";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
+import { TOPIC_TITLE_MAX_LENGTH } from "@/shared/lib/constants/forum";
 
 const route = useRoute();
 const router = useRouter();
@@ -234,9 +237,18 @@ async function handleTogglePin(row: DisplayTopic) {
   if (pinningTopicId.value) return;
 
   const topicId = String(row.id);
+  // Read the direction BEFORE the request: on success the row is replaced by
+  // the refreshed listing, and the refusal has to name what was attempted.
+  const wasPinned = row.isPinned;
   pinningTopicId.value = topicId;
   try {
-    await store.togglePinTopic(topicId);
+    const { error } = await store.togglePinTopic(topicId);
+    if (error) {
+      notifyFailure(
+        error,
+        wasPinned ? "Не удалось открепить топик" : "Не удалось закрепить топик",
+      );
+    }
   } finally {
     pinningTopicId.value = null;
   }
@@ -246,7 +258,13 @@ async function handleTogglePin(row: DisplayTopic) {
 async function handleSavePinnedOrder(topicIds: string[]) {
   savingPinnedOrder.value = true;
   try {
-    await store.reorderPinnedTopics(topicIds);
+    const { error } = await store.reorderPinnedTopics(topicIds);
+    // The dialog closes only on success: closing it over a rejected save shows
+    // the new order on screen while the server keeps the old one.
+    if (error) {
+      notifyFailure(error, "Не удалось сохранить порядок закрепленных топиков");
+      return;
+    }
     showPinnedManager.value = false;
   } finally {
     savingPinnedOrder.value = false;
@@ -305,7 +323,10 @@ async function handleCreateTopic() {
       // field-level validation errors (e.g. a GeneralError, not a
       // BadRequestError) — this covers 403 (board policy) and 500 alike.
       if (!Object.keys(fieldErrors).length) {
-        createGeneralError.value = error.title || "Не удалось создать топик";
+        createGeneralError.value = describeFailure(
+          error,
+          "Не удалось создать топик",
+        );
       }
       return;
     }
@@ -448,7 +469,7 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
               </router-link>
             </Tooltip>
           </template>
-          <span v-else class="muted">—</span>
+          <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
         </template>
 
         <template v-if="canModerate" #cell-actions="{ row }">
@@ -540,7 +561,7 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
             type="text"
             class="create-topic-title-input"
             placeholder="Заголовок топика"
-            maxlength="200"
+            :maxlength="TOPIC_TITLE_MAX_LENGTH"
           />
         </form-field>
 
@@ -594,12 +615,12 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
   flex-direction: column
   gap: $small
 
+// A caption, not a pinned block: the text is four to seven words in every
+// board, and a dashed box around one line reads as weight the content does not
+// carry. Same idiom as the moderators line at the foot of this page, so the
+// listing sits between two muted captions.
 .board-description
-  padding: $small $medium
-  border: 1px dashed $border
-  background-color: $bg-element
-  color: $text
-  font-size: $secondary-font-size
+  +muted-links-line
 
 .topic-link
   color: $link

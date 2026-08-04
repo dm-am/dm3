@@ -6,11 +6,16 @@
 // BlogPanel.
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
-import { useBlogDetailsStore, type Rubric } from "@/entities/blog";
+import {
+  useBlogDetailsStore,
+  BlogStatusBadge,
+  type Rubric,
+} from "@/entities/blog";
 import { UserLink } from "@/entities/user";
-import { ContentText } from "@/shared/ui";
+import { ContentText } from "@/shared/ui/Content";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
+import { DashSeparator } from "@/shared/ui/DashSeparator";
 import { formatDate } from "@/shared/lib/utils/datetime";
 
 const blogStore = useBlogDetailsStore();
@@ -20,12 +25,6 @@ const { blog, rubrics } = storeToRefs(blogStore);
 // blog route is publicId-tolerant on the backend.
 const blogId = computed(() => blog.value?.publicId ?? blog.value?.id ?? "");
 const assistants = computed(() => blog.value?.assistants ?? []);
-
-const STATUS_LABEL: Record<string, string> = {
-  Draft: "Черновик",
-  Active: "Активен",
-  Closed: "Закрыт",
-};
 
 const rubricColumns: Column[] = [
   { key: "title", label: "Рубрика", align: "left" },
@@ -48,18 +47,19 @@ function rubricTo(r: Rubric) {
       <tbody>
         <tr>
           <th>Статус</th>
-          <td>{{ STATUS_LABEL[blog.status] ?? blog.status }}</td>
+          <td><BlogStatusBadge :status="blog.status" /></td>
         </tr>
         <tr>
           <th>Автор</th>
-          <td><UserLink :user="blog.author" /></td>
+          <td><UserLink :user="blog.author" hide-badge /></td>
         </tr>
         <tr>
           <th>{{ assistants.length > 1 ? "Ассистенты" : "Ассистент" }}</th>
           <td>
             <template v-if="assistants.length"
               ><template v-for="(a, i) in assistants" :key="a.id"
-                ><UserLink :user="a" /><span v-if="i < assistants.length - 1"
+                ><UserLink :user="a" hide-badge /><span
+                  v-if="i < assistants.length - 1"
                   >,
                 </span></template
               ></template
@@ -69,7 +69,7 @@ function rubricTo(r: Rubric) {
         </tr>
         <tr v-if="blog.mentor">
           <th>Наставник</th>
-          <td><UserLink :user="blog.mentor" /></td>
+          <td><UserLink :user="blog.mentor" hide-badge /></td>
         </tr>
         <tr>
           <th>Дата создания</th>
@@ -87,10 +87,9 @@ function rubricTo(r: Rubric) {
     </table>
 
     <!-- Rubrics -->
-    <section class="rubrics">
+    <section v-if="rubrics.length" class="rubrics">
       <BlockTitle>Рубрики</BlockTitle>
       <DataTable
-        v-if="rubrics.length"
         :columns="rubricColumns"
         :data="rubrics"
         :show-row-numbers="true"
@@ -105,44 +104,26 @@ function rubricTo(r: Rubric) {
           row.publicationCount
         }}</template>
       </DataTable>
-      <p class="feed-link">
-        <router-link :to="{ name: 'blog-feed', params: { id: blogId } }"
-          >Все публикации</router-link
-        >
-      </p>
     </section>
 
     <!-- Description (BBCode, server-rendered) -->
     <section v-if="blog.description" class="description">
-      <BlockTitle>Описание блога</BlockTitle>
+      <DashSeparator />
       <ContentText :html="blog.description" />
     </section>
   </div>
 </template>
 
 <style scoped lang="sass">
+@import "@/assets/styles/Tables"
+
 .blog-details
   display: flex
   flex-direction: column
   gap: $big
 
-// Compact key-value fact table — borderless information block (no card/rounding).
 .info-table
-  border-collapse: collapse
-  width: 100%
-
-  th,
-  td
-    padding: 2px $small 2px 0
-    text-align: left
-    vertical-align: top
-    font-weight: normal
-
-  th
-    width: 1%
-    white-space: nowrap
-    padding-right: $big
-    color: $text-muted
+  +info-table
 
 .rubrics
   display: flex
@@ -156,11 +137,4 @@ function rubricTo(r: Rubric) {
   color: $link
   &:hover
     color: $link-hover
-
-.feed-link
-  margin: 0
-  a
-    color: $link
-    &:hover
-      color: $link-hover
 </style>

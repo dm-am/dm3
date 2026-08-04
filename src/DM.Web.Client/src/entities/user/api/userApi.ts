@@ -12,12 +12,14 @@ import type {
   UpdateUserEndorsementRequest,
 } from "@/shared/api/models/community";
 import { UserActivityFilter } from "@/shared/api/models/community";
+import type { GameReview } from "@/shared/api/models/game/reviews";
 import { Api } from "@/shared/api";
 
 /**
  * The user directory and everything hanging off a public profile: the user
- * record itself, past usernames, the viewer's private note about them, and
- * endorsements written about or by them.
+ * record itself, past usernames, the viewer's private note about them,
+ * endorsements written about or by them, and game reviews written by them or
+ * about the games they master.
  *
  * What is NOT here: the viewer's own account and settings (accountApi,
  * personalApi), the moderation view of a user (entities/moderation), and the
@@ -27,9 +29,9 @@ export default new (class UserApi {
   /**
    * Fetch users with the full search/filter/sort param set.
    *
-   * The store (communityStore) builds backend-shaped params (q, activity,
+   * The store (communityStore) builds backend-shaped params (search, activity,
    * role, isOnline, isNewbie, rating/games/blogs ranges,
-   * registeredFrom/To, sort, sortOrder, take/skip) and passes them straight
+   * registeredFrom/To, sortBy, sortOrder, take/skip) and passes them straight
    * through here — we must NOT drop unknown keys (a prior version cherry-picked
    * only a handful and silently lost every filter). Mirrors how
    * gameApi.searchGames forwards its params.
@@ -67,7 +69,7 @@ export default new (class UserApi {
     // activity omitted from the query when undefined - the backend then
     // applies its default Active-only filter
     return Api.get<ListEnvelope<User>>("users", {
-      q: search,
+      search,
       take: size,
       activity,
     });
@@ -145,6 +147,12 @@ export default new (class UserApi {
    * One builder for the query string of both endorsement endpoints
    * (received / given) — when a new param is added on the BE,
    * only one place changes.
+   *
+   * The page number becomes skip/take here, exactly as in
+   * buildGameReviewParams. It used to be forwarded as `number`, which
+   * UserEndorsementsQuery does not bind: an unknown query parameter is ignored
+   * rather than refused, so every page of the profile's endorsement list
+   * answered with page one while the pager and the address bar said otherwise.
    */
   private buildEndorsementParams(
     q?: PagingQuery & {
@@ -155,12 +163,55 @@ export default new (class UserApi {
   ) {
     const params: Record<string, string | number | undefined> = {};
     if (!q) return params;
-    if (q.skip != null) params.skip = q.skip;
-    if (q.take != null) params.take = q.take;
-    if (q.number != null) params.number = q.number;
+    const pageSize = q.take ?? 20;
+    params.take = pageSize;
+    if (q.number && q.number > 1) {
+      params.skip = (q.number - 1) * pageSize;
+    } else if (q.skip != null) {
+      params.skip = q.skip;
+    }
     if (q.search) params.search = q.search;
     if (q.sortBy) params.sortBy = q.sortBy;
     if (q.sortOrder) params.sortOrder = q.sortOrder;
+    return params;
+  }
+
+  /**
+   * Get game reviews received by a user: reviews of the games they master.
+   *
+   * Not the post-review endpoints. A post review rates one post inside a game
+   * and lives under /v1/posts; these are reviews of whole games, and the
+   * profile shows the two as separate counters.
+   */
+  public getUserGameReviews(username: Username, q?: PagingQuery) {
+    return Api.get<ListEnvelope<GameReview>>(
+      `users/${username}/game-reviews`,
+      this.buildGameReviewParams(q),
+    );
+  }
+
+  /** Get game reviews written BY a user (they are the author). */
+  public getWrittenUserGameReviews(username: Username, q?: PagingQuery) {
+    return Api.get<ListEnvelope<GameReview>>(
+      `users/${username}/written-game-reviews`,
+      this.buildGameReviewParams(q),
+    );
+  }
+
+  /**
+   * One builder for the query string of both game-review endpoints. The
+   * endpoints take skip/take only, so a 1-indexed `number` is converted here,
+   * exactly as gameApi does for the game-scoped listing.
+   */
+  private buildGameReviewParams(q?: PagingQuery) {
+    const params: Record<string, number | undefined> = {};
+    const pageSize = q?.take ?? 20;
+    params.take = pageSize;
+    if (q?.number && q.number > 1) {
+      params.skip = (q.number - 1) * pageSize;
+    } else if (q?.skip) {
+      params.skip = q.skip;
+    }
     return params;
   }
 

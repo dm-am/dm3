@@ -10,6 +10,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Characters;
 using DM.Domain.Game.Features.Games;
 using DM.Infrastructure.Persistence.MongoIntegration;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
 using DbCharacterAttribute = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.CharacterAttribute;
@@ -24,17 +25,20 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
     private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public CharacterRepository(
         DmDbContext dbContext,
         IMapper mapper,
         DmMongoClient client,
-        IGuidFactory guidFactory) : base(client)
+        IGuidFactory guidFactory,
+        IDateTimeProvider dateTimeProvider) : base(client)
     {
         _dbContext = dbContext;
         _mapper = mapper;
         _guidFactory = guidFactory;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     #region Validation Operations
@@ -272,7 +276,7 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
         }
     }
 
-    public async Task Delete(Guid characterId)
+    public async Task Delete(Guid characterId, Guid deletedByUserId)
     {
         var character = await _dbContext.Characters.FindAsync(characterId);
         if (character != null)
@@ -280,7 +284,7 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
             var wasActive = !character.IsNpc && character.Status == CharacterStatus.Active;
             var gameId = character.GameId;
 
-            character.IsRemoved = true;
+            SoftDelete.Mark(character, deletedByUserId, _dateTimeProvider.Now);
             await _dbContext.SaveChangesAsync();
 
             // Adjust PcLimit if active non-NPC character was deleted

@@ -9,7 +9,7 @@ using DM.Domain.Community.Features.Polls;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
-using DM.Infrastructure.Messaging.GeneralBus;
+using DM.Domain.Core.Events;
 using DM.Testing;
 using FluentAssertions;
 using FluentValidation;
@@ -26,7 +26,7 @@ public class PollServiceShould : UnitTestBase
     private readonly ISetup<IPollFactory, CreatePollEntity> _createPollSetup;
     private readonly Mock<IPollRepository> _repository;
     private readonly ISetup<IPollRepository, Task<Poll>> _savePollSetup;
-    private readonly Mock<IInvokedEventProducer> _producer;
+    private readonly Mock<IEventProducer> _producer;
     private readonly PollService _service;
 
     public PollServiceShould()
@@ -45,7 +45,7 @@ public class PollServiceShould : UnitTestBase
         _repository = Mock<IPollRepository>();
         _savePollSetup = _repository.Setup(r => r.Create(It.IsAny<CreatePollEntity>()));
 
-        _producer = Mock<IInvokedEventProducer>();
+        _producer = Mock<IEventProducer>();
         _producer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
 
         var dateTimeProvider = Mock<IDateTimeProvider>();

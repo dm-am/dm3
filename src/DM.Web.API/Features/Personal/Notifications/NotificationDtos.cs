@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using DM.Domain.Core.Enums;
+using DM.Web.API.Shared.Binding;
 
 namespace DM.Web.API.Features.Personal.Notifications;
 
@@ -22,6 +24,11 @@ public class Notification
     /// <summary>
     /// Notification payload
     /// </summary>
+    /// <remarks>
+    /// The converter is what keeps the keys of this bag identical whether the DTO
+    /// came off the bus or out of Mongo; see NotificationPayloadConverter.
+    /// </remarks>
+    [JsonConverter(typeof(NotificationPayloadConverter))]
     public object Payload { get; set; } = new { };
 }
 
@@ -119,25 +126,4 @@ public class UpdateBotConnection
     /// Updated set of enabled categories (replaces existing)
     /// </summary>
     public HashSet<NotificationCategory>? EnabledCategories { get; set; }
-}
-
-/// <summary>
-/// Channels for delivering notifications
-/// </summary>
-public enum NotificationChannel
-{
-    /// <summary>
-    /// Email notifications (always available)
-    /// </summary>
-    Email = 1,
-
-    /// <summary>
-    /// Telegram bot notifications (requires connection)
-    /// </summary>
-    Telegram = 2,
-
-    /// <summary>
-    /// Discord bot notifications (requires connection)
-    /// </summary>
-    Discord = 3
 }

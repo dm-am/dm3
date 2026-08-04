@@ -61,7 +61,7 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
     public async Task<ModeratedProfileNote> GetNote(Guid noteId)
     {
         var note = await _noteRepository.GetNote(noteId)
-            ?? throw new HttpException(HttpStatusCode.NotFound, $"Note {noteId} not found");
+            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ModerationNoteNotFound(noteId));
 
         var user = await _userLookupService.GetAsync(note.User.UserId);
 
@@ -96,7 +96,7 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
     {
         await _updateValidator.ValidateAndThrowAsync(updateNote);
         var note = await _noteRepository.GetNote(updateNote.Id)
-            ?? throw new HttpException(HttpStatusCode.NotFound, $"Note {updateNote.Id} not found");
+            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ModerationNoteNotFound(updateNote.Id));
 
         var user = await _userLookupService.GetAsync(note.User.UserId);
 
@@ -106,7 +106,7 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
         var identity = _identityProvider.Current;
         if (note.Author.UserId != identity.User.UserId && identity.User.Role < UserRole.SeniorModerator)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You can only edit your own notes");
+            throw new HttpException(HttpStatusCode.Forbidden, "Редактировать можно только свои заметки");
         }
 
         var entity = new UpdateModeratedProfileNoteEntity
@@ -125,7 +125,7 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
     public async Task Delete(Guid noteId)
     {
         var note = await _noteRepository.GetNote(noteId)
-            ?? throw new HttpException(HttpStatusCode.NotFound, $"Note {noteId} not found");
+            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ModerationNoteNotFound(noteId));
 
         var user = await _userLookupService.GetAsync(note.User.UserId);
 
@@ -135,7 +135,7 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
         var identity = _identityProvider.Current;
         if (note.Author.UserId != identity.User.UserId && identity.User.Role < UserRole.SeniorModerator)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You can only delete your own notes");
+            throw new HttpException(HttpStatusCode.Forbidden, "Удалять можно только свои заметки");
         }
 
         await _noteRepository.Delete(noteId);

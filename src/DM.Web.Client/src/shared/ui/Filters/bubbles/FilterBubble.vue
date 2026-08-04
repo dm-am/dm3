@@ -5,20 +5,13 @@
  * Displays a filter value with optional prefix and remove button.
  */
 import { symbols } from "@/shared/lib/utils/icons";
+import type { FilterBubbleProps } from "../types";
 
 defineOptions({ name: "FilterBubble" });
 
-withDefaults(
-  defineProps<{
-    /** Prefix text (e.g., "Статус:") */
-    prefix?: string;
-    /** Display value */
-    value: string;
-  }>(),
-  {
-    prefix: undefined,
-  },
-);
+withDefaults(defineProps<FilterBubbleProps>(), {
+  prefix: undefined,
+});
 
 const emit = defineEmits<{
   remove: [];

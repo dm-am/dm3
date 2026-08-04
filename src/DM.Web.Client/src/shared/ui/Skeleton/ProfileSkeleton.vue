@@ -3,7 +3,8 @@
  * Skeleton loading for ProfilePage — mirrors the real profile layout
  * pixel-for-pixel so nothing jumps once the profile loads:
  * - Title bar: single PageTitle-height bar ("Личный кабинет: username")
- * - Avatar: 220x220px (matches `.avatar-wrapper` in ProfilePage.vue)
+ * - Avatar: 220px wide, square (the width of `.avatar-wrapper` in
+ *   ProfilePage.vue; the height is a guess, see the rule)
  * - Stat lines: 7 short bars stacked vertically (registration, rating,
  *   given reviews, posts written, last activity, 2 endorsement lines)
  *
@@ -60,6 +61,12 @@
 
 .skeleton-avatar
   width: 220px  // matches .avatar-wrapper in ProfilePage.vue
+  // Square, because the shape of the picture is exactly what this bar cannot
+  // know: the profile response is what carries the avatar's intrinsic size, and
+  // it has not arrived yet. The loaded page reserves the real box from that pair
+  // (ProfilePage's .avatar-wrapper-unsized holds the same square for an upload
+  // that has no pair), so the square here is the best available guess and not a
+  // number copied from a rule that still says 220 in both directions.
   height: 220px
   max-width: 100%
   // .avatar-wrapper has margin-bottom $small (on top of the column gap).

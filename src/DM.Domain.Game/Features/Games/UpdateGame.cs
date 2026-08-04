@@ -15,21 +15,6 @@ public class UpdateGame
     public Guid GameId { get; set; }
 
     /// <summary>
-    /// Game status
-    /// </summary>
-    public ModuleStatus? Status { get; set; }
-
-    /// <summary>
-    /// Premoderation status
-    /// </summary>
-    public PremoderationStatus? PremoderationStatus { get; set; }
-
-    /// <summary>
-    /// Reason why the game was closed (only when closing)
-    /// </summary>
-    public ClosedReason? ClosedReason { get; set; }
-
-    /// <summary>
     /// Visibility of draft content (when Status = Draft)
     /// </summary>
     public DraftVisibility? DraftVisibility { get; set; }
@@ -95,16 +80,6 @@ public class UpdateGame
     public IEnumerable<Guid> Tags { get; set; } = [];
 
     #region Internal fields (set by service)
-
-    /// <summary>
-    /// Activation date (set on first activation, internal, UTC)
-    /// </summary>
-    public DateTimeOffset? ActivatedUtc { get; set; }
-
-    /// <summary>
-    /// Closed date (set when closing, internal)
-    /// </summary>
-    public DateTimeOffset? ClosedUtc { get; set; }
 
     /// <summary>
     /// Mentor user ID (set during premoderation, internal)

@@ -35,6 +35,14 @@ print('Creating indexes for DM3...');
 // Used by: GameReadingService, ForumReadingService, ConversationReadingService
 // ============================================================================
 
+// The key every write addresses a marker by: FlushAsync, FlushAllAsync and the
+// create paths all upsert on (UserId, EntityId, EntryType), so one document per
+// triple is the invariant they assume
+db.UnreadCounters.createIndex(
+    { UserId: 1, EntityId: 1, EntryType: 1 },
+    { name: "IX_UnreadCounters_User_Entity_Type", unique: true, background: true }
+);
+
 // Index for SelectByEntities - MOST CRITICAL for game sidebar performance
 // Query: UserId IN [...], EntityId IN [...], EntryType = X, IsRemoved = false
 db.UnreadCounters.createIndex(
@@ -61,6 +69,13 @@ db.UnreadCounters.createIndex(
 db.UnreadCounters.createIndex(
     { ParentId: 1, EntryType: 1 },
     { name: "IX_UnreadCounters_Parent_Type", background: true }
+);
+
+// Retention: a tombstone only has to outlive the request that deleted the
+// entity, and a live marker carries no RemovedUtc element for the TTL to read
+db.UnreadCounters.createIndex(
+    { RemovedUtc: 1 },
+    { name: "IX_UnreadCounters_Expiry", background: true, expireAfterSeconds: 604800 }
 );
 
 print('UnreadCounters indexes created');
@@ -111,6 +126,13 @@ db.RealtimeNotifications.createIndex(
 db.RealtimeNotifications.createIndex(
     { NotificationId: 1 },
     { name: "IX_RealtimeNotifications_NotificationId", background: true }
+);
+
+// Retention: nothing deletes a notification, and the documents carry user
+// identifiers along with game and character names
+db.RealtimeNotifications.createIndex(
+    { CreatedUtc: 1 },
+    { name: "IX_RealtimeNotifications_Expiry", background: true, expireAfterSeconds: 15552000 }
 );
 
 print('RealtimeNotifications indexes created');
@@ -207,15 +229,15 @@ print('SecurityAuditLog indexes created');
 print('');
 print('=== MongoDB Indexes Created Successfully ===');
 print('Collections indexed:');
-print('  - UnreadCounters (4 indexes) - CRITICAL for sidebar performance');
+print('  - UnreadCounters (6 indexes, one unique, one TTL) - CRITICAL for sidebar performance');
 print('  - UserSessions (1 index) - CRITICAL for every authenticated request');
 print('  - UserSettings (1 index)');
 print('  - LoginAttempts (2 indexes, one TTL)');
 print('  - SecurityAuditLog (2 indexes, one TTL)');
-print('  - RealtimeNotifications (2 indexes)');
+print('  - RealtimeNotifications (3 indexes, one TTL)');
 print('  - Polls (2 indexes)');
 print('  - AttributeSchemata (1 index)');
 print('  - Dice (1 index)');
 print('');
-print('Total: 14 indexes');
+print('Total: 19 indexes');
 print('==========================================');

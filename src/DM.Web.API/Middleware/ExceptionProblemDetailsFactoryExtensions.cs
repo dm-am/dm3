@@ -14,6 +14,25 @@ internal static class ExceptionProblemDetailsFactoryExtensions
         HttpException httpException, HttpContext httpContext) =>
         factory.CreateProblemDetails(httpContext, (int)httpException.StatusCode, httpException.Message);
 
+    /// <summary>
+    /// A refusal says only that it refused.
+    /// </summary>
+    /// <remarks>
+    /// The message of this exception names the user, the intention and the target,
+    /// which is what the log needs and none of what the caller should get: telling
+    /// an anonymous caller which intention was evaluated against which entity
+    /// makes the endpoint an oracle for entities they cannot read. The message is
+    /// written to the log at Warning by the middleware before this runs.
+    ///
+    /// Same shape as the unhandled-exception overload below, and for the same
+    /// reason — the only difference is that there the message is a framework one
+    /// and here it is ours.
+    /// </remarks>
+    public static ProblemDetails CreateFrom(this ProblemDetailsFactory factory,
+        IntentionManagerException intentionException, HttpContext httpContext) =>
+        factory.CreateProblemDetails(httpContext, (int)intentionException.StatusCode,
+            RefusalMessage.AccessDenied);
+
     public static ProblemDetails CreateFrom(this ProblemDetailsFactory factory,
         HttpBadRequestException httpBadRequestException, HttpContext httpContext)
     {
@@ -37,7 +56,7 @@ internal static class ExceptionProblemDetailsFactoryExtensions
         }
 
         return factory.CreateValidationProblemDetails(httpContext,
-            modelStateDictionary, StatusCodes.Status400BadRequest, "Validation failed");
+            modelStateDictionary, StatusCodes.Status400BadRequest, RefusalMessage.InvalidData);
     }
 
     /// <summary>
@@ -49,6 +68,6 @@ internal static class ExceptionProblemDetailsFactoryExtensions
     /// </summary>
     public static ProblemDetails CreateFrom(this ProblemDetailsFactory factory,
         Exception exception, HttpContext httpContext, Guid correlationId) =>
-        factory.CreateProblemDetails(httpContext, StatusCodes.Status500InternalServerError, "Internal server error",
-            detail: $"Server error. Address the administration for technical support. Use the following token to help us identify your issue: {correlationId}");
+        factory.CreateProblemDetails(httpContext, StatusCodes.Status500InternalServerError, "Ошибка сервера",
+            detail: $"Ошибка сервера. Обратитесь в поддержку и назовите этот токен: {correlationId}");
 }

@@ -64,7 +64,7 @@ public class BlogBlacklistServiceShould : UnitTestBase
         _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
         _repository.Setup(r => r.GetBlacklist(blogId, default)).ReturnsAsync(new List<GeneralUser>());
 
-        await _service.GetBlacklistAsync(blogId);
+        await _service.Get(blogId);
 
         _intentionManager.Verify(m => m.ThrowIfForbidden(BlogIntention.Edit, blog), Times.Once);
     }
@@ -91,7 +91,7 @@ public class BlogBlacklistServiceShould : UnitTestBase
             .ReturnsAsync(new List<Guid>());
         _mapper.Setup(m => m.Map<GeneralUser>(user)).Returns(user);
 
-        await _service.AddToBlacklistAsync(blogId, "testuser");
+        await _service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "testuser" });
 
         _intentionManager.Verify(m => m.ThrowIfForbidden(BlogIntention.Edit, blog), Times.Once);
     }
@@ -113,10 +113,10 @@ public class BlogBlacklistServiceShould : UnitTestBase
         _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
         _userLookupService.Setup(s => s.GetAsync("owner")).ReturnsAsync(user);
 
-        var act = async () => await _service.AddToBlacklistAsync(blogId, "owner");
+        var act = async () => await _service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "owner" });
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("owner"));
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("автора блога"));
     }
 
     [Fact]
@@ -137,10 +137,10 @@ public class BlogBlacklistServiceShould : UnitTestBase
         _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
         _userLookupService.Setup(s => s.GetAsync("mentor")).ReturnsAsync(user);
 
-        var act = async () => await _service.AddToBlacklistAsync(blogId, "mentor");
+        var act = async () => await _service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "mentor" });
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("mentor"));
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("наставника"));
     }
 
     [Fact]
@@ -169,7 +169,7 @@ public class BlogBlacklistServiceShould : UnitTestBase
         _producer.Setup(p => p.SendAsync(EventType.BlogInvitationCancelled, It.IsAny<Guid>()))
             .Returns(Task.CompletedTask);
 
-        await _service.AddToBlacklistAsync(blogId, "testuser");
+        await _service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "testuser" });
 
         _producer.Verify(p => p.SendAsync(EventType.BlogInvitationCancelled, tokenId1), Times.Once);
         _producer.Verify(p => p.SendAsync(EventType.BlogInvitationCancelled, tokenId2), Times.Once);

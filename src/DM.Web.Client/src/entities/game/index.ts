@@ -24,13 +24,13 @@ export type {
   CharacterAttributeInput,
   CharacterPrivacySettings,
   ApiCharacterStatus,
+  CharacterStatusTransition,
   PlayerCharacterInfo,
   Room,
   RoomId,
-  RoomClaim,
   RoomAccess,
   RoomSettings,
-  PendingPost,
+  PostPendency,
   ChatRoom,
   ChatRoomAccess,
   CreateChatRoomInput,
@@ -65,13 +65,23 @@ export {
 } from "./model/types";
 
 // Store
-export { useGamesStore, useGameDetailsStore } from "./model/store";
+export { useGamesStore } from "./model/store";
+export { useGameDetailsStore } from "./model/detailsStore";
 export { useRatedPostsStore } from "./model/ratedPostsStore";
 export { usePulseStore, getWeekStartUtc } from "./model/pulseStore";
-export type { PulseSearchParams } from "./model/pulseStore";
+export { buildRatedPostsParams } from "./model/ratedPostsParams";
+export type {
+  PulseSearchParams,
+  RatedPostsApiParams,
+  RatedPostsScope,
+} from "./model/ratedPostsParams";
 
 // Composables
 export { useGameDisplay } from "./model/useGameDisplay";
+
+// Lifecycle caption of a character, shared by the roster card and the
+// character's own page.
+export { characterStatusLabel } from "./model/characterStatus";
 
 // Attribute-schema helpers: pure functions over the schema shape declared
 // above, framework-free and shared by every embed site of the editor.

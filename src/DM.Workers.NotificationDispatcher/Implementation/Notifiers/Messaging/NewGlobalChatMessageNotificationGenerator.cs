@@ -57,6 +57,10 @@ internal class NewGlobalChatMessageNotificationGenerator : BaseNotificationGener
             // in the API realtime processor, not through per-user stored
             // notifications (which would spam every user's inbox)
             UsersInterested = [],
+            // The author is set even though the blacklist filter has no recipient
+            // list to work on here: the field states who wrote the message, and it
+            // starts filtering by itself the day this event gains an audience
+            ActorId = messageData.AuthorUserId,
             Metadata = new
             {
                 messageData.MessageId,

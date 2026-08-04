@@ -10,13 +10,14 @@ public class AwardType
     public Guid Id { get; set; }
     /// <summary>Stable code ("contest_first", "popular_vote").</summary>
     public string Code { get; set; } = string.Empty;
-    /// <summary>Display name ("Литконкурс", "Народное признание").</summary>
+    /// <summary>Display name ("Литконкурс", "Народное признание, например" - the
+    /// trailing words are part of that award's name).</summary>
     public string Title { get; set; } = string.Empty;
     /// <summary>Description (what it is granted for).</summary>
     public string Description { get; set; } = string.Empty;
     /// <summary>Icon name from the game-icons sprite.</summary>
     public string IconName { get; set; } = string.Empty;
-    /// <summary>Visual tier (1=gold, 2=silver, 3=bronze).</summary>
+    /// <summary>Visual tier: 1 gold, 2 silver, 3 bronze, 4 steel, 5 diamond. Null for no tier.</summary>
     public int? Tier { get; set; }
     /// <summary>Display order within a contest series.</summary>
     public int SortOrder { get; set; }

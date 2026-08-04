@@ -16,7 +16,7 @@ import { API_BASE_URL, primaryUser } from "../../fixtures/auth";
  *   assertions inside `if (await x.isVisible())`, so they reported green on a
  *   page that rendered nothing at all.
  *
- * Written against a desktop viewport. Two columns (Теги, Отзывы) are hidden
+ * Written against a desktop viewport. Two columns (Теги, Рецензии) are hidden
  * below 768px by design (Column.hideOnMobile), which the column test reads
  * from the same media query the CSS uses.
  */
@@ -194,7 +194,7 @@ test.describe("Games List Page", () => {
               "Ведущие",
               "Теги",
               "Статус игры",
-              "Отзывы",
+              "Рецензии",
               "Читатели",
             ],
       );
@@ -220,8 +220,11 @@ test.describe("Games List Page", () => {
       // possible outcome including a page that failed to render.
       const pager = page.getByRole("navigation", { name: "Пагинация" });
       await expect(pager).toBeVisible();
+      // The accessible name is the aria-label Paging.vue puts on the link,
+      // "Страница N", not the digit it prints. A link named by its text alone
+      // is one a screen reader announces as a bare number.
       await expect(
-        pager.getByRole("link", { name: "2", exact: true }),
+        pager.getByRole("link", { name: "Страница 2", exact: true }),
       ).toBeVisible();
     });
   });
@@ -730,7 +733,7 @@ test.describe("Games List Page", () => {
 
       await page
         .getByRole("navigation", { name: "Пагинация" })
-        .getByRole("link", { name: "2", exact: true })
+        .getByRole("link", { name: "Страница 2", exact: true })
         .click();
 
       await expect(page).toHaveURL(
@@ -744,7 +747,7 @@ test.describe("Games List Page", () => {
 
       await page
         .getByRole("navigation", { name: "Пагинация" })
-        .getByRole("link", { name: "2", exact: true })
+        .getByRole("link", { name: "Страница 2", exact: true })
         .click();
 
       await expect(page).toHaveURL(

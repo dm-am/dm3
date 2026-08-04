@@ -33,6 +33,7 @@ internal class MessageLikedNotificationGenerator : BaseNotificationGenerator
             where like.LikeId == entityId && like.EntityType == LikeEntityType.Message
             select new
             {
+                LikerId = like.UserId,
                 LikerUsername = like.User!.Username,
                 message.MessageId,
                 message.UserId,
@@ -48,6 +49,7 @@ internal class MessageLikedNotificationGenerator : BaseNotificationGenerator
         yield return new CreateNotification
         {
             UsersInterested = [likedMessageData.UserId],
+            ActorId = likedMessageData.LikerId,
             Metadata = new
             {
                 LikerUsername = likedMessageData.LikerUsername,

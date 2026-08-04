@@ -58,7 +58,7 @@ public class GameServiceShould : UnitTestBase
             .Returns(Task.CompletedTask);
 
         var dataResolver = Mock<IGameCreationDataResolver>();
-        dataResolver.Setup(r => r.GetAvailableTagIds())
+        dataResolver.Setup(r => r.ResolveTagIds(It.IsAny<IEnumerable<int>?>()))
             .ReturnsAsync(Array.Empty<Guid>());
 
         _intentionManager = Mock<IIntentionManager>();
@@ -214,12 +214,14 @@ public class GameServiceShould : UnitTestBase
             Recruitment = new GameRecruitment()
         };
         _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<CancellationToken>())).ReturnsAsync(game);
-        _repository.Setup(r => r.Delete(gameId, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        _repository.Setup(r => r.Delete(gameId, _currentUserId, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(gameId);
 
         _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.Delete, game), Times.Once);
-        _repository.Verify(r => r.Delete(gameId, It.IsAny<CancellationToken>()), Times.Once);
+        // The author of the removal travels with it: ISoftDeletable promises who deleted the
+        // row, and the column stays empty unless the service hands the identity over.
+        _repository.Verify(r => r.Delete(gameId, _currentUserId, It.IsAny<CancellationToken>()), Times.Once);
         _producer.Verify(p => p.SendAsync(EventType.DeletedGame, gameId), Times.Once);
     }
 }

@@ -12,6 +12,8 @@
 //     +expandable-row           // clickable expandable row
 //   .my-details
 //     +expandable-details       // expanded content
+//   .my-info-table
+//     +info-table               // key-value fact table of an entity page
 //
 // Note: For full-featured data tables with sorting/pagination, use DataTable component
 
@@ -45,15 +47,37 @@ $table-gap: 1px
   &:hover
     background-image: linear-gradient($hover-overlay, $hover-overlay)
 
+// Key-value fact table of an entity's info page: borderless, compact, no card.
+// Labels are not colour-differentiated from values (the old site's module-info
+// block reads as one run of facts). Two pages each kept their own copy of this
+// rule and drifted on exactly that declaration, which is why it lives here.
+=info-table
+  border-collapse: collapse
+  width: 100%
+
+  th,
+  td
+    padding: 2px $small 2px 0
+    text-align: left
+    vertical-align: top
+    font-weight: normal
+
+  th
+    width: 1%
+    white-space: nowrap
+    padding-right: $big
+    color: $text
+
 // Expandable row/details mixins (for interactive tables with click-to-expand)
 $expand-icon-size: 10px
 $expand-icon-width: 12px
 $details-offset: 20px
 
+// Chrome without a layout: each mode lays its own cells out (--grid as a CSS
+// table, --title as inline flow). Neither may be flex — a flex item is
+// blockified, and a blockified part is a line of its own in the clipboard,
+// which is how a one-title row copied as a newline and then its title.
 =expandable-row
-  display: flex
-  align-items: center
-  gap: $small
   padding: $table-cell-padding-v $table-cell-padding-h
   background-color: $bg-element
   cursor: pointer
@@ -69,12 +93,14 @@ $details-offset: 20px
     outline: 2px solid $border-focus
     outline-offset: -2px
 
+// The column the marker sits in. The marker itself is the global
+// .expand-marker (Reset.sass): it draws the glyph and owns the turn.
 =expand-icon
+  display: inline-block
+  vertical-align: middle
   font-size: $expand-icon-size
   color: $text-muted
   width: $expand-icon-width
-  flex-shrink: 0
-  transition: transform 0.15s ease
 
 =expandable-details
   padding: $table-cell-padding-v $table-cell-padding-h $table-cell-padding-v ($table-cell-padding-h + $details-offset)
@@ -87,7 +113,7 @@ $details-offset: 20px
   overflow-wrap: break-word
 
 // Mobile breakpoint
-$mobile-breakpoint: 600px
+
 
 =expandable-row-mobile
   padding: $small $table-cell-padding-h

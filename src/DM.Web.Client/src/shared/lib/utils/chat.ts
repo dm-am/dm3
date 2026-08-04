@@ -10,6 +10,7 @@ import dayjs from "dayjs";
 import type { Message } from "@/shared/api/models/common/message";
 import type { User } from "@/shared/api/models/common/user";
 import { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
+import { pluralize } from "./pluralize";
 
 // =============================================================================
 // Types
@@ -155,7 +156,9 @@ export function getLikesTooltip(likes: User[]): string {
   if (count === 2) return `${names[0]} и ${names[1]} оценили это`;
   if (count <= 5)
     return `${names.slice(0, -1).join(", ")} и ${names[count - 1]} оценили это`;
-  return `${names.slice(0, 3).join(", ")} и еще ${count - 3} оценили это`;
+  const rest = count - 3;
+  const verb = pluralize(rest, "оценил это", "оценили это", "оценили это");
+  return `${names.slice(0, 3).join(", ")} и еще ${rest} ${verb}`;
 }
 
 // =============================================================================

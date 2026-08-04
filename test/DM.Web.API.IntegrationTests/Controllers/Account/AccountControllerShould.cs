@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using DM.Web.API.IntegrationTests.Helpers;
+using DM.Web.API.Shared.Http;
 using FluentAssertions;
 using Xunit;
 
@@ -96,17 +97,33 @@ public class AccountControllerShould : IntegrationTestBase
     [Fact]
     public async Task Activate_WithInvalidToken_ReturnsGone()
     {
-        var invalidToken = Guid.NewGuid();
-        var activateRequest = new { username = "testlogin" };
-        var response = await Client.PostAsJsonAsync($"/v1/account/activation/{invalidToken}", activateRequest);
+        var request = new HttpRequestMessage(HttpMethod.Post, "/v1/account/activation")
+        {
+            Content = JsonContent.Create(new { username = "testlogin" })
+        };
+        request.Headers.Add(TokenHeaders.Account, Guid.NewGuid().ToString());
+        var response = await Client.SendAsync(request);
         response.StatusCode.Should().Be(HttpStatusCode.Gone);
     }
 
     [Fact]
     public async Task GetActivationInfo_WithInvalidToken_ReturnsNotFound()
     {
-        var invalidToken = Guid.NewGuid();
-        var response = await Client.GetAsync($"/v1/account/activate/{invalidToken}");
+        // The address asserted here used to be /v1/account/activate/{token}, which
+        // no route has ever matched: the 404 came from the framework for an
+        // unrouted path and the endpoint was never reached at all.
+        var request = new HttpRequestMessage(HttpMethod.Get, "/v1/account/activation");
+        request.Headers.Add(TokenHeaders.Account, Guid.NewGuid().ToString());
+        var response = await Client.SendAsync(request);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task GetActivationInfo_WithoutTokenHeader_ReturnsNotFound()
+    {
+        // A missing credential is answered exactly as an unknown one: the caller
+        // learns that the link does not work and nothing about why.
+        var response = await Client.GetAsync("/v1/account/activation");
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 

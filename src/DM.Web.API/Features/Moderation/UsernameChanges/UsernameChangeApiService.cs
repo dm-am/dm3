@@ -37,7 +37,7 @@ internal class UsernameChangeApiService : IUsernameChangeApiService
     {
         var request = await _usernameChangeService.GetByIdAsync(id);
         if (request == null)
-            throw new HttpException(HttpStatusCode.NotFound, "Username change request not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UsernameChangeRequestNotFound);
         return _mapper.Map<UsernameChangeRequest>(request);
     }
 

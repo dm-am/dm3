@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { formatDate } from "@/shared/lib/utils/datetime";
-import { computed, ref, onMounted, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import type { Username } from "@/shared/api/models/community";
 // The public warnings/bans endpoints return bare `UserWarningsInfo` /
 // `PublicUserBanStatus` payloads (NOT a ListEnvelope). `moderationApi`
@@ -15,6 +15,7 @@ import {
   type PublicBan,
 } from "@/entities/moderation";
 import { StatLine } from "@/shared/ui/StatLine";
+import { useGuardedRequest } from "@/shared/lib/composables";
 
 // Mirrors the backend warning policy (6+ points in 30 days triggers an
 // automatic ban — see WarningController.cs remarks). Not exposed by the
@@ -27,25 +28,41 @@ const props = defineProps<{
 
 const warningsInfo = ref<UserWarningsInfo | null>(null);
 const banStatus = ref<PublicUserBanStatus | null>(null);
-const loading = ref(true);
-const error = ref(false);
 
-async function fetchViolations() {
-  loading.value = true;
-  error.value = false;
-  const [warningsResult, bansResult] = await Promise.all([
-    moderationApi.getWarnings(props.username),
-    moderationApi.getBans(props.username),
-  ]);
-  if (warningsResult.error || bansResult.error) {
-    error.value = true;
-  }
-  warningsInfo.value = warningsResult.data ?? null;
-  banStatus.value = bansResult.data ?? null;
-  loading.value = false;
+// The line refetches when the profile changes under it, so two pairs of answers
+// can be on the wire at once; the guard drops the older pair instead of letting
+// whichever landed last decide whose violations are on screen.
+const { loading, error, run } = useGuardedRequest({
+  message: "не удалось загрузить",
+  clearErrorOnStart: true,
+});
+
+function fetchViolations() {
+  return run(
+    async () => {
+      const [warnings, bans] = await Promise.all([
+        moderationApi.getWarnings(props.username),
+        moderationApi.getBans(props.username),
+      ]);
+      // Both halves are one line on screen, so one failure is the line's
+      // failure — and the partial data is still handed over, as it was.
+      return {
+        data: { warnings: warnings.data, bans: bans.data },
+        error: warnings.error ?? bans.error,
+      };
+    },
+    (data) => {
+      warningsInfo.value = data?.warnings ?? null;
+      banStatus.value = data?.bans ?? null;
+    },
+  );
 }
 
-onMounted(fetchViolations);
+// Called during setup rather than on mount: `run` raises `loading` before its
+// first await, so the first paint already has the flag the template reads. On
+// mount the flag would be false for one frame and the line would draw 0/6 for a
+// profile whose warnings have not been read yet.
+fetchViolations();
 watch(() => props.username, fetchViolations);
 
 const activeBan = computed(() => banStatus.value?.activeBan ?? null);

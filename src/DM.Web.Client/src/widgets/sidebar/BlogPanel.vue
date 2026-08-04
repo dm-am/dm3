@@ -1,13 +1,20 @@
 <script setup lang="ts">
-// Left-sidebar panel for a blog page (mirrors GamePanel). Mounted by
-// LeftSidebar on any /blogs/:id route (route.meta.blogZone). It is the
-// single home for per-blog navigation and management, driven entirely by
-// the shared useBlogDetailsStore (the blog page loads the blog; this panel
-// surfaces the mutation actions).
+// Left-sidebar "Меню блога" panel for a blog page, built to the same plan as
+// GamePanel. Mounted by LeftSidebar on any /blogs/:id route
+// (route.meta.blogZone). It is the single home for per-blog navigation and
+// management, driven entirely by the shared useBlogDetailsStore (the blog
+// page loads the blog, the rubrics ride inside it; this panel surfaces the
+// mutation actions).
 //
-// Section order follows the product doc (4.2.1.4 "Панель блога"):
-//   {title} / "Статус" / "Рубрики" / "Обсуждение" (N) /
+// Menu order:
+//   "Рубрики" / "Информация" / "Лента публикаций" / "Обсуждение" /
 //   "Управление блогом" / "Действия с блогом" / "Модерация блога"
+//
+// Rubrics nest under their group row and drop their own "- " prefix; the
+// indent is the nesting. Every navigation row carries a counter, zero
+// included, and a counter is grey down to its brackets (SidebarCounter for a
+// single number, CounterPair for the rubric's "(N/A)"). Row labels are the
+// names their routes carry, so the menu and the page it opens agree.
 //
 // Role gates (never a single blanket "moderator" gate):
 //   "Управление блогом" — owner/assistant get the edit items (settings,
@@ -27,12 +34,13 @@ import { useRouter } from "vue-router";
 import {
   useBlogDetailsStore,
   BlogPremoderationTransition,
-  BlogStatusBadge,
 } from "@/entities/blog";
 import { BlogStatusButtons, BlogJoinActions } from "@/features/blog-actions";
 import { useAuthStore } from "@/entities/user";
 import { UserRole } from "@/shared/api/models/common";
 import SidebarBlock from "./SidebarBlock.vue";
+import SidebarCounter from "./SidebarCounter.vue";
+import SidebarSectionTitle from "./SidebarSectionTitle.vue";
 import SidebarSkeleton from "./SidebarSkeleton.vue";
 import BlogRubricLink from "./BlogRubricLink.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
@@ -141,18 +149,7 @@ async function confirmMod() {
 </script>
 
 <template>
-  <SidebarBlock token="BlogPanel">
-    <template #title>
-      <router-link
-        v-if="blog"
-        class="title-link"
-        :to="{ name: 'blog', params: { id: routeId } }"
-      >
-        {{ blog.title }}
-      </router-link>
-      <template v-else>Блог</template>
-    </template>
-
+  <SidebarBlock token="BlogPanel" title="Меню блога">
     <!-- 1. loading -->
     <SidebarSkeleton v-if="blogLoading && !blog" :lines="8" />
 
@@ -163,59 +160,61 @@ async function confirmMod() {
 
     <!-- 3. content -->
     <template v-else-if="blog">
-      <!-- Status: duplicated in the panel so the owner sees the blog's
-           state next to the status-transition buttons. The premoderation
-           status is not exposed by the blog API — that line will appear
-           together with the field. -->
-      <SecondaryText class="status-line">
-        Статус: <BlogStatusBadge :status="blog.status" />
-      </SecondaryText>
-
-      <!-- "Рубрики" section -->
-      <div class="section-title">Рубрики</div>
-      <template v-if="rubrics.length">
+      <!-- "Рубрики" — the group row; the blog's rubrics follow it indented.
+           They ride inside the blog itself, so this list has no loading or
+           error state of its own (a game fetches its rooms separately). -->
+      <li class="link">
+        <span class="muted" aria-hidden="true">- </span>Рубрики
+      </li>
+      <ul v-if="rubrics.length" class="rubric-list">
         <BlogRubricLink
           v-for="rubric in rubrics"
           :key="rubric.id"
           :rubric="rubric"
           :blog-id="routeId"
+          prefix=""
         />
-      </template>
+      </ul>
       <SecondaryText v-else>Рубрик пока нет</SecondaryText>
 
-      <!-- "Обсуждение" — blog discussion. The heading links to the comments
-           page; N is the unread comment count (mirrors GamePanel). -->
-      <div class="section-title">
-        <router-link
-          class="section-link"
-          :to="{ name: 'blog-comments', params: { id: routeId } }"
+      <!-- Blog navigation — a flat list of links, each carrying its counter. -->
+      <li class="link">
+        <span class="muted" aria-hidden="true">- </span>
+        <router-link :to="{ name: 'blog', params: { id: routeId } }"
+          >Информация</router-link
         >
-          Обсуждение<span v-if="blog.unreadCommentsCount">
-            ({{ blog.unreadCommentsCount }})</span
-          >
-        </router-link>
-      </div>
+      </li>
+      <li class="link">
+        <span class="muted" aria-hidden="true">- </span>
+        <router-link :to="{ name: 'blog-feed', params: { id: routeId } }"
+          >Лента публикаций</router-link
+        ><SidebarCounter :value="blog.unreadPublicationsCount ?? 0" />
+      </li>
+      <li class="link">
+        <span class="muted" aria-hidden="true">- </span>
+        <router-link :to="{ name: 'blog-comments', params: { id: routeId } }"
+          >Обсуждение</router-link
+        ><SidebarCounter :value="blog.unreadCommentsCount ?? 0" />
+      </li>
 
       <!-- "Управление блогом" section: edit items for owner/assistant, plus
            the notepad for the mentor's oversight (mirrors GamePanel). -->
       <template v-if="canEdit || canUseNotepad">
-        <div class="section-title">Управление блогом</div>
+        <SidebarSectionTitle>Управление блогом</SidebarSectionTitle>
         <template v-if="canEdit">
           <li class="link">
             <span class="muted" aria-hidden="true">- </span>
             <router-link
               :to="{ name: 'blog-settings', params: { id: routeId } }"
+              >Настройки блога</router-link
             >
-              Настройки блога
-            </router-link>
           </li>
           <li class="link">
             <span class="muted" aria-hidden="true">- </span>
             <router-link
               :to="{ name: 'blog-publication-create', params: { id: routeId } }"
+              >Создать публикацию</router-link
             >
-              Создать публикацию
-            </router-link>
           </li>
           <!-- Status transition buttons (owner/assistant); placed between the
                edit items and the notepad link to mirror GamePanel's order. -->
@@ -223,21 +222,21 @@ async function confirmMod() {
         </template>
         <li v-if="canUseNotepad" class="link">
           <span class="muted" aria-hidden="true">- </span>
-          <router-link :to="{ name: 'blog-notepad', params: { id: routeId } }">
-            Заметки блога
-          </router-link>
+          <router-link :to="{ name: 'blog-notepad', params: { id: routeId } }"
+            >Заметки блога</router-link
+          >
         </li>
       </template>
 
       <!-- "Действия с блогом" section (any authed except owner) -->
       <template v-if="canActOnBlog">
-        <div class="section-title">Действия с блогом</div>
+        <SidebarSectionTitle>Действия с блогом</SidebarSectionTitle>
         <BlogJoinActions variant="strip" />
       </template>
 
       <!-- "Модерация блога" section (global roles) -->
       <template v-if="showModeration">
-        <div class="section-title">Модерация блога</div>
+        <SidebarSectionTitle>Модерация блога</SidebarSectionTitle>
         <template v-if="isGlobalMentor">
           <li class="link">
             <span class="muted" aria-hidden="true">- </span>
@@ -289,46 +288,18 @@ async function confirmMod() {
 </template>
 
 <style scoped lang="sass">
-// The panel heading is itself a navigation link to the blog info page
-// (product doc 4.2.1.4). Inherits the block heading look; underlines on
-// hover like other strip links.
-.title-link
-  color: $heading-alt
-
-  &:hover
-    color: $link-hover
-    text-decoration: underline
-
-.status-line
-  display: block
-  margin-bottom: $tiny
-
-.section-title
-  margin: $small 0 $tiny
-  font-size: $secondary-font-size
-  font-weight: bold
-  color: $text-muted
-  text-transform: uppercase
-  letter-spacing: 0.3px
-
-// A section header that is itself a navigation link ("Обсуждение").
-.section-link
-  color: $text-muted
-
-  &:hover
-    color: $link-hover
-    text-decoration: underline
+// Rubrics nest under their group row: the indent is the nesting, which is why
+// the rubric rows carry no "- " prefix of their own.
+.rubric-list
+  list-style: none
+  margin: 0
+  padding: 0 0 0 $medium
 
 .link
   display: block
 
 .muted
   color: $text-muted
-
-// Only the decorative "- " prefix (aria-hidden) is excluded from selection;
-// informative muted text must stay selectable.
-.muted[aria-hidden="true"]
-  user-select: none
 
 .error
   color: $accent-red

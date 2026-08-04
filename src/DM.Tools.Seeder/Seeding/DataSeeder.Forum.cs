@@ -248,7 +248,6 @@ internal sealed partial class DataSeeder
                 _dbContext.Set<Topic>().Add(topic);
                 result.TopicsCreated++;
 
-                // Add comments (track them to update LastCommentId later)
                 // FAQ topic gets 50 comments for pagination testing
                 var commentsToCreate = template.Title == "FAQ для новых пользователей" ? 50 : _random.Next(3, 8);
                 DbComment? lastComment = null;
@@ -355,7 +354,6 @@ internal sealed partial class DataSeeder
             {
                 topic.LastCommentId = lastComment.CommentId;
 
-                // Update board
                 var board = boards.FirstOrDefault(b => b.BoardId == topic.BoardId);
                 if (board != null)
                 {

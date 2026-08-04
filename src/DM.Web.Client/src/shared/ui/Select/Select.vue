@@ -15,10 +15,20 @@ export interface SelectOption {
   disabled?: boolean;
 }
 
+/**
+ * A named set of options, rendered as an <optgroup>. Grouping is what keeps a
+ * list readable when one control has to offer two different intents at once —
+ * support and complaints on the ticket form.
+ */
+export interface SelectOptionGroup {
+  label: string;
+  options: SelectOption[];
+}
+
 withDefaults(
   defineProps<{
     modelValue: string;
-    options: SelectOption[];
+    options: (SelectOption | SelectOptionGroup)[];
     placeholder?: string;
     disabled?: boolean;
   }>(),
@@ -27,6 +37,10 @@ withDefaults(
     disabled: false,
   },
 );
+
+const isGroup = (
+  entry: SelectOption | SelectOptionGroup,
+): entry is SelectOptionGroup => "options" in entry;
 
 defineEmits<{
   "update:modelValue": [value: string];
@@ -44,14 +58,21 @@ defineEmits<{
       "
     >
       <option v-if="placeholder" value="" disabled>{{ placeholder }}</option>
-      <option
-        v-for="option in options"
-        :key="option.value"
-        :value="option.value"
-        :disabled="option.disabled"
-      >
-        {{ option.label }}
-      </option>
+      <template v-for="(entry, index) in options" :key="index">
+        <optgroup v-if="isGroup(entry)" :label="entry.label">
+          <option
+            v-for="option in entry.options"
+            :key="option.value"
+            :value="option.value"
+            :disabled="option.disabled"
+          >
+            {{ option.label }}
+          </option>
+        </optgroup>
+        <option v-else :value="entry.value" :disabled="entry.disabled">
+          {{ entry.label }}
+        </option>
+      </template>
     </select>
     <SvgIcon name="chevronDown" class="select-chevron" />
   </div>

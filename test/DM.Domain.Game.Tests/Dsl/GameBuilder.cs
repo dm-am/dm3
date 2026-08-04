@@ -43,6 +43,12 @@ public class GameBuilder
         return this;
     }
 
+    public GameBuilder WithDraftVisibility(DraftVisibility visibility)
+    {
+        game.DraftVisibility = visibility;
+        return this;
+    }
+
     public GameBuilder WithAssistants(params Guid[] userIds)
     {
         var assistants = new List<GameAssistantInfo>();
@@ -91,6 +97,40 @@ public class GameBuilder
     public GameBuilder WithCommentsAccessMode(CommentsAccessMode mode)
     {
         game.CommentsAccessMode = mode;
+        return this;
+    }
+
+    /// <summary>
+    /// The game's owner put these users on its blacklist. It closes writing and
+    /// not reading, so a game built with it still reads as the public game it is.
+    /// </summary>
+    public GameBuilder WithBlacklisted(params Guid[] userIds)
+    {
+        var blacklisted = new List<BlacklistedUser>();
+        foreach (var userId in userIds)
+        {
+            blacklisted.Add(new BlacklistedUser { UserId = userId, LinkId = Guid.NewGuid() });
+        }
+        game.BlacklistedUsers = blacklisted;
+        return this;
+    }
+
+    /// <summary>
+    /// Recruitment is what admits a character; an unset block reads as closed.
+    /// </summary>
+    public GameBuilder WithRecruitmentOpen()
+    {
+        game.Recruitment = new GameRecruitment { IsOpen = true };
+        return this;
+    }
+
+    /// <summary>
+    /// A player invitation the user has not answered yet: the second way into
+    /// character creation, past a closed recruitment.
+    /// </summary>
+    public GameBuilder WithPendingPlayerInvitation(Guid userId)
+    {
+        game.PendingPlayerInvitedUserIds = new[] { userId };
         return this;
     }
 

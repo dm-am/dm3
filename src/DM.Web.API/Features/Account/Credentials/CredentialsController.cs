@@ -1,4 +1,3 @@
-using System;
 using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Exceptions;
@@ -8,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.Http;
 using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Account.Credentials;
@@ -92,18 +92,19 @@ public class CredentialsController : ControllerBase
     /// Confirms email change using token from confirmation email.
     /// Token is valid for 24 hours.
     /// </remarks>
-    /// <param name="token">Confirmation token from email</param>
+    /// <param name="token">Confirmation token from the mailed link, in the X-Dm-Account-Token header</param>
     /// <response code="204">Email changed successfully</response>
-    /// <response code="404">Token invalid or expired</response>
+    /// <response code="404">Token missing, malformed, invalid or expired</response>
     /// <response code="429">Too many requests</response>
-    [HttpPost("email-change/{token:guid}", Name = nameof(ConfirmEmailChange))]
+    [HttpPost("email-change/confirm", Name = nameof(ConfirmEmailChange))]
     [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
-    public async Task<IActionResult> ConfirmEmailChange(Guid token)
+    public async Task<IActionResult> ConfirmEmailChange(
+        [FromHeader(Name = TokenHeaders.Account)] string? token)
     {
-        await _credentialsService.ConfirmEmailChange(token);
+        await _credentialsService.ConfirmEmailChange(TokenHeaders.ParseAccountToken(token));
         return NoContent();
     }
 
@@ -162,18 +163,19 @@ public class CredentialsController : ControllerBase
     /// After moderator approves the request, user receives a token.
     /// Use this endpoint to check if the token is valid and get request details.
     /// </remarks>
-    /// <param name="token">Approval token from notification</param>
+    /// <param name="token">Approval token from the notification link, in the X-Dm-Account-Token header</param>
     /// <response code="200">Token valid, ready to choose username</response>
-    /// <response code="404">Token invalid or expired</response>
-    [HttpGet("username-change/{token:guid}", Name = nameof(GetUsernameChangeApproval))]
+    /// <response code="404">Token missing, malformed, invalid or expired</response>
+    [HttpGet("username-change/approval", Name = nameof(GetUsernameChangeApproval))]
     [AllowAnonymous]
     [ProducesResponseType(typeof(UsernameChangeResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetUsernameChangeApproval(Guid token)
+    public async Task<IActionResult> GetUsernameChangeApproval(
+        [FromHeader(Name = TokenHeaders.Account)] string? token)
     {
-        var result = await _credentialsService.GetUsernameChangeApprovalAsync(token);
+        var result = await _credentialsService.GetUsernameChangeApprovalAsync(TokenHeaders.ParseAccountToken(token));
         if (result == null)
-            throw new HttpException(HttpStatusCode.NotFound, "Invalid or expired approval token");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.LinkInvalidOrExpired);
         return Ok(result);
     }
 
@@ -185,18 +187,20 @@ public class CredentialsController : ControllerBase
     /// The username will be validated for availability.
     /// Token expires 48 hours after approval.
     /// </remarks>
-    /// <param name="token">Approval token from notification</param>
+    /// <param name="token">Approval token from the notification link, in the X-Dm-Account-Token header</param>
     /// <param name="request">New username to use</param>
     /// <response code="200">Username changed successfully</response>
     /// <response code="400">Invalid username or username not available</response>
-    /// <response code="404">Token invalid or expired</response>
-    [HttpPost("username-change/{token:guid}", Name = nameof(CompleteUsernameChange))]
+    /// <response code="404">Token missing, malformed, invalid or expired</response>
+    [HttpPost("username-change/complete", Name = nameof(CompleteUsernameChange))]
     [AllowAnonymous]
     [ProducesResponseType(typeof(UsernameChangeResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> CompleteUsernameChange(Guid token, [FromBody] UsernameChangeCompletionRequest request) =>
-        Ok(await _credentialsService.CompleteUsernameChangeAsync(token, request));
+    public async Task<IActionResult> CompleteUsernameChange(
+        [FromHeader(Name = TokenHeaders.Account)] string? token,
+        [FromBody] UsernameChangeCompletionRequest request) =>
+        Ok(await _credentialsService.CompleteUsernameChangeAsync(TokenHeaders.ParseAccountToken(token), request));
 
     #endregion
 }

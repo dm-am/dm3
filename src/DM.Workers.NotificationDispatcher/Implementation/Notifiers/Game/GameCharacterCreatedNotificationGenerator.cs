@@ -74,6 +74,7 @@ internal class GameCharacterCreatedNotificationGenerator : BaseNotificationGener
         yield return new CreateNotification
         {
             UsersInterested = usersInterested,
+            ActorId = data.AuthorId,
             Metadata = new
             {
                 AuthorUsername = data.Username,

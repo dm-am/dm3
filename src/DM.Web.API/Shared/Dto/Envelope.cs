@@ -6,24 +6,27 @@ namespace DM.Web.API.Shared.Dto;
 /// Enveloped DTO model
 /// </summary>
 /// <typeparam name="T">Enveloped type</typeparam>
+/// <remarks>
+/// There is no metadata slot. It stood here as <c>object?</c>, so it published
+/// itself into all 42 Envelope schemas as a nullable property with no type at
+/// all — a generated client got <c>metadata: any</c> on every single resource —
+/// and not one of the 127 construction sites ever passed a second argument.
+/// An extension point that describes nothing is worse than none: the consumer
+/// can neither use it nor knowingly ignore it. It comes back when there is a
+/// real case for it, with a type.
+/// </remarks>
 public class Envelope<T>
 {
     /// <inheritdoc />
-    public Envelope(T resource, object? metadata = null)
+    public Envelope(T resource)
     {
         Resource = resource;
-        Metadata = metadata;
     }
 
     /// <summary>
     /// Enveloped resource
     /// </summary>
     public T Resource { get; }
-
-    /// <summary>
-    /// Additional metadata
-    /// </summary>
-    public object? Metadata { get; }
 }
 
 /// <summary>

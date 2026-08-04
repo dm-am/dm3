@@ -6,6 +6,7 @@ using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Events;
 using DM.Domain.Core.Identity;
 using DM.Testing.Dsl;
 using DM.Testing;
@@ -27,6 +28,7 @@ public class AuthenticationServiceShould : UnitTestBase
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<ILoginAttemptTracker> _loginAttemptTracker;
     private readonly Mock<ISecurityAuditService> _auditService;
+    private readonly Mock<IEventProducer> _eventProducer;
     private readonly AuthenticationService _service;
 
     public AuthenticationServiceShould()
@@ -39,6 +41,7 @@ public class AuthenticationServiceShould : UnitTestBase
         _identityProvider = Mock<IIdentityProvider>();
         _loginAttemptTracker = Mock<ILoginAttemptTracker>();
         _auditService = Mock<ISecurityAuditService>();
+        _eventProducer = Mock<IEventProducer>();
         var logger = Mock<ILogger<AuthenticationService>>();
         var config = Options.Create(new AuthenticationConfiguration
         {
@@ -57,6 +60,7 @@ public class AuthenticationServiceShould : UnitTestBase
             _identityProvider.Object,
             _loginAttemptTracker.Object,
             _auditService.Object,
+            _eventProducer.Object,
             logger.Object,
             config);
     }
@@ -101,6 +105,11 @@ public class AuthenticationServiceShould : UnitTestBase
         result.User.IsAuthenticated.Should().BeFalse();
         result.Error.Should().Be(AuthenticationError.WrongLogin);
         _loginAttemptTracker.Verify(t => t.RecordFailedAttempt(new LoginAttemptOrigin(email, null)), Times.Once);
+        // Answered in the same time as a wrong password, not only in the same
+        // words: with no hash of anything, a missing account comes back before
+        // Argon2id would have finished, and that difference is the answer
+        _securityManager.Verify(s => s.ComparePasswords(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Once);
     }
 
     [Fact]
@@ -131,6 +140,38 @@ public class AuthenticationServiceShould : UnitTestBase
         _loginAttemptTracker.Verify(t => t.RecordFailedAttempt(new LoginAttemptOrigin(email, null)), Times.Once);
         _auditService.Verify(a => a.LogAsync(user.UserId, SecurityEventType.LoginFailure,
             It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task AnnounceTheLockoutOnTheAttemptThatCausesIt()
+    {
+        var email = "test@example.com";
+        var user = new AuthenticatedUser
+        {
+            UserId = Guid.NewGuid(),
+            Email = email,
+            Salt = "salt",
+            PasswordHash = "hash",
+            IsRemoved = false,
+            AccessPolicy = AccessPolicy.NotSpecified
+        };
+        var origin = new LoginAttemptOrigin(email, null);
+
+        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
+        _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
+        _loginAttemptTracker.Setup(t => t.GetDelayForUser(origin)).ReturnsAsync(0);
+        _securityManager.Setup(s => s.ComparePasswords("wrongpassword", user.Salt, user.PasswordHash))
+            .Returns(false);
+
+        // Unlocked when the attempt starts, locked once it has been counted:
+        // that is the one attempt the notification belongs to.
+        _loginAttemptTracker.SetupSequence(t => t.IsAccountLocked(origin))
+            .ReturnsAsync(false)
+            .ReturnsAsync(true);
+
+        await _service.Authenticate(email, "wrongpassword");
+
+        _eventProducer.Verify(p => p.SendAsync(EventType.AccountLocked, user.UserId), Times.Once);
     }
 
     [Fact]
@@ -189,14 +230,115 @@ public class AuthenticationServiceShould : UnitTestBase
         _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
         _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
         _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
-        _securityManager.Setup(s => s.ComparePasswords("password", "salt", "hash")).Returns(true);
+        // The password is right, and that is what earns the real reason: to
+        // everyone else a banned account answers like a wrong password, see
+        // HideTheStateOfTheAccountUntilThePasswordIsProven
+        _securityManager.Setup(s => s.ComparePasswords("password", user.Salt, user.PasswordHash))
+            .Returns(true);
 
         var result = await _service.Authenticate(email, "password");
 
         result.User.IsAuthenticated.Should().BeFalse();
         result.Error.Should().Be(AuthenticationError.Banned);
-        // The ban decides before the password is even consulted, and no session
-        // is minted
+        // No session is minted for a banned account
+        _repository.Verify(r => r.AddSession(It.IsAny<Guid>(), It.IsAny<CreateSession>()), Times.Never);
+    }
+
+    /// <summary>
+    /// A wrong password answers the same whatever state the account is in.
+    /// </summary>
+    /// <remarks>
+    /// "Removed" and "banned" used to be decided before the password was
+    /// compared, so anyone who typed an address learned what moderation had done
+    /// to the person behind it, with no password and with nothing counted
+    /// against the asking. That an address is registered is disclosed here by a
+    /// recorded decision (SECURITY.md, the enumeration exception); what was done
+    /// with the account is not.
+    /// </remarks>
+    [Theory]
+    [InlineData(true, AccessPolicy.NotSpecified)]
+    [InlineData(false, AccessPolicy.FullBan)]
+    public async Task HideTheStateOfTheAccountUntilThePasswordIsProven(
+        bool isRemoved, AccessPolicy accessPolicy)
+    {
+        var email = "test@example.com";
+        var user = Create.User()
+            .WithRole(UserRole.RegularUser)
+            .WithAccessPolicy(accessPolicy)
+            .WithCredentials("salt", "hash")
+            .Please();
+        user.IsRemoved = isRemoved;
+        var origin = new LoginAttemptOrigin(email, null);
+
+        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.IsAccountLocked(origin)).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.GetDelayForUser(origin)).ReturnsAsync(0);
+        _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
+        _securityManager.Setup(s => s.ComparePasswords("wrongpassword", user.Salt, user.PasswordHash))
+            .Returns(false);
+
+        var result = await _service.Authenticate(email, "wrongpassword");
+
+        result.Error.Should().Be(AuthenticationError.WrongPassword);
+        // And it costs the guess an attempt, like any other wrong password does
+        _loginAttemptTracker.Verify(t => t.RecordFailedAttempt(origin), Times.Once);
+    }
+
+    [Fact]
+    public async Task RefuseLoginForARemovedAccountOnceThePasswordIsProven()
+    {
+        var email = "removed@example.com";
+        var user = Create.User()
+            .WithRole(UserRole.RegularUser)
+            .WithCredentials("salt", "hash")
+            .Please();
+        user.IsRemoved = true;
+
+        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
+        _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
+        _securityManager.Setup(s => s.ComparePasswords("password", user.Salt, user.PasswordHash))
+            .Returns(true);
+
+        var result = await _service.Authenticate(email, "password");
+
+        result.User.IsAuthenticated.Should().BeFalse();
+        result.Error.Should().Be(AuthenticationError.Removed);
+        _repository.Verify(r => r.AddSession(It.IsAny<Guid>(), It.IsAny<CreateSession>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RefuseLoginForTheSystemActorEvenWhenItsPasswordMatches()
+    {
+        var email = "system@dm.local";
+        var user = Create.User()
+            .WithRole(UserRole.System)
+            .WithCredentials("salt", "hash")
+            .Please();
+
+        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
+        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
+        _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
+        // Everything a successful login needs is stubbed, a matching password
+        // included: what stops the robot in production is the empty salt and hash
+        // the seed writes, and the refusal has to hold without them
+        _securityManager.Setup(s => s.ComparePasswords("password", user.Salt, user.PasswordHash))
+            .Returns(true);
+        _sessionFactory.Setup(f => f.Create(true, false, null))
+            .Returns(new CreateSession { Id = Guid.NewGuid() });
+        _repository.Setup(r => r.FindUserSettings(user.UserId)).ReturnsAsync(UserSettings.Default);
+        _repository.Setup(r => r.AddSession(user.UserId, It.IsAny<CreateSession>()))
+            .ReturnsAsync(new Session { Id = Guid.NewGuid() });
+        _cryptoService.Setup(c => c.Encrypt(It.IsAny<string>())).ReturnsAsync("encrypted-token");
+
+        var result = await _service.Authenticate(email, "password");
+
+        result.User.IsAuthenticated.Should().BeFalse();
+        // Answered as a wrong password on purpose: a distinct error would point at
+        // the one account that exists but can never be logged into
+        result.Error.Should().Be(AuthenticationError.WrongPassword);
         _repository.Verify(r => r.AddSession(It.IsAny<Guid>(), It.IsAny<CreateSession>()), Times.Never);
     }
 
@@ -347,11 +489,13 @@ public class AuthenticationServiceShould : UnitTestBase
         _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
         _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
         _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
-        _securityManager.Setup(s => s.ComparePasswords("password", "salt", "hash")).Returns(true);
+        _securityManager.Setup(s => s.ComparePasswords("password", user.Salt, user.PasswordHash))
+            .Returns(true);
 
         var result = await _service.Authenticate(email, "password");
 
         result.User.IsAuthenticated.Should().BeFalse();
+        // A ban that comes from a row refuses exactly like the flag does
         result.Error.Should().Be(AuthenticationError.Banned);
     }
 

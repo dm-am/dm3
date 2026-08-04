@@ -1,5 +1,5 @@
 import type { Envelope, ListEnvelope } from "@/shared/api/models/common";
-import { Api } from "@/shared/api";
+import { Api, X_DM_TICKET_TOKEN } from "@/shared/api";
 
 // ==================== Ticket Intake Types ====================
 
@@ -81,7 +81,8 @@ export type Ticket = {
 };
 
 /**
- * Public, token-gated view of a guest ticket (GET /v1/tickets/track/{token}).
+ * Public, token-gated view of a guest ticket (GET /v1/tickets/track, token in
+ * the X-Dm-Ticket-Token header).
  * Mirrors backend TrackedTicket — moderation internals are intentionally
  * omitted.
  */
@@ -156,14 +157,16 @@ export default new (class TicketApi {
 
   /**
    * Track a guest ticket by its tracking token (public, no auth).
-   * GET /v1/tickets/track/{token}. Response is wrapped in Envelope.
+   * GET /v1/tickets/track, token in the X-Dm-Ticket-Token header — the token is
+   * the only credential of this call, and a URL is written verbatim into the
+   * proxy access log. Response is wrapped in Envelope.
    */
   public trackTicket(token: string) {
     return Api.get<Envelope<TrackedTicket>>(
-      `tickets/track/${encodeURIComponent(token)}`,
+      "tickets/track",
       undefined,
       undefined,
-      { skipAuth: true },
+      { skipAuth: true, headers: { [X_DM_TICKET_TOKEN]: token } },
     );
   }
 

@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Mail;
@@ -10,7 +11,7 @@ namespace DM.Infrastructure.Mail;
 /// <summary>
 /// Sends emails through the RabbitMQ queue the mail worker consumes.
 /// </summary>
-internal class MailSender : IMailSender
+internal class MailSender : IMailSender, IDisposable
 {
     private readonly IValidator<EmailLetter> validator;
     private readonly IProducer<string, EmailLetter> producer;
@@ -30,4 +31,12 @@ internal class MailSender : IMailSender
         await validator.ValidateAndThrowAsync(letter);
         await producer.Send(string.Empty, letter, CancellationToken.None);
     }
+
+    /// <summary>
+    /// Returns the AMQP channel this sender took from the pool. Same reasoning as
+    /// InvokedEventProducer in the messaging assembly: the producer leases a
+    /// channel on its first send and gives it back only on Dispose, and the
+    /// wrapper was neither disposable nor scoped.
+    /// </summary>
+    public void Dispose() => (producer as IDisposable)?.Dispose();
 }

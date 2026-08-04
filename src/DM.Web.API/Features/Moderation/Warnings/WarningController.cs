@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using DM.Web.API.Swagger;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
@@ -17,8 +18,9 @@ namespace DM.Web.API.Features.Moderation.Warnings;
 ///
 /// ## Warning Points
 /// - Each warning carries 0-6 points (0 = verbal warning, no points)
-/// - 6+ points in 30 days triggers an automatic ban
 /// - Points are recalculated when warnings are removed
+/// - A ban is always issued by a senior moderator: points accumulate and are read,
+///   they are not compared against any threshold
 /// </remarks>
 [ApiController]
 [Route("v1/moderation/warnings")]
@@ -59,7 +61,7 @@ public class WarningController : ControllerBase
     /// Returns all warnings across the website.
     /// Can be filtered by user login.
     /// </remarks>
-    /// <param name="user">Optional user login to filter by</param>
+    /// <param name="username">Optional username to filter by</param>
     /// <response code="200">List of warnings</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">Moderator role required</response>
@@ -68,8 +70,10 @@ public class WarningController : ControllerBase
     [ProducesResponseType(typeof(ListEnvelope<Warning>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetAllWarnings([FromQuery] string? user = null) =>
-        Ok(await _warningApiService.GetAllWarnings(user));
+    // A username filter is `username` on the wire, per the query vocabulary in
+    // API_DESIGN.md; this one alone said `user`.
+    public async Task<IActionResult> GetAllWarnings([FromQuery] string? username = null) =>
+        Ok(await _warningApiService.GetAllWarnings(username));
 
     /// <summary>
     /// Create a warning
@@ -83,7 +87,8 @@ public class WarningController : ControllerBase
     /// - 2 points: Moderate violation
     /// - 3-6 points: Serious violation
     ///
-    /// 6+ points within 30 days triggers automatic ban.
+    /// Points are a record for the moderator who decides on a ban; nothing bans a
+    /// user automatically.
     /// </remarks>
     /// <param name="request">Warning details</param>
     /// <response code="201">Warning created</response>
@@ -94,6 +99,7 @@ public class WarningController : ControllerBase
     [HttpPost(Name = nameof(CreateWarning))]
     [RequireRole(UserRole.Moderator)]
     [ProducesResponseType(typeof(Envelope<Warning>), StatusCodes.Status201Created)]
+    [CreatedWithoutLocation]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]

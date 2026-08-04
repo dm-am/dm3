@@ -8,6 +8,7 @@ import { useBoardsStore, forumApi } from "@/entities/forum";
 import { useAuthStore, UserLink } from "@/entities/user";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 const store = useBoardsStore();
 const { boards, boardsLoading, boardsError } = storeToRefs(store);
@@ -136,7 +137,7 @@ onMounted(() => store.fetchBoards());
       :disabled="markingAllAsRead || !boards.some((b) => b.unreadCommentsCount)"
       @click="markAllAsRead"
     >
-      {{ markingAllAsRead ? "Отмечаю…" : "Отметить все как прочитанное" }}
+      {{ markingAllAsRead ? "Отмечаю..." : "Отметить все как прочитанное" }}
     </button>
   </div>
   <SecondaryText v-if="markAllError" class="mark-all-error" role="alert">
@@ -168,7 +169,7 @@ onMounted(() => store.fetchBoards());
     </template>
 
     <template #cell-description="{ row }">
-      {{ row.description || "—" }}
+      {{ row.description || VALUE_UNAVAILABLE }}
     </template>
 
     <template #cell-topics="{ row }">
@@ -221,7 +222,7 @@ onMounted(() => store.fetchBoards());
         ></Tooltip>
       </template>
       <!-- No activity -->
-      <span v-else class="muted">—</span>
+      <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
     </template>
   </DataTable>
 </template>

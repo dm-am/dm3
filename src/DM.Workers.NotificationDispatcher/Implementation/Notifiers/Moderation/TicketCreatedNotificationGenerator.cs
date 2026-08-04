@@ -64,6 +64,9 @@ internal class TicketCreatedNotificationGenerator : BaseNotificationGenerator
         yield return new CreateNotification
         {
             UsersInterested = moderatorIds,
+            // No ActorId although the ticket author is right there in ticketData.UserId:
+            // the recipients are the moderators on duty, and a report reaching them
+            // cannot depend on whether one of them blacklisted the reporter.
             Metadata = new
             {
                 TicketId = ticketData.TicketId,

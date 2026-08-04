@@ -2,10 +2,16 @@
 import type { LinkedProfile } from "@/shared/api/models/moderation";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { formatDate } from "@/shared/lib/utils/datetime";
+import { pluralize } from "@/shared/lib/utils/pluralize";
 
 defineProps<{
   profiles: LinkedProfile[];
 }>();
+
+/** "1 общий IP" / "3 общих IP". */
+function sharedIpsLabel(count: number): string {
+  return `${count} ${pluralize(count, "общий", "общих", "общих")} IP`;
+}
 </script>
 
 <template>
@@ -21,7 +27,7 @@ defineProps<{
           {{ p.username }}
         </router-link>
         <secondary-text>
-          {{ p.sharedIpsCount }} общих IP, последний
+          {{ sharedIpsLabel(p.sharedIpsCount) }}, последний
           {{ formatDate(p.lastSharedLoginUtc) }}
         </secondary-text>
       </div>

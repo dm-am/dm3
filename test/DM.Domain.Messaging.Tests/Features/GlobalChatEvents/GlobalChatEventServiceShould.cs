@@ -133,6 +133,48 @@ public class GlobalChatEventServiceShould : UnitTestBase
         _eventProducer.Verify(p => p.SendAsync(EventType.GlobalChatEventStarted, eventId), Times.Once);
     }
 
+    /// <summary>
+    /// The actual start is a fact of its own. It is manual and does not have to
+    /// fall on the planned one, so an event begun late is exactly the case where
+    /// the plan plus the duration answers with an end already in the past, and a
+    /// client holding only those two shows a countdown that has run out while the
+    /// event is still going.
+    /// </summary>
+    [Fact]
+    public async Task StampTheActualStartWhenTheEventGoesLive()
+    {
+        var eventId = Guid.NewGuid();
+        var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Scheduled };
+        _repository.Setup(r => r.Get(eventId)).ReturnsAsync(chatEvent);
+        _repository.Setup(r => r.HasActiveEvent()).ReturnsAsync(false);
+        _repository.Setup(r => r.UpdateStatus(It.IsAny<Guid>(), It.IsAny<GlobalChatEventStatus>(), It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(chatEvent);
+
+        await _service.StartAsync(eventId);
+
+        _repository.Verify(r => r.UpdateStatus(
+            eventId, GlobalChatEventStatus.Live, _now, null, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// The end is stamped and the start is left alone: an event is started once,
+    /// and writing the closing moment over both marks would erase how long it ran.
+    /// </summary>
+    [Fact]
+    public async Task StampTheEndWhenTheEventIsClosed()
+    {
+        var eventId = Guid.NewGuid();
+        var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Live };
+        _repository.Setup(r => r.Get(eventId)).ReturnsAsync(chatEvent);
+        _repository.Setup(r => r.UpdateStatus(It.IsAny<Guid>(), It.IsAny<GlobalChatEventStatus>(), It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(chatEvent);
+
+        await _service.EndAsync(eventId);
+
+        _repository.Verify(r => r.UpdateStatus(
+            eventId, GlobalChatEventStatus.Ended, null, _now, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     [Fact]
     public async Task AuthorizeJoinAction()
     {

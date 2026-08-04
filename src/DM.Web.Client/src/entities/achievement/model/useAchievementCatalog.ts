@@ -20,15 +20,20 @@ const loading = ref(false);
 let pending: Promise<void> | null = null;
 
 export function useAchievementCatalog() {
-  async function load(): Promise<void> {
-    if (categories.value !== null && types.value !== null) return;
+  /**
+   * @param fresh Ask the origin rather than either cache. The catalogue answers
+   * `Cache-Control: public, max-age=300`, so a reload right after an edit would
+   * otherwise be served the browser's pre-edit copy.
+   */
+  async function load(fresh = false): Promise<void> {
+    if (!fresh && categories.value !== null && types.value !== null) return;
     if (pending !== null) return pending;
     pending = (async () => {
       loading.value = true;
       try {
         const [c, t] = await Promise.all([
-          achievementApi.getAchievementCategories(),
-          achievementApi.getAchievementTypes(),
+          achievementApi.getAchievementCategories(fresh),
+          achievementApi.getAchievementTypes(fresh),
         ]);
         categories.value = c.data?.resources ?? [];
         types.value = t.data?.resources ?? [];
@@ -44,7 +49,7 @@ export function useAchievementCatalog() {
     categories.value = null;
     types.value = null;
     pending = null;
-    return load();
+    return load(true);
   }
 
   return { categories, types, loading, load, reload };

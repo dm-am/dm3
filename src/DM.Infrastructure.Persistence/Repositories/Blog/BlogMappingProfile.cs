@@ -6,6 +6,7 @@ using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Blog.Features.Comments;
 using DM.Domain.Blog.Features.PublicationComments;
 using DM.Domain.Core.Comments;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
@@ -63,7 +64,7 @@ internal class BlogMappingProfile : Profile
             .ForMember(d => d.JoinedUtc, s => s.MapFrom(a => a.JoinedUtc))
             .ForMember(d => d.LastActivityUtc, s => s.MapFrom(a => a.User.LastActivityUtc))
             .ForMember(d => d.Role, s => s.MapFrom(a => a.User.Role))
-            .ForMember(d => d.IsNewbie, s => s.MapFrom(a => a.User.QuantityRating < 100));
+            .ForMember(d => d.IsNewbie, s => s.MapFrom(a => a.User.IsNewbie));
 
         CreateMap<DbBlog, BlogDto>()
             .ForMember(d => d.Id, s => s.MapFrom(b => b.BlogId))

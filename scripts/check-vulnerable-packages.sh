@@ -11,6 +11,15 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ALLOWLIST="$REPO_ROOT/.github/vulnerability-allowlist.txt"
 
+# Restore first: `dotnet list package` reads the assets file and answers
+# "No assets file was found ... Please run restore" with exit 1 when there is
+# none. On a developer machine obj/ is left over from an ordinary build, so the
+# script passed by hand; in CI the checkout is clean, so this job failed every
+# run — and publish declares needs: dependency-scan, so no image was ever
+# published. Restoring here rather than in the workflow keeps the script correct
+# wherever it is called from.
+dotnet restore "$REPO_ROOT/DM.sln" --verbosity quiet
+
 report="$(dotnet list "$REPO_ROOT/DM.sln" package --vulnerable --include-transitive 2>&1)"
 echo "$report"
 

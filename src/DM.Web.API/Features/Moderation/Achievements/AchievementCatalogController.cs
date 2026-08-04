@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using DM.Web.API.Swagger;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Features.Community.Achievements;
 using DM.Web.API.Shared.Authentication;
@@ -62,6 +63,7 @@ public class AchievementCatalogController : ControllerBase
     /// <response code="409">Code is already taken.</response>
     [HttpPost("achievement-types", Name = nameof(CreateAchievementType))]
     [ProducesResponseType(typeof(Envelope<AchievementType>), StatusCodes.Status201Created)]
+    [CreatedWithoutLocation]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]

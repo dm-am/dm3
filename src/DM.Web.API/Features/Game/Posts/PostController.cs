@@ -66,7 +66,7 @@ public class PostController : ControllerBase
     {
         var result = await _postApiService.Create(id, post);
         return CreatedAtRoute(nameof(GetPost),
-            new {id = result.Resource.Id}, result);
+            new { id = result.Resource.Id }, result);
     }
 
     /// <summary>
@@ -84,7 +84,7 @@ public class PostController : ControllerBase
     /// Update post
     /// </summary>
     /// <param name="id">Post identifier</param>
-    /// <param name="post">Updated post details</param>
+    /// <param name="request">Editable post fields</param>
     /// <response code="200">Returns the updated post</response>
     /// <response code="400">Some of post changed properties were invalid or passed id was not recognized</response>
     /// <response code="401">User must be authenticated</response>
@@ -97,8 +97,8 @@ public class PostController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PatchPost(Guid id, [FromBody] Post post) =>
-        Ok(await _postApiService.Update(id, post));
+    public async Task<IActionResult> PatchPost(Guid id, [FromBody] UpdatePostRequest request) =>
+        Ok(await _postApiService.Update(id, request));
 
     /// <summary>
     /// Delete post
@@ -134,19 +134,20 @@ public class PostController : ControllerBase
     ///
     /// Filters:
     /// - hasReviews: Only posts with at least one review
-    /// - lastReviewedAfter: Posts with last review after this date (ISO 8601)
+    /// - lastReviewedFromUtc: Posts with last review at or after this date (ISO 8601)
     /// - gameId: Filter by specific game
     /// - minRating / maxRating: Rating range (can be negative)
-    /// - authorUsernames: Comma-separated post author usernames
-    /// - createdAfter / createdBefore: Post creation date range (ISO 8601)
+    /// - authorUsernames: Post author usernames, the parameter repeated once each
+    /// - createdFromUtc / createdToUtc: Post creation date range (ISO 8601)
     /// </remarks>
     /// <param name="query">Filter and sorting parameters</param>
     /// <response code="200">Returns the list of rated posts</response>
     [HttpGet(Name = nameof(GetRatedPosts))]
     [ProducesResponseType(typeof(ListEnvelope<Post>), StatusCodes.Status200OK)]
-    // Client-only cache: the response is personalized (unread counters, private rooms),
-    // so it must never be stored by shared caches or the server response cache
-    [ResponseCache(Duration = 60, Location = ResponseCacheLocation.Client)]
+    // No cache policy at all: the response is personalized (unread counters,
+    // private rooms), and a personal answer held for a minute is stale for that
+    // caller rather than leaked to another — a smaller defect, not a different
+    // one. Freshness here is worth more than a saved request.
     public async Task<IActionResult> GetRatedPosts([FromQuery] PostsQuery query) =>
         Ok(await _postApiService.GetRated(query));
 }

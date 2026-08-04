@@ -5,6 +5,13 @@
         <OutputType>Exe</OutputType>
     </PropertyGroup>
 
+    <!-- The tool composes inside its entry point, so the only way for a rule to
+         build the container it actually runs on is to see the method that makes
+         it. -->
+    <ItemGroup>
+        <InternalsVisibleTo Include="DM.Architecture.Tests" />
+    </ItemGroup>
+
     <ItemGroup>
         <PackageReference Include="Autofac" />
         <PackageReference Include="Autofac.Extensions.DependencyInjection" />
@@ -13,7 +20,9 @@
 
     <ItemGroup>
         <ProjectReference Include="..\DM.Domain.Account\DM.Domain.Account.csproj" />
+        <ProjectReference Include="..\DM.Domain.Blog\DM.Domain.Blog.csproj" />
         <ProjectReference Include="..\DM.Domain.Community\DM.Domain.Community.csproj" />
+        <ProjectReference Include="..\DM.Domain.Game\DM.Domain.Game.csproj" />
         <ProjectReference Include="..\DM.Domain.Core\DM.Domain.Core.csproj" />
         <ProjectReference Include="..\DM.Domain.Personal\DM.Domain.Personal.csproj" />
         <ProjectReference Include="..\DM.Infrastructure.Core\DM.Infrastructure.Core.csproj" />
@@ -26,6 +35,13 @@
     <ItemGroup>
         <None Update="appsettings.json">
             <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+        <!-- The Development overlay holds the localhost credentials, and it stays out
+             of the image. The tool runs in the stack with DM_* supplied; a run without
+             them has to stop rather than reach for a database of its own choosing. -->
+        <None Update="appsettings.Development.json">
+            <CopyToPublishDirectory>Never</CopyToPublishDirectory>
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
     </ItemGroup>

@@ -1,4 +1,4 @@
-import { test, expect, APIRequestContext } from "@playwright/test";
+import { test, expect, type APIRequestContext } from "@playwright/test";
 import {
   authenticatedContext,
   secondaryUser,
@@ -14,38 +14,35 @@ let ownerContext: APIRequestContext;
 let invitedContext: APIRequestContext;
 let testBlogId: string;
 
+/**
+ * Setup is allowed to fail the run, and nothing here may turn a failure into a
+ * pass. What stood here before did both: the two logins were wrapped in
+ * `try/catch` that only logged, the blog id was read from `.id` instead of the
+ * envelope's `resource.id`, and the suite opened with a describe-level
+ * `test.skip(!ownerContext || !invitedContext || !testBlogId)`. That condition
+ * is evaluated while the file is being collected, before any hook has run, so
+ * all three values were always undefined and all four tests were always
+ * skipped — `--list` still reports them, annotated `skip`, which is how the
+ * suite looked alive while never having run.
+ */
 test.beforeAll(async () => {
-  // Login as blog owner
-  try {
-    ownerContext = await authenticatedContext(PRIMARY_STORAGE_STATE);
-  } catch (e) {
-    console.error("Failed to login as owner:", e);
-  }
+  ownerContext = await authenticatedContext(PRIMARY_STORAGE_STATE);
+  invitedContext = await authenticatedContext(SECONDARY_STORAGE_STATE);
 
-  // Login as invited user
-  try {
-    invitedContext = await authenticatedContext(SECONDARY_STORAGE_STATE);
-  } catch (e) {
-    console.error("Failed to login as invited user:", e);
-  }
+  const createResponse = await ownerContext.post(`${API_URL}/v1/blogs`, {
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: {
+      title: "Invitation Test Blog",
+      isPublic: false,
+      commentsEnabled: true,
+    },
+  });
 
-  // Create a test blog
-  if (ownerContext) {
-    const createResponse = await ownerContext.post(`${API_URL}/v1/blogs`, {
-      headers: {
-        "Content-Type": "application/json",
-      },
-      data: {
-        title: "Invitation Test Blog",
-        isPublic: false,
-        commentsEnabled: true,
-      },
-    });
-
-    if (createResponse.ok()) {
-      testBlogId = (await createResponse.json()).id;
-    }
-  }
+  expect(createResponse.status()).toBe(201);
+  const { resource } = await createResponse.json();
+  testBlogId = resource.id;
 });
 
 test.afterAll(async () => {
@@ -64,15 +61,13 @@ test.afterAll(async () => {
 });
 
 test.describe("Blog Invitations API", () => {
-  test.skip(
-    !ownerContext || !invitedContext || !testBlogId,
-    "Skipping - setup failed",
-  );
-
   test("should create and get pending invitations", async () => {
-    // Create assistant invitation
+    // Create assistant invitation. The route is plural — `assistants` and
+    // `readers` — and the singular spelling used here matched no action at
+    // all; the `if (status === 404) test.skip()` that followed made the miss
+    // look like a feature nobody had built yet.
     const createResponse = await ownerContext.post(
-      `${API_URL}/v1/blogs/${testBlogId}/invitations/assistant`,
+      `${API_URL}/v1/blogs/${testBlogId}/invitations/assistants`,
       {
         headers: {
           "Content-Type": "application/json",
@@ -83,15 +78,10 @@ test.describe("Blog Invitations API", () => {
       },
     );
 
-    // Skip test if endpoint doesn't exist yet
-    if (createResponse.status() === 404) {
-      test.skip(true, "Blog invitations API not yet implemented");
-      return;
-    }
-
     expect(createResponse.status()).toBe(201);
+    // An invitation is returned bare, and its identifier is `id`.
     const invitation = await createResponse.json();
-    expect(invitation).toHaveProperty("tokenId");
+    expect(invitation).toHaveProperty("id");
 
     // Get pending invitations for blog
     const listResponse = await ownerContext.get(
@@ -102,9 +92,10 @@ test.describe("Blog Invitations API", () => {
     const list = await listResponse.json();
     expect(list.resources.length).toBeGreaterThan(0);
 
-    // Cancel the invitation
+    // Cancel the invitation. Cancelling is an owner action inside the blog's
+    // own collection: /v1/blogs/{blogId}/invitations/{invitationId}.
     const cancelResponse = await ownerContext.delete(
-      `${API_URL}/v1/blogs/invitations/${invitation.tokenId}`,
+      `${API_URL}/v1/blogs/${testBlogId}/invitations/${invitation.id}`,
     );
 
     expect(cancelResponse.status()).toBe(204);
@@ -113,7 +104,7 @@ test.describe("Blog Invitations API", () => {
   test("should get user pending invitations", async () => {
     // Create invitation first
     const createResponse = await ownerContext.post(
-      `${API_URL}/v1/blogs/${testBlogId}/invitations/reader`,
+      `${API_URL}/v1/blogs/${testBlogId}/invitations/readers`,
       {
         headers: {
           "Content-Type": "application/json",
@@ -124,17 +115,13 @@ test.describe("Blog Invitations API", () => {
       },
     );
 
-    if (createResponse.status() === 404) {
-      test.skip(true, "Blog invitations API not yet implemented");
-      return;
-    }
-
     expect(createResponse.status()).toBe(201);
     const invitation = await createResponse.json();
 
-    // Get pending invitations for invited user
+    // Get pending invitations for the invited user. A recipient handles their
+    // own invitations through the Personal API, not through the blog.
     const myInvitationsResponse = await invitedContext.get(
-      `${API_URL}/v1/blogs/invitations/my`,
+      `${API_URL}/v1/users/me/invitations`,
     );
 
     expect(myInvitationsResponse.ok()).toBeTruthy();
@@ -143,7 +130,7 @@ test.describe("Blog Invitations API", () => {
 
     // Reject the invitation
     const rejectResponse = await invitedContext.post(
-      `${API_URL}/v1/blogs/invitations/${invitation.tokenId}/reject`,
+      `${API_URL}/v1/users/me/invitations/${invitation.id}/reject`,
     );
 
     expect(rejectResponse.status()).toBe(204);
@@ -152,7 +139,7 @@ test.describe("Blog Invitations API", () => {
   test("should accept invitation and become participant", async () => {
     // Create invitation
     const createResponse = await ownerContext.post(
-      `${API_URL}/v1/blogs/${testBlogId}/invitations/reader`,
+      `${API_URL}/v1/blogs/${testBlogId}/invitations/readers`,
       {
         headers: {
           "Content-Type": "application/json",
@@ -163,17 +150,12 @@ test.describe("Blog Invitations API", () => {
       },
     );
 
-    if (createResponse.status() === 404) {
-      test.skip(true, "Blog invitations API not yet implemented");
-      return;
-    }
-
     expect(createResponse.status()).toBe(201);
     const invitation = await createResponse.json();
 
     // Accept the invitation
     const acceptResponse = await invitedContext.post(
-      `${API_URL}/v1/blogs/invitations/${invitation.tokenId}/accept`,
+      `${API_URL}/v1/users/me/invitations/${invitation.id}/accept`,
     );
 
     expect(acceptResponse.status()).toBe(204);
@@ -188,7 +170,7 @@ test.describe("Blog Invitations API", () => {
 
   test("should require authentication for invitations", async ({ request }) => {
     const response = await request.post(
-      `${API_URL}/v1/blogs/${testBlogId}/invitations/assistant`,
+      `${API_URL}/v1/blogs/${testBlogId}/invitations/assistants`,
       {
         headers: {
           "Content-Type": "application/json",
@@ -199,7 +181,6 @@ test.describe("Blog Invitations API", () => {
       },
     );
 
-    // Either 401 or 404 if endpoint doesn't exist
-    expect([401, 404]).toContain(response.status());
+    expect(response.status()).toBe(401);
   });
 });

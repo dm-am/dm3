@@ -19,8 +19,10 @@ test.describe("Registration Flow", () => {
     // Fill with invalid email
     await page.fill("#email", "invalid-email");
 
-    // Try to continue
-    await page.click('button[type="submit"]');
+    // Leave the field. The validator runs on blur, and the submit button stays
+    // disabled until it has: clicking it while the field still holds focus
+    // waits for a control that will never be enabled.
+    await page.locator("#email").blur();
 
     // Should show validation error
     await expect(page.locator(".form-field-error")).toBeVisible({
@@ -36,7 +38,9 @@ test.describe("Registration Flow", () => {
     const uniqueEmail = `test${Date.now()}@example.com`;
     await page.fill("#email", uniqueEmail);
 
-    // Wait for async validation
+    // Leave the field: the availability check runs on blur, and the submit
+    // button is disabled until it has answered.
+    await page.locator("#email").blur();
     await page.waitForTimeout(1000);
 
     // Click continue to go to step 2
@@ -46,13 +50,16 @@ test.describe("Registration Flow", () => {
     await expect(page.locator("#password")).toBeVisible({ timeout: 5000 });
   });
 
-  test("should show password requirements error", async ({ page }) => {
+  test("refuses to register on a password that is too short", async ({
+    page,
+  }) => {
     await page.goto("/");
     await page.click('[data-testid="register-button"]');
 
     // Step 1: Fill email
     const uniqueEmail = `test${Date.now()}@example.com`;
     await page.fill("#email", uniqueEmail);
+    await page.locator("#email").blur();
     await page.waitForTimeout(1000);
     await page.click('button[type="submit"]');
 
@@ -60,19 +67,16 @@ test.describe("Registration Flow", () => {
     await expect(page.locator("#password")).toBeVisible({ timeout: 5000 });
     await page.fill("#password", "123");
 
-    // Check rules checkbox (need to view rules first)
-    await page.click('a[href="/rules"]');
-    await page.waitForTimeout(500);
-    await page.click("#acceptedRules");
+    await page.locator("#password").blur();
 
-    // Wait for bot protection
-    await page.waitForTimeout(2500);
-
-    await page.click('button[type="submit"]');
-
-    // Should show validation error
-    await expect(page.locator(".form-field-error")).toBeVisible({
-      timeout: 10000,
-    });
+    // What this form actually does with a short password, which is not what the
+    // old body asserted. There is no .form-field-error to wait for: that slot
+    // carries the refusal the server sends back, and nothing is sent. The
+    // requirement is stated up front as a hint, the strength indicator answers
+    // while you type, and the button stays disabled - so the previous version
+    // waited for a button that will never be enabled and died at the test
+    // timeout, thirty seconds per run, reporting it as a missing error message.
+    await expect(page.getByText("Минимум 8 символов").first()).toBeVisible();
+    await expect(page.locator('button[type="submit"]')).toBeDisabled();
   });
 });

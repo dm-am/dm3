@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Reflection;
-using System.Text.Json;
 using System.Threading.Tasks;
 using DM.Domain.Core.Mail;
 using Microsoft.AspNetCore.Components;
@@ -13,7 +12,15 @@ using Microsoft.Extensions.Logging;
 namespace DM.Infrastructure.Mail.Rendering;
 
 /// <inheritdoc />
-internal class TemplateRenderer : ITemplateRenderer, IRenderer, IAsyncDisposable
+/// <remarks>
+/// Deliberately not disposable. The HtmlRenderer it holds is a singleton the
+/// container owns, and this type used to dispose it: registered per dependency by
+/// the blanket scan, it took the shared renderer down with the first request scope
+/// that ended, and every letter after that rendered to an empty string. Nothing
+/// noticed because the renderer had no templates and returned JSON without
+/// touching it.
+/// </remarks>
+internal class TemplateRenderer : ITemplateRenderer
 {
     private readonly ILogger<TemplateRenderer> _logger;
     private readonly HtmlRenderer _htmlRenderer;
@@ -47,12 +54,16 @@ internal class TemplateRenderer : ITemplateRenderer, IRenderer, IAsyncDisposable
                 .Where(p => p.GetCustomAttribute<ParameterAttribute>() is not null)
                 .ToImmutableArray();
 
-            if (parameters.Length > 1)
+            // Not "> 1": a component with no parameters at all reached Single()
+            // and threw, and this runs in the renderer's constructor — so one
+            // parameterless component anywhere in the assembly took out every
+            // letter the product sends.
+            if (parameters.Length != 1)
             {
                 continue;
             }
 
-            var parameter = parameters.Single();
+            var parameter = parameters[0];
 
             if (parameter.Name != "Model")
             {
@@ -63,20 +74,23 @@ internal class TemplateRenderer : ITemplateRenderer, IRenderer, IAsyncDisposable
         }
     }
 
-
-    public ValueTask DisposeAsync()
-    {
-        return _htmlRenderer.DisposeAsync();
-    }
-
     /// <inheritdoc cref="ITemplateRenderer.RenderAsync{TModel}"/>
+    /// <exception cref="TemplateRenderException">A model with no template</exception>
+    /// <remarks>
+    /// A missing template throws rather than falling back. The fallback used to
+    /// serialize the model to JSON and hand it back as the letter body, and since
+    /// the project shipped with no templates at all, that is what every account
+    /// letter contained: a registering user received
+    /// {"ConfirmationLinkUrl":"..."}. Nothing failed, nothing was logged, and no
+    /// test looked, so it survived. Loud is the only safe direction here.
+    /// </remarks>
     public Task<string> RenderAsync<TModel>(TModel model)
     {
-        var haveTemplateType = _templateTypes.TryGetValue(typeof(TModel), out var templateType);
-
-        if (!haveTemplateType)
+        if (!_templateTypes.TryGetValue(typeof(TModel), out var templateType))
         {
-            return Task.FromResult(JsonSerializer.Serialize(model));
+            _logger.LogError("No email template for {Model}", typeof(TModel).FullName);
+            throw new TemplateRenderException(
+                $"No email template for {typeof(TModel).FullName}");
         }
 
         return _htmlRenderer.Dispatcher.InvokeAsync(async () =>
@@ -91,7 +105,4 @@ internal class TemplateRenderer : ITemplateRenderer, IRenderer, IAsyncDisposable
             return output.ToHtmlString();
         });
     }
-
-    /// <inheritdoc cref="IRenderer.Render{TModel}"/>
-    public Task<string> Render<TModel>(TModel model) => RenderAsync(model);
 }

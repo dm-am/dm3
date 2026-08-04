@@ -26,8 +26,8 @@ cd src/DM.Web.Client && npm install && npm run dev
 ### Альтернатива (ручной запуск)
 
 ```bash
+bash docker/scripts/init-env.sh local         # Создать docker/.env и ключ шифрования
 cd docker
-cp .env.example .env                          # Создать файл с секретами
 docker compose up -d                          # Инфраструктура
 
 cd src/DM.Web.Client && npm install && npm run dev  # Frontend
@@ -62,7 +62,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 | Prometheus | 9090 | — |
 | Grafana | 3000 | из `docker/.env` |
 
-**Credentials:** Все пароли в `docker/.env` (создать из `docker/.env.example`).
+**Credentials:** Все пароли в `docker/.env`. Файл создает `docker/scripts/init-env.sh local`, его же зовут `dm.sh start` и `dm.ps1 start`. Копия `.env.example` руками оставляет крипто-ключ пустым, а compose объявляет его через `${...:?}` и останавливается на интерполяции до старта контейнеров.
 
 **Все порты:** `docker ps --format "table {{.Names}}\t{{.Ports}}"`
 
@@ -125,7 +125,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 |-------|------------|
 | inactive@test.local | Тестирование flow "регистрация не завершена" |
 
-Все пользователи начинают с 0 постов (статус "новичок").
+Статус новичка после сида есть не у всех: рейтинг пересчитывается в конце прогона по фактическому числу постов, и под порог попадают только самые тихие аккаунты. Сам порог и то, что он ограничивает, описаны в [AUTHORIZATION.md](../architecture/AUTHORIZATION.md).
 
 ### Ручная регистрация
 
@@ -178,8 +178,12 @@ npm run test:unit     # Тесты
 
 ```bash
 docker stop dm-api
-dotnet run --project src/DM.Web.API --urls "http://localhost:5000"
+dotnet run --project src/DM.Web.API --urls "http://localhost:5000" --environment Development
 ```
+
+Окружение задается явно: без него хост считает себя Production, не читает
+`appsettings.Development.json` с учетными данными localhost и останавливается на
+проверке строк подключения. Там же включается Swagger.
 
 ### Миграции
 
@@ -229,7 +233,7 @@ VITE_API_HOST=http://localhost:5000
 
 ### Docker
 
-Все секреты — в `docker/.env` (создать из `.env.example`):
+Все секреты — в `docker/.env` (создает `docker/scripts/init-env.sh local`):
 ```bash
 POSTGRES_PASSWORD=...
 RABBITMQ_DEFAULT_PASS=...
@@ -248,7 +252,7 @@ IMGPROXY_SALT=...  # 64 hex chars (32 bytes), HMAC-SHA256 salt
 | Frontend не видит API | Проверить `.env.local`: `VITE_API_HOST=http://localhost:5000` |
 | Изображения не загружаются | API создает bucket автоматически на старте. Проверь `docker logs dm-api 2>&1 \| grep -i bucket` |
 | Thumbnails не отдаются (404 на imgproxy) | `docker ps \| grep imgproxy`. Проверить `IMGPROXY_KEY`/`IMGPROXY_SALT` в `docker/.env` (64 hex chars each) |
-| Seed: "API not available" | Запусти API: `dotnet run --project src/DM.Web.API` |
+| Seed: "API not available" | Запусти API: `dotnet run --project src/DM.Web.API --environment Development` |
 | Seed: "PostgreSQL not available" | Запусти: `docker compose up -d dm-pg` |
 | Пользователи не в "Активных" | Seed обновляет `LastActivityUtc`, перезапусти seed |
 
@@ -258,10 +262,11 @@ IMGPROXY_SALT=...  # 64 hex chars (32 bytes), HMAC-SHA256 salt
 
 ```bash
 cd docker
+bash scripts/init-htpasswd.sh                                             # спросит пароль
 docker compose -f docker-compose.yml -f docker-compose.preview.yml up -d --build
 ```
 
-URL: http://localhost:80 за Basic Auth. Пароль в документации не публикуется: он лежит в `docker/nginx/.htpasswd`, задать свой — [DEPLOYMENT.md](./DEPLOYMENT.md#preview-окружение).
+URL: http://localhost:80 за Basic Auth, логин `preview`. Пароля в репозитории нет: `docker/nginx/.htpasswd` создается первой командой, без него docker сделает на месте файла каталог и nginx не поднимется. Подробности: [DEPLOYMENT.md](./DEPLOYMENT.md#preview-окружение).
 
 ---
 

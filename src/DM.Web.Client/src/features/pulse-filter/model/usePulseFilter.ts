@@ -275,7 +275,7 @@ export function usePulseFilter(): PulseFilterComposable {
     if (state.minRating !== null) params.minRating = state.minRating;
     if (state.maxRating !== null) params.maxRating = state.maxRating;
     if (state.authorUsernames.size > 0)
-      params.authorUsernames = [...state.authorUsernames].join(",");
+      params.authorUsernames = [...state.authorUsernames];
     if (state.createdFrom) params.createdFrom = state.createdFrom;
     if (state.createdTo) params.createdTo = state.createdTo;
     if (state.gameId) params.gameId = state.gameId;

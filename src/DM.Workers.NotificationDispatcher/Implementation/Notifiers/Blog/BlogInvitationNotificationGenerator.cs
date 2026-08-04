@@ -36,6 +36,7 @@ internal class BlogInvitationNotificationGenerator : BaseNotificationGenerator
                 t.UserId,
                 BlogId = t.EntityId!.Value,
                 BlogTitle = t.Blog!.Title,
+                InviterId = t.CreatorId ?? t.Blog.AuthorId,
                 InviterUsername = t.Blog.Author!.Username,
                 t.Type
             })
@@ -48,9 +49,13 @@ internal class BlogInvitationNotificationGenerator : BaseNotificationGenerator
 
         var role = invitationData.Type == TokenType.BlogAssistantInvitation ? "Ассистент" : "Читатель";
 
+        // The inviter is the token's creator; falling back to the blog author keeps
+        // the filter on the person InviterUsername names for tokens stored without a
+        // creator, the way BlogInvitationRepository resolves its inviter.
         yield return new CreateNotification
         {
             UsersInterested = [invitationData.UserId],
+            ActorId = invitationData.InviterId,
             Metadata = new
             {
                 BlogId = invitationData.BlogId.EncodeToReadable(invitationData.BlogTitle),

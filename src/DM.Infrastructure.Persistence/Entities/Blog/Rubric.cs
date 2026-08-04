@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Entities.Contracts;
 using DM.Infrastructure.Persistence.Entities.Account;
 
@@ -35,11 +34,6 @@ public class Rubric : ISoftDeletable
     /// Sort order within blog
     /// </summary>
     public int SortOrder { get; set; }
-
-    /// <summary>
-    /// Access type for the rubric
-    /// </summary>
-    public RubricAccessType AccessType { get; set; } = RubricAccessType.Open;
 
     /// <summary>
     /// Whether the rubric is archived (visual indicator only)

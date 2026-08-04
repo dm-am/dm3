@@ -37,14 +37,14 @@ public interface ILoginAttemptRepository
     Task SetLockout(LoginAttemptOrigin origin, DateTime lockoutStart);
 
     /// <summary>
+    /// Reset attempts and lockout for one account and address pair (on an expired lockout)
+    /// </summary>
+    /// <param name="origin">Account and client address of the attempt</param>
+    Task ResetAttempts(LoginAttemptOrigin origin);
+
+    /// <summary>
     /// Reset attempts and lockout for an account, from every address (on successful login)
     /// </summary>
     /// <param name="email">User email</param>
     Task ResetAttempts(string email);
-
-    /// <summary>
-    /// Clean up expired attempt records
-    /// </summary>
-    /// <param name="expirationHours">Hours after which records are considered expired</param>
-    Task CleanupExpiredRecords(int expirationHours);
 }

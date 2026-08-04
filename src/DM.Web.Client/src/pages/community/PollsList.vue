@@ -86,9 +86,9 @@ function pagingAnchor(): HTMLElement | null {
   <!-- Out-of-range page: paging exists but this page has no resources -->
   <div v-else-if="currentPageOutOfRange" class="empty-state">
     <secondary-text>
-      На этой странице опросов нет —
+      На этой странице опросов нет.
       <router-link :to="{ name: 'polls' }"
-        >вернуться на первую страницу</router-link
+        >Вернуться на первую страницу</router-link
       >
     </secondary-text>
   </div>
@@ -149,10 +149,7 @@ function pagingAnchor(): HTMLElement | null {
   @media (max-width: $bp-shell)
     grid-template-columns: repeat(2, 1fr)
 
-  // Not migrated to $bp-mobile — out of scope for this pass (see
-  // UI_STANDARDS.md "Брейкпоинты": only the shell + drawer use the token
-  // scale so far, the rest is a future consolidation)
-  @media (max-width: 600px)
+  @media (max-width: $bp-mobile)
     grid-template-columns: 1fr
 
 .poll-card

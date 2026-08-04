@@ -42,7 +42,7 @@ internal class ModeratedProfileService : IModeratedProfileService
 
         if (user == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, $"Пользователь {username} не найден");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.UserNotFoundByUsername(username));
         }
 
         return user;
@@ -54,7 +54,7 @@ internal class ModeratedProfileService : IModeratedProfileService
         var user = await _userRepository.GetUserAsync(username);
         if (user == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, $"User '{username}' not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(username));
         }
 
         _intentionManager.ThrowIfForbidden(ModerationIntention.ModerateUserProfile);
@@ -77,7 +77,7 @@ internal class ModeratedProfileService : IModeratedProfileService
             throw new HttpBadRequestException(
                 new System.Collections.Generic.Dictionary<string, string>
                 {
-                    ["role"] = "Cannot set Guest role"
+                    ["role"] = "Нельзя назначить роль \"Гость\""
                 });
         }
 

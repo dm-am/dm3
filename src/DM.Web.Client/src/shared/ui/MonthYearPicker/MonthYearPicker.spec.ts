@@ -3,7 +3,11 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 import { mount } from "@vue/test-utils";
+import { parse as parseSfc } from "vue/compiler-sfc";
 import MonthYearPicker from "./MonthYearPicker.vue";
 
 describe("MonthYearPicker", () => {
@@ -153,6 +157,96 @@ describe("MonthYearPicker", () => {
       await open(wrapper);
       await wrapper.findAll(".myp-grid--months .myp-cell")[0].trigger("click");
       expect(wrapper.find(".myp-popover").exists()).toBe(false);
+    });
+  });
+
+  // ============================================================================
+  // POPOVER PLACEMENT
+  // ============================================================================
+
+  /**
+   * The popover used to be rendered inside the bordered stepper pill, and the
+   * pill clips its sections by radius (overflow: hidden). The 220px panel was
+   * cut down to the field's own height, and since opening moves focus into a
+   * cell, the browser scrolled that clipped box: the field showed a strip of
+   * the month grid ("Июл Авг") instead of a popover under it. The border and
+   * the clipping live on an inner box now, and the popover is a child of the
+   * bare positioning root.
+   *
+   * The fence reads the component's own stylesheet instead of computed styles
+   * because jsdom applies no scoped CSS: getComputedStyle reports "visible"
+   * for every element here, so a style-blind test would stay green on exactly
+   * the markup that broke.
+   */
+  describe("Popover placement", () => {
+    const SOURCE = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "MonthYearPicker.vue"),
+      "utf8",
+    );
+
+    /**
+     * Classes whose rule clips what it contains. Indented Sass: a declaration
+     * belongs to the nearest line above it with a smaller indent, so the
+     * enclosing selectors form a stack, and the box that clips is the last
+     * compound of the chain (in ".a &.b .c" it is ".c", not ".a").
+     */
+    const clippingClasses = (): Set<string> => {
+      const { descriptor } = parseSfc(SOURCE, {
+        filename: "MonthYearPicker.vue",
+      });
+      const clipping = new Set<string>();
+      const stack: { indent: number; selector: string }[] = [];
+      for (const line of (descriptor.styles[0]?.content ?? "").split("\n")) {
+        const text = line.trim();
+        if (!text || text.startsWith("//") || text.startsWith("@")) continue;
+        const indent = line.length - line.trimStart().length;
+        while (stack.length && stack[stack.length - 1].indent >= indent) {
+          stack.pop();
+        }
+        const overflow = /^overflow(?:-[xy])?:\s*(\S+)/.exec(text);
+        if (overflow) {
+          if (overflow[1] !== "visible") {
+            const box =
+              stack
+                .map((entry) => entry.selector)
+                .join(" ")
+                .split(/\s+/)
+                .pop() ?? "";
+            for (const [, name] of box.matchAll(/\.([\w-]+)/g)) {
+              clipping.add(name);
+            }
+          }
+          continue;
+        }
+        // Property lines and mixin calls are leaves; anything else opens a block.
+        if (!/^[a-z-]+:/.test(text) && !text.startsWith("+")) {
+          stack.push({ indent, selector: text });
+        }
+      }
+      return clipping;
+    };
+
+    it("keeps the popover out of every box that clips", async () => {
+      const clipping = clippingClasses();
+      // A silent empty scan would be worse than a failure: the walk below
+      // would then compare against nothing and could never go red again.
+      expect(clipping.size).toBeGreaterThan(0);
+
+      const wrapper = mountComponent({ stepper: true });
+      await wrapper.find(".myp-trigger-section").trigger("click");
+      const popover = wrapper.find(".myp-popover");
+      expect(popover.exists()).toBe(true);
+
+      // Up to the component root — boxes above it belong to the page.
+      const root = wrapper.element;
+      const clipped: string[] = [];
+      for (let el = popover.element.parentElement; el; el = el.parentElement) {
+        if (Array.from(el.classList).some((name) => clipping.has(name))) {
+          clipped.push(el.className);
+        }
+        if (el === root) break;
+      }
+      expect(clipped).toEqual([]);
     });
   });
 });

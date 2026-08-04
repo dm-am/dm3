@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { symbols } from "@/shared/lib/utils/icons";
+import { useDialogShell } from "@/shared/lib/composables/useDialogShell";
 import type { Topic } from "@/entities/forum";
 
 const props = defineProps<{
@@ -99,15 +100,43 @@ function handleSave() {
 function handleClose() {
   emit("close");
 }
+
+// This overlay was a modal in look only: no role, no aria-modal, no Escape, no
+// focus trap, no focus returned to the button that opened it. It is mounted by
+// its parent's v-if, so from its own side it is open for as long as it exists —
+// which is what the shell is told.
+const modal = ref<HTMLElement | null>(null);
+const closeBtn = ref<HTMLElement | null>(null);
+const shell = useDialogShell({
+  show: computed(() => true),
+  container: modal,
+  initialFocus: () => closeBtn.value,
+  onDismiss: handleClose,
+});
 </script>
 
 <template>
-  <div class="pinned-manager-overlay" @click.self="handleClose">
-    <div class="pinned-manager-modal">
+  <div
+    class="pinned-manager-overlay"
+    @click="shell.handleBackdropClick"
+    @keydown="shell.handleKeydown"
+  >
+    <!-- tabindex="-1": the keydown listener is on the overlay, and a click on
+         the modal's own heading or hint drops focus to <body>, an ancestor of
+         the overlay that the event would then never reach. -->
+    <div
+      ref="modal"
+      class="pinned-manager-modal"
+      tabindex="-1"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Порядок закрепленных топиков"
+    >
       <div class="modal-header">
         <h3>Порядок закрепленных топиков</h3>
         <Tooltip text="Закрыть">
           <button
+            ref="closeBtn"
             class="close-button"
             aria-label="Закрыть"
             @click="handleClose"
@@ -198,7 +227,9 @@ function handleClose() {
   left: 0
   right: 0
   bottom: 0
-  background: rgba(0, 0, 0, 0.5)
+  // The scrim of the dialog tier, from the token both other backdrops take.
+  // It was the one hand-mixed colour left outside the dev catalogue.
+  background: $overlay-bg
   display: flex
   align-items: center
   justify-content: center
@@ -297,7 +328,6 @@ function handleClose() {
   +button
 
 .empty-message
-  text-align: center
   color: $text-muted
   padding: $large
 

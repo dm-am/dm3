@@ -3,19 +3,24 @@ import { ref, computed, onMounted, reactive } from "vue";
 import { useModal } from "vue-final-modal";
 import {
   gameTagApi,
+  useGamesStore,
   type ModerationTagGroup,
   type ModerationTag,
 } from "@/entities/game";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { SvgIcon } from "@/shared/ui/Icon";
-import { EmptyState } from "@/shared/ui";
+import { EmptyState } from "@/shared/ui/EmptyState";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { describeFailure, notifyFailure } from "@/shared/lib/errors";
+import { pluralize } from "@/shared/lib/utils/pluralize";
 import TagGroupDialog from "./dialogs/TagGroupDialog.vue";
 import TagDialog from "./dialogs/TagDialog.vue";
+import { useRoleGate } from "./lib/useRoleGate";
 
+const { hasAccess, deniedText } = useRoleGate("SeniorModerator");
 const toast = useToast();
+const gamesStore = useGamesStore();
 
 // State
 const groups = ref<ModerationTagGroup[]>([]);
@@ -31,6 +36,11 @@ const filteredTags = computed(() => {
   if (!selectedGroupId.value) return tags.value;
   return tags.value.filter((t) => t.groupId === selectedGroupId.value);
 });
+
+/** "1 игра" / "2 игры" / "5 игр". */
+function gamesLabel(count: number): string {
+  return `${count} ${pluralize(count, "игра", "игры", "игр")}`;
+}
 
 const selectedGroupTitle = computed(() => {
   if (!selectedGroupId.value) return "Все теги";
@@ -61,6 +71,19 @@ async function loadData() {
   }
 }
 
+/**
+ * This page reads `moderation/tags`, which carries no cache policy; the rest of
+ * the site reads the same catalogue from `games/tags`, which answers
+ * `public, max-age=300`. The write goes to a third address, so nothing
+ * invalidates the copy the browser holds for the public one — the tag picker on
+ * "Создать игру" would show the pre-edit list for the next five minutes, and
+ * survive a reload doing it. So after a write here the public catalogue is
+ * re-read from the origin.
+ */
+async function reloadAfterWrite() {
+  await Promise.all([loadData(), gamesStore.fetchTags(true)]);
+}
+
 function selectGroup(groupId: string | null) {
   selectedGroupId.value = groupId;
 }
@@ -75,7 +98,7 @@ const { open: openGroupDialog, close: closeGroupDialog } = useModal({
     defaultSortOrder: computed(() => groups.value.length),
     onSuccess: async () => {
       closeGroupDialog();
-      await loadData();
+      await reloadAfterWrite();
     },
     onCancel: () => closeGroupDialog(),
   }),
@@ -118,7 +141,7 @@ async function confirmDeleteGroup() {
       selectedGroupId.value = null;
     }
     deleteGroupTarget.value = null;
-    await loadData();
+    await reloadAfterWrite();
   } finally {
     deletingGroup.value = false;
   }
@@ -138,7 +161,7 @@ const { open: openTagDialog, close: closeTagDialog } = useModal({
     defaultSortOrder: computed(() => filteredTags.value.length),
     onSuccess: async () => {
       closeTagDialog();
-      await loadData();
+      await reloadAfterWrite();
     },
     onCancel: () => closeTagDialog(),
   }),
@@ -160,8 +183,9 @@ const deletingTag = ref(false);
 
 function deleteTag(tag: ModerationTag) {
   if (tag.gamesCount > 0) {
+    const games = pluralize(tag.gamesCount, "игре", "играх", "играх");
     toast.error(
-      `Нельзя удалить тег, который используется в ${tag.gamesCount} играх`,
+      `Нельзя удалить тег, который используется в ${tag.gamesCount} ${games}`,
     );
     return;
   }
@@ -178,7 +202,7 @@ async function confirmDeleteTag() {
       return;
     }
     deleteTagTarget.value = null;
-    await loadData();
+    await reloadAfterWrite();
   } finally {
     deletingTag.value = false;
   }
@@ -190,7 +214,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="moderation-tags">
+  <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
+
+  <div v-else class="moderation-tags">
     <div v-if="loading" class="loading">Загрузка...</div>
     <div v-else-if="error" class="error">{{ error }}</div>
     <template v-else>
@@ -279,7 +305,7 @@ onMounted(() => {
               </div>
               <div class="tag-meta">
                 <span class="tag-group">{{ tag.groupTitle }}</span>
-                <span class="tag-games">{{ tag.gamesCount }} игр</span>
+                <span class="tag-games">{{ gamesLabel(tag.gamesCount) }}</span>
                 <span class="tag-sort">Порядок: {{ tag.sortOrder }}</span>
               </div>
             </div>
@@ -347,7 +373,6 @@ onMounted(() => {
 .error
   grid-column: 1 / -1
   padding: $large
-  text-align: center
 
 .error
   color: $accent-red
@@ -409,7 +434,7 @@ onMounted(() => {
 
   &.active
     background: $link
-    color: white
+    color: $text-on-fill
 
 .group-title
   flex: 1
@@ -506,7 +531,7 @@ onMounted(() => {
     height: 18px
 
 // Responsive
-@media (max-width: 768px)
+@media (max-width: $bp-tablet)
   .moderation-tags
     grid-template-columns: 1fr
 </style>

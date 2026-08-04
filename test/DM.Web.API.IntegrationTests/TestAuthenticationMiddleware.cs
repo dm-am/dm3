@@ -10,6 +10,9 @@ namespace DM.Web.API.IntegrationTests;
 /// Test middleware that authenticates requests based on special test headers.
 /// This middleware runs BEFORE the normal AuthenticationMiddleware and sets up the identity
 /// so that the real authentication is bypassed.
+/// Injecting the identity from inside the pipeline is the only option that holds: a test
+/// IIdentityProvider registered from the test container callback is overwritten, because the
+/// account domain's module registers the production one after that callback has run.
 /// </summary>
 /// <remarks>
 /// Headers:

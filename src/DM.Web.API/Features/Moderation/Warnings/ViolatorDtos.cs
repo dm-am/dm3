@@ -47,11 +47,16 @@ public class Violator
 public class ViolatorsQuery
 {
     /// <summary>
-    /// Filter: "all" (default) - points or active ban,
+    /// Ban state: "all" (default) - points or active ban,
     /// "banned" - active ban only, "points-only" - points without a ban
     /// </summary>
+    /// <remarks>
+    /// Named after what it filters, per the query vocabulary in API_DESIGN.md.
+    /// It was `filter`, which says only that the endpoint filters — a name a
+    /// consumer cannot read a meaning out of and cannot guess a value for.
+    /// </remarks>
     /// <example>all</example>
     [RegularExpression("^(all|banned|points-only)$",
-        ErrorMessage = "Filter must be one of: all, banned, points-only")]
-    public string Filter { get; set; } = "all";
+        ErrorMessage = "Ban state must be one of: all, banned, points-only")]
+    public string BanState { get; set; } = "all";
 }

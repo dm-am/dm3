@@ -50,7 +50,7 @@ internal class RegistrationService : IRegistrationService
         {
             throw new HttpBadRequestException(new Dictionary<string, string>
             {
-                [nameof(registration.Password)] = "Этот пароль был скомпрометирован в результате утечки данных. Пожалуйста, выберите другой пароль."
+                [nameof(registration.Password)] = RefusalMessage.PasswordBreached
             });
         }
 

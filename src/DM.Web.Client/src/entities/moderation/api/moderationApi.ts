@@ -111,8 +111,10 @@ export default new (class ModerationApi {
    * Get users with active warning points or an active ban (Moderator+),
    * sorted by points descending. GET v1/moderation/violators.
    */
-  public getViolators(filter: ViolatorsFilter = "all") {
-    return Api.get<ListEnvelope<Violator>>("moderation/violators", { filter });
+  public getViolators(banState: ViolatorsFilter = "all") {
+    return Api.get<ListEnvelope<Violator>>("moderation/violators", {
+      banState,
+    });
   }
 
   // ==================== Ban History / All Warnings ====================
@@ -130,12 +132,12 @@ export default new (class ModerationApi {
 
   /**
    * Get all warnings across the website (Moderator+), optionally
-   * filtered by user login. GET v1/moderation/warnings.
+   * filtered by username. GET v1/moderation/warnings.
    */
-  public getAllWarnings(user?: string) {
+  public getAllWarnings(username?: string) {
     return Api.get<ListEnvelope<Warning>>(
       "moderation/warnings",
-      user ? { user } : undefined,
+      username ? { username } : undefined,
     );
   }
 
@@ -158,13 +160,13 @@ export default new (class ModerationApi {
 
   /**
    * Get blogs in the given premoderation status, oldest first
-   * (BlogsQuery.PremoderationStatus — honored for Mentor+ callers only).
+   * (BlogsQuery.PremoderationStatuses — honored for Mentor+ callers only).
    */
   public getPremoderatedBlogs(
     status: Exclude<PremoderationStatus, "Approved">,
   ) {
     return Api.get<ListEnvelope<PremoderatedBlog>>("blogs", {
-      premoderationStatus: status,
+      premoderationStatuses: [status],
       sortBy: "created",
       sortOrder: "asc",
       take: 100,
@@ -180,16 +182,18 @@ export default new (class ModerationApi {
    */
   public getAllUploads(params?: {
     username?: string;
-    /** 1-based page number (UploadsQuery.Number) */
+    /** 1-based page number; the wire takes skip/take like every other list. */
     number?: number;
-    /** page size 1-100 (UploadsQuery.Size) */
+    /** page size 1-100 */
     size?: number;
   }) {
     const username = params?.username?.trim();
+    const pageSize = params?.size ?? 20;
+    const pageNumber = params?.number ?? 1;
     return Api.get<ListEnvelope<Upload>>("uploads", {
       ...(username ? { username } : { scope: "all" }),
-      number: params?.number,
-      size: params?.size,
+      skip: pageNumber > 1 ? (pageNumber - 1) * pageSize : undefined,
+      take: pageSize,
     });
   }
 
@@ -310,7 +314,6 @@ export type Ban = {
 };
 
 export enum BanType {
-  Auto = "Auto",
   Temporary = "Temporary",
   Permanent = "Permanent",
   Voluntary = "Voluntary",

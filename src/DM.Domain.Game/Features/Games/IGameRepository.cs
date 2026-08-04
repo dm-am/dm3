@@ -121,5 +121,8 @@ public interface IGameRepository
     /// <summary>
     /// Delete game (soft delete)
     /// </summary>
-    Task Delete(Guid gameId, CancellationToken ct = default);
+    /// <param name="gameId">Game identifier</param>
+    /// <param name="deletedByUserId">User who removed the game</param>
+    /// <param name="ct">Cancellation token</param>
+    Task Delete(Guid gameId, Guid deletedByUserId, CancellationToken ct = default);
 }

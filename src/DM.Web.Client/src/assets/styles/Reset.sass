@@ -45,35 +45,21 @@ a
     text-decoration: underline
     color: $link-hover
 
-field
-  display: flex
-  margin: $small 0
-  align-items: baseline
-
-  & input
-    flex-shrink: 0
-
-  &.error input
-    animation-name: shake-error
-    animation-duration: $animation-time
-    animation-timing-function: ease-in-out
-    border-color: $border-accent-red
-
-    &:focus
-      box-shadow: inset 0 0 $minor $border-accent-red
-
-  & label
-    flex-shrink: 0
-    display: inline-block
-    min-width: $grid-step * 30
-    color: $text
-
 // Keyboard focus indicator — the reset above removes outlines, so restore
 // them for keyboard navigation only (mouse focus stays outline-free).
 // Component-level :focus-visible rules (e.g. _Tables.sass expandable rows,
 // DataTable sort buttons) have higher specificity and override this.
+// Form controls are on this list too. They used to rely on the ring inside
+// +input-base, which a control that styles its own frame never takes, and the
+// components that do that are the search field, the date field and the range
+// picker — the most-used fields on the site. A keyboard reader had nothing at
+// all to tell them where they were.
 a:focus-visible,
-button:focus-visible
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible
   outline: 2px solid $border-focus
   outline-offset: 2px
 
@@ -115,6 +101,23 @@ button:focus-visible
   > .expand-fold-clip
     overflow: hidden
     min-height: 0
+
+// Disclosure marker — the triangle in front of a row that opens. The glyph is
+// pseudo-content and never a text node: interface text stays selectable, so a
+// marker written into the markup rides along into every row a reader copies.
+// Collapsed is the base state, and `.expanded` turns the same triangle a
+// quarter circle, which draws the down-pointing one. Global for the same
+// reason as the folds above, and on their tempo — the marker and the content
+// it opens are one motion. Size and color are inherited, so a marker looks
+// like the row it belongs to.
+.expand-marker
+  &::before
+    content: "\25B6"
+    display: inline-block
+    transition: transform $expand-duration $expand-easing
+
+  &.expanded::before
+    transform: rotate(90deg)
 
 // Screen-reader-only content (standard clip pattern)
 .visually-hidden
@@ -185,6 +188,19 @@ button:focus-visible
   100%
     background-color: transparent
     box-shadow: none
+
+// The skeleton shimmer lives here and not next to its mixin. A partial that
+// emits a rule is emitted again into every scoped stylesheet that imports it,
+// and twenty components import the skeleton partial: the built CSS carried
+// twenty copies of these four lines, eight of them in the entry chunk. This
+// file is emitted once, from main.ts, so the name stays global — which is also
+// what keeps the mixin's `animation:` resolving, since Vue rewrites a keyframes
+// name only when the @keyframes is declared inside the same scoped block.
+@keyframes skeleton-shimmer
+  0%
+    background-position: 200% 0
+  100%
+    background-position: -200% 0
 
 // Search highlight - global marker pen effect
 // Used by highlightMatch() utility - preserves original text color

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Game.Features.Games;
@@ -341,6 +342,11 @@ public class UpdateRoomEntity
     public bool? DiceEnabled { get; set; }
 
     /// <summary>
+    /// Room is kept out of the room list for those without access (if changed)
+    /// </summary>
+    public bool? HiddenWithoutAccess { get; set; }
+
+    /// <summary>
     /// Room is archived (if changed)
     /// </summary>
     public bool? IsArchived { get; set; }
@@ -397,6 +403,13 @@ public class CreatePostEntity
     public string? MetagameText { get; set; }
 
     /// <summary>
+    /// Owner user ids allowed to see each [private] block of
+    /// <see cref="GameText"/>, resolved at save time and frozen.
+    /// See <see cref="PrivateAddresseeSnapshot"/>.
+    /// </summary>
+    public string PrivateAddresseeSnapshotJson { get; set; } = PrivateAddresseeSnapshot.Empty;
+
+    /// <summary>
     /// Creation timestamp
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
@@ -431,6 +444,13 @@ public class UpdatePostEntity
     /// Metagame text (OOC commentary)
     /// </summary>
     public string? MetagameText { get; set; }
+
+    /// <summary>
+    /// Owner user ids allowed to see each [private] block of
+    /// <see cref="GameText"/>. Recomputed on every save, keeping what an
+    /// earlier one already resolved. See <see cref="PrivateAddresseeSnapshot"/>.
+    /// </summary>
+    public string PrivateAddresseeSnapshotJson { get; set; } = PrivateAddresseeSnapshot.Empty;
 
     /// <summary>
     /// Soft delete flag (if changed)
@@ -637,6 +657,16 @@ public class DeleteGameCommentEntity
     /// New last comment ID after deletion
     /// </summary>
     public Guid? NewLastCommentId { get; set; }
+
+    /// <summary>
+    /// User who removed the comment
+    /// </summary>
+    public Guid DeletedByUserId { get; set; }
+
+    /// <summary>
+    /// When the comment was removed
+    /// </summary>
+    public DateTimeOffset DeletedUtc { get; set; }
 }
 
 /// <summary>

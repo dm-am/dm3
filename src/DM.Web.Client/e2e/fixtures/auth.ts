@@ -2,13 +2,35 @@ import {
   test as base,
   expect,
   request as playwrightRequest,
-  Page,
-  APIRequestContext,
+  type Page,
+  type APIRequestContext,
 } from "@playwright/test";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
 export const API_BASE_URL = process.env.VITE_API_URL || "http://localhost:5000";
+
+/**
+ * Port of the preview server the suite runs against.
+ *
+ * Not a free choice: the API validates Origin twice (CORS allowlist and the
+ * CSRF middleware), and its allowlist holds 5173, 5174 and 8080 only. On any
+ * other port every request from the page is rejected and the whole tier reads
+ * red for a reason that has nothing to do with the tests.
+ */
+export const PREVIEW_PORT = 5174;
+
+/**
+ * The address the browser opens. Declared here rather than in the config
+ * because global setup writes localStorage for exactly this origin, and two
+ * copies of the address are two chances for the session to be saved against a
+ * host the page never visits.
+ *
+ * An external target under test (staging, a container, a manually started
+ * server) comes through E2E_BASE_URL and is used as-is.
+ */
+export const APP_BASE_URL =
+  process.env.E2E_BASE_URL || `http://localhost:${PREVIEW_PORT}`;
 
 /**
  * Seeded dev accounts. Not secrets: DM.Tools.Seeder writes exactly these into

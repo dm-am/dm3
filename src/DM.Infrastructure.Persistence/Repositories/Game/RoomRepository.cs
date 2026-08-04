@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Rooms;
 using DM.Infrastructure.Persistence.RelationalStorage;
@@ -17,26 +18,47 @@ internal class RoomRepository : IRoomRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public RoomRepository(
         DmDbContext dbContext,
-        IMapper mapper)
+        IMapper mapper,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _mapper = mapper;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     #region Read Operations
 
-    public async Task<IEnumerable<Room>> GetAllAvailable(Guid gameId, Guid userId)
+    public async Task<IEnumerable<Room>> GetAllVisible(Guid gameId, Guid userId)
     {
-        return await _dbContext.Rooms
+        var visible = _dbContext.Rooms
             .Where(r => r.GameId == gameId)
+            .Where(GameAccessibilityFilters.RoomAvailable(userId, listingOnly: true));
+
+        // Which of them the reader may actually open, asked with the very
+        // filter every point read uses: a row in the menu and the page behind
+        // it can then never disagree about who gets in.
+        var enterable = (await visible
             .Where(GameAccessibilityFilters.RoomAvailable(userId))
+            .Select(r => r.RoomId)
+            .ToArrayAsync())
+            .ToHashSet();
+
+        var rooms = await visible
             .OrderBy(r => r.OrderNumber)
             .ProjectTo<Room>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
+
+        foreach (var room in rooms)
+        {
+            room.CanView = enterable.Contains(room.Id);
+        }
+
+        return rooms;
     }
 
     public Task<Room?> GetAvailable(Guid roomId, Guid userId)
@@ -98,37 +120,76 @@ internal class RoomRepository : IRoomRepository
 
     public async Task<Room> Create(CreateRoomEntity createRoom)
     {
-        // Get the last room to set proper links
-        var lastRoom = await _dbContext.Rooms
-            .Where(r => !r.IsRemoved && r.GameId == createRoom.GameId)
-            .OrderByDescending(r => r.OrderNumber)
-            .FirstOrDefaultAsync();
-
-        var dbRoom = new DbRoom
+        // RoomNumber is the room's address and is allocated as MAX+1, and the
+        // tail of the room list is a read-modify-write of two rows: both are
+        // wrong the moment two rooms of one game are created at once. Locking
+        // the game row first serializes creation per game, which is the smallest
+        // scope that makes the number and the list links correct at the same
+        // time; the unique index on (GameId, RoomNumber) stays as the invariant
+        // behind it. The strategy wrapper is required because the API host
+        // configures EnableRetryOnFailure, and a retrying execution strategy
+        // refuses a transaction opened by hand.
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        var attempted = false;
+        await strategy.ExecuteAsync(async () =>
         {
-            RoomId = createRoom.RoomId,
-            GameId = createRoom.GameId,
-            Title = createRoom.Title,
-            Type = createRoom.Type,
-            AccessType = createRoom.AccessType,
-            ViewPrivateText = createRoom.ViewPrivateText,
-            ViewDiceResults = createRoom.ViewDiceResults,
-            DiceEnabled = createRoom.DiceEnabled,
-            IsArchived = createRoom.IsArchived,
-            OrderNumber = createRoom.OrderNumber,
-            PreviousRoomId = lastRoom?.RoomId,
-            IsRemoved = false
-        };
+            if (attempted)
+            {
+                // A retry replays this whole block, so anything the failed
+                // attempt left tracked has to go: still Added it would insert
+                // the room twice, already Unchanged it would insert nothing.
+                _dbContext.ChangeTracker.Clear();
+            }
 
-        _dbContext.Rooms.Add(dbRoom);
+            attempted = true;
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
-        // Update last room's next pointer
-        if (lastRoom != null)
-        {
-            lastRoom.NextRoomId = createRoom.RoomId;
-        }
+            await _dbContext.Database.ExecuteSqlRawAsync(
+                """SELECT "GameId" FROM "Games" WHERE "GameId" = {0} FOR UPDATE""", createRoom.GameId);
 
-        await _dbContext.SaveChangesAsync();
+            // IgnoreQueryFilters: a removed room keeps its number. Counted under
+            // the soft-delete filter, deleting the newest room would hand its
+            // number to the next one and the link of the deleted room would
+            // start opening a different room.
+            var maxRoomNumber = await _dbContext.Rooms
+                .IgnoreQueryFilters()
+                .TagWith("DM.Game.MaxRoomNumber")
+                .Where(r => r.GameId == createRoom.GameId)
+                .Select(r => (int?)r.RoomNumber)
+                .MaxAsync() ?? 0;
+
+            // Get the last room to set proper links
+            var lastRoom = await _dbContext.Rooms
+                .Where(r => !r.IsRemoved && r.GameId == createRoom.GameId)
+                .OrderByDescending(r => r.OrderNumber)
+                .FirstOrDefaultAsync();
+
+            _dbContext.Rooms.Add(new DbRoom
+            {
+                RoomId = createRoom.RoomId,
+                GameId = createRoom.GameId,
+                RoomNumber = maxRoomNumber + 1,
+                Title = createRoom.Title,
+                Type = createRoom.Type,
+                AccessType = createRoom.AccessType,
+                ViewPrivateText = createRoom.ViewPrivateText,
+                ViewDiceResults = createRoom.ViewDiceResults,
+                DiceEnabled = createRoom.DiceEnabled,
+                IsArchived = createRoom.IsArchived,
+                OrderNumber = createRoom.OrderNumber,
+                PreviousRoomId = lastRoom?.RoomId,
+                IsRemoved = false
+            });
+
+            // Update last room's next pointer
+            if (lastRoom != null)
+            {
+                lastRoom.NextRoomId = createRoom.RoomId;
+            }
+
+            await _dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+        });
 
         return await _dbContext.Rooms
             .Where(r => r.RoomId == createRoom.RoomId)
@@ -162,6 +223,9 @@ internal class RoomRepository : IRoomRepository
 
         if (updateRoom.DiceEnabled.HasValue)
             room.DiceEnabled = updateRoom.DiceEnabled.Value;
+
+        if (updateRoom.HiddenWithoutAccess.HasValue)
+            room.HiddenWithoutAccess = updateRoom.HiddenWithoutAccess.Value;
 
         if (updateRoom.IsArchived.HasValue)
             room.IsArchived = updateRoom.IsArchived.Value;
@@ -239,7 +303,7 @@ internal class RoomRepository : IRoomRepository
             .FirstAsync();
     }
 
-    public async Task Delete(Guid roomId)
+    public async Task Delete(Guid roomId, Guid deletedByUserId)
     {
         var room = await _dbContext.Rooms.FindAsync(roomId);
         if (room == null) return;
@@ -259,7 +323,7 @@ internal class RoomRepository : IRoomRepository
                 nextRoom.PreviousRoomId = room.PreviousRoomId;
         }
 
-        room.IsRemoved = true;
+        SoftDelete.Mark(room, deletedByUserId, _dateTimeProvider.Now);
         await _dbContext.SaveChangesAsync();
     }
 

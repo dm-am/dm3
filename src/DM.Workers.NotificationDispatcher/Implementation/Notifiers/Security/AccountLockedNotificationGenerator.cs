@@ -46,6 +46,8 @@ internal class AccountLockedNotificationGenerator : BaseNotificationGenerator
         yield return new CreateNotification
         {
             UsersInterested = new[] { userData.UserId },
+            // No ActorId: a system event. The lock is raised by the failed-login
+            // counter, not by a person, and it goes to the owner of the account.
             Metadata = new
             {
                 Username = userData.Username,

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using AutoMapper;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Community.Features.Polls;
 using DM.Infrastructure.Persistence.MongoIntegration;
@@ -11,8 +12,8 @@ using DM.Infrastructure.Persistence.Shared.Queries;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
-using DbPoll = DM.Infrastructure.Persistence.Entities.Forum.Poll;
-using DbPollOption = DM.Infrastructure.Persistence.Entities.Forum.PollOption;
+using DbPoll = DM.Infrastructure.Persistence.Entities.Community.Poll;
+using DbPollOption = DM.Infrastructure.Persistence.Entities.Community.PollOption;
 
 namespace DM.Infrastructure.Persistence.Repositories.Community;
 
@@ -20,11 +21,16 @@ namespace DM.Infrastructure.Persistence.Repositories.Community;
 internal class PollRepository : MongoCollectionRepository<DbPoll>, IPollRepository
 {
     private readonly IMapper _mapper;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
-    public PollRepository(DmMongoClient client, IMapper mapper) : base(client)
+    public PollRepository(
+        DmMongoClient client,
+        IMapper mapper,
+        IDateTimeProvider dateTimeProvider) : base(client)
     {
         _mapper = mapper;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     // ═══ READ ═══
@@ -66,7 +72,10 @@ internal class PollRepository : MongoCollectionRepository<DbPoll>, IPollReposito
         PollsQuery query,
         PagingData pagingData)
     {
-        var now = DateTime.UtcNow;
+        // Pending/Active/Closed are derived from the current moment, so the one
+        // clock the application agrees on decides it. UtcDateTime because the
+        // value goes into a BsonArray, which has no conversion from DateTimeOffset.
+        var now = _dateTimeProvider.Now.UtcDateTime;
         var isDesc = string.Equals(query.SortOrder, "desc", StringComparison.OrdinalIgnoreCase);
 
         // Build aggregation pipeline with computed statusOrder field
@@ -107,7 +116,7 @@ internal class PollRepository : MongoCollectionRepository<DbPoll>, IPollReposito
             return filter;
 
         // Status filter (3 statuses: pending, active, closed)
-        var now = DateTime.UtcNow;
+        var now = _dateTimeProvider.Now.UtcDateTime;
         if (string.Equals(query.Status, "pending", StringComparison.OrdinalIgnoreCase))
         {
             // now < StartsUtc

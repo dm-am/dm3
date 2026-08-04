@@ -42,3 +42,12 @@ indent_size = 2
 # SASS/CSS files
 [*.{sass,scss,css}]
 indent_size = 2
+
+# DAL entities under DM.Infrastructure.Persistence: every member is a column and
+# its name is the whole contract, so a per-member XML comment can only repeat the
+# schema. The exemption is declared here once, for the folder, so the next entity
+# file inherits it instead of carrying a pragma of its own; a folder split between
+# two documentation policies leaves the author of the next file guessing which one
+# is in force. Everything outside Entities still has to be documented.
+[src/DM.Infrastructure.Persistence/Entities/**.cs]
+dotnet_diagnostic.CS1591.severity = none

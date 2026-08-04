@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
 
@@ -101,4 +102,14 @@ public interface IAuthenticationRepository
     /// </summary>
     /// <param name="userId">User identifier</param>
     Task RemoveAllSessions(Guid userId);
+
+    /// <summary>
+    /// Remove every session that had expired by <paramref name="now" />, across all
+    /// accounts, and delete the documents left holding none.
+    /// </summary>
+    /// <param name="now">Moment the pass runs at; expiration is compared against it.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>What the pass removed.</returns>
+    Task<SessionPurgeResult> PurgeExpiredSessions(
+        DateTimeOffset now, CancellationToken cancellationToken = default);
 }

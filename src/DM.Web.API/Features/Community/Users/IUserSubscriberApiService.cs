@@ -1,5 +1,6 @@
-using System.Collections.Generic;
 using System.Threading.Tasks;
+using DM.Domain.Core.Dto;
+using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Personal.Subscriptions;
 
 namespace DM.Web.API.Features.Community.Users;
@@ -10,9 +11,9 @@ namespace DM.Web.API.Features.Community.Users;
 public interface IUserSubscriberApiService
 {
     /// <summary>
-    /// Get subscribers of a user
+    /// Get a page of the subscribers of a user
     /// </summary>
-    Task<IEnumerable<User>> GetSubscribersAsync(string username);
+    Task<ListEnvelope<User>> GetSubscribersAsync(string username, PagingQuery query);
 
     /// <summary>
     /// Subscribe to a user

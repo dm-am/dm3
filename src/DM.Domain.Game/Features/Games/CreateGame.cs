@@ -60,9 +60,10 @@ public class CreateGame
     public Guid? AttributeSchemaId { get; set; }
 
     /// <summary>
-    /// Game tag identifiers
+    /// Game tag short identifiers: the public alias the tag list and the game
+    /// filters speak, translated to the tags' own identifiers on the way in
     /// </summary>
-    public IEnumerable<Guid> Tags { get; set; } = [];
+    public IEnumerable<int> Tags { get; set; } = [];
 
     /// <summary>
     /// Create game as a draft

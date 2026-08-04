@@ -17,13 +17,13 @@ public class AttributeValueValidatorShould : UnitTestBase
         bool required = false,
         int? maxLength = null,
         params string[] listValues) => new()
-    {
-        Title = "Attribute",
-        Type = type,
-        Required = required,
-        MaxLength = maxLength,
-        Values = System.Array.ConvertAll(listValues, v => new ListValue { Value = v })
-    };
+        {
+            Title = "Attribute",
+            Type = type,
+            Required = required,
+            MaxLength = maxLength,
+            Values = System.Array.ConvertAll(listValues, v => new ListValue { Value = v })
+        };
 
     [Fact]
     public void FailWhenValueIsNull()

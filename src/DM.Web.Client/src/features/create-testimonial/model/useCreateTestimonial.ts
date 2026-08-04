@@ -1,5 +1,6 @@
 import { ref } from "vue";
 import { useTestimonialStore } from "@/entities/testimonial";
+import { describeFailure } from "@/shared/lib/errors";
 
 export function useCreateTestimonial() {
   const testimonialStore = useTestimonialStore();
@@ -37,12 +38,15 @@ export function useCreateTestimonial() {
         errorMessage.value = "У вас уже есть отзыв";
       } else if (error.status === 400) {
         errorMessage.value = "Некорректные данные (10-1000 символов)";
-      } else if (error.status === 403) {
-        errorMessage.value = "Недостаточно прав";
       } else if (error.status === 500) {
         errorMessage.value = "Внутренняя ошибка сервера. Попробуйте позже";
       } else {
-        errorMessage.value = "Не удалось создать отзыв. Попробуйте позже";
+        // The server names which refusal a 403 was; this sentence is for a
+        // failure that named nothing.
+        errorMessage.value = describeFailure(
+          error,
+          "Не удалось создать отзыв. Попробуйте позже",
+        );
       }
     } else {
       testimonialText.value = "";

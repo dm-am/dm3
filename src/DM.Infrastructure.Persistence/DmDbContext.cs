@@ -1,5 +1,6 @@
 using System;
 using System.Linq.Expressions;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Entities.Blog;
 using DM.Infrastructure.Persistence.Entities.Shared;
@@ -297,13 +298,49 @@ public class DmDbContext : DbContext
         modelBuilder.Entity<Subscription>()
             .HasIndex(s => new { s.TargetType, s.TargetId });
 
-        // Likes are polymorphic and had no index at all. Every aggregate reads them
-        // either as "likes of this entity" or as "likes of this kind" followed by a
-        // join on EntityId, so EntityType leads: with the reverse order the join-shaped
-        // reads (profile counters, community statistics) would not take the index at
-        // all. The table grows without bound, so the scan degrades superlinearly.
-        modelBuilder.Entity<Like>()
-            .HasIndex(l => new { l.EntityType, l.EntityId });
+        // One subscription per (subscriber, target). All three subscribe services
+        // check first and insert after, so two overlapping requests both find
+        // nothing and both insert, and the extra row is not something the reader
+        // can clear: the button reads "subscribed" while any row is left, and each
+        // unsubscribe click removes one. Leads with SubscriberId, so it replaces
+        // the plain FK index the convention used to add rather than adding to it.
+        modelBuilder.Entity<Subscription>()
+            .HasIndex(s => new { s.SubscriberId, s.TargetType, s.TargetId })
+            .IsUnique();
+
+        // One live like per (entity, reader). Liking is check-then-insert over the
+        // loaded navigation, so two overlapping clicks both find nothing and both
+        // insert: the counter then reports one person twice, and the same duplicate
+        // reaches the LikesReceived metric, where somebody else's double click moves
+        // the author towards an award. Partial on live rows because unliking sets
+        // IsRemoved and liking again has to be allowed — the same shape as the
+        // endorsement and review indexes above.
+        //
+        // EntityType leads because every aggregate reads likes either as "likes of
+        // this entity" or as "likes of this kind" joined on EntityId: equality on the
+        // type gives a range already ordered by EntityId, which is what the join-shaped
+        // reads (profile counters, community statistics) want. The reverse order is
+        // usable too — a nested loop driven by EntityId would take it — so the choice
+        // is about the shape and the cost of the join, not about the index being read
+        // at all. Replaces the plain (EntityType, EntityId) index: it is the leading
+        // pair, and no read of this table looks at removed rows.
+        var likeIndexBuilder = modelBuilder.Entity<Like>()
+            .HasIndex(l => new { l.EntityType, l.EntityId, l.UserId });
+        if (isPostgres)
+        {
+            likeIndexBuilder.HasFilter("\"IsRemoved\" = false");
+        }
+        likeIndexBuilder.IsUnique();
+
+        // A game carries a tag once. The link rows are written from a resolved
+        // catalogue today, which is why no duplicate exists to clean up, but the
+        // required-tag filter counts rows and not distinct tags, so a second row for
+        // one tag would answer a search for "D&D AND detective" with a game that only
+        // has D&D twice. Leading with GameId, so it replaces the conventional FK index
+        // rather than adding to it.
+        modelBuilder.Entity<GameTag>()
+            .HasIndex(t => new { t.GameId, t.TagId })
+            .IsUnique();
 
         // The readable chat id is resolved by equality in GET /chats/{id}. Without
         // uniqueness a collision between an encoded serial and the reserved name of
@@ -311,6 +348,18 @@ public class DmDbContext : DbContext
         // the plan happened to reach first.
         modelBuilder.Entity<Chat>()
             .HasIndex(c => c.PublicId)
+            .IsUnique();
+
+        // Games and blogs resolve their pages by the same readable key and by the same
+        // equality, so they get the same constraint — and the index besides, which
+        // neither of them had: the address in every link on the site was answered by a
+        // sequential scan.
+        modelBuilder.Entity<Game>()
+            .HasIndex(g => g.PublicId)
+            .IsUnique();
+
+        modelBuilder.Entity<Blog>()
+            .HasIndex(b => b.PublicId)
             .IsUnique();
 
         // TopicNumber is the canonical topic URL key, and it is allocated as
@@ -322,6 +371,24 @@ public class DmDbContext : DbContext
         modelBuilder.Entity<Topic>()
             .HasIndex(t => new { t.BoardId, t.TopicNumber })
             .IsUnique();
+
+        // RoomNumber is the same key one level down: a room is addressed as
+        // /games/{game}/rooms/{number}, and the number is what the address
+        // resolves by. It is allocated as MAX+1 within the game, so two rooms
+        // created at once read the same maximum, and two rooms sharing a number
+        // means one of them can never be opened by its own link. A removed room
+        // keeps its number for the reason a removed topic does. The pair also
+        // replaces the plain GameId index: every room read filters by the game
+        // first, so the composite serves those reads unchanged.
+        modelBuilder.Entity<Room>()
+            .HasIndex(r => new { r.GameId, r.RoomNumber })
+            .IsUnique();
+
+        // Off by default: a closed room is named to everybody unless its master
+        // says otherwise, and a row written without the column has to mean that.
+        modelBuilder.Entity<Room>()
+            .Property(r => r.HiddenWithoutAccess)
+            .HasDefaultValue(false);
 
         #endregion
 
@@ -1088,7 +1155,21 @@ public class DmDbContext : DbContext
                 Order = 1,
                 ViewPolicy = BoardAccessPolicy.Guest,
                 CreateTopicPolicy = BoardAccessPolicy.RegularUser,
-                TopicsCount = 1
+                // Two topics are seeded into this board below. The column is a
+                // denormalised count that only a topic write recomputes, so a seeded
+                // value that disagrees with the seeded rows is what a freshly migrated
+                // database shows the forum — and it also becomes the unread count for
+                // everyone who has never opened the board.
+                TopicsCount = 2,
+                // The last-topic block is denormalised the same way and was left unset,
+                // so a board with two topics showed an empty "last activity" column
+                // until somebody created or deleted a topic in it. Points at the newer
+                // of the two seeded topics.
+                LastTopicId = Guid.Parse("00000000-0000-0000-0000-000000000100"),
+                LastTopicNumber = 2,
+                LastTopicTitle = "Обсуждение действий администрации",
+                LastTopicAuthorId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                LastTopicCreatedUtc = new DateTimeOffset(2020, 1, 1, 0, 0, 1, TimeSpan.Zero)
             },
             new Board
             {
@@ -1207,7 +1288,7 @@ public class DmDbContext : DbContext
                 AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000001"),
                 Code = "days_since_registration",
                 Title = "Выслуга лет",
-                Description = "Время с момента регистрации на сайте.",
+                Description = "Время с момента регистрации на сайте",
                 IconName = "hourglass",
                 Metric = AchievementMetric.DaysSinceRegistration,
                 SortOrder = 1,
@@ -1218,7 +1299,7 @@ public class DmDbContext : DbContext
                 AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000002"),
                 Code = "game_posts_authored",
                 Title = "Игровые посты",
-                Description = "Игровые посты в активных играх. Считаются все, включая удаленные игры.",
+                Description = "Игровые посты во всех играх, включая удаленные",
                 IconName = "scroll-quill",
                 Metric = AchievementMetric.GamePostsAuthored,
                 SortOrder = 2,
@@ -1229,7 +1310,7 @@ public class DmDbContext : DbContext
                 AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000003"),
                 Code = "post_review_score_sum",
                 Title = "Рейтинг",
-                Description = "Сумма положительных оценок твоих игровых постов. Отрицательные оценки рейтинг не уменьшают.",
+                Description = "Сумма оценок игровых постов с учетом минусов",
                 IconName = "laurels",
                 Metric = AchievementMetric.PostReviewScoreSum,
                 SortOrder = 3,
@@ -1240,7 +1321,7 @@ public class DmDbContext : DbContext
                 AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000004"),
                 Code = "games_hosted",
                 Title = "Игры в роли ведущего",
-                Description = "Игры, где ты мастер или ассистент.",
+                Description = "Игры в роли мастера или ассистента",
                 IconName = "scepter",
                 Metric = AchievementMetric.GamesHosted,
                 SortOrder = 4,
@@ -1251,7 +1332,7 @@ public class DmDbContext : DbContext
                 AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000005"),
                 Code = "games_played",
                 Title = "Игры в роли игрока",
-                Description = "Игры, где у тебя есть активный или бывший персонаж.",
+                Description = "Игры с активным или бывшим персонажем",
                 IconName = "sword",
                 Metric = AchievementMetric.GamesPlayed,
                 SortOrder = 5,
@@ -1262,7 +1343,7 @@ public class DmDbContext : DbContext
                 AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000006"),
                 Code = "blogs_hosted",
                 Title = "Блоги в роли ведущего",
-                Description = "Блоги, где ты автор или ассистент.",
+                Description = "Блоги в роли автора или ассистента",
                 IconName = "book",
                 Metric = AchievementMetric.BlogsHosted,
                 SortOrder = 6,
@@ -1273,7 +1354,7 @@ public class DmDbContext : DbContext
                 AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000007"),
                 Code = "publications_authored",
                 Title = "Публикации",
-                Description = "Статьи в блогах. Черновики тоже считаются.",
+                Description = "Статьи в блогах, включая черновики",
                 IconName = "papers",
                 Metric = AchievementMetric.PublicationsAuthored,
                 SortOrder = 7,
@@ -1284,7 +1365,7 @@ public class DmDbContext : DbContext
                 AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000008"),
                 Code = "topics_authored",
                 Title = "Топики",
-                Description = "Форумные топики, которые ты создал.",
+                Description = "Топики, созданные на форуме",
                 IconName = "stabbed-note",
                 Metric = AchievementMetric.TopicsAuthored,
                 SortOrder = 8,
@@ -1295,7 +1376,7 @@ public class DmDbContext : DbContext
                 AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000009"),
                 Code = "comments_authored",
                 Title = "Комментарии",
-                Description = "Все комментарии: форум, блоги, игры, публикации.",
+                Description = "Комментарии на форуме, в блогах, играх и публикациях",
                 IconName = "discussion",
                 Metric = AchievementMetric.CommentsAuthored,
                 SortOrder = 9,
@@ -1306,7 +1387,7 @@ public class DmDbContext : DbContext
                 AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000a"),
                 Code = "global_chat_messages",
                 Title = "Глобальный чат",
-                Description = "Сообщения в глобальном чате сайта.",
+                Description = "Сообщения в глобальном чате",
                 IconName = "talk",
                 Metric = AchievementMetric.GlobalChatMessages,
                 SortOrder = 10,
@@ -1317,7 +1398,7 @@ public class DmDbContext : DbContext
                 AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000b"),
                 Code = "likes_received",
                 Title = "Лайки",
-                Description = "Лайки на топиках, публикациях, комментариях и сообщениях чата. Игровые посты учитываются через \"Рейтинг\".",
+                Description = "Лайки на топиках, публикациях, комментариях и сообщениях чата",
                 IconName = "heart-organ",
                 Metric = AchievementMetric.LikesReceived,
                 SortOrder = 11,
@@ -1328,7 +1409,7 @@ public class DmDbContext : DbContext
                 AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000c"),
                 Code = "game_drops",
                 Title = "Дропы",
-                Description = "Игры, которые ты покинул добровольно. Смерть персонажа и изгнание мастером не считаются.",
+                Description = "Игры, покинутые добровольно (смерть персонажа и изгнание мастером не считаются)",
                 IconName = "walking-boot",
                 Metric = AchievementMetric.GameDrops,
                 SortOrder = 12,
@@ -1339,7 +1420,7 @@ public class DmDbContext : DbContext
                 AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000d"),
                 Code = "bans_received",
                 Title = "Баны",
-                Description = "Баны, полученные от модерации.",
+                Description = "Баны, полученные от модерации",
                 IconName = "plastic-duck",
                 Metric = AchievementMetric.BansReceived,
                 SortOrder = 13,
@@ -1432,7 +1513,7 @@ public class DmDbContext : DbContext
             {
                 AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000000a"),
                 Code = "RATING_250",
-                Title = "Видный талант",
+                Title = "Самобытный талант",
                 Threshold = 250,
                 Tier = 2,
                 AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000003")
@@ -1450,7 +1531,7 @@ public class DmDbContext : DbContext
             {
                 AchievementTypeId = new Guid("00000000-0000-0000-0002-00000000000c"),
                 Code = "RATING_1000",
-                Title = "Мастодонт-аксакал",
+                Title = "Мастодонт ремесла",
                 Threshold = 1000,
                 Tier = 4,
                 AchievementCategoryId = new Guid("00000000-0000-0000-0003-000000000003")
@@ -1747,7 +1828,7 @@ public class DmDbContext : DbContext
             {
                 AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000029"),
                 Code = "DROPS_1",
-                Title = "Перекати-поле",
+                Title = "Покинувший строй",
                 Threshold = 1,
                 Tier = 1,
                 AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000c")
@@ -1783,7 +1864,7 @@ public class DmDbContext : DbContext
             {
                 AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000025"),
                 Code = "BANS_1",
-                Title = "Яйцо с характером",
+                Title = "Выпавший из гнезда",
                 Threshold = 1,
                 Tier = 1,
                 AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000d")
@@ -1792,7 +1873,7 @@ public class DmDbContext : DbContext
             {
                 AchievementTypeId = new Guid("00000000-0000-0000-0002-000000000026"),
                 Code = "BANS_3",
-                Title = "Выпавший из гнезда",
+                Title = "Крякнувший лишнего",
                 Threshold = 3,
                 Tier = 2,
                 AchievementCategoryId = new Guid("00000000-0000-0000-0003-00000000000d")
@@ -1822,7 +1903,7 @@ public class DmDbContext : DbContext
                 AwardTypeId = new Guid("00000000-0000-0000-0001-000000000001"),
                 Code = "contest_first",
                 Title = "Литконкурс",
-                Description = "Победитель конкурса",
+                Description = "Первое место в конкурсе",
                 IconName = "trophy-cup",
                 Tier = 1,
                 SortOrder = 1,
@@ -1833,7 +1914,7 @@ public class DmDbContext : DbContext
                 AwardTypeId = new Guid("00000000-0000-0000-0001-000000000002"),
                 Code = "contest_second",
                 Title = "Литконкурс",
-                Description = "Серебряный призер конкурса",
+                Description = "Второе место в конкурсе",
                 IconName = "trophy-cup",
                 Tier = 2,
                 SortOrder = 2,
@@ -1844,7 +1925,7 @@ public class DmDbContext : DbContext
                 AwardTypeId = new Guid("00000000-0000-0000-0001-000000000003"),
                 Code = "contest_third",
                 Title = "Литконкурс",
-                Description = "Бронзовый призер конкурса",
+                Description = "Третье место в конкурсе",
                 IconName = "trophy-cup",
                 Tier = 3,
                 SortOrder = 3,
@@ -1855,7 +1936,7 @@ public class DmDbContext : DbContext
                 AwardTypeId = new Guid("00000000-0000-0000-0001-000000000004"),
                 Code = "popular_vote",
                 Title = "Народное признание, например",
-                Description = "Лучшая работа конкурса по голосованию участников",
+                Description = "Лучшая работа по голосованию участников",
                 IconName = "ribbon-medal",
                 Tier = 1,
                 SortOrder = 4,
@@ -1866,7 +1947,7 @@ public class DmDbContext : DbContext
                 AwardTypeId = new Guid("00000000-0000-0000-0001-000000000005"),
                 Code = "best_critic",
                 Title = "Лучший критик",
-                Description = "Лучшие рецензии сезона по решению жюри",
+                Description = "Лучшие рецензии конкурса по решению жюри",
                 IconName = "quill-ink",
                 Tier = 1,
                 SortOrder = 5,
@@ -1877,7 +1958,7 @@ public class DmDbContext : DbContext
                 AwardTypeId = new Guid("00000000-0000-0000-0001-000000000006"),
                 Code = "guesser",
                 Title = "Угадайка",
-                Description = "Угадал больше всех авторов конкурсных работ",
+                Description = "Больше всех угаданных авторов конкурсных работ",
                 IconName = "magnifying-glass",
                 Tier = 1,
                 SortOrder = 6,
@@ -1888,7 +1969,7 @@ public class DmDbContext : DbContext
                 AwardTypeId = new Guid("00000000-0000-0000-0001-000000000007"),
                 Code = "honorary_goblin",
                 Title = "Почетный гоблин",
-                Description = "Бывший гоблин, отдавший сообществу годы службы",
+                Description = "Годы службы сообществу в команде гоблинов",
                 IconName = "goblin",
                 Tier = 5,
                 SortOrder = 7,
@@ -2042,7 +2123,7 @@ public class DmDbContext : DbContext
         // `FK_Comments_Topics_EntityId`. This constraint is FALSE: comments on Game/Blog/
         // Publication have an EntityId not from Topics, and INSERT fails on its check.
         // In the generated migration file this `migrationBuilder.AddForeignKey`
-        // block must be removed manually (see the NOTE comment in InitialCreate.cs).
+        // block must be removed manually (a comment marks the spot in InitialCreate.cs).
         // Referential integrity is maintained by application logic.
         modelBuilder.Entity<Topic>()
             .HasMany(t => t.Comments)
@@ -2050,7 +2131,10 @@ public class DmDbContext : DbContext
             .HasForeignKey(c => c.EntityId)
             .OnDelete(DeleteBehavior.ClientCascade);
 
-        // Configure IsNewbie as a computed column
+        // IsNewbie as a stored computed column: the schema's copy of
+        // ProbationPolicy.NewbiePostThreshold, which SQL cannot read. The number is
+        // repeated here, in the migration and in both snapshots, and an
+        // architecture test compares all four with the constant.
         if (isPostgres)
         {
             modelBuilder.Entity<User>()
@@ -2089,8 +2173,9 @@ public class DmDbContext : DbContext
         // Username and email are looked up case-insensitively everywhere
         // (lower(column) = lower(value)), so the indexes that serve those
         // lookups are expression indexes on lower(...). EF cannot express an
-        // index over an expression, so they are created by raw SQL in the
-        // migration — see the IX_Users_*_Lower statements there. Declaring a
+        // index over an expression, and hand-written SQL in the migration would
+        // be lost silently the next time the migration is regenerated, so
+        // ExpressionIndexInitializer asserts them at startup instead. Declaring a
         // plain HasIndex here instead would build a b-tree over the raw column
         // that no case-insensitive predicate can use, which is exactly the
         // state this replaced: the name said Lower, the index did not.
@@ -2164,6 +2249,18 @@ public class DmDbContext : DbContext
             entity.HasIndex(u => u.TargetPostId)
                 .HasFilter("\"TargetPostId\" IS NOT NULL");
 
+            // A character has at most one live portrait. It owns no column pointing
+            // at one — the portrait is whichever CharacterAvatar row still points at
+            // the character — so a second live row is not an extra picture but a
+            // second answer to one question, and the batch read of a room used to
+            // fail outright on the pair. Partial on Type = 2 (CharacterAvatar) and on
+            // the live rows, because the portrait a character replaces stays in the
+            // table until the orphan sweeper drops it. Named, because the non-unique
+            // index above already holds the default name for this column.
+            entity.HasIndex(u => u.TargetCharacterId, "IX_Uploads_TargetCharacterId_Live")
+                .IsUnique()
+                .HasFilter("\"Type\" = 2 AND \"IsRemoved\" = false");
+
             // CHECK constraint: exactly one typed target column
             // is non-null AND matches the Type discriminator.
             // CHECK: exactly one typed target column is non-null AND
@@ -2204,6 +2301,16 @@ public class DmDbContext : DbContext
                 "(\"CharacterId\" IS NOT NULL AND \"ReaderUserId\" IS NULL) OR " +
                 "(\"CharacterId\" IS NULL AND \"ReaderUserId\" IS NOT NULL)"));
         });
+
+        // A character holds one value per attribute specification. The update
+        // path reads the stored rows into a dictionary keyed by AttributeId and
+        // writes them as check-then-insert, so a second row for the same pair
+        // both loses one of the two values and makes every later edit of that
+        // character fail on the duplicate key. The composite replaces the
+        // conventional CharacterId index: it is the leading column, so the
+        // per-character lookups keep their index.
+        modelBuilder.Entity<CharacterAttribute>()
+            .HasIndex(a => new { a.CharacterId, a.AttributeId }).IsUnique();
 
         // Global Query Filter: automatically exclude soft-deleted entities
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
@@ -2579,7 +2686,7 @@ public class DmDbContext : DbContext
     public DbSet<FundraisingGoal> FundraisingGoals { get; set; }
 
     /// <summary>
-    /// Award type catalog (timeless, 6 rows in seed). Grant context (year, season,
+    /// Award type catalog (timeless). Grant context (year, season,
     /// topic) lives on <see cref="ContestSeries"/>; per-grant on <see cref="UserAward"/>.
     /// </summary>
     public DbSet<AwardType> AwardTypes { get; set; }

@@ -14,17 +14,17 @@
           <div class="invitation-info">
             <div class="invitation-header">
               <RouterLink
-                :to="`/games/${invitation.gameId}`"
+                :to="targetRoute(invitation)"
                 class="invitation-game-link"
               >
-                {{ invitation.gameTitle }}
+                {{ invitation.entityTitle }}
               </RouterLink>
             </div>
             <div class="invitation-details">
               <span class="invitation-from">
                 От:
                 <RouterLink
-                  :to="`/users/${invitation.inviterUsername}`"
+                  :to="inviterRoute(invitation.inviterUsername)"
                   class="invitation-user-link"
                 >
                   {{ invitation.inviterUsername }}
@@ -65,16 +65,19 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { RouterLink } from "vue-router";
-import { accountApi } from "@/entities/user";
+import { RouterLink, type RouteLocationRaw } from "vue-router";
+import { personalApi } from "@/entities/user";
 import { formatDate } from "@/shared/lib/utils/datetime";
 import { useToast } from "@/shared/lib/composables/useToast";
-import type { Invitation, InvitationType } from "@/entities/game";
+import type { ReceivedInvitation } from "@/shared/api/models/personal";
 import { notifyFailure } from "@/shared/lib/errors";
 
 const toast = useToast();
 
-const invitations = ref<Invitation[]>([]);
+// The shape the endpoint actually answers. The section used to type it as the
+// game-side Invitation (gameId / gameTitle), so every row rendered an empty
+// link — a zero-width anchor with no name in it — pointing at /games/undefined.
+const invitations = ref<ReceivedInvitation[]>([]);
 const loading = ref(true);
 const processingId = ref<string | null>(null);
 
@@ -84,7 +87,7 @@ onMounted(async () => {
 
 async function loadInvitations() {
   loading.value = true;
-  const { data, error } = await accountApi.getMyInvitations();
+  const { data, error } = await personalApi.getMyInvitations();
   loading.value = false;
 
   if (!error && data) {
@@ -92,7 +95,23 @@ async function loadInvitations() {
   }
 }
 
-function typeLabel(type: InvitationType): string {
+// Named routes, and the right one per entity: the endpoint answers game and
+// blog invitations together, and /games/<id> is not a route at all (the game
+// lives at /game/:id), so the hand-written path fell through to the catch-all.
+function targetRoute(invitation: ReceivedInvitation): RouteLocationRaw {
+  return invitation.entityType === "blog"
+    ? { name: "blog", params: { id: invitation.entityId } }
+    : { name: "game", params: { id: invitation.entityId } };
+}
+
+// The inviter's profile, by name for the same reason: /users/<name> is the
+// path the "profile" route happens to have today, and a hand-written copy of a
+// path goes stale silently — the row above it is what that looks like.
+function inviterRoute(username: string): RouteLocationRaw {
+  return { name: "profile", params: { username } };
+}
+
+function typeLabel(type: ReceivedInvitation["type"]): string {
   switch (type) {
     case "player":
       return "Игрок";
@@ -105,7 +124,7 @@ function typeLabel(type: InvitationType): string {
 
 async function accept(invitationId: string) {
   processingId.value = invitationId;
-  const { error } = await accountApi.acceptInvitation(invitationId);
+  const { error } = await personalApi.acceptInvitation(invitationId);
   processingId.value = null;
 
   if (error) {
@@ -118,7 +137,7 @@ async function accept(invitationId: string) {
 
 async function reject(invitationId: string) {
   processingId.value = invitationId;
-  const { error } = await accountApi.rejectInvitation(invitationId);
+  const { error } = await personalApi.rejectInvitation(invitationId);
   processingId.value = null;
 
   if (error) {
@@ -140,7 +159,6 @@ async function reject(invitationId: string) {
 
 .loading-state
   color: $text-muted
-  text-align: center
   padding: $medium
 
 .invitations-list
@@ -158,7 +176,7 @@ async function reject(invitationId: string) {
   border: 1px solid $border
   gap: $medium
 
-  @media (max-width: 768px)
+  @media (max-width: $bp-tablet)
     flex-direction: column
     align-items: stretch
 
@@ -213,7 +231,7 @@ async function reject(invitationId: string) {
   gap: $small
   flex-shrink: 0
 
-  @media (max-width: 768px)
+  @media (max-width: $bp-tablet)
     justify-content: flex-end
     margin-top: $small
 

@@ -10,12 +10,13 @@ using DM.Infrastructure.Core.Logging;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Mail;
 using DM.Infrastructure.Messaging;
+using DM.Workers.NotificationDispatcher.Implementation;
 using DM.Workers.NotificationDispatcher.Implementation.Bot;
 using DM.Workers.NotificationDispatcher.Implementation.Email;
 using Jamq.Client.Abstractions.Consuming;
-using Jamq.Client.DependencyInjection;
-using Jamq.Client.Rabbit.DependencyInjection;
+using DM.Domain.Moderation;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,14 +30,17 @@ namespace DM.Workers.NotificationDispatcher;
 public class Startup
 {
     private readonly IConfiguration _configuration;
+    private readonly IWebHostEnvironment _environment;
 
     /// <summary>
     ///
     /// </summary>
     /// <param name="configuration"></param>
-    public Startup(IConfiguration configuration)
+    /// <param name="environment">The host's answer about the environment, so logging cannot give a second one</param>
+    public Startup(IConfiguration configuration, IWebHostEnvironment environment)
     {
         _configuration = configuration;
+        _environment = environment;
     }
 
     /// <summary>
@@ -55,10 +59,15 @@ public class Startup
             .AddDmMessageQueuing(_configuration)
             .AddDmMailConfiguration(_configuration)
             .AddDmAccountConfiguration(_configuration)
-            .AddDmLogging("DM.Notifications.Consumer", _configuration);
+            // Same reason as the account call above: ConfigureContainer registers the
+            // community assembly, whose endorsement service asks for the probation
+            // contract. Nothing registered it here, so the first notification that
+            // touched an endorsement would have failed to resolve on a live message.
+            .AddDmLogging("DM.Notifications.Consumer", _configuration, _environment)
+            .RequireRelationalStorage()
+            .RequireDocumentStorage();
 
-        services.AddJamqClient(
-            config => config.UseRabbit(),
+        services.AddDmJamqClient(
             consumerBuilderDefaults: builder => builder.WithMiddleware<NotificationConsumerRetryMiddleware>());
         services.AddHostedService<NotificationDispatcherConsumer>();
 
@@ -111,6 +120,17 @@ public class Startup
         // Bot notification sender (Discord/Telegram)
         builder.RegisterType<NotificationBotSender>()
             .As<INotificationBotSender>()
+            .InstancePerLifetimeScope();
+
+        // Продюсер вынесен из процессора отдельным типом. Jamq создает scope на каждое
+        // доставленное сообщение и резолвит процессор в нем, поэтому продюсер, который
+        // строился в конструкторе процессора, брал AMQP-канал на сообщение и не
+        // возвращал его: канал уходит обратно в пул только в Dispose, а процессор
+        // не был IDisposable. Здесь scope живет одно сообщение, так что несущая
+        // половина — именно Dispose, а не время жизни; scope выбран для единообразия
+        // с API, где одного продюсера просят несколько сервисов в одном запросе.
+        builder.RegisterType<RealtimeNotificationProducer>()
+            .As<IRealtimeNotificationProducer>()
             .InstancePerLifetimeScope();
     }
 

@@ -72,6 +72,7 @@ internal class NewPublicationNotificationGenerator : BaseNotificationGenerator
         yield return new CreateNotification
         {
             UsersInterested = subscriberIds,
+            ActorId = publicationData.AuthorId,
             Metadata = new
             {
                 PublicationId = publicationData.PublicationId.EncodeToReadable(publicationData.Title),

@@ -11,9 +11,9 @@ public class LoginRequest
     /// User email address
     /// </summary>
     /// <example>john@example.com</example>
-    [Required(ErrorMessage = "Email обязателен")]
-    [StringLength(100, MinimumLength = 1, ErrorMessage = "Email должен быть от 1 до 100 символов")]
-    [EmailAddress(ErrorMessage = "Неверный формат email")]
+    [Required(ErrorMessage = "Почта обязательна")]
+    [StringLength(100, MinimumLength = 1, ErrorMessage = "Почта должна быть от 1 до 100 символов")]
+    [EmailAddress(ErrorMessage = "Неверный формат почты")]
     public string Email { get; set; } = "";
 
     /// <summary>

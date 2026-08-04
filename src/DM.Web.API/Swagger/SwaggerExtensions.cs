@@ -30,12 +30,12 @@ public static class SwaggerExtensions
     public static readonly IEnumerable<string> ApiGroups = Assembly.GetExecutingAssembly().GetTypes()
         .Where(t => t.IsSubclassOf(typeof(ControllerBase)))
         .Select(t => t.GetCustomAttribute<ApiExplorerSettingsAttribute>())
-        .Where(t => t is {IgnoreApi: false})
+        .Where(t => t is { IgnoreApi: false })
         .Select(t => t!.GroupName)
         .Where(g => g != null)
         .Select(g => g!)
         .Distinct();
-        
+
     /// <summary>
     /// Configure swagger gen
     /// </summary>
@@ -44,7 +44,7 @@ public static class SwaggerExtensions
     {
         foreach (var apiGroup in ApiGroups)
         {
-            options.SwaggerDoc(apiGroup, new OpenApiInfo {Title = $"DM.API {apiGroup}", Version = "v1"});
+            options.SwaggerDoc(apiGroup, new OpenApiInfo { Title = $"DM.API {apiGroup}", Version = "v1" });
         }
 
         // BFF Pattern: Cookie-based authentication
@@ -59,6 +59,9 @@ public static class SwaggerExtensions
 
         options.OperationFilter<AuthenticationSwaggerFilter>();
         options.OperationFilter<BbAudienceSwaggerFilter>();
+        options.OperationFilter<ResponseMediaTypeSwaggerFilter>();
+        options.OperationFilter<CreatedLocationSwaggerFilter>();
+        options.ParameterFilter<SortVocabularySwaggerFilter>();
 
         var apiAssemblyName = Assembly.GetExecutingAssembly().GetName().Name;
         options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, $"{apiAssemblyName}.xml"));

@@ -91,9 +91,9 @@ internal class GameApiService : IGameApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<GameDetails>> Update(Guid gameId, GameDetails game)
+    public async Task<Envelope<GameDetails>> Update(Guid gameId, UpdateGameRequest request)
     {
-        var updateGame = _mapper.Map<UpdateGame>(game);
+        var updateGame = _mapper.Map<UpdateGame>(request);
         updateGame.GameId = gameId;
         var updatedGame = await _gameService.UpdateAsync(updateGame);
         return new Envelope<GameDetails>(_mapper.Map<GameDetails>(updatedGame));

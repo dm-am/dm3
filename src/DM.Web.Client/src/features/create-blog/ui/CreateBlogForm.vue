@@ -27,6 +27,8 @@ import {
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
 import type { BadRequestError } from "@/shared/api/models/common";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { UnsavedChangesGuard } from "@/shared/ui/UnsavedChangesGuard";
+import { describeFailure } from "@/shared/lib/errors";
 
 const router = useRouter();
 const { user } = storeToRefs(useAuthStore());
@@ -44,6 +46,13 @@ const description = ref("");
 const draftVisibility = ref(DraftVisibility.Public);
 const commentsEnabled = ref(true);
 const copyBlacklist = ref(false);
+
+// See CreateGameForm: released once the blog exists, so the form's own
+// navigation is not questioned.
+const saved = ref(false);
+const dirty = computed(
+  () => !saved.value && !!(title.value.trim() || description.value.trim()),
+);
 
 const isSubmitting = ref(false);
 const titleError = ref("");
@@ -81,7 +90,7 @@ async function handleSubmit() {
       descriptionError.value = getFieldError(errors, "description") || "";
 
       if (!titleError.value && !descriptionError.value) {
-        toast.error(apiError.title || "Не удалось создать блог");
+        toast.error(describeFailure(apiError, "Не удалось создать блог"));
       }
       return;
     }
@@ -89,6 +98,7 @@ async function handleSubmit() {
     if (data) {
       // Same as game creation: the lists are cached, so without refreshing
       // them the new blog is missing from /blogs and from the sidebar.
+      saved.value = true;
       await blogsStore.invalidateBlogLists();
       router.push({
         name: "blog",
@@ -181,6 +191,8 @@ async function handleSubmit() {
         Создать блог
       </Button>
     </div>
+
+    <UnsavedChangesGuard :dirty="dirty" />
   </form>
 </template>
 

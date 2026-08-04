@@ -41,13 +41,3 @@ export const NSFW_HIDE_TEXT = "Скрыть шокирующий контент"
 /** Warning text shown in 18+ overlay */
 export const NSFW_WARNING_TEXT =
   "Если вам исполнилось 18 лет и вы готовы к просмотру контента, который может оказаться для вас неприемлемым, нажмите сюда.";
-
-// ============================================================================
-// IMAGE CONSTANTS
-// ============================================================================
-
-/** Default max width for images (in pixels) - must match backend BbParserWrapper.DefaultMaxWidth */
-export const DEFAULT_IMG_MAX_WIDTH = 600;
-
-/** Default max height for images (in pixels) - must match backend BbParserWrapper.DefaultMaxHeight */
-export const DEFAULT_IMG_MAX_HEIGHT = 400;

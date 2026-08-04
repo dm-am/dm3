@@ -70,6 +70,7 @@ internal class NewForumTopicFromSubscribedAuthorNotificationGenerator : BaseNoti
         {
             EventType = EventType.NewTopicFromSubscribedAuthor,
             UsersInterested = subscriberIds,
+            ActorId = topicData.AuthorId,
             Metadata = new
             {
                 TopicId = topicData.TopicId.EncodeToReadable(topicData.Title),

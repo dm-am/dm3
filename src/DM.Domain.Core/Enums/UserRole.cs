@@ -36,8 +36,12 @@ public enum UserRole
     Admin = 5,
 
     /// <summary>
-    /// System user (Robot Administrator).
-    /// Cannot login, used for automated actions like auto-bans.
+    /// System user (Robot Administrator): the author every automated action is
+    /// attributed to. There is no automatic ban - warning points are recorded and
+    /// read, never compared against a threshold. Not a privilege tier — the role gates are
+    /// <c>&gt;=</c> comparisons, so an identity carrying this role would outrank an
+    /// administrator in every one of them. The password login refuses it by role,
+    /// before the password is compared.
     /// </summary>
     System = 6
 }

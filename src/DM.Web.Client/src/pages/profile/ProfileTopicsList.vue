@@ -34,7 +34,8 @@ import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import { TopicsFilter, useTopicsFilter } from "@/features/topic-filter";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
 import { useAuthStore } from "@/shared/stores/auth";
-import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 const props = defineProps<{
   /** Profile owner whose topics we list. */
@@ -60,26 +61,24 @@ const apiQuery = computed(() => {
 // throw away paging). Same cache-y idiom the rest of the app uses,
 // just inlined for one screen.
 const envelope: Ref<ListEnvelope<Topic> | null> = ref(null);
-const loading = ref(false);
-const loadError = ref(false);
+
+// Keeps any already-shown topics on a failure (stale-while-revalidate); the
+// template surfaces the error only when there's nothing to show.
+const {
+  loading,
+  error: loadError,
+  run,
+} = useGuardedRequest({ message: "Не удалось загрузить топики" });
 
 const authStore = useAuthStore();
-const guard = createRequestGuard();
 
-async function fetchTopics() {
-  const requestId = guard.next();
-  loading.value = true;
-  const { data, error } = await forumApi.getAllTopics(apiQuery.value);
-  if (!guard.isCurrent(requestId)) return;
-  loading.value = false;
-  if (error) {
-    // Keep any already-shown topics (stale-while-revalidate); the
-    // template surfaces the error only when there's nothing to show.
-    loadError.value = true;
-    return;
-  }
-  loadError.value = false;
-  envelope.value = data ?? null;
+function fetchTopics() {
+  return run(
+    () => forumApi.getAllTopics(apiQuery.value),
+    (data) => {
+      envelope.value = data;
+    },
+  );
 }
 
 const topics = computed(() => envelope.value?.resources ?? []);
@@ -145,11 +144,7 @@ function boardLink(row: Topic) {
          server-side, so the author chip is suppressed. -->
     <TopicsFilter :hide-author="true" />
 
-    <ErrorState
-      v-if="loadError"
-      message="Не удалось загрузить топики"
-      :retry="fetchTopics"
-    />
+    <ErrorState v-if="loadError" :message="loadError" :retry="fetchTopics" />
 
     <DataTable
       v-if="!loadError || topics.length > 0"
@@ -221,7 +216,7 @@ function boardLink(row: Topic) {
             </router-link>
           </Tooltip>
         </template>
-        <span v-else class="muted">—</span>
+        <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
       </template>
 
       <template v-if="paging && paging.pages && paging.pages > 1" #footer>

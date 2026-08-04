@@ -8,18 +8,19 @@ using DM.Domain.Messaging.Features.Messages;
 using DM.Domain.Messaging.Features.Likes;
 using DM.Domain.Personal.Features.Profiles;
 using DM.Domain.Personal.Features.Blacklists;
+using DM.Domain.Core.Chats;
 using DM.Domain.Core.Dto;
 using DM.Web.API.Shared.Dto;
 using ServiceCreateChat = DM.Domain.Messaging.Features.Chats.CreateChat;
 using ServiceUpdateChat = DM.Domain.Messaging.Features.Chats.UpdateChat;
 using ServiceCreateMessage = DM.Domain.Messaging.Features.Messages.CreateMessage;
 using ServiceUpdateMessage = DM.Domain.Messaging.Features.Messages.UpdateMessage;
+using ServiceMessage = DM.Domain.Messaging.Features.Messages.Message;
 using ApiChat = DM.Web.API.Features.Messaging.Chats.Chat;
 using ApiCreateChat = DM.Web.API.Features.Messaging.Chats.CreateChat;
 using ApiUpdateChat = DM.Web.API.Features.Messaging.Chats.UpdateChat;
 using ApiChatAvailability = DM.Web.API.Features.Messaging.Chats.ChatAvailability;
 using ApiMessage = DM.Web.API.Features.Messaging.Messages.Message;
-using DbChat = DM.Infrastructure.Persistence.Entities.Messaging.Chat;
 
 namespace DM.Web.API.Features.Messaging;
 
@@ -86,19 +87,33 @@ internal class MessagingApiService : IMessagingApiService
         };
 
         var result = await _messageService.GetWithCursorAsync(chatId, cursorQuery);
+        return ToCursorEnvelope(result);
+    }
 
-        var cursorPaging = new CursorPaging
+    /// <inheritdoc />
+    public async Task<CursorEnvelope<ApiMessage>> GetGameRoomMessagesWithCursorAsync(
+        Guid chatId,
+        string? cursor = null,
+        int limit = 50)
+    {
+        var cursorQuery = new CursorQuery
+        {
+            Cursor = cursor,
+            Limit = limit
+        };
+
+        var result = await _messageService.GetGameRoomWithCursorAsync(chatId, cursorQuery);
+        return ToCursorEnvelope(result);
+    }
+
+    private CursorEnvelope<ApiMessage> ToCursorEnvelope(CursorResult<ServiceMessage> result) =>
+        new(result.Data.Select(_mapper.Map<ApiMessage>), new CursorPaging
         {
             NextCursor = result.NextCursor,
             PrevCursor = result.PrevCursor,
             HasNext = result.HasNext,
             HasPrev = result.HasPrev
-        };
-
-        return new CursorEnvelope<ApiMessage>(
-            result.Data.Select(_mapper.Map<ApiMessage>),
-            cursorPaging);
-    }
+        });
 
     /// <inheritdoc />
     public async Task<Envelope<ApiMessage>> CreateMessageAsync(Guid chatId, ApiMessage message)
@@ -106,6 +121,15 @@ internal class MessagingApiService : IMessagingApiService
         var createMessage = _mapper.Map<ServiceCreateMessage>(message);
         createMessage.ChatId = chatId;
         var createdMessage = await _messageService.CreateAsync(createMessage);
+        return new Envelope<ApiMessage>(_mapper.Map<ApiMessage>(createdMessage));
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<ApiMessage>> CreateGameRoomMessageAsync(Guid chatId, ApiMessage message)
+    {
+        var createMessage = _mapper.Map<ServiceCreateMessage>(message);
+        createMessage.ChatId = chatId;
+        var createdMessage = await _messageService.CreateInGameRoomAsync(createMessage);
         return new Envelope<ApiMessage>(_mapper.Map<ApiMessage>(createdMessage));
     }
 
@@ -212,20 +236,21 @@ internal class MessagingApiService : IMessagingApiService
         Guid? aroundMessageId = null,
         DateTimeOffset? nearTimestampUtc = null,
         int limit = 50) =>
-        GetMessagesWithCursorAsync(DbChat.GlobalChatId, cursor, aroundMessageId, nearTimestampUtc, limit);
+        GetMessagesWithCursorAsync(
+            WellKnownChats.GlobalChatId, cursor, aroundMessageId, nearTimestampUtc, limit);
 
     /// <inheritdoc />
     public Task<Envelope<ApiMessage>> CreateGlobalChatMessageAsync(ApiMessage message) =>
-        CreateMessageAsync(DbChat.GlobalChatId, message);
+        CreateMessageAsync(WellKnownChats.GlobalChatId, message);
 
     /// <inheritdoc />
     public Task MarkGlobalChatAsReadAsync() =>
-        MarkAsReadAsync(DbChat.GlobalChatId);
+        MarkAsReadAsync(WellKnownChats.GlobalChatId);
 
     /// <inheritdoc />
     public async Task<int> GetGlobalChatUnreadCountAsync()
     {
-        var chat = await _chatService.GetAsync(DbChat.GlobalChatId);
+        var chat = await _chatService.GetAsync(WellKnownChats.GlobalChatId);
         return chat.UnreadMessagesCount;
     }
 }

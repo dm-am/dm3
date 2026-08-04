@@ -1,7 +1,7 @@
 using Autofac;
+using DM.Domain.Core.Mail;
 using DM.Infrastructure.Core.Extensions;
-using Microsoft.AspNetCore.Components.Web;
-using Microsoft.Extensions.DependencyInjection;
+using DM.Infrastructure.Mail.Rendering;
 using Microsoft.Extensions.Logging;
 
 namespace DM.Infrastructure.Mail;
@@ -16,16 +16,23 @@ public class MailModule : Module
     {
         builder.RegisterDefaultTypes();
 
+        // Один отправитель на scope. Причина та же, что у InvokedEventProducer:
+        // канал берется из пула при первой отправке и возвращается только в
+        // Dispose, а при InstancePerDependency возвращать его было некому.
+        builder.RegisterType<MailSender>()
+            .As<IMailSender>()
+            .InstancePerLifetimeScope();
+
         // Register HtmlRenderer for Blazor template rendering
-        builder.Register(ctx =>
-            {
-                var loggerFactory = ctx.Resolve<ILoggerFactory>();
-                var services = new ServiceCollection();
-                services.AddLogging();
-                var serviceProvider = services.BuildServiceProvider();
-                return new HtmlRenderer(serviceProvider, loggerFactory);
-            })
+        builder.Register(ctx => EmailRendering.CreateHtmlRenderer(ctx.Resolve<ILoggerFactory>()))
             .AsSelf()
+            .SingleInstance();
+
+        // Один рендерер на процесс. Карта шаблонов строится рефлексией по сборке и
+        // не меняется, а HtmlRenderer под ним и так синглтон: сериализацию рендеров
+        // обеспечивает его собственный Dispatcher, через который идет каждый вызов.
+        builder.RegisterType<TemplateRenderer>()
+            .As<ITemplateRenderer>()
             .SingleInstance();
 
         base.Load(builder);

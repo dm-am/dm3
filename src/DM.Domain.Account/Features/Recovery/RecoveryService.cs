@@ -2,6 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Availability;
 using DM.Domain.Account.Features.Registration;
+using DM.Domain.Account.Features.Security;
 using DM.Domain.Account.Features.Tokens;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
@@ -19,6 +20,7 @@ internal class RecoveryService : IRecoveryService
     private readonly IRegistrationMailSender _activationEmailSender;
     private readonly ITokenFactory _tokenFactory;
     private readonly IGuidFactory _guidFactory;
+    private readonly ISecurityAuditService _auditService;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ILogger<RecoveryService> _logger;
 
@@ -30,6 +32,7 @@ internal class RecoveryService : IRecoveryService
         IRegistrationMailSender activationEmailSender,
         ITokenFactory tokenFactory,
         IGuidFactory guidFactory,
+        ISecurityAuditService auditService,
         IDateTimeProvider dateTimeProvider,
         ILogger<RecoveryService> logger)
     {
@@ -40,6 +43,7 @@ internal class RecoveryService : IRecoveryService
         _activationEmailSender = activationEmailSender;
         _tokenFactory = tokenFactory;
         _guidFactory = guidFactory;
+        _auditService = auditService;
         _dateTimeProvider = dateTimeProvider;
         _logger = logger;
     }
@@ -57,6 +61,11 @@ internal class RecoveryService : IRecoveryService
             var token = _tokenFactory.Create(user.UserId, TokenType.PasswordChange);
             await _passwordResetRepository.ReplacePasswordResetToken(user.UserId, token);
             await _passwordResetEmailSender.Send(user.Email, user.Username, token.TokenId);
+
+            // The journal the owner of the account reads: a reset he did not ask
+            // for is the visible half of somebody working on his mailbox, and the
+            // application log is not a place he can look.
+            await _auditService.LogAsync(user.UserId, SecurityEventType.PasswordResetRequest);
 
             _logger.LogInformation("Password reset email sent for active user");
             return RecoveryResult.PasswordReset;

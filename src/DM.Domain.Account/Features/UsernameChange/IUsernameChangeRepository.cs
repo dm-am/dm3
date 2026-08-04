@@ -59,4 +59,26 @@ public interface IUsernameChangeRepository
     /// Save changes
     /// </summary>
     Task SaveChanges(CancellationToken ct = default);
+
+    /// <summary>
+    /// Expire requests still waiting for a moderator since before
+    /// <paramref name="createdBefore" />.
+    /// </summary>
+    /// <param name="createdBefore">Cutoff the caller derived from the review window.</param>
+    /// <param name="resolvedUtc">Moment written as the resolution time.</param>
+    /// <param name="comment">Resolution comment the requester is shown.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Number of requests expired.</returns>
+    Task<int> ExpireUnreviewedRequests(
+        DateTimeOffset createdBefore, DateTimeOffset resolvedUtc, string comment, CancellationToken ct = default);
+
+    /// <summary>
+    /// Expire approved requests whose approval token has run out by
+    /// <paramref name="now" />, and withdraw the token.
+    /// </summary>
+    /// <param name="now">Moment the pass runs at; the stored expiration is compared against it.</param>
+    /// <param name="commentSuffix">Text appended to the resolution comment already there.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Number of requests expired.</returns>
+    Task<int> ExpireApprovalTokens(DateTimeOffset now, string commentSuffix, CancellationToken ct = default);
 }

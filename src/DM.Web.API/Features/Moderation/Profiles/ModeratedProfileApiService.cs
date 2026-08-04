@@ -15,6 +15,7 @@ using ApiLinkedProfile = DM.Web.API.Features.Moderation.Profiles.LinkedProfile;
 using ServiceUserIpInfo = DM.Domain.Account.Features.Authentication.UserIpInfo;
 using ServiceLinkedProfile = DM.Domain.Account.Features.Authentication.LinkedProfile;
 using ServiceUserLoginRecord = DM.Domain.Account.Features.Authentication.UserLoginRecord;
+using DM.Domain.Core.Dto;
 
 namespace DM.Web.API.Features.Moderation.Profiles;
 
@@ -25,7 +26,7 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
 {
     private readonly IIdentityProvider _identityProvider;
     private readonly IModeratedProfileService _moderatedProfileService;
-    private readonly ILoginRecordRepository _loginRecordRepository;
+    private readonly ILoginRecordService _loginRecordService;
     private readonly DM.Web.API.Features.Moderation.Warnings.IWarningApiService _warningApiService;
     private readonly DM.Web.API.Features.Moderation.Bans.IBanApiService _banApiService;
     private readonly IModeratedProfileNoteApiService _moderatorNoteApiService;
@@ -37,7 +38,7 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
     public ModeratedProfileApiService(
         IIdentityProvider identityProvider,
         IModeratedProfileService moderatedProfileService,
-        ILoginRecordRepository loginRecordRepository,
+        ILoginRecordService loginRecordService,
         DM.Web.API.Features.Moderation.Warnings.IWarningApiService warningApiService,
         DM.Web.API.Features.Moderation.Bans.IBanApiService banApiService,
         IModeratedProfileNoteApiService moderatorNoteApiService,
@@ -47,7 +48,7 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
     {
         _identityProvider = identityProvider;
         _moderatedProfileService = moderatedProfileService;
-        _loginRecordRepository = loginRecordRepository;
+        _loginRecordService = loginRecordService;
         _warningApiService = warningApiService;
         _banApiService = banApiService;
         _moderatorNoteApiService = moderatorNoteApiService;
@@ -70,16 +71,18 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
         // Sequential on purpose: every query below runs on this request's
         // single DbContext, and EF forbids concurrent operations on one
         // context. Admin-only queries are skipped for lower roles.
-        var linkedProfiles = await _loginRecordRepository.GetLinkedProfiles(user.UserId);
+        var linkedProfiles = await _loginRecordService.GetLinkedProfiles(user.UserId);
         var moderatorNotes = await _moderatorNoteApiService.GetNotes(username);
         var personalNote = await _personalNoteService.GetNote(username);
         var warnings = await _warningApiService.GetUserWarnings(username);
         var banStatus = await _banApiService.GetUserBanStatus(username);
         var ipAddresses = isAdmin
-            ? MapIpAddresses(await _loginRecordRepository.GetUserIps(user.UserId))
+            ? MapIpAddresses(await _loginRecordService.GetIpAddresses(user.UserId))
             : null;
         var loginHistory = isAdmin
-            ? MapLoginHistory(await _loginRecordRepository.GetLoginHistory(user.UserId))
+            // The moderation profile shows the most recent logins, not the whole
+            // journal: the page bound is the same one every other list obeys.
+            ? MapLoginHistory(await _loginRecordService.GetHistory(user.UserId, new PagingQuery { Take = 50 }))
             : null;
 
         // Map base UserProfile fields using AutoMapper, then add moderation-specific fields

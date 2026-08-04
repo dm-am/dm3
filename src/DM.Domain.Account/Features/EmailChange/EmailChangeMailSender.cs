@@ -38,7 +38,7 @@ internal class EmailChangeMailSender : IEmailChangeMailSender
         await _mailSender.SendAsync(new EmailLetter
         {
             Address = email,
-            Subject = $"Подтверждение смены адреса электронной почты на Dungeon Master для {username}",
+            Subject = $"Dungeon Master: подтверждение смены адреса почты для {username}",
             Body = emailBody,
             LinkedResources = [_emailAssetsProvider.GetLogo()]
         });

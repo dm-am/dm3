@@ -124,7 +124,7 @@ import { RouterLink } from "vue-router";
 import { useModal } from "vue-final-modal";
 import { blacklistApi } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
-import { EmptyState } from "@/shared/ui";
+import { EmptyState } from "@/shared/ui/EmptyState";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { formatDate } from "@/shared/lib/utils/datetime";
 import { BlockUserDialog } from "@/features/block-user";
@@ -285,7 +285,7 @@ async function confirmUnblock() {
   border: 1px solid $border
   gap: $medium
 
-  @media (max-width: 768px)
+  @media (max-width: $bp-tablet)
     flex-direction: column
     align-items: stretch
 
@@ -325,7 +325,7 @@ async function confirmUnblock() {
     opacity: 0.5
     cursor: default
 
-  @media (max-width: 768px)
+  @media (max-width: $bp-tablet)
     align-self: flex-end
     margin-top: $small
 

@@ -7,8 +7,10 @@ using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Domain.Community.Features.UserEndorsements;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Extensions;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
 using DbUserEndorsement = DM.Infrastructure.Persistence.Entities.Community.UserEndorsement;
 
@@ -19,11 +21,16 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public UserEndorsementRepository(DmDbContext dbContext, IMapper mapper)
+    public UserEndorsementRepository(
+        DmDbContext dbContext,
+        IMapper mapper,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _mapper = mapper;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     // ═══ READ ═══
@@ -192,8 +199,13 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
 
         if (entity.Text != null)
             dbEndorsement.Text = entity.Text;
-        if (entity.IsRemoved.HasValue)
-            dbEndorsement.IsRemoved = entity.IsRemoved.Value;
+        if (entity.IsRemoved == true)
+            // Through the one call that writes the flag and the audit together: this
+            // path wrote ModifiedByUserId and left the deletion columns empty, so a
+            // withdrawn endorsement was the one removal in the table with no author.
+            SoftDelete.Mark(dbEndorsement, entity.DeletedByUserId, entity.DeletedUtc ?? _dateTimeProvider.Now);
+        else if (entity.IsRemoved == false)
+            dbEndorsement.IsRemoved = false;
         if (entity.ModifiedUtc.HasValue)
             dbEndorsement.ModifiedUtc = entity.ModifiedUtc.Value;
         if (entity.ModifiedByUserId.HasValue)
@@ -201,7 +213,13 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
 
         await _dbContext.SaveChangesAsync();
 
+        // IgnoreQueryFilters, because one of the updates this method serves is the
+        // removal: the global filter drops soft-deleted rows, so reading the row
+        // back through it threw "Sequence contains no elements" on the way out of
+        // every withdrawal. The caller asked for this row by its identifier and has
+        // just written it, so the filter has nothing to protect here.
         return await _dbContext.UserEndorsements
+            .IgnoreQueryFilters()
             .Where(e => e.UserEndorsementId == entity.EndorsementId)
             .ProjectTo<UserEndorsement>(_mapper.ConfigurationProvider)
             .FirstAsync();
@@ -227,6 +245,14 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
     }
 
     /// <inheritdoc />
-    public Task<int> GetUserPostCountAsync(Guid userId) => _dbContext.Posts
-        .CountAsync(p => p.AuthorId == userId);
+    /// <remarks>
+    /// The denormalised counter, not a COUNT over posts: posts are counted under
+    /// the !IsRemoved filter while the counter is decremented on removal, so the
+    /// two are different numbers and reading each in a different place made the
+    /// newbie badge and the right to write disagree about one user.
+    /// </remarks>
+    public Task<int> GetUserPostCountAsync(Guid userId) => _dbContext.Users
+        .Where(u => u.UserId == userId)
+        .Select(u => u.QuantityRating)
+        .FirstOrDefaultAsync();
 }

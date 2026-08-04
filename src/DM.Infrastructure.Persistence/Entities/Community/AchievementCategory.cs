@@ -1,4 +1,3 @@
-#pragma warning disable CS1591 // DAL entity — fields are self-documenting; see Domain.Community.Features.Achievements.AchievementCategory
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;

@@ -6,7 +6,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Account.Features.Security;
+using DM.Domain.Blog.Features.Popularity;
 using DM.Domain.Community.Features.Polls;
+using DM.Domain.Game.Features.Popularity;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Identity;
 using DM.Domain.Personal.Features.Profiles;
@@ -57,18 +59,6 @@ namespace DM.Tools.Seeder.Seeding;
 /// </summary>
 internal sealed partial class DataSeeder
 {
-    /// <summary>
-    /// Configuration key holding the instant the whole seed is laid out around.
-    /// Environment form: <c>DM_SeedEpochUtc</c>.
-    /// </summary>
-    private const string SeedEpochKey = "SeedEpochUtc";
-
-    /// <summary>
-    /// Seed of <see cref="_random"/>. Arbitrary value, fixed forever: what
-    /// matters is that it never changes, not what it is.
-    /// </summary>
-    private const int RandomSeed = 20260730;
-
     private readonly DmDbContext _dbContext;
     private readonly DmMongoClient _mongoClient;
     private readonly ISecurityManager _securityManager;
@@ -77,36 +67,20 @@ internal sealed partial class DataSeeder
     private readonly IPublicIdService _publicIdService;
     private readonly IImageProcessingService _imageProcessing;
     private readonly Amazon.S3.IAmazonS3 _s3Client;
+    private readonly IGamePopularityProcessor _gamePopularity;
+    private readonly IBlogPopularityProcessor _blogPopularity;
     private readonly CdnConfiguration _cdnConfig;
 
     /// <summary>
     /// The only source of randomness in the seed, and a seeded one.
+    /// See <see cref="SeedDeterminism.Random"/>.
     /// </summary>
-    /// <remarks>
-    /// Every draw here reaches something a reader sees: which accounts play
-    /// which game, who wrote a comment and what it says, view and like counts,
-    /// review verdicts, list order. On <c>Random.Shared</c> that made the
-    /// fixture different on every run, so an assertion about a count or a name
-    /// held or failed by luck and nothing could be measured twice. Seeded, the
-    /// same command produces the same fixture on any machine.
-    ///
-    /// Not thread-safe, and does not need to be: the seed runs one aggregate
-    /// after another on a single scope, because a shared <c>DmDbContext</c>
-    /// cannot be used concurrently either.
-    /// </remarks>
     private readonly Random _random;
 
     /// <summary>
     /// The instant every seeded timestamp is offset from.
+    /// See <see cref="SeedDeterminism.Epoch"/>.
     /// </summary>
-    /// <remarks>
-    /// Resolved once so that a single run is internally consistent, and
-    /// overridable through <see cref="SeedEpochKey"/> so that a run can be
-    /// pinned to a chosen moment. It defaults to the real clock on purpose: a
-    /// hardcoded past epoch would empty every surface built around recency -
-    /// the current-month leaderboards, "activated N days ago", the new-games
-    /// block. Pinning is what a pixel baseline needs, and only it.
-    /// </remarks>
     private readonly DateTimeOffset _now;
 
     /// <summary>
@@ -117,13 +91,14 @@ internal sealed partial class DataSeeder
         DmMongoClient mongoClient,
         ISecurityManager securityManager,
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider,
+        SeedDeterminism determinism,
         IPollRepository pollRepository,
         IPublicIdService publicIdService,
         IImageProcessingService imageProcessing,
         Amazon.S3.IAmazonS3 s3Client,
-        IOptions<CdnConfiguration> cdnOptions,
-        IConfiguration configuration)
+        IGamePopularityProcessor gamePopularity,
+        IBlogPopularityProcessor blogPopularity,
+        IOptions<CdnConfiguration> cdnOptions)
     {
         _dbContext = dbContext;
         _mongoClient = mongoClient;
@@ -133,33 +108,29 @@ internal sealed partial class DataSeeder
         _publicIdService = publicIdService;
         _imageProcessing = imageProcessing;
         _s3Client = s3Client;
+        _gamePopularity = gamePopularity;
+        _blogPopularity = blogPopularity;
         _cdnConfig = cdnOptions.Value;
-        _random = new Random(RandomSeed);
-        _now = ResolveEpoch(configuration, dateTimeProvider);
+        _random = determinism.Random;
+        _now = determinism.Epoch;
     }
 
     /// <summary>
-    /// Reads the pinned epoch, falling back to the clock.
+    /// Start of the window the site means by "за неделю": seven days back.
     /// </summary>
-    /// <exception cref="FormatException">
-    /// The key was set to something unparseable. Thrown rather than ignored: a
-    /// typo that silently reverted to the clock would look like a determinism
-    /// bug in whatever consumed the seed.
-    /// </exception>
-    private static DateTimeOffset ResolveEpoch(
-        IConfiguration configuration, IDateTimeProvider dateTimeProvider)
-    {
-        var configured = configuration[SeedEpochKey];
-        if (string.IsNullOrWhiteSpace(configured))
-        {
-            return dateTimeProvider.Now;
-        }
-
-        return DateTimeOffset.Parse(
-            configured,
-            CultureInfo.InvariantCulture,
-            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
-    }
+    /// <remarks>
+    /// The homepage "лучший пост недели" block filters posts by exactly this
+    /// boundary (getWeekStartUtc on the client), and two parts of the seed have
+    /// to agree with it: the showcase post must land inside the window, and
+    /// leaderboard coverage must stay out of it. One implementation, so the two
+    /// cannot drift apart.
+    ///
+    /// Rolling, not the calendar Monday. A calendar boundary empties the block
+    /// for the first hours of every Monday, and it empties it for good once the
+    /// seed is a week old, which is what a fixture on a developer machine
+    /// always is.
+    /// </remarks>
+    private static DateTimeOffset WeekStartUtc(DateTimeOffset moment) => moment.AddDays(-7);
 
     /// <summary>
     /// Seed the content set: forum topics and comments, games, characters, posts,
@@ -239,6 +210,8 @@ internal sealed partial class DataSeeder
         // ═══════════════════════════════════════════════════════════════════
         await CreateGlobalChatMessages(users, now, result);
         await CreateGlobalChatEvents(users, now, result);
+        await CreateDirectChats(users, now, result);
+        await ConnectBotChannels(users, result);
 
         // ═══════════════════════════════════════════════════════════════════
         // 6. CREATE REVIEWS

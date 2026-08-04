@@ -61,6 +61,18 @@ public class GlobalChatEvent
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
+    /// When the event actually started (UTC). Absent until it does: the start is
+    /// manual and does not have to fall on StartsUtc, so the planned start plus
+    /// the duration is not an answer to how long the event has been running.
+    /// </summary>
+    public DateTimeOffset? StartedUtc { get; set; }
+
+    /// <summary>
+    /// When the event actually ended (UTC). Absent while it is still running.
+    /// </summary>
+    public DateTimeOffset? EndedUtc { get; set; }
+
+    /// <summary>
     /// Event participants
     /// </summary>
     public IEnumerable<GlobalChatEventParticipant> Participants { get; set; } = [];

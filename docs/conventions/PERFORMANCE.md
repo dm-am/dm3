@@ -73,7 +73,6 @@
 | **Tree shaking** | Именованные импорты, не default |
 | **Code splitting** | Route-based splitting через dynamic import() в router |
 | **Lazy modals** | vue-final-modal загружает компоненты только при открытии |
-| **Анализ бандла** | Регулярный аудит с vite-bundle-analyzer |
 
 ---
 
@@ -88,7 +87,6 @@
 | **Include стратегия** | Минимум Include, избегать глубокой вложенности |
 | **Split Queries** | AsSplitQuery для множественных коллекций |
 | **Индексы** | На все WHERE, ORDER BY, JOIN поля |
-| **Compiled Queries** | Для частых запросов с параметрами |
 
 ### N+1 Prevention
 
@@ -175,7 +173,6 @@ void enrichGame(bestOfWeek.value).then(g => { bestOfWeekGame.value = g; });
 | **Lightweight Projections** | `Ref` DTOs для списков (только необходимые поля, counts вместо arrays) |
 | **Compression** | Brotli/Gzip для всех JSON ответов (Startup.cs: AddResponseCompression) |
 | **Response Caching** | `[ResponseCache]` для статических справочников (tags, boards) |
-| **ETags** | Conditional requests для кэшируемых данных |
 
 ### Async Patterns
 

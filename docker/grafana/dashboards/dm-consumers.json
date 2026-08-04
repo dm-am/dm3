@@ -26,30 +26,43 @@
       }
     },
     {
-      "title": "Email Consumer — Request Rate",
+      "title": "Queue Depth",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 4 },
       "targets": [
         {
-          "expr": "rate(http_server_request_duration_seconds_count{job=\"dm-mail-worker\"}[5m])",
-          "legendFormat": "requests/s",
+          "expr": "rabbitmq_queue_messages_ready{queue=~\"dm.*\"}",
+          "legendFormat": "{{queue}}",
           "refId": "A"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
     },
     {
-      "title": "Notification Consumer — Request Rate",
+      "title": "Dead-lettered Messages",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 4 },
       "targets": [
         {
-          "expr": "rate(http_server_request_duration_seconds_count{job=\"dm-notification-worker\"}[5m])",
-          "legendFormat": "requests/s",
+          "expr": "rabbitmq_queue_messages_ready{queue=~\".*-dlq\"}",
+          "legendFormat": "{{queue}}",
           "refId": "A"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "title": "Consumers per Queue",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 4 },
+      "targets": [
+        {
+          "expr": "rabbitmq_queue_consumers{queue=~\"dm.*\"}",
+          "legendFormat": "{{queue}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
     },
     {
       "title": "Consumer GC Heap",

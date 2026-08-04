@@ -132,6 +132,49 @@ public class PermissionFilteringVisitorShould
         html.Should().NotContain("private-message");
     }
 
+    /// <summary>
+    /// The unquoted attribute form, which is the only one the product produces.
+    /// </summary>
+    /// <remarks>
+    /// Every other test in this class writes [private="B"], and the editor writes
+    /// [private=B]: bbcode.ts builds the tag without quotes, the toolbar wraps a
+    /// selection without quotes, and the editor's own help text teaches the
+    /// unquoted form. So both halves of the contract were covered — on different
+    /// syntaxes — and nothing covered the syntax that actually travels.
+    ///
+    /// Theory rather than two facts so the pair stays visibly symmetrical: if the
+    /// parser ever stops accepting one of them, the row says which.
+    ///
+    /// The one-sided rows are the same leak through the spelling nobody checked:
+    /// a leading quote used to be read as "already quoted" and passed through, so
+    /// the parser refused the unterminated attribute and the block was served as
+    /// plain text to every reader of the room.
+    /// </remarks>
+    [Theory]
+    [InlineData("[private=B]secret[/private]")]
+    [InlineData("[private=\"B\"]secret[/private]")]
+    [InlineData("[PRIVATE=\"B\"]secret[/PRIVATE]")]
+    [InlineData("[Private=B]secret[/Private]")]
+    [InlineData("[private=\"B]secret[/private]")]
+    [InlineData("[private=B\"]secret[/private]")]
+    public void StripPrivate_ForNonAddressee_WhicheverWayTheAttributeIsWritten(string input)
+    {
+        var viewer = Viewer(UserRole.RegularUser, OtherUser);
+        var addressees = new Dictionary<string, IReadOnlySet<Guid>>(StringComparer.Ordinal)
+        {
+            ["B"] = new HashSet<Guid> { OwnerB }
+        };
+        var ctx = DisplayCtxForGamePost(viewer) with
+        {
+            PrivateAddresseeOwnerUserIdsByAttribute = addressees
+        };
+
+        var html = RenderWithContext(input, BbSurface.GamePost, ctx);
+
+        html.Should().NotContain("secret");
+        html.Should().NotContain("private-message");
+    }
+
     [Fact]
     public void RenderPrivate_ForGameLead()
     {

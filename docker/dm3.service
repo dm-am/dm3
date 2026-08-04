@@ -7,12 +7,14 @@ After=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/dm3/docker
-# The same overlay the installer deployed with. Without it systemd brought up
-# the base topology - no nginx, no frontend - while ExecStop tore down every
-# container of the project, so a restart silently replaced the site with a bare
-# API. Both lines must name the same files as setup-server.sh.
-ExecStart=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.preview.yml up -d
-ExecStop=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.preview.yml down
+# The same overlay and the same profile the installer deployed with. Without the
+# overlay systemd brought up the base topology - no nginx, no frontend - while
+# ExecStop tore down every container of the project, so a restart silently
+# replaced the site with a bare API. Without the profile watchtower never starts
+# and the stand stops updating at the first reboot. Both lines must name the
+# same files and profiles as setup-server.sh, and CI compares them.
+ExecStart=/usr/bin/docker compose --profile production -f docker-compose.yml -f docker-compose.preview.yml up -d
+ExecStop=/usr/bin/docker compose --profile production -f docker-compose.yml -f docker-compose.preview.yml down
 TimeoutStartSec=300
 
 [Install]

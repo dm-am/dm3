@@ -18,6 +18,7 @@
         <router-link
           :to="getPageLink(1)"
           class="nav-button"
+          aria-label="Первая страница"
           @click="prematureUpdate(1)"
           >&lt;&lt;</router-link
         ></Tooltip
@@ -30,6 +31,7 @@
         <router-link
           :to="getPageLink(leftEllipsisTarget)"
           class="nav-button"
+          aria-label="Назад"
           @click="prematureUpdate(leftEllipsisTarget)"
           >...</router-link
         ></Tooltip
@@ -41,6 +43,7 @@
       <router-link
         :to="getPageLink(page)"
         :class="['page-number', { active: page === localPaging.current }]"
+        :aria-label="`Страница ${page}`"
         :aria-current="page === localPaging.current ? 'page' : undefined"
         @click="prematureUpdate(page)"
         >{{ page }}</router-link
@@ -53,6 +56,7 @@
         <router-link
           :to="getPageLink(rightEllipsisTarget)"
           class="nav-button"
+          aria-label="Вперед"
           @click="prematureUpdate(rightEllipsisTarget)"
           >...</router-link
         ></Tooltip
@@ -64,6 +68,7 @@
       <router-link
         :to="getPageLink(localPaging.pages)"
         class="nav-button"
+        aria-label="Последняя страница"
         @click="prematureUpdate(localPaging.pages)"
         >&gt;&gt;</router-link
       >
@@ -72,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import type { Paging } from "@/shared/api/models/common";
+import type { PagingInfo } from "@/shared/api/models/common";
 import { computed, ref, watch, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import { Tooltip } from "@/shared/ui/Tooltip";
@@ -80,7 +85,7 @@ import { scrollBlockIntoView, scrollContentToTop } from "@/shared/lib/scroll";
 
 const props = withDefaults(
   defineProps<{
-    paging: Paging;
+    paging: PagingInfo;
     to: any;
     /** Use query param instead of route param for page number */
     useQuery?: boolean;
@@ -152,7 +157,7 @@ watch(
 );
 
 // Reactive local copy of paging for immediate UI updates
-const localPaging = ref<Paging>({
+const localPaging = ref<PagingInfo>({
   current: 1,
   size: 10,
   pages: 1,
@@ -184,7 +189,7 @@ const prematureUpdate = (page: number) => {
 };
 
 // Calculate window bounds (always 10 pages or fewer)
-function getWindowBounds(paging: Paging): {
+function getWindowBounds(paging: PagingInfo): {
   lowerBound: number;
   upperBound: number;
 } {

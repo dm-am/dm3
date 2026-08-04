@@ -7,7 +7,7 @@
  * real create/edit form (CharacterForm) and the schema-editor live preview
  * (CharacterFormPreview) so the two can never drift apart.
  *
- *  - Text            -> text FormField (maxlength = MaxLength)
+ *  - Text            -> text FormField (maxlength = MaxLength, none when unset)
  *  - Number          -> numeric FormField (digits + optional leading minus)
  *  - TextList / NumberList / TextNumberList -> Select (TextNumberList shows the
  *    text with its signed modifier)

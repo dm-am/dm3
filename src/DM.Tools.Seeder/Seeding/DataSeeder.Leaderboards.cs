@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Community.Features.Polls;
+using DM.Domain.Community.Features.Statistics;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Identity;
 using DM.Domain.Personal.Features.Profiles;
@@ -67,8 +68,8 @@ internal sealed partial class DataSeeder
     /// </summary>
     private async Task EnsureLeaderboardCoverage(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
     {
-        // A little over the board's top-10 so each board is unambiguously full.
-        const int target = 12;
+        // A little over the board size so each board is unambiguously full.
+        const int target = LeaderboardBoards.BoardSize + 2;
 
         var monthStart = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero);
         var prevMonthStart = monthStart.AddMonths(-1);
@@ -76,22 +77,28 @@ internal sealed partial class DataSeeder
 
         // The homepage widgets must stay on the organic showcase posts (Chuck's
         // grapefruit post for "лучший пост недели", the fireplace post for
-        // "последний оцененный"). Only the CURRENT-month window can collide
-        // with them, so only it takes the week-start constraints:
-        //  - coverage reviews go only on posts CREATED BEFORE the current week;
-        //  - coverage review DATES stay before the week start and >=6h before
-        //    `now`, so the freshest review remains the organic one.
-        var daysSinceMonday = ((int)now.DayOfWeek + 6) % 7; // Monday=0 … Sunday=6
-        var weekStart = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero)
-            .AddDays(-daysSinceMonday);
+        // "последний оцененный"). The weekly widget ranks by the POST's creation
+        // date, so EVERY window can collide with it, not only the current month:
+        // the tail of a closed month (27.07 to 31.07 of a July window) lies
+        // inside the current week. Hence:
+        //  - coverage reviews go only on posts CREATED BEFORE the current week,
+        //    in every window;
+        //  - in the current-month window coverage review DATES also stay before
+        //    the week start and >=6h before `now`, so the freshest review on the
+        //    site remains the organic one.
+        var weekStart = WeekStartUtc(now);
 
         var nonDraftGameIds = await _dbContext.Set<DbGame>()
             .Where(g => !g.IsRemoved && g.Status != ModuleStatus.Draft)
             .Select(g => g.GameId)
             .ToListAsync();
 
+        // Iterated below, and every pass draws from the generator and takes the
+        // next publication number, so the order of this list is part of the
+        // fixture rather than a detail of the query plan.
         var blogs = await _dbContext.Set<DbBlog>()
             .Where(b => !b.IsRemoved && b.Status != ModuleStatus.Draft)
+            .OrderBy(b => b.SerialNumber)
             .ToListAsync();
 
         // Publication numbers are assigned across windows before a single
@@ -126,19 +133,28 @@ internal sealed partial class DataSeeder
             var positiveGames = windowReviews.GroupBy(r => r.GameId).Count(g => g.Sum(x => x.Sign) > 0);
             var positiveAuthors = windowReviews.GroupBy(r => r.PostAuthorId).Count(g => g.Sum(x => x.Sign) > 0);
 
-            if (positiveGames < 10 || positiveAuthors < 10)
+            if (positiveGames < LeaderboardBoards.BoardSize || positiveAuthors < LeaderboardBoards.BoardSize)
             {
-                // Current month: any pre-week post (keeps topped-up posts out of
-                // the weekly-best widget). Closed windows: the window's own
-                // posts, so the reviews sit next to the activity they praise.
+                // Every window stops at the week start: a topped-up post created
+                // this week would outrank the showcase post in the weekly-best
+                // widget, and a closed month's last days fall inside this week.
+                // On top of that a closed window takes its own posts, so the
+                // reviews sit next to the activity they praise.
                 var candidatesQuery = _dbContext.Posts
                     .Where(po => !po.IsRemoved
                         && po.Room.AccessType == RoomAccessType.Open
-                        && nonDraftGameIds.Contains(po.Room.GameId));
-                candidatesQuery = isCurrentMonth
-                    ? candidatesQuery.Where(po => po.CreatedUtc < weekStart)
-                    : candidatesQuery.Where(po => po.CreatedUtc >= winStart && po.CreatedUtc < winEnd);
+                        && nonDraftGameIds.Contains(po.Room.GameId)
+                        && po.CreatedUtc < weekStart);
+                if (!isCurrentMonth)
+                {
+                    candidatesQuery = candidatesQuery
+                        .Where(po => po.CreatedUtc >= winStart && po.CreatedUtc < winEnd);
+                }
+                // The first rows take the highest scores below, so this order is
+                // the ranking the boards end up showing.
                 var candidates = (await candidatesQuery
+                        .OrderBy(po => po.CreatedUtc)
+                        .ThenBy(po => po.PostId)
                         .Select(po => new { po.PostId, po.AuthorId, GameId = po.Room.GameId })
                         .ToListAsync())
                     .Where(c => !usedPostIds.Contains(c.PostId))
@@ -296,77 +312,23 @@ internal sealed partial class DataSeeder
         result.Details.Add("Ensured full top-10 rating coverage for the current month, the last closed month and the previous year");
     }
 
+    /// <summary>
+    /// Recalculates the popularity scores of the fixture through the same
+    /// processors the running site uses.
+    /// </summary>
+    /// <remarks>
+    /// This used to be a second copy of the calculation, query for query, and the
+    /// window the copies compared against had already diverged - the site read the
+    /// product constant, the fixture read a literal of its own. One definition
+    /// now, and the moment is the seed epoch rather than the wall clock, which is
+    /// what a fixture dates everything else from.
+    /// </remarks>
     private async Task UpdatePopularityScores(DateTimeOffset now, ComprehensiveSeedResult result)
     {
-        var activeThreshold = now - TimeSpan.FromDays(30);
+        var (_, games) = await _gamePopularity.UpdateScoresAsync(now);
+        var (_, blogs) = await _blogPopularity.UpdateScoresAsync(now);
 
-        // Update game popularity scores (active players + readers)
-        var gameIds = await _dbContext.Set<DbGame>()
-            .Where(g => !g.IsRemoved && g.Status != ModuleStatus.Draft)
-            .Select(g => g.GameId)
-            .ToListAsync();
-
-        if (gameIds.Count > 0)
-        {
-            var playerCounts = await _dbContext.Set<Character>()
-                .Where(c => gameIds.Contains(c.GameId) &&
-                           c.Status == CharacterStatus.Active &&
-                           !c.IsNpc &&
-                           c.AuthorId.HasValue &&
-                           c.Author != null &&
-                           c.Author.LastActivityUtc.HasValue &&
-                           c.Author.LastActivityUtc.Value > activeThreshold)
-                .GroupBy(c => c.GameId)
-                .Select(g => new { GameId = g.Key, Count = g.Select(c => c.AuthorId!.Value).Distinct().Count() })
-                .ToDictionaryAsync(x => x.GameId, x => x.Count);
-
-            var gameReaderCounts = await _dbContext.Set<Subscription>()
-                .Where(s => s.TargetType == SubscriptionTargetType.Game &&
-                           gameIds.Contains(s.TargetId) &&
-                           s.Subscriber.LastActivityUtc.HasValue &&
-                           s.Subscriber.LastActivityUtc.Value > activeThreshold)
-                .GroupBy(s => s.TargetId)
-                .Select(g => new { GameId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.GameId, x => x.Count);
-
-            var games = await _dbContext.Set<DbGame>().Where(g => gameIds.Contains(g.GameId)).ToListAsync();
-            foreach (var game in games)
-            {
-                playerCounts.TryGetValue(game.GameId, out var playerCount);
-                gameReaderCounts.TryGetValue(game.GameId, out var readerCount);
-                game.PopularityScore = playerCount + readerCount;
-                game.PopularityScoreUpdatedUtc = now;
-            }
-        }
-
-        // Update blog popularity scores (active readers)
-        var blogIds = await _dbContext.Set<DbBlog>()
-            .Where(b => !b.IsRemoved)
-            .Select(b => b.BlogId)
-            .ToListAsync();
-
-        if (blogIds.Count > 0)
-        {
-            var blogReaderCounts = await _dbContext.Set<Subscription>()
-                .Where(s => s.TargetType == SubscriptionTargetType.Blog &&
-                           blogIds.Contains(s.TargetId) &&
-                           s.Subscriber.LastActivityUtc.HasValue &&
-                           s.Subscriber.LastActivityUtc.Value > activeThreshold)
-                .GroupBy(s => s.TargetId)
-                .Select(g => new { BlogId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.BlogId, x => x.Count);
-
-            var blogs = await _dbContext.Set<DbBlog>().Where(b => blogIds.Contains(b.BlogId)).ToListAsync();
-            foreach (var blog in blogs)
-            {
-                blogReaderCounts.TryGetValue(blog.BlogId, out var readerCount);
-                blog.PopularityScore = readerCount;
-                blog.PopularityScoreUpdatedUtc = now;
-            }
-        }
-
-        await _dbContext.SaveChangesAsync();
-        result.Details.Add($"Updated popularity scores for {gameIds.Count} games and {blogIds.Count} blogs");
+        result.Details.Add($"Updated popularity scores for {games} games and {blogs} blogs");
     }
 
     private async Task CreateLikes(List<DbUser> users, ComprehensiveSeedResult result)

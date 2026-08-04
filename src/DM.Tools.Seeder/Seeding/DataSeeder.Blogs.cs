@@ -18,6 +18,7 @@ using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Core.Storage;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.MongoIntegration;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Entities.Blog;
 using DM.Infrastructure.Persistence.Entities.Forum;
 using DM.Infrastructure.Persistence.Entities.Game.Characters;
@@ -50,7 +51,7 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-        private async Task CreateBlogs(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
+    private async Task CreateBlogs(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
     {
         // Check if blogs already exist
         var existingBlogsCount = await _dbContext.Set<DbBlog>().CountAsync();
@@ -62,8 +63,8 @@ internal sealed partial class DataSeeder
         }
 
         var mentor = users.First(u => u.Role == UserRole.Mentor);
-        var experiencedUsers = users.Where(u => u.QuantityRating >= 100).ToList();
-        var newbieUsers = users.Where(u => u.QuantityRating < 100).ToList();
+        var experiencedUsers = users.Where(u => !ProbationPolicy.IsNewbie(u.QuantityRating)).ToList();
+        var newbieUsers = users.Where(u => ProbationPolicy.IsNewbie(u.QuantityRating)).ToList();
 
         if (experiencedUsers.Count == 0) experiencedUsers = users.Take(2).ToList();
 
@@ -170,6 +171,11 @@ internal sealed partial class DataSeeder
                 blogActivatedUtc = blogCreatedUtc.AddDays(activationDelay);
             }
 
+            // The readable address is taken from the sequence before the insert, the way the
+            // repository takes it, instead of being written as a placeholder and stamped by a
+            // second SaveChanges — see SerialNumberAllocator for what that pair costs.
+            var blogSerialNumber = await SerialNumberAllocator.NextAsync<DbBlog>(_dbContext);
+
             var blog = new DbBlog
             {
                 BlogId = _guidFactory.Create(),
@@ -187,8 +193,8 @@ internal sealed partial class DataSeeder
                 PublicationCount = 0,
                 CommentCount = 0,
                 IsRemoved = false,
-                // Temporary placeholder - will be updated after SaveChanges
-                PublicId = $"t{_guidFactory.Create():N}"[..10]
+                SerialNumber = blogSerialNumber,
+                PublicId = _publicIdService.Encode(blogSerialNumber)
             };
 
             _dbContext.Set<DbBlog>().Add(blog);
@@ -197,8 +203,8 @@ internal sealed partial class DataSeeder
             // Create rubrics
             var rubrics = new[]
             {
-                new Rubric { RubricId = _guidFactory.Create(), BlogId = blog.BlogId, Title = "Общее", AccessType = RubricAccessType.Open, SortOrder = 1, CreatedUtc = blog.CreatedUtc, IsArchived = false, IsRemoved = false },
-                new Rubric { RubricId = _guidFactory.Create(), BlogId = blog.BlogId, Title = "Для избранных", AccessType = RubricAccessType.Private, SortOrder = 2, CreatedUtc = blog.CreatedUtc, IsArchived = false, IsRemoved = false },
+                new Rubric { RubricId = _guidFactory.Create(), BlogId = blog.BlogId, Title = "Общее", SortOrder = 1, CreatedUtc = blog.CreatedUtc, IsArchived = false, IsRemoved = false },
+                new Rubric { RubricId = _guidFactory.Create(), BlogId = blog.BlogId, Title = "Для избранных", SortOrder = 2, CreatedUtc = blog.CreatedUtc, IsArchived = false, IsRemoved = false },
             };
 
             foreach (var rubric in rubrics)
@@ -353,13 +359,6 @@ internal sealed partial class DataSeeder
             }
 
             // Batch save after each blog
-            await _dbContext.SaveChangesAsync();
-
-            // Reload the blog to get the auto-generated SerialNumber
-            await _dbContext.Entry(blog).ReloadAsync();
-
-            // Update PublicId from SerialNumber (which was auto-generated on insert)
-            blog.PublicId = _publicIdService.Encode(blog.SerialNumber);
             await _dbContext.SaveChangesAsync();
         }
 

@@ -45,7 +45,7 @@ internal class UserNotepadService : IUserNotepadService
         var entry = await _repository.GetEntryAsync(entryId, ct);
         if (entry == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Entry not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.NotepadEntryNotFound);
         }
 
         ThrowIfNotAuthorized(entry);
@@ -77,7 +77,7 @@ internal class UserNotepadService : IUserNotepadService
         var entry = await _repository.GetEntryAsync(entryId, ct);
         if (entry == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Entry not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.NotepadEntryNotFound);
         }
 
         ThrowIfNotAuthorized(entry);
@@ -111,7 +111,7 @@ internal class UserNotepadService : IUserNotepadService
     {
         if (entry.NotepadType != NotepadType.User || entry.ContainerId != UserId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Access denied");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
         }
     }
 }

@@ -7,6 +7,7 @@ using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
@@ -33,6 +34,7 @@ public class TicketServiceShould : UnitTestBase
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<IGuidFactory> _guidFactory;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly Mock<IEventProducer> _eventProducer;
     private readonly TicketService _service;
     private readonly Guid _currentUserId = Guid.NewGuid();
     private readonly Guid _targetUserId = Guid.NewGuid();
@@ -63,6 +65,7 @@ public class TicketServiceShould : UnitTestBase
         _identityProvider = Mock<IIdentityProvider>();
         _guidFactory = Mock<IGuidFactory>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
+        _eventProducer = Mock<IEventProducer>();
 
         SetCurrentUser(UserRole.Moderator);
         _dateTimeProvider.Setup(d => d.Now).Returns(_now);
@@ -78,7 +81,8 @@ public class TicketServiceShould : UnitTestBase
             _userLookupService.Object,
             _identityProvider.Object,
             _guidFactory.Object,
-            _dateTimeProvider.Object);
+            _dateTimeProvider.Object,
+            _eventProducer.Object);
     }
 
     private void SetCurrentUser(UserRole role)
@@ -101,7 +105,7 @@ public class TicketServiceShould : UnitTestBase
         var act = () => _service.CreateTicket(createTicket);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("Cannot report yourself"));
+            .Where(e => e.Message.Contains("пожаловаться на себя"));
     }
 
     [Fact]
@@ -134,6 +138,23 @@ public class TicketServiceShould : UnitTestBase
         capturedEntity.EntityId.Should().Be(entityId);
         capturedEntity.Status.Should().Be(TicketStatus.WaitingForModeration);
         capturedEntity.Subtype.Should().Be(TicketSubtype.UserComplaint);
+    }
+
+    [Fact]
+    public async Task AnnounceACreatedTicket()
+    {
+        var targetUser = new GeneralUser { UserId = _targetUserId, Username = "TargetUser" };
+        _userLookupService.Setup(s => s.GetAsync("TargetUser")).ReturnsAsync(targetUser);
+        _ticketRepository.Setup(r => r.Create(It.IsAny<CreateTicketEntity>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Ticket { TicketId = _ticketId });
+
+        await _service.CreateTicket(new CreateTicket
+        {
+            TargetUsername = "TargetUser",
+            Description = "Spam"
+        });
+
+        _eventProducer.Verify(p => p.SendAsync(EventType.TicketCreated, _ticketId), Times.Once);
     }
 
     [Fact]
@@ -264,22 +285,23 @@ public class TicketServiceShould : UnitTestBase
     {
         IReadOnlyCollection<TicketSubtype>? capturedSubtypes = null;
         _ticketRepository.Setup(r => r.GetTickets(
+                It.IsAny<PagingQuery>(),
                 It.IsAny<TicketStatus?>(),
                 It.IsAny<IReadOnlyCollection<TicketSubtype>?>(),
                 It.IsAny<CancellationToken>()))
-            .Callback<TicketStatus?, IReadOnlyCollection<TicketSubtype>?, CancellationToken>(
-                (_, subtypes, _) => capturedSubtypes = subtypes)
-            .ReturnsAsync(Array.Empty<Ticket>());
+            .Callback<PagingQuery, TicketStatus?, IReadOnlyCollection<TicketSubtype>?, CancellationToken>(
+                (_, _, subtypes, _) => capturedSubtypes = subtypes)
+            .ReturnsAsync((Array.Empty<Ticket>(), PagingResult.Empty(20)));
 
         // Junior moderator: user complaints and suggestions only
         SetCurrentUser(UserRole.Moderator);
-        await _service.GetTickets();
+        await _service.GetTickets(new PagingQuery());
         capturedSubtypes.Should().BeEquivalentTo(
             new[] { TicketSubtype.UserComplaint, TicketSubtype.SiteImprovementSuggestion });
 
         // Senior moderator: additionally complaints about junior moderator decisions
         SetCurrentUser(UserRole.SeniorModerator);
-        await _service.GetTickets();
+        await _service.GetTickets(new PagingQuery());
         capturedSubtypes.Should().BeEquivalentTo(new[]
         {
             TicketSubtype.UserComplaint,
@@ -289,7 +311,7 @@ public class TicketServiceShould : UnitTestBase
 
         // Admin: no subtype filter at all
         SetCurrentUser(UserRole.Admin);
-        await _service.GetTickets();
+        await _service.GetTickets(new PagingQuery());
         capturedSubtypes.Should().BeNull();
     }
 
@@ -298,10 +320,11 @@ public class TicketServiceShould : UnitTestBase
     {
         SetCurrentUser(UserRole.Moderator);
 
-        var tickets = await _service.GetTickets(subtype: TicketSubtype.Bug);
+        var (tickets, _) = await _service.GetTickets(new PagingQuery(), subtype: TicketSubtype.Bug);
 
         tickets.Should().BeEmpty();
         _ticketRepository.Verify(r => r.GetTickets(
+                It.IsAny<PagingQuery>(),
                 It.IsAny<TicketStatus?>(),
                 It.IsAny<IReadOnlyCollection<TicketSubtype>?>(),
                 It.IsAny<CancellationToken>()),
@@ -406,7 +429,7 @@ public class TicketServiceShould : UnitTestBase
         var act = () => _service.AssignToMe(_ticketId);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("not found"));
+            .Where(e => e.Message.Contains("не найдено"));
     }
 
     [Fact]
@@ -441,7 +464,7 @@ public class TicketServiceShould : UnitTestBase
         var act = () => _service.AssignToMe(_ticketId);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("Cannot assign a closed ticket"));
+            .Where(e => e.Message.Contains("нельзя взять в работу"));
     }
 
     [Fact]
@@ -507,7 +530,7 @@ public class TicketServiceShould : UnitTestBase
         var act = () => _service.ResolveTicket(_ticketId, resolveTicket);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("already closed"));
+            .Where(e => e.Message.Contains("уже закрыто"));
     }
 
     [Fact]
@@ -532,7 +555,7 @@ public class TicketServiceShould : UnitTestBase
         var act = () => _service.ResolveTicket(_ticketId, resolveTicket);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("no target user"));
+            .Where(e => e.Message.Contains("не указан пользователь"));
     }
 
     [Fact]
@@ -650,7 +673,7 @@ public class TicketServiceShould : UnitTestBase
             .ReturnsAsync(ticket);
         _banService.Setup(s => s.CreateBan(It.IsAny<CreateBan>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new HttpException(HttpStatusCode.Conflict,
-                "User TargetUser is already banned until ..."));
+                "Пользователь TargetUser уже забанен до ..."));
 
         var resolveTicket = new ResolveTicket
         {
@@ -664,7 +687,7 @@ public class TicketServiceShould : UnitTestBase
         // The conflict check inside the ban service fires and is not swallowed.
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict)
-            .Where(e => e.Message.Contains("already banned"));
+            .Where(e => e.Message.Contains("уже забанен"));
         _ticketRepository.Verify(
             r => r.Update(It.IsAny<UpdateTicketEntity>(), It.IsAny<CancellationToken>()), Times.Never);
     }

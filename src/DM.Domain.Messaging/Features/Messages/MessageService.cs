@@ -69,6 +69,27 @@ internal class MessageService : IMessageService
         var chat = await _chatService.GetAsync(createMessage.ChatId);
         _intentionManager.ThrowIfForbidden(ChatIntention.CreateMessage, chat);
 
+        return await CreateInternalAsync(chat, createMessage, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<Message> CreateInGameRoomAsync(CreateMessage createMessage, CancellationToken ct = default)
+    {
+        await _createValidator.ValidateAndThrowAsync(createMessage, ct);
+        // No participation check here on purpose: a game room chat has no
+        // participant rows, so the rule applied above refuses everyone, the
+        // master included. Access to a game room chat is access to its room, and
+        // the game module has decided that before this call. The read below
+        // accepts nothing but a game room chat, so this path cannot reach private
+        // correspondence.
+        var chat = await _chatService.GetGameRoomAsync(createMessage.ChatId);
+
+        return await CreateInternalAsync(chat, createMessage, ct);
+    }
+
+    private async Task<Message> CreateInternalAsync(
+        Chat chat, CreateMessage createMessage, CancellationToken ct)
+    {
         var userId = _identityProvider.Current.User.UserId;
 
         // For direct chats, check if recipient has blocked sender with BlockDirectMessages enabled
@@ -82,7 +103,7 @@ internal class MessageService : IMessageService
                     otherUser.UserId, UserBlacklistSettings.BlockDirectMessages, ct);
                 if (blockedIds.Contains(userId))
                 {
-                    throw new HttpException(HttpStatusCode.Forbidden, "Cannot send message to this user");
+                    throw new HttpException(HttpStatusCode.Forbidden, "Нельзя отправить сообщение этому пользователю");
                 }
             }
         }
@@ -100,7 +121,7 @@ internal class MessageService : IMessageService
                 if (!isParticipant)
                 {
                     throw new HttpException(HttpStatusCode.Forbidden,
-                        "There is a closed chat event in progress. Only event participants can send messages.");
+                        "Идет закрытый эвент. Писать могут только его участники.");
                 }
             }
         }
@@ -148,7 +169,7 @@ internal class MessageService : IMessageService
         var message = await _repository.Get(messageId, _identityProvider.Current.User.UserId, ct);
         if (message == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Message not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.MessageNotFound);
         }
 
         return message;
@@ -160,6 +181,18 @@ internal class MessageService : IMessageService
     {
         // Validate chat access (throws if user doesn't have access)
         await _chatService.GetAsync(chatId);
+
+        return await _repository.GetWithCursor(chatId, query, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<CursorResult<Message>> GetGameRoomWithCursorAsync(
+        Guid chatId, CursorQuery query, CancellationToken ct = default)
+    {
+        // The room check happened in the game module. What is confirmed here is
+        // only that the chat really is a game room one, so this reader cannot be
+        // pointed at a direct or group chat.
+        await _chatService.GetGameRoomAsync(chatId);
 
         return await _repository.GetWithCursor(chatId, query, ct);
     }
@@ -201,7 +234,7 @@ internal class MessageService : IMessageService
         var message = await _repository.Get(messageId, currentUserId);
         if (message == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Message not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.MessageNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(MessageIntention.Delete, message);

@@ -16,8 +16,11 @@ import {
   formatContestSeriesTitle,
 } from "@/entities/achievement";
 import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 import ContestSeriesCreateDialog from "./dialogs/ContestSeriesCreateDialog.vue";
+import { useRoleGate } from "./lib/useRoleGate";
 
+const { hasAccess, deniedText } = useRoleGate("SeniorModerator");
 const router = useRouter();
 const { series, loading, load, reload } = useContestSeries();
 
@@ -62,7 +65,9 @@ function openSeries(id: string) {
 </script>
 
 <template>
-  <section class="awards-admin">
+  <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
+
+  <section v-else class="awards-admin">
     <header class="awards-admin__header">
       <BlockTitle>Серии конкурсов</BlockTitle>
       <div class="awards-admin__actions">
@@ -78,7 +83,7 @@ function openSeries(id: string) {
       </div>
     </header>
 
-    <SecondaryText v-if="loading && !series">Загрузка…</SecondaryText>
+    <SecondaryText v-if="loading && !series">Загрузка...</SecondaryText>
     <SecondaryText v-else-if="sortedSeries.length === 0">
       Нет серий конкурсов
     </SecondaryText>
@@ -114,7 +119,7 @@ function openSeries(id: string) {
             >
               открыть →
             </a>
-            <span v-else class="muted">—</span>
+            <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
           </td>
           <td>{{ s.isActive ? "Активна" : "Скрыта" }}</td>
           <td>

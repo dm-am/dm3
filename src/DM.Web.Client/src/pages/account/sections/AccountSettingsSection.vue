@@ -189,7 +189,7 @@ const saveSettings = () => {
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))
   gap: $small
 
-@media (max-width: 768px)
+@media (max-width: $bp-tablet)
   .pagination-grid
     grid-template-columns: 1fr
 </style>

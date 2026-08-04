@@ -34,12 +34,28 @@ jobs:
         dotnet-version: 8.0.x
     - name: Restore dependencies
       run: dotnet restore
+    # .editorconfig declares a final newline and no trailing whitespace for the
+    # whole tree, and nothing checked it: 134 C# files had drifted out of the
+    # first rule. A file without a final newline adds a line to every diff that
+    # touches it, so review reads noise instead of the change, and the count only
+    # grows. The whitespace subcommand is deliberate — it checks exactly the
+    # rules .editorconfig states and skips the analyzer pass, which would make
+    # this a slow gate on rules the project never declared.
+    - name: Format
+      run: dotnet format DM.sln whitespace --verify-no-changes
     # Release is what ships (docker/app.Dockerfile publishes -c Release), so it
     # is what gets compiled and tested here.
     - name: Build
       run: dotnet build --no-restore -c Release
     - name: Test
       run: dotnet test --no-build -c Release --verbosity normal --logger trx --results-directory TestResults --collect:"XPlat Code Coverage"
+    # The cobertura was collected and uploaded with if-no-files-found: error - a
+    # guarantee that the file exists, with no threshold anywhere, so deleting
+    # tests or adding a module without any passed every gate green. The frontend
+    # has had a ratchet since it had tests at all; this is the same rule for the
+    # solution, and the numbers live next to the reason in the script.
+    - name: Coverage threshold
+      run: bash scripts/check-coverage.sh
     - name: Upload test results
       uses: actions/upload-artifact@v4
       if: always()
@@ -90,8 +106,8 @@ jobs:
         path: src/DM.Web.Client/coverage/
         if-no-files-found: warn
 
-  # The end-to-end tier, which until now ran nowhere: 32 spec files and 258 tests
-  # that only ever executed on the owner's machine, so nothing stopped a merge
+  # The end-to-end tier, which until now ran nowhere: 32 spec files and the 235
+  # tests in them, which only ever ran on the owner's machine, so nothing stopped a merge
   # from breaking them and nobody found out until the next manual run.
   #
   # It needs a real stack, not a mock — the suite talks to the API over HTTP and
@@ -103,6 +119,13 @@ jobs:
       # Every compose invocation in this job means the pair, and repeating the
       # flags five times is how one of them ends up missing the overlay.
       COMPOSE_FILE: docker-compose.yml:docker-compose.e2e.yml
+      # docker/.env.example ends with Development for local work, and a tier that
+      # exercises Development proves nothing about the build that ships: Swagger
+      # is mapped only there, and the content policy of the API relaxes its
+      # script-src for it. Through the environment rather than by rewriting a
+      # line of the file, the way the throwaway encryption key below is handed
+      # in: compose prefers the environment over .env.
+      ASPNETCORE_ENVIRONMENT: Production
     steps:
     - uses: actions/checkout@v4
 
@@ -146,12 +169,16 @@ jobs:
               DM_RateLimiting__Enabled: "false"
         YAML
 
+    # --build on the migration line too. Its image is the API image, and the API
+    # image is now the tag the registry publishes: compose pulls a missing image
+    # before it considers building one, so a plain "up" here would migrate the
+    # database with the published build and test a commit that is not this one.
     - name: Start the stack
       working-directory: docker
       run: |
         docker compose config --quiet
         docker compose up -d postgres mongo rabbitmq minio mailhog jaeger
-        docker compose up -d --wait migration
+        docker compose up -d --build --wait migration
         docker compose up -d --build --wait dmapi
 
     - name: Wait for API health
@@ -183,6 +210,42 @@ jobs:
     - name: Run the suite
       working-directory: src/DM.Web.Client
       run: npx playwright test --project=chromium
+
+    # retries: 2 in CI means a test that failed twice and passed on the third
+    # attempt leaves the job green, and the only evidence used to be inside an
+    # HTML artifact somebody has to download and open. A flake that nobody sees
+    # is a test on its way to being deleted for being "always red anyway", so the
+    # count and the names go on the run page itself, whether the suite passed or
+    # not. The reporter that writes the file is declared in playwright.config.ts.
+    - name: Flaky tests of this run
+      if: always()
+      working-directory: src/DM.Web.Client
+      # Node rather than jq: the job already installs it, and the same script runs
+      # on a developer machine. A spec is flaky when Playwright retried it into a
+      # pass; suites nest, so the walk is recursive.
+      run: |
+        node -e '
+          const fs = require("fs");
+          const report = "playwright-report/results.json";
+          const summary = process.env.GITHUB_STEP_SUMMARY;
+          if (!fs.existsSync(report)) {
+            fs.appendFileSync(summary, "No Playwright report at " + report + "\n");
+            process.exit(0);
+          }
+          const flaky = [];
+          const walk = (suite) => {
+            for (const spec of suite.specs || []) {
+              if ((spec.tests || []).some((test) => test.status === "flaky")) {
+                flaky.push((spec.file || suite.title) + ": " + spec.title);
+              }
+            }
+            for (const child of suite.suites || []) walk(child);
+          };
+          walk(JSON.parse(fs.readFileSync(report, "utf8")));
+          const lines = ["### Playwright: " + flaky.length + " flaky test(s)"];
+          for (const name of flaky) lines.push("- " + name);
+          fs.appendFileSync(summary, lines.join("\n") + "\n");
+        '
 
     - name: Upload Playwright report
       uses: actions/upload-artifact@v4
@@ -343,12 +406,15 @@ jobs:
         POSTGRES_PASSWORD: ci-validation-placeholder
         RABBITMQ_DEFAULT_PASS: ci-validation-placeholder
         MINIO_ROOT_PASSWORD: ci-validation-placeholder
+        MINIO_APP_PASSWORD: ci-validation-placeholder
+        MINIO_IMGPROXY_PASSWORD: ci-validation-placeholder
         GF_SECURITY_ADMIN_PASSWORD: ci-validation-placeholder
         IMGPROXY_KEY: ci-validation-placeholder
         IMGPROXY_SALT: ci-validation-placeholder
       run: |
         docker compose --env-file /dev/null -f docker-compose.yml config --quiet
         docker compose --env-file /dev/null -f docker-compose.yml -f docker-compose.preview.yml config --quiet
+        docker compose --env-file /dev/null -f docker-compose.yml -f docker-compose.preview.yml -f docker-compose.mirror.yml config --quiet
 
     - name: Every build context the overlay names must exist
       working-directory: docker
@@ -359,6 +425,8 @@ jobs:
         POSTGRES_PASSWORD: ci-validation-placeholder
         RABBITMQ_DEFAULT_PASS: ci-validation-placeholder
         MINIO_ROOT_PASSWORD: ci-validation-placeholder
+        MINIO_APP_PASSWORD: ci-validation-placeholder
+        MINIO_IMGPROXY_PASSWORD: ci-validation-placeholder
         GF_SECURITY_ADMIN_PASSWORD: ci-validation-placeholder
         IMGPROXY_KEY: ci-validation-placeholder
         IMGPROXY_SALT: ci-validation-placeholder
@@ -372,10 +440,177 @@ jobs:
               test -d "$ctx" || { echo "::error::build context does not exist: $ctx"; exit 1; }
             done
 
-    - name: The unit systemd runs must name the same files as the installer
+    - name: The unit systemd runs must name the same files and profiles as the installer
       run: |
-        installer=$(grep -oE '\-f [a-z.-]+\.yml' docker/setup-server.sh | sort -u)
-        unit=$(grep -oE '\-f [a-z.-]+\.yml' docker/dm3.service | sort -u)
+        # Profiles as well as files: watchtower lives behind the production
+        # profile, and a unit that drops it stops updating the stand at the first
+        # reboot with nothing in the logs to say so.
+        pattern='(\-f [a-z.-]+\.yml|--profile [a-z]+)'
+        installer=$(grep -oE "$pattern" docker/setup-server.sh | sort -u)
+        unit=$(grep -oE "$pattern" docker/dm3.service | sort -u)
         echo "installer: $installer"
         echo "unit:      $unit"
-        test "$installer" = "$unit" || { echo "::error::dm3.service and setup-server.sh disagree on the compose files"; exit 1; }
+        # Non-empty first, and named positively after that. Two empty extractions
+        # compare equal, so a switch to --file, to COMPOSE_FILE or to a path
+        # outside the character class above would have left this step green on
+        # nothing at all - while the failure it exists to catch came back.
+        test -n "$installer" || { echo "::error::no compose files or profiles found in docker/setup-server.sh"; exit 1; }
+        test -n "$unit" || { echo "::error::no compose files or profiles found in docker/dm3.service"; exit 1; }
+        printf '%s\n' "$installer" | grep -qx -- '-f docker-compose.preview.yml' || { echo "::error::the installer no longer names the overlay the site lives in"; exit 1; }
+        printf '%s\n' "$installer" | grep -qx -- '--profile production' || { echo "::error::the installer no longer enables the profile watchtower lives behind"; exit 1; }
+        test "$installer" = "$unit" || { echo "::error::dm3.service and setup-server.sh disagree on the compose files or profiles"; exit 1; }
+
+    # Nothing compiled the edge: a typo in either nginx.conf was a crash-looping
+    # container on the server, which is the whole site, and a typo in the alert
+    # rules stopped Prometheus from starting at all. All three tools run in a
+    # container so the versions match what the deployment runs.
+    - name: The edge and the SPA server configurations must parse
+      run: |
+        # The upstreams are resolved at start-up and none of them exists here.
+        docker run --rm \
+          --add-host dmapi:127.0.0.1 --add-host dmfront:127.0.0.1 \
+          --add-host minio:127.0.0.1 --add-host imgproxy:127.0.0.1 \
+          -v "$PWD/docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
+          nginx:1.27-alpine nginx -t
+        # The SPA config is a server block, not a whole configuration: it is
+        # mounted where the image includes it from.
+        docker run --rm \
+          -v "$PWD/src/DM.Web.Client/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
+          nginx:1.27-alpine nginx -t
+
+    - name: The Prometheus configuration and its alert rules must parse
+      run: |
+        docker run --rm \
+          -v "$PWD/docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+          -v "$PWD/docker/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro" \
+          --entrypoint promtool prom/prometheus:v2.51.0 \
+          check config /etc/prometheus/prometheus.yml
+
+    # promtool above is happy with rules that go nowhere, and that is what this
+    # repository ran: rule_files with no alerting section and no alertmanager to
+    # name in one. Every rule reached a firing state inside Prometheus and stayed
+    # there, so an outage was found by opening /alerts through a tunnel.
+    - name: Every alert rule must reach a receiver the stack runs
+      run: |
+        grep -q '^rule_files:' docker/prometheus.yml ||
+          { echo "::error::prometheus.yml evaluates no rules of its own any more - this check is about the ones it does"; exit 1; }
+
+        # The alerting section only, up to the next key at column zero: a
+        # "targets:" line taken from the whole file would match a scrape job and
+        # pass on a configuration that delivers nothing.
+        # `|| true` because the step runs under `bash -e` and the last grep exits
+        # 1 when there is no alerting section at all - which is the very case the
+        # message below exists for. Without it the step died on the assignment,
+        # printed nothing, and left whoever broke it an exit code to guess from.
+        targets=$(sed -n '/^alerting:/,/^[^[:space:]#]/p' docker/prometheus.yml |
+          grep -oE "targets:[[:space:]]*\[[^]]*\]" | grep -oE "[a-z0-9.-]+:[0-9]+" || true)
+        test -n "$targets" || { echo "::error::prometheus.yml declares rule_files and no alertmanager to post them to"; exit 1; }
+
+        for target in $targets; do
+          echo "checking alert target: $target"
+          grep -q "container_name: '${target%%:*}'" docker/docker-compose.yml ||
+            { echo "::error::nothing in the stack answers to ${target%%:*}, so every notification is a connection refused"; exit 1; }
+        done
+
+    # The one thing no test in the solution can do: start it. The configuration
+    # is rendered from the environment at container start, so a template that
+    # cannot produce a file alertmanager accepts is a receiver that is not there
+    # - and nothing else in the pipeline runs this container.
+    - name: The alert receiver must render its configuration and start
+      run: |
+        docker run --rm \
+          -v "$PWD/docker/prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro" \
+          -v "$PWD/docker/alertmanager-init.sh:/alertmanager-init.sh:ro" \
+          --entrypoint /bin/sh prom/alertmanager:v0.27.0 \
+          -c '/alertmanager-init.sh --render-only && amtool check-config /tmp/alertmanager.yml'
+
+        docker run -d --name alert-receiver-gate \
+          -v "$PWD/docker/prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro" \
+          -v "$PWD/docker/alertmanager-init.sh:/alertmanager-init.sh:ro" \
+          --entrypoint /bin/sh prom/alertmanager:v0.27.0 /alertmanager-init.sh
+
+        ready=0
+        for _ in $(seq 1 20); do
+          if docker exec alert-receiver-gate wget --spider -q http://localhost:9093/-/healthy; then
+            ready=1
+            break
+          fi
+          sleep 1
+        done
+
+        docker logs alert-receiver-gate
+        docker rm -f alert-receiver-gate > /dev/null
+        test "$ready" = 1 || { echo "::error::the alert receiver does not start with the configuration in this repository"; exit 1; }
+
+    # Every tracked script, not a hand kept list: the backup jobs run at two in
+    # the morning into a log nobody reads, so a typo in one of them is found by
+    # a failed restore.
+    - name: Every shell script must pass shellcheck
+      run: |
+        docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:v0.10.0 \
+          $(git ls-files '*.sh') scripts/hooks/pre-push
+
+  # The pair that actually gets deployed had never been started by anything: e2e
+  # brings up the base stack plus its own overlay and talks to the API directly,
+  # so nginx, its basic auth, the SPA container and every route through the edge
+  # were executed for the first time on the server. Three of the deployment
+  # defects this repository has already fixed - the API port outside the
+  # perimeter, the session cookie, the unreachable transform layer - are that one
+  # class, and none of them could have failed a gate.
+  deployment-smoke:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Generate a throwaway encryption key
+      run: echo "DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+
+    - name: Create .env for Docker Compose
+      run: cp docker/.env.example docker/.env
+
+    # The repository ships no credentials, and without the file docker creates a
+    # directory in its place and nginx does not start.
+    - name: Generate the stand credentials
+      env:
+        DM_PREVIEW_PASSWORD: smoke-test-password
+      run: bash docker/scripts/init-htpasswd.sh
+
+    - name: Start the pair the installer and the unit deploy
+      working-directory: docker
+      env:
+        COMPOSE_FILE: docker-compose.yml:docker-compose.preview.yml
+        ASPNETCORE_ENVIRONMENT: Production
+      # imgproxy on the list because nginx resolves the hosts it proxies to at
+      # start-up: the transform location names imgproxy literally, so without
+      # that container the edge exits with "host not found in upstream" and the
+      # whole job waits on a health check that will never pass. It is part of
+      # the pair being deployed, not a convenience.
+      run: |
+        docker compose up -d postgres mongo rabbitmq minio imgproxy mailhog jaeger
+        docker compose up -d --build --wait migration
+        docker compose up -d --build --wait dmapi
+        docker compose up -d --build --wait nginx
+
+    - name: The edge answers where the deployment needs it to
+      run: |
+        status() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+        # The heartbeat the monitoring guide recommends: the liveness of the API
+        # itself, reachable without the stand credentials. Answered by the SPA
+        # fallback with 200 before it had a location of its own.
+        test "$(status http://localhost/_health)" = 200
+        test "$(status http://localhost/nginx-health)" = 200
+        # Everything else is behind basic auth, the SPA and the API alike.
+        test "$(status http://localhost/)" = 401
+        test "$(status http://localhost/v1/boards)" = 401
+        test "$(status -u preview:smoke-test-password http://localhost/)" = 200
+        test "$(status -u preview:smoke-test-password http://localhost/v1/boards)" = 200
+
+    - name: Logs on failure
+      if: failure()
+      working-directory: docker
+      env:
+        COMPOSE_FILE: docker-compose.yml:docker-compose.preview.yml
+      run: docker compose logs --tail=200 nginx dmapi dmfront

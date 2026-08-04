@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Events;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Users;
 using FluentValidation;
 
@@ -21,6 +24,7 @@ internal class WarningService : IWarningService
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IEventProducer _eventProducer;
 
     /// <inheritdoc />
     public WarningService(
@@ -30,7 +34,8 @@ internal class WarningService : IWarningService
         IUserLookupService userLookupService,
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        IEventProducer eventProducer)
     {
         _createValidator = createValidator;
         _warningRepository = warningRepository;
@@ -39,6 +44,7 @@ internal class WarningService : IWarningService
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
+        _eventProducer = eventProducer;
     }
 
     /// <inheritdoc />
@@ -49,8 +55,10 @@ internal class WarningService : IWarningService
             var user = await _userLookupService.GetAsync(username);
             return await _warningRepository.GetUserWarnings(user.UserId, ct);
         }
-        catch
+        catch (HttpException e) when (e.StatusCode == HttpStatusCode.Gone)
         {
+            // See BanService: an empty list answers "no such user" and nothing
+            // else. Every other failure belongs to ErrorHandlingMiddleware.
             return [];
         }
     }
@@ -69,8 +77,11 @@ internal class WarningService : IWarningService
             return await GetUserWarnings(username, ct);
         }
 
-        // For now, return empty - would need to implement GetAll in repository
-        return [];
+        // The unfiltered list used to be an empty one with a note that the
+        // repository method was missing: behind a Moderator+ gate and a 200, a
+        // moderator opening the page saw what a website without violations looks
+        // like.
+        return await _warningRepository.GetAllWarnings(ct);
     }
 
     /// <inheritdoc />
@@ -99,7 +110,13 @@ internal class WarningService : IWarningService
             CreatedUtc = _dateTimeProvider.Now
         };
 
-        return await _warningRepository.Create(entity, ct);
+        var warning = await _warningRepository.Create(entity, ct);
+
+        // This event is the only thing that tells the warned user anything at
+        // all: no screen interrupts them, and points accumulate towards a ban in
+        // silence. Sent after the write so the generator finds the warning.
+        await _eventProducer.SendAsync(EventType.WarningIssued, warning.WarningId);
+        return warning;
     }
 
     /// <inheritdoc />
@@ -122,8 +139,10 @@ internal class WarningService : IWarningService
             var user = await _userLookupService.GetAsync(username);
             return await _warningRepository.GetUserWarningPoints(user.UserId, ct);
         }
-        catch
+        catch (HttpException e) when (e.StatusCode == HttpStatusCode.Gone)
         {
+            // Zero points is what an unblemished profile looks like, so this
+            // catch may only stand for a user who does not exist.
             return 0;
         }
     }

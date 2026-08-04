@@ -57,7 +57,10 @@ const errorDefaults: Record<number, ErrorConfig> = {
   404: {
     title: "Страница не найдена",
     description:
-      "Такой страницы не существует. Возможно, она была перемещена или удалена.",
+      // Without the deletion clause: that is what 410 below says, and while
+      // both said it the two pages answered the same question. This one is the
+      // wrong address, nothing more.
+      "По этому адресу ничего нет. Проверьте ссылку, возможно, в ней ошибка.",
     image: generalImage,
   },
   409: {
@@ -89,6 +92,39 @@ const fallbackConfig: ErrorConfig = {
 /** Resolves title/description/illustration for an HTTP error code. */
 export function getErrorConfig(code: number): ErrorConfig {
   return errorDefaults[code] ?? fallbackConfig;
+}
+
+/**
+ * The page a failed load's HTTP status deserves.
+ *
+ * One mapping, because three had already diverged: the forum board page turned
+ * every status but 404 into "ошибка сервера", and since the API answers a
+ * missing board with 410 that is what a mistyped alias actually showed; the
+ * topic page next to it mapped the same 410 to "Страница удалена"; the profile
+ * page had a third spelling. A game and a blog had no mapping at all and drew
+ * one paragraph for everything, so a reader refused access could not tell it
+ * from a network failure.
+ *
+ * 410 is the one status that means two things here, so the caller says which.
+ * The default is "не найдено", because the API spends Gone on "no such board /
+ * user"; `goneMeansRemoved` is the opt-in of the pages that read it literally.
+ * The topic page has that distinction from the server (TopicService answers
+ * Gone for a deleted topic and 404 for one that never existed), so it is the
+ * page that asks. The game and blog shells do not ask: GameService answers Gone
+ * for every id that addresses nothing this reader may see, so a mistyped address
+ * would be reported to them as somebody having deleted the game.
+ *
+ * Everything else collapses on purpose: a status with no page of its own reads
+ * as "not found", and a missing status or a 5xx as a fault on our side.
+ */
+export function errorCodeForStatus(
+  status: number | undefined,
+  options: { goneMeansRemoved?: boolean } = {},
+): number {
+  if (!status || status >= 500) return 500;
+  if (status === 403) return 403;
+  if (status === 410) return options.goneMeansRemoved ? 410 : 404;
+  return 404;
 }
 
 /**

@@ -3,7 +3,7 @@
  * PublicationCreate — create a new publication in the blog (dev doc
  * 4.2.3.6.7 "Создание публикации"). Form: title (required), rubric (optional
  * select over the blog's rubrics), content (BBCode editor). "Опубликовать"
- * creates and publishes immediately; "Отменить" returns to the blog feed.
+ * creates and publishes immediately; "Отмена" returns to the blog feed.
  * Access is gated to owner + assistant; the backend enforces this too.
  */
 import { computed, ref } from "vue";
@@ -11,7 +11,7 @@ import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useBlogDetailsStore, blogApi } from "@/entities/blog";
 import { PublicationForm } from "@/features/publication";
-import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
+import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { notifyFailure } from "@/shared/lib/errors";
@@ -36,13 +36,18 @@ const title = ref("");
 const rubricId = ref<string>(NO_RUBRIC);
 const content = ref("");
 const saving = ref(false);
+const formRef = ref<InstanceType<typeof PublicationForm> | null>(null);
 
 const valid = computed(
   () => title.value.trim().length > 0 && content.value.trim().length > 0,
 );
 
 async function publish() {
-  if (!valid.value || saving.value) return;
+  // Validity gates the form, not this handler: the page hands `valid` down and
+  // the form keeps its action disabled while it is false, so a submit that
+  // arrives here is one the author was allowed to make. The second check that
+  // used to stand here answered the form's own event with silence.
+  if (saving.value) return;
   saving.value = true;
   const { data, error } = await blogApi.createPublication(blogId.value, {
     title: title.value.trim(),
@@ -56,6 +61,11 @@ async function publish() {
     return;
   }
   toast.success("Публикация создана");
+  // The text is published, so the draft of it is no longer a draft. It lived
+  // seven days, and the next visit to this page offered to restore an already
+  // published record — accepting posted it twice. Every other composer clears
+  // its draft here; this one navigated away instead.
+  formRef.value?.clearDraft();
   // Refresh the blog so counters and the sidebar stay in sync.
   if (blog.value) blogStore.loadBlog(blogId.value);
   const createdRubric = data?.resource?.rubric?.id;
@@ -73,14 +83,13 @@ function cancel() {
 
 <template>
   <div class="publication-create">
-    <page-title>Создание публикации</page-title>
-
     <secondary-text v-if="!canManage">
       Создание публикаций доступно мастеру блога и ассистентам.
     </secondary-text>
 
     <PublicationForm
       v-else
+      ref="formRef"
       v-model:title="title"
       v-model:rubric-id="rubricId"
       v-model:content="content"
@@ -88,8 +97,8 @@ function cancel() {
       :valid="valid"
       :loading="saving"
       action="Опубликовать"
-      cancel-label="Отменить"
-      :draft-key="`blog_${blogId}_publication_new`"
+      cancel-label="Отмена"
+      :draft-key="composerDraftKey('blog', 'publication', blogId)"
       @submit="publish"
       @cancel="cancel"
     />

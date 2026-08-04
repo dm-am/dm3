@@ -92,6 +92,17 @@ export type PeriodDigestRef = {
   month?: number | null;
 };
 
+/**
+ * Where the reader continues in a topic: the first comment he has not read,
+ * or the topic's last comment when everything is read. `commentId` is null
+ * when the topic has no comments at all.
+ */
+export type FirstUnreadComment = {
+  commentId: string | null;
+  /** Position of that comment in the topic (1-based), for paging */
+  commentNumber: number;
+};
+
 // Query parameters for topics list
 export type TopicsQuery = {
   number?: number;
@@ -105,16 +116,8 @@ export type TopicsQuery = {
   sortOrder?: string;
 };
 
-// Query parameters for comments list
-export type CommentsQuery = {
-  number?: number;
-  size?: number;
-  search?: string;
-  authors?: string[];
-  createdFromUtc?: string;
-  createdToUtc?: string;
-  sortBy?: string;
-  sortOrder?: string;
-};
+// Query parameters for comments list. Shared with the game and the blog: the
+// four discussions read the same query, so it is declared once in shared/api.
+export type { CommentsQuery } from "@/shared/api";
 
 // Comment type is now imported from shared and re-exported above

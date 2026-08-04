@@ -1,4 +1,5 @@
 using AutoMapper;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Identity;
@@ -15,8 +16,6 @@ namespace DM.Web.API.Features.Community.Users;
 /// </summary>
 internal class UserMappingProfile : Profile
 {
-    private const int NewbieThreshold = 100;
-
     public UserMappingProfile()
     {
         // Avatar: Domain AvatarPicture (single source-key) → API UserPicture (3 URLs).
@@ -48,17 +47,18 @@ internal class UserMappingProfile : Profile
 
         // Query string to domain filter. Mapped by name rather than by hand so a
         // filter added to both sides needs no third edit here, and so the two
-        // members that do not line up have to be named to be handled: the search
-        // term is Q on the wire, and the direction is derived from SortOrder by
-        // CommunityUserApiService, which knows the per-field default.
+        // members that do not line up have to be named to be handled: the sort
+        // field is sortBy on the wire and Sort in the domain, and the direction
+        // is derived from SortOrder by CommunityUserApiService, which knows the
+        // per-field default.
         CreateMap<UsersQuery, UserFilter>()
-            .ForMember(d => d.Search, o => o.MapFrom(s => s.Q))
+            .ForMember(d => d.Sort, o => o.MapFrom(s => s.SortBy))
             .ForMember(d => d.SortAscending, o => o.Ignore());
 
         // GeneralUser (domain) -> User (API)
         CreateMap<GeneralUser, User>()
             .ForMember(d => d.Id, o => o.MapFrom(s => s.UserId))
-            .ForMember(d => d.IsNewbie, o => o.MapFrom(s => s.QuantityRating < NewbieThreshold))
+            .ForMember(d => d.IsNewbie, o => o.MapFrom(s => s.IsNewbie))
             .ForMember(d => d.Rating, o => o.MapFrom(s => s.RatingDisabled
                 ? null
                 : new Rating { TotalPosts = s.QuantityRating, PostReviewScoreSum = s.QualityRating }))
@@ -75,6 +75,8 @@ internal class UserMappingProfile : Profile
             .ForMember(d => d.ReviewsReceived, o => o.MapFrom(s => s.PostReviewsReceivedCount))
             .ForMember(d => d.EndorsementsGiven, o => o.MapFrom(s => s.EndorsementsGivenCount))
             .ForMember(d => d.EndorsementsReceived, o => o.MapFrom(s => s.EndorsementsReceivedCount))
+            .ForMember(d => d.GameReviewsGiven, o => o.MapFrom(s => s.GameReviewsGivenCount))
+            .ForMember(d => d.GameReviewsReceived, o => o.MapFrom(s => s.GameReviewsReceivedCount))
             .ForMember(d => d.TopicsAuthored, o => o.MapFrom(s => s.TopicsAuthoredCount))
             .ForMember(d => d.CommentsAuthored, o => o.MapFrom(s => s.CommentsAuthoredCount))
             .ForMember(d => d.GlobalChatMessages, o => o.MapFrom(s => s.GlobalChatMessagesCount))
@@ -90,7 +92,7 @@ internal class UserMappingProfile : Profile
         // GeneralUser (domain) -> UserProfile (API)
         CreateMap<GeneralUser, UserProfile>()
             .ForMember(d => d.Id, o => o.MapFrom(s => s.UserId))
-            .ForMember(d => d.IsNewbie, o => o.MapFrom(s => s.QuantityRating < NewbieThreshold))
+            .ForMember(d => d.IsNewbie, o => o.MapFrom(s => s.IsNewbie))
             .ForMember(d => d.Rating, o => o.MapFrom(s => new Rating { TotalPosts = s.QuantityRating, PostReviewScoreSum = s.QualityRating }))
             // Picture — via the registered AvatarPicture→UserPicture converter.
             .ForMember(d => d.Picture, o => o.MapFrom(s => s.Picture))
@@ -108,6 +110,8 @@ internal class UserMappingProfile : Profile
             .ForMember(d => d.ReviewsReceived, o => o.MapFrom(s => s.PostReviewsReceivedCount))
             .ForMember(d => d.EndorsementsGiven, o => o.MapFrom(s => s.EndorsementsGivenCount))
             .ForMember(d => d.EndorsementsReceived, o => o.MapFrom(s => s.EndorsementsReceivedCount))
+            .ForMember(d => d.GameReviewsGiven, o => o.MapFrom(s => s.GameReviewsGivenCount))
+            .ForMember(d => d.GameReviewsReceived, o => o.MapFrom(s => s.GameReviewsReceivedCount))
             .ForMember(d => d.TopicsAuthored, o => o.MapFrom(s => s.TopicsAuthoredCount))
             .ForMember(d => d.CommentsAuthored, o => o.MapFrom(s => s.CommentsAuthoredCount))
             .ForMember(d => d.GlobalChatMessages, o => o.MapFrom(s => s.GlobalChatMessagesCount))

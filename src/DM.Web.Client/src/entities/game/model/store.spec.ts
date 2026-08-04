@@ -39,6 +39,8 @@ const {
   mockGetPosts,
   mockGetCharacters,
   mockGetGameComments,
+  mockUpdateGameComment,
+  mockDeleteGameComment,
   mockSubscribe,
   mockUnsubscribe,
 } = vi.hoisted(() => ({
@@ -55,6 +57,8 @@ const {
   mockGetPosts: vi.fn(),
   mockGetCharacters: vi.fn(),
   mockGetGameComments: vi.fn(),
+  mockUpdateGameComment: vi.fn(),
+  mockDeleteGameComment: vi.fn(),
   mockSubscribe: vi.fn(),
   mockUnsubscribe: vi.fn(),
 }));
@@ -74,12 +78,15 @@ vi.mock("../api/gameApi", () => ({
     getPosts: mockGetPosts,
     getCharacters: mockGetCharacters,
     getGameComments: mockGetGameComments,
+    updateGameComment: mockUpdateGameComment,
+    deleteGameComment: mockDeleteGameComment,
     subscribe: mockSubscribe,
     unsubscribe: mockUnsubscribe,
   },
 }));
 
-import { useGamesStore, useGameDetailsStore } from "./store";
+import { useGamesStore } from "./store";
+import { useGameDetailsStore } from "./detailsStore";
 
 const createMockUserRef = (id: string, username: string): UserRef =>
   ({
@@ -404,33 +411,6 @@ describe("useGamesStore", () => {
       expect(mockSearchGames).not.toHaveBeenCalled();
     });
   });
-
-  // ============================================================================
-  // RESET
-  // ============================================================================
-
-  describe("resetAllGames", () => {
-    it("resets all game data", async () => {
-      const mockGames = [createMockGameRef("1", "Game")];
-      mockGetPopularGames.mockResolvedValue({
-        data: { resources: mockGames },
-        error: null,
-      });
-      mockSearchGames.mockResolvedValue({
-        data: { resources: [], paging: null },
-        error: null,
-      });
-
-      const store = useGamesStore();
-      await store.fetchPopularGames();
-      await store.searchGames({ search: "test" });
-
-      store.resetAllGames();
-
-      expect(store.popularGames).toBeNull();
-      expect(store.searchResult).toBeNull();
-    });
-  });
 });
 
 // ============================================================================
@@ -486,6 +466,41 @@ describe("useGameDetailsStore", () => {
 
       expect(store.gameError).toBeTruthy();
       expect(store.game).toBeNull();
+    });
+
+    // The status is the whole point of the refusal: the shell reads it out of
+    // the store (GamePage.vue) and picks the error page from it, so a load that
+    // keeps the sentence and drops the number sends a reader who was refused
+    // access to "ошибка сервера". Both halves are asserted here because the
+    // shell's own spec sets gameErrorStatus by hand — deleting the line that
+    // fills it left every other test in the tree green.
+    it.each([403, 404, 410, 500])(
+      "keeps the %i the server answered",
+      async (status) => {
+        mockGetGame.mockResolvedValue({
+          data: null,
+          error: { status, title: "Refused" },
+        });
+
+        const store = useGameDetailsStore();
+        const result = await store.loadGame("invalid");
+
+        expect(store.gameErrorStatus).toBe(status);
+        expect(result).toEqual({ ok: false, status });
+      },
+    );
+
+    it("reports a refusal that carries no status as one", async () => {
+      mockGetGame.mockResolvedValue({
+        data: null,
+        error: { title: "Network is down" },
+      });
+
+      const store = useGameDetailsStore();
+      const result = await store.loadGame("invalid");
+
+      expect(store.gameErrorStatus).toBeNull();
+      expect(result.ok).toBe(false);
     });
 
     it("tracks loading state", async () => {
@@ -739,6 +754,195 @@ describe("useGameDetailsStore", () => {
 
       store.gameError = "Error";
       expect(store.hasError).toBeTruthy();
+    });
+  });
+
+  // ============================================================================
+  // OUT-OF-ORDER RESPONSES
+  // ============================================================================
+
+  /**
+   * The store is a single bag for "the current game", and two clicks inside one
+   * round trip put two replies in flight. Whichever landed last used to win, so
+   * a slower reply for the game the user had already left redrew the page under
+   * the new title: no error, no spinner, wrong data.
+   */
+  describe("out-of-order responses", () => {
+    function deferred<T>() {
+      let resolve!: (value: T) => void;
+      const promise = new Promise<T>((settle) => {
+        resolve = settle;
+      });
+      return { promise, resolve };
+    }
+
+    it("keeps the newer game when the older reply lands last", async () => {
+      const older = deferred<unknown>();
+      const newer = deferred<unknown>();
+      mockGetGame
+        .mockReturnValueOnce(older.promise)
+        .mockReturnValueOnce(newer.promise);
+
+      const store = useGameDetailsStore();
+      const loadA = store.loadGame("game-a");
+      const loadB = store.loadGame("game-b");
+
+      newer.resolve({ data: createMockGame("game-b", "Game B"), error: null });
+      await loadB;
+      older.resolve({ data: createMockGame("game-a", "Game A"), error: null });
+      await loadA;
+
+      expect(store.game?.title).toBe("Game B");
+    });
+
+    it("lets the newer request own the spinner", async () => {
+      const older = deferred<unknown>();
+      const newer = deferred<unknown>();
+      mockGetGame
+        .mockReturnValueOnce(older.promise)
+        .mockReturnValueOnce(newer.promise);
+
+      const store = useGameDetailsStore();
+      const loadA = store.loadGame("game-a");
+      const loadB = store.loadGame("game-b");
+
+      older.resolve({ data: createMockGame("game-a", "Game A"), error: null });
+      await loadA;
+
+      // Game B is still on the wire: hiding the spinner here presents an
+      // unfinished load as finished, with the wrong game underneath it.
+      expect(store.gameLoading).toBe(true);
+      expect(store.game).toBeNull();
+
+      newer.resolve({ data: createMockGame("game-b", "Game B"), error: null });
+      await loadB;
+
+      expect(store.gameLoading).toBe(false);
+      expect(store.game?.title).toBe("Game B");
+    });
+
+    it("does not let a stale failure blank the game that loaded", async () => {
+      const older = deferred<unknown>();
+      const newer = deferred<unknown>();
+      mockGetGame
+        .mockReturnValueOnce(older.promise)
+        .mockReturnValueOnce(newer.promise);
+
+      const store = useGameDetailsStore();
+      const loadA = store.loadGame("game-a");
+      const loadB = store.loadGame("game-b");
+
+      newer.resolve({ data: createMockGame("game-b", "Game B"), error: null });
+      await loadB;
+      older.resolve({ data: null, error: { status: 404, title: "Not found" } });
+      await loadA;
+
+      expect(store.game?.title).toBe("Game B");
+      expect(store.gameError).toBeNull();
+    });
+
+    it("keeps the room header and its posts in step", async () => {
+      const store = useGameDetailsStore();
+      store.rooms = [
+        { id: "room-2", title: "Room 2", roomNumber: 2 },
+        { id: "room-3", title: "Room 3", roomNumber: 3 },
+      ] as unknown as Room[];
+
+      const postsOfTwo = [
+        {
+          id: "post-2",
+          gameText: "Room 2",
+          createdUtc: "2024-01-01T00:00:00Z",
+        },
+      ] as unknown as Post[];
+      const postsOfThree = [
+        {
+          id: "post-3",
+          gameText: "Room 3",
+          createdUtc: "2024-01-01T00:00:00Z",
+        },
+      ] as unknown as Post[];
+
+      const older = deferred<unknown>();
+      const newer = deferred<unknown>();
+      mockGetPosts
+        .mockReturnValueOnce(older.promise)
+        .mockReturnValueOnce(newer.promise);
+
+      const loadTwo = store.loadPosts("room-2");
+      const loadThree = store.loadPosts("room-3");
+
+      newer.resolve({
+        data: { resources: postsOfThree, paging: null },
+        error: null,
+      });
+      await loadThree;
+      older.resolve({
+        data: { resources: postsOfTwo, paging: null },
+        error: null,
+      });
+      await loadTwo;
+
+      // currentRoom is assigned synchronously, the posts arrive later: the two
+      // must not come from different requests.
+      expect(store.currentRoom?.id).toBe("room-3");
+      expect(store.posts).toEqual(postsOfThree);
+    });
+
+    it("drops a reply that arrives after the store was reset", async () => {
+      const pending = deferred<unknown>();
+      mockGetGame.mockReturnValueOnce(pending.promise);
+
+      const store = useGameDetailsStore();
+      const load = store.loadGame("game-a");
+
+      // What GamePage does when the id in the URL changes, and on unmount.
+      store.reset();
+
+      pending.resolve({
+        data: createMockGame("game-a", "Game A"),
+        error: null,
+      });
+      await load;
+
+      expect(store.game).toBeNull();
+    });
+  });
+
+  // ============================================================================
+  // COMMENT MUTATIONS
+  // ============================================================================
+
+  describe("comment mutations", () => {
+    const refusal = {
+      type: "",
+      title: "Недостаточно прав",
+      status: 403,
+      traceId: "t",
+    };
+
+    it("leaves the comment untouched when the delete is refused", async () => {
+      mockDeleteGameComment.mockResolvedValue({ data: null, error: refusal });
+
+      const store = useGameDetailsStore();
+      store.comments = [{ id: "c-1", text: "Текст" }] as never;
+
+      const { error } = await store.deleteComment("c-1");
+
+      expect(error).toBe(refusal);
+      expect(store.comments[0].isRemoved).toBeFalsy();
+    });
+
+    it("keeps the old text when the edit is refused", async () => {
+      mockUpdateGameComment.mockResolvedValue({ data: null, error: refusal });
+
+      const store = useGameDetailsStore();
+      store.comments = [{ id: "c-1", text: "Текст" }] as never;
+
+      const { error } = await store.updateComment("c-1", "Новый текст");
+
+      expect(error).toBe(refusal);
+      expect(store.comments[0].text).toBe("Текст");
     });
   });
 });

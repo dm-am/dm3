@@ -39,10 +39,22 @@ public interface IImageProcessingService
 /// ready for S3 PUT. Thumbnails are not pre-generated — imgproxy
 /// does on-the-fly transforms on request.
 /// </summary>
+/// <param name="Bytes">Encoded file to store.</param>
+/// <param name="ContentType">MIME type the bytes are encoded in.</param>
+/// <param name="Extension">Extension normalized from <paramref name="ContentType"/>.</param>
+/// <param name="Width">
+/// Width of <paramref name="Bytes"/> in pixels, after the optional downscale —
+/// the intrinsic width of the file that ends up in the bucket, not of what the
+/// caller sent. Recorded so a page can reserve the exact box an aspect-preserving
+/// picture will occupy before the browser has decoded it.
+/// </param>
+/// <param name="Height">Height of <paramref name="Bytes"/> in pixels, on the same terms.</param>
 public sealed record ProcessedImage(
     byte[] Bytes,
     string ContentType,
-    string Extension);
+    string Extension,
+    int Width,
+    int Height);
 
 /// <summary>
 /// Publicly accessible pipeline constants — SSOT for docs, tests,

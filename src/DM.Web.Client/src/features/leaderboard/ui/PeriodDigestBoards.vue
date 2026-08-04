@@ -127,7 +127,7 @@ const boardList = computed(() => {
 .digest-expand-button
   +expand-toggle-button
 
-@media (max-width: 620px)
+@media (max-width: $bp-mobile)
   .boards-grid
     grid-template-columns: 1fr
 </style>

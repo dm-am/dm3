@@ -1,45 +1,139 @@
 #!/usr/bin/env node
 /**
- * Hook: блокировка опасных git команд
- * Exit 2 = блокировка с сообщением для Claude
+ * Hook: блокировка git-команд, которые теряют работу без возможности вернуть.
+ * Exit 2 = блокировка с сообщением для Claude.
+ *
+ * Почему список шире четырех команд из CLAUDE.md: правило запрещает не имена, а
+ * потерю несохраненной работы, а у каждой из четырех есть эквивалент с тем же
+ * эффектом и другим написанием. Проверка показала, что прежняя версия
+ * останавливала 2 варианта из 10 — `git clean` с одним -f, `git restore` по пути
+ * и очистка stash проходили насквозь и делали ровно то, от чего хук защищает.
+ *
+ * Точность здесь важнее охвата: хук, который блокирует безопасное, обходят, и
+ * тогда он не защищает ничего. Поэтому restore только по индексу, reset --soft и
+ * stash без снятия разрешены намеренно.
  */
 
-let input = '';
+/**
+ * Правила проверяются В НАЧАЛЕ команды, а не где угодно в тексте.
+ *
+ * Хук получает всю строку Bash целиком, включая то, что команда лишь передает
+ * дальше: коммит-сообщение, аргумент node -e, содержимое документации. Первая
+ * версия этого расширенного хука матчила подстроку в любом месте и заблокировала
+ * сначала коммит, объяснявший запрет, а потом правку теста, где эти строки
+ * обязаны быть. Позиция и есть различие между вызовом и упоминанием, поэтому
+ * каждое правило привязано к началу, а строка режется по разделителям команд.
+ *
+ * Цена известна и принята: вызов, спрятанный внутрь `sh -c "..."`, не ловится.
+ * Хук защищает от промаха, а не от намеренного обхода; ложное срабатывание на
+ * прозе обходят точно так же, только каждый день.
+ */
+const RULES = [
+  {
+    pattern: /^git\s+checkout(?:\s|$)/i,
+    why: 'git checkout — перезаписывает рабочее дерево',
+  },
+  {
+    pattern: /^git\s+reset\s+(--hard|--merge)\b/i,
+    why: 'git reset --hard / --merge — теряет незакоммиченные изменения (--soft разрешен)',
+  },
+  {
+    // Любой форсирующий флаг: -f, -fd, -xdf, --force. Без него clean ничего не удаляет.
+    pattern: /^git\s+clean\b.*(?:-[a-zA-Z]*f|--force)/i,
+    why: 'git clean с форсирующим флагом — удаляет untracked файлы',
+  },
+  {
+    pattern: /^git\s+stash\s+(drop|clear)\b/i,
+    why: 'git stash drop и clear — теряют отложенные изменения',
+  },
+  {
+    // Без --staged переписывает рабочее дерево; с --staged затрагивает только индекс.
+    pattern: /^git\s+restore\b(?!.*--staged)/i,
+    why: 'git restore без --staged — перезаписывает рабочее дерево (--staged разрешен)',
+  },
+  {
+    pattern: /^git\s+push\b.*(?:--force|\s-f\b)/i,
+    why: 'форсированный push — перезаписывает историю на удаленном репозитории',
+  },
+  {
+    // Единственное правило без флага регистронезависимости, и это не оплошность:
+    // -D удаляет ветку независимо от слияния, а -d отказывается. При сравнении
+    // без учета регистра безопасная форма попадала под блокировку.
+    pattern: /^git\s+branch\s+(-D|--delete\s+--force)\b/,
+    why: 'git branch -D — удаляет ветку вместе с коммитами, которых нет больше нигде (-d разрешен)',
+  },
+  {
+    // Держит достижимость тегов и висячих коммитов, на которые ссылается аудит.
+    pattern: /^git\s+(gc|prune|reflog\s+expire)\b.*(--prune|--expire)/i,
+    why: 'сборка мусора с --prune/--expire — обрывает коммиты, на которые ссылаются заметки аудита',
+  },
+];
 
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', chunk => input += chunk);
-process.stdin.on('end', () => {
-  try {
-    const data = JSON.parse(input);
-    const command = data.tool_input?.command || '';
+/**
+ * Убирает тела heredoc'ов: это данные, которые команда передает дальше, и
+ * разбирать их как команды неверно. Привязка к началу строки уже отсекает
+ * большую часть таких случаев, но строка внутри heredoc может начинаться со
+ * слова git — например, документация, показывающая команду.
+ */
+function stripHeredocBodies(command) {
+  return command.replace(
+    /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1[\s\S]*?^\s*\2\s*$/gm,
+    '<<HEREDOC',
+  );
+}
 
-    // Проверяем опасные git команды
-    const dangerousPatterns = [
-      /git\s+checkout(?:\s|$)/i,
-      /git\s+reset\s+--hard/i,
-      /git\s+clean\s+-[a-z]*f[a-z]*d|git\s+clean\s+-[a-z]*d[a-z]*f/i,
-      /git\s+stash\s+drop/i
-    ];
+/** Куски строки, каждый из которых шелл начинает исполнять как команду. */
+function commandSegments(command) {
+  return command
+    .split(/\n|;|&&|\|\||\||\(|\)|`|\$\(/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
 
-    for (const pattern of dangerousPatterns) {
-      if (pattern.test(command)) {
-        console.error('BLOCKED: Эта git команда ЗАПРЕЩЕНА!');
+/** Правило, которое сработало на этой строке, или null. */
+function findViolation(rawCommand) {
+  const segments = commandSegments(stripHeredocBodies(rawCommand));
+  for (const segment of segments) {
+    for (const rule of RULES) {
+      if (rule.pattern.test(segment)) return rule;
+    }
+  }
+  return null;
+}
+
+module.exports = { findViolation };
+
+// Как хук: читает JSON на stdin. Как модуль: отдает findViolation тесту.
+if (require.main === module) {
+  let input = '';
+
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', (chunk) => (input += chunk));
+  process.stdin.on('end', () => {
+    try {
+      const data = JSON.parse(input);
+      const violation = findViolation(data.tool_input?.command || '');
+
+      if (violation) {
+        console.error('BLOCKED: эта git-команда ЗАПРЕЩЕНА в проекте.');
         console.error('');
-        console.error('Запрещенные команды:');
-        console.error('  git checkout — теряет незакоммиченные изменения');
-        console.error('  git reset --hard — теряет незакоммиченные изменения');
-        console.error('  git clean -fd — удаляет untracked файлы');
-        console.error('  git stash drop — теряет stash');
+        console.error(`Сработало правило: ${violation.why}`);
         console.error('');
-        console.error('Альтернативы:');
-        console.error('  git stash (без drop)');
-        console.error('  Спросить пользователя');
+        console.error('Что делать вместо:');
+        console.error('  отложить: git stash (без drop и clear)');
+        console.error('  снять с индекса: git restore --staged <путь>');
+        console.error('  вернуть файл из коммита: git show HEAD:<путь> > <путь>');
+        console.error('  во всех остальных случаях — спросить владельца');
         process.exit(2);
       }
-    }
 
-    process.exit(0);
-  } catch (e) {
-    process.exit(0);
-  }
-});
+      process.exit(0);
+    } catch {
+      // Непарсящийся ввод: хук не может узнать, что за команда. Пропустить и
+      // сказать об этом — единственное поведение, которое не ломает работу и не
+      // делает вид, что проверка прошла.
+      console.error('block-dangerous-git: не удалось разобрать ввод хука, команда пропущена');
+      process.exit(0);
+    }
+  });
+}

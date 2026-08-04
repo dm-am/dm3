@@ -3,9 +3,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Core.Identity;
+using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Comments;
 using DM.Domain.Blog.Features.PublicationComments;
-using DM.Domain.Core.Enums;
+using DM.Web.API.Shared.Comments;
 using DM.Web.API.Shared.Dto;
 using Comment = DM.Web.API.Shared.Dto.Comment;
 using DiscussionResponse = DM.Web.API.Shared.Dto.DiscussionResponse;
@@ -18,52 +19,28 @@ internal class PublicationCommentApiService : IPublicationCommentApiService
 {
     private readonly IPublicationCommentService _commentService;
     private readonly IIdentityProvider _identityProvider;
+    private readonly IUserBlacklistChecker _blacklistChecker;
     private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public PublicationCommentApiService(
         IPublicationCommentService commentService,
         IIdentityProvider identityProvider,
+        IUserBlacklistChecker blacklistChecker,
         IMapper mapper)
     {
         _commentService = commentService;
         _identityProvider = identityProvider;
+        _blacklistChecker = blacklistChecker;
         _mapper = mapper;
-    }
-
-    /// <inheritdoc />
-    public async Task<DiscussionResponse> GetDiscussion(Guid publicationId, PublicationCommentsQuery query)
-    {
-        var (comments, paging) = await _commentService.GetAsync(publicationId, query);
-        var identity = _identityProvider.Current;
-        var currentUserId = identity.User?.UserId ?? Guid.Empty;
-        var isAuthenticated = identity.User?.IsAuthenticated ?? false;
-        var isModerator = (identity.User?.Role ?? UserRole.Guest) >= UserRole.Moderator;
-
-        var discussionComments = comments.Select(c =>
-        {
-            var dc = _mapper.Map<DiscussionComment>(c);
-            var isAuthor = c.Author?.UserId == currentUserId;
-            dc.IsLikedByMe = c.Likes?.Any(l => l.UserId == currentUserId) ?? false;
-            dc.CanEdit = isAuthor || isModerator;
-            dc.CanDelete = isAuthor || isModerator;
-            dc.CanLike = isAuthenticated && !isAuthor;
-            return dc;
-        }).ToList();
-
-        var totalLikes = discussionComments.Sum(c => c.LikesCount);
-
-        return new DiscussionResponse(
-            discussionComments,
-            new Paging(paging),
-            totalLikes,
-            isAuthenticated);
     }
 
     /// <inheritdoc />
     public async Task<ListEnvelope<Comment>> Get(Guid publicationId, PublicationCommentsQuery query)
     {
-        var (comments, paging) = await _commentService.GetAsync(publicationId, query);
+        var excludeUserIds = await CommentReading.HiddenAuthorsAsync(
+            _blacklistChecker, _identityProvider.Current);
+        var (comments, paging) = await _commentService.GetAsync(publicationId, query, excludeUserIds);
         return new ListEnvelope<Comment>(comments.Select(_mapper.Map<Comment>), new PagingInfo(paging));
     }
 
@@ -84,9 +61,9 @@ internal class PublicationCommentApiService : IPublicationCommentApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<Comment>> Update(Guid commentId, Comment comment)
+    public async Task<Envelope<Comment>> Update(Guid commentId, UpdateCommentRequest request)
     {
-        var updateComment = _mapper.Map<UpdateComment>(comment);
+        var updateComment = _mapper.Map<UpdateComment>(request);
         updateComment.CommentId = commentId;
         var updatedComment = await _commentService.UpdateAsync(updateComment);
         return new Envelope<Comment>(_mapper.Map<Comment>(updatedComment));

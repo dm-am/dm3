@@ -21,7 +21,7 @@ internal class EmailLookupRepository : IEmailLookupRepository
     {
         var normalizedEmail = email.Trim().ToLowerInvariant();
         return await _dbContext.Users
-            .Where(u => !u.IsRemoved && u.Email != null && EF.Functions.ILike(u.Email, normalizedEmail))
+            .Where(u => !u.IsRemoved && u.Email != null && u.Email.ToLower() == normalizedEmail)
             .Select(u => new EmailLookupInfo
             {
                 UserId = u.UserId,
@@ -36,6 +36,6 @@ internal class EmailLookupRepository : IEmailLookupRepository
     {
         var normalizedEmail = email.Trim().ToLowerInvariant();
         return await _dbContext.Users
-            .AnyAsync(u => !u.IsRemoved && u.Email != null && EF.Functions.ILike(u.Email, normalizedEmail), ct);
+            .AnyAsync(u => !u.IsRemoved && u.Email != null && u.Email.ToLower() == normalizedEmail, ct);
     }
 }

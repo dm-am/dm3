@@ -1,4 +1,4 @@
-import { test, expect, APIRequestContext } from "@playwright/test";
+import { test, expect, type APIRequestContext } from "@playwright/test";
 import { authenticatedContext, seededUser } from "../../fixtures/auth";
 
 const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
@@ -50,6 +50,14 @@ test.describe("Profile Notes API", () => {
   });
 
   test("reads the note back by username", async () => {
+    // Its own precondition. The note used to come from the test above and be
+    // deleted by the one below, and the file runs in parallel with itself, so
+    // whether this one found anything depended on the order the workers
+    // happened to pick.
+    await authContext.put(`${API_URL}/v1/users/me/notes/${subjectUsername}`, {
+      headers: { "Content-Type": "application/json" },
+      data: { text: "Заметка из e2e" },
+    });
     const response = await authContext.get(
       `${API_URL}/v1/users/me/notes/${subjectUsername}`,
     );

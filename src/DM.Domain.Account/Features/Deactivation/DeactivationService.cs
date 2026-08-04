@@ -38,13 +38,13 @@ internal class DeactivationService : IDeactivationService
     {
         var currentUser = _identityProvider.Current.User;
         if (!currentUser.IsAuthenticated)
-            throw new HttpException(HttpStatusCode.Unauthorized, "Требуется авторизация");
+            throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
 
         // Load user credentials for password verification
         var credentials = await _deactivationRepository.GetUserCredentials(currentUser.UserId);
 
         if (credentials == null)
-            throw new HttpException(HttpStatusCode.NotFound, "Пользователь не найден");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFound);
 
         // Verify password
         if (!_securityManager.ComparePasswords(password, credentials.Salt, credentials.PasswordHash))

@@ -16,6 +16,11 @@ public interface IWarningRepository
     Task<IEnumerable<Warning>> GetUserWarnings(Guid userId, CancellationToken ct = default);
 
     /// <summary>
+    /// Get every active warning on the website, newest first
+    /// </summary>
+    Task<IEnumerable<Warning>> GetAllWarnings(CancellationToken ct = default);
+
+    /// <summary>
     /// Get warning by ID
     /// </summary>
     Task<Warning?> Get(Guid warningId, CancellationToken ct = default);

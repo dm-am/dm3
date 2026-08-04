@@ -82,53 +82,78 @@ public class GeneralUser : IUser
     /// <inheritdoc />
     public int QuantityRating { get; set; }
 
+    // ---- Aggregates, and null is one of their values ----
+    //
+    // Everything from here down is filled by a batch of COUNTs the user
+    // repository runs after the projection, and by nothing else. A user that
+    // arrived nested in another resource — the author of a comment, the people
+    // who liked it — has been through no such batch, so the honest answer for
+    // these members is "not computed". Hence nullable: as plain ints they
+    // defaulted to zero, the API layer copied the zero onto the wire, and a
+    // counted zero became indistinguishable from an uncounted one. Read them
+    // with an explicit fallback; do not assume the caller hydrated.
+
     /// <summary>
     /// Number of post reviews given by this user
     /// </summary>
-    public int PostReviewsGivenCount { get; set; }
+    public int? PostReviewsGivenCount { get; set; }
 
     /// <summary>
     /// Number of post reviews received by this user (on their posts)
     /// </summary>
-    public int PostReviewsReceivedCount { get; set; }
+    public int? PostReviewsReceivedCount { get; set; }
 
     /// <summary>
     /// Number of endorsements (user recommendations) received by this user.
     /// Denormalized aggregate populated by UserRepository.GetCommonRelatedData.
     /// </summary>
-    public int EndorsementsReceivedCount { get; set; }
+    public int? EndorsementsReceivedCount { get; set; }
 
     /// <summary>
     /// Number of endorsements written by this user (about other users).
     /// </summary>
-    public int EndorsementsGivenCount { get; set; }
+    public int? EndorsementsGivenCount { get; set; }
+
+    /// <summary>
+    /// Number of game reviews received by this user: reviews written about the
+    /// games they master. A game review is about a game, and the game's master
+    /// is who it lands on — the same relation GameReviewFilter already spells
+    /// as GmId.
+    /// </summary>
+    public int? GameReviewsReceivedCount { get; set; }
+
+    /// <summary>
+    /// Number of game reviews written by this user (about other people's games
+    /// and their own alike).
+    /// </summary>
+    public int? GameReviewsGivenCount { get; set; }
 
     /// <summary>
     /// Forum topics authored by this user. Denormalized aggregate
     /// populated by UserRepository.GetCommonRelatedData via batched COUNT.
     /// Drives the <c>TopicsAuthored</c> achievement metric.
     /// </summary>
-    public int TopicsAuthoredCount { get; set; }
+    public int? TopicsAuthoredCount { get; set; }
 
     /// <summary>
     /// Comments authored by this user (forum + blog + game + publication —
     /// all polymorphic Comments rows). Drives the <c>CommentsAuthored</c>
     /// achievement metric.
     /// </summary>
-    public int CommentsAuthoredCount { get; set; }
+    public int? CommentsAuthoredCount { get; set; }
 
     /// <summary>
     /// Messages this user has posted in the global chat. Drives the
     /// <c>GlobalChatMessages</c> achievement metric.
     /// </summary>
-    public int GlobalChatMessagesCount { get; set; }
+    public int? GlobalChatMessagesCount { get; set; }
 
     /// <summary>
     /// Bans received by this user (count of <c>Bans</c> rows where this user
     /// is the target). Drives the <c>BansReceived</c> achievement metric —
     /// the "резиновая уточка" chain (an easter egg for the duckling-terrorists meme).
     /// </summary>
-    public int BansReceivedCount { get; set; }
+    public int? BansReceivedCount { get; set; }
 
     /// <summary>
     /// Game drops — count of retired characters this user authored where
@@ -136,14 +161,14 @@ public class GeneralUser : IUser
     /// deaths and GM exiles; those aren't drops. Drives the <c>GameDrops</c>
     /// achievement metric.
     /// </summary>
-    public int GameDropsCount { get; set; }
+    public int? GameDropsCount { get; set; }
 
     /// <summary>
     /// Publications authored — articles in blogs written by this user.
     /// Drives the <c>PublicationsAuthored</c> achievement metric.
     /// Drafts count too (the work was done).
     /// </summary>
-    public int PublicationsAuthoredCount { get; set; }
+    public int? PublicationsAuthoredCount { get; set; }
 
     /// <summary>
     /// Total likes received on user's authored content (topics +
@@ -152,7 +177,7 @@ public class GeneralUser : IUser
     /// own quality signal (PostReview score sum → "Рейтинг"), so they
     /// are NOT counted here to avoid double-counting recognition.
     /// </summary>
-    public int LikesReceivedCount { get; set; }
+    public int? LikesReceivedCount { get; set; }
 
     /// <summary>
     /// Registration date (UTC)
@@ -162,7 +187,7 @@ public class GeneralUser : IUser
     /// <summary>
     /// Number of games where user is master or assistant
     /// </summary>
-    public int GamesHosting { get; set; }
+    public int? GamesHosting { get; set; }
 
     /// <summary>
     /// Games hosting breakdown by status (for tooltips)
@@ -172,7 +197,7 @@ public class GeneralUser : IUser
     /// <summary>
     /// Number of games where user is a player (has active character)
     /// </summary>
-    public int GamesPlaying { get; set; }
+    public int? GamesPlaying { get; set; }
 
     /// <summary>
     /// Games playing breakdown by status (for tooltips)
@@ -182,7 +207,7 @@ public class GeneralUser : IUser
     /// <summary>
     /// Number of blogs where user is owner or assistant
     /// </summary>
-    public int BlogsHosting { get; set; }
+    public int? BlogsHosting { get; set; }
 
     /// <summary>
     /// Blogs hosting breakdown by status (for tooltips)
@@ -191,8 +216,9 @@ public class GeneralUser : IUser
 
     /// <summary>
     /// How many subscribers each of the three profile categories really has.
+    /// Null when nobody counted them, which is not the same as three zeroes.
     /// </summary>
-    public SubscribersByCategory SubscribersByCategory { get; set; } = new();
+    public SubscribersByCategory? SubscribersByCategory { get; set; }
 
     /// <summary>
     /// Subscriber refs for profile-page display: at most
@@ -202,13 +228,17 @@ public class GeneralUser : IUser
     /// The cap is taken before the categories are considered, so this is a sample
     /// of the subscribers and not the members of any one line —
     /// <see cref="SubscribersByCategory" /> is what says how many there are.
+    /// Null means the preview was never fetched; an empty list means it was and
+    /// the user has none.
     /// </remarks>
-    public IReadOnlyCollection<SubscriberInfo> Subscribers { get; set; } = [];
+    public IReadOnlyCollection<SubscriberInfo>? Subscribers { get; set; }
 
     /// <summary>
-    /// Username change history (for tooltip display)
+    /// Username change history (for tooltip display). Null where the projection
+    /// could not order it — the ordering is not translatable inside a ProjectTo,
+    /// so only the paths that fetch it separately have one.
     /// </summary>
-    public IReadOnlyCollection<UsernameHistoryEntry> UsernameHistory { get; set; } = Array.Empty<UsernameHistoryEntry>();
+    public IReadOnlyCollection<UsernameHistoryEntry>? UsernameHistory { get; set; }
 
     /// <summary>
     /// Whether user is authenticated or not
@@ -216,7 +246,12 @@ public class GeneralUser : IUser
     public bool IsAuthenticated => Role != UserRole.Guest;
 
     /// <summary>
-    /// Whether user is a newbie (less than 100 posts)
+    /// Whether the user is still a newbie: fewer game posts than
+    /// <see cref="ProbationPolicy.NewbiePostThreshold" />. The predicate every
+    /// caller asks, over the counter every other reader uses. The rule used to be
+    /// written out seven times over two sources - this counter and a COUNT over
+    /// posts - so removing a post was enough to make the badge on the profile and
+    /// the right to write a review disagree about one person.
     /// </summary>
-    public bool IsNewbie => QuantityRating < 100;
+    public bool IsNewbie => ProbationPolicy.IsNewbie(QuantityRating);
 }

@@ -110,7 +110,7 @@ const {
 
           <div class="form-actions">
             <Button :disabled="isSubmitting" @click="submitPoll">
-              {{ isSubmitting ? "Создание…" : "Создать опрос" }}
+              {{ isSubmitting ? "Создание..." : "Создать опрос" }}
             </Button>
             <span v-if="errorMessage" class="error-message">{{
               errorMessage

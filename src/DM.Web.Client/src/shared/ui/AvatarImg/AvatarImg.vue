@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { defaultAvatarUrl } from "@/shared/lib/utils/icons";
+import { defaultAvatarBody, icons } from "@/shared/lib/utils/icons";
 import type { UserPicture } from "@/shared/api/models/community";
 
 /**
@@ -25,8 +25,9 @@ const props = withDefaults(
     /** Alt text for screen readers. Empty string = decorative. */
     alt: string;
     /**
-     * Size in CSS px (square avatar). Used for:
-     *   - the width/height attributes (anti-CLS),
+     * Size in CSS px. Used for:
+     *   - the declared width, and the declared height wherever the picture's
+     *     own ratio is not known (anti-CLS),
      *   - sizes='{N}px' for srcset selection.
      */
     size: number;
@@ -42,6 +43,9 @@ const props = withDefaults(
      * Needed for large aspect-preserving avatars (ProfilePage 220px).
      * srcset is not used in this mode (the original is the only variant
      * with the aspect preserved).
+     *
+     * The declared height follows the picture's own ratio in this mode, when
+     * the API knows it — see `boxHeight`.
      */
     preferOriginal?: boolean;
     /**
@@ -64,25 +68,22 @@ const small = computed(() => props.picture?.smallUrl ?? null);
 const medium = computed(() => props.picture?.mediumUrl ?? null);
 const original = computed(() => props.picture?.originalUrl ?? null);
 
-const hasAnyUrl = computed(
-  () => !!(small.value || medium.value || original.value),
-);
-
-const shouldRender = computed(() => (props.noDefault ? hasAnyUrl.value : true));
-
 // `src` (a fallback for browsers without srcset support — all modern
 // browsers support it, but src is still needed as a baseline).
+// Empty when the user has no picture: the default silhouette is not a URL any
+// more, it is the <svg> below, so "is there a picture" is exactly "is src set".
 const src = computed(() => {
-  const fallback = props.noDefault ? "" : defaultAvatarUrl;
   if (props.preferOriginal) {
-    return original.value || medium.value || small.value || fallback;
+    return original.value || medium.value || small.value || "";
   }
   // Thumbnail-mode pick: small for small displays, medium for large ones.
   if (props.size <= 100) {
-    return small.value || medium.value || original.value || fallback;
+    return small.value || medium.value || original.value || "";
   }
-  return medium.value || small.value || original.value || fallback;
+  return medium.value || small.value || original.value || "";
 });
+
+const defaultAvatarViewBox = icons.defaultAvatar.viewBox;
 
 // srcset: candidates with width descriptors. The browser picks by `sizes` * DPR.
 // Not used in preferOriginal mode (single source, the browser scales).
@@ -95,20 +96,83 @@ const srcset = computed(() => {
 });
 
 const sizes = computed(() => `${props.size}px`);
+
+/**
+ * The picture's own dimensions, but only while the original is what gets
+ * drawn. The thumbnails are square center-crops at the size they are asked
+ * for, so the square declared from `size` already describes them exactly;
+ * the original keeps the uploaded aspect ratio and nothing else describes it.
+ * Null for an upload made before the pipeline recorded the pair.
+ */
+const intrinsic = computed(() => {
+  if (!props.preferOriginal || !original.value) return null;
+  const width = props.picture?.originalWidth;
+  const height = props.picture?.originalHeight;
+  if (!width || !height || width <= 0 || height <= 0) return null;
+  return { width, height };
+});
+
+/**
+ * width/height as declared on the element. This is the whole anti-CLS
+ * mechanism: the browser derives an aspect ratio from the pair and reserves
+ * the box from it before a single byte of the picture has arrived, and
+ * `height: auto` in the stylesheet then resolves against that ratio instead
+ * of collapsing.
+ *
+ * The width stays `size`, so the declared box is still the slot the caller
+ * asked for; only the ratio comes from the file. Without a known ratio the
+ * declaration is the square it has always been — the best guess available,
+ * and one the caller has to keep backing with a floor.
+ */
+const boxHeight = computed(() => {
+  const size = intrinsic.value;
+  if (!size) return props.size;
+  return Math.max(1, Math.round((props.size * size.height) / size.width));
+});
 </script>
 
 <template>
   <img
-    v-if="shouldRender"
+    v-if="src"
     :src="src"
     :srcset="srcset"
     :sizes="srcset ? sizes : undefined"
     :alt="alt"
     :width="size"
-    :height="size"
+    :height="boxHeight"
     :class="imgClass"
     :loading="eager ? 'eager' : 'lazy'"
     :fetchpriority="eager ? 'high' : 'auto'"
     decoding="async"
   />
+  <!-- No picture: the silhouette, inline, so the cascade paints it. It carries
+       the caller's class and the same width/height the <img> would, which is
+       what keeps the slot the same size in both branches. `noDefault` callers
+       (Character: no avatar means no image, unlike User) get neither. -->
+  <svg
+    v-else-if="!noDefault"
+    class="default-avatar"
+    :class="imgClass"
+    :viewBox="defaultAvatarViewBox"
+    :width="size"
+    :height="size"
+    :role="alt ? 'img' : undefined"
+    :aria-label="alt || undefined"
+    :aria-hidden="alt ? undefined : 'true'"
+    v-html="defaultAvatarBody"
+  />
 </template>
+
+<style scoped lang="sass">
+// The two tones of the default silhouette, from the theme instead of from four
+// hex literals inside a data URI. $text-muted on $bg-element is the pair the
+// palette already calibrates to AA (4.50 in the light theme), so the silhouette
+// reads on its square in both themes without a number chosen here.
+// :deep, because the body arrives through v-html and scoped attributes are
+// stamped on compiled markup only.
+.default-avatar :deep(.default-avatar-bg)
+  fill: $bg-element
+
+.default-avatar :deep(.default-avatar-fg)
+  fill: $text-muted
+</style>

@@ -9,6 +9,7 @@ using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Extensions;
 using DM.Domain.Forum.Features.Comments;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 
@@ -75,9 +76,9 @@ internal class TopicCommentRepository : ITopicCommentRepository
         }
 
         // Filter by authors (OR logic)
-        if (commentsQuery.Authors is { Count: > 0 })
+        if (commentsQuery.AuthorUsernames is { Count: > 0 })
         {
-            var authorNames = commentsQuery.Authors.Select(a => a.ToLowerInvariant()).ToArray();
+            var authorNames = commentsQuery.AuthorUsernames.Select(a => a.ToLowerInvariant()).ToArray();
             query = query.Where(c => c.Author != null && authorNames.Contains(c.Author.Username.ToLower()));
         }
 
@@ -135,6 +136,71 @@ internal class TopicCommentRepository : ITopicCommentRepository
             .Where(c => !c.IsRemoved && c.CommentId == commentId)
             .ProjectTo<Comment>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
+    }
+
+    /// <inheritdoc />
+    public async Task<FirstUnreadComment?> FindFirstUnread(Guid topicId, DateTimeOffset lastReadUtc,
+        IReadOnlyCollection<Guid>? excludeUserIds = null)
+    {
+        var comments = VisibleComments(topicId, excludeUserIds);
+
+        var firstUnread = await comments
+            .TagWith("DM.TopicComments.FirstUnread")
+            .Where(c => c.CreatedUtc > lastReadUtc)
+            .OrderBy(c => c.CreatedUtc)
+            .Select(c => new { c.CommentId, c.CreatedUtc })
+            .FirstOrDefaultAsync();
+
+        return firstUnread == null
+            ? null
+            : await Position(comments, firstUnread.CommentId, firstUnread.CreatedUtc);
+    }
+
+    /// <inheritdoc />
+    public async Task<FirstUnreadComment?> GetLastComment(Guid topicId,
+        IReadOnlyCollection<Guid>? excludeUserIds = null)
+    {
+        var comments = VisibleComments(topicId, excludeUserIds);
+
+        var lastComment = await comments
+            .TagWith("DM.TopicComments.LastComment")
+            .OrderByDescending(c => c.CreatedUtc)
+            .Select(c => new { c.CommentId, c.CreatedUtc })
+            .FirstOrDefaultAsync();
+
+        return lastComment == null
+            ? null
+            : await Position(comments, lastComment.CommentId, lastComment.CreatedUtc);
+    }
+
+    /// <summary>
+    /// Comments of the topic as this reader is shown them. Counting a position
+    /// over any other set would send him to a page the comment is not on.
+    /// </summary>
+    private IQueryable<Entities.Shared.Comment> VisibleComments(
+        Guid topicId, IReadOnlyCollection<Guid>? excludeUserIds)
+    {
+        var query = _dbContext.Comments.Where(c => !c.IsRemoved && c.EntityId == topicId);
+
+        return excludeUserIds is { Count: > 0 }
+            ? query.Where(c => !excludeUserIds.Contains(c.AuthorId))
+            : query;
+    }
+
+    /// <summary>
+    /// The comment's 1-based place in the order the discussion is paged by,
+    /// oldest first, which is the order the list renders without a sort.
+    /// </summary>
+    private static async Task<FirstUnreadComment> Position(
+        IQueryable<Entities.Shared.Comment> comments, Guid commentId, DateTimeOffset createdUtc)
+    {
+        return new FirstUnreadComment
+        {
+            CommentId = commentId,
+            CommentNumber = await comments
+                .TagWith("DM.TopicComments.Position")
+                .CountAsync(c => c.CreatedUtc <= createdUtc)
+        };
     }
 
     /// <inheritdoc />
@@ -215,13 +281,13 @@ internal class TopicCommentRepository : ITopicCommentRepository
     }
 
     /// <inheritdoc />
-    public async Task<Guid?> GetSecondLastCommentId(Guid topicId)
+    public async Task<Guid?> GetNewestCommentIdExcept(Guid topicId, Guid exceptCommentId)
     {
         return await _dbContext.Comments
-            .TagWith("DM.TopicComments.SecondLastCommentId")
-            .Where(c => !c.IsRemoved && c.EntityId == topicId)
+            .TagWith("DM.TopicComments.NewestCommentIdExcept")
+            .Where(c => !c.IsRemoved && c.EntityId == topicId && c.CommentId != exceptCommentId)
             .OrderByDescending(c => c.CreatedUtc)
-            .Skip(1)
+            .ThenByDescending(c => c.CommentId)
             .Select(c => (Guid?)c.CommentId)
             .FirstOrDefaultAsync();
     }
@@ -232,12 +298,18 @@ internal class TopicCommentRepository : ITopicCommentRepository
         var dbComment = await _dbContext.Comments.FindAsync(deleteComment.CommentId);
         if (dbComment != null)
         {
-            dbComment.IsRemoved = true;
+            SoftDelete.Mark(dbComment, deleteComment.DeletedByUserId, deleteComment.DeletedUtc);
         }
 
-        // Update topic comment count and last comment ID
+        // The pointer moves only when the row it points at is the one going away.
+        // The service computes NewLastCommentId for the last comment and leaves it
+        // null for every other, so assigning it unconditionally erased the pointer
+        // whenever somebody deleted a comment from the middle of a discussion — and
+        // the topic list reads the topic's activity through that pointer, so the
+        // topic dropped to the bottom of the activity order until the next comment.
         var topic = await _dbContext.Topics.FindAsync(deleteComment.TopicId);
-        if (topic != null)
+        if (topic != null &&
+            (deleteComment.NewLastCommentId.HasValue || topic.LastCommentId == deleteComment.CommentId))
         {
             topic.LastCommentId = deleteComment.NewLastCommentId;
         }

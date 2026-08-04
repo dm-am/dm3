@@ -6,6 +6,7 @@ using System.Threading;
 using System;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
@@ -21,6 +22,7 @@ internal class BanService : IBanService
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IValidator<CreateBan> _createValidator;
+    private readonly IEventProducer _eventProducer;
 
     /// <inheritdoc />
     public BanService(
@@ -29,7 +31,8 @@ internal class BanService : IBanService
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
-        IValidator<CreateBan> createValidator)
+        IValidator<CreateBan> createValidator,
+        IEventProducer eventProducer)
     {
         _banRepository = banRepository;
         _userLookupService = userLookupService;
@@ -37,6 +40,7 @@ internal class BanService : IBanService
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
         _createValidator = createValidator;
+        _eventProducer = eventProducer;
     }
 
     /// <inheritdoc />
@@ -47,8 +51,12 @@ internal class BanService : IBanService
             var user = await _userLookupService.GetAsync(username);
             return await _banRepository.GetUserBans(user.UserId, ct);
         }
-        catch
+        catch (HttpException e) when (e.StatusCode == HttpStatusCode.Gone)
         {
+            // The one failure an empty list is the answer to: no such user.
+            // A dropped connection, a cancelled request or a mapping error is
+            // not that answer, and returning [] for it showed the moderator a
+            // clean record he could not tell from a real one.
             return [];
         }
     }
@@ -61,8 +69,10 @@ internal class BanService : IBanService
             var user = await _userLookupService.GetAsync(username);
             return await _banRepository.GetActiveBan(user.UserId, ct);
         }
-        catch
+        catch (HttpException e) when (e.StatusCode == HttpStatusCode.Gone)
         {
+            // Reached from the public /v1/users/{username}/bans/active route,
+            // so "we could not check" used to leave as "not banned".
             return null;
         }
     }
@@ -116,7 +126,7 @@ internal class BanService : IBanService
             if (targetUser.Role >= UserRole.Admin)
             {
                 throw new HttpException(HttpStatusCode.Forbidden,
-                    "An administrator cannot be banned");
+                    "Администратора нельзя забанить");
             }
 
             // Strictly below your own role. Equal-role bans let two senior
@@ -125,7 +135,7 @@ internal class BanService : IBanService
             if (targetUser.Role >= currentUser.Role)
             {
                 throw new HttpException(HttpStatusCode.Forbidden,
-                    "You can only ban a user whose role is below yours");
+                    "Забанить можно только пользователя с ролью ниже вашей");
             }
         }
 
@@ -134,7 +144,7 @@ internal class BanService : IBanService
         if (existingBan != null)
         {
             throw new HttpException(HttpStatusCode.Conflict,
-                $"User {createBan.Username} is already banned until {existingBan.EndedUtc}");
+                $"Пользователь {createBan.Username} уже забанен до {existingBan.EndedUtc}");
         }
 
         var now = _dateTimeProvider.Now;
@@ -153,7 +163,7 @@ internal class BanService : IBanService
             // Only a voluntary self-ban reaches here: the validator requires a
             // duration or an explicit expiry for every moderator-issued ban, and a
             // permanent one is expressed by the client as a hundred years.
-            endedUtc = now.AddYears(100);
+            endedUtc = now.AddYears(Ban.PermanentYears);
         }
 
         // Only the two ban scopes from the doc (4.2.4.2) exist; an omitted or
@@ -175,7 +185,22 @@ internal class BanService : IBanService
             AccessRestrictionPolicy = accessPolicy
         };
 
-        return await _banRepository.Create(entity, ct);
+        var ban = await _banRepository.Create(entity, ct);
+
+        // Nothing else tells the target they were banned: the ban surfaces only
+        // as a refusal at the next action they try. Sent after the write, so the
+        // generator that reads the ban back by id finds it.
+        //
+        // A voluntary self-ban is the exception. The generator addresses exactly
+        // one recipient - the target - and for a self-ban that is the person who
+        // just requested it: the notification tells him nothing he does not know
+        // and reads as a sanction imposed from outside.
+        if (!createBan.IsVoluntary)
+        {
+            await _eventProducer.SendAsync(EventType.BanIssued, ban.BanId);
+        }
+
+        return ban;
     }
 
     /// <inheritdoc />
@@ -188,9 +213,9 @@ internal class BanService : IBanService
         }
 
         var ban = await _banRepository.Get(banId, ct);
-        if (ban == null || ban.IsRemoved)
+        if (ban == null || ban.IsLifted)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Ban not found");
+            throw new HttpException(HttpStatusCode.NotFound, "Бан не найден");
         }
 
         // A democratic ban leaves the moderator role and authentication intact,
@@ -198,31 +223,18 @@ internal class BanService : IBanService
         if (ban.TargetUserId == currentUser.UserId)
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "You cannot lift your own ban");
+                "Нельзя снять бан с самого себя");
         }
 
         // Permanent bans are stored with a far-future end date (see CreateBan);
         // lifting them is reserved for administrators. Voluntary self-bans are exempt.
-        var isPermanent = !ban.IsVoluntary && ban.EndedUtc > _dateTimeProvider.Now.AddYears(50);
+        var isPermanent = ban.IsPermanentAt(_dateTimeProvider.Now);
         if (isPermanent && currentUser.Role < UserRole.Admin)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Only administrators can lift permanent bans");
+            throw new HttpException(HttpStatusCode.Forbidden, "Постоянный бан может снять только администратор");
         }
 
-        await _banRepository.Remove(banId, currentUser.UserId, _dateTimeProvider.Now, reason, ct);
+        await _banRepository.Lift(banId, currentUser.UserId, _dateTimeProvider.Now, reason, ct);
     }
 
-    /// <inheritdoc />
-    public async Task<bool> IsUserBanned(string username, CancellationToken ct = default)
-    {
-        try
-        {
-            var user = await _userLookupService.GetAsync(username);
-            return await _banRepository.IsUserBanned(user.UserId, ct);
-        }
-        catch
-        {
-            return false;
-        }
-    }
 }

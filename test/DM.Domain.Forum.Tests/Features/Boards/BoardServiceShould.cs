@@ -138,7 +138,7 @@ public class BoardServiceShould : UnitTestBase
 
         var exception = await act.Should().ThrowAsync<HttpException>();
         exception.Which.StatusCode.Should().Be(HttpStatusCode.Gone);
-        exception.Which.Message.Should().Contain("Board NonExistent not found");
+        exception.Which.Message.Should().Contain("Раздел NonExistent не найден");
     }
 
     [Fact]

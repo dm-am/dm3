@@ -29,6 +29,7 @@ import { useToast } from "@/shared/lib/composables/useToast";
 import { useExpandableSection } from "@/shared/lib/composables";
 import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
 import { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 import { ROLE_INFO, STAFF_ROLES } from "@/shared/config/roles";
 
 import Button from "@/shared/ui/Button/Button.vue";
@@ -58,7 +59,11 @@ import ModerationLinkedProfiles from "./moderation/ModerationLinkedProfiles.vue"
 import ModerationNotes from "./moderation/ModerationNotes.vue";
 import ModerationViolations from "./moderation/ModerationViolations.vue";
 import { BlockUserDialog } from "@/features/block-user";
-import { ErrorPage } from "@/shared/ui/ErrorPage";
+import {
+  ErrorPage,
+  errorCodeForStatus,
+  getErrorConfig,
+} from "@/shared/ui/ErrorPage";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { notifyFailure } from "@/shared/lib/errors";
 
@@ -86,16 +91,13 @@ const usernameParam = computed(() => route.params.username as string);
 // the status is read from it directly.
 const errorCode = ref<number | null>(null);
 
-function mapErrorStatus(status: number | undefined): number {
-  if (status === 404 || status === 410) return 404;
-  if (status === 403) return 403;
-  return 500;
-}
-
 async function loadProfile(name: Username) {
   errorCode.value = null;
   const error = await communityStore.trySelectProfile(name);
-  if (error) errorCode.value = mapErrorStatus(error.status);
+  // The profile endpoint answers an unknown username with 410, which here means
+  // "no such user" and not "deleted" - that is the default of the shared map,
+  // so this page reads the same as it did with its own copy.
+  if (error) errorCode.value = errorCodeForStatus(error.status);
 }
 
 useFetchData(
@@ -109,11 +111,16 @@ useFetchData(
 );
 const isSystemUser = computed(() => user.value?.role === UserRole.System);
 
-// Tab title reflects the loaded profile ("{username} — Dungeon Master");
-// falls back
-// to the URL param while the profile is still loading so the tab is never
-// blank or stale.
-useDocumentTitle(() => user.value?.username ?? usernameParam.value);
+// Tab title reflects the loaded profile, falling back to the URL param while
+// it is still loading so the tab is never blank or stale. When the load fails
+// the error owns the title: the param names a user who does not exist, and a
+// tab named after him over a 404 page is the page lying about itself. Same
+// rule and same source as the forum shell (ForumPage.vue).
+useDocumentTitle(() =>
+  errorCode.value
+    ? getErrorConfig(errorCode.value).title
+    : (user.value?.username ?? usernameParam.value),
+);
 
 const {
   isEditMode,
@@ -190,6 +197,22 @@ const usernameHistory = computed<UsernameHistoryEntry[]>(
   () => user.value?.usernameHistory ?? [],
 );
 
+/**
+ * Whether the avatar slot can be reserved from the picture itself.
+ *
+ * This page draws the original, which keeps the aspect ratio of whatever was
+ * uploaded, so its height is not a function of the 220px width. When the API
+ * sends the intrinsic pair AvatarImg declares it and the browser reserves the
+ * exact box before decoding; when it does not — an upload made before the
+ * pipeline recorded one — the declaration falls back to a square and the slot
+ * has to hold that square itself, or the picture shrinks the box on decode and
+ * pulls the role line, the statistics and the tabs up with it.
+ */
+const avatarSizeIsKnown = computed(() => {
+  const picture = user.value?.picture;
+  return !!picture?.originalWidth && !!picture?.originalHeight;
+});
+
 const showChangeForm = ref(false);
 watch(isEditMode, (editing) => {
   if (!editing) showChangeForm.value = false;
@@ -256,6 +279,12 @@ const endorsementsReceived = computed(
   () => user.value?.endorsementsReceived ?? 0,
 );
 const endorsementsGiven = computed(() => user.value?.endorsementsGiven ?? 0);
+// Reviews of whole games. Not the same datum as `reviewsGiven` above, which
+// counts ratings of single posts.
+const gameReviewsReceived = computed(
+  () => user.value?.gameReviewsReceived ?? 0,
+);
+const gameReviewsGiven = computed(() => user.value?.gameReviewsGiven ?? 0);
 
 const reviewsGivenLink = computed(() => ({
   name: "given-reviews" as const,
@@ -277,6 +306,16 @@ const givenEndorsementsLink = computed(() => ({
   params: { username: usernameParam.value },
 }));
 
+const receivedGameReviewsLink = computed(() => ({
+  name: "received-game-reviews" as const,
+  params: { username: usernameParam.value },
+}));
+
+const givenGameReviewsLink = computed(() => ({
+  name: "given-game-reviews" as const,
+  params: { username: usernameParam.value },
+}));
+
 const ratingSum = computed<number | null>(() => {
   const r = user.value?.rating;
   if (!r) return null;
@@ -285,7 +324,7 @@ const ratingSum = computed<number | null>(() => {
 
 const ratingSumDisplay = computed<string>(() => {
   const v = ratingSum.value;
-  if (v === null) return "n/a";
+  if (v === null) return VALUE_UNAVAILABLE;
   return v > 0 ? `+${v}` : String(v);
 });
 
@@ -608,7 +647,7 @@ watch(usernameParam, async () => {
             :disabled="!canSubmitChangeForm"
             @click="submitUsernameChangeRequest"
           >
-            {{ isChangeFormSubmitting ? "Отправка…" : "Отправить" }}
+            {{ isChangeFormSubmitting ? "Отправка..." : "Отправить" }}
           </Button>
         </div>
       </div>
@@ -616,7 +655,10 @@ watch(usernameParam, async () => {
 
     <section class="identity">
       <div class="col col-identity">
-        <div class="avatar-wrapper">
+        <div
+          class="avatar-wrapper"
+          :class="{ 'avatar-wrapper-unsized': !avatarSizeIsKnown }"
+        >
           <AvatarImg
             :picture="user.picture"
             :alt="user.username"
@@ -712,6 +754,25 @@ watch(usernameParam, async () => {
               :to="endorsementsGiven > 0 ? givenEndorsementsLink : undefined"
             />
           </div>
+          <!-- Reviews of whole games: their own subgroup beside the
+               recommendations, on the same idiom and the same spacing. Worded
+               apart from the post pair above on purpose, because "Рейтинг" and
+               "Оценено чужих постов" count ratings of single posts and these
+               two count reviews of games. -->
+          <div class="game-review-stats">
+            <StatLine
+              label="Получено рецензий на игры"
+              :value="gameReviewsReceived"
+              :to="
+                gameReviewsReceived > 0 ? receivedGameReviewsLink : undefined
+              "
+            />
+            <StatLine
+              label="Написано рецензий на игры"
+              :value="gameReviewsGiven"
+              :to="gameReviewsGiven > 0 ? givenGameReviewsLink : undefined"
+            />
+          </div>
         </div>
 
         <ProfileViolations :username="usernameParam as Username" />
@@ -724,7 +785,7 @@ watch(usernameParam, async () => {
                 :disabled="isSaving"
                 @click="saveChanges"
               >
-                {{ isSaving ? "Сохранение…" : "Сохранить" }}
+                {{ isSaving ? "Сохранение..." : "Сохранить" }}
               </Button>
               <Button :disabled="isSaving" @click="cancelEdit">Отмена</Button>
             </template>
@@ -746,7 +807,7 @@ watch(usernameParam, async () => {
               :disabled="isBlockLoading"
               @click="confirmingUnblock = true"
             >
-              {{ isBlockLoading ? "…" : "Разблокировать" }}
+              {{ isBlockLoading ? "..." : "Разблокировать" }}
             </Button>
             <Button v-else @click="() => openBlockModal()"
               >Заблокировать</Button
@@ -770,6 +831,9 @@ watch(usernameParam, async () => {
     </section>
 
     <section v-if="moderatedProfile" class="mod-bar">
+      <!-- One line, one copy: inline flow with a real (zero-width) space
+           between the title and the summary. As a flex row it copied as
+           three lines — a browser serializes flex items one per line. -->
       <button
         type="button"
         class="mod-header"
@@ -779,9 +843,9 @@ watch(usernameParam, async () => {
         <SvgIcon
           :name="showModPanel ? 'chevronDown' : 'chevronRight'"
           class="mod-chevron"
-        />
-        <span class="mod-title">ПАНЕЛЬ МОДЕРАЦИИ</span>
-        <span class="mod-summary">{{ modSummary }}</span>
+        /><span class="mod-title">ПАНЕЛЬ МОДЕРАЦИИ</span
+        ><span class="copy-space">{{ " " }}</span
+        ><span class="mod-summary">{{ modSummary }}</span>
       </button>
       <div ref="modZoneRef" class="expand-zone" v-bind="modZoneBindings">
         <div v-if="showModPanel" class="mod-body">
@@ -863,13 +927,13 @@ watch(usernameParam, async () => {
             <BBCodeEditor
               v-model="noteEditText"
               context="common"
-              placeholder="Напишите заметку об этом пользователе…"
+              placeholder="Напишите заметку об этом пользователе..."
               :min-height="100"
               :max-height="300"
             />
             <div class="note-actions">
               <Button :disabled="isNoteSaving" @click="saveNote">
-                {{ isNoteSaving ? "Сохранение…" : "Сохранить" }}
+                {{ isNoteSaving ? "Сохранение..." : "Сохранить" }}
               </Button>
               <Button :disabled="isNoteSaving" @click="cancelEditNote">
                 Отмена
@@ -885,13 +949,10 @@ watch(usernameParam, async () => {
         />
       </template>
       <template v-else-if="activeTab === 'games'">
+        <ProfileGamesTable :username="usernameParam" />
         <section v-if="hasBestPost" class="featured-section">
           <BlockTitle>Лучший игровой пост</BlockTitle>
           <ProfileBestPostSection :username="usernameParam as Username" />
-        </section>
-        <section class="list-section">
-          <BlockTitle>Игры пользователя</BlockTitle>
-          <ProfileGamesTable :username="usernameParam" />
         </section>
         <ProfileSubscribersSection
           :subscribers="subscribers"
@@ -902,13 +963,10 @@ watch(usernameParam, async () => {
       </template>
 
       <template v-else-if="activeTab === 'blogs'">
+        <ProfileBlogsTable :username="usernameParam" />
         <section class="featured-section">
           <BlockTitle>Самая популярная публикация</BlockTitle>
           <ProfileBestPublicationSection :username="usernameParam" />
-        </section>
-        <section class="list-section">
-          <BlockTitle>Блоги пользователя</BlockTitle>
-          <ProfileBlogsTable :username="usernameParam" />
         </section>
         <ProfileSubscribersSection
           :subscribers="subscribers"
@@ -919,10 +977,7 @@ watch(usernameParam, async () => {
       </template>
 
       <template v-else-if="activeTab === 'topics'">
-        <section class="list-section">
-          <BlockTitle>Топики пользователя</BlockTitle>
-          <ProfileTopicsList :username="usernameParam" />
-        </section>
+        <ProfileTopicsList :username="usernameParam" />
         <ProfileSubscribersSection
           :subscribers="subscribers"
           label="Подписаны на топики"
@@ -944,7 +999,7 @@ watch(usernameParam, async () => {
           {{ hasChanges ? "Несохраненные изменения" : "Режим редактирования" }}
         </span>
         <Button v-if="hasChanges" :disabled="isSaving" @click="saveChanges">
-          {{ isSaving ? "Сохранение…" : "Сохранить" }}
+          {{ isSaving ? "Сохранение..." : "Сохранить" }}
         </Button>
         <Button :disabled="isSaving" @click="cancelEdit">
           {{ hasChanges ? "Отмена" : "Завершить" }}
@@ -1001,13 +1056,13 @@ watch(usernameParam, async () => {
   max-width: 100%
 
 // The within-group row-gap is unified across all profile stat groups
-// (.stats-group, .endorsement-stats in ProfilePage; .info-grid,
-// .contacts-subgroup in ProfilePersonalInfo) — $minor (4px) on top of
-// each line's line-height 1.25 gives 7-8px of visual air.
+// (.stats-group, .endorsement-stats, .game-review-stats in ProfilePage;
+// .info-grid, .contacts-subgroup in ProfilePersonalInfo) — $minor (4px) on top
+// of each line's line-height 1.25 gives 7-8px of visual air.
 // Less — the lines stick together; more — the group's logical unity breaks.
 // Inter-group spacing is controlled by the $medium margin on .endorsement-stats
-// / .info-grid-break — intentionally larger than the within-group one so
-// it reads as a context switch.
+// / .game-review-stats / .info-grid-break — intentionally larger than the
+// within-group one so it reads as a context switch.
 .stats-group
   display: flex
   flex-direction: column
@@ -1026,6 +1081,17 @@ watch(usernameParam, async () => {
   gap: $minor
   margin-top: $medium
 
+// Game reviews are the next subgroup down, on the same terms: recommendations
+// are about a person, reviews are about a game, and the two pairs read as two
+// units rather than as one list of four. Same $minor rhythm inside and the
+// same $medium step away from the block above.
+.game-review-stats
+  display: flex
+  flex-direction: column
+  align-items: flex-start
+  gap: $minor
+  margin-top: $medium
+
 // Subscribers list styling now lives in ProfileSubscribersSection — the
 // page-level rules are gone because nothing on ProfilePage renders
 // `.subscribers-list` / `.subscriber-link` directly anymore.
@@ -1033,10 +1099,10 @@ watch(usernameParam, async () => {
 // `.violations-inline` — the root div of ProfileViolations with the inline prop:
 // a sibling of `.stats-group` inside `.col-identity { gap: $small }`.
 // margin-top $small adds up with the parent's $small flex gap giving
-// a total $medium gap between "Написано рекомендаций" (the last
-// endorsement-stats line) and "Нарушения". This is symmetric with
-// `.endorsement-stats { margin-top: $medium }` above — both subgroups
-// sit at the same $medium distance from the preceding block.
+// a total $medium gap between "Написано рецензий на игры" (the last
+// game-review-stats line) and "Нарушения". This is symmetric with
+// `.endorsement-stats { margin-top: $medium }` above — every subgroup
+// sits at the same $medium distance from the preceding block.
 :deep(.violations-inline)
   display: flex
   flex-direction: column
@@ -1092,6 +1158,17 @@ watch(usernameParam, async () => {
   width: 220px
   max-width: 100%
   margin-bottom: $small
+
+// The floor for a picture whose shape nobody knows. The original is
+// aspect-preserving (<=1024 on the long side), so once the DTO carries its
+// intrinsic pair AvatarImg declares it and the browser reserves the exact box
+// before decoding: no floor, and no blank strip under a landscape avatar.
+// An upload made before the pipeline recorded that pair leaves AvatarImg
+// declaring a square, and then the square has to be held here — without it the
+// box shrank on decode and pulled the role line, the statistics and the tabs
+// up with it.
+.avatar-wrapper-unsized
+  min-height: 220px
 
 .avatar
   display: block
@@ -1208,10 +1285,11 @@ watch(usernameParam, async () => {
   justify-content: space-between
   gap: $medium
 
+// Inline flow, not flex: the gap is a margin on the parts and the space
+// between the words is a real text node, so the whole header is one line
+// in a copy as well as on screen.
 .mod-header
-  display: flex
-  align-items: center
-  gap: $small
+  display: block
   width: 100%
   padding: 0
   background: none
@@ -1227,16 +1305,18 @@ watch(usernameParam, async () => {
 .mod-chevron
   width: 14px
   height: 14px
-  flex-shrink: 0
+  vertical-align: middle
   color: $accent-red
 
 .mod-title
+  margin-left: $small
   font-weight: 600
   letter-spacing: 0.5px
   text-transform: uppercase
   color: $accent-red
 
 .mod-summary
+  margin-left: $small
   font-size: $secondary-font-size
   color: $text-muted
 
@@ -1299,18 +1379,18 @@ watch(usernameParam, async () => {
   gap: $medium
   min-height: 100px
 
-// The subscribers caption belongs to the table above it, so it sits at
+// The subscribers caption belongs to the block above it, so it sits at
 // $small (8px) from it instead of the tab-content's base $medium gap —
-// the negative margin eats the difference for this one pair only; the
-// gap below the line (to the "best of" section) stays $medium.
+// the negative margin eats the difference for this one pair only.
 .tab-content > :deep(.subscribers-line)
   margin-top: -$small
 
 // Featured "best of" block (best post / best publication): a full
 // BlockTitle heading labels the spotlight, same rank as the other profile
-// section headings ("Контакты", "Личная заметка").
-.featured-section,
-.list-section
+// section headings ("Контакты", "Личная заметка"). The category listings
+// carry no heading of their own — the active tab already names them — so
+// they sit in .tab-content directly and need no wrapper section.
+.featured-section
   display: flex
   flex-direction: column
   gap: $small
@@ -1368,7 +1448,7 @@ watch(usernameParam, async () => {
   transform: translateY(100%)
   opacity: 0
 
-@media (max-width: 768px)
+@media (max-width: $bp-tablet)
   .avatar-wrapper
     width: 100%
     max-width: 280px

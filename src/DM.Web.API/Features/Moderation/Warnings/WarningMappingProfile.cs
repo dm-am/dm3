@@ -28,15 +28,16 @@ internal class WarningMappingProfile : Profile
             .ForMember(d => d.Id, s => s.MapFrom(b => b.BanId))
             .ForMember(d => d.User, s => s.MapFrom(b => b.TargetUser))
             .ForMember(d => d.Moderator, s => s.MapFrom(b => b.Author))
-            .ForMember(d => d.Type, s => s.MapFrom(b => MapBanType(b)))
+            .ForMember(d => d.Type, s => s.MapFrom<BanTypeResolver>())
             .ForMember(d => d.StartedUtc, s => s.MapFrom(b => b.StartedUtc))
             .ForMember(d => d.ExpiresUtc, s => s.MapFrom(b => b.EndedUtc))
             .ForMember(d => d.Comment, s => s.MapFrom(b => b.Comment))
-            .ForMember(d => d.IsActive, s => s.MapFrom(b => !b.IsRemoved && b.EndedUtc > System.DateTimeOffset.UtcNow))
-            .ForMember(d => d.IsLifted, s => s.MapFrom(b => b.IsRemoved))
+            .ForMember(d => d.IsActive, s => s.MapFrom<BanActivityResolver>())
+            .ForMember(d => d.IsLifted, s => s.MapFrom(b => b.IsLifted))
             .ForMember(d => d.IsVoluntary, s => s.MapFrom(b => b.IsVoluntary))
-            .ForMember(d => d.LiftedUtc, s => s.Ignore())
-            .ForMember(d => d.LiftedBy, s => s.Ignore());
+            .ForMember(d => d.LiftedUtc, s => s.MapFrom(b => b.LiftedUtc))
+            .ForMember(d => d.LiftedByUserId, s => s.MapFrom(b => b.LiftedByUserId))
+            .ForMember(d => d.LiftReason, s => s.MapFrom(b => b.LiftReason));
 
         // Trimmed public views: no reason/comment, no moderator identity,
         // no causation entity refs — anonymous profile visitors only see
@@ -47,25 +48,9 @@ internal class WarningMappingProfile : Profile
             .ForMember(d => d.IsActive, s => s.MapFrom(w => !w.IsRemoved));
 
         CreateMap<DomainBan, PublicBan>()
-            .ForMember(d => d.Type, s => s.MapFrom(b => MapBanType(b)))
+            .ForMember(d => d.Type, s => s.MapFrom<BanTypeResolver>())
             .ForMember(d => d.StartedUtc, s => s.MapFrom(b => b.StartedUtc))
             .ForMember(d => d.ExpiresUtc, s => s.MapFrom(b => b.EndedUtc))
-            .ForMember(d => d.IsActive, s => s.MapFrom(b => !b.IsRemoved && b.EndedUtc > System.DateTimeOffset.UtcNow));
-    }
-
-    private static BanType MapBanType(DomainBan ban)
-    {
-        if (ban.IsVoluntary)
-        {
-            return BanType.Voluntary;
-        }
-
-        // Check if it's a permanent ban (100+ years into the future)
-        if (ban.EndedUtc > System.DateTimeOffset.UtcNow.AddYears(50))
-        {
-            return BanType.Permanent;
-        }
-
-        return BanType.Temporary;
+            .ForMember(d => d.IsActive, s => s.MapFrom<BanActivityResolver>());
     }
 }

@@ -74,7 +74,7 @@ async function submit() {
         <textarea
           id="reject-reason"
           v-model="comment"
-          placeholder="Укажите причину отклонения…"
+          placeholder="Укажите причину отклонения..."
           rows="4"
         ></textarea>
       </FormField>

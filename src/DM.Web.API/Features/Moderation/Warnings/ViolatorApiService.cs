@@ -22,9 +22,9 @@ internal class ViolatorApiService : IViolatorApiService
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<Violator>> GetViolators(string filter)
+    public async Task<ListEnvelope<Violator>> GetViolators(string banState)
     {
-        var violators = await _warningService.GetViolators(ParseFilter(filter));
+        var violators = await _warningService.GetViolators(ParseFilter(banState));
         return new ListEnvelope<Violator>(violators.Select(Map).ToList());
     }
 

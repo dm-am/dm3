@@ -11,7 +11,8 @@
  * v-if + Transition, Escape-to-close, backdrop-click-to-close, a minimal
  * focus trap, and focus restore to the trigger on close.
  */
-import { ref, watch, nextTick, onBeforeUnmount } from "vue";
+import { ref, computed, watch, onBeforeUnmount } from "vue";
+import { useDialogShell } from "@/shared/lib/composables/useDialogShell";
 import { symbols } from "@/shared/lib/utils/icons";
 
 const props = withDefaults(
@@ -31,7 +32,6 @@ const emit = defineEmits<{
 
 const panel = ref<HTMLElement | null>(null);
 const closeBtn = ref<HTMLButtonElement | null>(null);
-let previouslyFocused: HTMLElement | null = null;
 let lockedScrollEl: HTMLElement | null = null;
 let lockedScrollPrevOverflow = "";
 
@@ -57,19 +57,22 @@ function unlockScroll() {
   }
 }
 
+// The drawer is a modal, so it owes a reader what every modal owes: focus in
+// on open, trapped while open, back where it was on close, Escape closes. That
+// behaviour is useDialogShell's, and this file used to carry a second copy of
+// it — its own focusables() included — which is how two copies drift.
+const shell = useDialogShell({
+  show: computed(() => props.modelValue),
+  container: panel,
+  initialFocus: () => closeBtn.value,
+  onDismiss: close,
+});
+
+// The scroll lock stays here: the shell knows about focus, not about the page
+// behind it.
 watch(
   () => props.modelValue,
-  (open) => {
-    if (open) {
-      previouslyFocused = document.activeElement as HTMLElement | null;
-      lockScroll();
-      nextTick(() => closeBtn.value?.focus());
-    } else {
-      unlockScroll();
-      previouslyFocused?.focus?.();
-      previouslyFocused = null;
-    }
-  },
+  (open) => (open ? lockScroll() : unlockScroll()),
   // Also handles the (unusual but possible) case of the drawer being
   // mounted already open — locks scroll immediately instead of only on
   // the next open/close transition.
@@ -79,45 +82,6 @@ watch(
 onBeforeUnmount(() => {
   unlockScroll();
 });
-
-// Focusable elements inside the drawer, in DOM order.
-function focusables(): HTMLElement[] {
-  if (!panel.value) return [];
-  return Array.from(
-    panel.value.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-    ),
-  ).filter((el) => !el.hasAttribute("disabled"));
-}
-
-function handleKeydown(e: KeyboardEvent) {
-  if (e.key === "Escape") {
-    e.preventDefault();
-    close();
-    return;
-  }
-  if (e.key === "Tab") {
-    // Trap focus within the drawer while open.
-    const items = focusables();
-    if (!items.length) return;
-    const first = items[0];
-    const last = items[items.length - 1];
-    const active = document.activeElement as HTMLElement | null;
-    if (e.shiftKey && active === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && active === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  }
-}
-
-function handleScrimClick(e: MouseEvent) {
-  if (e.target === e.currentTarget) {
-    close();
-  }
-}
 </script>
 
 <template>
@@ -129,12 +93,17 @@ function handleScrimClick(e: MouseEvent) {
       <div
         v-if="modelValue"
         class="drawer-scrim"
-        @click="handleScrimClick"
-        @keydown="handleKeydown"
+        @click="shell.handleBackdropClick"
+        @keydown="shell.handleKeydown"
       >
+        <!-- tabindex="-1": the keydown listener is on the scrim, and a click on
+             the panel's own text drops focus to <body>, which is the scrim's
+             ancestor — the event would never reach the listener and Escape
+             would stop closing the drawer. -->
         <div
           ref="panel"
           class="drawer-panel"
+          tabindex="-1"
           role="dialog"
           aria-modal="true"
           :aria-label="ariaLabel"

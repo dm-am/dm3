@@ -1,6 +1,7 @@
 import type { ListEnvelope, User } from "@/shared/api/models/common";
 import type {
   LoginCredentials,
+  LoginResponse,
   RegisterCredentials,
   ChangeEmailRequest,
   PendingInfo,
@@ -17,8 +18,7 @@ import type {
   BotLinkResult,
   SecurityEvent,
 } from "@/shared/api/models/account";
-import type { Invitation } from "@/shared/api/models/game";
-import { Api } from "@/shared/api";
+import { Api, X_DM_ACCOUNT_TOKEN } from "@/shared/api";
 
 /**
  * The viewer's own account: how they get in (registration, activation,
@@ -43,7 +43,9 @@ export default new (class AccountApi {
    * Returns pending info if token exists
    */
   public getActivationInfo(token: string) {
-    return Api.get<PendingInfo>(`account/activation/${token}`);
+    return Api.get<PendingInfo>("account/activation", undefined, undefined, {
+      headers: { [X_DM_ACCOUNT_TOKEN]: token },
+    });
   }
 
   /**
@@ -52,9 +54,16 @@ export default new (class AccountApi {
    */
   public activate(
     token: string,
-    request: { username: string; expectedEmail?: string },
+    // retryEmail, spelled the way ActivationRequest binds it. It used to be
+    // sent as expectedEmail: no JsonPropertyName stands between them and the
+    // serializer is camelCase, so the value arrived null on every request and
+    // the idempotent-retry branch it feeds answered 410 to a repeat of an
+    // activation that had already succeeded.
+    request: { username: string; retryEmail?: string },
   ) {
-    return Api.post<User>(`account/activation/${token}`, request);
+    return Api.post<User>("account/activation", request, {
+      headers: { [X_DM_ACCOUNT_TOKEN]: token },
+    });
   }
 
   /**
@@ -88,36 +97,41 @@ export default new (class AccountApi {
 
   /**
    * Sign in with email/username and password (cookie-based)
+   *
+   * The refusal here is the answer to the sign-in form: a 403 names the state
+   * of the account — banned, removed, locked out after too many attempts — and
+   * the form shows that sentence under the password field. So this request
+   * takes the refusal over and the response interceptor stays quiet about it.
    */
   public signIn(credentials: LoginCredentials) {
-    return Api.post<User>("account/login", credentials);
+    return Api.post<LoginResponse>("account/login", credentials, {
+      ownsRefusal: true,
+    });
   }
 
+  // Dropping the viewer is the session module's job: updateUser(null) owns the
+  // persisted copy, and clearing it here as well made the transport a second
+  // writer of the same key.
   public async signOut() {
-    const result = await Api.delete("account/login");
-    Api.logout();
-    return result;
+    return Api.delete("account/login");
   }
 
-  // Invitations
-  public getMyInvitations() {
-    return Api.get<ListEnvelope<Invitation>>("users/me/invitations");
-  }
-
-  public acceptInvitation(tokenId: string) {
-    return Api.post(`users/me/invitations/${tokenId}/accept`);
-  }
-
-  public rejectInvitation(tokenId: string) {
-    return Api.post(`users/me/invitations/${tokenId}/reject`);
-  }
+  // Invitations live on personalApi, which types the same endpoint by what it
+  // actually answers (ReceivedInvitation: entityId / entityType / entityTitle).
+  // Two clients for one route is how the account page came to read gameId and
+  // gameTitle out of a payload that carries neither.
 
   // Password management
   /**
    * Check password reset token validity
    */
   public getPasswordResetTokenInfo(token: string) {
-    return Api.get<PasswordResetTokenInfo>(`account/password-reset/${token}`);
+    return Api.get<PasswordResetTokenInfo>(
+      "account/password-reset",
+      undefined,
+      undefined,
+      { headers: { [X_DM_ACCOUNT_TOKEN]: token } },
+    );
   }
 
   /**
@@ -131,7 +145,11 @@ export default new (class AccountApi {
    * Complete password reset using token
    */
   public completePasswordReset(token: string, newPassword: string) {
-    return Api.post<User>(`account/password-reset/${token}`, { newPassword });
+    return Api.post<User>(
+      "account/password-reset",
+      { newPassword },
+      { headers: { [X_DM_ACCOUNT_TOKEN]: token } },
+    );
   }
 
   /**
@@ -145,7 +163,9 @@ export default new (class AccountApi {
    * Confirm email change via token
    */
   public confirmEmailChange(token: string) {
-    return Api.post(`account/email-change/${token}`);
+    return Api.post("account/email-change/confirm", undefined, {
+      headers: { [X_DM_ACCOUNT_TOKEN]: token },
+    });
   }
 
   // Session management

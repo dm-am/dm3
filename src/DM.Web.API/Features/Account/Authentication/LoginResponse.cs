@@ -9,8 +9,8 @@ namespace DM.Web.API.Features.Account.Authentication;
 /// <remarks>
 /// Returned by:
 /// - POST /v1/account/login
-/// - POST /v1/account/activation/{token}
-/// - POST /v1/account/password-reset/{token}
+/// - POST /v1/account/activation
+/// - POST /v1/account/password-reset
 ///
 /// Contains everything needed to start a session - theme, UI preferences.
 /// </remarks>

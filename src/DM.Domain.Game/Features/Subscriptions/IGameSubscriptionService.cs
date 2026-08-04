@@ -18,6 +18,14 @@ public interface IGameSubscriptionService
     Task<Subscription> SubscribeAsync(Guid gameId, CancellationToken ct = default);
 
     /// <summary>
+    /// Subscribe another user, where the subscription follows from somebody
+    /// else's action rather than from a request of their own. A blacklisted user
+    /// is skipped instead of refused: the caller is not the subscriber, and a
+    /// refusal would fail the action that caused the subscription.
+    /// </summary>
+    Task SubscribeUserAsync(Guid gameId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>
     /// Unsubscribe current user from a game
     /// </summary>
     Task UnsubscribeAsync(Guid gameId, CancellationToken ct = default);

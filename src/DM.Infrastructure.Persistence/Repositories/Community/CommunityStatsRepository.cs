@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Community.Features.Statistics;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,19 +13,23 @@ namespace DM.Infrastructure.Persistence.Repositories.Community;
 internal class CommunityStatsRepository : ICommunityStatsRepository
 {
     private readonly DmDbContext _dbContext;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     private static readonly TimeSpan OnlineThreshold = TimeSpan.FromMinutes(5);
 
     /// <inheritdoc />
-    public CommunityStatsRepository(DmDbContext dbContext)
+    public CommunityStatsRepository(
+        DmDbContext dbContext,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
     public async Task<LiveStats> GetLiveStats(CancellationToken ct = default)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = _dateTimeProvider.Now;
         var todayStart = now.Date;
         var todayStartUtc = new DateTimeOffset(todayStart, TimeSpan.Zero);
         var onlineThreshold = now - OnlineThreshold;
@@ -32,13 +37,13 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
 
         // Online users count
         var onlineCount = await _dbContext.Users.CountAsync(u =>
-            !u.IsRemoved  &&
+            !u.IsRemoved &&
             u.LastActivityUtc.HasValue && u.LastActivityUtc.Value > onlineThreshold, ct);
 
         // Totals with today's delta
-        var totalUsers = await _dbContext.Users.CountAsync(u => !u.IsRemoved , ct);
+        var totalUsers = await _dbContext.Users.CountAsync(u => !u.IsRemoved, ct);
         var usersToday = await _dbContext.Users.CountAsync(u =>
-            !u.IsRemoved  && u.CreatedUtc >= todayStartUtc, ct);
+            !u.IsRemoved && u.CreatedUtc >= todayStartUtc, ct);
 
         var totalCharacters = await _dbContext.Characters.CountAsync(c => !c.IsRemoved, ct);
         var charactersToday = await _dbContext.Characters.CountAsync(c =>
@@ -123,7 +128,7 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             .Select(g => new { UserId = g.Key, Score = g.Sum(r => (int)r.SignValue) })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score).ThenBy(x => x.UserId)
-            .Take(10)
+            .Take(LeaderboardBoards.BoardSize)
             .Join(_dbContext.Users, x => x.UserId, u => u.UserId, (x, u) => new LeaderboardEntry
             {
                 EntityId = u.UserId,
@@ -139,7 +144,7 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             .Select(g => new { UserId = g.Key, Score = g.Count() })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score).ThenBy(x => x.UserId)
-            .Take(10)
+            .Take(LeaderboardBoards.BoardSize)
             .Join(_dbContext.Users, x => x.UserId, u => u.UserId, (x, u) => new LeaderboardEntry
             {
                 EntityId = u.UserId,
@@ -155,7 +160,7 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             .Select(g => new { GameId = g.Key, Score = g.Sum(r => (int)r.SignValue) })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score).ThenBy(x => x.GameId)
-            .Take(10)
+            .Take(LeaderboardBoards.BoardSize)
             .Join(_dbContext.Games, x => x.GameId, g => g.GameId, (x, g) => new LeaderboardEntry
             {
                 EntityId = g.GameId,
@@ -172,7 +177,7 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             .Select(g => new { GameId = g.Key, Score = g.Count() })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score).ThenBy(x => x.GameId)
-            .Take(10)
+            .Take(LeaderboardBoards.BoardSize)
             .Join(_dbContext.Games, x => x.GameId, g => g.GameId, (x, g) => new LeaderboardEntry
             {
                 EntityId = g.GameId,
@@ -191,7 +196,7 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             .Select(g => new { UserId = g.Key, Score = g.Sum(p => (int)p.GameText.Length) })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score).ThenBy(x => x.UserId)
-            .Take(10)
+            .Take(LeaderboardBoards.BoardSize)
             .Join(_dbContext.Users, x => x.UserId, u => u.UserId, (x, u) => new LeaderboardEntry
             {
                 EntityId = u.UserId,
@@ -217,7 +222,7 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             .Select(g => new { BlogId = g.Key, Score = g.Count() })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score).ThenBy(x => x.BlogId)
-            .Take(10)
+            .Take(LeaderboardBoards.BoardSize)
             .Join(_dbContext.Blogs, x => x.BlogId, b => b.BlogId, (x, b) => new LeaderboardEntry
             {
                 EntityId = b.BlogId,
@@ -234,7 +239,7 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             .Select(g => new { BlogId = g.Key, Score = g.Count() })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score).ThenBy(x => x.BlogId)
-            .Take(10)
+            .Take(LeaderboardBoards.BoardSize)
             .Join(_dbContext.Blogs, x => x.BlogId, b => b.BlogId, (x, b) => new LeaderboardEntry
             {
                 EntityId = b.BlogId,
@@ -256,7 +261,7 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             .Select(g => new { UserId = g.Key, Score = g.Sum(p => (int)p.Content.Length) })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score).ThenBy(x => x.UserId)
-            .Take(10)
+            .Take(LeaderboardBoards.BoardSize)
             .Join(_dbContext.Users, x => x.UserId, u => u.UserId, (x, u) => new LeaderboardEntry
             {
                 EntityId = u.UserId,

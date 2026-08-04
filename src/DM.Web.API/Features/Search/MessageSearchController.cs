@@ -41,19 +41,21 @@ public class MessageSearchController : ControllerBase
     /// re-validated on every page from the authenticated identity.
     ///
     /// ## Operators
-    /// Inline operators inside <c>q</c> are also accepted as separate query
-    /// params: <c>from:&lt;username&gt;</c>, <c>before:</c>/<c>after:</c>/<c>during:&lt;date&gt;</c>.
+    /// Inline operators inside <c>search</c> are also accepted as separate query
+    /// params: <c>from:&lt;username&gt;</c> as <c>authorUsername</c>, and
+    /// <c>before:</c>/<c>after:</c>/<c>during:&lt;date&gt;</c> as
+    /// <c>createdFromUtc</c>/<c>createdToUtc</c>.
     ///
     /// ## Scopes (<c>in</c>, repeatable)
     /// <c>in=global</c>, <c>in=dm:&lt;chatId|publicId&gt;</c>, <c>in=game:&lt;gameId|publicId&gt;</c>.
     /// Omitted (or <c>in=all</c>) searches everything accessible. A scope the
     /// user cannot access yields no rows.
     /// </remarks>
-    /// <param name="q">Search query string (1-500 characters, required)</param>
+    /// <param name="search">Search query string (1-500 characters, required)</param>
     /// <param name="in">Repeatable scope filter</param>
-    /// <param name="from">Author username filter (case-insensitive)</param>
-    /// <param name="after">Inclusive lower bound on creation time (UTC)</param>
-    /// <param name="before">Inclusive upper bound on creation time (UTC)</param>
+    /// <param name="authorUsername">Author username filter (case-insensitive)</param>
+    /// <param name="createdFromUtc">Inclusive lower bound on creation time (UTC)</param>
+    /// <param name="createdToUtc">Inclusive upper bound on creation time (UTC)</param>
     /// <param name="cursor">Opaque cursor for the next page</param>
     /// <param name="limit">Maximum number of results (1-100, default 50)</param>
     /// <response code="200">Search results with cursor pagination</response>
@@ -67,13 +69,19 @@ public class MessageSearchController : ControllerBase
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
+    // Names taken from the query vocabulary in API_DESIGN.md: the free-text
+    // filter is `search` everywhere, a username filter is spelled out, and a
+    // date bound is `<field>FromUtc`/`<field>ToUtc`. This endpoint and
+    // /v1/search/forum sit in one folder and used to take the search string
+    // under two different names.
     public async Task<IActionResult> SearchMessages(
-        [FromQuery][Required][StringLength(500, MinimumLength = 1)] string q,
+        [FromQuery][Required][StringLength(500, MinimumLength = 1)] string search,
         [FromQuery(Name = "in")] string[]? @in = null,
-        [FromQuery] string? from = null,
-        [FromQuery] DateTimeOffset? after = null,
-        [FromQuery] DateTimeOffset? before = null,
+        [FromQuery] string? authorUsername = null,
+        [FromQuery] DateTimeOffset? createdFromUtc = null,
+        [FromQuery] DateTimeOffset? createdToUtc = null,
         [FromQuery] string? cursor = null,
         [FromQuery] int limit = 50) =>
-        Ok(await _apiService.SearchAsync(q, @in ?? Array.Empty<string>(), from, after, before, cursor, limit));
+        Ok(await _apiService.SearchAsync(search, @in ?? Array.Empty<string>(), authorUsername,
+            createdFromUtc, createdToUtc, cursor, limit));
 }

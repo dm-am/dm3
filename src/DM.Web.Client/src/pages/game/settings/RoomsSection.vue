@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
  * RoomsSection — full room management for a game: create rooms, rename them,
- * edit per-room settings (private text / dice), switch access type, manage the
- * per-room access grants (characters and readers) for Private rooms, and
- * archive / unarchive / delete rooms.
+ * edit per-room settings (private text / dice / menu visibility), switch access
+ * type, manage the per-room access grants (characters and readers) for Private
+ * rooms, and archive / unarchive / delete rooms.
  *
  * Create + archive go through the store (which re-syncs the active/archived
  * split); the remaining mutations call gameApi directly and reload the rooms
@@ -30,6 +30,7 @@ import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { notifyFailure } from "@/shared/lib/errors";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 const store = useGameDetailsStore();
 const { game, rooms, activeRooms, archivedRooms, characters } =
@@ -106,6 +107,7 @@ const draft = reactive({
   viewPrivateText: false,
   viewDiceResults: false,
   diceEnabled: false,
+  hiddenWithoutAccess: false,
 });
 const savingRoom = ref(false);
 const newReader = ref("");
@@ -129,6 +131,7 @@ function toggle(room: Room) {
   draft.viewPrivateText = room.settings?.viewPrivateText ?? false;
   draft.viewDiceResults = room.settings?.viewDiceResults ?? false;
   draft.diceEnabled = room.settings?.diceEnabled ?? false;
+  draft.hiddenWithoutAccess = room.settings?.hiddenWithoutAccess ?? false;
   newReader.value = "";
   grantCharacterId.value = "";
 }
@@ -146,6 +149,10 @@ async function saveRoom(room: Room) {
       viewPrivateText: draft.viewPrivateText,
       viewDiceResults: draft.viewDiceResults,
       diceEnabled: draft.diceEnabled,
+      // Sent even for an Open room, where the toggle is not shown: the block is
+      // written whole, so leaving it out would clear the setting the master put
+      // on the room before he opened it.
+      hiddenWithoutAccess: draft.hiddenWithoutAccess,
     },
   } as Partial<Room>);
   savingRoom.value = false;
@@ -226,7 +233,7 @@ async function removeAccess(access: RoomAccess) {
 function accessLabel(access: RoomAccess): string {
   if (access.character) return access.character.name;
   if (access.user) return access.user.username;
-  return "—";
+  return VALUE_UNAVAILABLE;
 }
 </script>
 
@@ -246,6 +253,9 @@ function accessLabel(access: RoomAccess): string {
             <span v-if="room.isArchived" class="room-tag room-tag--archived"
               >архив</span
             >
+            <span class="room-tag">
+              {{ room.type === RoomType.Chat ? "чат" : "посты" }}
+            </span>
             <span class="room-tag">
               {{
                 room.access === RoomAccessType.Private
@@ -281,6 +291,17 @@ function accessLabel(access: RoomAccess): string {
                       (v) => (draft.accessType = v as RoomAccessType)
                     "
                   />
+                </FormField>
+                <!-- Only a closed room has anybody to hide from: an open one is
+                     listed to everybody by its access type alone. -->
+                <FormField v-if="draft.accessType === RoomAccessType.Private">
+                  <label class="checkbox-label">
+                    <input
+                      v-model="draft.hiddenWithoutAccess"
+                      type="checkbox"
+                    />
+                    Скрывать комнату от тех, у кого нет доступа
+                  </label>
                 </FormField>
                 <FormField>
                   <label class="checkbox-label">

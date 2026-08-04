@@ -129,7 +129,7 @@ const linksWithSplit = computed(() =>
   .help-link
     font-weight: 600
 
-@media (max-width: $mobile-breakpoint)
+@media (max-width: $bp-mobile)
   .help-row
     grid-template-columns: 24px 1fr
     grid-template-rows: auto auto

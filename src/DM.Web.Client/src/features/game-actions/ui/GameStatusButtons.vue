@@ -122,7 +122,6 @@ async function confirm() {
 
 .muted
   color: $text-muted
-  user-select: none
 
 .strip-action
   padding: 0
@@ -153,6 +152,5 @@ async function confirm() {
   +button
 
   &.danger
-    background-color: $accent-red
-    border-color: $accent-red
+    +button-danger
 </style>

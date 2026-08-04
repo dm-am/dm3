@@ -6,8 +6,10 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Testing;
+using FluentValidation;
 using DM.Web.API.Middleware;
 using FluentAssertions;
+using FluentValidation.Results;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,7 +32,7 @@ public class ErrorHandlingMiddlewareShould : UnitTestBase
         var response = await Handle(new InvalidOperationException(InternalMessage));
 
         response.RootElement.GetProperty("status").GetInt32().Should().Be(500);
-        response.RootElement.GetProperty("title").GetString().Should().Be("Internal server error");
+        response.RootElement.GetProperty("title").GetString().Should().Be("Ошибка сервера");
         response.RootElement.GetProperty("detail").GetString().Should().Contain(_correlationId.ToString());
         response.RootElement.ToString().Should().NotContain("42P01").And.NotContain("secret");
     }
@@ -46,6 +48,22 @@ public class ErrorHandlingMiddlewareShould : UnitTestBase
 
         response.RootElement.GetProperty("status").GetInt32().Should().Be(409);
         response.RootElement.GetProperty("title").GetString().Should().Be("Topic is closed");
+    }
+
+    /// <summary>
+    /// The interface is Russian, and a 400 is the failure a reader meets most
+    /// often. Field codes are the better sentence when a form asks for them, but
+    /// eight call sites read the title straight out of the problem document, so
+    /// the title itself has to be readable.
+    /// </summary>
+    [Fact]
+    public async Task TitleAValidationFailureInRussian()
+    {
+        var response = await Handle(
+            new ValidationException(new[] { new ValidationFailure("Name", "Empty") }));
+
+        response.RootElement.GetProperty("status").GetInt32().Should().Be(400);
+        response.RootElement.GetProperty("title").GetString().Should().Be("Некорректные данные");
     }
 
     private async Task<JsonDocument> Handle(Exception exception)

@@ -16,10 +16,16 @@ COPY . .
 # routes them; a deployment that serves the API from another origin overrides it.
 ARG VITE_API_HOST=""
 ENV VITE_API_HOST=$VITE_API_HOST
-RUN npm run build
+# build-only, not build: "build" runs the type check first, and the type check
+# reads tsconfig.e2e.json, whose include is e2e/** - a directory .dockerignore
+# keeps out of the context. Inside the image that config matches nothing and
+# tsc stops with TS18003, so every build of this image failed. The type check
+# belongs to the frontend CI job, which publish-frontend and the deployment
+# smoke both wait on, so no image can carry code that never passed it.
+RUN npm run build-only
 
 # Production stage
-FROM nginx:alpine
+FROM nginx:1.27-alpine
 
 # Copy built files
 COPY --from=build /app/dist /usr/share/nginx/html

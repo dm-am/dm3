@@ -6,7 +6,6 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Amazon.S3;
-using Amazon.S3.Model;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Caching;
@@ -32,10 +31,11 @@ internal class UploadApiService : IUploadApiService
     private readonly IIntentionManager _intentionManager;
     private readonly IUserService _userService;
     private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IAmazonS3 _s3Client;
+    private readonly IObjectStorage _objectStorage;
     private readonly IImageProcessingService _imageProcessingService;
     private readonly ICache _cache;
     private readonly IHttpContextAccessor _httpContext;
+    private readonly IReadOnlyCollection<IUploadTargetAuthorizer> _targetAuthorizers;
     private readonly CdnConfiguration _cdnConfig;
 
     /// <summary>Max upload size — 10 MB (in sync with RequestSizeLimit on the controller).</summary>
@@ -56,10 +56,11 @@ internal class UploadApiService : IUploadApiService
         IIntentionManager intentionManager,
         IUserService userService,
         IDateTimeProvider dateTimeProvider,
-        IAmazonS3 s3Client,
+        IObjectStorage objectStorage,
         IImageProcessingService imageProcessingService,
         ICache cache,
         IHttpContextAccessor httpContext,
+        IEnumerable<IUploadTargetAuthorizer> targetAuthorizers,
         IOptions<CdnConfiguration> cdnOptions)
     {
         _uploadRepository = uploadRepository;
@@ -67,10 +68,11 @@ internal class UploadApiService : IUploadApiService
         _intentionManager = intentionManager;
         _userService = userService;
         _dateTimeProvider = dateTimeProvider;
-        _s3Client = s3Client;
+        _objectStorage = objectStorage;
         _imageProcessingService = imageProcessingService;
         _cache = cache;
         _httpContext = httpContext;
+        _targetAuthorizers = targetAuthorizers.ToList();
         _cdnConfig = cdnOptions.Value;
     }
 
@@ -107,14 +109,14 @@ internal class UploadApiService : IUploadApiService
 
         if (upload == null)
         {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, "Upload not found");
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.UploadNotFound);
         }
 
         // Owner self-view; viewing another user's file is a moderation action
         // (Moderator+), aligned with the list + delete endpoints.
         if (upload.UserId != userId && _identityProvider.Current.User.Role < UserRole.Moderator)
         {
-            throw new HttpException(System.Net.HttpStatusCode.Forbidden, "Access denied");
+            throw new HttpException(System.Net.HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
         }
 
         return MapToDto(upload);
@@ -128,16 +130,16 @@ internal class UploadApiService : IUploadApiService
 
         if (upload == null)
         {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, "Upload not found");
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.UploadNotFound);
         }
 
         // Owner self-service; deleting others' files is a moderation action (Moderator+).
         if (upload.UserId != userId && _identityProvider.Current.User.Role < UserRole.Moderator)
         {
-            throw new HttpException(System.Net.HttpStatusCode.Forbidden, "Access denied");
+            throw new HttpException(System.Net.HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
         }
 
-        await _uploadRepository.SoftDeleteAsync(id, _dateTimeProvider.Now);
+        await _uploadRepository.SoftDeleteAsync(id, userId, _dateTimeProvider.Now);
     }
 
     /// <inheritdoc />
@@ -185,7 +187,7 @@ internal class UploadApiService : IUploadApiService
             stopwatch.Stop();
             UploadMetrics.Success.Add(1, typeTag,
                 new("content_type", result.ContentType));
-            UploadMetrics.DurationMs.Record(stopwatch.Elapsed.TotalMilliseconds, typeTag);
+            UploadMetrics.Duration.Record(stopwatch.Elapsed.TotalSeconds, typeTag);
             UploadMetrics.InputSizeBytes.Record(file.Length, typeTag);
             // OutputSizeBytes is written inside DirectUploadCore via an activity tag —
             // add it here if present.
@@ -243,7 +245,22 @@ internal class UploadApiService : IUploadApiService
             });
         }
 
-        // 1. Buffer + validate + process (in-memory; magic-byte, EXIF strip,
+        // 1. Resolve and check the target before anything else. For UserAvatar an
+        // unset targetId means the uploader themselves; for CharacterAvatar and
+        // PostAttachment it is required. The null check used to sit after the PUT
+        // and outside the rollback, so a valid image with a missing targetId left
+        // an object in the bucket that nothing would ever collect: the orphan
+        // sweeper walks rows, and the failed request never wrote one.
+        //
+        // Ahead of processing, not merely ahead of the PUT: decoding, EXIF
+        // stripping and downscaling up to 10 MB is the expensive part of this
+        // request, and a caller with no right to the target should not be able to
+        // spend it.
+        var effectiveTarget = targetId ?? (type == UploadType.UserAvatar ? userId : (Guid?)null);
+        RequireTarget(type, effectiveTarget);
+        await AuthorizeTargetAsync(type, effectiveTarget!.Value);
+
+        // 2. Buffer + validate + process (in-memory; magic-byte, EXIF strip,
         //    decompression-bomb guard, downscale to 1024 px). A single file —
         //    thumbnails are generated on-the-fly via imgproxy at serving time.
         ProcessedImage processed;
@@ -252,23 +269,13 @@ internal class UploadApiService : IUploadApiService
             processed = await _imageProcessingService.ProcessAsync(fileStream, file.ContentType);
         }
 
-        // 2. Resolve and check the target BEFORE anything reaches the bucket.
-        // For UserAvatar an unset targetId means the uploader themselves; for
-        // CharacterAvatar and PostAttachment it is required. This check used to
-        // sit after the PUT and outside the rollback, so a valid image with a
-        // missing targetId left an object in the bucket that nothing would ever
-        // collect: the orphan sweeper walks rows, and the failed request never
-        // wrote one.
-        var effectiveTarget = targetId ?? (type == UploadType.UserAvatar ? userId : (Guid?)null);
-        RequireTarget(type, effectiveTarget);
-
         // 3. Generate the object key (the extension is NORMALIZED from the validated
         //    content-type, NOT from the user filename — anti-extension-spoofing).
         var objectKey = GenerateObjectKey(type, userId, processed.Extension);
 
-        // 4. A single S3 PUT. Everything after it that can fail is wrapped in
-        //    the rollback below.
-        await PutToS3Async(objectKey, processed.Bytes, processed.ContentType);
+        // 4. A single PUT into the object store. Everything after it that can
+        //    fail is wrapped in the rollback below.
+        await _objectStorage.PutAsync(objectKey, processed.Bytes, processed.ContentType);
 
         Activity.Current?.SetTag("upload.output_size_bytes", processed.Bytes.LongLength);
 
@@ -285,9 +292,13 @@ internal class UploadApiService : IUploadApiService
             FileName = SanitizeFileName(file.FileName, processed.Extension),
             ContentType = processed.ContentType,
             SizeBytes = processed.Bytes.LongLength,
+            // Measured by the pipeline that produced these bytes, so the row and
+            // the object in the bucket cannot disagree about the aspect ratio.
+            Width = processed.Width,
+            Height = processed.Height,
             ObjectKey = objectKey,
             Original = true,
-            Url = GeneratePublicUrl(objectKey),
+            Url = _objectStorage.BuildPublicUrl(objectKey),
             CreatedUtc = now,
             ConfirmedUtc = now,
         };
@@ -299,12 +310,12 @@ internal class UploadApiService : IUploadApiService
         }
         catch
         {
-            // Compensation for the PUT above. The object is in the bucket and the
-            // only row that would ever have named it does not exist: the orphan
-            // sweeper walks rows, so nothing else will ever find this key. The
-            // catch has to stay on this side of the repository call — that is
-            // where the S3 write happened and where the key is still known.
-            await RollbackS3PutsAsync(new[] { objectKey });
+            // Compensation for the PUT above, and the only chance there is: the
+            // object is in the bucket and the only row that would ever have named
+            // it does not exist, while the orphan sweeper walks rows. The catch
+            // has to stay on this side of the repository call — that is where the
+            // object was written and where the key is still known.
+            await _objectStorage.DeleteAsync(objectKey);
             throw;
         }
 
@@ -320,9 +331,9 @@ internal class UploadApiService : IUploadApiService
     {
         var requirement = type switch
         {
-            UploadType.UserAvatar => "User avatar requires a target user ID",
-            UploadType.CharacterAvatar => "Character avatar requires a target character ID",
-            UploadType.PostAttachment => "Post attachment requires a target post ID",
+            UploadType.UserAvatar => "Не указан пользователь",
+            UploadType.CharacterAvatar => "Не указан персонаж",
+            UploadType.PostAttachment => "Не указан пост",
             _ => throw new InvalidOperationException($"Unknown UploadType {type}"),
         };
 
@@ -335,46 +346,30 @@ internal class UploadApiService : IUploadApiService
         }
     }
 
-    private async Task PutToS3Async(string objectKey, byte[] bytes, string contentType)
+    /// <summary>
+    /// Refuses an upload whose target the caller has no right to.
+    /// </summary>
+    /// <remarks>
+    /// Until this existed the endpoint checked only that a target was named, so any
+    /// authenticated user could point a CharacterAvatar at any character. Two such
+    /// rows turned every read of that character's room into a 500 for everyone, and
+    /// nothing but a hand-edited row brought it back.
+    ///
+    /// The rule per type comes from the module that owns the entity — see
+    /// IUploadTargetAuthorizer. Fails closed: a type with no authorizer is refused,
+    /// so adding one to the enum without a rule breaks the upload rather than
+    /// opening it. That path is unreachable today and is asserted, not assumed.
+    /// </remarks>
+    private async Task AuthorizeTargetAsync(UploadType type, Guid target)
     {
-        await PutToS3Async(objectKey, new MemoryStream(bytes, writable: false), contentType);
-    }
-
-    private async Task PutToS3Async(string objectKey, Stream stream, string contentType)
-    {
-        var putRequest = new PutObjectRequest
+        var authorizer = _targetAuthorizers.FirstOrDefault(a => a.Type == type);
+        if (authorizer == null)
         {
-            BucketName = _cdnConfig.BucketName,
-            Key = objectKey,
-            InputStream = stream,
-            ContentType = contentType,
-            // objectKey is hash-based (immutable) → aggressive browser/CDN caching.
-            // Replacing the avatar = a new key, no cache-busting issues.
-            Headers =
-            {
-                CacheControl = "public, max-age=31536000, immutable",
-            },
-        };
-        await _s3Client.PutObjectAsync(putRequest);
-    }
-
-    private async Task RollbackS3PutsAsync(IReadOnlyCollection<string> keys)
-    {
-        foreach (var key in keys)
-        {
-            try
-            {
-                await _s3Client.DeleteObjectAsync(new DeleteObjectRequest
-                {
-                    BucketName = _cdnConfig.BucketName,
-                    Key = key,
-                });
-            }
-            catch
-            {
-                // Best-effort rollback — remaining orphans are swept by the background GC.
-            }
+            throw new InvalidOperationException(
+                $"No upload target authorizer for {type}");
         }
+
+        await authorizer.EnsureAllowedAsync(target);
     }
 
     private static string SanitizeFileName(string? originalName, string normalizedExtension)
@@ -401,42 +396,45 @@ internal class UploadApiService : IUploadApiService
                 Type = query.Type,
                 Status = query.Status,
             },
-            skip: (query.Number - 1) * query.Size,
-            take: query.Size);
+            skip: query.Skip,
+            take: query.Take);
 
-        var paging = new PagingInfo(PagingResult.Create(totalCount, query.Number, query.Size));
+        // Skip is an offset in entities, which is the slot PagingResult.Create
+        // reads as a 1-based entity number — the same conversion PagingData does
+        // for every other offset-paged list. The page number used to be handed
+        // in here instead, and ceil(page / pageSize) reported page 1 for the
+        // first twenty pages.
+        var paging = new PagingInfo(PagingResult.Create(totalCount, query.Skip + 1, query.Take));
         return (uploads.Select(MapToDto), paging);
     }
 
     /// <summary>
-    /// Hash-based immutable object key: type folder + scope (userId) + 8-char hex.
+    /// Object key: type folder + scope (userId) + a full random suffix. Not a
+    /// content hash: the same image uploaded twice occupies two objects, and the
+    /// key says nothing about what stands behind it. Keys are never rewritten (a
+    /// replaced avatar allocates a fresh one), and that, not the shape of the key,
+    /// is what the immutable cache headers on PUT rest on.
+    ///
+    /// The suffix is the whole identifier and not eight characters of it. The
+    /// bucket answers anonymously, which is right for avatars and is what post
+    /// attachments live under too, so for an attachment in a closed room the
+    /// address is the access control. Eight hex is 32 bits next to a user id
+    /// anyone can read off the page, and that is a hint rather than a capability.
     /// The extension is accepted as a validated, normalized string.
     /// </summary>
     private string GenerateObjectKey(UploadType type, Guid userId, string normalizedExtension)
     {
-        var folder = type switch
-        {
-            UploadType.UserAvatar => "avatars",
-            UploadType.CharacterAvatar => "characters",
-            UploadType.PostAttachment => "posts",
-            _ => "misc",
-        };
+        // The prefix is not chosen here: the bucket policy grants anonymous reads
+        // per prefix, so the two have to say the same thing about a type.
+        var folder = UploadFolder.For(type);
 
-        var uniqueId = Guid.NewGuid().ToString("N")[..8];
+        var uniqueId = Guid.NewGuid().ToString("N");
         var ext = string.IsNullOrEmpty(normalizedExtension) ? string.Empty : normalizedExtension;
         var keyName = $"{userId:N}_{uniqueId}{ext}";
 
         return string.IsNullOrEmpty(_cdnConfig.Folder)
             ? $"{folder}/{keyName}"
             : $"{_cdnConfig.Folder}/{folder}/{keyName}";
-    }
-
-    private string GeneratePublicUrl(string objectKey)
-    {
-        return new UriBuilder(new Uri(_cdnConfig.PublicUrl))
-        {
-            Path = $"{_cdnConfig.BucketName}/{objectKey}",
-        }.ToString();
     }
 
     private static Shared.Dto.Upload MapToDto(StoredUpload upload)

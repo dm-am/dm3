@@ -8,6 +8,11 @@ namespace DM.Domain.Community.Features.Awards;
 /// <summary>
 /// Storage for the award catalog, contest series and grant records.
 /// </summary>
+/// <remarks>
+/// The mutating methods (Update*, Revoke) assume the row exists and throw on an
+/// absent one. A caller that skips the existence check turns an unknown id into
+/// a 500 where the endpoint declares 404.
+/// </remarks>
 public interface IAwardRepository
 {
     // ---- AwardType (timeless catalog) ----

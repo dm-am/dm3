@@ -10,6 +10,7 @@ using DM.Domain.Personal.Features.ProfileNotes;
 using DM.Infrastructure.Core.Parsing;
 using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
+using DM.Domain.Core.Dto;
 
 namespace DM.Web.API.Features.Community.Users;
 
@@ -21,7 +22,7 @@ internal class CommunityUserApiService : ICommunityUserApiService
     private readonly ICommunityProfileService _profileService;
     private readonly IUserLookupService _userLookupService;
     private readonly IUserProfileNoteService _profileNoteService;
-    private readonly ILoginRecordRepository _loginRecordRepository;
+    private readonly ILoginRecordService _loginRecordService;
     private readonly IMapper _mapper;
 
     /// <inheritdoc />
@@ -29,13 +30,13 @@ internal class CommunityUserApiService : ICommunityUserApiService
         ICommunityProfileService profileService,
         IUserLookupService userLookupService,
         IUserProfileNoteService profileNoteService,
-        ILoginRecordRepository loginRecordRepository,
+        ILoginRecordService loginRecordService,
         IMapper mapper)
     {
         _profileService = profileService;
         _userLookupService = userLookupService;
         _profileNoteService = profileNoteService;
-        _loginRecordRepository = loginRecordRepository;
+        _loginRecordService = loginRecordService;
         _mapper = mapper;
     }
 
@@ -49,7 +50,7 @@ internal class CommunityUserApiService : ICommunityUserApiService
         {
             "asc" => true,
             "desc" => false,
-            _ => query.Sort == UserSort.Name // Default: asc for Name, desc for others
+            _ => query.SortBy == UserSort.Name // Default: asc for Name, desc for others
         };
 
         // Mapped by name, so a filter added to the query string and the domain
@@ -145,16 +146,17 @@ internal class CommunityUserApiService : ICommunityUserApiService
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<LoginHistoryDto>> GetLoginHistory(string username)
+    public async Task<ListEnvelope<LoginHistoryDto>> GetLoginHistory(string username, PagingQuery query)
     {
         var user = await _userLookupService.GetAsync(username);
-        var loginHistory = await _loginRecordRepository.GetLoginHistory(user.UserId);
+        var loginHistory = await _loginRecordService.GetHistory(user.UserId, query);
+        var total = await _loginRecordService.CountHistory(user.UserId);
         var dtos = loginHistory.Select(r => new LoginHistoryDto
         {
             LoginTimestampUtc = r.LoginUtc,
             IpAddress = r.IpAddress,
             UserAgent = r.UserAgent
         });
-        return new ListEnvelope<LoginHistoryDto>(dtos);
+        return new ListEnvelope<LoginHistoryDto>(dtos, new PagingInfo(query.Skip, query.Take, total));
     }
 }

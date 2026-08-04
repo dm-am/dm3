@@ -2,14 +2,13 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Collections.Generic;
 using System.Net;
-using System.Security.Cryptography;
-using System.Text.Json;
 using System.Threading.Tasks;
 using System;
 using DM.Domain.Account.Configuration;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 
@@ -26,11 +25,27 @@ internal class AuthenticationService : IAuthenticationService
     private readonly IIdentityProvider _identityProvider;
     private readonly ILoginAttemptTracker _loginAttemptTracker;
     private readonly ISecurityAuditService _auditService;
+    private readonly IEventProducer _eventProducer;
     private readonly ILogger<AuthenticationService> _logger;
     private readonly AuthenticationConfiguration _config;
 
-    private const string UserIdKey = "userId";
-    private const string SessionIdKey = "sessionId";
+    /// <summary>
+    /// Credentials of nobody, hashed so that a login for an account that does not
+    /// exist costs what a login for one that does costs.
+    /// </summary>
+    /// <remarks>
+    /// The two answers are required to be indistinguishable, and in text they
+    /// are: both come back as "wrong email or password". In time they were not. A
+    /// missing account skipped Argon2id entirely and answered tens of
+    /// milliseconds sooner, which says the address carries no account without any
+    /// password having been tried. The salt has to be well formed because the
+    /// hasher decodes it; neither value is ever stored or compared against
+    /// anything real.
+    /// </remarks>
+    private static readonly string DecoySalt = Convert.ToBase64String(new byte[75]);
+
+    /// <inheritdoc cref="DecoySalt" />
+    private static readonly string DecoyHash = Convert.ToBase64String(new byte[32]);
 
     /// <inheritdoc />
     public AuthenticationService(
@@ -42,6 +57,7 @@ internal class AuthenticationService : IAuthenticationService
         IIdentityProvider identityProvider,
         ILoginAttemptTracker loginAttemptTracker,
         ISecurityAuditService auditService,
+        IEventProducer eventProducer,
         ILogger<AuthenticationService> logger,
         IOptions<AuthenticationConfiguration> authConfig)
     {
@@ -53,6 +69,7 @@ internal class AuthenticationService : IAuthenticationService
         _identityProvider = identityProvider;
         _loginAttemptTracker = loginAttemptTracker;
         _auditService = auditService;
+        _eventProducer = eventProducer;
         _logger = logger;
         _config = authConfig.Value;
     }
@@ -102,21 +119,50 @@ internal class AuthenticationService : IAuthenticationService
         switch (userFound)
         {
             case false:
+                // Paid so that this answer takes as long as a wrong password does,
+                // and not only reads the same: see DecoySalt.
+                _securityManager.ComparePasswords(password, DecoySalt, DecoyHash);
                 await _loginAttemptTracker.RecordFailedAttempt(origin);
                 _logger.LogWarning("Login failed: user not found");
                 return Identity.Fail(AuthenticationError.WrongLogin);
-            case true when user!.IsRemoved:
+            // The system actor is refused by its role, not by its credentials. The
+            // seed leaves its salt and hash empty, so today the comparison below is
+            // the only thing stopping it — an invariant living in two string columns.
+            // Folded into this branch rather than answered separately so that the
+            // attempt is counted, audited and reported exactly like a wrong password,
+            // leaving the account indistinguishable from outside.
+            case true when user!.Role == UserRole.System ||
+                           !_securityManager.ComparePasswords(password, user.Salt, user.PasswordHash):
+                await _loginAttemptTracker.RecordFailedAttempt(origin);
+
+                // Only the attempt that crosses the threshold reaches this while
+                // locked: every later one is refused above, before the counter is
+                // touched. So the owner of the account hears about the lockout
+                // once per lockout, through a channel the person guessing the
+                // password does not see.
+                if (await _loginAttemptTracker.IsAccountLocked(origin))
+                {
+                    await _eventProducer.SendAsync(EventType.AccountLocked, user.UserId);
+                }
+
+                await _auditService.LogAsync(user.UserId, SecurityEventType.LoginFailure,
+                    context?.IpAddress, context?.UserAgent, "Wrong password");
+                _logger.LogWarning("Login failed: wrong password. UserId={UserId}", user.UserId);
+                return Identity.Fail(AuthenticationError.WrongPassword);
+
+            // Past this branch the password is proven, and only past it may the
+            // answer say anything about the account itself. Asked before it,
+            // "removed" and "banned" told whoever typed an address what had been
+            // done to the person behind it, without a password and without the
+            // try being counted. That an address is registered is disclosed here
+            // by a recorded decision (see SECURITY.md); what moderation did with
+            // the account is not, and the owner still gets the real reason.
+            case true when user.IsRemoved:
                 _logger.LogWarning("Login failed: account removed. UserId={UserId}", user.UserId);
                 return Identity.Fail(AuthenticationError.Removed);
             case true when user.AccessPolicy.HasFlag(AccessPolicy.FullBan):
                 _logger.LogWarning("Login failed: account banned. UserId={UserId}", user.UserId);
                 return Identity.Fail(AuthenticationError.Banned);
-            case true when !_securityManager.ComparePasswords(password, user.Salt, user.PasswordHash):
-                await _loginAttemptTracker.RecordFailedAttempt(origin);
-                await _auditService.LogAsync(user.UserId, SecurityEventType.LoginFailure,
-                    context?.IpAddress, context?.UserAgent, "Wrong password");
-                _logger.LogWarning("Login failed: wrong password. UserId={UserId}", user.UserId);
-                return Identity.Fail(AuthenticationError.WrongPassword);
 
             default:
                 // Successful login - reset attempt counter
@@ -141,21 +187,14 @@ internal class AuthenticationService : IAuthenticationService
     /// <inheritdoc />
     public async Task<IIdentity> Authenticate(string authToken)
     {
-        Guid userId;
-        Guid sessionId;
-
-        try
+        var token = await SessionToken.Read(_cryptoService, authToken);
+        if (token == null)
         {
-            var decryptedString = await _cryptoService.Decrypt(authToken);
-            var authData = JsonSerializer.Deserialize<Dictionary<string, Guid>>(decryptedString);
-            userId = authData![UserIdKey];
-            sessionId = authData[SessionIdKey];
-        }
-        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or FormatException or CryptographicException)
-        {
-            _logger.LogWarning(ex, "Token authentication failed: forged or corrupted token");
+            _logger.LogWarning("Token authentication failed: forged or corrupted token");
             return Identity.Fail(AuthenticationError.ForgedToken);
         }
+
+        var (userId, sessionId) = token;
 
         var fetchUser = _repository.FindUser(userId);
         var fetchSession = _repository.FindUserSession(userId, sessionId);
@@ -304,7 +343,7 @@ internal class AuthenticationService : IAuthenticationService
             // middleware maps only HttpException and its kin. Terminating one's own
             // session is a caller mistake, not a server fault.
             throw new HttpException(HttpStatusCode.BadRequest,
-                "Cannot terminate current session. Use logout instead.");
+                "Нельзя завершить текущую сессию. Для этого есть кнопка Выйти");
         }
 
         await _repository.RemoveSession(userId, sessionId);
@@ -327,12 +366,7 @@ internal class AuthenticationService : IAuthenticationService
         AuthenticatedUser user, CreateSession session, UserSettings settings)
     {
         var newSession = await _repository.AddSession(user.UserId, session);
-        var authData = new Dictionary<string, Guid>
-        {
-            [UserIdKey] = user.UserId,
-            [SessionIdKey] = session.Id
-        };
-        var token = await _cryptoService.Encrypt(JsonSerializer.Serialize(authData));
+        var token = await new SessionToken(user.UserId, session.Id).Write(_cryptoService);
         return Identity.Success(user, newSession, settings, token);
     }
 

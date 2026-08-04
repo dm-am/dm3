@@ -54,3 +54,18 @@ updates:
     directory: /
     schedule:
       interval: monthly
+
+  # Base images: the compose files and both Dockerfiles. A pinned tag stops
+  # resolving to whatever the registry holds that day, and moving it becomes a
+  # reviewed pull request instead of a silent change at the next "up -d".
+  - package-ecosystem: docker
+    directory: /docker
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: docker
+    directory: /src/DM.Web.Client
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5

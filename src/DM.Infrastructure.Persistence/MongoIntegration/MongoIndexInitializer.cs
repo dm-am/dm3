@@ -10,7 +10,7 @@ using DbAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.Characters
 using DbDiceRoll = DM.Infrastructure.Persistence.Entities.Game.Posts.DiceRoll;
 using DbLoginAttempt = DM.Infrastructure.Persistence.Entities.Account.LoginAttempt;
 using DbNotification = DM.Infrastructure.Persistence.Entities.Personal.Notifications.Notification;
-using DbPoll = DM.Infrastructure.Persistence.Entities.Forum.Poll;
+using DbPoll = DM.Infrastructure.Persistence.Entities.Community.Poll;
 using DbSecurityAuditEntry = DM.Infrastructure.Persistence.Entities.Account.SecurityAuditEntry;
 using DbSession = DM.Infrastructure.Persistence.Entities.Account.Session;
 using DbUnreadCounter = DM.Infrastructure.Persistence.Entities.Shared.UnreadCounter;
@@ -31,8 +31,11 @@ namespace DM.Infrastructure.Persistence.MongoIntegration;
 ///
 /// createIndexes is idempotent — an index whose name and key spec match an existing one is a
 /// no-op on the server, so a restart costs nothing when everything is already in place.
-/// Options that are part of the stored index descriptor (unique, and so on) must be repeated
-/// here exactly, otherwise the server answers with an IndexOptionsConflict.
+/// Options that are part of the stored index descriptor (unique, TTL, and so on) must be
+/// repeated here exactly, otherwise the server answers with an IndexOptionsConflict. Changing
+/// a retention constant below therefore does not reach a database that already holds the
+/// index: the value lives in the stored descriptor, and moving it takes an explicit drop and
+/// recreate, which is a deliberate operation and not a startup hook's business.
 ///
 /// Obsolete indexes are not dropped: dropping is destructive and belongs to an explicit
 /// operation, not to a startup hook.
@@ -60,6 +63,20 @@ public class MongoIndexInitializer : IHostedService
         // UnreadCounters — UnreadCountersRepository
         await Assert(client.GetCollection<DbUnreadCounter>(), new[]
         {
+            // The key the repository writes by: every upsert addresses a marker as
+            // (UserId, EntityId, EntryType), so one document per triple is the
+            // invariant the writes assume. Without the index two upserts racing
+            // each other — two tabs, a double click on "mark as read" — leave two
+            // markers, and every read has to defend itself against a state that
+            // should not exist.
+            // A database that already holds duplicates fails this assertion, and
+            // the failure is logged rather than thrown; the way out is a reset,
+            // not a repair.
+            Index<DbUnreadCounter>("IX_UnreadCounters_User_Entity_Type", keys => keys
+                .Ascending(c => c.UserId)
+                .Ascending(c => c.EntityId)
+                .Ascending(c => c.EntryType), unique: true),
+
             // SelectByEntitiesAsync: UserId IN, EntityId IN, EntryType =, IsRemoved =
             Index<DbUnreadCounter>("IX_UnreadCounters_SelectByEntities", keys => keys
                 .Ascending(c => c.UserId)
@@ -85,6 +102,15 @@ public class MongoIndexInitializer : IHostedService
             Index<DbUnreadCounter>("IX_UnreadCounters_Parent_Type", keys => keys
                 .Ascending(c => c.ParentId)
                 .Ascending(c => c.EntryType)),
+
+            // A tombstone stops a deleted entity from returning through "mark as
+            // read", and that is over in minutes; it used to stay forever, one
+            // document per user per deleted topic, room and conversation, with
+            // nothing collecting it. A live marker has no RemovedUtc element at
+            // all, and a TTL index passes over what is not a date.
+            Index<DbUnreadCounter>("IX_UnreadCounters_Expiry", keys => keys
+                .Ascending(c => c.RemovedUtc),
+                expireAfter: TimeSpan.FromDays(TombstoneRetentionDays)),
         }, cancellationToken);
 
         // UserSessions — AuthenticationRepository
@@ -102,7 +128,7 @@ public class MongoIndexInitializer : IHostedService
                 .Ascending($"{nameof(DbUserSession.Sessions)}.{nameof(DbSession.Id)}")),
         }, cancellationToken);
 
-        // UserSettings — UserSettingsRepository, AuthenticationRepository.FindUserSettings
+        // UserSettings — BotLinkRepository, UserRepository, AuthenticationRepository.FindUserSettings
         await Assert(client.GetCollection<DbUserSettings>(), new[]
         {
             // GetByUserId, Upsert, FindUserSettings: UserId =
@@ -126,6 +152,16 @@ public class MongoIndexInitializer : IHostedService
             // NotificationId is not the _id of the document.
             Index<DbNotification>("IX_RealtimeNotifications_NotificationId", keys => keys
                 .Ascending(n => n.NotificationId)),
+
+            // Nothing ever deletes a notification: the repository has no delete at
+            // all, so every notification ever raised for anyone stayed forever, and
+            // the unread count paid for the whole history of a user on every page.
+            // The documents carry identifiers of interested users along with game
+            // and character names, which is the same argument that gave the
+            // security trail its expiry — hence the same period.
+            Index<DbNotification>("IX_RealtimeNotifications_Expiry", keys => keys
+                .Ascending(n => n.CreatedUtc),
+                expireAfter: TimeSpan.FromDays(NotificationRetentionDays)),
         }, cancellationToken);
 
         // Polls — PollRepository
@@ -149,7 +185,7 @@ public class MongoIndexInitializer : IHostedService
         // AttributeSchemata — AttributeSchemaRepository
         await Assert(client.GetCollection<DbAttributeSchema>(), new[]
         {
-            // GetSchemata: Eq(s => s.Type, Public) | Eq(s => s.UserId, userId)
+            // GetSchemata: Eq(s => s.IsRemoved, false) & (Eq(s => s.Type, Public) | Eq(s => s.UserId, userId))
             Index<DbAttributeSchema>("IX_AttributeSchemata_UserId", keys => keys
                 .Ascending(s => s.UserId)),
         }, cancellationToken);
@@ -174,7 +210,10 @@ public class MongoIndexInitializer : IHostedService
 
             // Counters have to decay. Without this a handful of typos spread over
             // months accumulates to the lockout threshold and locks the account out
-            // of nowhere. CleanupExpiredRecords exists but nothing calls it.
+            // of nowhere. This is the whole of the decay: the sweep that used to be
+            // declared beside it was never called from anywhere, and it skipped
+            // exactly the rows that outlive everything else — a record carrying a
+            // lockout start is never read again once its pair stops trying.
             Index<DbLoginAttempt>("IX_LoginAttempts_Expiry", keys => keys
                 .Ascending(a => a.LastAttemptUtc),
                 expireAfter: TimeSpan.FromHours(LoginAttemptRetentionHours)),
@@ -213,6 +252,19 @@ public class MongoIndexInitializer : IHostedService
     /// </summary>
     private const int SecurityAuditRetentionDays = 180;
 
+    /// <summary>
+    /// Retention of the notification stream. Same constraint as the two TTLs
+    /// above: the value lives in the stored index descriptor, not in configuration.
+    /// </summary>
+    private const int NotificationRetentionDays = 180;
+
+    /// <summary>
+    /// How long a tombstoned unread marker is kept. Its job — refusing to revive a
+    /// deleted entity through "mark as read" — is over as soon as the request that
+    /// deleted the entity is, so anything above zero is slack, not a requirement.
+    /// </summary>
+    private const int TombstoneRetentionDays = 7;
+
     /// <inheritdoc />
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
@@ -224,23 +276,48 @@ public class MongoIndexInitializer : IHostedService
         new(keys(Builders<TEntity>.IndexKeys),
             new CreateIndexOptions { Name = name, Unique = unique, ExpireAfter = expireAfter });
 
-    private async Task Assert<TEntity>(
+    private Task Assert<TEntity>(
         IMongoCollection<TEntity> collection,
         IEnumerable<CreateIndexModel<TEntity>> indexes,
+        CancellationToken cancellationToken) =>
+        Assert(collection.Indexes, collection.CollectionNamespace.CollectionName, indexes, _logger,
+            cancellationToken);
+
+    /// <summary>
+    /// Asserts one index per command.
+    /// </summary>
+    /// <remarks>
+    /// createIndexes takes a whole batch and the server runs it whole or not at all, so a
+    /// single descriptor the database disagrees about — an index someone created by hand, a
+    /// TTL whose stored value differs from the constant — used to cost every other index of
+    /// that collection. The failure was swallowed into a log line nobody reads, which is the
+    /// right call for one index and the wrong price for five: the queries the rest of them
+    /// serve went to collection scans with nothing to show for it.
+    ///
+    /// Still never stops the host: the application is fully functional without an index, only
+    /// slower, and refusing to start over one trades a slow site for no site.
+    /// </remarks>
+    internal static async Task Assert<TEntity>(
+        IMongoIndexManager<TEntity> indexManager,
+        string collectionName,
+        IEnumerable<CreateIndexModel<TEntity>> indexes,
+        ILogger logger,
         CancellationToken cancellationToken)
     {
-        var collectionName = collection.CollectionNamespace.CollectionName;
-        try
+        foreach (var index in indexes)
         {
-            var created = await collection.Indexes.CreateManyAsync(indexes, cancellationToken);
-            _logger.LogDebug("[Mongo Indexes] {Collection}: {Indexes} asserted",
-                collectionName, string.Join(", ", created));
-        }
-        catch (Exception ex)
-        {
-            // Never stop the host over an index: the application is fully functional without
-            // one, only slower. A conflict with an index created by hand is the usual cause.
-            _logger.LogError(ex, "[Mongo Indexes] Failed to assert indexes on {Collection}", collectionName);
+            var indexName = index.Options?.Name;
+            try
+            {
+                await indexManager.CreateOneAsync(index, cancellationToken: cancellationToken);
+                logger.LogDebug("[Mongo Indexes] {Collection}.{Index} asserted",
+                    collectionName, indexName);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "[Mongo Indexes] Failed to assert {Index} on {Collection}",
+                    indexName, collectionName);
+            }
         }
     }
 }

@@ -7,6 +7,9 @@ using Serilog;
 
 [assembly: InternalsVisibleTo("DM.Web.API.IntegrationTests")]
 [assembly: InternalsVisibleTo("DM.Web.API.Tests")]
+// The composition-root rule builds this host's container next to the two workers',
+// and that project is the only one referencing all of them.
+[assembly: InternalsVisibleTo("DM.Architecture.Tests")]
 
 namespace DM.Web.API;
 
@@ -21,9 +24,20 @@ public class Program
     /// <param name="args"></param>
     public static void Main(string[] args)
     {
-        CreateWebHostBuilder(args)
-            .WithDmConfiguration()
-            .Build().Run();
+        try
+        {
+            CreateWebHostBuilder(args)
+                .WithDmConfiguration()
+                .Build().Run();
+        }
+        finally
+        {
+            // UseSerilog() borrows the static logger and does not take ownership
+            // (dispose: false), so shutdown disposes nothing and the Loki sink,
+            // which ships on a timer, dies with its last batch still buffered —
+            // the lines that say why the process stopped.
+            Log.CloseAndFlush();
+        }
     }
 
     /// <summary>

@@ -4,22 +4,35 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 
-const { mockGetMessages, mockGetMessagesBefore, mockGetMessagesAround } =
-  vi.hoisted(() => ({
-    mockGetMessages: vi.fn(),
-    mockGetMessagesBefore: vi.fn(),
-    mockGetMessagesAround: vi.fn(),
-  }));
+const {
+  mockGetMessages,
+  mockGetMessagesBefore,
+  mockGetMessagesAround,
+  mockUpdateMessage,
+  mockDeleteMessage,
+  mockGetEvents,
+} = vi.hoisted(() => ({
+  mockGetMessages: vi.fn(),
+  mockGetMessagesBefore: vi.fn(),
+  mockGetMessagesAround: vi.fn(),
+  mockUpdateMessage: vi.fn(),
+  mockDeleteMessage: vi.fn(),
+  mockGetEvents: vi.fn(),
+}));
 
 vi.mock("../api/globalChatApi", () => ({
   default: {
     getMessages: mockGetMessages,
     getMessagesBefore: mockGetMessagesBefore,
     getMessagesAround: mockGetMessagesAround,
+    updateMessage: mockUpdateMessage,
+    deleteMessage: mockDeleteMessage,
+    getEvents: mockGetEvents,
   },
 }));
 
 import { useGlobalChatStore } from "./store";
+import { NotificationType } from "@/shared/api/models/notifications";
 
 const MAX_MESSAGES = 500;
 
@@ -120,5 +133,112 @@ describe("useGlobalChatStore, loading older messages", () => {
 
     expect(mockGetMessages).toHaveBeenLastCalledWith({ limit: 50 });
     expect(store.messages.map((m) => m.id)).toEqual(["m1", "m2", "m3"]);
+  });
+});
+
+describe("useGlobalChatStore, editing and deleting a message", () => {
+  const refusal = {
+    type: "",
+    title: "Недостаточно прав",
+    status: 403,
+    traceId: "t",
+  };
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+  });
+
+  /**
+   * A refused delete used to strike the message through anyway, so the
+   * moderator read the deleted-message placeholder next to the toast saying
+   * the delete had failed.
+   */
+  it("leaves the message alone when the delete is refused", async () => {
+    mockGetMessages.mockResolvedValue(page([1]));
+    mockDeleteMessage.mockResolvedValue({ data: null, error: refusal });
+
+    const store = useGlobalChatStore();
+    await store.fetchMessages();
+
+    const { error } = await store.deleteMessage("m1");
+
+    expect(error).toBe(refusal);
+    expect(store.messages[0].isRemoved).toBeFalsy();
+  });
+
+  it("keeps the message when the edit is refused", async () => {
+    mockGetMessages.mockResolvedValue(page([1]));
+    mockUpdateMessage.mockResolvedValue({ data: null, error: refusal });
+
+    const store = useGlobalChatStore();
+    await store.fetchMessages();
+
+    const { error } = await store.updateMessage("m1", "Новый текст");
+
+    expect(error).toBe(refusal);
+    expect(store.messages[0].text).toBe("text 1");
+  });
+});
+
+/**
+ * The events list was read once, when the chat opened, and nothing ever asked
+ * for it again: an event could start and finish in front of an open tab while
+ * the line above the feed went on describing page load. Both ends of the fix
+ * are held here, because the push is only half of it — the list also has to end
+ * up holding what came back.
+ */
+describe("useGlobalChatStore, the events list on a realtime push", () => {
+  const chatEvent = {
+    id: "e1",
+    title: "Вечер быстрых зарисовок",
+    startsUtc: "2026-08-04T20:00:00Z",
+    status: "Live",
+    isOpen: true,
+    participantCount: 3,
+  };
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+    mockGetEvents.mockResolvedValue({
+      data: { resources: [chatEvent] },
+      error: null,
+    });
+  });
+
+  it("re-reads the events when one starts", async () => {
+    const store = useGlobalChatStore();
+
+    await store.refreshEventsOnNotification(
+      NotificationType.GlobalChatEventStarted,
+    );
+
+    expect(mockGetEvents).toHaveBeenCalledTimes(1);
+    expect(store.events.map((e) => e.id)).toEqual(["e1"]);
+  });
+
+  it("re-reads the events when one ends", async () => {
+    const store = useGlobalChatStore();
+
+    await store.refreshEventsOnNotification(
+      NotificationType.GlobalChatEventEnded,
+    );
+
+    expect(mockGetEvents).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * One socket carries every message of the chat as well. Re-reading the events
+   * on each of them would put a request behind every line anybody types.
+   */
+  it("leaves them alone on a push about anything else", async () => {
+    const store = useGlobalChatStore();
+
+    await store.refreshEventsOnNotification(
+      NotificationType.NewGlobalChatMessage,
+    );
+
+    expect(mockGetEvents).not.toHaveBeenCalled();
   });
 });

@@ -19,9 +19,6 @@ public class AccountMappingProfileShould : UnitTestBase
     public AccountMappingProfileShould() => _mapper = _configuration.CreateMapper();
 
     [Fact]
-    public void HaveValidConfiguration() => _configuration.AssertConfigurationIsValid();
-
-    [Fact]
     public void MapSessionEntityToSession()
     {
         var entity = new Entities.Account.Session

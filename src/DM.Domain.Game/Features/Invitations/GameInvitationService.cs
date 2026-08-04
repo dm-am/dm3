@@ -139,20 +139,20 @@ internal class GameInvitationService : IGameInvitationService
         var (token, info) = await _repository.GetInvitation(tokenId, ct);
         if (token == null || info == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Invitation not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.InvitationNotFound);
         }
 
         // Check if invitation has expired
         var expiresUtc = token.CreatedUtc.AddDays(InvitationExpirationDays);
         if (_dateTimeProvider.Now > expiresUtc)
         {
-            throw new HttpException(HttpStatusCode.Gone, "Invitation has expired");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.InvitationExpired);
         }
 
         var currentUserId = _identityProvider.Current.User.UserId;
         if (token.UserId != currentUserId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "This invitation is not for you");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.InvitationNotForYou);
         }
 
         var gameId = token.EntityId!.Value;
@@ -188,7 +188,7 @@ internal class GameInvitationService : IGameInvitationService
                 break;
 
             default:
-                throw new HttpException(HttpStatusCode.BadRequest, "Invalid invitation type");
+                throw new HttpException(HttpStatusCode.BadRequest, "Неизвестный тип приглашения");
         }
     }
 
@@ -197,13 +197,13 @@ internal class GameInvitationService : IGameInvitationService
         var (token, _) = await _repository.GetInvitation(tokenId, ct);
         if (token == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Invitation not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.InvitationNotFound);
         }
 
         var currentUserId = _identityProvider.Current.User.UserId;
         if (token.UserId != currentUserId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "This invitation is not for you");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.InvitationNotForYou);
         }
 
         await _repository.RemoveInvitation(tokenId, ct);
@@ -227,7 +227,7 @@ internal class GameInvitationService : IGameInvitationService
         var (token, _) = await _repository.GetInvitation(tokenId, ct);
         if (token == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Invitation not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.InvitationNotFound);
         }
 
         var game = await GetGameOrThrow(token.EntityId!.Value);
@@ -267,7 +267,7 @@ internal class GameInvitationService : IGameInvitationService
         // Cannot remove master
         if (game.Master.UserId == userId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Cannot remove the game master");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя удалить мастера игры");
         }
 
         // Only assistants can be removed from a game
@@ -286,7 +286,7 @@ internal class GameInvitationService : IGameInvitationService
         var game = await _gameRepository.GetGame(gameId, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, "Game not found");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
         }
         return game;
     }
@@ -296,22 +296,22 @@ internal class GameInvitationService : IGameInvitationService
         var currentUserId = _identityProvider.Current.User.UserId;
 
         // Check content blacklist
-        if (game.BlacklistedUsers.Any(b => b.UserId == userId))
+        if (game.IsBlacklisted(userId))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Cannot invite a blacklisted user");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.CannotInviteBlacklistedUser);
         }
 
         // Check personal blacklist - cannot invite someone you've blocked
         if (await _userBlacklistChecker.IsBlockedAsync(currentUserId, userId, ct))
         {
-            throw new HttpException(HttpStatusCode.UnprocessableEntity, "Cannot invite a user you have blocked");
+            throw new HttpException(HttpStatusCode.UnprocessableEntity, RefusalMessage.CannotInviteBlockedUser);
         }
     }
 
     private async Task<GameInvitation> GetInvitationInfo(Guid tokenId, CancellationToken ct)
     {
         var (_, info) = await _repository.GetInvitation(tokenId, ct);
-        return info ?? throw new HttpException(HttpStatusCode.InternalServerError, "Failed to retrieve invitation");
+        return info ?? throw new HttpException(HttpStatusCode.InternalServerError, "Не удалось получить приглашение");
     }
 
     #endregion

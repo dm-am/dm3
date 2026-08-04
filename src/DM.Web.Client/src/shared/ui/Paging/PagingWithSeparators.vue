@@ -5,10 +5,10 @@
  */
 import type { RouteLocationRaw } from "vue-router";
 import Paging from "./Paging.vue";
-import type { Paging as PagingType } from "@/shared/api/models/common";
+import type { PagingInfo } from "@/shared/api/models/common";
 
 defineProps<{
-  paging: PagingType;
+  paging: PagingInfo;
   to: RouteLocationRaw;
   useQuery?: boolean;
   queryKey?: string;

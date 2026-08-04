@@ -96,14 +96,8 @@ watch(messageLayout, () => {
 });
 
 // Region switcher
-const {
-  currentRegion,
-  canSwitch,
-  switchTooltip,
-  switchRegion,
-  isHydrated,
-  isSwitching,
-} = useRegion();
+const { canSwitch, switchTooltip, switchRegion, isHydrated, isSwitching } =
+  useRegion();
 </script>
 
 <template>
@@ -219,10 +213,15 @@ const {
               :disabled="!canSwitch || isSwitching"
               @click="switchRegion"
             >
-              <span v-if="currentRegion?.id === 'main'" class="flag-icon"
-                >🇷🇺</span
-              >
-              <span v-else class="globe-icon">🌐︎</span>
+              <!-- One icon for both states, from the registry the other 39 come
+                   from. The pair it replaces was two emoji with two different
+                   rendering policies in one button — a flag built from regional
+                   indicators, which Windows does not compose at all and draws as
+                   the letters "RU" in a box, and a globe carrying a
+                   text-presentation selector. Which mirror the reader is on and
+                   where the button leads is said in words, by the accessible
+                   name and the tooltip. -->
+              <SvgIcon name="globe" />
             </button>
           </div>
         </div>
@@ -233,6 +232,7 @@ const {
 
 <style scoped lang="sass">
 @import "@/assets/styles/ZIndex"
+@import "@/assets/styles/Inputs"
 
 .scroll-nav
   position: fixed
@@ -281,7 +281,10 @@ const {
   position: absolute
   bottom: 0
   right: calc(100% + $small)
-  z-index: 101
+  // A popover, and the scale has a tier for one. The literal 101 was a step
+  // above $z-dropdown, so the bubble covered any filter dropdown that reached
+  // it — a number picked to win an argument the scale had already settled.
+  z-index: $z-popover
 
 // The bubble uses a two-column grid on .bubble-content. Each
 // .settings-row inherits those shared column tracks via CSS subgrid,
@@ -406,19 +409,18 @@ const {
       background: $link-nav-hover
 
 // Mirror button
+// The glyph is sized in pixels, not through font-size. 1.3em was written for
+// an emoji, where the drawn glyph is smaller than its em box; an SvgIcon is
+// exactly 1em square, so the same rule made a 20.8px icon inside an 18px-tall
+// button and it spilled over the edges.
 .mirror-btn
-  display: flex
-  align-items: center
-  justify-content: center
-  width: 36px
-  height: 18px
-  background: none
-  border: none
-  padding: 0
-  font-size: 1.3em
   line-height: 1
   color: $link-nav
-  cursor: pointer
+  +icon-button(36px, 18px)
+
+  .svg-icon
+    width: 14px
+    height: 14px
 
   &:hover:not(:disabled)
     color: $link-nav-hover
@@ -429,15 +431,6 @@ const {
 
   &.is-loading
     animation: pulse 1s infinite
-
-.globe-icon
-  position: relative
-  top: 0.05em
-
-.flag-icon
-  position: relative
-  top: -0.1em
-  font-size: 1.2em
 
 @keyframes pulse
   0%, 100%

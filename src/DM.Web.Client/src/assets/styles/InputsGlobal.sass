@@ -16,3 +16,25 @@ select
 
 input[type="checkbox"]
   +checkbox()
+
+// A control's letters are the site's. The reset lists sixty elements and
+// `button` is not among them, and the block above covers input/textarea/select
+// only — so every hand-rolled button (the subscription tabs, the notepad's
+// close cross, the four outlined pills) was drawn by the user agent in its own
+// family, visibly not PT Sans, on the same line as text that was. `inherit` and
+// not the family by name: the family is declared once, on <body>, and this rule
+// only stops the UA sheet from overriding it.
+button
+  font-family: inherit
+
+// The bot trap the public forms render: in the markup, out of the page. Off
+// screen rather than display:none, which is the first thing a bot skips. One
+// rule for all three call sites: they had drifted into two different
+// treatments, and the support form drew the trap with none at all, in plain
+// sight, where a reader could type into it and get the ticket refused.
+.honeypot-field
+  position: absolute
+  left: -9999px
+  width: 1px
+  height: 1px
+  opacity: 0

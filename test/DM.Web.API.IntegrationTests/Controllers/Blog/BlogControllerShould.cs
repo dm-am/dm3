@@ -65,13 +65,20 @@ public class BlogControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Search blogs with updated sort should return OK
+    /// Search blogs with an explicit activation sort should return OK
     /// </summary>
+    /// <remarks>
+    /// This asked for sortBy=updated, which BlogRepository has no case for, and
+    /// asserted 200 — so the test held the endpoint to answering a wrong sort
+    /// with the default order instead of refusing it. The endpoint now refuses
+    /// (SortRefusalShould), and the search-plus-sort combination this test is
+    /// about is exercised with a field the repository actually sorts by.
+    /// </remarks>
     [Fact]
-    public async Task GetBlogs_WithSearchAndUpdatedSort_ReturnsOk()
+    public async Task GetBlogs_WithSearchAndActivatedSort_ReturnsOk()
     {
         // Act
-        var response = await Client.GetAsync("/v1/blogs?search=test&sortBy=updated");
+        var response = await Client.GetAsync("/v1/blogs?search=test&sortBy=activated");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);

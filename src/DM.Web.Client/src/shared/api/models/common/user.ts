@@ -55,7 +55,7 @@ export enum AccessPolicy {
 
 /**
  * User profile picture
- * @see src/DM.Web.API/Dto/Users/UserPicture.cs
+ * @see src/DM.Web.API/Features/Community/Users/UserDtos.cs
  */
 export type UserPicture = {
   /** Picture identifier (for deletion, only in PersonalProfile context) */
@@ -66,11 +66,20 @@ export type UserPicture = {
   mediumUrl?: string;
   /** Original picture URL (full size, only in PersonalProfile context) */
   originalUrl?: string;
+  /**
+   * Intrinsic width of `originalUrl` in pixels. Only the original carries a
+   * pair: small and medium are square crops at the size they are asked for,
+   * while the original keeps the uploaded aspect ratio. Absent for an upload
+   * stored before the pipeline measured one.
+   */
+  originalWidth?: number;
+  /** Intrinsic height of `originalUrl` in pixels; travels with `originalWidth`. */
+  originalHeight?: number;
 };
 
 /**
  * Rating information
- * @see src/DM.Web.API/Dto/Personal/Rating.cs
+ * @see src/DM.Web.API/Features/Community/Users/UserDtos.cs
  */
 export type Rating = {
   /** Total posts count (quantity rating) */
@@ -147,7 +156,7 @@ export type UserRef = {
  * Base user DTO for lists, author references, mentions, and cards.
  * Extends UserRef with additional profile information.
  *
- * @see src/DM.Web.API/Dto/Users/User.cs
+ * @see src/DM.Web.API/Features/Community/Users/UserDtos.cs
  *
  * Used in:
  * - post.author, comment.author, game.master, etc.
@@ -214,6 +223,10 @@ export interface User extends UserRef {
   endorsementsGiven?: number;
   /** Number of endorsements received by this user. */
   endorsementsReceived?: number;
+  /** Number of game reviews written by this user (whole games, not posts). */
+  gameReviewsGiven?: number;
+  /** Number of game reviews written about the games this user masters. */
+  gameReviewsReceived?: number;
   /** Forum topics authored by this user. */
   topicsAuthored?: number;
   /** Comments authored by this user (polymorphic across all comment-host entities). */

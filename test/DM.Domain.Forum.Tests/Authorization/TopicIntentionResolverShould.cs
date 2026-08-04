@@ -75,7 +75,7 @@ public class TopicIntentionResolverShould
                 IsClosed = false,
                 Board = new Board
                 {
-                    ModeratorIds = new[] {Guid.NewGuid(), Guid.NewGuid()}
+                    ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid() }
                 }
             });
         actual.Should().BeFalse();
@@ -93,7 +93,7 @@ public class TopicIntentionResolverShould
                 IsClosed = false,
                 Board = new Board
                 {
-                    ModeratorIds = new[] {Guid.NewGuid(), Guid.NewGuid()}
+                    ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid() }
                 }
             });
         actual.Should().BeTrue();
@@ -112,7 +112,7 @@ public class TopicIntentionResolverShould
                 IsClosed = false,
                 Board = new Board
                 {
-                    ModeratorIds = new[] {Guid.NewGuid(), Guid.NewGuid()}
+                    ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid() }
                 }
             });
         actual.Should().BeTrue();
@@ -131,7 +131,7 @@ public class TopicIntentionResolverShould
                 IsClosed = false,
                 Board = new Board
                 {
-                    ModeratorIds = new[] {userId, Guid.NewGuid()}
+                    ModeratorIds = new[] { userId, Guid.NewGuid() }
                 }
             });
         actual.Should().BeTrue();
@@ -149,7 +149,7 @@ public class TopicIntentionResolverShould
                 IsClosed = false,
                 Board = new Board
                 {
-                    ModeratorIds = new[] {Guid.NewGuid(), Guid.NewGuid()}
+                    ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid() }
                 }
             });
         actual.Should().BeTrue();
@@ -168,7 +168,7 @@ public class TopicIntentionResolverShould
                 IsClosed = false,
                 Board = new Board
                 {
-                    ModeratorIds = new[] {Guid.NewGuid(), Guid.NewGuid()}
+                    ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid() }
                 }
             });
         actual.Should().BeFalse();
@@ -186,7 +186,7 @@ public class TopicIntentionResolverShould
                 IsClosed = false,
                 Board = new Board
                 {
-                    ModeratorIds = new[] {Guid.NewGuid(), Guid.NewGuid()}
+                    ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid() }
                 }
             });
         actual.Should().BeTrue();

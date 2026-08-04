@@ -55,7 +55,10 @@ internal class PostPendencyService : IPostPendencyService
     public async Task<PostPendency> CreateAsync(CreatePostPendency createPostPendency)
     {
         await _validator.ValidateAndThrowAsync(createPostPendency);
-        var room = await _roomService.GetAsync(createPostPendency.RoomId);
+        // With the game, not without: the rule reads the roles of the game the
+        // room belongs to, and asked with the plain projection the check finds no
+        // resolver and refuses everybody.
+        var room = await _roomService.GetWithGameAsync(createPostPendency.RoomId);
         _intentionManager.ThrowIfForbidden(RoomIntention.CreatePostPendency, room);
 
         var (_, waitingForUserId) = await _userLookupService.FindUserIdAsync(createPostPendency.WaitingForUsername);
@@ -66,7 +69,7 @@ internal class PostPendencyService : IPostPendencyService
                 e.WaitingForUser.UserId == waitingForUserId))
         {
             throw new HttpException(HttpStatusCode.Conflict,
-                $"There's already a pendency for user {createPostPendency.WaitingForUsername}");
+                $"Ожидание хода для {createPostPendency.WaitingForUsername} уже есть");
         }
 
         if (room.Accesses.All(a => a.Character.Author.UserId != waitingForUserId))
@@ -93,7 +96,7 @@ internal class PostPendencyService : IPostPendencyService
         var pendency = await _repository.Get(pendencyId);
         if (pendency == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Post pendency not found");
+            throw new HttpException(HttpStatusCode.NotFound, "Ожидание хода не найдено");
         }
 
         _intentionManager.ThrowIfForbidden(RoomIntention.DeletePostPendency, pendency);

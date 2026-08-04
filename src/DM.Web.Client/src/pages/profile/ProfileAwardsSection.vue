@@ -4,7 +4,7 @@ import { formatDate } from "@/shared/lib/utils/datetime";
  * ProfileAwardsSection — the "Награды" block inside the "Достижения" tab.
  *
  * Curated awards: granted by Admin/SeniorModerator via the admin pages.
- * The award catalog (`AwardType`) is timeless (6 rows forever); a specific
+ * The award catalog (`AwardType`) is timeless; a specific
  * contest is stored in `ContestSeries` and linked via an FK on UserAward.
  *
  * Tile:
@@ -17,7 +17,8 @@ import { formatDate } from "@/shared/lib/utils/datetime";
  *       * For contest_first/second/third — the series title ("23-й литературный
  *         конкурс"); the placement is read from the tier color (gold/silver/bronze)
  *       * For special awards (popular_vote, best_critic, guesser) — type.title
- *         ("Народное признание", "Лучший критик", "Угадайка")
+ *         ("Народное признание, например" - the last two words are part of the
+ *         name, "Лучший критик", "Угадайка")
  *
  * The rich popover shows type.description + a link to the results topic.
  */
@@ -30,6 +31,7 @@ import { ErrorState } from "@/shared/ui/ErrorState";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { formatContestSeriesTitle } from "@/entities/achievement";
 import { toInternalPath } from "@/shared/lib/utils/internalUrl";
+import { useGuardedRequest } from "@/shared/lib/composables";
 
 const props = defineProps<{ username: string }>();
 
@@ -42,27 +44,31 @@ const emit = defineEmits<{
 
 const awards = ref<UserAward[]>([]);
 const loaded = ref(false);
-const loading = ref(false);
-const error = ref(false);
 
-async function fetchAwards(username: string) {
-  loading.value = true;
+// The section refetches when the profile changes under it, so two answers can be
+// on the wire at once. Without a guard the slower one wins and the tab reports a
+// state — which the parent uses to decide the shared empty text — for a profile
+// the reader has already left.
+const { loading, error, run } = useGuardedRequest({
+  message: "Не удалось загрузить награды",
+  clearErrorOnStart: true,
+});
+
+function fetchAwards(username: string) {
   loaded.value = false;
-  error.value = false;
   emit("state", "loading");
-  const { data, error: fetchError } =
-    await achievementApi.getUserAwards(username);
-  if (fetchError) {
-    error.value = true;
-  } else {
-    awards.value = data?.resources ?? [];
-  }
-  loading.value = false;
-  loaded.value = true;
-  emit(
-    "state",
-    error.value ? "error" : awards.value.length > 0 ? "content" : "empty",
-  );
+  return run(
+    () => achievementApi.getUserAwards(username),
+    (data) => {
+      awards.value = data?.resources ?? [];
+    },
+  ).finally(() => {
+    loaded.value = true;
+    emit(
+      "state",
+      error.value ? "error" : awards.value.length > 0 ? "content" : "empty",
+    );
+  });
 }
 
 onMounted(() => fetchAwards(props.username));
@@ -124,7 +130,7 @@ function contestContextLabel(a: UserAward): string | null {
   const kind =
     a.contestSeries.contestType === ContestType.Literary
       ? "Литературный конкурс"
-      : "Арт конкурс";
+      : "Арт-конкурс";
   return `${kind} #${a.contestSeries.number} (${a.contestSeries.year})`;
 }
 
@@ -160,15 +166,12 @@ const hasAwards = computed(() => awards.value.length > 0);
 <template>
   <section v-if="loading && !loaded" class="awards-section">
     <BlockTitle>Награды</BlockTitle>
-    <SecondaryText>Загрузка…</SecondaryText>
+    <SecondaryText>Загрузка...</SecondaryText>
   </section>
 
   <section v-else-if="error" class="awards-section">
     <BlockTitle>Награды</BlockTitle>
-    <ErrorState
-      message="Не удалось загрузить награды"
-      :retry="() => fetchAwards(username)"
-    />
+    <ErrorState :message="error" :retry="() => fetchAwards(username)" />
   </section>
 
   <section v-else-if="hasAwards" class="awards-section">
@@ -273,7 +276,7 @@ const hasAwards = computed(() => awards.value.length > 0);
   gap: $medium
   align-items: start
 
-  @media (max-width: 640px)
+  @media (max-width: $bp-mobile)
     grid-template-columns: repeat(3, minmax(0, 1fr))
 
 .award
@@ -317,11 +320,15 @@ const hasAwards = computed(() => awards.value.length > 0);
   letter-spacing: 0.3px
   line-height: 1
   white-space: nowrap
-  color: var(--tier-badge-text)
+  color: $heading
+  background-color: var(--tier-badge-bg)
+  // One ring, not two. The border in the page colour is what lifts the badge
+  // off the icon it overlaps; a second hairline in the metal was added on top
+  // of it and drew outside the border, so the badge read as a dark pill with a
+  // white gap and a stray metal ring around it.
   border: 2px solid $bg-page
   border-radius: $minor
   font-variant-numeric: tabular-nums
-  text-shadow: 0 0 1px rgba(0, 0, 0, 0.4)
 
 // Caption, centered under the icon. A reserved 2-line min-height keeps the
 // common 1- and 2-line titles all the same height (no ragged bottoms); a
@@ -331,8 +338,11 @@ const hasAwards = computed(() => awards.value.length > 0);
   width: 100%
   box-sizing: border-box
   font-size: $secondary-font-size
-  font-weight: 500
-  color: $heading
+  // The name of an entity, at the weight and the colour the site sets a name
+  // in. $heading is the brown of h1 and of block titles; on a caption under an
+  // icon it read as a heading of its own, and bold made that louder still.
+  font-weight: bold
+  color: $text
   letter-spacing: 0.1px
   text-align: center
   line-height: 1.2
@@ -340,41 +350,38 @@ const hasAwards = computed(() => awards.value.length > 0);
   min-height: 2.4em
 
 // Tier metal colors — shared tokens (see ThemeVariables.css), also
-// consumed by ModerationAwardTypes.vue for the same catalog dedup.
+// consumed by ModerationAwardTypes.vue for the same catalog dedup. The metal
+// goes on the glyph of both the icon and the series badge; the badge's fill is
+// the one dark token, so the tier colour reads on the letters instead of on
+// 16px of pill behind black text.
 .tier-gold
-  .award-icon
+  .award-icon,
+  .award-series
     color: var(--award-gold)
-  .award-series
-    background-color: var(--award-gold)
 .tier-silver
-  .award-icon
+  .award-icon,
+  .award-series
     color: var(--award-silver)
-  .award-series
-    background-color: var(--award-silver)
 .tier-bronze
-  .award-icon
+  .award-icon,
+  .award-series
     color: var(--award-bronze)
-  .award-series
-    background-color: var(--award-bronze)
 .tier-steel
-  .award-icon
+  .award-icon,
+  .award-series
     color: $text-meta
-  .award-series
-    background-color: $text-meta
 .tier-base
-  .award-icon
-    color: $heading
+  .award-icon,
   .award-series
-    background-color: $heading
+    color: $heading
 // Diamond — a unique, place-less honor (currently only "Почетный гоблин").
 // Rendered in the achievement platinum (the tier-IV colour from the
 // achievements grid), so the honour reads as a distinct, premium mark rather
 // than a contest metal. Colour: --award-diamond → --achievement-platinum (SSOT).
 .tier-diamond
-  .award-icon
-    color: var(--award-diamond)
+  .award-icon,
   .award-series
-    background-color: var(--award-diamond)
+    color: var(--award-diamond)
 
 // --- Rich popover ---
 .award-popover

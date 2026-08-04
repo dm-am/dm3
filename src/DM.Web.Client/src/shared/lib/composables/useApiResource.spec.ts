@@ -100,6 +100,42 @@ describe("useApiResource", () => {
     expect(resource.data.value).toEqual(["one game", "the new one"]);
   });
 
+  it("makes a caller wait for the refetch invalidate started", async () => {
+    const first = deferred<string[]>();
+    const second = deferred<string[]>();
+    const fetcher = vi
+      .fn<() => Promise<ApiResult<string[]>>>()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    // A minute of cache: without invalidate() the data below is fresh, and a
+    // plain fetch() would return at the freshness check.
+    const resource = useApiResource(fetcher, { cacheMs: 60_000 });
+
+    first.release(ok(["one game"]));
+    await resource.fetch();
+
+    const refreshing = resource.invalidate();
+
+    // invalidate() means "what is on screen is known to be wrong", so the
+    // entry has to be aged out rather than dropped: dropped, it reads as
+    // absent, and a joining caller is told the data is fresh while the
+    // correcting request is still on the wire.
+    let joinedSettled = false;
+    const joined = resource.fetch();
+    void joined.then(() => {
+      joinedSettled = true;
+    });
+    await Promise.resolve();
+    expect(joinedSettled).toBe(false);
+
+    second.release(ok(["one game", "the new one"]));
+    await refreshing;
+    await joined;
+
+    expect(resource.data.value).toEqual(["one game", "the new one"]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
   it("does not put a request on the wire for a list nobody loaded", async () => {
     const fetcher = vi.fn(() => Promise.resolve(ok(["x"])));
     const resource = useApiResource(fetcher);
@@ -110,6 +146,43 @@ describe("useApiResource", () => {
 
     expect(fetcher).not.toHaveBeenCalled();
     expect(resource.data.value).toBeNull();
+  });
+
+  it("keeps refreshing in the background after a forced fetch overtook one", async () => {
+    const first = deferred<string>();
+    const background = deferred<string>();
+    const forced = deferred<string>();
+    const later = deferred<string>();
+    const queue = [
+      first.promise,
+      background.promise,
+      forced.promise,
+      later.promise,
+    ];
+    const fetcher = vi.fn(() => queue.shift() as Promise<ApiResult<string>>);
+    // Negative TTL: everything is stale the moment it lands, so the test needs
+    // no clock to reach the stale-while-revalidate branch.
+    const resource = useApiResource(fetcher, { cacheMs: -1 });
+
+    const initial = resource.fetch();
+    first.release(ok("first"));
+    await initial;
+
+    // Stale: this one takes the background branch and raises the flag.
+    await resource.fetch();
+
+    // A mutation invalidates the same resource while that refresh is still on
+    // the wire, so the guard moves on and the background answer is dropped.
+    const invalidated = resource.invalidate();
+    forced.release(ok("forced"));
+    background.release(ok("background"));
+    await invalidated;
+
+    // Stale again. With the flag left raised this call returned without a
+    // request, and the resource never refreshed again.
+    await resource.fetch();
+
+    expect(fetcher).toHaveBeenCalledTimes(4);
   });
 
   it("raises loading synchronously, before the first await", () => {

@@ -6,9 +6,9 @@ namespace DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes;
 public class StringAttributeConstraints : AttributeConstraints
 {
     /// <summary>
-    /// Maximum string length
+    /// Maximum string length (no cap if null)
     /// </summary>
-    public int MaxLength { get; set; }
+    public int? MaxLength { get; set; }
 
     /// <inheritdoc />
     public override string GetDefaultValue() => string.Empty;

@@ -5,10 +5,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <InternalsVisibleTo Include="DM.Domain.Messaging.Tests" />
-    </ItemGroup>
-
-    <ItemGroup>
         <ProjectReference Include="..\DM.Domain.Core\DM.Domain.Core.csproj" />
     </ItemGroup>
 

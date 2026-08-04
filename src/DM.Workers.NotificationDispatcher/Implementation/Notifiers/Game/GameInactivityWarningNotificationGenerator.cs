@@ -58,6 +58,9 @@ internal class GameInactivityWarningNotificationGenerator : BaseNotificationGene
         usersInterested.UnionWith(data.AssistantIds);
         usersInterested.UnionWith(data.ActivePlayerIds);
 
+        // No ActorId: nobody performed this. The warning comes from the schedule
+        // that watches a game go a month without posts, and MasterUsername below
+        // names the game's master for the text, not an actor to filter on.
         yield return new CreateNotification
         {
             UsersInterested = usersInterested.ToArray(),

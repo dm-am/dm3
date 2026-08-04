@@ -1,6 +1,7 @@
 using System;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Identity;
 
 namespace DM.Domain.Moderation.Features.Warnings;
 
@@ -56,9 +57,64 @@ public class Ban
     public bool IsVoluntary { get; set; }
 
     /// <summary>
-    /// Whether the ban has been removed (lifted early)
+    /// When the ban was lifted early, null while it runs its course
     /// </summary>
-    public bool IsRemoved { get; set; }
+    public DateTimeOffset? LiftedUtc { get; set; }
+
+    /// <summary>
+    /// Moderator who lifted the ban early
+    /// </summary>
+    public Guid? LiftedByUserId { get; set; }
+
+    /// <summary>
+    /// Why the ban was lifted early
+    /// </summary>
+    public string? LiftReason { get; set; }
+
+    /// <summary>
+    /// Whether the ban was lifted before its end date. Lifting is not deleting:
+    /// the row used to be soft-deleted, which put it under the global !IsRemoved
+    /// filter, so this flag - read off that same column - was false on every row a
+    /// query could still return.
+    /// </summary>
+    public bool IsLifted => LiftedUtc.HasValue;
+
+    /// <summary>
+    /// How far into the future a permanent ban is written. Permanence is not a
+    /// column: the schema stores a window, and a window this long is what
+    /// carries it.
+    /// </summary>
+    public const int PermanentYears = 100;
+
+    /// <summary>
+    /// The remaining lifetime above which a ban reads back as permanent.
+    /// Deliberately far below <see cref="PermanentYears" />: the end date is
+    /// fixed at creation while the moment it is compared against keeps moving,
+    /// so an exact comparison would turn every permanent ban temporary one tick
+    /// after it was issued.
+    /// </summary>
+    public const int PermanentThresholdYears = 50;
+
+    /// <summary>
+    /// Whether the ban is in force at the given moment.
+    /// </summary>
+    /// <remarks>
+    /// Delegates to <see cref="AccessRestriction.IsInForceAt" />, the single
+    /// definition of "banned right now", so that a listing and the enforcement
+    /// cannot answer differently about the same ban. A lifted ban keeps its row
+    /// for the moderation history and is in force for nobody.
+    /// </remarks>
+    public bool IsInForceAt(DateTimeOffset moment) =>
+        !IsLifted &&
+        new AccessRestriction(AccessRestrictionPolicy, StartedUtc, EndedUtc).IsInForceAt(moment);
+
+    /// <summary>
+    /// Whether the ban is a permanent one at the given moment. A voluntary
+    /// self-ban never is: its length is the user's own choice, and lifting it is
+    /// not reserved for administrators.
+    /// </summary>
+    public bool IsPermanentAt(DateTimeOffset moment) =>
+        !IsVoluntary && EndedUtc > moment.AddYears(PermanentThresholdYears);
 }
 
 /// <summary>

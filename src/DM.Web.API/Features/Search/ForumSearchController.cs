@@ -44,8 +44,8 @@ public class ForumSearchController : ControllerBase
     /// Anonymous callers search the boards open to guests; everything else needs
     /// the role the board demands.
     /// </remarks>
-    /// <param name="query">Search query string (1-500 characters)</param>
-    /// <param name="q">Pagination parameters</param>
+    /// <param name="search">Search query string (1-500 characters)</param>
+    /// <param name="paging">Pagination parameters</param>
     /// <param name="ct">Cancellation token</param>
     /// <response code="200">Search results with pagination</response>
     /// <response code="400">Invalid query (empty or too long)</response>
@@ -55,9 +55,12 @@ public class ForumSearchController : ControllerBase
     [ProducesResponseType(typeof(ListEnvelope<ForumSearchResult>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
+    // The free-text filter is `search` on all thirteen other list endpoints;
+    // this one used to call it `query` and its neighbour /v1/search/messages
+    // called it `q`. See the query vocabulary in API_DESIGN.md.
     public async Task<IActionResult> SearchForum(
-        [FromQuery][Required][StringLength(500, MinimumLength = 1)] string query,
-        [FromQuery] PagingQuery q,
+        [FromQuery][Required][StringLength(500, MinimumLength = 1)] string search,
+        [FromQuery] PagingQuery paging,
         CancellationToken ct) =>
-        Ok(await _apiService.Search(query, q, ct));
+        Ok(await _apiService.Search(search, paging, ct));
 }

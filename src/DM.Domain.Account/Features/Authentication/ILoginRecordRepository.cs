@@ -43,9 +43,15 @@ public interface ILoginRecordRepository
     /// Get recent login history for a user (both successful and failed)
     /// </summary>
     /// <param name="userId">User identifier</param>
-    /// <param name="limit">Maximum number of records to return</param>
+    /// <param name="skip">Number of records to skip</param>
+    /// <param name="take">Number of records to take</param>
     /// <returns>Login records sorted by date descending</returns>
-    Task<IReadOnlyList<UserLoginRecord>> GetLoginHistory(Guid userId, int limit = 50);
+    Task<IReadOnlyList<UserLoginRecord>> GetLoginHistory(Guid userId, int skip, int take);
+
+    /// <summary>
+    /// Count the login records of a user
+    /// </summary>
+    Task<int> CountLoginHistory(Guid userId);
 
     /// <summary>
     /// Check if user has previously logged in from this IP address

@@ -78,10 +78,4 @@ internal class SubscriptionApiService : ISubscriptionApiService
         return subscription == null ? null : _mapper.Map<Subscription>(subscription);
     }
 
-    /// <inheritdoc />
-    public async Task<IEnumerable<User>> GetSubscribersAsync(SubscriptionTargetType targetType, Guid targetId)
-    {
-        var subscribers = await _subscriptionService.GetTargetSubscribersAsync(targetType, targetId);
-        return subscribers.Select(_mapper.Map<User>);
-    }
 }

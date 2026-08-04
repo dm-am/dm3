@@ -34,6 +34,7 @@ import { useGamesStore } from "@/entities/game";
 import { useAuthStore } from "@/entities/user";
 import { onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
+import { useViewerChange } from "@/shared/lib/composables";
 
 const store = useGamesStore();
 const userStore = useAuthStore();
@@ -51,16 +52,9 @@ async function fetchRecruitingGames(force = false) {
 
 onMounted(() => fetchRecruitingGames());
 
-// Refetch only on actual login/logout to keep unread counters accurate
-// (force=true because a plain fetch() no-ops inside the cache TTL).
-watch(
-  () => userStore.user?.username,
-  (newUsername, oldUsername) => {
-    if ((newUsername && !oldUsername) || (!newUsername && oldUsername)) {
-      fetchRecruitingGames(true);
-    }
-  },
-);
+// Refetch on any change of viewer to keep unread counters accurate (force=true
+// because a plain fetch() no-ops inside the cache TTL).
+useViewerChange(() => fetchRecruitingGames(true));
 
 // Re-trigger on navigation so a failed fetch gets another chance once the
 // TTL cache considers it stale.

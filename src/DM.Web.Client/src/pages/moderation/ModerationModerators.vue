@@ -12,8 +12,9 @@ import { ErrorState } from "@/shared/ui/ErrorState";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { UserLink } from "@/entities/user";
 import { useRoleGate } from "./lib/useRoleGate";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
-const { hasAccess } = useRoleGate("Moderator");
+const { hasAccess, deniedText } = useRoleGate("Moderator");
 
 const moderators = ref<ModeratorOverview[]>([]);
 const loading = ref(false);
@@ -51,9 +52,7 @@ onMounted(fetch);
   <div class="moderation-moderators">
     <page-title>Модерация</page-title>
 
-    <SecondaryText v-if="!hasAccess">
-      Страница доступна только модераторам
-    </SecondaryText>
+    <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
 
     <ErrorState v-else-if="loadError" :message="loadError" :retry="fetch" />
 
@@ -72,7 +71,7 @@ onMounted(fetch);
         <span v-if="row.boards.length">
           {{ row.boards.map((z) => z.title).join(", ") }}
         </span>
-        <span v-else class="muted">—</span>
+        <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
       </template>
       <template #cell-games="{ row }">
         <template v-if="row.curatedGames.length">
@@ -83,7 +82,7 @@ onMounted(fetch);
             ><template v-if="i < row.curatedGames.length - 1">, </template>
           </template>
         </template>
-        <span v-else class="muted">—</span>
+        <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
       </template>
       <template #cell-blogs="{ row }">
         <template v-if="row.curatedBlogs.length">
@@ -94,7 +93,7 @@ onMounted(fetch);
             ><template v-if="i < row.curatedBlogs.length - 1">, </template>
           </template>
         </template>
-        <span v-else class="muted">—</span>
+        <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
       </template>
     </DataTable>
   </div>

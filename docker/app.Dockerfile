@@ -5,7 +5,12 @@ ARG PROJECT_NAME
 WORKDIR /app
 
 # 1. Copy solution and project files FIRST (for restore caching)
-COPY DM.sln Directory.Build.props Directory.Packages.props ./
+# The compiler policy the local build reads has to reach this one too: the
+# props carry TreatWarningsAsErrors and .editorconfig carries the exemptions it
+# is calibrated against. Without the latter the image build fails on warnings a
+# developer never sees, and the failure names a source file rather than a
+# missing file.
+COPY DM.sln Directory.Build.props Directory.Packages.props .editorconfig ./
 
 # Domain projects
 COPY src/DM.Domain.Core/DM.Domain.Core.csproj src/DM.Domain.Core/
@@ -36,20 +41,25 @@ RUN dotnet restore src/${PROJECT_NAME}/${PROJECT_NAME}.csproj
 # 3. Copy source code AFTER restore (only code changes invalidate this layer)
 COPY src/ src/
 
-# 4. Publish
-RUN dotnet publish src/${PROJECT_NAME}/${PROJECT_NAME}.csproj -c Release -o out
+# 4. Publish. --no-restore: the restore above already ran for this project, and
+# without the flag publish does the whole of it a second time on every build.
+RUN dotnet publish src/${PROJECT_NAME}/${PROJECT_NAME}.csproj -c Release -o out --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 
 ARG PROJECT_NAME
 
 WORKDIR /app
-COPY --from=build /app/out ./
 
+# Ahead of the COPY: neither layer depends on anything in the repository, and
+# below it the package index was fetched again on every change to a single
+# source file. curl is here for the healthcheck the compose files declare.
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN adduser --disabled-password --no-create-home dmuser
+
+COPY --from=build /app/out ./
 USER dmuser
 
 ENV RUNTIME_PROJECT=${PROJECT_NAME}.dll

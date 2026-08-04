@@ -95,9 +95,17 @@ function handleKeydown(e: KeyboardEvent) {
         @click="shell.handleBackdropClick"
         @keydown="handleKeydown"
       >
+        <!-- tabindex="-1" is not decoration. The Escape listener sits on the
+             backdrop, and a click on the dialog's own heading or sentence moves
+             the document focus to <body>; the keydown then fires on body, which
+             is the backdrop's ANCESTOR, and never reaches the listener — so
+             Escape stopped closing the dialog the reader was looking at. A
+             container that can hold focus itself takes that click instead, and
+             the event has a path back down. -->
         <div
           ref="container"
           class="dialog-container"
+          tabindex="-1"
           role="dialog"
           aria-modal="true"
           :aria-label="title"
@@ -212,11 +220,7 @@ function handleKeydown(e: KeyboardEvent) {
   +button
 
   &.danger
-    background-color: $accent-red
-    border-color: $accent-red
-
-    &:hover:not(:disabled)
-      background-color: $accent-red
+    +button-danger
 
   &:disabled
     opacity: 0.6

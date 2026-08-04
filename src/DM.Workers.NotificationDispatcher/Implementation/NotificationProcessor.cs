@@ -1,16 +1,17 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
+using DM.Domain.Core.Enums;
 using DM.Infrastructure.Messaging.GeneralBus;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Workers.NotificationDispatcher.Implementation.Notifiers;
 using DM.Workers.NotificationDispatcher.Implementation.Email;
 using DM.Workers.NotificationDispatcher.Implementation.Bot;
 using Jamq.Client.Abstractions.Consuming;
-using Jamq.Client.Abstractions.Producing;
-using Jamq.Client.Rabbit.Producing;
+using Microsoft.Extensions.Logging;
 
 namespace DM.Workers.NotificationDispatcher.Implementation;
 
@@ -22,7 +23,8 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
     private readonly INotificationEmailSender _emailSender;
     private readonly INotificationBotSender _botSender;
     private readonly IMapper _mapper;
-    private readonly IProducer<string, RealtimeNotification> _producer;
+    private readonly IRealtimeNotificationProducer _producer;
+    private readonly ILogger<NotificationProcessor> _logger;
 
     /// <inheritdoc />
     public NotificationProcessor(
@@ -31,15 +33,16 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
         INotificationEmailSender emailSender,
         INotificationBotSender botSender,
         IMapper mapper,
-        IProducerBuilder producerBuilder)
+        IRealtimeNotificationProducer producer,
+        ILogger<NotificationProcessor> logger)
     {
         _generators = generators;
         _notificationService = notificationService;
         _emailSender = emailSender;
         _botSender = botSender;
         _mapper = mapper;
-        _producer = producerBuilder.BuildRabbit<RealtimeNotification>(
-            new RabbitProducerParameters("dm.notifications.sent"));
+        _producer = producer;
+        _logger = logger;
     }
 
     /// <inheritdoc />
@@ -65,26 +68,70 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
             return ProcessResult.Success;
         }
 
-        var notifications = await _notificationService.CreateAsync(notificationsToCreate);
+        var notifications = await _notificationService.CreateAsync(notificationsToCreate, cancellationToken);
 
-        // Send to SignalR (in-app notifications)
-        foreach (var notification in notifications.Select(_mapper.Map<RealtimeNotification>))
+        // Past this call the notifications are durable, and the event carries no
+        // idempotency key — nothing downstream can tell a replay from a first
+        // delivery. An exception escaping from here hands the whole method back to
+        // the retry middleware, which repeats the write as well: the recipient ends
+        // up with the same entry twice in the list, two letters and two bot
+        // messages. So delivery is best effort, logged and dropped on failure. The
+        // cost is bounded — the stored notification is what the list is built from,
+        // so a lost push only delays it until the next page load. Everything above
+        // this line has no side effects and still throws, which is what lets a
+        // message that produced nothing yet be replayed safely.
+
+        // In-app notifications, pushed over SignalR by the API
+        foreach (var notification in notifications)
         {
-            await _producer.Send(string.Empty, notification, cancellationToken);
+            await Deliver("realtime", notification.Entity.EventType, () =>
+                _producer.SendAsync(_mapper.Map<RealtimeNotification>(notification.Entity), cancellationToken));
         }
 
-        // Send email notifications to users who have enabled them
-        foreach (var createNotification in notificationsToCreate)
+        // A realtime-only notification ends at the hub. It carries no words of
+        // its own and exists to refresh a counter in an open tab, so mailing it
+        // out would turn a badge into correspondence nobody asked for.
+        //
+        // Read off what CreateAsync answered, never off notificationsToCreate:
+        // the service narrows the audience to who may receive the notification,
+        // and the list built above is the one it was asked for. Mailing that one
+        // delivers precisely what the filter refused to store.
+        var outbound = notifications
+            .Select(n => n.Source)
+            .Where(n => !n.RealtimeOnly)
+            .ToArray();
+
+        // Email notifications to users who have enabled them
+        foreach (var createNotification in outbound)
         {
-            await _emailSender.SendIfEnabled(createNotification, createNotification.EventType, cancellationToken);
+            await Deliver("email", createNotification.EventType, () =>
+                _emailSender.SendIfEnabled(createNotification, createNotification.EventType, cancellationToken));
         }
 
-        // Send bot notifications (Discord/Telegram) to users who have enabled them
-        foreach (var createNotification in notificationsToCreate)
+        // Bot notifications (Discord/Telegram) to users who have enabled them
+        foreach (var createNotification in outbound)
         {
-            await _botSender.SendIfEnabled(createNotification, createNotification.EventType, cancellationToken);
+            await Deliver("bot", createNotification.EventType, () =>
+                _botSender.SendIfEnabled(createNotification, createNotification.EventType, cancellationToken));
         }
 
         return ProcessResult.Success;
+    }
+
+    /// <summary>
+    /// Runs one delivery and keeps its failure to itself, so that a channel which is
+    /// down cannot cost the recipient duplicates over the channels which are up.
+    /// </summary>
+    private async Task Deliver(string channel, EventType eventType, Func<Task> deliver)
+    {
+        try
+        {
+            await deliver();
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Failed to deliver notification of {EventType} over {Channel}",
+                eventType, channel);
+        }
     }
 }

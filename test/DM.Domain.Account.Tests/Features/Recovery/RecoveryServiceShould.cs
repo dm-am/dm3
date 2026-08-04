@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using DM.Domain.Account.Features.Availability;
 using DM.Domain.Account.Features.Recovery;
 using DM.Domain.Account.Features.Registration;
+using DM.Domain.Account.Features.Security;
 using DM.Domain.Account.Features.Tokens;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Tokens;
@@ -25,6 +26,7 @@ public class RecoveryServiceShould : UnitTestBase
     private readonly Mock<IRegistrationMailSender> _activationEmailSender;
     private readonly Mock<ITokenFactory> _tokenFactory;
     private readonly Mock<IGuidFactory> _guidFactory;
+    private readonly Mock<ISecurityAuditService> _auditService;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
     private readonly RecoveryService _service;
 
@@ -37,6 +39,7 @@ public class RecoveryServiceShould : UnitTestBase
         _activationEmailSender = Mock<IRegistrationMailSender>();
         _tokenFactory = Mock<ITokenFactory>();
         _guidFactory = Mock<IGuidFactory>();
+        _auditService = Mock<ISecurityAuditService>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
         var logger = Mock<ILogger<RecoveryService>>();
 
@@ -50,6 +53,7 @@ public class RecoveryServiceShould : UnitTestBase
             _activationEmailSender.Object,
             _tokenFactory.Object,
             _guidFactory.Object,
+            _auditService.Object,
             _dateTimeProvider.Object,
             logger.Object);
     }

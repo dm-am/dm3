@@ -180,15 +180,15 @@
 
 ### Пагинация
 
-**Всегда query parameter `?page=N`**
+**Всегда query parameter `?number=N`**
 
 ```
-/forum/general?page=2
-/game/kxmnt/comments?page=3
-/community?page=5
+/forum/general?number=2
+/game/kxmnt/comments?number=3
+/community?number=5
 ```
 
-- `page=1` — первая страница (можно опустить)
+- `number=1` — первая страница (можно опустить)
 - Номер страницы, не номер элемента
 
 ### Фильтрация и сортировка
@@ -240,7 +240,7 @@ Query parameters для фильтров:
    - Вложенный: `/{parent}/{parentId}/{entity}/{num}`
 
 3. **Пагинация:**
-   - Всегда `?page=N`
+   - Всегда `?number=N`
 
 4. **Фильтры:**
    - Query parameters

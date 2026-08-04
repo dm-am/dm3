@@ -49,7 +49,7 @@ internal class CommunityProfileService : ICommunityProfileService
 
         if (user == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, $"Пользователь {username} не найден");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.UserNotFoundByUsername(username));
         }
 
         return user;
@@ -65,7 +65,7 @@ internal class CommunityProfileService : ICommunityProfileService
 
         if (user == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, $"Пользователь с ID {userId} не найден");
+            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.UserNotFoundById(userId));
         }
 
         return user;

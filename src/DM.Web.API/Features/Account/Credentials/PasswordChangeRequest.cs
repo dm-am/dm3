@@ -8,7 +8,7 @@ namespace DM.Web.API.Features.Account.Credentials;
 /// <remarks>
 /// Used when user is logged in and wants to change their password.
 /// Requires current password for verification.
-/// For password reset via email token, see POST /recovery and POST /password-reset/{token}.
+/// For password reset via email token, see POST /recovery and POST /password-reset.
 /// </remarks>
 public class PasswordChangeRequest
 {

@@ -10,9 +10,10 @@ namespace DM.Domain.Game.Features.Games;
 public interface IGameCreationDataResolver
 {
     /// <summary>
-    /// Get all available tag IDs
+    /// Translate the short tag ids the caller speaks into the tags' own
+    /// identifiers, dropping the ones the catalog no longer has
     /// </summary>
-    Task<IEnumerable<Guid>> GetAvailableTagIds();
+    Task<IReadOnlyCollection<Guid>> ResolveTagIds(IEnumerable<int>? shortIds);
     /// Find assistant user ID by username
     /// <returns>Tuple of (exists, userId)</returns>
     Task<(bool exists, Guid userId)> FindAssistantIdAsync(string username);

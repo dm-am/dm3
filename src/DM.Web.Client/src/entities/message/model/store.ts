@@ -293,12 +293,14 @@ export const useMessagingStore = defineStore("messaging", () => {
   // Send message
   const sending = ref(false);
 
+  /** Returns the error when the send failed, so the caller can restore the text. */
   async function sendMessage(chatId: ChatId, text: string) {
-    if (!text.trim()) return null;
+    if (!text.trim()) return { error: null };
     sending.value = true;
     try {
       const { data, error } = await messagingApi.sendMessage(chatId, text);
-      if (!error && data) {
+      if (error) return { error };
+      if (data) {
         messagesList.value.push(data as Message);
         // Update last message in chat list
         if (chats.value) {
@@ -312,10 +314,10 @@ export const useMessagingStore = defineStore("messaging", () => {
             data as Chat["lastMessage"];
         }
       }
-      return data ?? null;
     } finally {
       sending.value = false;
     }
+    return { error: null };
   }
 
   // Update message

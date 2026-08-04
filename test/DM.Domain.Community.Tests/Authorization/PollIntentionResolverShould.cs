@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Identity;
 using DM.Domain.Community.Authorization;

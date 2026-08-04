@@ -151,6 +151,7 @@ function handleKeydown(e: KeyboardEvent) {
         <div
           ref="container"
           class="dialog-container"
+          tabindex="-1"
           role="dialog"
           aria-modal="true"
           :aria-label="title"

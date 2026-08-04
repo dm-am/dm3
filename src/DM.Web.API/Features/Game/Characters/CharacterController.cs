@@ -96,7 +96,7 @@ public class CharacterController : ControllerBase
         var gameId = await _gameApiService.ResolveId(id);
         var result = await _characterApiService.Create(gameId, character);
         return CreatedAtRoute(nameof(GetCharacter),
-            new {id = result.Resource.Id}, result);
+            new { id = result.Resource.Id }, result);
     }
 
     /// <summary>
@@ -114,7 +114,7 @@ public class CharacterController : ControllerBase
     /// Update character
     /// </summary>
     /// <param name="id">Character identifier</param>
-    /// <param name="character">Updated character details</param>
+    /// <param name="request">Editable character fields</param>
     /// <response code="200">Returns the updated character</response>
     /// <response code="400">Some of character changed properties were invalid or passed id was not recognized</response>
     /// <response code="401">User must be authenticated</response>
@@ -127,8 +127,38 @@ public class CharacterController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PutCharacter(Guid id, [FromBody] CharacterDetails character) =>
-        Ok(await _characterApiService.Update(id, character));
+    public async Task<IActionResult> PutCharacter(Guid id, [FromBody] UpdateCharacterRequest request) =>
+        Ok(await _characterApiService.Update(id, request));
+
+    /// <summary>
+    /// Change character status
+    /// </summary>
+    /// <remarks>
+    /// The caller names the transition, not the target status: Retired is reached
+    /// by dying, by leaving and by being exiled, and each is a different right.
+    /// `Accept` and `Decline` answer an application, `Kill` and `Exile` belong to
+    /// the game lead, `Leave` and `Return` to the player, `Resurrect` undoes a
+    /// death. A transition illegal from the current status is rejected with 400.
+    ///
+    /// Content edits go through PATCH; it does not change status.
+    /// </remarks>
+    /// <param name="id">Character identifier</param>
+    /// <param name="request">Requested status transition</param>
+    /// <response code="200">Returns the updated character</response>
+    /// <response code="400">The requested transition is illegal for the current status</response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="403">User is not authorized to make this transition</response>
+    /// <response code="404">Character not found</response>
+    [HttpPost("{id}/status", Name = nameof(PostCharacterStatus))]
+    [AuthenticationRequired]
+    [ProducesResponseType(typeof(Envelope<CharacterDetails>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> PostCharacterStatus(
+        Guid id, [FromBody] CharacterStatusChangeRequest request) =>
+        Ok(await _characterApiService.ChangeStatus(id, request));
 
     /// <summary>
     /// Delete character

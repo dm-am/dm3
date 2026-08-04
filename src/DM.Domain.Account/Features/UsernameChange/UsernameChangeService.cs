@@ -16,7 +16,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
 {
     // Forbidden: control chars, HTML/URL unsafe, quotes, brackets, special chars, zero-width
     // Whitespace: not at start/end, not consecutive
-    // See: docs/architecture/USERNAME_POLICY.md
+    // See: docs/conventions/USERNAME_POLICY.md
     [GeneratedRegex(@"^(?!\s)(?!.*\s$)(?!.*\s{2})[^\p{Cc}<>""'`\\/@?#%&\[\](){}=~!$^*+|;:\u200B-\u200F\u2028-\u202F\uFEFF]{2,20}$")]
     private static partial Regex UsernameValidationRegex();
 
@@ -48,14 +48,14 @@ internal partial class UsernameChangeService : IUsernameChangeService
     {
         var currentUser = _identityProvider.Current.User;
         if (!currentUser.IsAuthenticated)
-            throw new HttpException(HttpStatusCode.Unauthorized, "Authentication required");
+            throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
 
         await _validator.ValidateAndThrowAsync(request);
 
         // Check no pending/approved request exists
         var existing = await _repository.GetPendingByUserId(currentUser.UserId);
         if (existing != null)
-            throw new HttpException(HttpStatusCode.Conflict, "A pending username change request already exists");
+            throw new HttpException(HttpStatusCode.Conflict, "Заявка на смену имени уже отправлена");
 
         var now = _dateTimeProvider.Now;
         var dto = new UsernameChangeRequest
@@ -88,7 +88,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
     {
         var currentUser = _identityProvider.Current.User;
         if (!currentUser.IsAuthenticated)
-            throw new HttpException(HttpStatusCode.Unauthorized, "Authentication required");
+            throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
 
         var entity = await _repository.GetLatestByUserId(currentUser.UserId);
         if (entity == null) return null;
@@ -107,7 +107,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
     {
         var entity = await _repository.GetById(requestId);
         if (entity == null)
-            throw new HttpException(HttpStatusCode.NotFound, "Username change request not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UsernameChangeRequestNotFound);
 
         return MapToEntry(entity);
     }
@@ -118,10 +118,10 @@ internal partial class UsernameChangeService : IUsernameChangeService
         var currentUser = _identityProvider.Current.User;
         var request = await _repository.GetById(resolve.RequestId);
         if (request == null)
-            throw new HttpException(HttpStatusCode.NotFound, "Username change request not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UsernameChangeRequestNotFound);
 
         if (request.Status != UsernameChangeRequestStatus.Pending)
-            throw new HttpException(HttpStatusCode.Conflict, "Request is already resolved");
+            throw new HttpException(HttpStatusCode.Conflict, "Заявка уже рассмотрена");
 
         var now = _dateTimeProvider.Now;
 
@@ -181,21 +181,21 @@ internal partial class UsernameChangeService : IUsernameChangeService
     {
         var request = await _repository.GetByApprovalToken(token);
         if (request == null)
-            throw new HttpException(HttpStatusCode.NotFound, "Invalid or expired approval token");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.LinkInvalidOrExpired);
 
         var now = _dateTimeProvider.Now;
 
         // Check if token is expired
         if (request.ApprovalTokenExpiresUtc < now)
-            throw new HttpException(HttpStatusCode.NotFound, "Approval token has expired");
+            throw new HttpException(HttpStatusCode.NotFound, "Срок действия ссылки истек");
 
         // Check if request is in approved state (not yet completed)
         if (request.Status != UsernameChangeRequestStatus.Approved)
-            throw new HttpException(HttpStatusCode.Conflict, "Request is not in approved state");
+            throw new HttpException(HttpStatusCode.Conflict, "Заявка не одобрена");
 
         // Validate username format
         if (string.IsNullOrWhiteSpace(newUsername) || !UsernameValidationRegex().IsMatch(newUsername.Trim()))
-            throw new HttpException(HttpStatusCode.BadRequest, "Invalid username format");
+            throw new HttpException(HttpStatusCode.BadRequest, "Недопустимое имя");
 
         newUsername = newUsername.Trim();
 
@@ -207,7 +207,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         var usernameReserved = await _historyRepository.IsUsernameReservedForOthers(newUsername, request.UserId);
 
         if (!usernameAvailable || usernameReserved)
-            throw new HttpException(HttpStatusCode.Conflict, "Username is not available");
+            throw new HttpException(HttpStatusCode.Conflict, "Имя недоступно");
 
         // Record history
         await _historyRepository.Add(new CreateUsernameHistory
@@ -240,16 +240,16 @@ internal partial class UsernameChangeService : IUsernameChangeService
         var currentUser = _identityProvider.Current.User;
         var request = await _repository.GetById(requestId);
         if (request == null)
-            throw new HttpException(HttpStatusCode.NotFound, "Username change request not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UsernameChangeRequestNotFound);
 
         // Can only rollback completed requests
         if (request.Status != UsernameChangeRequestStatus.Completed)
-            throw new HttpException(HttpStatusCode.Conflict, "Can only rollback completed username changes");
+            throw new HttpException(HttpStatusCode.Conflict, "Откатить можно только завершенную смену имени");
 
         // Find the previous username from history
         var history = await _historyRepository.GetLatestByUserId(request.UserId);
         if (history == null)
-            throw new HttpException(HttpStatusCode.Conflict, "No username history found for rollback");
+            throw new HttpException(HttpStatusCode.Conflict, "Откат невозможен: нет истории смены имени");
 
         // The history entry shows: OldUsername -> NewUsername
         // To rollback, we need to set username back to OldUsername
@@ -261,7 +261,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         var usernameAvailable = await _repository.IsUsernameAvailable(previousUsername, request.UserId);
         if (!usernameAvailable)
             throw new HttpException(HttpStatusCode.Conflict,
-                $"Cannot rollback: previous username '{previousUsername}' is no longer available");
+                $"Откат невозможен: имя {previousUsername} уже занято");
 
         var now = _dateTimeProvider.Now;
 

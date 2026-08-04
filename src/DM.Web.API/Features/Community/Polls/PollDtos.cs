@@ -168,18 +168,6 @@ public class UpdatePollRequest
 }
 
 /// <summary>
-/// Request to vote on a poll
-/// </summary>
-public class VoteRequest
-{
-    /// <summary>
-    /// Option ID to vote for
-    /// </summary>
-    [Required(ErrorMessage = "Option ID is required")]
-    public Guid OptionId { get; set; }
-}
-
-/// <summary>
 /// Query parameters for listing polls
 /// </summary>
 public class PollsQuery : PagingQuery

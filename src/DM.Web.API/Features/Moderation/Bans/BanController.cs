@@ -75,7 +75,7 @@ public class BanController : ControllerBase
         var ban = await _banApiService.GetActiveBan(username);
         if (ban == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "User is not currently banned");
+            throw new HttpException(HttpStatusCode.NotFound, "Пользователь не забанен");
         }
         return Ok(ban);
     }

@@ -10,6 +10,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Game.Authorization;
+using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.PostReviews;
 using DM.Testing.Dsl;
@@ -31,7 +32,7 @@ public class PostReviewServiceShould : UnitTestBase
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<IGuidFactory> _guidFactory;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
-    private readonly Mock<IProbationConfiguration> _probationConfig;
+    private readonly Mock<IGameBlacklistRepository> _blacklistRepository;
     private readonly PostReviewService _service;
     private readonly Guid _currentUserId;
 
@@ -59,8 +60,7 @@ public class PostReviewServiceShould : UnitTestBase
         _dateTimeProvider = Mock<IDateTimeProvider>();
         _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
 
-        _probationConfig = Mock<IProbationConfiguration>();
-        _probationConfig.Setup(c => c.NewbiePostThreshold).Returns(100);
+        _blacklistRepository = Mock<IGameBlacklistRepository>();
 
         _service = new PostReviewService(
             _createValidator.Object,
@@ -70,7 +70,28 @@ public class PostReviewServiceShould : UnitTestBase
             _identityProvider.Object,
             _guidFactory.Object,
             _dateTimeProvider.Object,
-            _probationConfig.Object);
+            _blacklistRepository.Object);
+    }
+
+    [Fact]
+    public async Task ThrowForbiddenWhenBlacklistedFromTheGame()
+    {
+        var postId = Guid.NewGuid();
+        var postAuthorId = Guid.NewGuid();
+        var gameId = Guid.NewGuid();
+
+        SetupSuccessfulCreate(postId, postAuthorId, gameId);
+        _blacklistRepository
+            .Setup(r => r.IsBlocked(gameId, _currentUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var act = async () => await _service.CreateAsync(
+            new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
+
+        // The game's posts are open to a blacklisted reader and stay open, so the
+        // refusal has to sit on rating them rather than on seeing them
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
     }
 
     #region Create Tests

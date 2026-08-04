@@ -6,10 +6,12 @@ using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Domain.Blog.Features.Comments;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
@@ -21,11 +23,16 @@ internal class BlogCommentRepository : IBlogCommentRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public BlogCommentRepository(DmDbContext dbContext, IMapper mapper)
+    public BlogCommentRepository(
+        DmDbContext dbContext,
+        IMapper mapper,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _mapper = mapper;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
@@ -69,9 +76,9 @@ internal class BlogCommentRepository : IBlogCommentRepository
         }
 
         // Filter by authors (OR logic)
-        if (commentsQuery.Authors is { Count: > 0 })
+        if (commentsQuery.AuthorUsernames is { Count: > 0 })
         {
-            var authorNames = commentsQuery.Authors.Select(a => a.ToLowerInvariant()).ToArray();
+            var authorNames = commentsQuery.AuthorUsernames.Select(a => a.ToLowerInvariant()).ToArray();
             query = query.Where(c => c.Author != null && authorNames.Contains(c.Author.Username.ToLower()));
         }
 
@@ -135,7 +142,7 @@ internal class BlogCommentRepository : IBlogCommentRepository
     public async Task<(Comment comment, Guid commentId)> Create(CreateComment createComment, Guid authorId, Guid blogId, int newCommentCount, CancellationToken ct = default)
     {
         var commentId = Guid.NewGuid();
-        var now = DateTimeOffset.UtcNow;
+        var now = _dateTimeProvider.Now;
 
         var dbComment = new DbComment
         {
@@ -212,13 +219,13 @@ internal class BlogCommentRepository : IBlogCommentRepository
     }
 
     /// <inheritdoc />
-    public async Task<Guid?> GetSecondLastCommentId(Guid blogId, CancellationToken ct = default)
+    public async Task<Guid?> GetNewestCommentIdExcept(Guid blogId, Guid exceptCommentId, CancellationToken ct = default)
     {
         return await _dbContext.Comments
-            .TagWith("DM.BlogComments.SecondLastCommentId")
-            .Where(c => !c.IsRemoved && c.EntityId == blogId)
+            .TagWith("DM.BlogComments.NewestCommentIdExcept")
+            .Where(c => !c.IsRemoved && c.EntityId == blogId && c.CommentId != exceptCommentId)
             .OrderByDescending(c => c.CreatedUtc)
-            .Skip(1)
+            .ThenByDescending(c => c.CommentId)
             .Select(c => (Guid?)c.CommentId)
             .FirstOrDefaultAsync(ct);
     }
@@ -229,15 +236,22 @@ internal class BlogCommentRepository : IBlogCommentRepository
         var dbComment = await _dbContext.Comments.FindAsync([entity.CommentId], ct);
         if (dbComment != null)
         {
-            dbComment.IsRemoved = true;
+            SoftDelete.Mark(dbComment, entity.DeletedByUserId, entity.DeletedUtc);
         }
 
-        // Update blog comment count and last comment ID
+        // Update blog comment count and last comment ID. The pointer moves only when
+        // the row it points at is the one going away: the service computes
+        // NewLastCommentId for the last comment and leaves it null for every other,
+        // so assigning it unconditionally erased the pointer whenever somebody
+        // deleted a comment from the middle of the discussion.
         var blog = await _dbContext.Blogs.FindAsync([entity.BlogId], ct);
         if (blog != null)
         {
             blog.CommentCount = entity.NewCommentCount;
-            blog.LastCommentId = entity.NewLastCommentId;
+            if (entity.NewLastCommentId.HasValue || blog.LastCommentId == entity.CommentId)
+            {
+                blog.LastCommentId = entity.NewLastCommentId;
+            }
         }
 
         await _dbContext.SaveChangesAsync(ct);

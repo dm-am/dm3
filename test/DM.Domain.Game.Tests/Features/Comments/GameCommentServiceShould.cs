@@ -185,10 +185,17 @@ public class GameCommentServiceShould : UnitTestBase
         var commentId = Guid.NewGuid();
         var comment = new GameCommentToDelete { Id = commentId, GameId = Guid.NewGuid() };
         _repository.Setup(r => r.GetForDelete(commentId)).ReturnsAsync(comment);
-        _repository.Setup(r => r.Delete(It.IsAny<DeleteGameCommentEntity>())).Returns(Task.CompletedTask);
+        DeleteGameCommentEntity? deleted = null;
+        _repository.Setup(r => r.Delete(It.IsAny<DeleteGameCommentEntity>()))
+            .Callback<DeleteGameCommentEntity>(entity => deleted = entity)
+            .Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(commentId);
 
         _intentionManager.Verify(m => m.ThrowIfForbidden(CommentIntention.Delete, It.IsAny<Comment>()), Times.Once);
+        // The author of the removal travels with it: Comment is ISoftDeletable and the
+        // column stays empty unless the service hands the identity over.
+        deleted!.DeletedByUserId.Should().Be(_currentUserId);
+        deleted.DeletedUtc.Should().NotBe(default);
     }
 }

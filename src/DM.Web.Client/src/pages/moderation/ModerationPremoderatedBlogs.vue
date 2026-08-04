@@ -22,7 +22,7 @@ import { PREMODERATION_STATUS_LABELS } from "./lib/labels";
 type QueueStatus = Exclude<PremoderationStatus, "Approved">;
 type BlogRow = PremoderatedBlog & { premoderationStatus: QueueStatus };
 
-const { hasAccess } = useRoleGate("Moderator");
+const { hasAccess, deniedText } = useRoleGate("Moderator");
 
 const rows = ref<BlogRow[]>([]);
 const loading = ref(false);
@@ -92,9 +92,7 @@ onMounted(fetch);
   <div class="premoderated-blogs">
     <page-title>Премодерируемые блоги</page-title>
 
-    <SecondaryText v-if="!hasAccess">
-      Страница доступна только модераторам
-    </SecondaryText>
+    <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
 
     <template v-else>
       <div class="filters">

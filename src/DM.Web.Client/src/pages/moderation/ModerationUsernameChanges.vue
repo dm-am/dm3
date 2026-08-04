@@ -13,7 +13,9 @@ import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import UsernameChangeRejectDialog from "./dialogs/UsernameChangeRejectDialog.vue";
+import { useRoleGate } from "./lib/useRoleGate";
 
+const { hasAccess, deniedText } = useRoleGate("SeniorModerator");
 const toast = useToast();
 const requests = ref<UsernameChangeRequest[]>([]);
 const loading = ref(false);
@@ -130,10 +132,12 @@ onMounted(() => fetchRequests());
 </script>
 
 <template>
-  <div class="username-changes">
+  <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
+
+  <div v-else class="username-changes">
     <h3>Запросы на смену имени пользователя</h3>
 
-    <secondary-text v-if="loading">Загрузка…</secondary-text>
+    <secondary-text v-if="loading">Загрузка...</secondary-text>
 
     <template v-else-if="pendingRequests.length === 0">
       <secondary-text>Нет активных запросов</secondary-text>
@@ -178,7 +182,7 @@ onMounted(() => fetchRequests());
             :disabled="processing === request.id"
             @click="approveTarget = request"
           >
-            {{ processing === request.id ? "…" : "Одобрить" }}
+            {{ processing === request.id ? "..." : "Одобрить" }}
           </button>
           <button
             class="reject-btn"

@@ -4,6 +4,7 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
+using DM.Web.API.Swagger;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -218,13 +219,20 @@ public class BlogController : ControllerBase
     /// </summary>
     /// <param name="id">Blog public ID (5 letters) or GUID</param>
     /// <param name="request">Rubric creation request</param>
-    /// <response code="201">Rubric created successfully</response>
+    /// <response code="201">Rubric created, returns the rubric</response>
     /// <response code="400">Invalid request</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized</response>
     /// <response code="404">Blog not found</response>
     [HttpPost("{id}/rubrics", Name = nameof(PostRubric))]
     [AuthenticationRequired]
+    // 201 without Location. A rubric has no address of its own, and
+    // API_DESIGN.md answers exactly that case: the header is left off rather
+    // than pointed at the collection, which a consumer resolving it against
+    // the request would read as the address of the created record. The status
+    // still says what happened, and dropping it to 200 said "here is a
+    // representation" about a request that created something.
+    [CreatedWithoutLocation]
     [ProducesResponseType(typeof(Envelope<Rubric>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -233,8 +241,7 @@ public class BlogController : ControllerBase
     public async Task<IActionResult> PostRubric(string id, [FromBody] CreateRubricRequest request)
     {
         var blogId = await _apiService.ResolveId(id);
-        var result = await _apiService.CreateRubric(blogId, request);
-        return Created("", result);
+        return StatusCode(StatusCodes.Status201Created, await _apiService.CreateRubric(blogId, request));
     }
 
     /// <summary>

@@ -1,5 +1,10 @@
 <template>
-  <form @submit.prevent="submit" autocomplete="off">
+  <!-- No form-level autocomplete="off": part of the browsers read it as a veto
+       over the fields' own autocomplete, and every value that matters here is
+       declared on the field (email, current-password, new-password, the
+       support contact). Anything that must not be filled - the bot traps, the
+       username and date inputs - carries its own "off". -->
+  <form @submit.prevent="submit">
     <slot />
     <div v-if="slots.controls" class="controls">
       <slot name="controls" />

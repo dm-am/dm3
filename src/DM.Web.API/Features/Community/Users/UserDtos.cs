@@ -28,10 +28,12 @@ public class User : UserRef
     /// History of username changes
     /// </summary>
     /// <remarks>
-    /// Always included. Most users have empty array [].
-    /// Helps identify "is this the former johnny?"
+    /// Helps identify "is this the former johnny?". An empty array means the user
+    /// never renamed; an absent field means this response never fetched the
+    /// history, which only the user endpoints do. The two used to be the same
+    /// empty array, and a reader could not tell them apart.
     /// </remarks>
-    public IReadOnlyCollection<UsernameHistoryEntry> UsernameHistory { get; set; } = Array.Empty<UsernameHistoryEntry>();
+    public IReadOnlyCollection<UsernameHistoryEntry>? UsernameHistory { get; set; }
 
     /// <summary>
     /// User rating information
@@ -47,7 +49,19 @@ public class User : UserRef
     /// </summary>
     public UserPicture Picture { get; set; } = new();
 
-    // ========== Statistics for community list ==========
+    // ========== Statistics, present only where somebody counted them ==========
+    //
+    // This schema travels at two fidelities. Asked for by name it is counted in
+    // full; nested in someone else's resource — the author of a comment, the
+    // people who liked it — it is whatever the query that fetched that resource
+    // filled, and that query counts no bans, no drops and no subscribers.
+    //
+    // So every aggregate below is nullable and the serializer drops nulls: a
+    // number in the response was counted, an absent field was not. They used to
+    // be plain ints, which put an indistinguishable zero on the wire and let a
+    // card report "нарушений: 0" under the name of a user with ten bans.
+    // RegisteredUtc, Rating and Picture stay unconditional — they come off the
+    // user row and every projection has them.
 
     /// <summary>
     /// Registration date (UTC)
@@ -57,7 +71,7 @@ public class User : UserRef
     /// <summary>
     /// Number of games where user is master or assistant
     /// </summary>
-    public int GamesHosting { get; set; }
+    public int? GamesHosting { get; set; }
 
     /// <summary>
     /// Games hosting breakdown by status (for tooltips)
@@ -67,7 +81,7 @@ public class User : UserRef
     /// <summary>
     /// Number of games where user is a player (has active character)
     /// </summary>
-    public int GamesPlaying { get; set; }
+    public int? GamesPlaying { get; set; }
 
     /// <summary>
     /// Games playing breakdown by status (for tooltips)
@@ -77,7 +91,7 @@ public class User : UserRef
     /// <summary>
     /// Number of blogs where user is owner or assistant
     /// </summary>
-    public int BlogsHosting { get; set; }
+    public int? BlogsHosting { get; set; }
 
     /// <summary>
     /// Blogs hosting breakdown by status (for tooltips)
@@ -87,57 +101,69 @@ public class User : UserRef
     /// <summary>
     /// Number of post reviews given to other users
     /// </summary>
-    public int ReviewsGiven { get; set; }
+    public int? ReviewsGiven { get; set; }
 
     /// <summary>
     /// Number of post reviews received from other users
     /// </summary>
-    public int ReviewsReceived { get; set; }
+    public int? ReviewsReceived { get; set; }
 
     /// <summary>
     /// Number of endorsements (user recommendations) written by this user
     /// about other users.
     /// </summary>
-    public int EndorsementsGiven { get; set; }
+    public int? EndorsementsGiven { get; set; }
 
     /// <summary>
     /// Number of endorsements received by this user (other users wrote them).
     /// </summary>
-    public int EndorsementsReceived { get; set; }
+    public int? EndorsementsReceived { get; set; }
+
+    /// <summary>
+    /// Number of game reviews written by this user. Reviews of whole games,
+    /// not of single posts — <see cref="ReviewsGiven" /> is the post one.
+    /// </summary>
+    public int? GameReviewsGiven { get; set; }
+
+    /// <summary>
+    /// Number of game reviews received by this user: reviews written about the
+    /// games they master.
+    /// </summary>
+    public int? GameReviewsReceived { get; set; }
 
     /// <summary>
     /// Forum topics authored by this user.
     /// </summary>
-    public int TopicsAuthored { get; set; }
+    public int? TopicsAuthored { get; set; }
 
     /// <summary>
     /// Comments authored by this user (polymorphic — across forum / blog /
     /// game / publication).
     /// </summary>
-    public int CommentsAuthored { get; set; }
+    public int? CommentsAuthored { get; set; }
 
     /// <summary>
     /// Messages this user has posted in the global chat.
     /// </summary>
-    public int GlobalChatMessages { get; set; }
+    public int? GlobalChatMessages { get; set; }
 
     /// <summary>
     /// Number of bans this user has received. Drives the "резиновая уточка"
     /// achievement chain — an easter egg for the duckling-terrorists meme.
     /// </summary>
-    public int BansReceived { get; set; }
+    public int? BansReceived { get; set; }
 
     /// <summary>
     /// Number of games this user has voluntarily dropped (Retired characters
     /// with IsPlayerLeft=true). Drives the "дропы" achievement chain.
     /// </summary>
-    public int GameDrops { get; set; }
+    public int? GameDrops { get; set; }
 
     /// <summary>
     /// Number of publications (blog articles) authored by this user.
     /// Drives the "публикации" achievement chain.
     /// </summary>
-    public int PublicationsAuthored { get; set; }
+    public int? PublicationsAuthored { get; set; }
 
     /// <summary>
     /// Total likes received on this user's authored content across
@@ -145,12 +171,12 @@ public class User : UserRef
     /// Drives the "лайки" achievement chain. Game posts excluded —
     /// they have their own quality signal via "Рейтинг".
     /// </summary>
-    public int LikesReceived { get; set; }
+    public int? LikesReceived { get; set; }
 
     /// <summary>
     /// How many subscribers each of the three profile categories has.
     /// </summary>
-    public SubscriberCounts SubscribersByCategory { get; set; } = new();
+    public SubscriberCounts? SubscribersByCategory { get; set; }
 
     /// <summary>
     /// Subscriber refs for profile display: at most 20, most recently active
@@ -158,7 +184,7 @@ public class User : UserRef
     /// category — the cap is taken before the categories are considered, so
     /// <see cref="SubscribersByCategory" /> is what says how many there are.
     /// </summary>
-    public IReadOnlyCollection<SubscriberRef> Subscribers { get; set; } = [];
+    public IReadOnlyCollection<SubscriberRef>? Subscribers { get; set; }
 }
 
 /// <summary>
@@ -267,12 +293,18 @@ public class UserProfile : User
     /// <summary>
     /// Number of post reviews given to other users
     /// </summary>
-    public int PostReviewsGiven { get; set; }
+    /// <remarks>
+    /// The same datum as <see cref="User.ReviewsGiven" /> under the older name,
+    /// and nullable for the same reason: mapping it from a nullable source into
+    /// a non-nullable member would reinstate the silent null-to-zero this schema
+    /// was fixed to stop doing.
+    /// </remarks>
+    public int? PostReviewsGiven { get; set; }
 
     /// <summary>
     /// Number of post reviews received from other users
     /// </summary>
-    public int PostReviewsReceived { get; set; }
+    public int? PostReviewsReceived { get; set; }
 
     /// <summary>
     /// Caller's personal note about this user (null if none)
@@ -376,6 +408,26 @@ public class UserPicture
     /// Original picture URL (full size, only in PersonalProfile context)
     /// </summary>
     public string? OriginalUrl { get; set; }
+
+    /// <summary>
+    /// Intrinsic width of <see cref="OriginalUrl"/> in pixels.
+    /// </summary>
+    /// <remarks>
+    /// Only the original needs it: the small and medium variants are square
+    /// crops, so their box follows from the size they are asked for, while the
+    /// original preserves the aspect ratio of whatever was uploaded. A client
+    /// that puts the pair on the img element gets the exact box reserved before
+    /// the picture decodes; null means the upload predates the measurement, and
+    /// the client is on its own guess again.
+    /// </remarks>
+    public int? OriginalWidth { get; set; }
+
+    /// <summary>
+    /// Intrinsic height of <see cref="OriginalUrl"/> in pixels. Sent together
+    /// with <see cref="OriginalWidth"/> — one without the other says nothing
+    /// about the ratio.
+    /// </summary>
+    public int? OriginalHeight { get; set; }
 }
 
 /// <summary>
@@ -402,14 +454,19 @@ public class UsernameHistoryEntry
 /// Query parameters for user list filtering
 /// </summary>
 /// <remarks>
-/// GET /v1/users?q=john&amp;role=Mentor&amp;activity=Active&amp;skip=0&amp;take=20&amp;sort=name
+/// GET /v1/users?search=john&amp;role=Mentor&amp;activity=Active&amp;skip=0&amp;take=20&amp;sortBy=Name
 /// </remarks>
 public class UsersQuery : PagingQuery
 {
     /// <summary>
     /// Search by username prefix
     /// </summary>
-    public string? Q { get; set; }
+    /// <remarks>
+    /// Named for the query vocabulary in API_DESIGN.md: the free-text filter is
+    /// `search` on every list endpoint. It was `q` here and on
+    /// /v1/search/messages while thirteen neighbours already said `search`.
+    /// </remarks>
+    public string? Search { get; set; }
 
     /// <summary>
     /// Filter by user role
@@ -496,8 +553,9 @@ public class UsersQuery : PagingQuery
     /// </summary>
     /// <remarks>
     /// Name - alphabetically, Rating - by post review score sum, LastActivity, Registered, etc.
+    /// Spelled `sortBy` like the other thirteen sorted lists; it was `sort` here alone.
     /// </remarks>
-    public UserSort Sort { get; set; } = UserSort.Name;
+    public UserSort SortBy { get; set; } = UserSort.Name;
 
     /// <summary>
     /// Sort direction: asc or desc

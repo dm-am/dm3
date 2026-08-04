@@ -4,9 +4,16 @@ using DM.Infrastructure.Persistence.Entities.Account;
 namespace DM.Infrastructure.Persistence.Entities.Contracts;
 
 /// <summary>
-/// Administrative activity contract (Warning, Ban)
+/// Administrative activity contract (Warning, Ban).
 /// </summary>
-internal interface IAdministrated : IRemovable
+/// <remarks>
+/// Deliberately not <see cref="IRemovable" />. A warning is soft-deletable and
+/// says so on its own declaration; a ban is not - lifting one is a moderation
+/// event with its own columns, and while the two shared a base the ban row fell
+/// under the global !IsRemoved filter and left every history the moment it was
+/// lifted.
+/// </remarks>
+internal interface IAdministrated
 {
     /// <summary>
     /// Target user identifier (who received the warning/ban)

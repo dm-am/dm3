@@ -31,6 +31,13 @@ public interface ICommunityStatsRepository
 /// </summary>
 public class LeaderboardBoards
 {
+    /// <summary>
+    /// How many entries a board holds. One number for every board: they are
+    /// read side by side, so a board cut to a different length reads as
+    /// missing data rather than as a shorter list.
+    /// </summary>
+    public const int BoardSize = 10;
+
     /// <summary>Top players by rating received</summary>
     public List<LeaderboardEntry> TopPlayersByRating { get; init; } = [];
 

@@ -37,7 +37,6 @@ import OwnedGames from "./OwnedGames.vue";
 import OwnedBlogs from "./OwnedBlogs.vue";
 import RecruitingGames from "./RecruitingGames.vue";
 import ActiveGames from "./ActiveGames.vue";
-import GamePanel from "./GamePanel.vue";
 import { useAuthStore } from "@/entities/user";
 
 // Below-fold: lazy-loaded to reduce initial bundle
@@ -48,10 +47,12 @@ const ForumBoards = defineAsyncComponent(() => import("./ForumBoards.vue"));
 // Conditional context panels: lazy-loaded so their entity stores/features
 // stay out of the main bundle (LeftSidebar itself is statically imported by
 // the router). Each mounts only on its own zone or user role.
+const GamePanel = defineAsyncComponent(() => import("./GamePanel.vue"));
 const BlogPanel = defineAsyncComponent(() => import("./BlogPanel.vue"));
-const ModerationPanel = defineAsyncComponent(
-  () => import("./ModerationPanel.vue"),
-);
+// One declaration per line, like its neighbours: the longest panel name is the
+// only thing that pushes this one past the print width.
+// prettier-ignore
+const ModerationPanel = defineAsyncComponent(() => import("./ModerationPanel.vue"));
 const MentorPanel = defineAsyncComponent(() => import("./MentorPanel.vue"));
 
 const userStore = useAuthStore();

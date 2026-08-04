@@ -73,7 +73,7 @@ internal class TopicCommentService : ITopicCommentService
         var currentUser = _identityProvider.Current.User;
         if (topic.Author != null && await _userBlacklistChecker.IsBlockedAsync(topic.Author.UserId, currentUser.UserId))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You cannot comment on this topic");
+            throw new HttpException(HttpStatusCode.Forbidden, "Вы не можете комментировать этот топик");
         }
 
         var createEntity = new CreateTopicCommentEntity
@@ -110,7 +110,36 @@ internal class TopicCommentService : ITopicCommentService
     public async Task<Comment> GetAsync(Guid commentId)
     {
         return await _repository.Get(commentId) ??
-               throw new HttpException(HttpStatusCode.Gone, $"Comment {commentId} not found");
+               throw new HttpException(HttpStatusCode.Gone, RefusalMessage.CommentNotFound(commentId));
+    }
+
+    /// <inheritdoc />
+    public async Task<FirstUnreadComment> GetFirstUnreadAsync(string boardAlias, int topicNumber,
+        IReadOnlyCollection<Guid>? excludeUserIds = null)
+    {
+        // Board access is the topic lookup itself: a topic this reader may not
+        // see never comes back from it, exactly as on the reading paths above.
+        var topic = await _topicService.GetByBoardAndNumberAsync(boardAlias, topicNumber);
+
+        // A guest has no marker of his own and the anonymous one belongs to
+        // nobody, so asking for it would answer with somebody else's reading.
+        // No marker at all means the same thing for an authenticated reader who
+        // has never opened the topic: everything is unread, he starts at the top.
+        var user = _identityProvider.Current.User;
+        var lastRead = user.IsAuthenticated
+            ? await _countersRepository.GetLastReadTimeAsync(user.UserId, topic.Id, UnreadEntryType.Message)
+            : null;
+        var lastReadUtc = lastRead.HasValue
+            ? new DateTimeOffset(DateTime.SpecifyKind(lastRead.Value, DateTimeKind.Utc))
+            : DateTimeOffset.MinValue;
+
+        // Nothing unread is the ordinary state one second after the topic was
+        // opened, because opening it flushes the marker. The end of the
+        // discussion is what the reader wants there, never its beginning: the
+        // beginning is what every repeat visit used to get.
+        return await _repository.FindFirstUnread(topic.Id, lastReadUtc, excludeUserIds)
+               ?? await _repository.GetLastComment(topic.Id, excludeUserIds)
+               ?? new FirstUnreadComment();
     }
 
     /// <inheritdoc />
@@ -120,6 +149,17 @@ internal class TopicCommentService : ITopicCommentService
         var comment = await GetAsync(updateComment.CommentId);
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Edit, comment);
+
+        // Rewriting a comment publishes text exactly as writing one does, so the
+        // ban is asked here too. Only the author is asked: a moderator editing
+        // somebody else's comment is moderating, and a ban takes no moderator
+        // tool away. The forum has no own-space exemption, the same answer
+        // TopicIntention.CreateComment gives.
+        var currentUser = _identityProvider.Current.User;
+        if (comment.Author?.UserId == currentUser.UserId)
+        {
+            currentUser.ThrowIfMayNotComment();
+        }
 
         var text = updateComment.Text?.Trim();
         if (!string.IsNullOrEmpty(text))
@@ -151,7 +191,7 @@ internal class TopicCommentService : ITopicCommentService
         var comment = await _repository.GetForDelete(commentId);
         if (comment == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, $"Comment {commentId} not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));
         }
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Delete, (Comment)comment);
@@ -159,14 +199,16 @@ internal class TopicCommentService : ITopicCommentService
         Guid? newLastCommentId = null;
         if (comment.IsLastComment)
         {
-            newLastCommentId = await _repository.GetSecondLastCommentId(comment.TopicId);
+            newLastCommentId = await _repository.GetNewestCommentIdExcept(comment.TopicId, commentId);
         }
 
         var deleteComment = new DeleteTopicCommentEntity
         {
             CommentId = commentId,
             TopicId = comment.TopicId,
-            NewLastCommentId = newLastCommentId
+            NewLastCommentId = newLastCommentId,
+            DeletedByUserId = _identityProvider.Current.User.UserId,
+            DeletedUtc = _dateTimeProvider.Now
         };
 
         await _repository.Delete(deleteComment);

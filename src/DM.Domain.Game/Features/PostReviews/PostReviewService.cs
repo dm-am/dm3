@@ -3,14 +3,15 @@ using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Configuration;
+using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Game.Authorization;
+using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.Games;
 using FluentValidation;
 
@@ -29,7 +30,7 @@ internal class PostReviewService : IPostReviewService
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IProbationConfiguration _probationConfig;
+    private readonly IGameBlacklistRepository _blacklistRepository;
 
     public PostReviewService(
         IValidator<CreatePostReview> createValidator,
@@ -39,7 +40,7 @@ internal class PostReviewService : IPostReviewService
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
-        IProbationConfiguration probationConfig)
+        IGameBlacklistRepository blacklistRepository)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -48,7 +49,7 @@ internal class PostReviewService : IPostReviewService
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
-        _probationConfig = probationConfig;
+        _blacklistRepository = blacklistRepository;
     }
 
     /// <inheritdoc />
@@ -65,33 +66,41 @@ internal class PostReviewService : IPostReviewService
         var postInfo = await _repository.GetPostInfoAsync(postId);
         if (postInfo == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Post not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.PostNotFound);
+        }
+
+        // The blacklist closes writing, and rating a post writes into the game it
+        // belongs to. The game's rooms and posts are open to a blacklisted reader
+        // and stay open, so the refusal has to be here and not in what they see.
+        if (await _blacklistRepository.IsBlocked(postInfo.GameId, authorId))
+        {
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
         }
 
         // Can't review own post
         if (authorId == postInfo.AuthorId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You cannot review your own post");
+            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя оценивать собственный пост");
         }
 
         // Newbies can only create neutral post reviews
         if (createReview.Sign != ReviewSign.Neutral && await IsNewbieAsync(authorId))
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "You need at least 100 game posts to create positive or negative reviews");
+                $"Ставить плюс и минус можно после {ProbationPolicy.NewbiePostThreshold} постов в играх");
         }
 
         // Check if already reviewed this post
         if (await ExistsAsync(authorId, postId))
         {
-            throw new HttpException(HttpStatusCode.Conflict, "You have already reviewed this post");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyReviewedPost);
         }
 
         // Check cooldown: can't review posts in the same game within 3 days
         if (await HasRecentReviewInGameAsync(authorId, postInfo.GameId))
         {
             throw new HttpException(HttpStatusCode.TooManyRequests,
-                "You can only submit one post review per game every 3 days");
+                "Оценивать посты в одной игре можно раз в три дня");
         }
 
         var entity = new CreatePostReviewEntity
@@ -123,7 +132,7 @@ internal class PostReviewService : IPostReviewService
         }
         catch (DuplicateEntityException)
         {
-            throw new HttpException(HttpStatusCode.Conflict, "You have already reviewed this post");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyReviewedPost);
         }
     }
 
@@ -133,7 +142,7 @@ internal class PostReviewService : IPostReviewService
         var review = await _repository.GetAsync(id);
         if (review == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Review not found");
+            throw new HttpException(HttpStatusCode.NotFound, "Оценка не найдена");
         }
 
         return review;
@@ -184,7 +193,7 @@ internal class PostReviewService : IPostReviewService
         if (currentUser.Role != UserRole.Admin && !CanEdit(review))
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "Reviews can only be edited within 24 hours of creation");
+                "Оценку можно править в течение суток после публикации");
         }
 
         // Handle sign change impact on QualityRating
@@ -250,9 +259,6 @@ internal class PostReviewService : IPostReviewService
         return now <= editDeadline;
     }
 
-    private async Task<bool> IsNewbieAsync(Guid userId)
-    {
-        var postCount = await _repository.GetUserPostCountAsync(userId);
-        return postCount < _probationConfig.NewbiePostThreshold;
-    }
+    private async Task<bool> IsNewbieAsync(Guid userId) =>
+        ProbationPolicy.IsNewbie(await _repository.GetUserPostCountAsync(userId));
 }

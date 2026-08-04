@@ -8,6 +8,7 @@ using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Subscriptions;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using SubscriptionEntity = DM.Infrastructure.Persistence.Entities.Subscriptions.Subscription;
 
 namespace DM.Infrastructure.Persistence.Shared.Subscriptions;
@@ -24,23 +25,54 @@ internal class SubscriptionRepository : ISubscriptionRepository
         _mapper = mapper;
     }
 
+    /// <summary>
+    /// The two reads a person sees, and the only ones that resolve what the
+    /// subscription points at.
+    /// </summary>
+    /// <remarks>
+    /// One query with four correlated lookups rather than the page asking four
+    /// endpoints per row. The fan-out reads below keep the plain projection:
+    /// notification delivery never renders the name, and paying for the joins
+    /// there would tax every published event.
+    /// </remarks>
+    private static IQueryable<Subscription> WithTargetNames(
+        DmDbContext dbContext, IQueryable<SubscriptionEntity> query) =>
+        query.Select(s => new Subscription
+        {
+            Id = s.SubscriptionId,
+            SubscriberId = s.SubscriberId,
+            TargetType = s.TargetType,
+            TargetId = s.TargetId,
+            Settings = s.Settings,
+            CreatedUtc = s.CreatedUtc,
+            TargetTitle =
+                s.TargetType == SubscriptionTargetType.Game
+                    ? dbContext.Games.Where(g => g.GameId == s.TargetId).Select(g => g.Title).FirstOrDefault()
+                    : s.TargetType == SubscriptionTargetType.Blog
+                        ? dbContext.Blogs.Where(b => b.BlogId == s.TargetId).Select(b => b.Title).FirstOrDefault()
+                        : s.TargetType == SubscriptionTargetType.Topic
+                            ? dbContext.Topics.Where(t => t.TopicId == s.TargetId).Select(t => t.Title).FirstOrDefault()
+                            : dbContext.Users.Where(u => u.UserId == s.TargetId).Select(u => u.Username).FirstOrDefault(),
+            TargetUsername = s.TargetType == SubscriptionTargetType.User
+                ? dbContext.Users.Where(u => u.UserId == s.TargetId).Select(u => u.Username).FirstOrDefault()
+                : null
+        });
+
     /// <inheritdoc />
     public async Task<IEnumerable<Subscription>> GetUserSubscriptionsAsync(Guid userId, CancellationToken ct = default)
     {
-        return await _dbContext.Subscriptions
-            .Where(s => s.SubscriberId == userId)
-            .OrderByDescending(s => s.CreatedUtc)
-            .ProjectTo<Subscription>(_mapper.ConfigurationProvider)
+        return await WithTargetNames(_dbContext, _dbContext.Subscriptions
+                .Where(s => s.SubscriberId == userId)
+                .OrderByDescending(s => s.CreatedUtc))
             .ToListAsync(ct);
     }
 
     /// <inheritdoc />
     public async Task<IEnumerable<Subscription>> GetUserSubscriptionsAsync(Guid userId, SubscriptionTargetType targetType, CancellationToken ct = default)
     {
-        return await _dbContext.Subscriptions
-            .Where(s => s.SubscriberId == userId && s.TargetType == targetType)
-            .OrderByDescending(s => s.CreatedUtc)
-            .ProjectTo<Subscription>(_mapper.ConfigurationProvider)
+        return await WithTargetNames(_dbContext, _dbContext.Subscriptions
+                .Where(s => s.SubscriberId == userId && s.TargetType == targetType)
+                .OrderByDescending(s => s.CreatedUtc))
             .ToListAsync(ct);
     }
 
@@ -95,7 +127,29 @@ internal class SubscriptionRepository : ISubscriptionRepository
         };
 
         _dbContext.Subscriptions.Add(entity);
-        await _dbContext.SaveChangesAsync(ct);
+        try
+        {
+            await _dbContext.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        {
+            // UNIQUE(SubscriberId, TargetType, TargetId). Every caller looks the
+            // subscription up before asking for one, so this is two requests
+            // overlapping rather than a mistake, and subscribing twice is
+            // subscribing. Report the row that won, the way the achievement
+            // grant reports one already earned.
+            _dbContext.Entry(entity).State = EntityState.Detached;
+            var winner = await FindAsync(
+                subscription.SubscriberId, subscription.TargetType, subscription.TargetId, ct);
+            if (winner == null)
+            {
+                // The winner was unsubscribed between the refusal and this read.
+                // There is no row to report and no honest answer to give.
+                throw;
+            }
+
+            return winner;
+        }
 
         return (await GetAsync(entity.SubscriptionId, ct))!;
     }

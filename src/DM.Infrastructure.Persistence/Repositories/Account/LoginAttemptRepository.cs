@@ -75,6 +75,10 @@ internal class LoginAttemptRepository : MongoCollectionRepository<LoginAttempt>,
     }
 
     /// <inheritdoc />
+    public Task ResetAttempts(LoginAttemptOrigin origin) =>
+        Collection.DeleteOneAsync(Filter.Eq(x => x.Id, origin.Key));
+
+    /// <inheritdoc />
     public Task ResetAttempts(string email)
     {
         // Every address, not only the one that succeeded: proving you know the
@@ -83,12 +87,4 @@ internal class LoginAttemptRepository : MongoCollectionRepository<LoginAttempt>,
             Filter.Eq(x => x.Email, email.ToLowerInvariant()));
     }
 
-    /// <inheritdoc />
-    public Task CleanupExpiredRecords(int expirationHours)
-    {
-        var cutoff = _dateTimeProvider.Now.UtcDateTime.AddHours(-expirationHours);
-        return Collection.DeleteManyAsync(
-            Filter.Lt(x => x.LastAttemptUtc, cutoff) &
-            Filter.Eq(x => x.LockoutStartUtc, null));
-    }
 }

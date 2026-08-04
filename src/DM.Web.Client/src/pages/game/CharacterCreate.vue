@@ -15,8 +15,8 @@ import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
 import { CharacterForm } from "@/features/edit-character";
 import { createEmptySchema } from "@/entities/game";
-import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import { useZoneSection } from "@/shared/lib/composables/useZoneSection";
 import { useToast } from "@/shared/lib/composables/useToast";
 
 const route = useRoute();
@@ -34,6 +34,11 @@ const gameGuid = computed(() => game.value?.id ?? gameId.value);
 
 const schema = computed(() => game.value?.schema ?? createEmptySchema());
 
+// The section of this page is the `?npc` flag, which a static meta.section
+// cannot spell. Announced to the shell instead, which composes the heading and
+// the tab out of it exactly as it does for every other sub-page.
+useZoneSection(() => (isNpc.value ? "Новый NPC" : "Новый персонаж"));
+
 onMounted(() => {
   if (!game.value) store.loadGame(gameId.value);
 });
@@ -50,10 +55,6 @@ function onCancel() {
 
 <template>
   <div class="character-create">
-    <page-title>
-      {{ isNpc ? "Новый NPC" : "Новый персонаж" }}
-    </page-title>
-
     <secondary-text v-if="!isNpc" class="intro">
       Заполните анкету персонажа. После отправки мастер рассмотрит заявку.
     </secondary-text>

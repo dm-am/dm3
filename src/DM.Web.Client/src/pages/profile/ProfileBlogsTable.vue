@@ -36,7 +36,7 @@ import type { ListEnvelope } from "@/shared/api/models/common";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
 import { buildReadersTooltip } from "@/shared/lib/utils/tooltipBuilders";
-import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 
 const props = defineProps<{
   /** Profile owner whose hosted blogs we list. */
@@ -102,28 +102,21 @@ const apiParams = computed(() => {
 });
 
 const envelope = ref<ListEnvelope<Blog> | null>(null);
-const loading = ref(false);
-const error = ref(false);
 
-// Discards stale responses when a fast search/page change races an
-// in-flight request.
-const guard = createRequestGuard();
+// clearErrorOnStart: what this table did before the composable — the error line
+// goes away while the next page loads.
+const { loading, error, run } = useGuardedRequest({
+  message: "Не удалось загрузить блоги",
+  clearErrorOnStart: true,
+});
 
-async function fetchBlogs() {
-  const requestId = guard.next();
-  loading.value = true;
-  error.value = false;
-  const { data, error: apiError } = await Api.get<ListEnvelope<Blog>>(
-    "blogs",
-    apiParams.value,
+function fetchBlogs() {
+  return run(
+    () => Api.get<ListEnvelope<Blog>>("blogs", apiParams.value),
+    (data) => {
+      envelope.value = data;
+    },
   );
-  if (!guard.isCurrent(requestId)) return;
-  loading.value = false;
-  if (apiError) {
-    error.value = true;
-    return;
-  }
-  envelope.value = data ?? null;
 }
 
 const blogs = computed(() => envelope.value?.resources ?? []);
@@ -217,11 +210,7 @@ function pagingAnchor(): HTMLElement | null {
       />
     </div>
 
-    <ErrorState
-      v-if="error"
-      message="Не удалось загрузить блоги"
-      :retry="fetchBlogs"
-    />
+    <ErrorState v-if="error" :message="error" :retry="fetchBlogs" />
 
     <DataTable
       v-if="!error || blogs.length > 0"

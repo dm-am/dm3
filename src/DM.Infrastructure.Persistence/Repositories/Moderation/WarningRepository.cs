@@ -36,6 +36,16 @@ internal class WarningRepository : IWarningRepository
     }
 
     /// <inheritdoc />
+    public async Task<IEnumerable<Warning>> GetAllWarnings(CancellationToken ct = default)
+    {
+        return await _dbContext.Warnings
+            .Where(w => !w.IsRemoved)
+            .OrderByDescending(w => w.CreatedUtc)
+            .ProjectTo<Warning>(_mapper.ConfigurationProvider)
+            .ToListAsync(ct);
+    }
+
+    /// <inheritdoc />
     public async Task<Warning?> Get(Guid warningId, CancellationToken ct = default)
     {
         return await _dbContext.Warnings

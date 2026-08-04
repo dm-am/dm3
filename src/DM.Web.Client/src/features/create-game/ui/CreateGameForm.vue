@@ -21,6 +21,8 @@ import {
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
 import type { BadRequestError } from "@/shared/api/models/common";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { UnsavedChangesGuard } from "@/shared/ui/UnsavedChangesGuard";
+import { describeFailure } from "@/shared/lib/errors";
 
 const router = useRouter();
 const { user } = storeToRefs(useAuthStore());
@@ -45,11 +47,27 @@ const schemaDraft = ref<AttributeSchema | null>(null);
 const assistantUsername = ref<string | null>(null);
 const selectedTags = ref<number[]>([]);
 
+// Released the moment the game exists: the navigation that follows is this
+// form's own, and asking the author whether they meant to leave their new game
+// would be theatre.
+const saved = ref(false);
+const dirty = computed(
+  () =>
+    !saved.value &&
+    !!(
+      title.value.trim() ||
+      systemName.value.trim() ||
+      settingName.value.trim() ||
+      information.value.trim()
+    ),
+);
+
 const isSubmitting = ref(false);
 const titleError = ref("");
 const systemError = ref("");
 const settingError = ref("");
 const infoError = ref("");
+const assistantError = ref("");
 
 const canCreate = computed(() => {
   return user.value && title.value.trim().length > 0;
@@ -60,6 +78,7 @@ function clearErrors() {
   systemError.value = "";
   settingError.value = "";
   infoError.value = "";
+  assistantError.value = "";
 }
 
 async function handleSubmit() {
@@ -86,13 +105,12 @@ async function handleSubmit() {
       schemaId = schemaData.resource.id ?? undefined;
     }
 
-    // Note: selected tags are not submitted — CreateGameRequest.Tags expects
-    // backend Guids, but /games/tags exposes only numeric short ids.
     const gameData: CreateGameInput = {
       title: title.value.trim(),
       system: systemName.value.trim() || undefined,
       setting: settingName.value.trim() || undefined,
       info: information.value,
+      tags: selectedTags.value.length > 0 ? [...selectedTags.value] : undefined,
       schemaId,
       assistantUsername: assistantUsername.value || undefined,
       privacySettings: {
@@ -111,14 +129,16 @@ async function handleSubmit() {
       systemError.value = getFieldError(errors, "system") || "";
       settingError.value = getFieldError(errors, "setting") || "";
       infoError.value = getFieldError(errors, "info") || "";
+      assistantError.value = getFieldError(errors, "assistantUsername") || "";
 
       if (
         !titleError.value &&
         !systemError.value &&
         !settingError.value &&
-        !infoError.value
+        !infoError.value &&
+        !assistantError.value
       ) {
-        toast.error(apiError.title || "Не удалось создать игру");
+        toast.error(describeFailure(apiError, "Не удалось создать игру"));
       }
       return;
     }
@@ -126,6 +146,7 @@ async function handleSubmit() {
     if (data) {
       // The lists are cached; without refreshing them the game the user just
       // created is missing from /games and from the sidebar until they expire.
+      saved.value = true;
       await gamesStore.invalidateGameLists();
       router.push({ name: "game", params: { id: data.resource.id } });
     }
@@ -220,7 +241,15 @@ async function handleSubmit() {
     <!-- Assistant -->
     <section class="form-section">
       <block-title>Ассистент</block-title>
-      <assistant-selector v-model="assistantUsername" />
+      <form-field
+        name="assistantUsername"
+        :errors="assistantError ? [assistantError] : []"
+      >
+        <assistant-selector
+          v-model="assistantUsername"
+          @update:model-value="assistantError = ''"
+        />
+      </form-field>
     </section>
 
     <!-- Privacy settings -->
@@ -264,6 +293,8 @@ async function handleSubmit() {
         Создать игру
       </Button>
     </div>
+
+    <UnsavedChangesGuard :dirty="dirty" />
   </form>
 </template>
 

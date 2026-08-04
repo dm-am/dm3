@@ -5,10 +5,10 @@ using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Blacklists;
-using DM.Domain.Core.Enums;
 using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
 using DM.Domain.Forum.Features.Comments;
+using DM.Web.API.Shared.Comments;
 using DM.Web.API.Shared.Dto;
 using Comment = DM.Web.API.Shared.Dto.Comment;
 using CreateCommentRequest = DM.Web.API.Shared.Dto.CreateCommentRequest;
@@ -39,18 +39,8 @@ internal class TopicCommentApiService : ITopicCommentApiService
     /// <inheritdoc />
     public async Task<(IEnumerable<Comment> Comments, PagingInfo Paging)> Get(Guid topicId, CommentsQuery query)
     {
-        var identity = _identityProvider.Current;
-        IReadOnlyCollection<Guid>? excludeUserIds = null;
-        if (identity.User?.IsAuthenticated == true)
-        {
-            var blockedIds = await _blacklistChecker.GetBlockedUserIdsIfFlagEnabledAsync(
-                identity.User.UserId, UserBlacklistSettings.HideComments);
-            if (blockedIds.Count > 0)
-            {
-                excludeUserIds = blockedIds;
-            }
-        }
-
+        var excludeUserIds = await CommentReading.HiddenAuthorsAsync(
+            _blacklistChecker, _identityProvider.Current);
         var (comments, paging) = await _commentService.GetAsync(topicId, query, excludeUserIds);
         return (comments.Select(_mapper.Map<Comment>), new PagingInfo(paging));
     }
@@ -72,9 +62,9 @@ internal class TopicCommentApiService : ITopicCommentApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<Comment>> Update(Guid commentId, Comment comment)
+    public async Task<Envelope<Comment>> Update(Guid commentId, UpdateCommentRequest request)
     {
-        var updateComment = _mapper.Map<UpdateComment>(comment);
+        var updateComment = _mapper.Map<UpdateComment>(request);
         updateComment.CommentId = commentId;
         var updatedComment = await _commentService.UpdateAsync(updateComment);
         return new Envelope<Comment>(_mapper.Map<Comment>(updatedComment));

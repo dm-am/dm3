@@ -1,6 +1,4 @@
 export * from "./module-status";
-// Note: Single resources are returned directly without wrapper (per API_STANDARDS.md)
-// Only collections use ListEnvelope or CursorEnvelope
 
 // Re-export branded types from parent index
 export { type Id, type Served, type Post, type Patch } from "../index";
@@ -17,7 +15,7 @@ export * from "./message";
 // Shared ID types (for FSD compliance - shared modules use these instead of entity imports)
 export * from "./ids";
 
-export type Paging = {
+export type PagingInfo = {
   pages: number;
   current: number;
   size: number;
@@ -33,7 +31,7 @@ export type PagingQuery = {
 
 export type ListEnvelope<T> = {
   resources: T[];
-  paging: Paging | null;
+  paging: PagingInfo | null;
 };
 
 export type CursorPaging = {

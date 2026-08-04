@@ -91,10 +91,15 @@ test.describe("Tooltip Accessibility", () => {
 
       // Hover to show tooltip
       await scrollNavBtn.hover();
-      await page.waitForTimeout(300);
+
+      // Wait for the tooltip itself, not for a fixed delay. The attribute is
+      // bound to the tooltip being visible, so reading it after an arbitrary
+      // 300ms asked the question before the answer existed and the assertion
+      // compared an empty string against a real id.
+      const tooltip = page.locator('[role="tooltip"]');
+      await expect(tooltip).toBeVisible();
 
       // After hover - has aria-describedby matching tooltip id
-      const tooltip = page.locator('[role="tooltip"]');
       const tooltipId = await tooltip.getAttribute("id");
       await expect(trigger).toHaveAttribute("aria-describedby", tooltipId!);
     });
@@ -125,19 +130,19 @@ test.describe("Tooltip Accessibility", () => {
     });
 
     test("tooltip is not shown for disabled state", async ({ page }) => {
-      // Navigate to page with disabled tooltips if available
-      // This test verifies the disabled prop works
-      await page.goto("/games");
+      // The settings button is the one trigger in the tree that disables its
+      // own tooltip, and it does so while the panel it opens is on screen.
+      const settings = page.locator(".settings-btn");
+      const tooltip = page.locator('[role="tooltip"]', {
+        hasText: "Настройки сайта",
+      });
 
-      // Find a tooltip trigger that might be disabled
-      const tooltipTrigger = page.locator(".tooltip-trigger").first();
-      if (await tooltipTrigger.isVisible().catch(() => false)) {
-        // Check if tooltip is conditionally disabled
-        await tooltipTrigger.hover();
-        await page.waitForTimeout(300);
+      await settings.hover();
+      await expect(tooltip).toBeVisible();
 
-        // This is a generic test - actual behavior depends on component state
-      }
+      await settings.click();
+      await expect(page.locator(".settings-bubble")).toBeVisible();
+      await expect(tooltip).toHaveCount(0);
     });
   });
 
@@ -189,51 +194,46 @@ test.describe("Tooltip Accessibility", () => {
 
       const scrollNavBtn = page.locator(".scroll-nav-btn").first();
 
-      // Touch/tap to show tooltip
+      // Touch is the third way in (WCAG 1.4.13) and it shows without the hover
+      // delay. The body used to end on the tap and assert nothing.
       await scrollNavBtn.tap();
-
-      // Touch behavior may vary - this documents expected behavior
+      await expect(page.locator('[role="tooltip"]')).toBeVisible();
 
       await context.close();
     });
   });
 
   test.describe("Multiple Tooltips", () => {
+    // The precondition is asserted rather than tested for. The whole body used
+    // to sit inside `if (count >= 2)`, so the day the nav rendered one button
+    // or none this reported a passing test about a behaviour it never
+    // exercised — which is the shape the rest of this corpus was rewritten out
+    // of.
     test("only one tooltip is visible at a time", async ({ page }) => {
       const buttons = page.locator(".scroll-nav-btn");
-      const count = await buttons.count();
+      await expect(buttons.nth(1)).toBeVisible();
 
-      if (count >= 2) {
-        // Hover first button
-        await buttons.first().hover();
-        await page.waitForTimeout(300);
+      await buttons.first().hover();
+      await expect(page.locator('[role="tooltip"]')).toHaveCount(1);
 
-        // Should have one tooltip
-        let tooltips = page.locator('[role="tooltip"]');
-        expect(await tooltips.count()).toBe(1);
-
-        // Move to second button
-        await buttons.nth(1).hover();
-        await page.waitForTimeout(300);
-
-        // Should still have only one tooltip visible
-        tooltips = page.locator('[role="tooltip"]');
-        const visibleCount = await tooltips.count();
-        expect(visibleCount).toBeLessThanOrEqual(1);
-      }
+      await buttons.nth(1).hover();
+      await expect(page.locator('[role="tooltip"]')).toHaveCount(1);
     });
   });
 
   test.describe("Sidebar Tooltips", () => {
-    test("sidebar section headers have tooltips", async ({ page }) => {
-      const sidebarHeader = page.locator(".sidebar-block-header").first();
-
-      if (await sidebarHeader.isVisible()) {
-        await sidebarHeader.hover();
-        await page.waitForTimeout(300);
-
-        // Tooltip may or may not appear - not all headers have tooltips
-      }
+    test("sidebar game entries carry a tooltip", async ({ page }) => {
+      // Section headers do not have one: the block title is a heading with a
+      // collapse toggle. The entries do, and that is what the old body hovered
+      // without asserting.
+      // The block renders before its list arrives, so the trigger appears only
+      // once the request has answered. The default five seconds raced it.
+      const entry = page
+        .locator("#sidebar-list-ActiveGames .tooltip-trigger")
+        .first();
+      await expect(entry).toBeVisible({ timeout: 10000 });
+      await entry.hover();
+      await expect(page.locator('[role="tooltip"]')).toBeVisible();
     });
   });
 
@@ -241,21 +241,16 @@ test.describe("Tooltip Accessibility", () => {
     test("data table cells can have tooltips", async ({ page }) => {
       await page.goto("/games");
 
-      // Wait for table to load
-      await page
-        .waitForSelector(".games-data-table, .games-list", {
-          timeout: 5000,
-        })
-        .catch(() => null);
-
-      // Find table cells that might have tooltips
-      const statusCell = page.locator('[data-testid="game-status"]').first();
-      if (await statusCell.isVisible().catch(() => false)) {
-        await statusCell.hover();
-        await page.waitForTimeout(300);
-
-        // Tooltip may or may not appear depending on content
-      }
+      // The waitForSelector named a table class that does not exist and its
+      // failure was caught, so the guard below never opened.
+      // Same race as the sidebar entry above: the table is rendered empty and
+      // filled when the listing answers.
+      const cell = page
+        .locator("table.data-table tbody .tooltip-trigger")
+        .first();
+      await expect(cell).toBeVisible({ timeout: 10000 });
+      await cell.hover();
+      await expect(page.locator('[role="tooltip"]')).toBeVisible();
     });
   });
 

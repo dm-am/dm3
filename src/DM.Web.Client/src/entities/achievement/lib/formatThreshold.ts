@@ -5,16 +5,6 @@ import {
 import { pluralize } from "@/shared/lib/utils/pluralize";
 
 /**
- * Human-readable threshold for a tier. SSOT for every place thresholds
- * are shown (tile numbers under the bar, the popover tier table).
- *
- * The metric description lives on the category; here only the number format
- * for the metric's unit of measure (posts / years / likes / etc).
- *
- * When adding a new metric, this changes + the paired case in
- * `getMetricValue` (it computes the metric value for a specific user).
- */
-/**
  * Display-unit number for a metric value. Most metrics are raw counts shown
  * as-is; DaysSinceRegistration is stored in days but shown in years, so it is
  * converted. SSOT used by BOTH the goal number (formatThreshold) and the
@@ -33,6 +23,16 @@ export function metricDisplayNumber(
   return value;
 }
 
+/**
+ * Human-readable threshold for a tier. SSOT for every place thresholds
+ * are shown (tile numbers under the bar, the popover tier table).
+ *
+ * The metric description lives on the category; here only the number format
+ * for the metric's unit of measure (posts / years / likes / etc).
+ *
+ * When adding a new metric, this changes + the paired case in
+ * `getMetricValue` (it computes the metric value for a specific user).
+ */
 export function formatThreshold(
   metric: AchievementMetric,
   threshold: number,
@@ -73,7 +73,7 @@ export function formatThreshold(
 
 /**
  * Contest series label for the tile and popover:
- *   "23-й литературный конкурс", "1-й арт конкурс".
+ *   "23-й литературный конкурс", "1-й арт-конкурс".
  * Used as the tile title of a placement award (contest_first/second/third)
  * — the placement is read from the tier color, and the "which contest" context is here.
  */
@@ -86,5 +86,5 @@ export function formatContestSeriesTitle(
     return `${ordinal} литературный конкурс`;
   }
   // Art and future types.
-  return `${ordinal} арт конкурс`;
+  return `${ordinal} арт-конкурс`;
 }

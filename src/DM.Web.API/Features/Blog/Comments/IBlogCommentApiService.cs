@@ -14,14 +14,6 @@ namespace DM.Web.API.Features.Blog.Comments;
 public interface IBlogCommentApiService
 {
     /// <summary>
-    /// Get blog discussion with permission flags
-    /// </summary>
-    /// <param name="blogId">Blog identifier</param>
-    /// <param name="query">Query with filtering, sorting and paging</param>
-    /// <returns>Discussion response with comments and metadata</returns>
-    Task<DiscussionResponse> GetDiscussion(Guid blogId, BlogCommentsQuery query);
-
-    /// <summary>
     /// Get blog comments
     /// </summary>
     /// <param name="blogId">Blog identifier</param>
@@ -48,9 +40,9 @@ public interface IBlogCommentApiService
     /// Update comment by API DTO model
     /// </summary>
     /// <param name="commentId">Comment identifier</param>
-    /// <param name="comment">Comment DTO model</param>
+    /// <param name="request">Updated comment text</param>
     /// <returns>Envelope of updated comment</returns>
-    Task<Envelope<Comment>> Update(Guid commentId, Comment comment);
+    Task<Envelope<Comment>> Update(Guid commentId, UpdateCommentRequest request);
 
     /// <summary>
     /// Delete blog comment

@@ -24,19 +24,27 @@ import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { useToast } from "@/shared/lib/composables/useToast";
+import {
+  joinTitleSegments,
+  useDocumentTitle,
+} from "@/shared/lib/composables/useDocumentTitle";
 import TicketCard from "./tickets/TicketCard.vue";
 import { useRoleGate } from "./lib/useRoleGate";
 import { notifyFailure } from "@/shared/lib/errors";
 
 const route = useRoute();
 const toast = useToast();
-const { hasAccess, isSeniorModerator } = useRoleGate("Moderator");
+const { hasAccess, deniedText, isSeniorModerator } = useRoleGate("Moderator");
 
 const ticketId = computed(() => String(route.params.ticketId ?? ""));
 
 const ticket = ref<Ticket | null>(null);
 const loading = ref(false);
 const loadError = ref<string | null>(null);
+
+// The subject first: the model carries no ticket number (the URL holds a
+// guid), so the subject line is all that tells two ticket tabs apart.
+useDocumentTitle(() => joinTitleSegments(ticket.value?.comment, "Обращение"));
 
 async function fetch() {
   if (!ticketId.value) return;
@@ -175,9 +183,7 @@ async function resolve() {
   <div class="moderation-ticket">
     <page-title>Обращение</page-title>
 
-    <SecondaryText v-if="!hasAccess">
-      Страница доступна только модераторам
-    </SecondaryText>
+    <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
 
     <ErrorState v-else-if="loadError" :message="loadError" :retry="fetch" />
 

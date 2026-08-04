@@ -12,6 +12,7 @@ using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.Entities.Community;
 using DM.Infrastructure.Persistence.Entities.Subscriptions;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Testcontainers.MongoDb;
 using Testcontainers.PostgreSql;
 using Testcontainers.RabbitMq;
@@ -25,8 +26,17 @@ namespace DM.Web.API.IntegrationTests;
 /// </summary>
 public class DatabaseFixture : IAsyncLifetime
 {
+    // The image the stand runs, not the small one. Alpine carries no locales, so
+    // initdb falls back to C and ORDER BY over a name becomes byte order: every
+    // capital before every lower-case letter, all of Cyrillic after all of Latin.
+    // The stand is postgres:16 in en_US.utf8 and orders the same names the way a
+    // reader expects, so a list assertion here answered a question production
+    // never asks. The locale is spelled out rather than left to the image default
+    // for the same reason the image is: an ordering is only testable against the
+    // collation it will actually run under.
     private readonly PostgreSqlContainer _postgresContainer = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+        .WithImage("postgres:16")
+        .WithEnvironment("POSTGRES_INITDB_ARGS", "--locale=en_US.utf8")
         .WithDatabase("dm3_test")
         .WithUsername("test")
         .WithPassword("test")
@@ -96,8 +106,29 @@ public class DatabaseFixture : IAsyncLifetime
         .EnableDetailedErrors()
         .Options);
 
+    /// <summary>
+    /// Context for another database on the same container, for tests that need a schema
+    /// built by the migration itself and untouched by the seed. The caller creates the
+    /// database with MigrateAsync and drops it in a finally.
+    /// </summary>
+    public DmDbContext CreateDbContextFor(string databaseName)
+    {
+        var connection = new NpgsqlConnectionStringBuilder(ConnectionString)
+        {
+            Database = databaseName,
+        };
+        return new DmDbContext(new DbContextOptionsBuilder<DmDbContext>()
+            .UseNpgsql(connection.ConnectionString)
+            .Options);
+    }
+
     #region Seeding
 
+    // Every guard below keys on a row this fixture owns, never on a bare Any():
+    // InitialCreate ships rows of its own (see MigrateAsync above), and a bare
+    // Any() would silently skip the whole seeder the moment the migration grows a
+    // row of the same kind, taking every test that depends on it down with an
+    // error that names no cause.
     private static async Task SeedAllAsync(DmDbContext db)
     {
         // Order matters: FK constraints
@@ -189,9 +220,6 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedTopics(DmDbContext db)
     {
-        // Keyed on this fixture's own row, not on "any topic exists": the
-        // migration ships topics of its own, and a bare Any() would silently skip
-        // the whole seeder and take every forum test down with it.
         if (db.Set<Topic>().Any(t => t.TopicId == TestConstants.TestTopicId)) return;
 
         var topics = new (Guid Id, Guid AuthorId, string Title, string Text, int HoursAgo, int TopicNumber)[]
@@ -217,7 +245,7 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedGames(DmDbContext db)
     {
-        if (db.Set<Game>().Any()) return;
+        if (db.Set<Game>().Any(g => g.GameId == TestConstants.TestGameId)) return;
 
         // (Id, AuthorId, Title, System, Setting, Info, DaysAgo, ActivatedDaysAgo, IsOpen, Count, Comments)
         var games = new (Guid Id, Guid AuthorId, string Title, string System, string Setting, string Info,
@@ -247,7 +275,9 @@ public class DatabaseFixture : IAsyncLifetime
         db.Set<Game>().AddRange(gameList.Select((g, i) => new Game
         {
             GameId = g.Id,
-            SerialNumber = i + 1,
+            // SerialNumber is left to the identity sequence: writing it by hand leaves the
+            // sequence pointing at a number the table already holds, so the next row the
+            // application creates collides with a seeded one on the readable address.
             PublicId = $"game{(char)('a' + i)}",
             MasterId = g.AuthorId,
             Title = g.Title,
@@ -268,7 +298,7 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedGameTags(DmDbContext db)
     {
-        if (db.Set<GameTag>().Any()) return;
+        if (db.Set<GameTag>().Any(t => t.GameId == TestConstants.TestGameId)) return;
 
         static Guid T(string hex) => Guid.Parse($"00000000-0000-0000-0000-0000000000{hex}");
 
@@ -305,7 +335,9 @@ public class DatabaseFixture : IAsyncLifetime
         db.Blogs.AddRange(blogs.Select((b, i) => new Blog
         {
             BlogId = b.Id,
-            SerialNumber = i + 1,
+            // SerialNumber is left to the identity sequence: writing it by hand leaves the
+            // sequence pointing at a number the table already holds, so the next row the
+            // application creates collides with a seeded one on the readable address.
             PublicId = $"blog{(char)('a' + i)}",
             AuthorId = b.AuthorId,
             Title = b.Title,
@@ -320,7 +352,7 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedRooms(DmDbContext db)
     {
-        if (db.Set<Room>().Any()) return;
+        if (db.Set<Room>().Any(r => r.RoomId == TestConstants.TestRoomId)) return;
 
         db.Set<Room>().Add(new Room
         {
@@ -350,7 +382,7 @@ public class DatabaseFixture : IAsyncLifetime
     /// </summary>
     private static void SeedGamePosts(DmDbContext db)
     {
-        if (db.Set<Post>().Any()) return;
+        if (db.Set<Post>().Any(p => p.PostId == TestConstants.TestGamePostId)) return;
 
         db.Set<Post>().Add(new Post
         {
@@ -389,7 +421,7 @@ public class DatabaseFixture : IAsyncLifetime
     /// </summary>
     private static void SeedCharacters(DmDbContext db)
     {
-        if (db.Set<Character>().Any()) return;
+        if (db.Set<Character>().Any(c => c.CharacterId == TestConstants.TestCharacterId)) return;
 
         db.Set<Character>().AddRange(
             new Character
@@ -430,7 +462,9 @@ public class DatabaseFixture : IAsyncLifetime
         db.Chats.Add(new Chat
         {
             ChatId = TestConstants.TestChatId,
-            SerialNumber = 2,
+            // SerialNumber is left to the identity sequence: writing it by hand leaves the
+            // sequence pointing at a number the table already holds, so the next row the
+            // application creates collides with a seeded one on the readable address.
             PublicId = "chata",
             Type = ChatType.Direct,
             Title = string.Empty
@@ -479,7 +513,8 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedBoardModerators(DmDbContext db)
     {
-        if (db.Set<BoardModerator>().Any()) return;
+        if (db.Set<BoardModerator>().Any(m =>
+                m.BoardId == TestConstants.TestBoardId && m.UserId == TestConstants.ModeratorUserId)) return;
 
         // Assign Moderator as the board moderator for Test Board
         db.Set<BoardModerator>().Add(new BoardModerator
@@ -492,7 +527,7 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedSubscriptions(DmDbContext db)
     {
-        if (db.Subscriptions.Any()) return;
+        if (db.Subscriptions.Any(s => s.SubscriberId == TestConstants.InactiveUser1Id)) return;
 
         // Inactive users subscribed to games and blogs
         var subscriptions = new (Guid SubscriberId, SubscriptionTargetType TargetType, Guid TargetId, int DaysAgo)[]
@@ -521,7 +556,7 @@ public class DatabaseFixture : IAsyncLifetime
 
     private static void SeedTestimonials(DmDbContext db)
     {
-        if (db.WebsiteTestimonials.Any()) return;
+        if (db.WebsiteTestimonials.Any(t => t.WebsiteTestimonialId == TestConstants.TestTestimonialId)) return;
 
         // (TestimonialId, UserId, Text, DaysAgo)
         var testimonials = new (Guid TestimonialId, Guid UserId, string Text, int DaysAgo)[]

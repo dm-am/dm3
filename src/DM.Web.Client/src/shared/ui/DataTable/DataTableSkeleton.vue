@@ -106,7 +106,7 @@ function getBarWidth(
   margin: 0 auto
 
 // Mobile responsiveness (matches DataTable)
-@media (max-width: 768px)
+@media (max-width: $bp-tablet)
   .hide-mobile
     display: none
 </style>

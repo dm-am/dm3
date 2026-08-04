@@ -23,18 +23,19 @@ import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
 import { ChatMessage } from "@/widgets/chat-message";
 import { LoginPrompt } from "@/features/auth";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { CommentSkeleton } from "@/shared/ui/Skeleton";
-import { useDocumentTitle } from "@/shared/lib/composables";
+import { useZoneSection } from "@/shared/lib/composables/useZoneSection";
 
 const PAGE_SIZE = 50;
 const MAX_MESSAGE_HEIGHT = 300;
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
-const { rooms } = storeToRefs(gameStore);
+const { rooms, roomsLoading } = storeToRefs(gameStore);
 const { user } = storeToRefs(useAuthStore());
 const { isCompactLayout } = storeToRefs(useUiStore());
 
@@ -48,7 +49,10 @@ const room = computed(
 );
 const chatRoomId = computed(() => (room.value?.id as string) ?? null);
 
-useDocumentTitle(() => (room.value ? `Чат: ${room.value.title}` : "Чат"));
+// The room IS the section here, and its name is data — meta.section cannot
+// spell it. Announced to the shell, which is the only place that writes a
+// heading or a tab name in this zone.
+useZoneSection(() => room.value?.title);
 
 // ───────────────────────────────────────────────────────────────────────────
 // Message stream (cursor pagination)
@@ -109,7 +113,16 @@ async function loadInitial() {
   paging.value = null;
 
   await ensureRooms();
+  // Not found means the list is in and the room is not in it. The shell loads
+  // the same list, and the store keeps only the newest request: a page that
+  // decides on its own await sees an empty list whenever the shell's request
+  // arrived second, and says the room does not exist while it is on the screen
+  // behind the message.
   if (!chatRoomId.value) {
+    if (roomsLoading.value) {
+      loading.value = false;
+      return;
+    }
     notFound.value = true;
     loading.value = false;
     return;
@@ -131,6 +144,12 @@ async function loadInitial() {
   nextTick(() => initBbcodeInteractive(messagesContainer.value));
   markRead();
 }
+
+// The list can arrive after this page has already asked for it, so the load is
+// retried the moment the room resolves.
+watch(chatRoomId, (id) => {
+  if (id && !messages.value.length && !loading.value) loadInitial();
+});
 
 async function loadOlder() {
   if (
@@ -229,17 +248,17 @@ onUnmounted(cleanupObserver);
   <div class="chat-room">
     <!-- Back link -->
     <router-link
-      :to="{ name: 'game-rooms', params: { id: gameId } }"
+      :to="{ name: 'game', params: { id: gameId } }"
       class="back-link"
     >
       <SvgIcon name="chevronLeft" />
-      Назад к комнатам
+      Назад к игре
     </router-link>
 
     <block-title v-if="room"
       >Чат: {{ room.title
-      }}<span v-if="room.isArchived" class="archived-tag"
-        >архив</span
+      }}<template v-if="room.isArchived"
+        >{{ " " }}<span class="archived-tag">архив</span></template
       ></block-title
     >
 
@@ -309,7 +328,7 @@ onUnmounted(cleanupObserver);
             v-model="newMessage"
             context="message"
             placeholder="Написать сообщение..."
-            :draft-key="`chat_room_${chatRoomId}`"
+            :draft-key="composerDraftKey('room', 'message', chatRoomId)"
             :disabled="sending"
             :min-height="60"
             :max-height="200"
@@ -338,9 +357,10 @@ onUnmounted(cleanupObserver);
   min-height: $grid-step * 50
 
 // Muted "архив" tag beside an archived room's title — archive is conveyed by
-// this marker + muted colour, never by a suffix inside the room name.
+// this marker + muted colour, never by a suffix inside the room name. The gap
+// in front of it is the " " text node in the title, not a margin: a margin is
+// drawn but not copied, and the title used to reach the clipboard glued.
 .archived-tag
-  margin-left: $small
   font-size: $secondary-font-size
   font-weight: normal
   color: $text-muted
@@ -407,15 +427,13 @@ onUnmounted(cleanupObserver);
 .chat-error
   display: flex
   flex-direction: column
-  align-items: center
+  align-items: flex-start
   gap: $small
   padding: $big
-  text-align: center
 
 .chat-empty-inline
   display: block
   padding: $big
-  text-align: center
 
 .chat-retry
   +button

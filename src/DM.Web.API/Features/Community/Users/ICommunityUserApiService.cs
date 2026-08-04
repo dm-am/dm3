@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.Dto;
+using DM.Domain.Core.Dto;
 
 namespace DM.Web.API.Features.Community.Users;
 
@@ -32,5 +33,5 @@ public interface ICommunityUserApiService
     /// <summary>
     /// Get login history by username
     /// </summary>
-    Task<ListEnvelope<LoginHistoryDto>> GetLoginHistory(string username);
+    Task<ListEnvelope<LoginHistoryDto>> GetLoginHistory(string username, PagingQuery query);
 }

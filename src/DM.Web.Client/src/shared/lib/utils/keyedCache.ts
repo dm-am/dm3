@@ -13,6 +13,13 @@ export interface KeyedCache<T> {
   /** True when an entry exists but has aged out. */
   isStale(key: string): boolean;
   set(key: string, value: T): void;
+  /**
+   * Ages an entry out without dropping it: what is stored is known to be out of
+   * date, but it is still what the reader is looking at. Dropping it instead
+   * would turn "stale" into "absent", and the caller would have to blank the
+   * screen or keep a second copy of the value to avoid that.
+   */
+  expire(key: string): void;
   clear(): void;
 }
 
@@ -34,16 +41,22 @@ export interface KeyedCache<T> {
  */
 export function createKeyedCache<T>(options: KeyedCacheOptions): KeyedCache<T> {
   const { ttlMs, maxEntries = 20 } = options;
-  const entries = new Map<string, { value: T; storedAt: number }>();
+  const entries = new Map<
+    string,
+    { value: T; storedAt: number; expired: boolean }
+  >();
 
-  function isFresh(storedAt: number): boolean {
-    return Date.now() - storedAt <= ttlMs;
+  function isFresh(entry: { storedAt: number; expired: boolean }): boolean {
+    // The expired flag rather than a doctored timestamp: ttlMs is allowed to be
+    // Infinity (a closed calendar period never has to be read again), and no
+    // timestamp is old enough to age out against that.
+    return !entry.expired && Date.now() - entry.storedAt <= ttlMs;
   }
 
   return {
     get(key) {
       const entry = entries.get(key);
-      return entry && isFresh(entry.storedAt) ? entry.value : undefined;
+      return entry && isFresh(entry) ? entry.value : undefined;
     },
 
     getStale(key) {
@@ -52,11 +65,11 @@ export function createKeyedCache<T>(options: KeyedCacheOptions): KeyedCache<T> {
 
     isStale(key) {
       const entry = entries.get(key);
-      return entry !== undefined && !isFresh(entry.storedAt);
+      return entry !== undefined && !isFresh(entry);
     },
 
     set(key, value) {
-      entries.set(key, { value, storedAt: Date.now() });
+      entries.set(key, { value, storedAt: Date.now(), expired: false });
       if (entries.size > maxEntries) {
         // The iterator's first key is the oldest insertion.
         const oldest = entries.keys().next().value;
@@ -64,9 +77,52 @@ export function createKeyedCache<T>(options: KeyedCacheOptions): KeyedCache<T> {
       }
     },
 
+    expire(key) {
+      const entry = entries.get(key);
+      if (entry) entry.expired = true;
+    },
+
     clear() {
       entries.clear();
     },
+  };
+}
+
+/** Whether a thing fetched once is still worth keeping, with no copy of it. */
+export interface Freshness {
+  /** True once the thing has been recorded and has since aged out. */
+  isStale(): boolean;
+  /** Record that it was just fetched. */
+  touch(): void;
+  /** Age it out on demand, without forgetting that it was ever fetched. */
+  expire(): void;
+  /** Forget it entirely — the next isStale() answers false, as it did at the start. */
+  clear(): void;
+}
+
+/**
+ * The cache's clock, without the cache.
+ *
+ * useApiResource holds its payload in a reactive ref, because that is the thing
+ * components render; what it needed from a cache was the answer to "is what I am
+ * holding still fresh". It used to have its own `lastFetched` and its own
+ * `now - lastFetched > cacheMs`, which is how a change to one implementation of
+ * freshness silently stopped applying to half the screens.
+ *
+ * Built on createKeyedCache rather than beside it: one entry, one slot, and the
+ * same arithmetic, boundary and expire() semantics — so this is a second way of
+ * asking, not a second answer. It stores nothing, because a value written to a
+ * cache nobody reads from is not a cache, it is a comment that compiles.
+ */
+export function createFreshness(ttlMs: number): Freshness {
+  const SLOT = "it";
+  const store = createKeyedCache<true>({ ttlMs, maxEntries: 1 });
+
+  return {
+    isStale: () => store.isStale(SLOT),
+    touch: () => store.set(SLOT, true),
+    expire: () => store.expire(SLOT),
+    clear: () => store.clear(),
   };
 }
 

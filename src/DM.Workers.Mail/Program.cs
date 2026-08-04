@@ -11,9 +11,20 @@ class Program
 {
     static void Main(string[] args)
     {
-        CreateWebHostBuilder(args)
-            .WithDmConfiguration()
-            .Build().Run();
+        try
+        {
+            CreateWebHostBuilder(args)
+                .WithDmConfiguration()
+                .Build().Run();
+        }
+        finally
+        {
+            // UseSerilog() borrows the static logger and does not take ownership
+            // (dispose: false), so shutdown disposes nothing and the Loki sink,
+            // which ships on a timer, dies with its last batch still buffered —
+            // the lines that say why the process stopped.
+            Log.CloseAndFlush();
+        }
     }
 
     /// <summary>

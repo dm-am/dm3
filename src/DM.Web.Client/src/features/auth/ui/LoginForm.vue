@@ -9,6 +9,7 @@ import {
   validators,
 } from "@/shared/lib/composables/useValidatedField";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
+import { announcedByInterceptor, describeFailure } from "@/shared/lib/errors";
 
 const props = defineProps<{
   prefillEmail?: string;
@@ -73,31 +74,48 @@ const submit = async () => {
     rememberMe: rememberMe.value,
   };
 
-  const badRequest = await signIn(credentials);
+  const failure = await signIn(credentials);
   loading.value = false;
 
-  if (badRequest) {
-    const errors = parseApiErrors(badRequest);
-
-    // Check for pending activation flag
-    if (errors["_pendingactivation"]) {
-      pendingActivation.value = true;
-      passwordField.setError(
-        getFieldError(errors, "email") || "Регистрация не завершена",
-      );
-    } else {
-      pendingActivation.value = false;
-      const emailError = getFieldError(errors, "email");
-      const passwordError = getFieldError(errors, "password");
-      if (emailError) {
-        emailField.setError(emailError);
-      }
-      if (passwordError) {
-        passwordField.setError(passwordError);
-      }
-    }
-  } else {
+  if (!failure) {
     emit("success");
+    return;
+  }
+
+  const errors = parseApiErrors(failure);
+
+  // Check for pending activation flag
+  if (errors["_pendingactivation"]) {
+    pendingActivation.value = true;
+    passwordField.setError(
+      getFieldError(errors, "email") || "Регистрация не завершена",
+    );
+    return;
+  }
+
+  pendingActivation.value = false;
+  const emailError = getFieldError(errors, "email");
+  const passwordError = getFieldError(errors, "password");
+  if (emailError) {
+    emailField.setError(emailError);
+  }
+  if (passwordError) {
+    passwordField.setError(passwordError);
+  }
+
+  // Nothing named a field, so the server refused the account rather than the
+  // form: banned, removed, locked out after too many attempts. The sentence
+  // goes under the password field, where the wrong-password sentence goes,
+  // because it answers the same submit. A 403 is ours to say — accountApi
+  // takes it back from the response interceptor — while a rate limit or a dead
+  // server is already on screen as a toast and must not be said twice.
+  const refused = failure.status === 403;
+  if (
+    !emailError &&
+    !passwordError &&
+    (refused || !announcedByInterceptor(failure.status))
+  ) {
+    passwordField.setError(describeFailure(failure, "Не удалось войти"));
   }
 };
 
@@ -210,9 +228,6 @@ const onPasswordInput = () => {
 
 .field-action
   +inline-link-button
-
-.honeypot-field
-  display: none
 
 .remember-me
   margin-top: $medium

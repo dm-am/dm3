@@ -45,11 +45,7 @@ internal class ImageProcessingService : IImageProcessingService
     /// <inheritdoc />
     /// <remarks>
     /// Every upload type the product has is an image, and every one of them goes
-    /// through this pipeline. PostAttachment used to be excluded, which routed it
-    /// to a path that took the object's extension from the client's file name and
-    /// its Content-Type from the client's header — so a .html file declared as
-    /// text/html landed in a public, anonymously readable bucket that the reverse
-    /// proxy serves from the application's own origin.
+    /// through this pipeline.
     /// </remarks>
     public bool IsImageType(UploadType type) =>
         type is UploadType.UserAvatar or UploadType.CharacterAvatar or UploadType.PostAttachment;
@@ -154,11 +150,18 @@ internal class ImageProcessingService : IImageProcessingService
 
         var bytes = await EncodeAsync(image, actualContentType, ct);
         activity?.SetTag("image.output_size_bytes", bytes.Length);
+        activity?.SetTag("image.output_width", image.Width);
+        activity?.SetTag("image.output_height", image.Height);
 
+        // Dimensions of the image as it is being encoded, i.e. after the resize
+        // above — the identify pass at step 2 measured what arrived, and for
+        // anything over 1024 px that is not what gets stored.
         return new ProcessedImage(
             Bytes: bytes,
             ContentType: actualContentType,
-            Extension: normalizedExtension);
+            Extension: normalizedExtension,
+            Width: image.Width,
+            Height: image.Height);
     }
 
     private static async Task<byte[]> EncodeAsync(Image image, string contentType, CancellationToken ct)

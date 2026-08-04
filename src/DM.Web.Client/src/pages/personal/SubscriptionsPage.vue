@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import type { RouteLocationRaw } from "vue-router";
 import { useSubscriptionsStore } from "@/entities/subscription";
 import {
   SubscriptionTargetType,
   type Subscription,
 } from "@/shared/api/models/subscriptions";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 import { notifyFailure } from "@/shared/lib/errors";
 
 const store = useSubscriptionsStore();
@@ -44,20 +46,52 @@ const getTargetTypeLabel = (type: SubscriptionTargetType): string => {
   }
 };
 
-const getTargetLink = (subscription: Subscription): string => {
+/**
+ * Named routes, one per target type. The hand-written paths were four guesses
+ * and three of them were wrong: a game lives at /game/:id (not /games/), a
+ * topic addressed by id goes through the resolver route (/forum/topics/<guid>
+ * was parsed as board "topics" and topic number NaN), and a profile is
+ * addressed by username, which the subscription row does not hold — hence
+ * targetUsername on the wire.
+ *
+ * An empty targetTitle means the server found no row to name: the game, blog or
+ * topic is gone. Such a subscription is still listed, because unsubscribing is
+ * the only thing left to do with it, but it gets no link: every one of these
+ * routes would have opened an error page.
+ */
+const targetLocation = (
+  subscription: Subscription,
+): RouteLocationRaw | null => {
+  if (!subscription.targetTitle) return null;
+
   switch (subscription.targetType) {
     case SubscriptionTargetType.Game:
-      return `/games/${subscription.targetId}`;
+      return { name: "game", params: { id: subscription.targetId } };
     case SubscriptionTargetType.Blog:
-      return `/blogs/${subscription.targetId}`;
+      return { name: "blog", params: { id: subscription.targetId } };
     case SubscriptionTargetType.Topic:
-      return `/forum/topics/${subscription.targetId}`;
+      return {
+        name: "forum-topic-redirect",
+        params: { topicId: subscription.targetId },
+      };
     case SubscriptionTargetType.User:
-      return `/users/${subscription.targetId}`;
+      return subscription.targetUsername
+        ? { name: "profile", params: { username: subscription.targetUsername } }
+        : null;
     default:
-      return "#";
+      return null;
   }
 };
+
+// One row per subscription, with the link resolved once: the template asked
+// for it twice, and a target that no longer exists has no link at all.
+const rows = computed(() =>
+  filteredSubscriptions.value.map((subscription) => ({
+    subscription,
+    label: subscription.targetTitle || VALUE_UNAVAILABLE,
+    to: targetLocation(subscription),
+  })),
+);
 
 const handleUnsubscribe = async (subscription: Subscription) => {
   const error = await store.unsubscribe(subscription.id);
@@ -102,7 +136,9 @@ const handleUnsubscribe = async (subscription: Subscription) => {
       </button>
     </div>
 
-    <secondary-text v-if="store.subscriptionsLoading">Загрузка…</secondary-text>
+    <secondary-text v-if="store.subscriptionsLoading"
+      >Загрузка...</secondary-text
+    >
 
     <template v-else-if="filteredSubscriptions.length === 0">
       <secondary-text>Нет подписок</secondary-text>
@@ -110,19 +146,22 @@ const handleUnsubscribe = async (subscription: Subscription) => {
 
     <ul v-else class="subscription-list">
       <li
-        v-for="subscription in filteredSubscriptions"
-        :key="subscription.id"
+        v-for="row in rows"
+        :key="row.subscription.id"
         class="subscription-item"
       >
         <span class="type-badge">{{
-          getTargetTypeLabel(subscription.targetType)
+          getTargetTypeLabel(row.subscription.targetType)
         }}</span>
-        <router-link :to="getTargetLink(subscription)" class="target-link">
-          {{ subscription.targetId }}
+        <router-link v-if="row.to" :to="row.to" class="target-link">
+          {{ row.label }}
         </router-link>
+        <span v-else class="target-link target-link--gone">{{
+          row.label
+        }}</span>
         <button
           class="unsubscribe-btn"
-          @click="handleUnsubscribe(subscription)"
+          @click="handleUnsubscribe(row.subscription)"
         >
           Отписаться
         </button>
@@ -133,6 +172,7 @@ const handleUnsubscribe = async (subscription: Subscription) => {
 
 <style scoped lang="sass">
 // Variables are injected globally via vite.config.ts additionalData
+@import "@/assets/styles/Inputs"
 
 .subscriptions-page
   padding: $medium
@@ -158,7 +198,7 @@ const handleUnsubscribe = async (subscription: Subscription) => {
 
     &.active
       background: $accent-green
-      color: $text-on-green
+      color: $text-on-fill
       border-color: $accent-green
 
 .subscription-list
@@ -191,17 +231,14 @@ const handleUnsubscribe = async (subscription: Subscription) => {
   &:hover
     text-decoration: underline
 
-.unsubscribe-btn
-  padding: $minor $small
-  border: 1px solid $accent-red
-  border-radius: $border-radius
-  background: transparent
-  color: $accent-red
-  cursor: pointer
-  font-size: 0.85rem
+  // A target that is gone: the name is still worth reading, the link is not
+  // worth offering.
+  &--gone
+    color: $text-muted
 
-  // Тинт вместо сплошной заливки: $text-on-red рассчитан на светлую
-  // подложку, на $accent-red его контраст 1.5.
-  &:hover
-    +tint($accent-red, 15%)
+    &:hover
+      text-decoration: none
+
+.unsubscribe-btn
+  +button-outline($accent-red)
 </style>

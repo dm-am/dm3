@@ -73,8 +73,7 @@ internal class RecoveryApiService : IRecoveryApiService
             {
                 ServiceEmailReason.Taken => ApiEmailUnavailableReason.Taken,
                 ServiceEmailReason.PendingActivation => ApiEmailUnavailableReason.PendingActivation,
-                null => null,
-                _ => null
+                null => null
             }
         };
     }

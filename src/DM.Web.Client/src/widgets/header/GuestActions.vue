@@ -8,6 +8,7 @@ import {
   RegistrationSuccess,
   AccessRecoveryForm,
 } from "@/features/auth";
+import { REDIRECT_QUERY_KEY, resumeTarget } from "@/shared/lib/auth";
 
 const route = useRoute();
 const router = useRouter();
@@ -16,13 +17,29 @@ const router = useRouter();
 const registeredEmail = ref("");
 const prefillEmail = ref("");
 
+// Where the viewer was going when the guard (or an expired session) sent them
+// here. Captured the moment the dialog is asked for, because handleActionParam
+// strips the query straight away; spent once, on a sign-in that succeeded.
+const pendingRedirect = ref<string | null>(null);
+
+function resumeAfterLogin() {
+  const target = pendingRedirect.value;
+  pendingRedirect.value = null;
+  // replace, not push: the home page the guard substituted is not a step the
+  // viewer took, and "Назад" must not lead back into the refusal.
+  if (target) void router.replace(target);
+}
+
 const { open: openLogin, close: closeLogin } = useModal({
   component: LoginForm,
   attrs: {
     get prefillEmail() {
       return prefillEmail.value;
     },
-    onSuccess: () => closeLogin(),
+    onSuccess: () => {
+      closeLogin();
+      resumeAfterLogin();
+    },
     onCancel: () => closeLogin(),
     onCantSignIn: (email?: string) => {
       prefillEmail.value = email || "";
@@ -83,9 +100,13 @@ const { open: openRecovery, close: closeRecovery } = useModal({
 function handleActionParam() {
   const action = route.query.action as string;
   if (action) {
-    // Remove only the consumed action key, keep the rest of the query intact
+    // Remove only the consumed keys, keep the rest of the query intact
     const query = { ...route.query };
     delete query.action;
+    delete query[REDIRECT_QUERY_KEY];
+    // Read before the query is rewritten. resumeTarget refuses anything that
+    // is not a path on this site: the value arrives through the URL.
+    pendingRedirect.value = resumeTarget(route.query[REDIRECT_QUERY_KEY]);
     router.replace({ query });
     prefillEmail.value = "";
 
@@ -105,6 +126,8 @@ watch(() => route.query.action, handleActionParam);
 // Extract handlers to avoid inline arrow functions in template
 function handleLoginClick() {
   prefillEmail.value = "";
+  // A deliberate click on "Вход" is not a refused navigation: nothing to resume.
+  pendingRedirect.value = null;
   openLogin();
 }
 

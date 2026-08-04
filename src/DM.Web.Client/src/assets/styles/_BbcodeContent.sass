@@ -121,6 +121,10 @@
   // other ancestor) to override image sizing by redeclaring the custom
   // properties via a normal class rule. No inline style on the img means
   // no !important needed anywhere.
+  //
+  // The var() fallbacks below are the single declaration of the default image
+  // size. Neither parser emits custom properties for an image without an
+  // explicit size, so no C# or TS constant can change it — edit it here.
   img, .bb-image
     max-width: var(--bb-image-max-width, 100%)
     max-height: var(--bb-image-max-height, 500px)

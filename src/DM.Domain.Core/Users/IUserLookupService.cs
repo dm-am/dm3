@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
@@ -53,4 +54,18 @@ public interface IUserLookupService
     /// <param name="ct">Cancellation token</param>
     /// <returns>Tuple with Found flag and UserId (Empty if not found)</returns>
     Task<(bool Found, Guid UserId)> FindUserIdAsync(string username, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get the display-level essentials of several users at once
+    /// </summary>
+    /// <remarks>
+    /// One projection and no counter hydration, see <see cref="UserReference"/>.
+    /// Declared here rather than left to the read repository because assembling a
+    /// response out of several domain calls is the API layer's job, and reaching
+    /// for a repository to do it is how the layer below stops being the only place
+    /// that answers.
+    /// </remarks>
+    /// <param name="userIds">User identifiers</param>
+    /// <returns>References of the users that exist</returns>
+    Task<IEnumerable<UserReference>> GetReferencesAsync(IEnumerable<Guid> userIds);
 }

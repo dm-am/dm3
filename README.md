@@ -78,6 +78,7 @@ git config core.hooksPath scripts/hooks
 
 | Документ | User Story |
 |----------|------------|
+| [Документация_по_разработке_DM3.docx](./docs/Документация_по_разработке_DM3.docx) | "Что строится целиком? Какой полный план функционала?" |
 | [PROGRESS](./docs/PROGRESS.md) | "Что уже готово?" |
 | [ROADMAP](./docs/plans/ROADMAP.md) | "Что планируется? Что рассматривается? Какой техдолг?" |
 | [DM2_MIGRATION](./docs/plans/DM2_MIGRATION.md) | "Как мигрировать данные со старого сайта?" |

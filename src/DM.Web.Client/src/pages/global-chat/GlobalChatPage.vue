@@ -22,15 +22,18 @@ import dayjs from "dayjs";
 import { symbols } from "@/shared/lib/utils/icons";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import { globalChatApi } from "@/entities/global-chat";
 import { ChatMessage } from "@/widgets/chat-message";
 import ChatEventsPanel from "./ChatEventsPanel.vue";
+import ChatDateJump from "./ChatDateJump.vue";
 import { ChatMessageSkeleton } from "@/shared/ui/Skeleton";
-import { MessageSearchPanel } from "@/features/message-search";
+import { MessageSearchBar } from "@/features/message-search";
 import { WarningDialog } from "@/features/moderation-actions";
 import { LoginPrompt } from "@/features/auth";
 import { DashSeparator } from "@/shared/ui/DashSeparator";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
+import { notifyFailure } from "@/shared/lib/errors";
 import {
   groupMessagesWithSeparators,
   isDateSeparator,
@@ -40,8 +43,8 @@ import {
 import { useVirtualScroll } from "@/shared/lib/composables";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useGlobalSignalR } from "@/shared/lib/composables/useSignalR";
-import { EventType } from "@/shared/api/models/notifications/signalr";
-import type { SignalRNotification } from "@/shared/api/models/notifications/signalr";
+import { NotificationType } from "@/shared/api/models/notifications";
+import type { SignalRNotification } from "@/shared/api/models/notifications";
 import { useMessageToolbar } from "@/shared/lib/composables/useMessageToolbar";
 import {
   useAnchoredInfiniteScroll,
@@ -429,7 +432,7 @@ watch(
 // dropped (store.addMessage already no-ops otherwise).
 const isAtLatest = computed(() => !selectedDate.value && !hasMoreAfter.value);
 
-// SignalR push: the backend broadcasts EventType.NewGlobalChatMessage to
+// SignalR push: the backend broadcasts NotificationType.NewGlobalChatMessage to
 // every open connection — guests included (the hub accepts anonymous
 // connections as receive-only broadcast listeners). The payload
 // intentionally omits message text (BBCode rendering stays server-side), so
@@ -462,8 +465,13 @@ async function fetchNewMessages() {
 }
 
 function handleGlobalChatNotification(notification: SignalRNotification) {
-  if (notification.eventType !== EventType.NewGlobalChatMessage) return;
-  fetchNewMessages();
+  if (notification.eventType === NotificationType.NewGlobalChatMessage) {
+    fetchNewMessages();
+    return;
+  }
+  // The events strip rides the same broadcast: an event starting or ending
+  // changes what it shows, and the store decides which pushes those are.
+  globalChatStore.refreshEventsOnNotification(notification.eventType);
 }
 
 let unsubscribeSignalR: (() => void) | null = null;
@@ -501,37 +509,36 @@ function stopPolling() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Message search (overlay panel opened from the events strip or Ctrl+F)
+// Message search (the row above the chat frame)
 // ─────────────────────────────────────────────────────────────
-const searchOpen = ref(false);
+const searchBarRef = ref<InstanceType<typeof MessageSearchBar> | null>(null);
 
-function openSearch() {
-  searchOpen.value = true;
-}
-
-function closeSearch() {
-  searchOpen.value = false;
-}
-
-// Ctrl+F (Cmd+F on macOS) opens the in-chat search instead of the browser find.
+// Ctrl+F (Cmd+F on macOS) goes to the chat's own field instead of the browser
+// find. The field is on screen at all times now, so there is nothing to open —
+// only somewhere to put the caret. A guest has no field (the endpoint refuses
+// him), and then the key is left to the browser rather than swallowed.
 function handleSearchHotkey(event: KeyboardEvent) {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
-    event.preventDefault();
-    openSearch();
+  if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "f") {
+    return;
   }
+  if (!searchBarRef.value?.focus()) return;
+  event.preventDefault();
 }
 
-// A global-chat search result jumps to the message in the live feed: leave
-// any archive date, then load the window around it (highlightedMessageId
-// watcher scrolls/flashes it).
-function handleJumpToGlobalMessage(messageId: string) {
-  searchOpen.value = false;
+// A search hit jumps to the message in the live feed: leave any archive date,
+// then load the window around it (the highlightedMessageId watcher scrolls and
+// flashes it). The landing scroll crosses the whole loaded window, so the
+// sentinels are suspended for its duration — exactly as on the #msg- landing,
+// which they would otherwise read as a request for another page.
+async function handleJumpToGlobalMessage(messageId: string) {
   selectedDate.value = "";
   if (route.query.date) {
     suppressNextDateWatch = true;
     router.replace({ name: "global-chat", query: {} });
   }
-  globalChatStore.navigateToMessage(messageId);
+  suspendInfiniteScroll();
+  await globalChatStore.navigateToMessage(messageId);
+  nextTick(() => setTimeout(resumeInfiniteScroll, LANDING_SCROLL_MS));
 }
 
 onMounted(async () => {
@@ -712,7 +719,13 @@ function cancelEdit() {
 // (its own local editor state) — the page never reads back a stale copy.
 async function saveEditWithText(msgId: string, text: string) {
   if (text.trim()) {
-    await globalChatStore.updateMessage(msgId, text);
+    const { error } = await globalChatStore.updateMessage(msgId, text);
+    // The editor stays open with the text still in it: a closed editor over
+    // the unchanged message says the edit went through.
+    if (error) {
+      notifyFailure(error, "Не удалось сохранить сообщение");
+      return;
+    }
   }
   cancelEdit();
 }
@@ -838,7 +851,7 @@ async function loadArchiveDate(date: string) {
       router.replace({ name: "global-chat", query: {} });
     }
     if (messages.value?.length) {
-      toast.error("Сообщений за эту дату не найдено — показаны последние");
+      toast.error("Сообщений за эту дату не найдено, показаны последние");
       scrollToBottom();
     }
     return;
@@ -919,18 +932,19 @@ async function handleSend() {
   if (!newMessage.value.trim() || sending.value) return;
   const text = newMessage.value;
   newMessage.value = "";
-  editorRef.value?.clear();
-  const result = await globalChatStore.sendMessage(text);
-  const failed = Boolean(result?.error);
-  // Give the text back on failure. Clearing before the request is what makes
-  // sending feel instant; losing what was written when it fails is not part
-  // of that bargain.
-  if (failed) {
+  const { error } = await globalChatStore.sendMessage(text);
+  // Give the text back on failure. Emptying the field before the request is
+  // what makes sending feel instant; losing what was written when it fails is
+  // not part of that bargain. The editor's own clear() waits for the send to
+  // land — it also drops the saved draft, and that copy is the one that
+  // outlives the tab.
+  if (error) {
     newMessage.value = text;
+    notifyFailure(error, "Не удалось отправить сообщение");
+    return;
   }
-  if (!failed) {
-    scrollToBottom();
-  }
+  editorRef.value?.clear();
+  scrollToBottom();
 }
 
 function requestDelete(id: string) {
@@ -942,37 +956,37 @@ function cancelDelete() {
 }
 
 async function confirmDelete() {
-  if (confirmingDeleteId.value) {
-    await globalChatStore.deleteMessage(confirmingDeleteId.value);
-    confirmingDeleteId.value = null;
-  }
+  if (!confirmingDeleteId.value) return;
+  const { error } = await globalChatStore.deleteMessage(
+    confirmingDeleteId.value,
+  );
+  confirmingDeleteId.value = null;
+  if (error) notifyFailure(error, "Не удалось удалить сообщение");
 }
 </script>
 
 <template>
   <page-title v-once>Глобальный чат</page-title>
 
+  <!-- Search row: above the chat frame, never inside it. The field and the
+       archive-date button share the site's one filter-bar line, and the hits
+       unroll from the row as a layer over the feed. -->
+  <MessageSearchBar ref="searchBarRef" @jump="handleJumpToGlobalMessage">
+    <ChatDateJump
+      :selected-date="selectedDate"
+      :max-date="todayValue"
+      @date-picked="onDatePicked"
+    />
+  </MessageSearchBar>
+
   <div
     ref="globalChatContainer"
     class="globalChat-container"
     :class="{ 'layout-compact': isCompactLayout }"
   >
-    <!-- Events panel pinned inside the chat frame, above the scrolling
-         feed: the live-event row, the arrow-flipped upcoming event and the
-         compact "К дате" calendar control in one block. -->
-    <ChatEventsPanel
-      :selected-date="selectedDate"
-      :max-date="todayValue"
-      @date-picked="onDatePicked"
-      @open-search="openSearch"
-    />
-
-    <!-- Search overlay: layered over the feed, which stays mounted beneath. -->
-    <MessageSearchPanel
-      v-if="searchOpen"
-      @close="closeSearch"
-      @jump-global="handleJumpToGlobalMessage"
-    />
+    <!-- Events panel pinned inside the chat frame, above the scrolling feed:
+         the focal event line and its floating layers. -->
+    <ChatEventsPanel />
     <div
       ref="messagesContainer"
       class="globalChat-messages"
@@ -1187,6 +1201,7 @@ async function confirmDelete() {
         <Tooltip text="Подтвердить удаление">
           <button
             class="toolbar-btn toolbar-btn-delete-confirm"
+            aria-label="Подтвердить удаление"
             @click="confirmDelete"
           >
             <SvgIcon name="trash" />
@@ -1278,7 +1293,7 @@ async function confirmDelete() {
     <!-- Quiet notice for non-participants while a closed event is live:
          the backend rejects their messages, so warn before they type. -->
     <secondary-text v-if="showClosedEventHint" class="globalChat-event-hint">
-      Идет закрытый эвент — писать могут только участники
+      Идет закрытый эвент, писать могут только участники
     </secondary-text>
     <div class="globalChat-input-container">
       <template v-if="canSendMessages">
@@ -1287,7 +1302,7 @@ async function confirmDelete() {
           v-model="newMessage"
           context="message"
           placeholder=""
-          draft-key="global-chat"
+          :draft-key="composerDraftKey('global-chat', 'message')"
           :disabled="sending"
           :min-height="60"
           :max-height="200"
@@ -1337,7 +1352,9 @@ async function confirmDelete() {
         margin-top: 0
 
 .globalChat-messages
-  height: calc(100vh - 350px)
+  // Everything the page spends around the feed, the search row above the frame
+  // included ($control-height plus the $small gap under it).
+  height: calc(100vh - 400px)
   min-height: 200px
   overflow-y: auto
   overflow-x: hidden
@@ -1365,9 +1382,8 @@ async function confirmDelete() {
 .globalChat-empty
   display: flex
   align-items: center
-  justify-content: center
+  justify-content: flex-start
   height: 100%
-  text-align: center
   padding: $big
 
 .globalChat-error
@@ -1432,7 +1448,7 @@ async function confirmDelete() {
   // tabindex="0" makes the whole row focusable so keyboard users can reach
   // the hover-only toolbar (focusin -> handleMessageFocusIn); outline only
   // on :focus-visible so mouse clicks don't leave a visible ring.
-  &:focus
+  &:focus:not(:focus-visible)
     outline: none
   &:focus-visible
     outline: 2px solid $border-focus
@@ -1534,7 +1550,6 @@ async function confirmDelete() {
 // Quiet single-line notice above the editor (mirrors the guest CTA styling)
 .globalChat-event-hint
   display: block
-  text-align: center
   padding-bottom: $tiny
 
 // CHAT-10: same control idiom as the fixed scroll-nav buttons (24px square,

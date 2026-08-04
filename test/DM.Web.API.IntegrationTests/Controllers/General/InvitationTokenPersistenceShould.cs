@@ -1,11 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
-using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Account;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
@@ -31,22 +29,11 @@ public class InvitationTokenPersistenceShould : IntegrationTestBase
     {
     }
 
-    private DmDbContext CreateMigratedContext(string databaseName)
-    {
-        var builder = new NpgsqlConnectionStringBuilder(DatabaseFixture.ConnectionString)
-        {
-            Database = databaseName,
-        };
-        return new DmDbContext(new DbContextOptionsBuilder<DmDbContext>()
-            .UseNpgsql(builder.ConnectionString)
-            .Options);
-    }
-
     [Fact]
     public async Task NotConstrainPolymorphicEntityIdToASingleTable()
     {
         var databaseName = $"dm3_migration_{Guid.NewGuid():N}";
-        await using var db = CreateMigratedContext(databaseName);
+        await using var db = DatabaseFixture.CreateDbContextFor(databaseName);
         try
         {
             await db.Database.MigrateAsync();
@@ -75,7 +62,7 @@ public class InvitationTokenPersistenceShould : IntegrationTestBase
     public async Task StoreInvitationTokensForBothGamesAndBlogs()
     {
         var databaseName = $"dm3_migration_{Guid.NewGuid():N}";
-        await using var db = CreateMigratedContext(databaseName);
+        await using var db = DatabaseFixture.CreateDbContextFor(databaseName);
         try
         {
             await db.Database.MigrateAsync();

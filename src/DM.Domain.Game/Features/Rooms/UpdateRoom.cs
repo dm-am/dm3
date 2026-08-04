@@ -50,6 +50,11 @@ public class UpdateRoom
     public bool? DiceEnabled { get; set; }
 
     /// <summary>
+    /// Room is kept out of the game's room list for those who may not open it
+    /// </summary>
+    public bool? HiddenWithoutAccess { get; set; }
+
+    /// <summary>
     /// Room is archived (hidden from the active rooms list, kept for history)
     /// </summary>
     public bool? IsArchived { get; set; }

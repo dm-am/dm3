@@ -7,6 +7,7 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
 using Serilog.Events;
+using Microsoft.Extensions.Hosting;
 using Serilog.Sinks.Grafana.Loki;
 using System;
 
@@ -21,13 +22,19 @@ public static class LoggingConfiguration
     /// Register logger and add it to the service collection of the application
     /// </summary>
     public static IServiceCollection AddDmLogging(this IServiceCollection services,
-        string applicationName, IConfiguration configuration)
+        string applicationName, IConfiguration configuration, IHostEnvironment environment)
     {
         var connectionStrings = new ConnectionStrings();
         configuration.GetSection(nameof(ConnectionStrings)).Bind(connectionStrings);
 
-        var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
-        var isDevelopment = environmentName == "Development";
+        // The host decides what environment this is: it reads DOTNET_ and ASPNETCORE_
+        // variables and the command line, so `--environment Development` sets it with
+        // no variable existing at all. Reading the variable here made a second,
+        // disagreeing answer inside one process - the pipeline mounting Swagger and
+        // skipping HSTS while the log stayed at Information and shipped an
+        // env=Production label to Loki.
+        var environmentName = environment.EnvironmentName;
+        var isDevelopment = environment.IsDevelopment();
 
         // One level rule governs both sinks. Debug on a server writes every framework
         // trace into a store with no retention, which costs disk and buries the events
@@ -74,6 +81,10 @@ public static class LoggingConfiguration
                 .AddHttpClientInstrumentation()
                 .AddRuntimeInstrumentation()
                 .AddMeter(DM.Infrastructure.Core.Tracing.UploadMetrics.MeterName)
+                // Without this the consumers export nothing about the messages they
+                // handle, and a worker failing every one of them is indistinguishable
+                // from an idle worker on every panel and every rule.
+                .AddMeter(DM.Infrastructure.Core.Tracing.MessagingMetrics.MeterName)
                 .AddPrometheusExporter());
 
         return services.AddLogging(b => b.AddSerilog());

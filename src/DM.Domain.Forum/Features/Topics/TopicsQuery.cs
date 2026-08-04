@@ -22,7 +22,7 @@ public class TopicsQuery : PagingQuery
     /// <summary>
     /// Filter by author usernames (case-insensitive, OR logic)
     /// </summary>
-    public IReadOnlyCollection<string>? Authors { get; set; }
+    public IReadOnlyCollection<string>? AuthorUsernames { get; set; }
 
     /// <summary>
     /// Filter by created date (from) - ISO 8601 format

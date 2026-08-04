@@ -27,8 +27,7 @@ internal class AvailabilityApiService : IAvailabilityApiService
             {
                 ServiceEmailReason.Taken => EmailUnavailableReason.Taken,
                 ServiceEmailReason.PendingActivation => EmailUnavailableReason.PendingActivation,
-                null => null,
-                _ => null
+                null => null
             }
         };
     }
@@ -46,8 +45,7 @@ internal class AvailabilityApiService : IAvailabilityApiService
                 ServiceUsernameReason.Taken => UsernameUnavailableReason.Taken,
                 ServiceUsernameReason.Reserved => UsernameUnavailableReason.Reserved,
                 ServiceUsernameReason.InvalidFormat => UsernameUnavailableReason.InvalidFormat,
-                null => null,
-                _ => null
+                null => null
             }
         };
     }

@@ -52,8 +52,8 @@ internal sealed partial class DataSeeder
 {
     /// <summary>
     /// Runs a seed image through the real image pipeline:
-    /// magic-byte → EXIF strip → resize → WebP thumbnails → S3 PUT of all 3
-    /// objects with Cache-Control: immutable. Returns an Upload entity ready
+    /// magic-byte → EXIF strip → resize → a single S3 PUT of the source object
+    /// with Cache-Control: immutable. Returns an Upload entity ready
     /// for Add() into the DbContext.
     /// </summary>
     private async Task<DM.Infrastructure.Persistence.Entities.Shared.Upload> SeedAvatarFromBytesAsync(
@@ -98,6 +98,8 @@ internal sealed partial class DataSeeder
             Original = true,
             ContentType = processed.ContentType,
             SizeBytes = processed.Bytes.LongLength,
+            Width = processed.Width,
+            Height = processed.Height,
             ObjectKey = objectKey,
             FilePath = BuildPublicUrl(objectKey),
             FileName = sourceFileName,

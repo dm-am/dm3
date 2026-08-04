@@ -15,7 +15,6 @@ import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useBlogDetailsStore } from "@/entities/blog";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
-import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
@@ -51,8 +50,6 @@ async function deleteBlog() {
 
 <template>
   <div class="blog-settings">
-    <page-title>Настройки блога</page-title>
-
     <secondary-text v-if="!canEdit">
       Настройки блога доступны мастеру блога и ассистентам.
     </secondary-text>

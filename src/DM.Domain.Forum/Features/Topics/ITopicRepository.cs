@@ -104,14 +104,15 @@ public interface ITopicRepository
     /// </summary>
     /// <param name="updateTopic">Topic update data</param>
     /// <param name="boardId">New board ID (if changed)</param>
-    /// <returns>Updated topic DTO</returns>
-    Task<Topic> Update(UpdateTopicEntity updateTopic, Guid? boardId = null);
+    /// <returns>Updated topic DTO, and whether the row actually changed</returns>
+    Task<TopicUpdateResult> Update(UpdateTopicEntity updateTopic, Guid? boardId = null);
 
     /// <summary>
     /// Soft delete a topic
     /// </summary>
     /// <param name="topicId">Topic identifier</param>
-    Task Delete(Guid topicId);
+    /// <param name="deletedByUserId">User who removed the topic</param>
+    Task Delete(Guid topicId, Guid deletedByUserId);
 
     /// <summary>
     /// Update attach order for multiple topics (batch operation)
@@ -120,6 +121,21 @@ public interface ITopicRepository
     /// <param name="ct">Cancellation token</param>
     Task UpdateAttachOrder(IReadOnlyDictionary<Guid, int> topicOrders, CancellationToken ct = default);
 }
+
+/// <summary>
+/// What an update did: the topic as it now stands, and whether it moved at all.
+/// </summary>
+/// <remarks>
+/// A PATCH that round-trips the values the topic already holds is a legitimate
+/// request and answers 200, but it is not an edit: it leaves no row in the edit
+/// history, and it must announce nothing either. The two have to be decided by the
+/// same fact, or the ChangedTopic notification goes out naming whoever edited the
+/// topic last — a person who did nothing this time, and whose blacklist is the one
+/// the delivery is then filtered against.
+/// </remarks>
+/// <param name="Topic">The topic after the update.</param>
+/// <param name="Changed">True when the row was actually modified.</param>
+public sealed record TopicUpdateResult(Topic Topic, bool Changed);
 
 /// <summary>
 /// Internal DTO for topic creation (repository layer)
@@ -166,4 +182,11 @@ public class UpdateTopicEntity
     /// Updated attached status (optional)
     /// </summary>
     public bool? IsAttached { get; set; }
+
+    /// <summary>
+    /// User performing the edit. Recorded in the topic edit history, which is
+    /// the only place the schema keeps "who changed this" for a topic — the row
+    /// itself carries the author and nothing else.
+    /// </summary>
+    public Guid EditorUserId { get; set; }
 }

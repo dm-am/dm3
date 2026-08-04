@@ -34,13 +34,13 @@ internal class CommentMappingProfile : Profile
                     };
             });
 
-        CreateMap<Comment, CreateComment>()
-            .ForMember(d => d.EntityId, opt => opt.Ignore());
-
-        CreateMap<Comment, UpdateComment>()
-            .ForMember(d => d.CommentId, opt => opt.Ignore());
-
+        // Request DTOs only. The response DTO used to map into both write
+        // models, which is what let a PATCH body carry an author and a like
+        // list that nothing read and the document could not mark as ignored.
         CreateMap<CreateCommentRequest, CreateComment>()
             .ForMember(d => d.EntityId, opt => opt.Ignore());
+
+        CreateMap<UpdateCommentRequest, UpdateComment>()
+            .ForMember(d => d.CommentId, opt => opt.Ignore());
     }
 }

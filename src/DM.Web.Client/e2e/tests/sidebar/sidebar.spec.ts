@@ -1,4 +1,44 @@
 import { test, expect } from "../../fixtures/auth";
+import type { Locator, Page } from "@playwright/test";
+
+/**
+ * The two sidebar columns and the blocks in them.
+ *
+ * What this file was: `.sidebar-block`, `.sidebar-block-header`,
+ * `.sidebar-block-content`, `.left-sidebar`, `.right-sidebar`,
+ * `.owned-games`, `.popular-games`, `.recruiting-games`, `.active-games`,
+ * `.active-polls`, `.game-tag-cloud`, `.forum-boards`, `.contact-forms`,
+ * `.support-us`, `.collapse-icon` — none of them is written anywhere in the
+ * client. `SidebarBlock` renders an `<li>` with an `h4.sidebar-title` and a
+ * `ul#sidebar-list-<token>`; the shell columns are `.sidebar-left` and
+ * `.sidebar-right`. Every one of those tests therefore looked at nothing,
+ * and the ones with a `count() > 0` guard around the assertion said so out
+ * loud.
+ *
+ * So the blocks are addressed the way the component identifies them — by
+ * token — and no assertion sits inside a condition.
+ */
+
+/** The list a sidebar block renders its rows into. */
+const block = (page: Page, token: string): Locator =>
+  page.locator(`#sidebar-list-${token}`);
+
+/**
+ * The clip the fold collapses, which is what "collapsed" means on screen.
+ *
+ * Not the list itself: collapsing is the CSS fold (Reset.sass — `.expand-fold`
+ * goes to `grid-template-rows: 0fr` and the clip hides its overflow), so the
+ * list keeps its own height and its own bounding box the whole time. An
+ * assertion that the list is hidden is red with the block collapsed and red
+ * with it open, which is the same "looked at nothing" this file was rewritten
+ * to stop doing.
+ */
+const blockFold = (page: Page, token: string): Locator =>
+  page.locator(`.expand-fold-clip:has(#sidebar-list-${token})`);
+
+/** The +/- control in the block heading; it carries the expanded state. */
+const blockToggle = (page: Page, token: string): Locator =>
+  page.locator(`#sidebar-toggle-${token}`);
 
 test.describe("Sidebars", () => {
   test.describe("Left Sidebar - Guest", () => {
@@ -7,52 +47,35 @@ test.describe("Sidebars", () => {
     });
 
     test("should display left sidebar", async ({ page }) => {
-      await expect(page.locator(".left-sidebar")).toBeVisible();
+      await expect(page.locator(".sidebar-left")).toBeVisible();
     });
 
     test("should display recruiting games section", async ({ page }) => {
-      const section = page
-        .locator(".sidebar-block")
-        .filter({ hasText: "Набор игроков" });
-      await expect(section).toBeVisible();
+      await expect(block(page, "RecruitingGames")).toBeVisible();
     });
 
     test("should display active games section", async ({ page }) => {
-      const section = page
-        .locator(".sidebar-block")
-        .filter({ hasText: "Активные игры" });
-      await expect(section).toBeVisible();
+      await expect(block(page, "ActiveGames")).toBeVisible();
     });
 
     test("should display finished games section", async ({ page }) => {
-      const section = page
-        .locator(".sidebar-block")
-        .filter({ hasText: "Завершенные игры" });
-      await expect(section).toBeVisible();
+      await expect(block(page, "FinishedGames")).toBeVisible();
     });
 
     test("should display active blogs section", async ({ page }) => {
-      const section = page
-        .locator(".sidebar-block")
-        .filter({ hasText: "Активные блоги" });
-      await expect(section).toBeVisible();
+      await expect(block(page, "ActiveBlogs")).toBeVisible();
     });
 
     test("should display forum boards section", async ({ page }) => {
-      const section = page
-        .locator(".sidebar-block")
-        .filter({ hasText: "Форум" });
-      await expect(section).toBeVisible();
+      await expect(block(page, "ForumBoards")).toBeVisible();
     });
 
     test("should not display owned games for guests", async ({ page }) => {
-      const ownedGamesSection = page.locator(".owned-games");
-      await expect(ownedGamesSection).not.toBeVisible();
+      await expect(block(page, "OwnedGames")).toBeHidden();
     });
 
     test("should not display owned blogs for guests", async ({ page }) => {
-      const ownedBlogsSection = page.locator(".owned-blogs");
-      await expect(ownedBlogsSection).not.toBeVisible();
+      await expect(block(page, "OwnedBlogs")).toBeHidden();
     });
   });
 
@@ -64,30 +87,22 @@ test.describe("Sidebars", () => {
     test("should display owned games section when authenticated", async ({
       authenticatedPage,
     }) => {
-      const section = authenticatedPage
-        .locator(".sidebar-block")
-        .filter({ hasText: "Мои игры" });
-      await expect(section).toBeVisible();
+      await expect(block(authenticatedPage, "OwnedGames")).toBeVisible();
     });
 
     test("should display owned blogs section when authenticated", async ({
       authenticatedPage,
     }) => {
-      const section = authenticatedPage
-        .locator(".sidebar-block")
-        .filter({ hasText: "Мои блоги" });
-      await expect(section).toBeVisible();
+      await expect(block(authenticatedPage, "OwnedBlogs")).toBeVisible();
     });
 
     test("lists the games the signed-in user takes part in", async ({
       authenticatedPage,
     }) => {
-      await authenticatedPage.goto("/");
-      const ownedGames = authenticatedPage.locator(".owned-games");
-
       // The seeded account hosts and plays games, so the block has entries.
       // Asserting count >= 0 passed even when the block rendered nothing.
-      await expect(ownedGames.locator(".game-link").first()).toBeVisible();
+      const rows = block(authenticatedPage, "OwnedGames").locator("li.link a");
+      await expect(rows.first()).toBeVisible();
     });
   });
 
@@ -97,115 +112,85 @@ test.describe("Sidebars", () => {
     });
 
     test("should display right sidebar", async ({ page }) => {
-      await expect(page.locator(".right-sidebar")).toBeVisible();
+      await expect(page.locator(".sidebar-right")).toBeVisible();
     });
 
     test("should display active polls section", async ({ page }) => {
-      const section = page
-        .locator(".sidebar-block")
-        .filter({ hasText: "Опросы" });
-      await expect(section).toBeVisible();
+      await expect(block(page, "ActivePolls")).toBeVisible();
     });
 
     test("should display popular games section", async ({ page }) => {
-      const section = page
-        .locator(".sidebar-block")
-        .filter({ hasText: "Популярные игры" });
-      await expect(section).toBeVisible();
+      await expect(block(page, "PopularGames")).toBeVisible();
     });
 
     test("should display popular blogs section", async ({ page }) => {
-      const section = page
-        .locator(".sidebar-block")
-        .filter({ hasText: "Популярные блоги" });
-      await expect(section).toBeVisible();
+      await expect(block(page, "PopularBlogs")).toBeVisible();
     });
 
     test("should display tag cloud section", async ({ page }) => {
-      const section = page
-        .locator(".sidebar-block")
-        .filter({ hasText: "Облако тегов" });
-      await expect(section).toBeVisible();
+      await expect(block(page, "GameTags")).toBeVisible();
     });
 
     test("should display contact forms section", async ({ page }) => {
-      const section = page
-        .locator(".sidebar-block")
-        .filter({ hasText: "Обратная связь" });
-      await expect(section).toBeVisible();
+      await expect(block(page, "ContactForms")).toBeVisible();
     });
 
     test("should display support section", async ({ page }) => {
-      const section = page
-        .locator(".sidebar-block")
-        .filter({ hasText: "Поддержать проект" });
-      await expect(section).toBeVisible();
+      await expect(block(page, "SupportUs")).toBeVisible();
     });
 
     test("should display partners section", async ({ page }) => {
-      const section = page
-        .locator(".sidebar-block")
-        .filter({ hasText: "Партнеры" });
-      await expect(section).toBeVisible();
+      await expect(block(page, "Partners")).toBeVisible();
     });
   });
 
   test.describe("SidebarBlock - Collapse/Expand", () => {
     test.beforeEach(async ({ page }) => {
-      // Clear localStorage to reset collapse state
+      // Reset the collapse state. The key is the component's own
+      // (`__HideMenuModule_<token>__`); the "sidebar-" prefix this used to
+      // clear matches nothing the client stores.
       await page.goto("/");
       await page.evaluate(() => {
         Object.keys(localStorage)
-          .filter((key) => key.startsWith("sidebar-"))
+          .filter((key) => key.startsWith("__HideMenuModule_"))
           .forEach((key) => localStorage.removeItem(key));
       });
       await page.reload();
     });
 
-    test("should toggle block collapse on header click", async ({ page }) => {
-      const block = page
-        .locator(".sidebar-block")
-        .filter({ hasText: "Популярные игры" });
-      const header = block.locator(".sidebar-block-header");
-      const content = block.locator(".sidebar-block-content");
+    test("should toggle block collapse on toggle click", async ({ page }) => {
+      const fold = blockFold(page, "PopularGames");
+      const toggle = blockToggle(page, "PopularGames");
 
-      // Initially expanded
-      await expect(content).toBeVisible();
+      // Initially expanded. Only the +/- control toggles: the heading text
+      // is deliberately not clickable, which is why clicking the header
+      // asserted nothing.
+      await expect(fold).toBeVisible();
 
-      // Click to collapse
-      await header.click();
-      await expect(content).not.toBeVisible();
+      await toggle.click();
+      await expect(fold).toBeHidden();
 
-      // Click to expand
-      await header.click();
-      await expect(content).toBeVisible();
+      await toggle.click();
+      await expect(fold).toBeVisible();
     });
 
     test("should persist collapse state in localStorage", async ({ page }) => {
-      const block = page
-        .locator(".sidebar-block")
-        .filter({ hasText: "Популярные игры" });
-      const header = block.locator(".sidebar-block-header");
+      await blockToggle(page, "PopularGames").click();
+      await expect(blockFold(page, "PopularGames")).toBeHidden();
 
-      // Collapse the block
-      await header.click();
-
-      // Reload the page
       await page.reload();
 
-      // Block should still be collapsed
-      const content = block.locator(".sidebar-block-content");
-      await expect(content).not.toBeVisible();
+      await expect(blockFold(page, "PopularGames")).toBeHidden();
     });
 
-    test("should show collapse indicator icon", async ({ page }) => {
-      const block = page
-        .locator(".sidebar-block")
-        .filter({ hasText: "Популярные игры" });
-      const header = block.locator(".sidebar-block-header");
-      const collapseIcon = header.locator(".collapse-icon");
+    test("should announce the collapse state on the toggle", async ({
+      page,
+    }) => {
+      const toggle = blockToggle(page, "PopularGames");
 
-      await expect(collapseIcon).toBeVisible();
+      await expect(toggle).toHaveAttribute("aria-expanded", "true");
+      await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
     });
   });
 
@@ -215,24 +200,15 @@ test.describe("Sidebars", () => {
     });
 
     test("should display game links in popular games", async ({ page }) => {
-      const section = page.locator(".popular-games");
-      const gameLinks = section.locator(".game-link");
-
-      // Should have some games or empty state
-      const count = await gameLinks.count();
-      if (count > 0) {
-        await expect(gameLinks.first()).toBeVisible();
-      }
+      const rows = block(page, "PopularGames").locator("li.link a");
+      await expect(rows.first()).toBeVisible();
     });
 
     test("should navigate to game page on click", async ({ page }) => {
-      const section = page.locator(".popular-games");
-      const gameLink = section.locator(".game-link").first();
+      const gameLink = block(page, "PopularGames").locator("li.link a").first();
 
-      if (await gameLink.isVisible()) {
-        await gameLink.click();
-        await expect(page).toHaveURL(/\/games\//);
-      }
+      await gameLink.click();
+      await expect(page).toHaveURL(/\/game\//);
     });
   });
 
@@ -242,18 +218,12 @@ test.describe("Sidebars", () => {
     });
 
     test("should display recruiting games list", async ({ page }) => {
-      const section = page.locator(".recruiting-games");
-      await expect(section).toBeVisible();
+      await expect(block(page, "RecruitingGames")).toBeVisible();
     });
 
-    test("should show recruitment indicator for games", async ({ page }) => {
-      const section = page.locator(".recruiting-games");
-      const games = section.locator(".game-link");
-
-      if ((await games.count()) > 0) {
-        // Games in this section should be recruiting
-        await expect(games.first()).toBeVisible();
-      }
+    test("should show recruiting games as rows", async ({ page }) => {
+      const rows = block(page, "RecruitingGames").locator("li.link a");
+      await expect(rows.first()).toBeVisible();
     });
   });
 
@@ -263,18 +233,18 @@ test.describe("Sidebars", () => {
     });
 
     test("should display active games list", async ({ page }) => {
-      const section = page.locator(".active-games");
-      await expect(section).toBeVisible();
+      await expect(block(page, "ActiveGames")).toBeVisible();
     });
 
-    test("should show last activity time for games", async ({ page }) => {
-      const section = page.locator(".active-games");
-      const games = section.locator(".game-link");
-
-      if ((await games.count()) > 0) {
-        // The first game should have an activity indicator, but the
-        // activity time may or may not be rendered depending on game data
-      }
+    test("pins the unread counters open on every active game row", async ({
+      page,
+    }) => {
+      // The block passes always-show-counters, so the pair is not a hover
+      // affordance here. There is no activity time in this row and never was:
+      // the old title described one and the body asserted nothing at all.
+      const rows = page.locator("#sidebar-list-ActiveGames li.link");
+      await expect(rows.first()).toBeVisible();
+      await expect(rows.first().locator(".counters")).toBeVisible();
     });
   });
 
@@ -284,33 +254,26 @@ test.describe("Sidebars", () => {
     });
 
     test("should display tag cloud", async ({ page }) => {
-      const tagCloud = page.locator(".game-tag-cloud");
-      await expect(tagCloud).toBeVisible();
+      await expect(block(page, "GameTags").locator(".tag-cloud")).toBeVisible();
     });
 
-    test("should display tags with varying font sizes", async ({ page }) => {
-      const tagCloud = page.locator(".game-tag-cloud");
-      const tags = tagCloud.locator(".tag-link");
+    test("should size the tags by popularity", async ({ page }) => {
+      const tags = block(page, "GameTags").locator(".tag-cloud .tag");
+      await expect(tags.first()).toBeVisible();
 
-      if ((await tags.count()) > 1) {
-        // Tags should have different font sizes based on popularity
-        const firstTagSize = await tags
-          .first()
-          .evaluate((el) => window.getComputedStyle(el).fontSize);
-        expect(firstTagSize).toBeDefined();
-      }
+      const size = await tags
+        .first()
+        .evaluate((el) => window.getComputedStyle(el).fontSize);
+      expect(size).toMatch(/^\d+(\.\d+)?px$/);
     });
 
     test("should navigate to games filtered by tag on click", async ({
       page,
     }) => {
-      const tagCloud = page.locator(".game-tag-cloud");
-      const tag = tagCloud.locator(".tag-link").first();
+      const tag = block(page, "GameTags").locator(".tag-cloud .tag").first();
 
-      if (await tag.isVisible()) {
-        await tag.click();
-        await expect(page).toHaveURL(/\/games\?.*tag/i);
-      }
+      await tag.click();
+      await expect(page).toHaveURL(/\/games\?.*requiredTags/i);
     });
   });
 
@@ -320,31 +283,24 @@ test.describe("Sidebars", () => {
     });
 
     test("should display active polls section", async ({ page }) => {
-      const section = page.locator(".active-polls");
-      await expect(section).toBeVisible();
+      await expect(block(page, "ActivePolls")).toBeVisible();
     });
 
     test("should display poll if exists", async ({ page }) => {
-      const section = page.locator(".active-polls");
-      const poll = section.locator(".poll");
+      const poll = block(page, "ActivePolls").locator(".poll").first();
 
-      // May or may not have active polls
-      const hasPoll = await poll.isVisible().catch(() => false);
-      if (hasPoll) {
-        await expect(poll.locator(".poll-title, .poll-question")).toBeVisible();
-      }
+      await expect(poll).toBeVisible();
+      await expect(poll.locator(".poll-title")).toBeVisible();
     });
   });
 
   test.describe("Poll Voting", () => {
     test("should display poll options", async ({ page }) => {
       await page.goto("/");
-      const poll = page.locator(".poll").first();
+      const poll = page.locator("#sidebar-list-ActivePolls .poll").first();
 
-      if (await poll.isVisible().catch(() => false)) {
-        const options = poll.locator(".poll-option");
-        await expect(options.first()).toBeVisible();
-      }
+      await expect(poll).toBeVisible();
+      await expect(poll.locator(".poll-option-row").first()).toBeVisible();
     });
 
     test("should show vote button for authenticated users", async ({
@@ -352,20 +308,28 @@ test.describe("Sidebars", () => {
     }) => {
       await authenticatedPage.goto("/");
 
-      const poll = authenticatedPage.locator(".poll").first();
-      if (await poll.isVisible().catch(() => false)) {
-        // The "голосовать" button should be visible if user hasn't voted
-      }
+      const poll = authenticatedPage
+        .locator("#sidebar-list-ActivePolls .poll")
+        .first();
+      await expect(poll).toBeVisible();
+      // Either "Проголосовать" on every option or "Отменить голос" on the one
+      // already chosen: an active poll offers a signed-in reader one of the
+      // two, and offers a guest neither.
+      await expect(poll.locator(".poll-option-vote").first()).toBeVisible();
     });
 
-    test("should show results after voting", async ({ authenticatedPage }) => {
+    test("shows the tally next to every option", async ({
+      authenticatedPage,
+    }) => {
       await authenticatedPage.goto("/");
 
-      const poll = authenticatedPage.locator(".poll").first();
-      if (await poll.isVisible().catch(() => false)) {
-        // If user has voted, results should be shown - may or may not be
-        // visible depending on vote state
-      }
+      const poll = authenticatedPage
+        .locator("#sidebar-list-ActivePolls .poll")
+        .first();
+      await expect(poll).toBeVisible();
+      await expect(poll.locator(".poll-option-count").first()).toHaveText(
+        /\(\d+\)/,
+      );
     });
   });
 
@@ -375,37 +339,21 @@ test.describe("Sidebars", () => {
     });
 
     test("should display forum boards list", async ({ page }) => {
-      const section = page.locator(".forum-boards");
-      await expect(section).toBeVisible();
+      await expect(block(page, "ForumBoards")).toBeVisible();
     });
 
     test("should display board names", async ({ page }) => {
-      const section = page.locator(".forum-boards");
-      const boards = section.locator(".board-link, a");
-
-      if ((await boards.count()) > 0) {
-        await expect(boards.first()).toBeVisible();
-      }
-    });
-
-    test("should show comment count for boards", async ({ page }) => {
-      const section = page.locator(".forum-boards");
-      const commentCounts = section.locator(".comment-count, .topic-count");
-
-      // Comment counts may be displayed
-      if ((await commentCounts.count()) > 0) {
-        await expect(commentCounts.first()).toBeVisible();
-      }
+      const boards = block(page, "ForumBoards").locator("li.board-link a");
+      await expect(boards.first()).toBeVisible();
     });
 
     test("should navigate to forum board on click", async ({ page }) => {
-      const section = page.locator(".forum-boards");
-      const boardLink = section.locator("a").first();
+      const boardLink = block(page, "ForumBoards")
+        .locator("li.board-link a")
+        .first();
 
-      if (await boardLink.isVisible()) {
-        await boardLink.click();
-        await expect(page).toHaveURL(/\/forum\//);
-      }
+      await boardLink.click();
+      await expect(page).toHaveURL(/\/forum\//);
     });
   });
 
@@ -415,30 +363,25 @@ test.describe("Sidebars", () => {
     });
 
     test("should display contact forms section", async ({ page }) => {
-      const section = page.locator(".contact-forms");
-      await expect(section).toBeVisible();
+      await expect(
+        block(page, "ContactForms").locator(".contact-links"),
+      ).toBeVisible();
     });
 
     test("should have support link", async ({ page }) => {
-      const section = page.locator(".contact-forms");
-      const supportLink = section
-        .locator("a")
-        .filter({ hasText: /поддержк|связь|обращени/i });
+      const supportLink = block(page, "ContactForms")
+        .locator(".contact-item a")
+        .filter({ hasText: /поддержк/i });
 
-      if ((await supportLink.count()) > 0) {
-        await expect(supportLink.first()).toBeVisible();
-      }
+      await expect(supportLink).toHaveAttribute("href", "/support");
     });
 
     test("should have complaint link", async ({ page }) => {
-      const section = page.locator(".contact-forms");
-      const complaintLink = section
-        .locator("a")
-        .filter({ hasText: /жалоб|нарушени/i });
+      const complaintLink = block(page, "ContactForms")
+        .locator(".contact-item a")
+        .filter({ hasText: /жалоб/i });
 
-      if ((await complaintLink.count()) > 0) {
-        await expect(complaintLink.first()).toBeVisible();
-      }
+      await expect(complaintLink).toHaveAttribute("href", "/complaint");
     });
   });
 
@@ -448,25 +391,19 @@ test.describe("Sidebars", () => {
     });
 
     test("should display support section", async ({ page }) => {
-      const section = page.locator(".support-us");
-      await expect(section).toBeVisible();
+      await expect(block(page, "SupportUs")).toBeVisible();
     });
 
     test("should display progress bar", async ({ page }) => {
-      const section = page.locator(".support-us");
-
       // No visibility guard around the assertion: the guard repeated the
       // assertion word for word, so the test passed by skipping itself.
-      await expect(section.locator(".progress-bar, .progress")).toBeVisible();
+      await expect(block(page, "SupportUs").locator(".progress")).toBeVisible();
     });
 
     test("should have donation link", async ({ page }) => {
-      const section = page.locator(".support-us");
-      const donateLink = section.locator("a");
+      const donateLink = block(page, "SupportUs").locator("a").first();
 
-      if ((await donateLink.count()) > 0) {
-        await expect(donateLink.first()).toHaveAttribute("href");
-      }
+      await expect(donateLink).toHaveAttribute("href", /\S/);
     });
   });
 
@@ -476,17 +413,13 @@ test.describe("Sidebars", () => {
     });
 
     test("should display partners section", async ({ page }) => {
-      const section = page.locator(".partners");
-      await expect(section).toBeVisible();
+      await expect(block(page, "Partners").locator(".partners")).toBeVisible();
     });
 
     test("should display partner links", async ({ page }) => {
-      const section = page.locator(".partners");
-      const partnerLinks = section.locator("a");
+      const partnerLinks = block(page, "Partners").locator(".partner-link");
 
-      if ((await partnerLinks.count()) > 0) {
-        await expect(partnerLinks.first()).toHaveAttribute("href");
-      }
+      await expect(partnerLinks.first()).toHaveAttribute("href", /\S/);
     });
   });
 
@@ -496,20 +429,23 @@ test.describe("Sidebars", () => {
     });
 
     test("should display game title", async ({ page }) => {
-      const gameLink = page.locator(".game-link").first();
+      const gameLink = page.locator("#sidebar-list-ActiveGames li.link a");
 
-      if (await gameLink.isVisible().catch(() => false)) {
-        const title = gameLink.locator(".game-title, .title");
-        await expect(title).toBeVisible();
-      }
+      await expect(gameLink.first()).toHaveText(/\S/);
     });
 
     test("should display master name", async ({ page }) => {
-      const gameLink = page.locator(".game-link").first();
-
-      if (await gameLink.isVisible().catch(() => false)) {
-        // Master name may be shown
-      }
+      // The row is a title; the master is in the tooltip that wraps it, which
+      // is where the old guard stopped without asserting anything.
+      // The same locator the title test uses: a bare "a" also matches the
+      // block's own header link, which is present before the list has loaded
+      // and carries no tooltip.
+      const gameLink = page
+        .locator("#sidebar-list-ActiveGames li.link a")
+        .first();
+      await expect(gameLink).toBeVisible();
+      await gameLink.hover();
+      await expect(page.locator('[role="tooltip"]')).toContainText("Мастер:");
     });
 
     test("should show unread indicator when applicable", async ({
@@ -517,11 +453,13 @@ test.describe("Sidebars", () => {
     }) => {
       await authenticatedPage.goto("/");
 
-      const gameLink = authenticatedPage.locator(".game-link").first();
-      if (await gameLink.isVisible().catch(() => false)) {
-        // Unread indicator shown for subscribed games with new content -
-        // may or may not be visible
-      }
+      // "Мои игры" pins the counters open too, so the unread pair is on the
+      // row whatever its numbers are.
+      const rows = authenticatedPage.locator(
+        "#sidebar-list-OwnedGames li.link",
+      );
+      await expect(rows.first()).toBeVisible();
+      await expect(rows.first().locator(".counters")).toBeVisible();
     });
   });
 
@@ -531,20 +469,16 @@ test.describe("Sidebars", () => {
     });
 
     test("should display blog title", async ({ page }) => {
-      const section = page.locator(".active-blogs, .popular-blogs").first();
-
       // Same as above: the guard was the assertion.
-      await expect(section.locator(".blog-link, a").first()).toBeVisible();
+      const rows = block(page, "PopularBlogs").locator("li.link a");
+      await expect(rows.first()).toBeVisible();
     });
 
     test("should navigate to blog on click", async ({ page }) => {
-      const section = page.locator(".active-blogs, .popular-blogs").first();
-      const blogLink = section.locator("a").first();
+      const blogLink = block(page, "PopularBlogs").locator("li.link a").first();
 
-      if (await blogLink.isVisible()) {
-        await blogLink.click();
-        await expect(page).toHaveURL(/\/blogs\//);
-      }
+      await blogLink.click();
+      await expect(page).toHaveURL(/\/blogs\//);
     });
   });
 
@@ -553,44 +487,46 @@ test.describe("Sidebars", () => {
       await page.setViewportSize({ width: 375, height: 667 });
       await page.goto("/");
 
-      // Sidebars should be hidden or collapsible on mobile - either hidden
-      // or transformed into a mobile menu.
-      // On mobile, sidebars are typically hidden or in a hamburger menu
-      // This test verifies the responsive behavior exists
+      // Below the shell breakpoint the left column is gone and its content is
+      // reachable through the burger drawer; the right column reflows under
+      // the page instead of disappearing.
+      await expect(page.locator(".sidebar-left")).toBeHidden();
+      await expect(page.locator(".burger-btn")).toBeVisible();
+      await expect(page.locator(".sidebar-right")).toBeVisible();
     });
 
     test("should show sidebars on desktop viewport", async ({ page }) => {
       await page.setViewportSize({ width: 1920, height: 1080 });
       await page.goto("/");
 
-      await expect(page.locator(".left-sidebar")).toBeVisible();
-      await expect(page.locator(".right-sidebar")).toBeVisible();
+      await expect(page.locator(".sidebar-left")).toBeVisible();
+      await expect(page.locator(".sidebar-right")).toBeVisible();
     });
   });
 
   test.describe("Sidebar on Different Pages", () => {
     test("should display sidebars on home page", async ({ page }) => {
       await page.goto("/");
-      await expect(page.locator(".left-sidebar")).toBeVisible();
-      await expect(page.locator(".right-sidebar")).toBeVisible();
+      await expect(page.locator(".sidebar-left")).toBeVisible();
+      await expect(page.locator(".sidebar-right")).toBeVisible();
     });
 
     test("should display sidebars on games page", async ({ page }) => {
       await page.goto("/games");
-      await expect(page.locator(".left-sidebar")).toBeVisible();
-      await expect(page.locator(".right-sidebar")).toBeVisible();
+      await expect(page.locator(".sidebar-left")).toBeVisible();
+      await expect(page.locator(".sidebar-right")).toBeVisible();
     });
 
     test("should display sidebars on forum page", async ({ page }) => {
       await page.goto("/forum");
-      await expect(page.locator(".left-sidebar")).toBeVisible();
-      await expect(page.locator(".right-sidebar")).toBeVisible();
+      await expect(page.locator(".sidebar-left")).toBeVisible();
+      await expect(page.locator(".sidebar-right")).toBeVisible();
     });
 
     test("should display sidebars on community page", async ({ page }) => {
       await page.goto("/community");
-      await expect(page.locator(".left-sidebar")).toBeVisible();
-      await expect(page.locator(".right-sidebar")).toBeVisible();
+      await expect(page.locator(".sidebar-left")).toBeVisible();
+      await expect(page.locator(".sidebar-right")).toBeVisible();
     });
   });
 });

@@ -6,24 +6,14 @@
  */
 import { computed } from "vue";
 import { FilterDropdownItem } from "../primitives";
-import type { ListOption } from "../types";
+import type { ListOption, OptionsListProps } from "../types";
 
 defineOptions({ name: "OptionsList" });
 
-const props = withDefaults(
-  defineProps<{
-    /** Available options */
-    options: ListOption[];
-    /** Currently highlighted index */
-    highlightedIndex?: number;
-    /** Filter query for filtering options */
-    filterQuery?: string;
-  }>(),
-  {
-    highlightedIndex: -1,
-    filterQuery: "",
-  },
-);
+const props = withDefaults(defineProps<OptionsListProps>(), {
+  highlightedIndex: -1,
+  filterQuery: "",
+});
 
 const emit = defineEmits<{
   select: [value: string, hasSubOptions: boolean];
@@ -75,5 +65,4 @@ function handleSelect(option: ListOption) {
   padding: $medium
   font-size: $secondary-font-size
   color: $text-muted
-  text-align: center
 </style>

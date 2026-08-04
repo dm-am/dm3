@@ -184,6 +184,25 @@ public class TopicController : ControllerBase
         Ok(await _topicApiService.GetByBoardAndNumber(alias, num));
 
     /// <summary>
+    /// Get where the reader continues in a topic
+    /// </summary>
+    /// <remarks>
+    /// Returns the first comment the reader has not read yet together with its
+    /// position in the topic, so the caller can open the page holding it and
+    /// scroll to the comment. When everything is read the topic's last comment
+    /// is returned instead. A topic with no comments answers with no comment.
+    /// </remarks>
+    /// <param name="alias">Board URL alias (lowercase, e.g. "general")</param>
+    /// <param name="num">Topic number within the board</param>
+    /// <response code="200">Comment to continue the topic from</response>
+    /// <response code="404">Board or topic not found</response>
+    [HttpGet("~/v1/forum/{alias}/{num:int}/comments/first-unread", Name = nameof(GetFirstUnreadTopicComment))]
+    [ProducesResponseType(typeof(Envelope<FirstUnreadComment>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetFirstUnreadTopicComment(string alias, int num) =>
+        Ok(await _commentApiService.GetFirstUnread(alias, num));
+
+    /// <summary>
     /// Get topic discussion with comments and permission flags
     /// </summary>
     /// <remarks>
@@ -267,20 +286,20 @@ public class TopicController : ControllerBase
     /// Each user can only like a topic once.
     /// </remarks>
     /// <param name="id">Topic identifier (GUID)</param>
-    /// <response code="201">Like added, returns user who liked</response>
+    /// <response code="200">Like added, returns user who liked</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User cannot like this topic (e.g., own topic)</response>
     /// <response code="409">User already liked this topic</response>
     /// <response code="404">Topic not found</response>
     [HttpPost("{id}/likes", Name = nameof(PostTopicLike))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostTopicLike(Guid id) =>
-        CreatedAtRoute(nameof(GetTopic), new {id}, await _likeApiService.LikeTopic(id));
+        Ok(await _likeApiService.LikeTopic(id));
 
     /// <summary>
     /// Remove like from topic

@@ -1,11 +1,7 @@
 ﻿<script setup lang="ts">
 import { computed, ref } from "vue";
-import {
-  useAuthStore,
-  userIsModerator,
-  signOut,
-  signOutAll,
-} from "@/entities/user";
+import { useAuthStore, userIsModerator } from "@/entities/user";
+import { useSessionExit } from "@/features/auth";
 import { useMessagingStore } from "@/entities/message";
 import { useNotificationStore } from "@/entities/notification";
 import { useUiStore } from "@/shared/stores/ui";
@@ -42,6 +38,11 @@ function toggleLogoutMenu() {
 function closeLogoutMenu() {
   logoutMenuOpen.value = false;
 }
+// Signing out is not a navigation, so the route guard never runs: on /account
+// the viewer stayed on a page whose whole body is `v-if="user"` — a heading
+// over nothing. Leaving the page is part of the action.
+const { signOut, signOutAll } = useSessionExit();
+
 async function handleSignOut() {
   closeLogoutMenu();
   await signOut();
@@ -74,7 +75,7 @@ async function handleSignOutAll() {
       <router-link
         class="logo mobile-logo"
         :to="{ name: 'home' }"
-        aria-label="Dungeon Master — на главную"
+        aria-label="Dungeon Master, на главную"
       />
 
       <div v-if="user && user.username" class="mobile-right">
@@ -112,7 +113,7 @@ async function handleSignOutAll() {
       <router-link
         class="logo"
         :to="{ name: 'home' }"
-        aria-label="Dungeon Master — на главную"
+        aria-label="Dungeon Master, на главную"
       />
       <div class="user-actions">
         <template v-if="user && user.username">
@@ -230,6 +231,7 @@ async function handleSignOutAll() {
 </template>
 
 <style scoped lang="sass">
+@import "@/assets/styles/ZIndex"
 @import "@/assets/styles/Inputs"
 
 // Bottom padding that aligns the three header columns on a shared baseline.
@@ -297,7 +299,9 @@ $baseline-pad: 9px
 .logout-backdrop
   position: fixed
   inset: 0
-  z-index: 40
+  // The scale, not a pair of numbers below it: at 40/41 the menu went under
+  // every dropdown on the page (100) the moment the two came near each other.
+  z-index: $z-dropdown
   border: none
   background: transparent
   padding: 0
@@ -307,7 +311,7 @@ $baseline-pad: 9px
   position: absolute
   top: 100%
   right: 0
-  z-index: 41
+  z-index: $z-sticky
   margin-top: $tiny
   min-width: 200px
   list-style: none
@@ -457,7 +461,7 @@ $baseline-pad: 9px
   box-sizing: border-box
   border-radius: 8px
   background-color: $accent-green
-  color: $text-on-green
+  color: $text-on-fill
   font-size: 10px
   font-weight: bold
   line-height: 1

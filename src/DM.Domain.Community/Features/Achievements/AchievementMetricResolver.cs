@@ -26,20 +26,25 @@ public static class AchievementMetricResolver
     {
         return metric switch
         {
-            AchievementMetric.GamePostsAuthored      => user.QuantityRating,
-            AchievementMetric.DaysSinceRegistration  => DaysSinceRegistration(user, now),
-            AchievementMetric.PostReviewScoreSum     => Math.Max(0, user.QualityRating),
-            AchievementMetric.GamesHosted            => user.GamesHosting,
-            AchievementMetric.GamesPlayed            => user.GamesPlaying,
-            AchievementMetric.BlogsHosted            => user.BlogsHosting,
-            AchievementMetric.TopicsAuthored         => user.TopicsAuthoredCount,
-            AchievementMetric.CommentsAuthored       => user.CommentsAuthoredCount,
-            AchievementMetric.GlobalChatMessages     => user.GlobalChatMessagesCount,
-            AchievementMetric.BansReceived           => user.BansReceivedCount,
-            AchievementMetric.GameDrops              => user.GameDropsCount,
-            AchievementMetric.PublicationsAuthored   => user.PublicationsAuthoredCount,
-            AchievementMetric.LikesReceived          => user.LikesReceivedCount,
-            _                                        => 0,
+            AchievementMetric.GamePostsAuthored => user.QuantityRating,
+            AchievementMetric.DaysSinceRegistration => DaysSinceRegistration(user, now),
+            AchievementMetric.PostReviewScoreSum => Math.Max(0, user.QualityRating),
+            // The counters are nullable because a user can arrive without them
+            // counted. Here that is unreachable — the caller resolves the user
+            // through the lookup service, which goes to the repository that runs
+            // the batch — and an uncounted metric must not clear a threshold, so
+            // the fallback is the same zero the field used to default to.
+            AchievementMetric.GamesHosted => user.GamesHosting ?? 0,
+            AchievementMetric.GamesPlayed => user.GamesPlaying ?? 0,
+            AchievementMetric.BlogsHosted => user.BlogsHosting ?? 0,
+            AchievementMetric.TopicsAuthored => user.TopicsAuthoredCount ?? 0,
+            AchievementMetric.CommentsAuthored => user.CommentsAuthoredCount ?? 0,
+            AchievementMetric.GlobalChatMessages => user.GlobalChatMessagesCount ?? 0,
+            AchievementMetric.BansReceived => user.BansReceivedCount ?? 0,
+            AchievementMetric.GameDrops => user.GameDropsCount ?? 0,
+            AchievementMetric.PublicationsAuthored => user.PublicationsAuthoredCount ?? 0,
+            AchievementMetric.LikesReceived => user.LikesReceivedCount ?? 0,
+            _ => 0,
         };
     }
 

@@ -29,6 +29,15 @@ internal class MessageIntentionResolver : IIntentionResolver<MessageIntention, M
     public bool IsAllowed(IAuthorizationSubject user, MessageIntention intention, Message target) =>
         intention switch
         {
+            // Rewriting a message publishes text as sending one does, so the ban
+            // answers on the terms ChatIntention.CreateMessage sets: the global
+            // chat is public speech, while direct, group and game room chats are
+            // deliberately outside the ordinary ban. Only the author is asked, a
+            // moderator's edit is moderation and a ban takes no moderator tool
+            // away.
+            MessageIntention.Edit when target.ChatType == ChatType.Global &&
+                                       target.Author?.UserId == user.UserId =>
+                CanEditOrDelete(user, target) && user.MaySpeak(),
             MessageIntention.Edit => CanEditOrDelete(user, target),
             MessageIntention.Delete => CanEditOrDelete(user, target),
             MessageIntention.Like => user.IsAuthenticated && target.Author?.UserId != user.UserId,

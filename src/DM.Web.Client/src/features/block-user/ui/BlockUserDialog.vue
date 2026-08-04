@@ -6,6 +6,7 @@ import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import Form from "@/shared/ui/Form/Form.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
 import type { BlacklistEntry } from "@/shared/api/models/personal";
+import { describeFailure } from "@/shared/lib/errors";
 
 const props = defineProps<{
   initialUsername?: string;
@@ -36,7 +37,10 @@ async function submit() {
   loading.value = false;
 
   if (apiError) {
-    error.value = apiError.title || "Не удалось заблокировать пользователя";
+    error.value = describeFailure(
+      apiError,
+      "Не удалось заблокировать пользователя",
+    );
     return;
   }
 

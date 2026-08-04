@@ -4,17 +4,26 @@ import type {
   CommentId,
   Board,
   BoardId,
+  FirstUnreadComment,
   Topic,
   TopicId,
   TopicsQuery,
   CommentsQuery,
 } from "../model/types";
-import { Api } from "@/shared/api";
+import { Api, toCommentsQueryParams } from "@/shared/api";
 import { RENDER_AUDIENCE } from "@/shared/api";
 import type { Patch, Post } from "@/shared/api/models";
 
 // Well-known board aliases
 const NEWS_BOARD_ALIAS = "news";
+
+/**
+ * How many news cards the homepage block shows at once. Owner's rule: having
+ * more than two at a time is too many. It caps the request and the render
+ * alike — the block's freshness window (last seven days) decides WHICH news
+ * qualify, never HOW MANY are shown.
+ */
+export const NEWS_WIDGET_LIMIT = 2;
 
 export default new (class ForumApi {
   public getBoards() {
@@ -26,9 +35,15 @@ export default new (class ForumApi {
   }
 
   public getNews() {
-    // Fetch recent news for homepage filtering by date
+    // Homepage news block. The sort key is explicit because the server's
+    // default is last activity (TopicRepository), which floats an older topic
+    // above a newer one the moment somebody comments on it — news are ordered
+    // by publication, not by discussion. `take` here is the block's hard cap,
+    // not a page size.
     return Api.get<ListEnvelope<Topic>>(`boards/${NEWS_BOARD_ALIAS}/topics`, {
-      take: 5,
+      take: NEWS_WIDGET_LIMIT,
+      sortBy: "created",
+      sortOrder: "desc",
     });
   }
 
@@ -80,8 +95,10 @@ export default new (class ForumApi {
     if (q.search) {
       queryParams.search = q.search;
     }
+    // `authorUsernames` on the wire, per the API query vocabulary; `authors`
+    // is the name this query type and the route use.
     if (q.authors && q.authors.length > 0) {
-      queryParams.authors = q.authors;
+      queryParams.authorUsernames = q.authors;
     }
     if (q.createdFromUtc) {
       queryParams.createdFromUtc = q.createdFromUtc;
@@ -156,42 +173,24 @@ export default new (class ForumApi {
     return Api.delete(`topics/${id}/comments/unread`);
   }
 
+  /**
+   * Where this reader continues in the topic: the first comment he has not
+   * read, or the topic's last comment when everything is read. Backs the
+   * card's comments counter, which lands him on that comment instead of at
+   * the top of the discussion. Addressed by alias and number, like the topic
+   * itself, so the resolver needs no separate lookup of the topic id.
+   */
+  public getFirstUnreadComment(boardAlias: string, topicNumber: number) {
+    return Api.get<Envelope<FirstUnreadComment>>(
+      `forum/${boardAlias}/${topicNumber}/comments/first-unread`,
+    );
+  }
+
   public getComments(id: TopicId, q: CommentsQuery) {
-    // Convert page number to skip/take for backend
-    const pageSize = q.size ?? 20;
-    const queryParams: Record<string, string | number | string[] | undefined> =
-      {
-        take: pageSize,
-      };
-
-    // Paging
-    if (q.number && q.number > 1) {
-      queryParams.skip = (q.number - 1) * pageSize;
-    }
-
-    // Filtering
-    if (q.search) {
-      queryParams.search = q.search;
-    }
-    if (q.authors && q.authors.length > 0) {
-      queryParams.authors = q.authors;
-    }
-    if (q.createdFromUtc) {
-      queryParams.createdFromUtc = q.createdFromUtc;
-    }
-    if (q.createdToUtc) {
-      queryParams.createdToUtc = q.createdToUtc;
-    }
-
-    // Sorting
-    if (q.sortBy) {
-      queryParams.sortBy = q.sortBy;
-    }
-    if (q.sortOrder) {
-      queryParams.sortOrder = q.sortOrder;
-    }
-
-    return Api.get<ListEnvelope<Comment>>(`topics/${id}/comments`, queryParams);
+    return Api.get<ListEnvelope<Comment>>(
+      `topics/${id}/comments`,
+      toCommentsQueryParams(q),
+    );
   }
 
   public createComment(id: TopicId, comment: Post<Comment>) {

@@ -1,29 +1,28 @@
 <script setup lang="ts">
 /**
  * ReceivedReviewsPage — a user's "Полученные оценки" page.
- * A thin wrapper over `ProfileRatedPostsList` in `received` mode: posts
- * authored by this user that received at
- * least one review.
+ * A thin wrapper over the shared `RatedPostsList` scoped to this user as the
+ * post AUTHOR: posts they wrote that received at least one review.
  */
 import { computed } from "vue";
-import { useRoute } from "vue-router";
-import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
 import { ErrorPage } from "@/shared/ui/ErrorPage";
+import type { RatedPostsScope } from "@/entities/game";
+import { RatedPostsList } from "@/widgets/rated-posts";
 import ProfileSubpageHeader from "./ProfileSubpageHeader.vue";
-import ProfileRatedPostsList from "./ProfileRatedPostsList.vue";
-import { useProfileSubpageUser } from "./useProfileSubpageUser";
+import { useProfileSubpage } from "./useProfileSubpage";
 
-const route = useRoute();
-const username = computed(() => route.params.username as string);
+const { username, canonicalUsername, notFound, profileLink } =
+  useProfileSubpage("Полученные оценки постов");
 
-const { notFound, canonicalUsername } = useProfileSubpageUser(username);
-
-const profileLink = computed(() => ({
-  name: "profile" as const,
-  params: { username: username.value },
+const scope = computed<RatedPostsScope>(() => ({
+  kind: "author",
+  username: username.value,
 }));
 
-useDocumentTitle(() => `Полученные оценки постов — ${canonicalUsername.value}`);
+const pagingTo = computed(() => ({
+  name: "received-reviews" as const,
+  params: { username: username.value },
+}));
 </script>
 
 <template>
@@ -38,10 +37,11 @@ useDocumentTitle(() => `Полученные оценки постов — ${can
       >, оцененные хотя бы раз другими участниками сообщества
     </ProfileSubpageHeader>
 
-    <ProfileRatedPostsList
-      :username="username"
-      mode="received"
-      route-name="received-reviews"
+    <RatedPostsList
+      :scope="scope"
+      :paging-to="pagingTo"
+      empty-text="У пользователя пока нет оцененных постов"
+      hide-author-filter
     />
   </div>
 </template>

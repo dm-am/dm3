@@ -1,23 +1,34 @@
 networks:
   default:
     name: 'dm-full-app'
+    # Заданная подсеть, а не выданная Docker из пула. Она — то, что API считает
+    # доверенным источником X-Forwarded-For, поэтому значение должно быть
+    # известно заранее и совпадать с DM_ReverseProxyConfiguration__TrustedNetworks
+    # в docker-compose.preview.yml. Проверяется тестом DeploymentConfigurationShould.
+    ipam:
+      config:
+        - subnet: '172.28.0.0/16'
 
 name: dm
 
 volumes:
-  backups:
   pgdata:
   mongodata:
   lokidata:
   miniodata:
+  rmqdata:
+  alertmanagerdata:
 
 # Переменные с дефолтами для локальной разработки
 # Для зеркала: переопределить в .env.mirror
 x-workload-env: &workload-env
   # === ASP.NET Core ===
-  # Production unless explicitly overridden. Development unlocks the dev-only
-  # seed and role endpoints, so an unset variable on a server must not be the
-  # thing that opens them; docker/.env.example sets Development for local work.
+  # Production unless explicitly overridden. Development is what maps Swagger UI
+  # and relaxes the script CSP for it, so an unset variable on a server must not
+  # be the thing that publishes the API documentation; docker/.env.example sets
+  # Development for local work. There are no environment-gated seed or role
+  # endpoints: seeding is a separate tool and the role endpoint is closed by
+  # RequireRole(Admin).
   ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
 
   # === Базы данных ===
@@ -44,8 +55,13 @@ x-workload-env: &workload-env
   DM_CdnConfiguration__PublicUrl: ${CDN_PUBLIC_URL:-http://localhost:9000}
   DM_CdnConfiguration__Region: us-east-1
   DM_CdnConfiguration__BucketName: dm-uploads
-  DM_CdnConfiguration__AccessKey: minio
-  DM_CdnConfiguration__SecretKey: ${MINIO_ROOT_PASSWORD}
+  # Service account scoped to one bucket, not root. Object storage holds the
+  # only data nothing else can rebuild, and any leak of a workload's
+  # configuration used to hand over administration of the store: dropping the
+  # bucket, rewriting its policy, minting further accounts. Created by
+  # minio-init, the way mongo-init.js creates the Mongo application user.
+  DM_CdnConfiguration__AccessKey: ${MINIO_APP_USER:-dm-app}
+  DM_CdnConfiguration__SecretKey: ${MINIO_APP_PASSWORD:?MINIO_APP_PASSWORD is required}
   DM_CdnConfiguration__Folder:
   DM_CdnConfiguration__Provider: Minio
 
@@ -70,15 +86,19 @@ x-workload-env: &workload-env
   # === Интеграция ===
   DM_IntegrationSettings__WebUrl: ${WEB_URL:-http://localhost:5173}
   DM_IntegrationSettings__ApiUrl: ${API_URL:-http://localhost:5000}
-  DM_IntegrationSettings__AdminUrl:
-  DM_IntegrationSettings__MobileUrl:
   DM_IntegrationSettings__CorsUrls__0: ${CORS_URL_0:-http://localhost:5173}
   DM_IntegrationSettings__CorsUrls__1: ${CORS_URL_1:-http://localhost:8080}
-  DM_IntegrationSettings__StaticAssetsUrl: ${STATIC_ASSETS_URL:-http://localhost:9000/dm-uploads}
 
   # === Зеркало ===
   DM_MirrorConfiguration__CurrentMirrorId: ${MIRROR_ID:-main}
 
+# Build context shared by every image this repository produces. CI builds them
+# and pushes them under one tag per run, which is why all four image references
+# below read IMAGE_TAG: they come from a single commit and there is nothing to
+# pin apart. Nothing in the deployment path passes --build, so the server pulls
+# what was published and compose falls back to building only when the registry
+# cannot be reached. Rolling a stand back is IMAGE_TAG in .env set to the short
+# sha of an earlier run.
 x-docker-context: &docker-context
   context: ./..
   dockerfile: ./docker/app.Dockerfile
@@ -94,7 +114,6 @@ services:
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - backups:/var/backups
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d dm3"]
@@ -175,8 +194,28 @@ services:
     ports:
       - '127.0.0.1:15672:15672'
       - '127.0.0.1:5672:5672'
+      # Metrics endpoint of rabbitmq_prometheus. Everything that says whether the
+      # bus is moving - depth of a queue, a dead-letter queue that stopped being
+      # empty, a queue left with no consumer - is visible only here: the workers
+      # publish nothing about the broker, and a consumer that silently stopped
+      # looks from their side exactly like an idle one.
+      - '127.0.0.1:15692:15692'
     environment:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    volumes:
+      # The metrics plugin is not on by default, and the default endpoint
+      # aggregates across every queue - an aggregate cannot name the queue that
+      # is backing up, which is the whole point of scraping it.
+      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - ./rabbitmq/dm.conf:/etc/rabbitmq/conf.d/10-dm.conf:ro
+      # The one stateful service that had no volume of its own. The queues here
+      # are declared durable, but the directory holding them lived in the
+      # container layer, so recreating the container - an image update, a changed
+      # limit - took the unsent mail and the dead-letter queue with it. The node
+      # name is pinned by the hostname above: mnesia stores its data under a
+      # directory named after the node, and a generated hostname would leave the
+      # next container looking at an empty one.
+      - rmqdata:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
       interval: 5s
@@ -196,7 +235,7 @@ services:
 
   mailhog:
     container_name: 'dm-mailhog'
-    image: 'mailhog/mailhog'
+    image: 'mailhog/mailhog:v1.0.1'
     ports:
       - '127.0.0.1:1025:1025'
       - '127.0.0.1:8025:8025'
@@ -240,6 +279,36 @@ services:
           memory: 256M
           cpus: '0.5'
 
+  # Bootstrap of the object store: root creates the bucket and the two scoped
+  # accounts here and is then out of the picture. Runs before anything that
+  # touches a bucket, and the workloads wait for it to succeed.
+  minio-init:
+    container_name: 'dm-minio-init'
+    # Unpinned like the image backup-minio.sh runs: mc talks to the server over
+    # its admin API, and the two are released together.
+    image: 'minio/mc'
+    entrypoint: ["/bin/sh", "/minio-init.sh"]
+    environment:
+      MINIO_ENDPOINT: http://${MINIO_HOST:-dm-minio}:9000
+      BUCKET_NAME: dm-uploads
+      MINIO_ROOT_USER: 'minio'
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_APP_USER: ${MINIO_APP_USER:-dm-app}
+      MINIO_APP_PASSWORD: ${MINIO_APP_PASSWORD:?MINIO_APP_PASSWORD is required}
+      MINIO_IMGPROXY_USER: ${MINIO_IMGPROXY_USER:-dm-imgproxy}
+      MINIO_IMGPROXY_PASSWORD: ${MINIO_IMGPROXY_PASSWORD:?MINIO_IMGPROXY_PASSWORD is required}
+    volumes:
+      - ./minio-init.sh:/minio-init.sh:ro
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
+
   # --- Infrastructure: Image transforms (imgproxy) ---
   # On-the-fly resize + format negotiation (AVIF/WebP/JPEG via Accept header).
   # Reads from MinIO via S3 protocol, серверу аватаров достаточно хранить
@@ -257,8 +326,10 @@ services:
       IMGPROXY_S3_ENDPOINT: 'http://dm-minio:9000'
       IMGPROXY_S3_REGION: 'us-east-1'
       IMGPROXY_S3_BUCKET_LOOKUP_TYPE: 'force-path-style'
-      AWS_ACCESS_KEY_ID: 'minio'
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      # Read-only service account: imgproxy never writes to the bucket, and it
+      # is the container that parses untrusted image data.
+      AWS_ACCESS_KEY_ID: ${MINIO_IMGPROXY_USER:-dm-imgproxy}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_IMGPROXY_PASSWORD:?MINIO_IMGPROXY_PASSWORD is required}
       # Format negotiation via Accept header.
       IMGPROXY_AUTO_WEBP: 'true'
       IMGPROXY_AUTO_AVIF: 'true'
@@ -274,8 +345,8 @@ services:
       retries: 5
       start_period: 5s
     depends_on:
-      minio:
-        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     restart: unless-stopped
     deploy:
       resources:
@@ -327,6 +398,54 @@ services:
         limits:
           memory: 256M
           cpus: '0.5'
+
+  # The receiver of the rules Prometheus evaluates. Without it the whole rule set
+  # reached a firing state inside Prometheus and stopped there: finding out that
+  # ApiDown had fired took opening /alerts through a tunnel, which takes already
+  # suspecting the site is down.
+  #
+  # No secret of its own. Alerts go out over the mail transport the deployment
+  # already has - MAIL_HOST is MailHog on a stand and the relay on a server - so
+  # an alert arrives wherever registration mail arrives, and there is no token to
+  # paste before delivery starts working.
+  alertmanager:
+    container_name: 'dm-alertmanager'
+    image: 'prom/alertmanager:v0.27.0'
+    # Alertmanager expands no environment variable in its configuration file, so
+    # the entrypoint renders one from the environment first. Everything below
+    # would otherwise have to be a literal in the repository.
+    entrypoint: ["/bin/sh", "/alertmanager-init.sh"]
+    ports:
+      - '127.0.0.1:9093:9093'
+    environment:
+      # The mail path of the application, not a second one: a relay reachable by
+      # the API is a relay reachable by the alerts about the API.
+      ALERT_SMTP_SMARTHOST: ${MAIL_HOST:-dm-mailhog}:${MAIL_PORT:-1025}
+      ALERT_SMTP_USERNAME: ${ALERT_SMTP_USERNAME:-}
+      ALERT_SMTP_PASSWORD: ${ALERT_SMTP_PASSWORD:-}
+      # MailHog offers no STARTTLS and alertmanager insists on it by default, so
+      # the stand default is off and a relay that wants TLS turns it on.
+      ALERT_SMTP_REQUIRE_TLS: ${ALERT_SMTP_REQUIRE_TLS:-false}
+      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-alertmanager@dm.am}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-alerts@dm.am}
+    volumes:
+      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager-init.sh:/alertmanager-init.sh:ro
+      # Silences and the notification log. In the container layer they went with
+      # every image update: the stack would then re-send every firing alert and
+      # forget the silence set on the incident being worked on.
+      - alertmanagerdata:/alertmanager
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:9093/-/healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
 
   grafana:
     container_name: 'dm-grafana'
@@ -390,7 +509,7 @@ services:
 
   migration:
     container_name: 'dm-migration'
-    image: 'dm-api:local'
+    image: ghcr.io/dm-am/dm-api:${IMAGE_TAG:-latest}
     build:
       <<: *docker-context
       args:
@@ -411,7 +530,9 @@ services:
 
   dm-mail-worker:
     container_name: 'dm-mail-worker'
-    image: 'dm-worker-mail:local'
+    image: ghcr.io/dm-am/dm-worker-mail:${IMAGE_TAG:-latest}
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     build:
       <<: *docker-context
       args:
@@ -439,7 +560,9 @@ services:
 
   dm-notification-worker:
     container_name: 'dm-notification-worker'
-    image: 'dm-worker-notification:local'
+    image: ghcr.io/dm-am/dm-worker-notification:${IMAGE_TAG:-latest}
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     build:
       <<: *docker-context
       args:
@@ -469,7 +592,7 @@ services:
 
   dmapi:
     container_name: 'dm-api'
-    image: ${API_IMAGE:-ghcr.io/dm-am/dm-api:latest}
+    image: ghcr.io/dm-am/dm-api:${IMAGE_TAG:-latest}
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
     build:
@@ -477,15 +600,22 @@ services:
       args:
         PROJECT_NAME: DM.Web.API
     ports:
-      - '5000:5000'
+      # Привязка к loopback, как у всех остальных семнадцати публикаций в этом
+      # файле. Без нее порт слушал 0.0.0.0, а опубликованный docker-ом порт идет
+      # через цепочки nat/DOCKER мимо INPUT, то есть мимо iptables из
+      # setup-server.sh. На preview-стенде это открывало весь /v1/**, /metrics и
+      # /_health/detail в интернет в обход basic auth: nginx закрывал только
+      # порт 80, то есть SPA, а не данные. Локальной разработке loopback-а
+      # достаточно, а nginx ходит к API по имени сервиса внутри сети.
+      - '127.0.0.1:5000:5000'
     environment: *workload-env
     depends_on:
       migration:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
-      minio:
-        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5000/_health || exit 1"]
       interval: 15s
@@ -521,17 +651,23 @@ services:
         condition: service_healthy
       mongo:
         condition: service_healthy
-      minio:
-        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     restart: "no"
     profiles:
       - tools
 
   # --- Infrastructure: Auto-update ---
 
+  # Started by the profile setup-server.sh and dm3.service pass, and by the
+  # mirror command for a mirror. Nothing passed a profile before, so the service
+  # the guides call the update mechanism was declared and never run. It restarts
+  # only containers carrying the watchtower label, and the one-shot migration
+  # deliberately has none: a release that changes the schema is a restart of the
+  # unit, not a container swap.
   watchtower:
     container_name: 'dm-watchtower'
-    image: containrrr/watchtower
+    image: containrrr/watchtower:1.7.1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:

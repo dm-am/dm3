@@ -1,24 +1,45 @@
 
+// The family the whole site is set in, so it is on the critical path of every
+// address (Reset.sass puts it on the root elements, main.ts imports this file).
+//
+// font-display is the difference between a page that appears and a page that
+// does not. Its default is `auto`, which every engine reads as `block`: the
+// text a browser is about to paint is held back for up to three seconds while
+// the file arrives, so a slow first visit shows an empty page frame. `swap`
+// spends one reflow instead — the words are there from the first frame in the
+// fallback face and change shape once the real one lands. The same value on all
+// four faces: a rule that holds for the roman and not for the italic is a rule
+// nobody can state.
+//
+// The two normal faces are also asked for in index.html, so their request
+// leaves with the document instead of waiting for this stylesheet to parse.
+// fontDelivery.spec.ts keeps the two lists in step, and keeps both nginx hops
+// compressing the files.
+
 @font-face
   font-family: "PT Sans"
   font-weight: 400
   font-style: normal
+  font-display: swap
   src: url("@/assets/fonts/PTSans-Regular.ttf") format("truetype")
 
 @font-face
   font-family: "PT Sans"
   font-weight: 700
   font-style: normal
+  font-display: swap
   src: url("@/assets/fonts/PTSans-Bold.ttf") format("truetype")
 
 @font-face
   font-family: "PT Sans"
   font-weight: 400
   font-style: italic
+  font-display: swap
   src: url("@/assets/fonts/PTSans-Italic.ttf") format("truetype")
 
 @font-face
   font-family: "PT Sans"
   font-weight: 700
   font-style: italic
+  font-display: swap
   src: url("@/assets/fonts/PTSans-BoldItalic.ttf") format("truetype")

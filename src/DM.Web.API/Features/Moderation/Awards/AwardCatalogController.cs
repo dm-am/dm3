@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using DM.Web.API.Swagger;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Features.Community.Awards;
 using DM.Web.API.Shared.Authentication;
@@ -13,8 +14,7 @@ namespace DM.Web.API.Features.Moderation.Awards;
 /// CRUD for the award catalog and contest series.
 /// </summary>
 /// <remarks>
-/// Award types (`AwardType`) — a timeless catalog (6 rows by default):
-/// 1st/2nd/3rd place, popular vote, best critic, guesser. Each type
+/// Award types (`AwardType`) — a timeless catalog. Each type
 /// is semantically immutable: it can be renamed but not deleted
 /// (only deactivated via PATCH IsActive=false), because
 /// historical UserAward records reference the type via FK.
@@ -47,6 +47,7 @@ public class AwardCatalogController : ControllerBase
     /// <response code="409">Code is already taken.</response>
     [HttpPost("award-types", Name = nameof(CreateAwardType))]
     [ProducesResponseType(typeof(Envelope<AwardType>), StatusCodes.Status201Created)]
+    [CreatedWithoutLocation]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
@@ -114,6 +115,7 @@ public class AwardCatalogController : ControllerBase
     /// <response code="409">A series with this (ContestType, Number) already exists.</response>
     [HttpPost("contest-series", Name = nameof(CreateContestSeries))]
     [ProducesResponseType(typeof(Envelope<ContestSeries>), StatusCodes.Status201Created)]
+    [CreatedWithoutLocation]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]

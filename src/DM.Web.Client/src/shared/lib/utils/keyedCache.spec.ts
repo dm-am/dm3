@@ -68,6 +68,47 @@ describe("createKeyedCache", () => {
 
     expect(cache.getStale("a")).toBeUndefined();
   });
+
+  it("ages an entry out on demand without losing it", () => {
+    const cache = createKeyedCache<number>({ ttlMs: 1000 });
+    cache.set("a", 1);
+    cache.expire("a");
+
+    // A mutation makes what is stored wrong, but it is still what the reader
+    // is looking at: dropping it would blank the screen instead of refreshing
+    // it, which is the bug that made creating a game empty "Мои игры".
+    expect(cache.get("a")).toBeUndefined();
+    expect(cache.isStale("a")).toBe(true);
+    expect(cache.getStale("a")).toBe(1);
+  });
+
+  it("ages out an entry that no elapsed time could age out", () => {
+    const cache = createKeyedCache<number>({ ttlMs: Infinity });
+    cache.set("a", 1);
+    cache.expire("a");
+
+    // A closed calendar period never expires by the clock, so expiry cannot be
+    // written as a doctored timestamp — no timestamp is old enough.
+    expect(cache.isStale("a")).toBe(true);
+  });
+
+  it("brings an expired entry back when it is written again", () => {
+    const cache = createKeyedCache<number>({ ttlMs: 1000 });
+    cache.set("a", 1);
+    cache.expire("a");
+    cache.set("a", 2);
+
+    expect(cache.get("a")).toBe(2);
+    expect(cache.isStale("a")).toBe(false);
+  });
+
+  it("says nothing about expiring a key it never held", () => {
+    const cache = createKeyedCache<number>({ ttlMs: 1000 });
+    cache.expire("missing");
+
+    expect(cache.isStale("missing")).toBe(false);
+    expect(cache.getStale("missing")).toBeUndefined();
+  });
 });
 
 describe("stableCacheKey", () => {

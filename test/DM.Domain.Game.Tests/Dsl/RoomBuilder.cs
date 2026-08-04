@@ -40,13 +40,18 @@ public class RoomBuilder
     /// <summary>
     /// Grants a character the right to be posted as in this room.
     /// </summary>
-    public RoomBuilder WithCharacterAccess(Guid characterId, Guid authorId, bool isNpc = false)
+    public RoomBuilder WithCharacterAccess(
+        Guid characterId,
+        Guid authorId,
+        bool isNpc = false,
+        RoomAccessPolicy policy = RoomAccessPolicy.Full)
     {
         accesses.Add(new RoomAccess
         {
             Id = Guid.NewGuid(),
             RoomId = room.Id,
             TargetType = RoomAccessTargetType.Character,
+            Policy = policy,
             Character = new Character
             {
                 Id = characterId,
@@ -61,21 +66,23 @@ public class RoomBuilder
     /// <summary>
     /// Grants a user reader access: a spectator row with no character behind it.
     /// </summary>
-    public RoomBuilder WithReaderAccess(Guid userId)
+    public RoomBuilder WithReaderAccess(Guid userId, RoomAccessPolicy policy = RoomAccessPolicy.Full)
     {
         accesses.Add(new RoomAccess
         {
             Id = Guid.NewGuid(),
             RoomId = room.Id,
             TargetType = RoomAccessTargetType.Reader,
+            Policy = policy,
             User = new GeneralUser { UserId = userId }
         });
         return this;
     }
 
     /// <summary>
-    /// A reader row that carries no user. Only for pinning down how the two
-    /// overloads differ when they walk the same row.
+    /// A reader row that carries no user. The user is filled by a projection and
+    /// not by a schema constraint, so an empty one is reachable and every overload
+    /// that walks the row has to deny on it.
     /// </summary>
     public RoomBuilder WithReaderAccessMissingItsUser()
     {
@@ -84,6 +91,10 @@ public class RoomBuilder
             Id = Guid.NewGuid(),
             RoomId = room.Id,
             TargetType = RoomAccessTargetType.Reader,
+            // Granted writing on purpose: what has to deny here is the missing
+            // user, and a row that also lacked the policy would deny for two
+            // reasons and prove neither.
+            Policy = RoomAccessPolicy.Full,
             User = null!
         });
         return this;

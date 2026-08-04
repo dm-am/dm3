@@ -35,7 +35,9 @@ internal class GamePlayerInvitationNotificationGenerator : BaseNotificationGener
             {
                 t.UserId,
                 t.EntityId,
+                t.CreatorId,
                 GameTitle = t.Game!.Title,
+                MasterId = t.Game.MasterId,
                 InviterUsername = t.Game.Master!.Username
             })
             .FirstOrDefaultAsync();
@@ -45,9 +47,14 @@ internal class GamePlayerInvitationNotificationGenerator : BaseNotificationGener
             yield break;
         }
 
+        // The inviter is the token's creator, master or assistant. Falling back to
+        // the master keeps the filter on the person InviterUsername names when a
+        // token carries no creator, the way BlogInvitationRepository resolves its
+        // inviter.
         yield return new CreateNotification
         {
             UsersInterested = new[] { data.UserId },
+            ActorId = data.CreatorId ?? data.MasterId,
             Metadata = new
             {
                 GameTitle = data.GameTitle,

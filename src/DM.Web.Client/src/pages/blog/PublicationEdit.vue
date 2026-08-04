@@ -2,7 +2,7 @@
 /**
  * PublicationEdit — edit an existing publication (dev doc 4.2.3.6.8
  * "Редактирование публикации"). Form: title, rubric, content; "Сохранить"
- * patches, "Удалить" deletes with a confirmation, "Отменить" returns to
+ * patches, "Удалить" deletes with a confirmation, "Отмена" returns to
  * the blog feed. Access is gated to owner + assistant (backend-enforced).
  *
  * Content round-trip caveat: the API serves publication content as
@@ -21,11 +21,11 @@ import { htmlToBbcode } from "@/shared/lib/utils/bbcode";
 import { PublicationForm } from "@/features/publication";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { ErrorState } from "@/shared/ui/ErrorState";
-import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { notifyFailure } from "@/shared/lib/errors";
+import { UnsavedChangesGuard } from "@/shared/ui/UnsavedChangesGuard";
 
 const route = useRoute();
 const router = useRouter();
@@ -78,6 +78,20 @@ const valid = computed(
 );
 
 const saving = ref(false);
+// Released on a successful save or delete: both navigate away themselves.
+const saved = ref(false);
+
+// The edit form carries no draft-key on purpose (a draft of an edit would
+// resurrect itself over the published text later), so leaving the page is the
+// only thing standing between the author and losing the edit.
+const dirty = computed(
+  () =>
+    !saved.value &&
+    !!publication.value &&
+    (title.value !== publication.value.title ||
+      rubricId.value !== (publication.value.rubric?.id ?? NO_RUBRIC) ||
+      content.value !== initialContent.value),
+);
 
 async function save() {
   if (!publication.value || !valid.value || saving.value) return;
@@ -101,6 +115,7 @@ async function save() {
     notifyFailure(error, "Не удалось сохранить публикацию");
     return;
   }
+  saved.value = true;
   toast.success("Публикация сохранена");
   router.push({ name: "blog-feed", params: { id: blogId.value } });
 }
@@ -116,6 +131,7 @@ async function confirmDelete() {
     notifyFailure(error, "Не удалось удалить публикацию");
     return;
   }
+  saved.value = true;
   toast.success("Публикация удалена");
   blogStore.loadBlog(blogId.value);
   router.push({ name: "blog-feed", params: { id: blogId.value } });
@@ -128,8 +144,6 @@ function cancel() {
 
 <template>
   <div class="publication-edit">
-    <page-title>Редактирование публикации</page-title>
-
     <secondary-text v-if="!canManage">
       Редактирование публикаций доступно мастеру блога и ассистентам.
     </secondary-text>
@@ -153,7 +167,7 @@ function cancel() {
         :valid="valid"
         :loading="saving"
         action="Сохранить"
-        cancel-label="Отменить"
+        cancel-label="Отмена"
         @submit="save"
         @cancel="cancel"
       />
@@ -167,6 +181,8 @@ function cancel() {
           Удалить публикацию
         </button>
       </div>
+
+      <UnsavedChangesGuard :dirty="dirty" />
     </template>
 
     <!-- 4. empty / not found -->

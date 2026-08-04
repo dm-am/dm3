@@ -24,6 +24,8 @@ export type GameReview = {
   id: Served<GameReviewId>;
   /** Game identifier */
   gameId: Served<string>;
+  /** Title of the reviewed game — what names the row on the profile listings */
+  gameTitle?: Served<string>;
   /** Review author */
   author: Served<User>;
   /** Review text (BBCode supported) */

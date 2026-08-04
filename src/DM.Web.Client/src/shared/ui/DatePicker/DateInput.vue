@@ -16,6 +16,7 @@ import { ref, watch, onMounted, onUnmounted, nextTick } from "vue";
 import { SvgIcon } from "@/shared/ui/Icon";
 import CalendarGrid from "./CalendarGrid.vue";
 import { formatDate } from "@/shared/lib/utils/datetime";
+import { POPOVER_GAP, VIEWPORT_EDGE } from "@/shared/lib/constants/geometry";
 
 const props = withDefaults(
   defineProps<{
@@ -134,8 +135,12 @@ function updatePosition() {
   const el = popoverEl();
   const width = el?.offsetWidth || FALLBACK_WIDTH;
   const height = el?.offsetHeight || FALLBACK_HEIGHT;
-  const gap = 2; // matches $tiny offset of other dropdowns
-  const edge = 8; // minimal distance from viewport edges
+  // Both from the shared scale rather than written here: the comment that used
+  // to say "matches $tiny offset of other dropdowns" was true only until $tiny
+  // moved, and the eight below was the same number the tooltip keeps under a
+  // name of its own.
+  const gap = POPOVER_GAP;
+  const edge = VIEWPORT_EDGE;
   const vw = document.documentElement.clientWidth;
   const vh = document.documentElement.clientHeight;
 
@@ -171,10 +176,18 @@ function toggle() {
 watch(isOpen, (opened) => {
   // Track any scrolling container (capture phase) while the popover is open
   if (opened) {
-    document.addEventListener("scroll", updatePosition, true);
+    // Passive: updatePosition only READS geometry (getBoundingClientRect,
+    // offsetWidth), and a non-passive scroll listener makes the browser wait
+    // for it before every frame — a forced layout on the scroll path, felt as
+    // stutter while the popover is open. The same options the tooltip's
+    // listener in this same layer already carries.
+    document.addEventListener("scroll", updatePosition, {
+      passive: true,
+      capture: true,
+    });
     window.addEventListener("resize", updatePosition);
   } else {
-    document.removeEventListener("scroll", updatePosition, true);
+    document.removeEventListener("scroll", updatePosition, { capture: true });
     window.removeEventListener("resize", updatePosition);
   }
 });

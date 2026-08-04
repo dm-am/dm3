@@ -17,7 +17,6 @@
  */
 
 import { computed } from "vue";
-import { symbols } from "@/shared/lib/utils/icons";
 import { useExpandable } from "@/shared/lib/composables";
 
 export interface ExpandableItem {
@@ -132,9 +131,11 @@ defineExpose({ expandItem });
         @click="toggle(item.id)"
         @keydown="handleKeydown($event, item.id)"
       >
-        <span class="expand-icon" aria-hidden="true">{{
-          isExpanded(item.id) ? symbols.triangleDown : symbols.triangleRight
-        }}</span>
+        <span
+          class="expand-icon expand-marker"
+          :class="{ expanded: isExpanded(item.id) }"
+          aria-hidden="true"
+        />
         <span
           v-for="column in columns"
           :key="column.key"
@@ -152,7 +153,7 @@ defineExpose({ expandItem });
       <div
         v-else
         :id="`expandable-toggle-${item.id}`"
-        class="expandable-row"
+        class="expandable-row expandable-row--title"
         :class="{ expanded: isExpanded(item.id) }"
         role="button"
         tabindex="0"
@@ -161,9 +162,11 @@ defineExpose({ expandItem });
         @click="toggle(item.id)"
         @keydown="handleKeydown($event, item.id)"
       >
-        <span class="expand-icon" aria-hidden="true">{{
-          isExpanded(item.id) ? symbols.triangleDown : symbols.triangleRight
-        }}</span>
+        <span
+          class="expand-icon expand-marker"
+          :class="{ expanded: isExpanded(item.id) }"
+          aria-hidden="true"
+        />
         <span class="item-title">{{ item.title }}</span>
       </div>
 
@@ -241,6 +244,18 @@ defineExpose({ expandItem });
   &
     user-select: text
 
+// Inline flow, not flex: the marker span carries no text (the triangle is
+// pseudo content, see disclosureMarker.spec.ts), but a flex row still
+// serializes it as a line of its own, so the row copied as a newline and then
+// its title. As inline-blocks the marker and the title copy as one line, and
+// the 12px marker column plus the former flex gap are the marker's own width
+// and its right margin.
+.expandable-row--title
+  display: block
+
+  > .expand-icon
+    margin-right: $small
+
 .expandable-row--grid
   display: table
   width: 100%
@@ -310,7 +325,7 @@ defineExpose({ expandItem });
       &:last-child
         margin-bottom: 0
 
-@media (max-width: $mobile-breakpoint)
+@media (max-width: $bp-mobile)
   .expandable-row
     +expandable-row-mobile
 

@@ -31,17 +31,17 @@ public class CharacterIntentionResolverShould : UnitTestBase
         bool isDead = false,
         bool isPlayerLeft = false,
         CharacterAccessPolicy accessPolicy = CharacterAccessPolicy.NoAccess) => new()
-    {
-        AuthorId = isNpc ? Guid.Empty : PlayerId,
-        GameMasterId = MasterId,
-        GameAssistantIds = [AssistantId],
-        GameStatus = gameStatus,
-        Status = status,
-        IsNpc = isNpc,
-        IsDead = isDead,
-        IsPlayerLeft = isPlayerLeft,
-        AccessPolicy = accessPolicy,
-    };
+        {
+            AuthorId = isNpc ? Guid.Empty : PlayerId,
+            GameMasterId = MasterId,
+            GameAssistantIds = [AssistantId],
+            GameStatus = gameStatus,
+            Status = status,
+            IsNpc = isNpc,
+            IsDead = isDead,
+            IsPlayerLeft = isPlayerLeft,
+            AccessPolicy = accessPolicy,
+        };
 
     // --- Ownership by the player ---
 
@@ -80,6 +80,21 @@ public class CharacterIntentionResolverShould : UnitTestBase
         var admin = Create.User(StrangerId).WithRole(UserRole.Admin).Please();
 
         resolver.IsAllowed(admin, intention, Character()).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(CharacterIntention.Edit)]
+    [InlineData(CharacterIntention.EditPrivacySettings)]
+    [InlineData(CharacterIntention.Delete)]
+    [InlineData(CharacterIntention.Leave)]
+    public void ForbidAGuestOnAnNpc(CharacterIntention intention)
+    {
+        // An NPC has no author, and the projection turns that null into
+        // Guid.Empty — the very id an anonymous visitor carries. Ownership
+        // must not match on it.
+        var guest = Create.User(Guid.Empty).WithRole(UserRole.Guest).Please();
+
+        resolver.IsAllowed(guest, intention, Character(isNpc: true)).Should().BeFalse();
     }
 
     // --- Ownership by the game ---

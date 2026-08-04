@@ -8,13 +8,14 @@ namespace DM.Web.API.Features.Moderation.Bans;
 /// <summary>
 /// Ban type
 /// </summary>
+/// <remarks>
+/// Derived from the stored ban, not sent with it: permanence is the length of the
+/// window and voluntariness is a column. An Auto member used to head this list for
+/// a ban issued automatically on warning points - points are clamped to 0..6 and
+/// compared with no threshold anywhere, so nothing could ever produce it.
+/// </remarks>
 public enum BanType
 {
-    /// <summary>
-    /// Automatic ban triggered by warning points
-    /// </summary>
-    Auto = 0,
-
     /// <summary>
     /// Temporary ban issued by moderator
     /// </summary>
@@ -92,9 +93,17 @@ public class Ban
     public DateTimeOffset? LiftedUtc { get; set; }
 
     /// <summary>
-    /// Who lifted the ban
+    /// Who lifted the ban, by identifier. An id and not a user object: the row
+    /// stores the moderator's id without a navigation to it, and inventing one
+    /// would add a foreign key for a field the history does not print. It used to
+    /// be a User the mapping explicitly ignored, so it was null on every ban.
     /// </summary>
-    public User? LiftedBy { get; set; }
+    public Guid? LiftedByUserId { get; set; }
+
+    /// <summary>
+    /// Why the ban was lifted early
+    /// </summary>
+    public string? LiftReason { get; set; }
 }
 
 /// <summary>
@@ -109,18 +118,18 @@ public class CreateBanRequest
     public string Username { get; set; } = "";
 
     /// <summary>
-    /// Ban type
-    /// </summary>
-    public BanType Type { get; set; } = BanType.Temporary;
-
-    /// <summary>
     /// Ban access restriction scope ("Тип бана" in the doc, 4.2.4.2):
-    /// <see cref="AccessPolicy.DemocraticBan"/> keeps read access,
-    /// <see cref="AccessPolicy.FullBan"/> blocks everything. Anything other
-    /// than these two is coerced to FullBan server-side. Defaults to FullBan
-    /// for backward compatibility with callers that omit it.
+    /// <see cref="AccessPolicy.DemocraticBan"/> silences public speech — the
+    /// global chat, the forum, the discussion of other people's games and blogs —
+    /// while the user's own games and blogs, posts in game rooms and direct
+    /// messages stay open; <see cref="AccessPolicy.FullBan"/> blocks everything
+    /// and fails authentication itself. This text is spelled out rather than
+    /// linked because Swagger renders a cref as a bare type name, and a moderator
+    /// picking the scope reads it here. Anything other than these two is refused
+    /// with 400, an omitted scope included: a default here would answer a request
+    /// that never named a scope with the strictest ban there is and report success.
     /// </summary>
-    public AccessPolicy AccessPolicy { get; set; } = AccessPolicy.FullBan;
+    public AccessPolicy AccessPolicy { get; set; }
 
     /// <summary>
     /// Ban expiration time (required for Temporary)

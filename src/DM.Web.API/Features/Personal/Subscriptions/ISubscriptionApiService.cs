@@ -12,11 +12,6 @@ namespace DM.Web.API.Features.Personal.Subscriptions;
 public interface ISubscriptionApiService
 {
     /// <summary>
-    /// Get subscribers for a target (readers list)
-    /// </summary>
-    Task<IEnumerable<User>> GetSubscribersAsync(SubscriptionTargetType targetType, Guid targetId);
-
-    /// <summary>
     /// Get all subscriptions for the current user
     /// </summary>
     Task<IEnumerable<Subscription>> GetMySubscriptionsAsync();

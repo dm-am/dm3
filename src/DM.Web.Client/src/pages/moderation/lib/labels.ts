@@ -1,11 +1,12 @@
-// Russian display labels for moderation enums (mirror the backend enum
-// Description attributes — TicketStatus.cs / TicketSubtype.cs / BanType).
+// Russian display labels for moderation enums. This is the dictionary: the
+// server keeps none, so there is nothing here to drift away from.
 import {
   BanType,
   type Ban,
   type PremoderationStatus,
 } from "@/entities/moderation";
 import type { TicketStatus, TicketSubtype } from "@/entities/ticket";
+import { pluralize } from "@/shared/lib/utils/pluralize";
 
 // ==================== Ticket status ====================
 
@@ -61,7 +62,7 @@ export const COMPLAINT_SUBTYPES: TicketSubtype[] = [
 
 // ==================== Premoderation ====================
 
-/** Mirrors the backend PremoderationStatus Description attributes. */
+/** The wording of PremoderationStatus, and the only copy of it. */
 export const PREMODERATION_STATUS_LABELS: Record<
   Exclude<PremoderationStatus, "Approved">,
   string
@@ -75,19 +76,11 @@ export const PREMODERATION_STATUS_LABELS: Record<
 /** "Предупреждение (N баллов)" / "Устное предупреждение (0 баллов)" (doc 4.2.2.21). */
 export function warningTypeLabel(points: number): string {
   if (points === 0) return "Устное предупреждение (0 баллов)";
-  return `Предупреждение (${points} ${pointsNoun(points)})`;
-}
-
-function pointsNoun(points: number): string {
-  const mod10 = points % 10;
-  const mod100 = points % 100;
-  if (mod10 === 1 && mod100 !== 11) return "балл";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "балла";
-  return "баллов";
+  const noun = pluralize(points, "балл", "балла", "баллов");
+  return `Предупреждение (${points} ${noun})`;
 }
 
 export const BAN_TYPE_LABELS: Record<BanType, string> = {
-  [BanType.Auto]: "Автоматический",
   [BanType.Temporary]: "Временный",
   [BanType.Permanent]: "Постоянный",
   [BanType.Voluntary]: "Добровольный",
@@ -99,13 +92,5 @@ export function banTermLabel(ban: Ban): string {
   const started = new Date(ban.startedUtc).getTime();
   const expires = new Date(ban.expiresUtc).getTime();
   const days = Math.max(1, Math.round((expires - started) / 86_400_000));
-  return `${days} ${daysNoun(days)}`;
-}
-
-function daysNoun(days: number): string {
-  const mod10 = days % 10;
-  const mod100 = days % 100;
-  if (mod10 === 1 && mod100 !== 11) return "день";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "дня";
-  return "дней";
+  return `${days} ${pluralize(days, "день", "дня", "дней")}`;
 }

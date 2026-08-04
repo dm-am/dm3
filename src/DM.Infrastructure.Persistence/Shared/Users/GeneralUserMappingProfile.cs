@@ -31,6 +31,8 @@ internal class GeneralUserMappingProfile : Profile
             .ForMember(d => d.PostReviewsReceivedCount, s => s.Ignore()) // Set separately after mapping
             .ForMember(d => d.EndorsementsGivenCount, s => s.Ignore()) // Set separately after mapping
             .ForMember(d => d.EndorsementsReceivedCount, s => s.Ignore()) // Set separately after mapping
+            .ForMember(d => d.GameReviewsGivenCount, s => s.Ignore()) // Set separately after mapping
+            .ForMember(d => d.GameReviewsReceivedCount, s => s.Ignore()) // Set separately after mapping
             .ForMember(d => d.TopicsAuthoredCount, s => s.Ignore()) // Set separately after mapping
             .ForMember(d => d.CommentsAuthoredCount, s => s.Ignore()) // Set separately after mapping
             .ForMember(d => d.GlobalChatMessagesCount, s => s.Ignore()) // Set separately after mapping
@@ -71,12 +73,16 @@ internal class GeneralUserMappingProfile : Profile
 
         // The ban window travels with the restriction: whether a ban is in force
         // is a question about time, and the answer belongs to whoever holds a
-        // clock, not to the projection. Removed bans are already excluded by the
-        // global soft-delete filter.
+        // clock, not to the projection. Lifted bans are excluded here, in the open:
+        // they used to be dropped by the global soft-delete filter, which meant a
+        // filter written for tidying rows was quietly carrying an authorization
+        // rule, and taking the ban out of that filter would have re-armed every
+        // lifted ban at once.
         CreateMap<User, AuthenticatedUser>()
             .IncludeBase<User, GeneralUser>()
             .ForMember(d => d.AccessRestrictions, s => s.MapFrom(
                 u => u.BansReceived
+                    .Where(b => b.LiftedUtc == null)
                     .Select(b => new AccessRestriction(b.AccessRestrictionPolicy, b.StartedUtc, b.EndedUtc))
                     .ToList()));
 

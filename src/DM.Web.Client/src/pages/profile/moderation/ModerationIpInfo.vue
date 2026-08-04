@@ -4,6 +4,7 @@ import { useExpandableSection } from "@/shared/lib/composables";
 import { symbols } from "@/shared/lib/utils/icons";
 import type { UserIpInfo, LoginRecord } from "@/shared/api/models/moderation";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import { NOTHING_TO_SHOW } from "@/shared/lib/constants/copy";
 import { formatDate, formatDateFull } from "@/shared/lib/utils/datetime";
 
 defineProps<{
@@ -55,7 +56,7 @@ const { toggle: toggleLoginHistory, zoneBindings: historyZoneBindings } =
           </tr>
         </tbody>
       </table>
-      <secondary-text v-else>Нет данных</secondary-text>
+      <secondary-text v-else>{{ NOTHING_TO_SHOW }}</secondary-text>
     </div>
 
     <div class="mod-subsection">
@@ -67,9 +68,11 @@ const { toggle: toggleLoginHistory, zoneBindings: historyZoneBindings } =
           @click="toggleLoginHistory()"
         >
           История входов ({{ loginHistory?.length ?? 0 }})
-          <span class="mod-expand-icon" aria-hidden="true">{{
-            showLoginHistory ? symbols.triangleDown : symbols.triangleRight
-          }}</span>
+          <span
+            class="mod-expand-icon expand-marker"
+            :class="{ expanded: showLoginHistory }"
+            aria-hidden="true"
+          />
         </button>
       </h5>
       <div

@@ -147,9 +147,8 @@ function initMessageBbcode(el: HTMLElement) {
           <div class="msg-header msg-header-compact">
             <Tooltip :text="deletedDateTooltip">
               <span class="msg-time-group">
-                <span class="msg-icon-placeholder" /><span class="msg-time">{{
-                  formattedTime
-                }}</span>
+                <span class="msg-time">{{ formattedTime }}</span>
+                <span class="msg-icon-placeholder" />
               </span>
             </Tooltip>
             <span class="msg-gap">{{ " " }}</span>
@@ -203,14 +202,11 @@ function initMessageBbcode(el: HTMLElement) {
         </router-link>
         <div class="msg-body">
           <div class="msg-header" :class="{ 'msg-header-compact': compact }">
-            <!-- Icon BEFORE the time, like every other compact header row
-                 (edited icon / placeholder) — keeps the time text right-
-                 aligned to the same gutter edge across all compact rows. -->
             <template v-if="compact">
               <Tooltip :text="deletedDateTooltip">
                 <span class="msg-time-group">
-                  <SvgIcon name="trash" class="msg-deleted-icon" />
                   <span class="msg-time">{{ formattedTime }}</span>
+                  <SvgIcon name="trash" class="msg-deleted-icon" />
                 </span>
               </Tooltip>
               <span class="msg-gap">{{ " " }}</span>
@@ -326,7 +322,7 @@ function initMessageBbcode(el: HTMLElement) {
             <BBCodeEditor
               v-model="localEditText"
               context="message"
-              placeholder="Редактирование сообщения…"
+              placeholder="Редактирование сообщения..."
               :min-height="60"
               :max-height="200"
               @submit="handleEditSubmit"
@@ -375,13 +371,13 @@ function initMessageBbcode(el: HTMLElement) {
             <template v-if="compact">
               <Tooltip :text="fullDateTooltip">
                 <span class="msg-time-group">
+                  <span class="msg-time">{{ formattedTime }}</span>
                   <SvgIcon
                     v-if="hasEdits"
                     name="pencil"
                     class="msg-edited-icon"
                   />
                   <span v-else class="msg-icon-placeholder" />
-                  <span class="msg-time">{{ formattedTime }}</span>
                 </span>
               </Tooltip>
               <span class="msg-gap">{{ " " }}</span>
@@ -488,7 +484,7 @@ function initMessageBbcode(el: HTMLElement) {
             <BBCodeEditor
               v-model="localEditText"
               context="message"
-              placeholder="Редактирование сообщения…"
+              placeholder="Редактирование сообщения..."
               :min-height="60"
               :max-height="200"
               @submit="handleEditSubmit"
@@ -794,7 +790,9 @@ function initMessageBbcode(el: HTMLElement) {
 // Compact layout — controlled by `compact` prop
 // ============================================================================
 // Compact: fixed time gutter so author names and content align across rows.
-// Gutter holds the (optional) edit/trash icon + the time, right-aligned.
+// Its content is left-aligned and leads with the time, the icon following it
+// as in the full layout, so the row's first visible character sits exactly
+// where the full layout starts its avatar instead of behind an empty run.
 // 80px so that gutter + .msg-gap ($small) = 88px — exactly the full
 // layout's avatar column (72px avatar + $medium gap): with matching page
 // paddings the compact content starts on the same x as the full content.
@@ -811,11 +809,11 @@ $compact-time-gutter: 80px
   .msg-header-compact
     margin-bottom: 0
     line-height: 1.4
-  // Fixed-width right-aligned time gutter so author names and content align
-  // across rows: gutter + .msg-gap = the content margin below.
+  // Fixed-width time gutter so author names and content align across rows:
+  // gutter + .msg-gap = the content margin below.
   .msg-time-group
     width: $compact-time-gutter
-    text-align: right
+    text-align: left
   .msg-author
     display: inline-flex
     align-items: baseline

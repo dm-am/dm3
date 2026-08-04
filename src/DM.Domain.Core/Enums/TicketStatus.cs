@@ -1,5 +1,3 @@
-using System.ComponentModel;
-
 namespace DM.Domain.Core.Enums;
 
 /// <summary>
@@ -10,24 +8,20 @@ public enum TicketStatus
     /// <summary>
     /// Ticket is waiting for a moderation response
     /// </summary>
-    [Description("Ожидает ответа модерации")]
     WaitingForModeration = 0,
 
     /// <summary>
     /// Moderation has answered and is waiting for the user
     /// </summary>
-    [Description("Ожидает ответа пользователя")]
     WaitingForUser = 1,
 
     /// <summary>
     /// Ticket conversation is finished
     /// </summary>
-    [Description("Закрыто")]
     Closed = 2,
 
     /// <summary>
     /// Ticket was marked as spam
     /// </summary>
-    [Description("Спам")]
     Spam = 3
 }

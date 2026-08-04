@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -51,4 +52,17 @@ public interface IRegistrationRepository
     /// Update pending registration (for resend activation)
     /// </summary>
     Task UpdatePending(PendingRegistration pending);
+
+    /// <summary>
+    /// Delete pending registrations started before <paramref name="startedBefore" />.
+    /// </summary>
+    /// <remarks>
+    /// The address a pending registration holds is not free for anybody else while
+    /// the row is there, so this is what returns it — the window it is derived
+    /// from is <see cref="Configuration.AccountRetentionPolicy.PendingRegistrationLifetime" />.
+    /// </remarks>
+    /// <param name="startedBefore">Cutoff the caller derived from the retention policy.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Number of rows removed.</returns>
+    Task<int> DeletePendingStartedBefore(DateTimeOffset startedBefore, CancellationToken cancellationToken = default);
 }

@@ -78,7 +78,7 @@ internal class PostService : IPostService
         var room = await _roomRepository.GetForUpdate(createPost.RoomId, identity.User.UserId);
         if (room == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Room not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(RoomIntention.CreatePost, (room, createPost.CharacterId));
@@ -98,6 +98,7 @@ internal class PostService : IPostService
             metaText = ModBlockSanitizer.SanitizeForAuthor(metaText, identity.User.Role);
 
         var now = _dateTimeProvider.Now;
+        var gameText = createPost.GameText.Trim();
 
         var entity = new CreatePostEntity
         {
@@ -105,8 +106,9 @@ internal class PostService : IPostService
             RoomId = createPost.RoomId,
             AuthorId = identity.User.UserId,
             CharacterId = createPost.CharacterId,
-            GameText = createPost.GameText.Trim(),
+            GameText = gameText,
             MetagameText = metaText,
+            PrivateAddresseeSnapshotJson = ResolvePrivateAddressees(gameText, room, null),
             CreatedUtc = now
         };
 
@@ -139,8 +141,16 @@ internal class PostService : IPostService
 
     public async Task<(IEnumerable<Post> posts, PagingResult paging)> GetAllAsync(Guid roomId, PagingQuery query)
     {
+        // Reading is gated by the scope the room was fetched through:
+        // GameAccessibilityFilters.RoomAvailable admits an open room to anyone
+        // who may see the game, and a private one only to its leads and to the
+        // characters and readers the room was opened to. A room outside that
+        // scope is not refused, it is absent, and GetAsync answers 404 for it.
+        //
+        // What stood here asked whether the reader may CREATE a post, against a
+        // target type no resolver handles, so every read of every room answered
+        // 403 and the room page said it could not load its posts.
         var room = await _roomService.GetAsync(roomId);
-        _intentionManager.ThrowIfForbidden(RoomIntention.CreatePost, room);
 
         var identity = _identityProvider.Current;
         var totalCount = await _repository.Count(roomId, identity.User.UserId);
@@ -158,7 +168,7 @@ internal class PostService : IPostService
         var post = await _repository.Get(postId, _identityProvider.Current.User.UserId);
         if (post == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Post not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.PostNotFound);
         }
 
         // Enrich post with dice rolls
@@ -198,9 +208,16 @@ internal class PostService : IPostService
             PostId = updatePost.PostId
         };
 
-        // Check text edit permission
-        if (_intentionManager.IsAllowed(PostIntention.EditText, (post, room)))
+        // Submitted text the caller may not edit is refused. It used to be swapped
+        // for the stored text and saved, so an edit nobody was allowed to make came
+        // back 200 with the post as it was - the same response a successful edit
+        // produces. A request that submits no text asks for nothing and keeps the
+        // stored values: the lead who may only change the character reaches the
+        // branch below.
+        if (updatePost.GameText != null || updatePost.MetagameText != null)
         {
+            _intentionManager.ThrowIfForbidden(PostIntention.EditText, (post, room));
+
             // PATCH semantics: an absent field keeps its value, an empty string
             // clears it. Without the null check, editing only the in-game text
             // wiped the out-of-character text, and omitting the in-game text threw.
@@ -219,17 +236,18 @@ internal class PostService : IPostService
             entity.MetagameText = post.MetagameText;
         }
 
-        // Check character change permission
-        if (updatePost.CharacterId != null)
+        entity.PrivateAddresseeSnapshotJson = ResolvePrivateAddressees(
+            entity.GameText, room, post.PrivateAddresseeSnapshotJson);
+
+        // Same rule for the character: a change the caller may not make is a
+        // refusal, an unchanged value is not a change.
+        if (updatePost.CharacterId != null && updatePost.CharacterId.HasChanged(post.Character?.Id))
         {
-            var canChangeCharacter = updatePost.CharacterId.HasChanged(post.Character?.Id) &&
-                _intentionManager.IsAllowed(RoomIntention.CreatePost, (room, updatePost.CharacterId.Value)) &&
-                _intentionManager.IsAllowed(PostIntention.EditCharacter, (post, room));
-            if (canChangeCharacter)
-            {
-                entity.ShouldChangeCharacter = true;
-                entity.CharacterId = updatePost.CharacterId.Value;
-            }
+            _intentionManager.ThrowIfForbidden(RoomIntention.CreatePost, (room, updatePost.CharacterId.Value));
+            _intentionManager.ThrowIfForbidden(PostIntention.EditCharacter, (post, room));
+
+            entity.ShouldChangeCharacter = true;
+            entity.CharacterId = updatePost.CharacterId.Value;
         }
 
         var updatedPost = await _repository.Update(entity);
@@ -237,6 +255,27 @@ internal class PostService : IPostService
 
         return updatedPost!;
     }
+
+    /// <summary>
+    /// Freeze who each [private=...] block of the post is for. Without this the
+    /// snapshot stayed at its default and the addressee rule — one of the five
+    /// in BBCODE_RENDERING.md — never fired for anyone: the player a line was
+    /// written to was the one reader who could not read it.
+    /// </summary>
+    /// <remarks>
+    /// Names resolve against the characters that have access to the room, so a
+    /// block can only ever name someone who already reads it; a snapshot hands
+    /// out no access that room membership did not. Blocks an earlier save
+    /// resolved keep their ids — the rule is addressee-forever, and re-resolving
+    /// them on edit would revoke a player whose character has left since.
+    /// </remarks>
+    private static string ResolvePrivateAddressees(
+        string gameText, RoomToUpdate? room, string? previousSnapshotJson) =>
+        PrivateAddresseeSnapshot.Build(gameText, previousSnapshotJson,
+            room?.Accesses
+                .Where(a => a.Character is not null && a.Character.Author is not null)
+                .Select(a => new PrivateAddressee(a.Character.Name, a.Character.Author.UserId))
+            ?? []);
 
     private async Task EnrichWithDiceRollsAsync(List<Post> posts)
     {
@@ -261,7 +300,7 @@ internal class PostService : IPostService
         var post = await GetAsync(postId);
         _intentionManager.ThrowIfForbidden(PostIntention.Delete, post);
 
-        await _repository.Delete(postId);
+        await _repository.Delete(postId, _identityProvider.Current.User.UserId);
         await _repository.DecrementAuthorQuantityRating(post.Author.UserId);
 
         await _unreadCountersRepository.DecrementAsync(post.RoomId, UnreadEntryType.Message, post.CreatedUtc);

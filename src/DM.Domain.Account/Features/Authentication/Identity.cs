@@ -48,13 +48,13 @@ public class Identity : IIdentity
     /// <returns>Authenticated user identity</returns>
     public static IIdentity Success(
         AuthenticatedUser user, Session session, UserSettings settings, string token) => new Identity
-    {
-        Error = AuthenticationError.NoError,
-        User = user,
-        Settings = settings,
-        AuthenticationToken = token,
-        Session = session
-    };
+        {
+            Error = AuthenticationError.NoError,
+            User = user,
+            Settings = settings,
+            AuthenticationToken = token,
+            Session = session
+        };
 
     /// <summary>
     /// Creates identity for the guest user

@@ -4,7 +4,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
+using DM.Domain.Account;
 using DM.Domain.Account.Features.Security;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Configuration;
 using DM.Infrastructure.Core;
 using DM.Infrastructure.Core.Configuration;
@@ -75,13 +77,32 @@ internal static class Program
         }
     }
 
-    private static IHostBuilder CreateHostBuilder() => Host
+    /// <summary>
+    /// The tool's composition, in one place so that the container it runs on is
+    /// the container a test can build.
+    /// </summary>
+    /// <remarks>
+    /// Internal rather than private for exactly that: the tool composes inside its
+    /// entry point rather than in a Startup class, so the architecture suite could
+    /// read this file as text and never resolve anything out of it. A dependency
+    /// the container cannot supply is not a build error here — it surfaces on a
+    /// developer's machine as a seeding run that dies before it writes a row.
+    /// </remarks>
+    internal static IHostBuilder CreateHostBuilder() => Host
         .CreateDefaultBuilder()
         .UseServiceProviderFactory(new AutofacServiceProviderFactory())
         .WithDmConfiguration()
         .ConfigureServices((context, services) => services
             .AddOptions()
             .AddDmCoreConfiguration(context.Configuration)
+            // The container below scans the whole account assembly, whose types read
+            // four option sections. IOptions of an unbound type hands out a default
+            // rather than throwing, so the encryption key would have been empty at the
+            // first call that needed it instead of missing at startup.
+            .AddDmAccountConfiguration(context.Configuration)
+            .RequireRelationalStorage()
+            .RequireDocumentStorage()
+            .RequireObjectStorage()
             .AddDbContext<DmDbContext>(options => options.UseNpgsql(
                 context.Configuration.GetConnectionString(nameof(ConnectionStrings.Rdb)),
                 npgsql => npgsql.CommandTimeout(120))))
@@ -91,8 +112,26 @@ internal static class Program
             builder.RegisterModuleOnce<PersistenceModule>();
 
             // Password hashing lives in the Account domain and its implementation is
-            // internal, so the assembly scan is what picks it up.
+            // internal, so the assembly scan is what picks it up. The same goes for
+            // the two popularity processors: the fixture scores its games and blogs
+            // by the site's definition rather than by a copy of it, and the classes
+            // that hold that definition are internal to their modules.
             builder.RegisterDefaultTypes(typeof(ISecurityManager).Assembly);
+            builder.RegisterDefaultTypes(typeof(DM.Domain.Game.Authorization.GameIntention).Assembly);
+            builder.RegisterDefaultTypes(typeof(DM.Domain.Blog.Authorization.BlogIntention).Assembly);
+
+            // Last, and deliberately last: Autofac takes the final registration
+            // as the default, so this is what replaces the infrastructure
+            // Guid.NewGuid() factory for the tool and only for the tool. Single
+            // instances, because a per-dependency generator restarts its stream
+            // on every resolve and hands out the same identifiers twice.
+            builder.RegisterType<SeedDeterminism>()
+                .AsSelf()
+                .SingleInstance();
+
+            builder.RegisterType<SeededGuidFactory>()
+                .As<IGuidFactory>()
+                .SingleInstance();
 
             builder.RegisterType<DataSeeder>()
                 .AsSelf()
@@ -110,11 +149,28 @@ internal static class Program
         Console.WriteLine("                 2026-06-15T12:00:00Z. Unset: the real clock, which is what");
         Console.WriteLine("                 keeps a development site looking alive. Pin it when the same");
         Console.WriteLine("                 dates have to come out of two different runs.");
+        Console.WriteLine();
+        Console.WriteLine("DM_SeedRandomSeed  integer the randomness and the identifiers are drawn");
+        Console.WriteLine("                 from. Unset: a fixed default, so two runs already agree.");
+        Console.WriteLine("                 Pin it to lay out a different, equally repeatable fixture.");
     }
 
     private static void PrintUsers(SeedResult result)
     {
-        Console.WriteLine($"users: {result.Created} created, {result.Skipped} skipped");
+        // Zeroes omitted, the way the content line next door already does it.
+        // "22 created, 0 skipped" spends half its width saying that nothing was
+        // skipped, on a line read after every run, and the two summaries of one
+        // command read differently for no reason.
+        var counters = new (string Label, int Value)[]
+        {
+            ("created", result.Created),
+            ("skipped", result.Skipped),
+        };
+
+        Console.WriteLine($"users: {Summarize(counters
+            .Where(counter => counter.Value > 0)
+            .Select(counter => $"{counter.Value} {counter.Label}")
+            .ToList())}");
         if (result.CreatedUsernames.Count > 0)
         {
             Console.WriteLine($"  created: {string.Join(", ", result.CreatedUsernames)}");

@@ -37,7 +37,7 @@ internal class RoomMappingProfile : Profile
         CreateMap<CreateRoomRequest, CreateRoom>()
             .ForMember(d => d.GameId, opt => opt.Ignore());
 
-        CreateMap<Room, UpdateRoom>()
+        CreateMap<UpdateRoomRequest, UpdateRoom>()
             .ForMember(d => d.RoomId, opt => opt.Ignore())
             // ChatId is server-managed (linked chat room); the API Room DTO
             // does not expose it, so an update never reassigns it.
@@ -53,19 +53,23 @@ internal class RoomMappingProfile : Profile
                 s => s.MapFrom(r => r.Settings != null ? (bool?)r.Settings.ViewDiceResults : null))
             .ForMember(d => d.DiceEnabled,
                 s => s.MapFrom(r => r.Settings != null ? (bool?)r.Settings.DiceEnabled : null))
+            .ForMember(d => d.HiddenWithoutAccess,
+                s => s.MapFrom(r => r.Settings != null ? (bool?)r.Settings.HiddenWithoutAccess : null))
             .ForMember(d => d.IsRemoved, opt => opt.Ignore());
 
+        // Policy used to be ignored here, so every access of every response
+        // answered null: the screen that grants access could not show which grant
+        // it had just made, and the same value now decides who may write.
         CreateMap<DomainRoomAccess, RoomAccess>()
-            .ForMember(d => d.Character, s => s.MapFrom(a => a.Character))
-            .ForMember(d => d.Policy, opt => opt.Ignore());
+            .ForMember(d => d.Character, s => s.MapFrom(a => a.Character));
 
         CreateMap<RoomAccess, CreateRoomAccess>()
             .ForMember(d => d.CharacterId, s => s.MapFrom(r => r.Character != null ? r.Character.Id : (Guid?)null))
             .ForMember(d => d.ReaderUsername, s => s.MapFrom(r => r.User != null ? r.User.Username : null))
             .ForMember(d => d.RoomId, opt => opt.Ignore());
 
-        CreateMap<RoomAccess, UpdateRoomAccess>()
-            .ForMember(d => d.AccessId, s => s.MapFrom(r => r.Id));
+        CreateMap<UpdateRoomAccessRequest, UpdateRoomAccess>()
+            .ForMember(d => d.AccessId, opt => opt.Ignore());
 
         CreateMap<DomainPostPendency, PostPendency>()
             .ForMember(d => d.CreatedBy, s => s.MapFrom(p => p.CreatedBy))

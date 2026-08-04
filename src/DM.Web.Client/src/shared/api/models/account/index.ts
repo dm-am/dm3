@@ -1,3 +1,6 @@
+import type { User } from "../common";
+import type { Preferences } from "../personal";
+
 /**
  * Credentials for new user registration (Step 1)
  * Username is chosen after email verification
@@ -7,15 +10,6 @@ export type RegisterCredentials = {
   password: string;
   acceptedRules: boolean;
   website?: string; // Honeypot field for bot protection
-};
-
-/**
- * Request to complete activation with username selection (Step 2)
- */
-export type ActivationRequest = {
-  token: string;
-  username: string;
-  expectedEmail?: string; // For idempotent retry detection
 };
 
 /**
@@ -44,6 +38,20 @@ export type LoginCredentials = {
   website?: string; // Honeypot field for bot protection
   /** Remember session for 1 year (true) or 24 hours (false) */
   rememberMe?: boolean;
+};
+
+/**
+ * What POST /v1/account/login answers with.
+ *
+ * Mirrors DM.Web.API.Features.Account.Authentication.LoginResponse. The viewer
+ * arrives wrapped, together with the preferences the interface needs to render
+ * the first screen. Typed as a bare User here, the whole envelope went into the
+ * store as though it were the viewer, and every field read off it was
+ * undefined until the next boot reconciled the store against the server.
+ */
+export type LoginResponse = {
+  user: User;
+  preferences: Preferences;
 };
 
 /**
@@ -128,7 +136,7 @@ export type SessionInfo = {
 
 /**
  * Username change request (requires moderation)
- * Note: requestedUsername is only set after approval via POST /username-change/{token}
+ * Note: requestedUsername is only set after approval via POST /username-change/complete
  */
 export type UsernameChangeRequest = {
   id: string;
@@ -145,7 +153,7 @@ export type UsernameChangeRequest = {
  * Request to create username change request.
  * Note: User does NOT specify desired username here.
  * This is a request for permission to change username.
- * The new username is chosen later via POST /username-change/{token}.
+ * The new username is chosen later via POST /username-change/complete.
  */
 export type CreateUsernameChangeRequest = {
   reason: string;

@@ -8,16 +8,18 @@
  *  - endpoint: `getUserEndorsements` (received) vs
  *    `getWrittenUserEndorsements` (written);
  *  - the route name for Paging links (the `routeName` prop);
- *  - in "written" the card (`<TestimonialCard>`) receives `about` — the endorsement
- *    recipient: the footer expands to "<автор> о <получатель>", where
- *    the author (the one "speaking" in the bubble) stays a regular link and
- *    the recipient a muted one. In "received" `about` is not passed —
- *    the footer shows only the author.
  *  - sorting/search: in "written" the "Автор" column is relabeled to
  *    "Получатель" (label + hint + search placeholder, #68г) — the value
  *    "author" itself is sent to the backend as is; for this scope the backend already
  *    silently sorts by the counterparty (see UserEndorsementFilter.cs).
- * Everything else — the filter bar, URL state, pagination — is shared.
+ * Everything else is shared, the card footer included: both modes hand
+ * `<TestimonialCard>` the same `about` (the endorsement recipient), so both
+ * pages read "<автор> о <получатель>" — the author (the one "speaking" in
+ * the bubble) as a regular link, the recipient as a muted one. The line is
+ * composed in exactly one place, inside the card. It used to be passed in
+ * "written" only, and the two pages then spelled one footer two ways:
+ * "SolohinLex о TestSeniorMod" on one, a bare "TestHonorary" on the other.
+ * The filter bar, URL state and pagination are shared as well.
  *
  * Architecture:
  *  - `useTestimonialsFilter` manages the URL state (search + sort).
@@ -49,7 +51,7 @@ import { SecondaryText } from "@/shared/ui/Layout";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { DashSeparator } from "@/shared/ui/DashSeparator";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
-import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 
 const props = defineProps<{
   username: string;
@@ -70,12 +72,16 @@ const route = useRoute();
 const { filterState, searchParams, hasActiveFilters } = useTestimonialsFilter();
 
 const envelope: Ref<ListEnvelope<UserEndorsement> | null> = ref(null);
-const loading = ref(false);
-const loadError = ref<string | null>(null);
 
-// Discards stale responses when a fast filter/page change races an
-// in-flight request.
-const guard = createRequestGuard();
+// Keeps any already-shown items on a failure (stale-while-revalidate); the
+// ErrorState banner renders independently above the list — see template — so
+// the previous message is not cleared until the next answer lands.
+const {
+  loading,
+  error: loadError,
+  clearError,
+  run,
+} = useGuardedRequest({ message: "Не удалось загрузить рекомендации" });
 
 // Username/mode change (navigating between "received" and "written" pages,
 // or to another profile) must drop the previous list immediately.
@@ -83,45 +89,33 @@ watch(
   () => `${props.username}:${props.mode}`,
   () => {
     envelope.value = null;
-    loadError.value = null;
+    clearError();
   },
 );
 
-async function fetch() {
-  const requestId = guard.next();
-  loading.value = true;
-  try {
-    // Do not detach the method — `getUserEndorsements`/`getWrittenUserEndorsements`
-    // call `this.buildEndorsementParams(q)`, and a detached `const fn =
-    // userApi.getX` loses `this` and crashes with a TypeError that is silently
-    // swallowed by the catch block below.
-    const params = {
-      search: searchParams.value.search,
-      sortBy: searchParams.value.sortBy,
-      sortOrder: searchParams.value.sortOrder,
-      number: searchParams.value.number,
-      take: searchParams.value.size,
-    };
-    const { data, error } =
+function fetch() {
+  // Do not detach the method — `getUserEndorsements`/`getWrittenUserEndorsements`
+  // call `this.buildEndorsementParams(q)`, and a detached `const fn =
+  // userApi.getX` loses `this` and crashes with a TypeError.
+  const params = {
+    search: searchParams.value.search,
+    sortBy: searchParams.value.sortBy,
+    sortOrder: searchParams.value.sortOrder,
+    number: searchParams.value.number,
+    take: searchParams.value.size,
+  };
+  return run(
+    () =>
       props.mode === "received"
-        ? await userApi.getUserEndorsements(props.username as Username, params)
-        : await userApi.getWrittenUserEndorsements(
+        ? userApi.getUserEndorsements(props.username as Username, params)
+        : userApi.getWrittenUserEndorsements(
             props.username as Username,
             params,
-          );
-    if (!guard.isCurrent(requestId)) return;
-    if (error) {
-      // Keep any already-shown items (stale-while-revalidate); the
-      // ErrorState banner renders independently above the list — see
-      // template.
-      loadError.value = "Не удалось загрузить рекомендации";
-    } else {
-      loadError.value = null;
-      envelope.value = data ?? null;
-    }
-  } finally {
-    if (guard.isCurrent(requestId)) loading.value = false;
-  }
+          ),
+    (data) => {
+      envelope.value = data;
+    },
+  );
 }
 
 useFetchData(
@@ -189,14 +183,16 @@ const searchPlaceholder = computed(() =>
  * UserEndorsement and WebsiteTestimonial are structurally compatible
  * (id / author / text / createdUtc / modifiedUtc). `<TestimonialCard>`
  * reads only these fields — we project at the boundary instead of duplicating
- * the visuals. The existing ProfileEndorsements.vue does the same coercion.
+ * the visuals.
  */
 function asTestimonial(e: UserEndorsement): WebsiteTestimonial {
   return e as unknown as WebsiteTestimonial;
 }
 
-/** Recipient of a "written" (given-mode) endorsement — the muted
- * recipient link in the "<author> о <recipient>" footer line. */
+/** Recipient of the endorsement — the muted recipient link in the
+ * "<author> о <recipient>" footer line, in both modes. In "received" the
+ * recipient is the profile owner, and the server sends targetUser either
+ * way (GET users/{name}/endorsements carries author AND targetUser). */
 function targetOf(e: UserEndorsement) {
   return e.targetUser;
 }
@@ -253,7 +249,7 @@ function pagingAnchor(): HTMLElement | null {
           <TestimonialCard
             :testimonial="asTestimonial(item)"
             :search-query="filterState.search"
-            :about="mode === 'written' ? targetOf(item) : undefined"
+            :about="targetOf(item)"
           />
           <DashSeparator v-if="idx < items.length - 1" spacing="tiny" />
         </template>

@@ -73,7 +73,7 @@ public class SubscriptionController : ControllerBase
         var result = await _apiService.GetByIdAsync(id);
         if (result == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Subscription not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.SubscriptionNotFound);
         }
         return Ok(result);
     }
@@ -100,7 +100,7 @@ public class SubscriptionController : ControllerBase
         var result = await _apiService.GetSubscriptionAsync(type, targetId);
         if (result == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Not subscribed to this target");
+            throw new HttpException(HttpStatusCode.NotFound, "Вы не подписаны");
         }
         return Ok(result);
     }
@@ -122,7 +122,10 @@ public class SubscriptionController : ControllerBase
     public async Task<IActionResult> Subscribe([FromBody] SubscribeRequest request)
     {
         var result = await _apiService.SubscribeAsync(request.TargetType, request.TargetId, request);
-        return CreatedAtRoute(nameof(CheckSubscription), new { type = request.TargetType, targetId = request.TargetId }, result);
+        // The subscription has an address of its own, and that is where Location
+        // leads. It used to lead to the query endpoint that answers "am I
+        // subscribed", which is not the resource that was created.
+        return CreatedAtRoute(nameof(GetSubscription), new { id = result.Id }, result);
     }
 
     /// <summary>

@@ -64,9 +64,9 @@ const DASH_LINE = "- ".repeat(450);
   max-width: var(--dash-width, 100%)
   width: 0
   min-width: var(--dash-width, 100%)
-  // Decorative horizontal dash line — like the sidebar "- " prefix, it is
-  // non-selectable so a page select-all/drag does not pull the "- - - -"
-  // line into the copied text.
+  // Decorative horizontal dash line, and the only non-selectable text in
+  // the client: a page select-all/drag must not pull the "- - - -" line
+  // into the copied text. The sidebar "- " prefix is selectable by rule.
   user-select: none
 
   &.spacing-small

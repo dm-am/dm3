@@ -24,8 +24,10 @@ import { GameIcon } from "@/shared/ui/Icon";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { UserLink } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
-import { notifyFailure } from "@/shared/lib/errors";
+import { describeFailure, notifyFailure } from "@/shared/lib/errors";
+import { useRoleGate } from "./lib/useRoleGate";
 
+const { hasAccess, deniedText } = useRoleGate("SeniorModerator");
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
@@ -84,7 +86,7 @@ async function grant() {
       },
     );
     if (error) {
-      grantError.value = error.title ?? "Не удалось выдать награду";
+      grantError.value = describeFailure(error, "Не удалось выдать награду");
       return;
     }
     grantForm.value.username = "";
@@ -154,7 +156,9 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="series-detail">
+  <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
+
+  <section v-else class="series-detail">
     <header class="series-detail__header">
       <button
         type="button"
@@ -195,7 +199,7 @@ onMounted(async () => {
           :disabled="editSaving"
           @click="saveEdit"
         >
-          {{ editSaving ? "Сохраняем…" : "Сохранить" }}
+          {{ editSaving ? "Сохраняем..." : "Сохранить" }}
         </button>
       </section>
 
@@ -206,15 +210,15 @@ onMounted(async () => {
           <label>Пользователь</label>
           <UserAutocomplete
             v-model="grantForm.username"
-            placeholder="Введите имя…"
+            placeholder="Введите имя..."
           />
         </div>
         <div class="form-row">
           <label>Тип награды</label>
           <select v-model="grantForm.awardTypeId">
-            <option value="" disabled>— выберите —</option>
+            <option value="" disabled>Не выбрано</option>
             <option v-for="t in awardTypes ?? []" :key="t.id" :value="t.id">
-              {{ t.title }} — {{ t.description }}
+              {{ t.title }} ({{ t.description }})
             </option>
           </select>
         </div>
@@ -233,14 +237,14 @@ onMounted(async () => {
           :disabled="granting || !grantForm.username || !grantForm.awardTypeId"
           @click="grant"
         >
-          {{ granting ? "Выдаем…" : "Выдать" }}
+          {{ granting ? "Выдаем..." : "Выдать" }}
         </button>
       </section>
 
       <!-- Grants list -->
       <section class="block">
         <h3>Выданные в этой серии</h3>
-        <SecondaryText v-if="grantsLoading">Загрузка…</SecondaryText>
+        <SecondaryText v-if="grantsLoading">Загрузка...</SecondaryText>
         <SecondaryText v-else-if="grants.length === 0">
           Награды в этой серии еще не выдавались
         </SecondaryText>
@@ -321,7 +325,7 @@ onMounted(async () => {
     color: $text
     font: inherit
 
-    &:focus
+    &:focus:not(:focus-visible)
       outline: none
       border-color: $link
 

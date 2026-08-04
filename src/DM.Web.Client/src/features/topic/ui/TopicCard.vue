@@ -3,10 +3,13 @@
  * TopicCard — the presentational "topic bubble" card.
  *
  * Single source of the topic-card markup and styles, shared by:
- *   - Topic.vue (forum topics: full navigation + viewer-dependent actions)
- *   - ProfileBestPublicationSection.vue (a blog publication rendered in the exact
- *     same visual shell, with non-applicable navigation and actions
- *     degraded to plain text / static indicators)
+ *   - TopicView.vue (forum topics: full navigation + viewer-dependent actions)
+ *   - PublicationCard.vue, which reaches it through the @x/publication door
+ *     (a blog publication rendered in the exact same visual shell, with
+ *     non-applicable navigation and actions degraded to plain text / static
+ *     indicators). That reuse is temporary and PublicationCard owns it: when
+ *     the publication gets a design of its own the change happens there, and
+ *     this card stays a forum concern.
  *
  * The component takes only display-ready values (no domain DTOs) because
  * the forum Topic type is built from Served<...> branded fields that cannot
@@ -62,7 +65,9 @@ const props = withDefaults(
     commentsTo?: RouteLocationRaw | null;
     /** Unread comments count (authenticated forum view only). */
     unreadCommentsCount?: number;
-    /** Unread-comments deep link; null disables the unread affordance. */
+    /** Where the viewer continues reading; null (a guest) falls back to the
+     * plain comments link. Independent of the unread count on purpose: with
+     * nothing unread this target answers with the topic's last comment. */
     unreadTo?: RouteLocationRaw | null;
     /** Users who liked the content (usernames drive the tooltip). */
     likes?: Array<{ username: Username }>;
@@ -72,7 +77,7 @@ const props = withDefaults(
     isLikedByMe?: boolean;
     /** Whether the moderator warn action is available. */
     canWarn?: boolean;
-    /** Topic is closed — renders the lock + "Тема закрыта" badge (doc 4.2.2.17). */
+    /** Topic is closed — renders the lock + "Топик закрыт" badge (doc 4.2.2.17). */
     isClosed?: boolean;
     /** Author/moderator lifecycle affordances (forum topic only). */
     canEdit?: boolean;
@@ -173,8 +178,11 @@ function initCardBbcode(el: HTMLElement) {
         {{ title }}
       </router-link>
       <template v-else>{{ title }}</template>
-      <span v-if="isClosed" class="closed-badge">
-        <SvgIcon name="locked" class="closed-icon" />Тема закрыта</span
+      <template v-if="isClosed"
+        >{{ " "
+        }}<span class="closed-badge">
+          <SvgIcon name="locked" class="closed-icon" />Топик закрыт</span
+        ></template
       >
       <!-- Optional owner-injected title tail (e.g. the digest topics'
            all-statistics link). -->
@@ -183,7 +191,7 @@ function initCardBbcode(el: HTMLElement) {
 
     <!-- Standalone closed badge when the card renders without a title. -->
     <div v-else-if="isClosed" class="closed-badge closed-badge-standalone">
-      <SvgIcon name="locked" class="closed-icon" />Тема закрыта
+      <SvgIcon name="locked" class="closed-icon" />Топик закрыт
     </div>
 
     <!-- Content. Skipped entirely for topics with no text (legal per the
@@ -231,23 +239,26 @@ function initCardBbcode(el: HTMLElement) {
           | Отредактировано {{ formattedEditDate }}</template
         >
         <!-- Product decision (2026-07-11): the card counter is the viewer's
-             UNREAD count — including an honest 0 when everything is read.
+             UNREAD count, including an honest 0 when everything is read.
              Guests have no read tracking, so for them (unreadTo is null)
              everything is unread and the counter shows the total. The
              "total (unread)" pair is a table convention, not a card one.
-             With 0 unread the ?unread=1 deep link is pointless, so the
-             number links to the plain comments target instead. -->
+             The TARGET does not depend on that number. It used to: at 0 unread
+             the link fell back to the top of the topic, and the counter is
+             zeroed the moment the topic opens, so the second click on the same
+             link always landed at the beginning. The resolver answers with the
+             last comment instead. -->
         | Комментарии (<router-link
-          v-if="unreadTo && unreadCommentsCount"
+          v-if="unreadTo"
           :to="unreadTo"
-          class="unread-link"
+          class="comments-link"
           >{{ unreadCommentsCount }}</router-link
         ><router-link
           v-else-if="commentsTo"
           :to="commentsTo"
           class="comments-link"
-          >{{ unreadTo ? unreadCommentsCount : commentsCount }}</router-link
-        ><span v-else>{{ unreadTo ? unreadCommentsCount : commentsCount }}</span
+          >{{ commentsCount }}</router-link
+        ><span v-else>{{ commentsCount }}</span
         >)</span
       >
 
@@ -391,11 +402,6 @@ function initCardBbcode(el: HTMLElement) {
   &:hover
     color: $link-hover
 
-.unread-link
-  color: $link
-  &:hover
-    color: $link-hover
-
 .topic-actions
   display: inline-flex
   align-items: center
@@ -424,7 +430,7 @@ function initCardBbcode(el: HTMLElement) {
     color: $accent-red
 
 // Non-interactive like indicator (own content / guest / preview): shows the
-// count without a clickable affordance, matching Comment.vue's .like-static.
+// count without a clickable affordance, matching CommentItem.vue's .like-static.
 .like-static
   display: inline-flex
   align-items: center
@@ -454,19 +460,19 @@ function initCardBbcode(el: HTMLElement) {
   &.delete-btn:hover
     color: $accent-red
 
-// Closed-topic badge (lock + "Тема закрыта"), sits next to the heading.
+// Closed-topic badge (lock + "Топик закрыт"), sits next to the heading. The gap
+// in front of it is the " " text node in the title, not a margin: a margin is
+// drawn but not copied, and the title used to reach the clipboard glued.
 .closed-badge
   display: inline-flex
   align-items: center
   gap: $tiny
-  margin-left: $small
   color: $accent-red
   font-size: $secondary-font-size
   font-weight: normal
   vertical-align: middle
 
 .closed-badge-standalone
-  margin-left: 0
   margin-bottom: $small
 
 .closed-icon

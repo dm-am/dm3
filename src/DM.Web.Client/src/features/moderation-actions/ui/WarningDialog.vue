@@ -161,7 +161,7 @@ function pointsErrors(): string[] {
       :valid="canSubmit"
       :loading="sending"
       action="Отправить предупреждение"
-      cancel="Отменить"
+      cancel="Отмена"
       @submit="submit"
       @cancel="emit('cancel')"
     >

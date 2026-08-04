@@ -52,14 +52,18 @@ export default new (class uploadApi {
    * and is Admin-gated server-side (UploadIntention.ListUser).
    */
   public getUploads(params?: {
-    username?: string;
+    /** 1-based page number; the wire takes skip/take like every other list. */
     number?: number;
+    /** page size 1-100 */
     size?: number;
+    username?: string;
   }) {
+    const pageSize = params?.size ?? 20;
+    const pageNumber = params?.number ?? 1;
     return Api.get<ListEnvelope<Upload>>("uploads", {
       username: params?.username,
-      number: params?.number,
-      size: params?.size,
+      skip: pageNumber > 1 ? (pageNumber - 1) * pageSize : undefined,
+      take: pageSize,
     });
   }
 

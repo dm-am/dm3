@@ -8,7 +8,7 @@ using MongoDB.Bson.Serialization;
 using MongoDB.Driver;
 using Xunit;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
-using DbPoll = DM.Infrastructure.Persistence.Entities.Forum.Poll;
+using DbPoll = DM.Infrastructure.Persistence.Entities.Community.Poll;
 using DbTopic = DM.Infrastructure.Persistence.Entities.Forum.Topic;
 
 namespace DM.Infrastructure.Persistence.Tests.Shared.Queries;

@@ -18,7 +18,7 @@ using DM.Domain.Core.Mail;
 namespace DM.Workers.Mail;
 
 /// <inheritdoc />
-internal class MailSendingProcessor : IProcessor<string, EmailLetter>
+internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposable, IAsyncDisposable
 {
     private readonly ILogger<MailSendingProcessor> _logger;
     private readonly ICorrelationTokenProvider _correlationTokenProvider;
@@ -63,6 +63,76 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>
 
         await _client.Value.SendAsync(mimeMessage, cancellationToken);
         return ProcessResult.Success;
+    }
+
+    /// <summary>
+    /// Closes the SMTP session this processor opened, if it opened one.
+    /// </summary>
+    /// <remarks>
+    /// A processor is resolved from a fresh scope for every delivered letter, and
+    /// a scope releases only what it can see as disposable. Without this the
+    /// session stays connected and authenticated until a finalizer happens to
+    /// reach the socket: relays cap concurrent connections per address, and past
+    /// the cap every further letter is retried, dead-lettered and never delivered
+    /// — activation and password reset mail included.
+    /// </remarks>
+    public async ValueTask DisposeAsync()
+    {
+        // A lazy factory that threw leaves IsValueCreated false: nothing was opened
+        if (!_client.IsValueCreated)
+        {
+            return;
+        }
+
+        var client = _client.Value;
+        try
+        {
+            if (client.IsConnected)
+            {
+                // Quit rather than drop: a socket closed without QUIT leaves the
+                // relay counting the session until its own idle timeout expires
+                await client.DisconnectAsync(true, CancellationToken.None);
+            }
+        }
+        catch (Exception e)
+        {
+            // Best effort: the letter is already sent, and throwing from disposal
+            // would fail a message the consumer would then redeliver
+            _logger.LogWarning(e, "Could not close the SMTP session cleanly");
+        }
+
+        client.Dispose();
+    }
+
+    /// <summary>
+    /// Synchronous fallback, for a scope that is disposed synchronously.
+    /// </summary>
+    /// <remarks>
+    /// Both paths exist because the container picks one by how the scope is
+    /// closed, and a type that is only IAsyncDisposable gets disposed
+    /// sync-over-async — on a network round trip that is worth avoiding.
+    /// </remarks>
+    public void Dispose()
+    {
+        if (!_client.IsValueCreated)
+        {
+            return;
+        }
+
+        var client = _client.Value;
+        try
+        {
+            if (client.IsConnected)
+            {
+                client.Disconnect(true, CancellationToken.None);
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "Could not close the SMTP session cleanly");
+        }
+
+        client.Dispose();
     }
 
     private static MimeEntity BuildMessageBody(EmailLetter message)

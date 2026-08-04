@@ -12,7 +12,9 @@ namespace DM.Web.API.Features.Personal.Notifications;
 /// </summary>
 /// <remarks>
 /// Provides REST endpoints for reading and managing notifications.
-/// Real-time notifications are delivered via SignalR hub at /notifications.
+/// Real-time notifications are delivered over the SignalR hub; its path is
+/// declared where the hub is mapped and in API_DESIGN.md, and is not repeated
+/// here — this third copy named an endpoint that never existed.
 ///
 /// ## Notification Types
 /// - New messages in conversations

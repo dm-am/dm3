@@ -43,7 +43,7 @@ public class MappingConfigurationShould : IntegrationTestBase
         configuration.AssertConfigurationIsValid();
     }
 
-[Fact]
+    [Fact]
     public void KeepTheEditTimestampWhenMappingAComment()
     {
         var mapper = DatabaseFixture.Factory.Services.GetRequiredService<IMapper>();

@@ -12,7 +12,6 @@ namespace DM.Domain.Account.Tests.Features.Availability;
 
 public class AvailabilityServiceShould : UnitTestBase
 {
-    private readonly Mock<IEmailLookupRepository> _emailLookupRepository;
     private readonly Mock<IRegistrationRepository> _registrationRepository;
     private readonly Mock<IUsernameChangeRepository> _usernameChangeRepository;
     private readonly Mock<IUsernameHistoryRepository> _usernameHistoryRepository;
@@ -20,13 +19,11 @@ public class AvailabilityServiceShould : UnitTestBase
 
     public AvailabilityServiceShould()
     {
-        _emailLookupRepository = Mock<IEmailLookupRepository>();
         _registrationRepository = Mock<IRegistrationRepository>();
         _usernameChangeRepository = Mock<IUsernameChangeRepository>();
         _usernameHistoryRepository = Mock<IUsernameHistoryRepository>();
 
         _service = new AvailabilityService(
-            _emailLookupRepository.Object,
             _registrationRepository.Object,
             _usernameChangeRepository.Object,
             _usernameHistoryRepository.Object);
@@ -36,7 +33,8 @@ public class AvailabilityServiceShould : UnitTestBase
     public async Task ReturnAvailableForUnusedEmail()
     {
         var email = "newuser@example.com";
-        _emailLookupRepository.Setup(r => r.GetUserByEmail(email, It.IsAny<CancellationToken>())).ReturnsAsync((EmailLookupInfo?)null);
+        _registrationRepository.Setup(r => r.EmailFreeForNewRegistration(email, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
         _registrationRepository.Setup(r => r.FindPendingByEmail(email, It.IsAny<CancellationToken>()))
             .ReturnsAsync((PendingRegistration?)null);
 
@@ -45,12 +43,15 @@ public class AvailabilityServiceShould : UnitTestBase
         result.IsAvailable.Should().BeTrue();
     }
 
+    /// <summary>
+    /// Deactivated accounts included: they keep their address, and the probe has to say so.
+    /// </summary>
     [Fact]
-    public async Task ReturnUnavailableWhenEmailIsTakenByActiveUser()
+    public async Task ReturnUnavailableWhenEmailIsHeldByAnyAccount()
     {
         var email = "existing@example.com";
-        _emailLookupRepository.Setup(r => r.GetUserByEmail(email, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new EmailLookupInfo { Email = email });
+        _registrationRepository.Setup(r => r.EmailFreeForNewRegistration(email, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
 
         var result = await _service.CheckEmailAvailability(email);
 
@@ -62,7 +63,8 @@ public class AvailabilityServiceShould : UnitTestBase
     public async Task ReturnUnavailableWhenEmailHasPendingRegistration()
     {
         var email = "pending@example.com";
-        _emailLookupRepository.Setup(r => r.GetUserByEmail(email, It.IsAny<CancellationToken>())).ReturnsAsync((EmailLookupInfo?)null);
+        _registrationRepository.Setup(r => r.EmailFreeForNewRegistration(email, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
         _registrationRepository.Setup(r => r.FindPendingByEmail(email, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new PendingRegistration { Email = email });
 

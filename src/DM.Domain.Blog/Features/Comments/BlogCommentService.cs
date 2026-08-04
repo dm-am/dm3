@@ -65,7 +65,7 @@ internal class BlogCommentService : IBlogCommentService
         var currentUser = _identityProvider.Current.User;
         if (blog.BlacklistedUserIds.Contains(currentUser.UserId))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "You are blacklisted from this blog");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromBlog);
         }
 
         // Strip [mod] authored by a non-moderator (it renders as a green mod
@@ -102,7 +102,7 @@ internal class BlogCommentService : IBlogCommentService
     public async Task<Comment> GetAsync(Guid commentId)
     {
         return await _repository.Get(commentId) ??
-               throw new HttpException(HttpStatusCode.NotFound, $"Comment {commentId} not found");
+               throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));
     }
 
     /// <inheritdoc />
@@ -113,11 +113,24 @@ internal class BlogCommentService : IBlogCommentService
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Edit, comment);
 
+        // Rewriting a comment publishes text exactly as writing one does, so the
+        // ban is asked here too, on the terms BlogIntention.CreateComment sets:
+        // the user's own blog stays open. Only the author is asked, a moderator
+        // editing somebody else's comment is moderating and a ban takes no
+        // moderator tool away. The blog is read inside the condition because
+        // whose blog it is only matters to somebody the ban actually restricts.
+        var currentUser = _identityProvider.Current.User;
+        if (comment.Author?.UserId == currentUser.UserId && !currentUser.MaySpeak())
+        {
+            var blog = await _blogService.GetBlogAsync(comment.EntityId);
+            currentUser.ThrowIfMayNotComment(inOwnSpace: blog.IsOwnBlog(currentUser.UserId));
+        }
+
         var text = updateComment.Text?.Trim();
         if (!string.IsNullOrEmpty(text))
         {
             // Strip [mod] authored by a non-moderator before comparing/saving.
-            text = ModBlockSanitizer.SanitizeForAuthor(text, _identityProvider.Current.User.Role);
+            text = ModBlockSanitizer.SanitizeForAuthor(text, currentUser.Role);
         }
         if (string.IsNullOrEmpty(text) || text == comment.Text)
         {
@@ -143,7 +156,7 @@ internal class BlogCommentService : IBlogCommentService
         var comment = await _repository.GetForDelete(commentId);
         if (comment == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, $"Comment {commentId} not found");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));
         }
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Delete, (Comment)comment);
@@ -151,7 +164,7 @@ internal class BlogCommentService : IBlogCommentService
         Guid? newLastCommentId = null;
         if (comment.IsLastComment)
         {
-            newLastCommentId = await _repository.GetSecondLastCommentId(comment.BlogId);
+            newLastCommentId = await _repository.GetNewestCommentIdExcept(comment.BlogId, commentId);
         }
 
         var entity = new DeleteBlogCommentEntity

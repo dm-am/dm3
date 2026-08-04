@@ -101,13 +101,19 @@ const columns: Column[] = [
   {
     key: "status",
     label: "Статус игры",
-    width: "18%",
+    width: "16.3%",
     align: "left",
   },
+  // One column, one meaning. It used to hold two counts behind a muted "/" —
+  // reviews OF THE GAME and ratings of POSTS in it — told apart only by an
+  // aria-label. A listing of games is about games, so the column keeps the
+  // reviews; the ratings of posts address a player's post and are a row of the
+  // game's own fact table now. The 1.7% comes out of "Статус игры", the only
+  // column with spare width, so the header word fits inside its cell.
   {
     key: "reviews",
-    label: "Отзывы",
-    width: "6%",
+    label: "Рецензии",
+    width: "7.7%",
     align: "center",
     hideOnMobile: true,
   },
@@ -329,27 +335,15 @@ function pagingAnchor(): HTMLElement | null {
 
       <!-- Reviews column -->
       <template #cell-reviews="{ row }">
-        <span class="reviews-cell">
-          <router-link
-            :to="{
-              name: 'game-reviews',
-              params: { id: row.publicId || row.id },
-            }"
-            class="review-link"
-            :aria-label="`Отзывы об игре: ${row.gameReviewsCount ?? 0}`"
-            >{{ row.gameReviewsCount ?? 0 }}</router-link
-          >
-          <span class="muted" aria-hidden="true">/</span>
-          <router-link
-            :to="{
-              name: 'game-post-reviews',
-              params: { id: row.publicId || row.id },
-            }"
-            class="review-link"
-            :aria-label="`Отзывы о постах: ${row.postReviewsCount ?? 0}`"
-            >{{ row.postReviewsCount ?? 0 }}</router-link
-          >
-        </span>
+        <router-link
+          :to="{
+            name: 'game-reviews',
+            params: { id: row.publicId || row.id },
+          }"
+          class="review-link"
+          :aria-label="`Рецензии: ${row.gameReviewsCount ?? 0}`"
+          >{{ row.gameReviewsCount ?? 0 }}</router-link
+        >
       </template>
 
       <!-- Readers column -->
@@ -404,9 +398,6 @@ function pagingAnchor(): HTMLElement | null {
       color: $link-hover
   // .search-highlight styled globally in Reset.sass
 
-.muted
-  color: $text-muted
-
 .tags-list
   line-height: 1.4
   word-wrap: break-word
@@ -438,9 +429,6 @@ function pagingAnchor(): HTMLElement | null {
 .assistant-count
   color: $text-muted
   cursor: help
-
-.reviews-cell
-  white-space: nowrap
 
 .review-link
   color: $link

@@ -84,12 +84,36 @@ public interface IMessagingApiService
         int limit = 50);
 
     /// <summary>
+    /// Get list of game room chat messages with cursor-based pagination
+    /// </summary>
+    /// <remarks>
+    /// For the game chat room endpoints, which authorize by the room. The chat
+    /// endpoints must keep using the general reader above.
+    /// </remarks>
+    /// <param name="chatId">Chat identifier</param>
+    /// <param name="cursor">Opaque cursor for pagination</param>
+    /// <param name="limit">Maximum number of messages to return</param>
+    /// <returns>List of messages with cursor-based pagination metadata</returns>
+    Task<CursorEnvelope<Message>> GetGameRoomMessagesWithCursorAsync(
+        Guid chatId,
+        string? cursor = null,
+        int limit = 50);
+
+    /// <summary>
     /// Create new message
     /// </summary>
     /// <param name="chatId">Chat identifier</param>
     /// <param name="message">Message</param>
     /// <returns>Created message wrapped in envelope</returns>
     Task<Envelope<Message>> CreateMessageAsync(Guid chatId, Message message);
+
+    /// <summary>
+    /// Create new message in a game room chat
+    /// </summary>
+    /// <param name="chatId">Chat identifier</param>
+    /// <param name="message">Message</param>
+    /// <returns>Created message wrapped in envelope</returns>
+    Task<Envelope<Message>> CreateGameRoomMessageAsync(Guid chatId, Message message);
 
     /// <summary>
     /// Get single message

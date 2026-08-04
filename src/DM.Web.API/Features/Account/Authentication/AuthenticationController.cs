@@ -17,7 +17,8 @@ namespace DM.Web.API.Features.Account.Authentication;
 /// <remarks>
 /// Manages user sessions using cookie-based authentication (BFF pattern).
 /// All endpoints are rate-limited to prevent brute-force attacks.
-/// Session cookies are HttpOnly and SameSite=Strict for security.
+/// Session cookies are HttpOnly and SameSite=Lax: Lax still travels on top-level
+/// navigation, which the activation and password-reset links sent by mail depend on.
 /// </remarks>
 [ApiController]
 [Route("v1/account")]
@@ -67,8 +68,8 @@ public class AuthenticationController : ControllerBase
         if (!string.IsNullOrWhiteSpace(request.Website))
         {
             throw new HttpBadRequestException(
-                new Dictionary<string, string> { ["identifier"] = "Invalid login attempt" },
-                "Invalid request");
+                new Dictionary<string, string> { ["identifier"] = "Не удалось войти" },
+                RefusalMessage.InvalidData);
         }
 
         var result = await _authenticationApiService.Login(request, HttpContext);

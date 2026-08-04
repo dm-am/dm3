@@ -22,7 +22,7 @@ public class CreateTicketIntakeRequest
     public string Subject { get; set; } = "";
 
     /// <summary>
-    /// Ticket text (BBCode)
+    /// Ticket text (plain text, no markup)
     /// </summary>
     /// <example>The page shows an error when I open it...</example>
     public string Text { get; set; } = "";
@@ -61,8 +61,8 @@ public class CreateTicketIntakeResponse
     /// <summary>
     /// Public tracking token for guest submissions. Present only for guests —
     /// null for authenticated authors, who track their tickets from
-    /// "Мои обращения". Used to build the guest tracking URL
-    /// (GET /v1/tickets/track/{token}).
+    /// "Мои обращения". Sent back on the guest tracking call in the
+    /// X-Dm-Ticket-Token header (GET /v1/tickets/track).
     /// </summary>
     public string? TrackingToken { get; set; }
 }
