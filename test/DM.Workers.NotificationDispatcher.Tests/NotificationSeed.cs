@@ -149,14 +149,17 @@ internal static class NotificationSeed
     };
 
     private static PostPendency Pendency(
-        Guid id, Guid? waitingForUserId, DateTimeOffset created, DateTimeOffset? fulfilled) => new()
+        Guid id, Guid? waitingForUserId, DateTimeOffset created, DateTimeOffset? fulfilled)
     {
-        PendencyId = id,
-        RoomId = RoomId,
-        CharacterId = CharacterId,
-        WaitingForUserId = waitingForUserId,
-        CreatedById = MasterId,
-        CreatedUtc = created,
-        FulfilledUtc = fulfilled
-    };
+        return new PostPendency
+        {
+            PendencyId = id,
+            RoomId = RoomId,
+            CharacterId = CharacterId,
+            WaitingForUserId = waitingForUserId,
+            CreatedById = MasterId,
+            CreatedUtc = created,
+            FulfilledUtc = fulfilled
+        };
+    }
 }
