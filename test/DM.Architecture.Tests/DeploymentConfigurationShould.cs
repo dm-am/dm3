@@ -980,36 +980,43 @@ public class DeploymentConfigurationShould
     /// the tree.
     /// </remarks>
     [Fact]
-    public void InstallFromTheBranchTheDocumentedCommandDownloads()
+    public void InstallFromTheRefTheDocumentedCommandDownloads()
     {
         var installer = File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh"));
 
-        var fallback = Regex.Match(installer, @"DM_BRANCH=""\$\{DM_BRANCH:-([\w.\-/]+)\}""");
-        fallback.Success.Should().BeTrue(
-            "the installer picks the branch it clones, and it has to name a default");
+        Regex.IsMatch(installer, @"DM_REF=""\$\{DM_REF:-").Should().BeTrue(
+            "the installer picks what it clones, and it has to name a default for a " +
+            "command that passes nothing");
+
+        Regex.IsMatch(installer, @"git clone --branch ""\$DM_REF""").Should().BeTrue(
+            "the clone takes the ref the caller asked for, not a second name for it");
 
         // README.md is in the walk because it is the first page a reader meets and
         // the earlier version of this test scanned docs/ alone: the one file most
         // likely to carry the install command was the one file exempt from it.
-        var guides = Directory.GetFiles(
-            Path.Combine(RepositoryRoot, "docs"), "*.md", SearchOption.AllDirectories);
-        var sources = guides
+        var sources = Directory
+            .GetFiles(Path.Combine(RepositoryRoot, "docs"), "*.md", SearchOption.AllDirectories)
             .Append(Path.Combine(RepositoryRoot, "README.md"))
             .Append(Path.Combine(DockerDirectory, "setup-server.sh"));
 
-        var branches = sources
+        var refs = sources
             .SelectMany(path => Regex.Matches(
                 File.ReadAllText(path),
-                @"raw\.githubusercontent\.com/[\w.\-]+/[\w.\-]+/([\w.\-]+)/docker/setup-server\.sh")
-                .Select(match => (Path.GetFileName(path), Branch: match.Groups[1].Value)))
+                @"raw\.githubusercontent\.com/[\w.\-]+/[\w.\-]+/([^/]+)/docker/setup-server\.sh")
+                .Select(match => (File: Path.GetFileName(path), Ref: match.Groups[1].Value)))
             .ToList();
 
-        branches.Should().NotBeEmpty(
-            "the automatic installation is documented as a URL with the branch in its path");
-        foreach (var (file, branch) in branches)
+        refs.Should().NotBeEmpty(
+            "the automatic installation is documented as a URL with the ref in its path");
+
+        // The ref is written once and read twice. A literal in the path hands out a
+        // script from one tree that clones another the moment the default moves, and
+        // that is exactly how a stand ended up on dev's images under main's compose.
+        foreach (var (file, reference) in refs)
         {
-            branch.Should().Be(fallback.Groups[1].Value,
-                $"{file} hands out a script that clones another branch than the one it downloads");
+            reference.Should().Be("$DM_REF",
+                $"{file} spells the ref out instead of passing the one the operator chose, " +
+                "so the script downloaded and the tree cloned drift apart");
         }
     }
 

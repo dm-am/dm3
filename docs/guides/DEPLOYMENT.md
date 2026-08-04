@@ -47,8 +47,14 @@ Internet → Nginx → Frontend (Vue.js)
 ### Автоматическая установка
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/dm-am/dm3/dev/docker/setup-server.sh | bash
+DM_REF=<тег>
+curl -sSL https://raw.githubusercontent.com/dm-am/dm3/$DM_REF/docker/setup-server.sh | DM_REF=$DM_REF bash
 ```
+
+`DM_REF` — тег релиза. Он же выбирает тег образов, которые поднимет стенд. Ветка
+тоже принимается, но это установка с движущейся цели: две одинаковые команды в
+разные дни дадут разные стенды, и установщик про это скажет вслух, назвав коммит.
+Для разработческого стенда так и надо, для боевого — нет.
 
 Результат: http://<IP> за Basic Auth. Логин `preview`, пароль задает оператор: перед установкой `export DM_PREVIEW_PASSWORD=ваш_пароль`, иначе установщик остановится. Файл `docker/nginx/.htpasswd` в репозитории не хранится, его создает [`docker/scripts/init-htpasswd.sh`](../../docker/scripts/init-htpasswd.sh) на сервере. Сменить пароль: [Смена пароля](#preview-окружение).
 
