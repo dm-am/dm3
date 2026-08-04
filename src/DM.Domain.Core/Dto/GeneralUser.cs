@@ -239,5 +239,5 @@ public class GeneralUser : IUser
     /// posts - so removing a post was enough to make the badge on the profile and
     /// the right to write a review disagree about one person.
     /// </summary>
-    public bool IsNewbie => QuantityRating < ProbationPolicy.NewbiePostThreshold;
+    public bool IsNewbie => ProbationPolicy.IsNewbie(QuantityRating);
 }

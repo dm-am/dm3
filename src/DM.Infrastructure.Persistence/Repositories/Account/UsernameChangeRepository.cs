@@ -200,4 +200,33 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
     /// <inheritdoc />
     public Task SaveChanges(CancellationToken ct = default) =>
         _dbContext.SaveChangesAsync(ct);
+
+    /// <inheritdoc />
+    public Task<int> ExpireUnreviewedRequests(
+        DateTimeOffset createdBefore,
+        DateTimeOffset resolvedUtc,
+        string comment,
+        CancellationToken ct = default) =>
+        _dbContext.UsernameChangeRequests
+            .TagWith("DM.Account.ExpireUnreviewedUsernameChanges")
+            .Where(r => r.Status == UsernameChangeRequestStatus.Pending && r.CreatedUtc < createdBefore)
+            .ExecuteUpdateAsync(
+                s => s.SetProperty(r => r.Status, UsernameChangeRequestStatus.Expired)
+                      .SetProperty(r => r.ResolvedUtc, resolvedUtc)
+                      .SetProperty(r => r.ResolverComment, comment),
+                ct);
+
+    /// <inheritdoc />
+    public Task<int> ExpireApprovalTokens(
+        DateTimeOffset now, string commentSuffix, CancellationToken ct = default) =>
+        _dbContext.UsernameChangeRequests
+            .TagWith("DM.Account.ExpireUsernameChangeApprovals")
+            .Where(r => r.Status == UsernameChangeRequestStatus.Approved &&
+                        r.ApprovalTokenExpiresUtc.HasValue &&
+                        r.ApprovalTokenExpiresUtc.Value < now)
+            .ExecuteUpdateAsync(
+                s => s.SetProperty(r => r.Status, UsernameChangeRequestStatus.Expired)
+                      .SetProperty(r => r.ApprovalToken, (Guid?)null)
+                      .SetProperty(r => r.ResolverComment, r => r.ResolverComment + commentSuffix),
+                ct);
 }

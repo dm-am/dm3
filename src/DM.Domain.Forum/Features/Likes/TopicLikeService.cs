@@ -52,7 +52,7 @@ internal class TopicLikeService : ITopicLikeService
         var currentUserId = _identityProvider.Current.User.UserId;
         if (topic.Author != null && await _userBlacklistChecker.IsBlockedAsync(topic.Author.UserId, currentUserId))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Вы не можете поставить лайк этой теме");
+            throw new HttpException(HttpStatusCode.Forbidden, "Вы не можете поставить лайк этому топику");
         }
 
         return await _likeOperations.LikeAsync(topic, EventType.LikedTopic);

@@ -31,8 +31,9 @@ test.describe("Password Reset Flow", () => {
     await page.waitForTimeout(2500);
 
     await page.click('button[type="submit"]');
-    // Should show success or confirmation message
-    await expect(page.locator(".success-message, .confirmation")).toBeVisible({
+    // The form swaps itself for "Проверьте почту". ".success-message" and
+    // ".confirmation" named nothing: the block is .success-content.
+    await expect(page.locator(".success-content")).toBeVisible({
       timeout: 10000,
     });
   });

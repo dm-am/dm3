@@ -16,9 +16,14 @@ import type { Locator, Page } from "@playwright/test";
  * So: no `if` around an assertion. A locator that finds nothing must fail.
  */
 
-/** The left-sidebar block that carries per-game navigation. */
+/**
+ * The left-sidebar block that carries per-game navigation. SidebarBlock
+ * identifies itself by token, not by a class: `.sidebar-block` was the second
+ * invented selector in this file's history, and it went in as the fix for the
+ * first.
+ */
 const gameMenu = (page: Page): Locator =>
-  page.locator(".sidebar-block").filter({ hasText: "Меню игры" });
+  page.locator("#sidebar-list-GamePanel");
 
 const roster = (page: Page): Locator => page.locator(".game-characters");
 

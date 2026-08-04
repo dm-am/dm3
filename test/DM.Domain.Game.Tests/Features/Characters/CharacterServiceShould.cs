@@ -331,9 +331,10 @@ public class CharacterServiceShould : UnitTestBase
     /// A field the caller may not set is refused, not dropped. The update asked
     /// IsAllowed and, on a no, left the value out: the request came back 200 with
     /// the character unchanged, which is exactly what a successful edit looks like.
-    /// One test for the pattern - the same shape guarded the privacy policy beside
-    /// this flag, the closed and attached flags of a forum topic, and the text of a
-    /// game post.
+    /// The same shape guarded the privacy policy beside this flag, the closed and
+    /// attached flags of a forum topic and the text of a game post; each of those
+    /// is held by a test of its own, because one test for a shape leaves the other
+    /// three points free to go back to dropping in silence.
     /// </summary>
     [Fact]
     public async Task RefuseAnNpcFlagTheCallerMayNotSet()
@@ -377,5 +378,63 @@ public class CharacterServiceShould : UnitTestBase
 
         _intentionManager.Verify(
             m => m.ThrowIfForbidden(CharacterIntention.EditMasterSettings), Times.Never);
+    }
+
+    /// <summary>
+    /// The second field on the same update, held separately: who may see the
+    /// character is a privacy decision, and answering a denied change with the
+    /// old policy and a 200 tells the owner it is set the way he asked.
+    /// </summary>
+    [Fact]
+    public async Task RefuseAnAccessPolicyTheCallerMayNotSet()
+    {
+        var characterId = Guid.NewGuid();
+        _repository.Setup(r => r.GetForUpdate(characterId)).ReturnsAsync(
+            new CharacterToUpdate
+            {
+                Id = characterId,
+                GameId = Guid.NewGuid(),
+                AccessPolicy = CharacterAccessPolicy.NoAccess
+            });
+        _repository.Setup(r => r.Update(It.IsAny<UpdateCharacterEntity>()))
+            .ReturnsAsync(new Character { Id = characterId });
+
+        await _service.UpdateAsync(new UpdateCharacter
+        {
+            CharacterId = characterId,
+            Name = "Updated",
+            AccessPolicy = CharacterAccessPolicy.EditAllowed
+        });
+
+        _intentionManager.Verify(
+            m => m.ThrowIfForbidden(CharacterIntention.EditPrivacySettings), Times.Once);
+    }
+
+    /// <summary>
+    /// And the same exemption: the round-tripped policy is not a change.
+    /// </summary>
+    [Fact]
+    public async Task NotAskForPrivacySettingsWhenTheAccessPolicyIsUnchanged()
+    {
+        var characterId = Guid.NewGuid();
+        _repository.Setup(r => r.GetForUpdate(characterId)).ReturnsAsync(
+            new CharacterToUpdate
+            {
+                Id = characterId,
+                GameId = Guid.NewGuid(),
+                AccessPolicy = CharacterAccessPolicy.EditAllowed
+            });
+        _repository.Setup(r => r.Update(It.IsAny<UpdateCharacterEntity>()))
+            .ReturnsAsync(new Character { Id = characterId });
+
+        await _service.UpdateAsync(new UpdateCharacter
+        {
+            CharacterId = characterId,
+            Name = "Updated",
+            AccessPolicy = CharacterAccessPolicy.EditAllowed
+        });
+
+        _intentionManager.Verify(
+            m => m.ThrowIfForbidden(CharacterIntention.EditPrivacySettings), Times.Never);
     }
 }

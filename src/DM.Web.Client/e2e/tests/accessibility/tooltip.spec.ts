@@ -199,28 +199,20 @@ test.describe("Tooltip Accessibility", () => {
   });
 
   test.describe("Multiple Tooltips", () => {
+    // The precondition is asserted rather than tested for. The whole body used
+    // to sit inside `if (count >= 2)`, so the day the nav rendered one button
+    // or none this reported a passing test about a behaviour it never
+    // exercised — which is the shape the rest of this corpus was rewritten out
+    // of.
     test("only one tooltip is visible at a time", async ({ page }) => {
       const buttons = page.locator(".scroll-nav-btn");
-      const count = await buttons.count();
+      await expect(buttons.nth(1)).toBeVisible();
 
-      if (count >= 2) {
-        // Hover first button
-        await buttons.first().hover();
-        await page.waitForTimeout(300);
+      await buttons.first().hover();
+      await expect(page.locator('[role="tooltip"]')).toHaveCount(1);
 
-        // Should have one tooltip
-        let tooltips = page.locator('[role="tooltip"]');
-        expect(await tooltips.count()).toBe(1);
-
-        // Move to second button
-        await buttons.nth(1).hover();
-        await page.waitForTimeout(300);
-
-        // Should still have only one tooltip visible
-        tooltips = page.locator('[role="tooltip"]');
-        const visibleCount = await tooltips.count();
-        expect(visibleCount).toBeLessThanOrEqual(1);
-      }
+      await buttons.nth(1).hover();
+      await expect(page.locator('[role="tooltip"]')).toHaveCount(1);
     });
   });
 

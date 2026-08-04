@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Autofac;
 using Autofac.Core;
 using Autofac.Core.Lifetime;
@@ -91,6 +92,43 @@ public class CompositionRootShould
             "sections; IOptions of an unbound type hands out a default rather than " +
             "throwing, so the encryption key would be empty at the first call that " +
             "needs it instead of missing at startup");
+    }
+
+    /// <summary>
+    /// The seeder resolves the one component it runs on.
+    /// </summary>
+    /// <remarks>
+    /// It composes inside a private method of its entry point, so this class could
+    /// only read that file as text and never resolve anything out of it — which
+    /// left the tool the one executable whose container nothing built. It matters
+    /// now that the fixture scores its games and blogs through the site's own
+    /// popularity processors rather than through a copy of the calculation: those
+    /// classes are internal to their modules, so what makes them resolvable is a
+    /// pair of assembly scans and nothing the compiler checks. Without this, a
+    /// missing scan surfaces as a seeding run that dies before it writes a row.
+    /// </remarks>
+    [Fact]
+    public void SupplyEveryDependencyOfTheSeederOutOfTheContainerTheToolRunsOn()
+    {
+        using var host = DM.Tools.Seeder.Program.CreateHostBuilder().Build();
+        var container = host.Services.GetRequiredService<ILifetimeScope>();
+
+        var seeder = typeof(DM.Tools.Seeder.Seeding.DataSeeder);
+        var dependencies = Dependencies(seeder).ToList();
+
+        dependencies.Should().HaveCountGreaterThan(5,
+            "the tool takes both stores, the hashing, the identifiers and the popularity " +
+            "processors, and reading none of them would leave this rule checking nothing");
+
+        dependencies
+            .Where(dependency => !container.IsRegistered(dependency))
+            .Select(dependency => dependency.Name)
+            .Should().BeEmpty(
+                "the tool is composed by hand, and a dependency its container cannot " +
+                "supply is neither a build error nor a startup error: it is a seeding run " +
+                "that fails on the developer's machine after the database was already " +
+                "reset. Registration rather than activation, because activating a store " +
+                "client needs a store");
     }
 
     /// <summary>
@@ -298,6 +336,115 @@ public class CompositionRootShould
         unresolvable.Should().BeEmpty(
             "a dependency the container cannot supply is not a build error and not a startup " +
             "error: it surfaces on the first request or the first message that reaches the type");
+    }
+
+    /// <summary>
+    /// Every contract a background job asks the scope for is one the container can
+    /// supply.
+    /// </summary>
+    /// <remarks>
+    /// The rule above resolves the jobs themselves, and that used to be the whole
+    /// story: a job took its dependencies in its constructor, so resolving the job
+    /// walked the graph behind it. It stopped being the whole story when the jobs
+    /// were moved off the DbContext -- each one now takes IServiceProvider and a
+    /// logger and resolves its processor inside the timer tick, so a processor with
+    /// no registration is invisible to the compiler, invisible to the rule above,
+    /// and surfaces once a day as one LogError inside PeriodicHostedService.Pass.
+    /// Deleting the TokenMaintenanceRepository registration left all 192
+    /// architecture tests green while token retention was dead.
+    ///
+    /// The names are read out of the sources rather than listed here: a list would
+    /// have to be extended by the same person who forgets the registration.
+    /// </remarks>
+    [Fact]
+    public void ResolveEveryContractABackgroundJobAsksTheScopeFor()
+    {
+        // The namespace prefix is optional and dropped: the type is looked up by
+        // name, and a qualified spelling is the same contract.
+        var asked = new Regex(@"GetRequiredService<(?:[A-Za-z0-9_]+\.)*(?<name>I[A-Za-z0-9]+)>",
+            RegexOptions.Compiled);
+
+        var contracts = Directory
+            .EnumerateFiles(
+                Path.Combine(RepositoryRoot, "src", "DM.Web.API", "HostedServices"),
+                "*.cs",
+                SearchOption.AllDirectories)
+            .SelectMany(path => asked.Matches(File.ReadAllText(path))
+                .Select(match => match.Groups["name"].Value))
+            .Distinct()
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        contracts.Should().HaveCountGreaterThan(5,
+            "the jobs resolve their processors from the scope, and reading none of them " +
+            "would report green over an empty set");
+
+        var (_, container) = Hosts.Single(host => host.Host == "DM.Web.API");
+        using var scope = container.BeginLifetimeScope();
+
+        var types = container.ComponentRegistry.Registrations
+            .Select(registration => registration.Activator.LimitType)
+            .Where(IsAuthored)
+            .Select(type => type.Assembly)
+            .Distinct()
+            .SelectMany(assembly => assembly.GetTypes())
+            .Where(type => type.IsInterface)
+            .GroupBy(type => type.Name)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        var unresolvable = new List<string>();
+        foreach (var contract in contracts)
+        {
+            if (!types.TryGetValue(contract, out var type))
+            {
+                // Framework contracts (IMapper, IDateTimeProvider and the like) are
+                // not what this rule is about; the ones it is about live in the
+                // assemblies the host registers.
+                continue;
+            }
+
+            try
+            {
+                scope.Resolve(type);
+            }
+            catch (Exception failure)
+            {
+                unresolvable.Add($"{contract} - {failure.GetBaseException().Message}");
+            }
+        }
+
+        unresolvable.Should().BeEmpty(
+            "a job that cannot resolve its processor does not fail to start: it starts, " +
+            "ticks, and writes one line to the log a day while the work it exists for " +
+            "is not done");
+    }
+
+    /// <summary>
+    /// The sort vocabulary is enforced by a filter, and a filter enforces
+    /// nothing until it is registered.
+    /// </summary>
+    /// <remarks>
+    /// One line in Startup stands between "?sortBy=nonsense answers 400" and a
+    /// table plus a filter plus a Swagger extension that are all dead code. The
+    /// rule that catches its absence end to end needs Docker and Testcontainers
+    /// (SortRefusalShould), which is not something every checkout runs, and the
+    /// line went missing once already. This reads the same registration out of
+    /// the options the host composes, and needs neither.
+    /// </remarks>
+    [Fact]
+    public void RegisterTheFilterThatEnforcesTheSortVocabulary()
+    {
+        var (_, container) = Hosts.Single(host => host.Host == "DM.Web.API");
+
+        var options = container.Resolve<IOptions<MvcOptions>>().Value;
+
+        options.Filters
+            .OfType<TypeFilterAttribute>()
+            .Select(filter => filter.ImplementationType)
+            .Should().Contain(typeof(DM.Web.API.Shared.Sorting.SortVocabularyFilter),
+                "without it every list endpoint takes an unknown sort field, ignores it " +
+                "and answers 200 with the default order - which is the answer the finding " +
+                "was raised over");
     }
 
     private static IReadOnlyList<(string, IContainer)> BuildHosts() =>

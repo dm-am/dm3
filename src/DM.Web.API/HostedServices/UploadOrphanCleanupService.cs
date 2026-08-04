@@ -1,37 +1,23 @@
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Uploads;
-using DM.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace DM.Web.API.HostedServices;
 
 /// <summary>
-/// Background worker that physically deletes S3 objects for soft-deleted uploads.
-///
-/// Workflow:
-/// 1. Periodically (every N hours) selects Uploads.IsRemoved=true whose
-///    DeletedUtc is older than the grace period (24h by default).
-/// 2. For each such record deletes its single stored object — thumbnail
-///    variants are made on-the-fly by imgproxy and never stored, so there is
-///    nothing else to delete. A key that is already gone counts as removed.
-/// 3. Deletes the Upload record itself from the DB (hard-delete) only after every
-///    object was removed. If the store refused, the record stays and is retried
-///    on the next tick.
-///
-/// The grace period allows short-term recovery: the user clicked "удалить
-/// аватар", changed their mind — restore works within the first 24h.
+/// Runs the orphaned-upload sweep on a schedule.
 /// </summary>
+/// <remarks>
+/// The grace period, the batch and the "keep the row if the store refused" rule
+/// belong to <see cref="IUploadOrphanCollector" />; this only decides how often
+/// to ask.
+/// </remarks>
 internal class UploadOrphanCleanupService : PeriodicHostedService
 {
     private readonly ILogger<UploadOrphanCleanupService> _logger;
-    private readonly TimeSpan _gracePeriod = TimeSpan.FromHours(24);
-    private const int BatchSize = 200;
 
     public UploadOrphanCleanupService(
         IServiceProvider serviceProvider,
@@ -45,90 +31,20 @@ internal class UploadOrphanCleanupService : PeriodicHostedService
     protected override TimeSpan Interval => TimeSpan.FromHours(6);
 
     /// <inheritdoc />
-    protected override Task RunOnce(IServiceProvider scope, CancellationToken cancellationToken) =>
-        SweepAsync(scope, cancellationToken);
-
-    /// <summary>
-    /// One sweep pass. Internal rather than private so the regression test can
-    /// drive a single pass without running the timer loop.
-    /// </summary>
-    internal async Task SweepAsync(IServiceProvider scope, CancellationToken ct)
+    protected override async Task RunOnce(IServiceProvider scope, CancellationToken cancellationToken)
     {
-        var db = scope.GetRequiredService<DmDbContext>();
-        var objectStorage = scope.GetRequiredService<IObjectStorage>();
+        var swept = await scope
+            .GetRequiredService<IUploadOrphanCollector>()
+            .SweepAsync(cancellationToken);
 
-        // The grace period decides when a file is physically destroyed, so the
-        // deadline is measured by the injected clock: a test can move that one,
-        // the system clock it cannot.
-        var clock = scope.GetRequiredService<IDateTimeProvider>();
-        var cutoff = clock.Now - _gracePeriod;
-        var candidates = await db.Uploads
-            // Soft-deleted rows are exactly what this sweeper looks for, and
-            // the global query filter hides them: without IgnoreQueryFilters
-            // the predicate becomes "NOT IsRemoved AND IsRemoved" and no row
-            // can ever match, so nothing is ever deleted from S3.
-            .IgnoreQueryFilters()
-            .Where(u => u.IsRemoved && u.DeletedUtc != null && u.DeletedUtc < cutoff)
-            .OrderBy(u => u.DeletedUtc)
-            .Take(BatchSize)
-            .ToListAsync(ct);
-
-        if (candidates.Count == 0)
+        if (swept.Candidates == 0)
         {
             _logger.LogDebug("[Upload Orphan Cleanup] No orphans to remove");
             return;
         }
 
-        var deletedDbRows = 0;
-        var removedObjects = 0;
-
-        foreach (var upload in candidates)
-        {
-            var allObjectsRemoved = true;
-
-            foreach (var key in EnumerateKeys(upload.ObjectKey))
-            {
-                // The store answers whether the key holds anything now, and it
-                // owns both the "already gone is fine" rule and the log line
-                // for a refusal. What is left here is the decision only this
-                // sweeper can make: keep the row for the next tick.
-                if (await objectStorage.DeleteAsync(key, ct))
-                {
-                    removedObjects++;
-                }
-                else
-                {
-                    allObjectsRemoved = false;
-                }
-            }
-
-            if (allObjectsRemoved)
-            {
-                db.Uploads.Remove(upload);
-                deletedDbRows++;
-            }
-        }
-
-        if (deletedDbRows > 0)
-        {
-            await db.SaveChangesAsync(ct);
-        }
-
         _logger.LogInformation(
             "[Upload Orphan Cleanup] Swept {Candidates} candidate(s): removed {ObjectCount} objects + {DbCount} DB rows",
-            candidates.Count, removedObjects, deletedDbRows);
-    }
-
-    /// <summary>
-    /// Single source file per upload (thumbnails live only in the imgproxy
-    /// cache, not in S3 storage).
-    /// </summary>
-    private static System.Collections.Generic.IEnumerable<string> EnumerateKeys(string objectKey)
-    {
-        if (string.IsNullOrEmpty(objectKey))
-        {
-            yield break;
-        }
-        yield return objectKey;
+            swept.Candidates, swept.ObjectsRemoved, swept.RecordsDeleted);
     }
 }

@@ -26,14 +26,74 @@ const CLIENT_SRC = dirname(fileURLToPath(import.meta.url));
 const SKIP_DIRS = new Set(["node_modules", "dist", "coverage"]);
 
 /** An expression that ends in a count; an offset like `count - 3` still is one. */
+// "number" and "left" are deliberately absent: roomNumber is an ordinal
+// ("Комната №3 не открыта") and arrowLeft is a glyph.
 const COUNT_TAIL =
-  /(?:count|length|points|days|total|size)\s*(?:[-+]\s*\d+\s*)?$/i;
+  /(?:count|length|points|days|total|size|amount|quantity|remaining)\s*(?:[-+]\s*\d+\s*)?$/i;
 
-/** `{{ ... }}` and then a Russian word; a line wrap counts as the space. */
-const INTERPOLATED = /\{\{([^{}]*)\}\}\s*([А-Яа-я]{2,})(\.?)/g;
+/**
+ * A count the file gave a name of its own.
+ *
+ * Reading only the names above is a rule about vocabulary, not about counting,
+ * and the vocabulary loses: chat.ts spelled "и еще 4 оценили это" through
+ * `const rest = count - 3`, and the same sentence written with a name off the
+ * list was invisible. So every local binding whose initialiser is a count is a
+ * count as well — one hop, which is what a line of copy tends to be away from
+ * the number it prints.
+ */
+const NAMED_LOCALLY =
+  /(?:^|\n)\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*([^;\n]+)/g;
+
+/** An initialiser that produces a number. */
+function isCount(expression: string): boolean {
+  const text = expression.trim().replace(/\.value$/, "");
+  return (
+    COUNT_TAIL.test(text) ||
+    /\.(length|size)\b/.test(text) ||
+    /\bMath\.\w+\(/.test(text) ||
+    /^\d+$/.test(text)
+  );
+}
+
+/** The counts a single file names, `.value` unwrapped. */
+function countsNamedIn(parts: string[]): Set<string> {
+  const names = new Set<string>();
+  // Twice: a name can be defined out of another one defined below it in a
+  // template-first read, and one hop of chaining is cheap.
+  for (let pass = 0; pass < 2; pass++) {
+    for (const part of parts) {
+      NAMED_LOCALLY.lastIndex = 0;
+      for (
+        let hit = NAMED_LOCALLY.exec(part);
+        hit;
+        hit = NAMED_LOCALLY.exec(part)
+      ) {
+        const [, name, initialiser] = hit;
+        if (isCount(initialiser) || names.has(initialiser.trim())) {
+          names.add(name);
+        }
+      }
+    }
+  }
+  return names;
+}
+
+/**
+ * A run of interpolations and then a Russian word; a line wrap counts as the
+ * space. A run rather than one, because the count is not always the last of
+ * them: the editor's counter reads `${charCount.value}${limit} символов`, where
+ * the nearest mustache holds " / 500" or nothing at all, and reading only that
+ * one let the counter say "1 символов" on every screen that sets no limit.
+ */
+const INTERPOLATED = /((?:\{\{[^{}]*\}\}[ \t]*)+)\s*([А-Яа-я]{2,})(\.?)/g;
 
 /** The same seam inside a template literal. */
-const SUBSTITUTED = /\$\{([^{}]*)\}[ \t]*([А-Яа-я]{2,})(\.?)/g;
+const SUBSTITUTED = /((?:\$\{[^{}]*\}[ \t]*)+)([А-Яа-я]{2,})(\.?)/g;
+
+/** The expressions of one such run, innermost braces stripped. */
+function expressionsOf(run: string): string[] {
+  return [...run.matchAll(/\{\{?([^{}]*)\}\}?/g)].map((hit) => hit[1].trim());
+}
 
 /**
  * A word that does not agree with the count. An impersonal short participle is
@@ -92,17 +152,24 @@ describe("a counted noun agrees with its count", () => {
       const raw = readFileSync(file, "utf8");
       if (!/[А-Яа-я]/.test(raw)) continue;
 
-      for (const part of readable(file, raw)) {
+      const parts = readable(file, raw);
+      const local = countsNamedIn(parts);
+
+      for (const part of parts) {
         for (const pattern of [INTERPOLATED, SUBSTITUTED]) {
           pattern.lastIndex = 0;
           for (let hit = pattern.exec(part); hit; hit = pattern.exec(part)) {
-            const [, expression, word, abbreviated] = hit;
-            if (!COUNT_TAIL.test(expression.trim())) continue;
+            const [, run, word, abbreviated] = hit;
+            const counted = expressionsOf(run).find((expression) => {
+              const printed = expression.replace(/\.value$/, "");
+              return COUNT_TAIL.test(printed) || local.has(printed);
+            });
+            if (counted === undefined) continue;
             // "5 б." is an abbreviation, and an abbreviation has one form.
             if (abbreviated === ".") continue;
             if (word in INVARIANT) continue;
             offenders.push(
-              `${where(file)}: "${word}" is spelled for one value of ${expression.trim()}`,
+              `${where(file)}: "${word}" is spelled for one value of ${counted}`,
             );
           }
         }

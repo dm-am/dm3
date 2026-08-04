@@ -85,7 +85,8 @@ vi.mock("../api/gameApi", () => ({
   },
 }));
 
-import { useGamesStore, useGameDetailsStore } from "./store";
+import { useGamesStore } from "./store";
+import { useGameDetailsStore } from "./detailsStore";
 
 const createMockUserRef = (id: string, username: string): UserRef =>
   ({
@@ -465,6 +466,41 @@ describe("useGameDetailsStore", () => {
 
       expect(store.gameError).toBeTruthy();
       expect(store.game).toBeNull();
+    });
+
+    // The status is the whole point of the refusal: the shell reads it out of
+    // the store (GamePage.vue) and picks the error page from it, so a load that
+    // keeps the sentence and drops the number sends a reader who was refused
+    // access to "ошибка сервера". Both halves are asserted here because the
+    // shell's own spec sets gameErrorStatus by hand — deleting the line that
+    // fills it left every other test in the tree green.
+    it.each([403, 404, 410, 500])(
+      "keeps the %i the server answered",
+      async (status) => {
+        mockGetGame.mockResolvedValue({
+          data: null,
+          error: { status, title: "Refused" },
+        });
+
+        const store = useGameDetailsStore();
+        const result = await store.loadGame("invalid");
+
+        expect(store.gameErrorStatus).toBe(status);
+        expect(result).toEqual({ ok: false, status });
+      },
+    );
+
+    it("reports a refusal that carries no status as one", async () => {
+      mockGetGame.mockResolvedValue({
+        data: null,
+        error: { title: "Network is down" },
+      });
+
+      const store = useGameDetailsStore();
+      const result = await store.loadGame("invalid");
+
+      expect(store.gameErrorStatus).toBeNull();
+      expect(result.ok).toBe(false);
     });
 
     it("tracks loading state", async () => {

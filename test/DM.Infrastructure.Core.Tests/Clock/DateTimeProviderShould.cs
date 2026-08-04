@@ -1,9 +1,9 @@
 using System;
-using DM.Infrastructure.Core;
+using DM.Infrastructure.Core.Clock;
 using FluentAssertions;
 using Xunit;
 
-namespace DM.Infrastructure.Core.Tests;
+namespace DM.Infrastructure.Core.Tests.Clock;
 
 public class DateTimeProviderShould
 {

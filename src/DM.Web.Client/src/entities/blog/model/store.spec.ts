@@ -48,7 +48,8 @@ vi.mock("@/shared/api", () => ({
   },
 }));
 
-import { useBlogsStore, useBlogDetailsStore } from "./store";
+import { useBlogsStore } from "./store";
+import { useBlogDetailsStore } from "./detailsStore";
 
 const createMockBlogRef = (id: string, title: string): BlogRef =>
   ({
@@ -574,6 +575,41 @@ describe("useBlogDetailsStore", () => {
     await loadFirst;
 
     expect(store.publications).toEqual(ofSecond);
+  });
+
+  // Both halves are asserted for the same reason the game store asserts both:
+  // the shell reads the number out of the store (BlogPage.vue) because five
+  // call sites outside it reload the blog, while the returned object only
+  // reaches the caller that asked. The shell's own spec drives the store
+  // through the mocked API, so dropping the line that fills the ref has to be
+  // caught here as well.
+  it.each([403, 404, 410, 500])(
+    "keeps the %i the server answered",
+    async (status) => {
+      mockGetBlog.mockResolvedValue({
+        data: null,
+        error: { status, title: "Refused" },
+      });
+
+      const store = useBlogDetailsStore();
+      const result = await store.loadBlog("blog-a");
+
+      expect(store.blogErrorStatus).toBe(status);
+      expect(result).toEqual({ ok: false, status });
+    },
+  );
+
+  it("reports a refusal that carries no status as one", async () => {
+    mockGetBlog.mockResolvedValue({
+      data: null,
+      error: { title: "Network is down" },
+    });
+
+    const store = useBlogDetailsStore();
+    const result = await store.loadBlog("blog-a");
+
+    expect(store.blogErrorStatus).toBeNull();
+    expect(result.ok).toBe(false);
   });
 
   it("drops a reply that arrives after the store was reset", async () => {

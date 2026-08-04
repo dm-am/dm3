@@ -26,6 +26,7 @@ using DM.Web.API.Shared.Binding;
 using DM.Web.API.Shared.Configuration;
 using DM.Web.API.Shared.Http;
 using DM.Web.API.Shared.RateLimiting;
+using DM.Web.API.Shared.Sorting;
 using DM.Web.API.Middleware;
 using DM.Web.API.Realtime;
 using DM.Web.API.Swagger;
@@ -184,7 +185,14 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
 
         services
             .AddSwaggerGen(c => c.ConfigureGen())
-            .AddMvc(config => config.ModelBinderProviders.Insert(0, new ReadableGuidBinderProvider()))
+            .AddMvc(config =>
+            {
+                config.ModelBinderProviders.Insert(0, new ReadableGuidBinderProvider());
+                // Every list endpoint answers 400 for a sort field it does not have.
+                // Without this line the vocabulary, the filter and the Swagger enum are
+                // all dead code and an unknown ?sortBy= comes back 200 in default order.
+                config.Filters.Add<SortVocabularyFilter>();
+            })
             .AddJsonOptions(config => config.Setup(_httpContextAccessor, _bbParserProvider));
     }
 

@@ -119,7 +119,7 @@ internal class TopicService : ITopicService
                 await _repository.Exists(topicId, ct)
                     ? HttpStatusCode.Gone
                     : HttpStatusCode.NotFound,
-                "Тема не найдена");
+                "Топик не найден");
         }
 
         if (identity.User.IsAuthenticated)
@@ -152,7 +152,7 @@ internal class TopicService : ITopicService
                 await _repository.ExistsByBoardAndNumber(board.Id, topicNumber, ct)
                     ? HttpStatusCode.Gone
                     : HttpStatusCode.NotFound,
-                $"Тема #{topicNumber} не найдена в разделе {boardAlias}");
+                $"Топик #{topicNumber} не найден в разделе {boardAlias}");
         }
 
         if (identity.User.IsAuthenticated)
@@ -355,10 +355,14 @@ internal class TopicService : ITopicService
         else
         {
             // Asking for one of these is refused; round-tripping the value the topic
-            // already has is not. Both used to be dropped in silence, so a user
-            // closing somebody else's topic got 200 and an open topic back.
+            // already has is not. All three used to be dropped in silence, so a user
+            // closing somebody else's topic got 200 and an open topic back, and a
+            // user moving their own topic to another board got 200 and the topic
+            // still in the old one -- the move is reachable from HTTP through
+            // UpdateTopicRequest.Board.
             if ((updateTopic.IsClosed.HasValue && updateTopic.IsClosed != oldTopic.IsClosed) ||
-                (updateTopic.IsAttached.HasValue && updateTopic.IsAttached != oldTopic.IsAttached))
+                (updateTopic.IsAttached.HasValue && updateTopic.IsAttached != oldTopic.IsAttached) ||
+                (updateTopic.BoardTitle != default && oldTopic.Board.Title != updateTopic.BoardTitle))
             {
                 _intentionManager.ThrowIfForbidden(ForumIntention.AdministrateTopics, oldTopic.Board);
             }

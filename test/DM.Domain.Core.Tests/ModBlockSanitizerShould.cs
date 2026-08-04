@@ -3,7 +3,7 @@ using DM.Domain.Core.Enums;
 using FluentAssertions;
 using Xunit;
 
-namespace DM.Infrastructure.Core.Tests;
+namespace DM.Domain.Core.Tests;
 
 /// <summary>
 /// The rule that decides who may author a [mod] block.
@@ -17,9 +17,9 @@ namespace DM.Infrastructure.Core.Tests;
 /// [mod=Имя], or a comparison that let Mentor through, would have surfaced as a
 /// moderator's block on an ordinary user's comment and nowhere else.
 ///
-/// It lives next to PermissionFilteringVisitorShould, the other half of the same
-/// rule (unwrap on write here, filtering on read there), because DM.Domain.Core
-/// has no test project of its own.
+/// The other half of the same rule — filtering on read rather than unwrapping on
+/// write — is PermissionFilteringVisitorShould, and it stays with the parser
+/// wrapper it belongs to.
 /// </remarks>
 public class ModBlockSanitizerShould
 {

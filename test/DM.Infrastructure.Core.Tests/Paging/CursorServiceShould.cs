@@ -1,11 +1,11 @@
 using System;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Infrastructure.Core;
+using DM.Infrastructure.Core.Paging;
 using FluentAssertions;
 using Xunit;
 
-namespace DM.Infrastructure.Core.Tests;
+namespace DM.Infrastructure.Core.Tests.Paging;
 
 public class CursorServiceShould
 {

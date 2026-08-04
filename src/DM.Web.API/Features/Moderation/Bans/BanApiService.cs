@@ -37,6 +37,16 @@ internal class BanApiService : IBanApiService
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// A lifted ban stays in the moderation history (that is the whole point of
+    /// keeping it) and stays out of the public one: it was taken back, and the
+    /// profile counts what the user served. The counter behind the achievement
+    /// chain reads the same rule (UserRepository, bansReceivedCounts), and the
+    /// two have to agree -- when the query stopped hiding lifted bans, this path
+    /// started counting one in "Последний бан: N-й с ...", while the achievement
+    /// went on not counting it, and PublicBan carries no flag with which the
+    /// profile could tell them apart.
+    /// </remarks>
     public async Task<PublicUserBanStatus> GetPublicUserBanStatus(string login)
     {
         var bans = await _banService.GetUserBans(login);
@@ -47,7 +57,7 @@ internal class BanApiService : IBanApiService
             Username = login,
             IsBanned = activeBan != null,
             ActiveBan = activeBan != null ? _mapper.Map<PublicBan>(activeBan) : null,
-            History = bans.Select(_mapper.Map<PublicBan>)
+            History = bans.Where(b => !b.IsLifted).Select(_mapper.Map<PublicBan>)
         };
     }
 

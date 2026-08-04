@@ -92,27 +92,6 @@ export function getErrorConfig(code: number): ErrorConfig {
 }
 
 /**
- * The error page an entity shell owes a failed fetch.
- *
- * A missing page, a page the viewer may not open, a page that was deleted and a
- * server that fell over are four different things to say, and the status is the
- * only place the difference lives. Written out once because three shells — the
- * topic, the game, the blog — each need the same four answers; the game and the
- * blog had none of them and said "Не удалось загрузить" to all four, which
- * reads as "try again" to someone following a link to something deleted.
- *
- * A 4xx this map does not name is a bad address, so it lands on 404; no status
- * at all means the request never left, which is 500's sentence.
- */
-export function toErrorPageCode(status: number | undefined): number {
-  if (status === 403) return 403;
-  if (status === 410) return 410;
-  if (status === 404) return 404;
-  if (!status || status >= 500) return 500;
-  return 404;
-}
-
-/**
  * The page a failed load's HTTP status deserves.
  *
  * One mapping, because three had already diverged: the forum board page turned

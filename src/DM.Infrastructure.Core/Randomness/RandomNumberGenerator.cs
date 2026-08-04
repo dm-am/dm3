@@ -1,7 +1,7 @@
 using System;
 using DM.Domain.Core.Abstractions;
 
-namespace DM.Infrastructure.Core;
+namespace DM.Infrastructure.Core.Randomness;
 
 /// <inheritdoc />
 internal class RandomNumberGenerator : IRandomNumberGenerator

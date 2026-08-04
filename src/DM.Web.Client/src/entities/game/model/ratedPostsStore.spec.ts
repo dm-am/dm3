@@ -80,4 +80,119 @@ describe("useRatedPostsStore", () => {
       take: 1,
     });
   });
+
+  /**
+   * The three blocks used to keep their own answer to "is mine still fresh":
+   * two module-level counters and a `fetchedAt` on every per-user entry. The
+   * bookkeeping is shared now (`shared/lib/utils/keyedCache`), and these hold
+   * what the three questions may not do to each other.
+   */
+  describe("caching", () => {
+    const post = (id: string) => ({ id }) as never;
+
+    it("asks the server once for a block that has an answer", async () => {
+      mockGetRatedPosts.mockResolvedValue({
+        data: { resources: [post("p-1")] },
+        error: null,
+      });
+      const store = useRatedPostsStore();
+
+      await store.fetchBestOfWeek();
+      await store.fetchBestOfWeek();
+
+      expect(mockGetRatedPosts).toHaveBeenCalledTimes(1);
+      expect(store.bestOfWeek?.id).toBe("p-1");
+    });
+
+    it("takes a week without a rated post for an answer", async () => {
+      // "None" is what the server said, not a failure to load: the counters
+      // this replaces kept a null as "never fetched" and asked again on every
+      // visit to the home page.
+      const store = useRatedPostsStore();
+
+      await store.fetchBestOfWeek();
+      await store.fetchBestOfWeek();
+
+      expect(mockGetRatedPosts).toHaveBeenCalledTimes(1);
+      expect(store.bestLoaded).toBe(true);
+    });
+
+    it("does not answer one block out of another block's entry", async () => {
+      mockGetRatedPosts.mockResolvedValue({
+        data: { resources: [post("p-1")] },
+        error: null,
+      });
+      const store = useRatedPostsStore();
+
+      await store.fetchBestOfWeek();
+      await store.fetchLatestRated();
+      await store.fetchBestPostOfUser("Tester");
+
+      expect(mockGetRatedPosts).toHaveBeenCalledTimes(3);
+    });
+
+    it("re-reads the latest rated post when another one is excluded", async () => {
+      mockGetRatedPosts.mockResolvedValue({
+        data: { resources: [post("p-1"), post("p-2")] },
+        error: null,
+      });
+      const store = useRatedPostsStore();
+
+      await store.fetchLatestRated("p-1");
+      await store.fetchLatestRated("p-2");
+
+      // The answer is picked out of the page BY the excluded id, so one entry
+      // for both would hand the second call the post it asked to avoid.
+      expect(mockGetRatedPosts).toHaveBeenCalledTimes(2);
+      expect(store.latestRated?.id).toBe("p-1");
+    });
+
+    it("keeps one entry per profile", async () => {
+      mockGetRatedPosts.mockResolvedValue({
+        data: { resources: [post("p-1")] },
+        error: null,
+      });
+      const store = useRatedPostsStore();
+
+      await store.fetchBestPostOfUser("Alice");
+      await store.fetchBestPostOfUser("Bob");
+      await store.fetchBestPostOfUser("Alice");
+
+      expect(mockGetRatedPosts).toHaveBeenCalledTimes(2);
+    });
+
+    it("asks again when the caller forces it", async () => {
+      const store = useRatedPostsStore();
+
+      await store.fetchBestOfWeek();
+      await store.fetchBestOfWeek(true);
+      await store.fetchLatestRated();
+      await store.fetchLatestRated(undefined, true);
+      await store.fetchBestPostOfUser("Alice");
+      await store.fetchBestPostOfUser("Alice", true);
+
+      expect(mockGetRatedPosts).toHaveBeenCalledTimes(6);
+    });
+
+    it("lets the retry button retry after a refusal", async () => {
+      mockGetRatedPosts
+        .mockResolvedValueOnce({ data: null, error: { status: 500 } })
+        .mockResolvedValueOnce({
+          data: { resources: [post("p-1")] },
+          error: null,
+        });
+      const store = useRatedPostsStore();
+
+      await store.fetchBestPostOfUser("Alice");
+      expect(store.bestPostErrorOf("Alice")).toBeTruthy();
+
+      // Not forced: a cached refusal would leave the block refusing to try
+      // for five minutes, which is what the entry's fetchedAt used to do.
+      await store.fetchBestPostOfUser("Alice");
+
+      expect(mockGetRatedPosts).toHaveBeenCalledTimes(2);
+      expect(store.bestPostErrorOf("Alice")).toBeNull();
+      expect(store.bestPostOfUser("Alice")?.id).toBe("p-1");
+    });
+  });
 });

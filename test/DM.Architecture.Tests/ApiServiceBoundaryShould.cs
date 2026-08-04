@@ -16,7 +16,10 @@ namespace DM.Architecture.Tests;
 /// The rules next door read the IL, which is the stronger check for a type reached
 /// through an alias. These cannot: one asserts a number written in a comment, and
 /// the other names the shape of a dependency (anything called I*Repository) rather
-/// than a single type, so the name is what there is to match on.
+/// than a single type, so the name is what there is to match on. Stronger there is
+/// not stronger everywhere: the IL rules do not see a type used only inside an
+/// async method body, which is where nearly all data access is written — see the
+/// remarks on ServiceLayerBoundaryShould.
 ///
 /// They close the same gap. KeepApiServicesOffTheDbContext names one class, so an
 /// API service that skipped its domain service by holding the repository behind it
@@ -32,10 +35,21 @@ public class ApiServiceBoundaryShould
     /// <summary>
     /// Uploads are the one feature with no owning module: every contract they need
     /// is declared in the kernel and implemented by the persistence layer, so there
-    /// is no domain service for this one to call. Named here rather than dropped
-    /// out of the rule quietly, so closing the gap is deleting a line.
+    /// is no domain service for this one to call, and the kernel may not hold one --
+    /// it is the project nothing else may be referenced from. Closing the gap means
+    /// a new domain module, which is the owner's decision and not this rule's.
     /// </summary>
-    private static readonly string[] WithoutADomainOwner = ["UploadApiService.cs"];
+    /// <remarks>
+    /// Named dependencies rather than a named file. Skipping the file put the whole
+    /// of UploadApiService outside the rule, so a sixth repository added to it would
+    /// have been as invisible as the one this list is about: the exemption covers
+    /// what the finding measured and nothing more, and a new entry here has to be
+    /// argued the same way.
+    /// </remarks>
+    private static readonly Dictionary<string, string[]> WithoutADomainOwner = new()
+    {
+        ["UploadApiService.cs"] = ["IUploadRepository", "IIntentionManager"]
+    };
 
     /// <summary>A dependency an API service is not allowed to be built out of.</summary>
     private static readonly Regex ForbiddenDependency = new(
@@ -97,14 +111,17 @@ public class ApiServiceBoundaryShould
 
         foreach (var path in Sources(root, "*ApiService.cs"))
         {
-            if (WithoutADomainOwner.Contains(Path.GetFileName(path)))
-            {
-                continue;
-            }
+            WithoutADomainOwner.TryGetValue(Path.GetFileName(path), out var allowed);
 
             foreach (Match match in ForbiddenDependency.Matches(File.ReadAllText(path)))
             {
-                offenders.Add(Path.GetRelativePath(root, path) + " -> " + match.Groups["name"].Value);
+                var dependency = match.Groups["name"].Value;
+                if (allowed != null && allowed.Contains(dependency))
+                {
+                    continue;
+                }
+
+                offenders.Add(Path.GetRelativePath(root, path) + " -> " + dependency);
             }
         }
 

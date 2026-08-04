@@ -5,7 +5,7 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 
-namespace DM.Infrastructure.Core;
+namespace DM.Infrastructure.Core.Paging;
 
 /// <inheritdoc />
 public class CursorService : ICursorService

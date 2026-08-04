@@ -61,6 +61,7 @@ public static class SwaggerExtensions
         options.OperationFilter<BbAudienceSwaggerFilter>();
         options.OperationFilter<ResponseMediaTypeSwaggerFilter>();
         options.OperationFilter<CreatedLocationSwaggerFilter>();
+        options.ParameterFilter<SortVocabularySwaggerFilter>();
 
         var apiAssemblyName = Assembly.GetExecutingAssembly().GetName().Name;
         options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, $"{apiAssemblyName}.xml"));

@@ -24,7 +24,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import BlogPage from "./BlogPage.vue";
-import type { Blog } from "@/entities/blog";
+import { useBlogDetailsStore, type Blog } from "@/entities/blog";
 
 const { mockGetBlog } = vi.hoisted(() => ({ mockGetBlog: vi.fn() }));
 
@@ -113,6 +113,25 @@ describe("BlogPage", () => {
       const wrapper = mount(BlogPage, { global: { stubs: withErrorPage } });
 
       expect(wrapper.find(".error-page").exists()).toBe(false);
+    });
+
+    // The reload the shell did not start. Five places outside it call loadBlog
+    // (PublicationCreate, PublicationEdit, BlogInfoSection, RolesSection
+    // twice), and an assistant who takes their own role away is refused by the
+    // very reload that follows. While the shell kept the code in a local ref
+    // this left `blog` null with the code still null, and the zone held the
+    // title skeleton for good instead of drawing the refusal.
+    it("answers a refusal from a reload it did not start", async () => {
+      mockGetBlog.mockResolvedValue({ data: { resource: blog } });
+      const wrapper = mount(BlogPage, { global: { stubs: withErrorPage } });
+      await flushPromises();
+      expect(wrapper.find("h1").exists()).toBe(true);
+
+      mockGetBlog.mockResolvedValue({ error: { status: 403 } });
+      await useBlogDetailsStore().loadBlog("aaaab");
+      await flushPromises();
+
+      expect(wrapper.find(".error-page").text()).toBe("403");
     });
   });
 });

@@ -103,6 +103,30 @@ function findAll(
   return found;
 }
 
+/**
+ * The expression inside however many parentheses wrap it.
+ *
+ * `a ?? (b as T)` is the only spelling Prettier lets through — it parenthesises
+ * a cast on the right of `??` on its own — and a check written against the bare
+ * `a ?? b as T` therefore matched nothing this repository can contain. It read
+ * as a gate on the copies of unwrapResource and was green on the very lines the
+ * audit quoted.
+ */
+function unparenthesize(node: ts.Expression): ts.Expression {
+  let current = node;
+  while (ts.isParenthesizedExpression(current)) current = current.expression;
+  return current;
+}
+
+/** The value a cast chain casts: `(x as unknown as T)` is about `x`. */
+function castSubject(node: ts.Expression): ts.Expression {
+  let current = unparenthesize(node);
+  while (ts.isAsExpression(current)) {
+    current = unparenthesize(current.expression);
+  }
+  return current;
+}
+
 /** True when the node sits inside a console.* call. */
 function insideConsoleCall(node: ts.Node): boolean {
   for (let current = node.parent; current; current = current.parent) {
@@ -140,15 +164,23 @@ describe("shared helpers are not written a second time", () => {
     const offenders = findAll(
       (node) => {
         if (!ts.isBinaryExpression(node)) return false;
-        // `x.resource ?? (x as unknown as T)`: a nullish default of null or of
-        // some other value is a different thing and stays allowed.
-        if (
-          node.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
-          ts.isPropertyAccessExpression(node.left) &&
-          node.left.name.text === "resource" &&
-          ts.isAsExpression(node.right)
-        ) {
-          return true;
+        // `x.resource ?? (x as unknown as T)`, and only that: the same payload
+        // read twice, once through the envelope and once cast past the
+        // compiler. A nullish default of null, or of a value built on the
+        // spot — the optimistic topic the forum store falls back to when a
+        // mutation answers no body — is a different thing and stays allowed.
+        if (node.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken) {
+          const left = unparenthesize(node.left);
+          const right = unparenthesize(node.right);
+          if (
+            ts.isPropertyAccessExpression(left) &&
+            left.name.text === "resource" &&
+            ts.isAsExpression(right) &&
+            castSubject(right).getText() ===
+              unparenthesize(left.expression).getText()
+          ) {
+            return true;
+          }
         }
         return (
           node.operatorToken.kind === ts.SyntaxKind.InKeyword &&
@@ -185,18 +217,28 @@ describe("shared helpers are not written a second time", () => {
       return found;
     };
 
-    const offenders = findAll(
+    // The home of the SSOT is not exempt, only allowed to hold one. Exempting
+    // the folder is how a fourth copy came to sit in errorConfig.ts itself,
+    // two functions apart from the map it duplicated and already disagreeing
+    // with it about 410 — the very divergence the check is named after, in the
+    // one place the check was not looking.
+    const maps = findAll(
       (node) =>
         (ts.isFunctionDeclaration(node) || ts.isArrowFunction(node)) &&
         node.parameters.some((p) => p.name.getText() === "status") &&
         returnsPageCode(node),
-      (path) => path.startsWith("shared/ui/ErrorPage/"),
     );
+    const home = "shared/ui/ErrorPage/errorConfig.ts:";
 
     expect(
-      offenders,
+      maps.filter((site) => !site.startsWith(home)),
       "use errorCodeForStatus from shared/ui/ErrorPage: three copies of this map had already diverged",
     ).toEqual([]);
+
+    expect(
+      maps,
+      `${home} declares the map more than once; the second copy is the divergence`,
+    ).toHaveLength(1);
   });
 
   it("answers a change of viewer through useViewerChange", () => {

@@ -57,7 +57,7 @@ internal class UserMappingProfile : Profile
         // GeneralUser (domain) -> User (API)
         CreateMap<GeneralUser, User>()
             .ForMember(d => d.Id, o => o.MapFrom(s => s.UserId))
-            .ForMember(d => d.IsNewbie, o => o.MapFrom(s => s.QuantityRating < ProbationPolicy.NewbiePostThreshold))
+            .ForMember(d => d.IsNewbie, o => o.MapFrom(s => s.IsNewbie))
             .ForMember(d => d.Rating, o => o.MapFrom(s => s.RatingDisabled
                 ? null
                 : new Rating { TotalPosts = s.QuantityRating, PostReviewScoreSum = s.QualityRating }))
@@ -89,7 +89,7 @@ internal class UserMappingProfile : Profile
         // GeneralUser (domain) -> UserProfile (API)
         CreateMap<GeneralUser, UserProfile>()
             .ForMember(d => d.Id, o => o.MapFrom(s => s.UserId))
-            .ForMember(d => d.IsNewbie, o => o.MapFrom(s => s.QuantityRating < ProbationPolicy.NewbiePostThreshold))
+            .ForMember(d => d.IsNewbie, o => o.MapFrom(s => s.IsNewbie))
             .ForMember(d => d.Rating, o => o.MapFrom(s => new Rating { TotalPosts = s.QuantityRating, PostReviewScoreSum = s.QualityRating }))
             // Picture — via the registered AvatarPicture→UserPicture converter.
             .ForMember(d => d.Picture, o => o.MapFrom(s => s.Picture))

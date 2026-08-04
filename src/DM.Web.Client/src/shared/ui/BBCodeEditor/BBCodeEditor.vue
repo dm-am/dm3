@@ -214,8 +214,13 @@ const wordCountLabel = computed(
 );
 
 const charCountLabel = computed(() => {
+  // The noun agrees with the number standing right before it, which is the
+  // limit when there is one: "12 / 500 символов", but "1 символ". Only one of
+  // the editor's twenty-odd embed sites passes a limit, so the counter of every
+  // other one opened on "1 символов".
+  const counted = props.maxLength > 0 ? props.maxLength : charCount.value;
   const limit = props.maxLength > 0 ? ` / ${props.maxLength}` : "";
-  return `${charCount.value}${limit} символов`;
+  return `${charCount.value}${limit} ${pluralize(counted, "символ", "символа", "символов")}`;
 });
 
 // Draft status text

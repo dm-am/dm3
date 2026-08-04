@@ -175,7 +175,7 @@ public class TopicServiceShould : UnitTestBase
 
         var exception = await act.Should().ThrowAsync<HttpException>();
         exception.Which.StatusCode.Should().Be(HttpStatusCode.NotFound);
-        exception.Which.Message.Should().Contain("Тема не найдена");
+        exception.Which.Message.Should().Contain("Топик не найден");
     }
 
     [Fact]
@@ -303,5 +303,136 @@ public class TopicServiceShould : UnitTestBase
             r => r.DeleteAsync(topicId, UnreadEntryType.Message),
             Times.Once);
         _eventProducer.Verify(p => p.SendAsync(EventType.DeletedTopic, topicId), Times.Once);
+    }
+
+    /// <summary>
+    /// Closing or pinning somebody else's topic is refused, not dropped. Both
+    /// flags used to be set to null when the caller could not administrate the
+    /// board, so the request came back 200 with an open topic - the same answer a
+    /// successful close produces.
+    /// </summary>
+    [Theory]
+    [InlineData(true, null)]
+    [InlineData(null, true)]
+    public async Task RefuseTheAdminFlagsTheCallerMayNotSet(bool? isClosed, bool? isAttached)
+    {
+        var topicId = Guid.NewGuid();
+        var board = new Board { Id = Guid.NewGuid(), Title = "General" };
+        var topic = new Topic { Id = topicId, Board = board, IsClosed = false, IsAttached = false };
+
+        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(topic);
+        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
+            .ReturnsAsync(topic);
+        _intentionManager.Setup(m => m.IsAllowed(ForumIntention.AdministrateTopics, board))
+            .Returns(false);
+        _intentionManager
+            .Setup(m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, board))
+            .Throws(new HttpException(HttpStatusCode.Forbidden, "нельзя"));
+
+        var act = () => _service.UpdateAsync(new UpdateTopic
+        {
+            TopicId = topicId,
+            IsClosed = isClosed,
+            IsAttached = isAttached
+        });
+
+        await act.Should().ThrowAsync<HttpException>();
+        _repository.Verify(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()), Times.Never,
+            "a refused change writes nothing");
+    }
+
+    /// <summary>
+    /// The client round-trips the whole topic, so the flags it already carries are
+    /// nobody's attempt at anything and must not be refused.
+    /// </summary>
+    [Fact]
+    public async Task NotRefuseTheAdminFlagsTheTopicAlreadyCarries()
+    {
+        var topicId = Guid.NewGuid();
+        var board = new Board { Id = Guid.NewGuid(), Title = "General" };
+        var topic = new Topic { Id = topicId, Board = board, IsClosed = true, IsAttached = false };
+
+        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(topic);
+        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
+            .ReturnsAsync(topic);
+        _intentionManager.Setup(m => m.IsAllowed(ForumIntention.AdministrateTopics, board))
+            .Returns(false);
+
+        await _service.UpdateAsync(new UpdateTopic
+        {
+            TopicId = topicId,
+            IsClosed = true,
+            IsAttached = false
+        });
+
+        _intentionManager.Verify(
+            m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, board), Times.Never);
+    }
+
+    /// <summary>
+    /// The third flag of the same branch, and the one the first pass missed.
+    /// Moving a topic to another board reaches the service through
+    /// UpdateTopicRequest.Board; the author passes TopicIntention.Edit, does not
+    /// enter the administrate branch, and the else branch used to name only the
+    /// two boolean flags -- so BoardTitle was neither checked nor cleared, the
+    /// repository was called with a null board id, and the author got 200 with
+    /// the topic still in the old board.
+    /// </summary>
+    [Fact]
+    public async Task RefuseTheBoardMoveTheCallerMayNotMake()
+    {
+        var topicId = Guid.NewGuid();
+        var board = new Board { Id = Guid.NewGuid(), Title = "General" };
+        var topic = new Topic { Id = topicId, Board = board, IsClosed = false, IsAttached = false };
+
+        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(topic);
+        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
+            .ReturnsAsync(topic);
+        _intentionManager.Setup(m => m.IsAllowed(ForumIntention.AdministrateTopics, board))
+            .Returns(false);
+        _intentionManager
+            .Setup(m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, board))
+            .Throws(new HttpException(HttpStatusCode.Forbidden, "нельзя"));
+
+        var act = () => _service.UpdateAsync(new UpdateTopic
+        {
+            TopicId = topicId,
+            BoardTitle = "Offtopic"
+        });
+
+        await act.Should().ThrowAsync<HttpException>();
+        _repository.Verify(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()), Times.Never,
+            "a refused move writes nothing");
+    }
+
+    /// <summary>
+    /// The same round-trip rule as the flags: the client sends the whole topic
+    /// back, so the board it is already in is nobody's attempt to move it.
+    /// </summary>
+    [Fact]
+    public async Task NotRefuseTheBoardTheTopicIsAlreadyIn()
+    {
+        var topicId = Guid.NewGuid();
+        var board = new Board { Id = Guid.NewGuid(), Title = "General" };
+        var topic = new Topic { Id = topicId, Board = board, IsClosed = false, IsAttached = false };
+
+        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(topic);
+        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
+            .ReturnsAsync(topic);
+        _intentionManager.Setup(m => m.IsAllowed(ForumIntention.AdministrateTopics, board))
+            .Returns(false);
+
+        await _service.UpdateAsync(new UpdateTopic
+        {
+            TopicId = topicId,
+            BoardTitle = board.Title
+        });
+
+        _intentionManager.Verify(
+            m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, board), Times.Never);
     }
 }

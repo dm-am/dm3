@@ -2,30 +2,32 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
-using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Shared;
+using DM.Infrastructure.Persistence.Repositories.General;
 using DM.Testing;
-using DM.Web.API.HostedServices;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 using IObjectStorage = DM.Domain.Core.Uploads.IObjectStorage;
 
-namespace DM.Web.API.Tests.Features.General;
+namespace DM.Infrastructure.Persistence.Tests.Repositories.General;
 
 /// <summary>
 /// The orphan sweeper looks for soft-deleted uploads, and DmDbContext applies a
 /// global "not removed" query filter to every IRemovable entity. Written without
 /// IgnoreQueryFilters the predicate collapses to "NOT IsRemoved AND IsRemoved",
-/// which no row can satisfy: the service logs "no orphans" forever while every
+/// which no row can satisfy: the sweep reports "no orphans" forever while every
 /// deleted avatar and attachment stays in the bucket at its original public URL.
 /// These tests pin both halves of the contract — a row past the grace period IS
 /// collected, and rows that are fresh or live are NOT.
 /// </summary>
-public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
+/// <remarks>
+/// The sweep used to live in a background service of the HTTP host, which is why
+/// this used to build a service provider to reach it. It is a domain contract
+/// now, so the test constructs the collector the way anything else would.
+/// </remarks>
+public class UploadOrphanCollectorShould : UnitTestBase
 {
     /// <summary>
     /// The instant every row here is dated from. Fixed rather than taken from
@@ -35,11 +37,10 @@ public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
     private static readonly DateTimeOffset Now = new(2020, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
     private readonly string _databaseName = Guid.NewGuid().ToString();
-    private readonly ServiceProvider _serviceProvider;
     private readonly Mock<IObjectStorage> _objectStorage;
     private readonly Mock<IDateTimeProvider> _clock;
 
-    public UploadOrphanCleanupShould()
+    public UploadOrphanCollectorShould()
     {
         _objectStorage = Mock<IObjectStorage>();
         _objectStorage.Setup(s => s.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -47,18 +48,9 @@ public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
 
         _clock = Mock<IDateTimeProvider>();
         _clock.SetupGet(c => c.Now).Returns(Now);
-
-        var services = new ServiceCollection();
-        // Scoped, exactly as in production: the periodic loop opens a scope per
-        // pass and the sweeper resolves its context out of that one.
-        services.AddDbContext<DmDbContext>(options => options.UseInMemoryDatabase(_databaseName));
-        services.AddScoped(_ => _objectStorage.Object);
-        services.AddSingleton(_ => _clock.Object);
-        _serviceProvider = services.BuildServiceProvider();
     }
 
-    /// <summary>A context on the same store, independent of the service's scope.</summary>
-    private DmDbContext Probe() => new(new DbContextOptionsBuilder<DmDbContext>()
+    private DmDbContext Context() => new(new DbContextOptionsBuilder<DmDbContext>()
         .UseInMemoryDatabase(_databaseName)
         .Options);
 
@@ -76,27 +68,22 @@ public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
 
     private async Task GivenUpload(Upload upload)
     {
-        await using var dbContext = Probe();
+        await using var dbContext = Context();
         dbContext.Uploads.Add(upload);
         await dbContext.SaveChangesAsync();
     }
 
-    /// <summary>
-    /// One pass, driven the way the periodic loop drives it: a scope per pass,
-    /// opened by the caller and handed to the sweeper.
-    /// </summary>
+    /// <summary>One pass, on a context of its own as a background scope has.</summary>
     private async Task Sweep()
     {
-        using var scope = _serviceProvider.CreateScope();
-        await new UploadOrphanCleanupService(
-                _serviceProvider,
-                NullLogger<UploadOrphanCleanupService>.Instance)
-            .SweepAsync(scope.ServiceProvider, CancellationToken.None);
+        await using var dbContext = Context();
+        await new UploadOrphanCollector(dbContext, _objectStorage.Object, _clock.Object)
+            .SweepAsync(CancellationToken.None);
     }
 
     private async Task<int> RemainingUploads()
     {
-        await using var dbContext = Probe();
+        await using var dbContext = Context();
         return await dbContext.Uploads.IgnoreQueryFilters().CountAsync();
     }
 
@@ -156,6 +143,4 @@ public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
             Times.Once);
         (await RemainingUploads()).Should().Be(0);
     }
-
-    public void Dispose() => _serviceProvider.Dispose();
 }

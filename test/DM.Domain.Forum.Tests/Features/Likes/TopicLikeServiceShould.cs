@@ -115,7 +115,7 @@ public class TopicLikeServiceShould : UnitTestBase
 
         var exception = await act.Should().ThrowAsync<HttpException>();
         exception.Which.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        exception.Which.Message.Should().Contain("Вы не можете поставить лайк этой теме");
+        exception.Which.Message.Should().Contain("Вы не можете поставить лайк этому топику");
     }
 
     [Fact]

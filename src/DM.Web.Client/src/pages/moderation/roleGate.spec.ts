@@ -63,4 +63,40 @@ describe("the moderation role gate", () => {
 
     expect(offenders).toEqual([]);
   });
+
+  /**
+   * Calling the gate is not the same as showing what it answered.
+   *
+   * A page that asks about the load first — `v-if="error"`, refusal in the
+   * `v-else-if` — puts the sentence back where the finding found it: the fetch
+   * behind the page answers 403, the error branch wins, and the reader is told
+   * "Не удалось загрузить данные" about data that was never going to load.
+   * Every page opens on the refusal today; the check above was blind to the
+   * order and stayed green when the two branches were swapped.
+   */
+  it("answers the refusal before it reports a failed load", () => {
+    const OPENS_ON_REFUSAL = /<[^>]*\sv-if="!hasAccess"/;
+    const ASKS_ABOUT_THE_LOAD = /\sv-(?:else-)?if="[^"]*\b(error|loading)\b/g;
+
+    const offenders = gatedPages.flatMap((name) => {
+      const source = readFileSync(join(HERE, name), "utf8");
+      const template = source.slice(source.indexOf("<template>"));
+
+      const refusal = template.search(OPENS_ON_REFUSAL);
+      if (refusal < 0) {
+        return [`${name}: the refusal is not the branch the template opens on`];
+      }
+
+      ASKS_ABOUT_THE_LOAD.lastIndex = 0;
+      const earlier = [...template.matchAll(ASKS_ABOUT_THE_LOAD)].filter(
+        (hit) => (hit.index ?? 0) < refusal,
+      );
+      return earlier.map(
+        (hit) =>
+          `${name}: ${hit[0].trim()} is asked before the refusal, so a 403 comes out as a failed load`,
+      );
+    });
+
+    expect(offenders).toEqual([]);
+  });
 });

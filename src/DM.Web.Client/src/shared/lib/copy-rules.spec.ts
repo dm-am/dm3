@@ -46,7 +46,7 @@ import { dirname, join, relative, resolve } from "path";
 import { fileURLToPath } from "url";
 import ts from "typescript";
 import { parse as parseSfc } from "vue/compiler-sfc";
-import { VALUE_UNAVAILABLE } from "./constants/copy";
+import { NOTHING_TO_SHOW, VALUE_UNAVAILABLE } from "./constants/copy";
 
 /** U+00B7 MIDDLE DOT, spelled by code point so this file stays clean itself. */
 const MIDDOT = "\u00B7";
@@ -92,29 +92,74 @@ const TOKEN_SPELLED = new RegExp(
 );
 
 /**
- * Where the forum entity is named, and therefore where its name is checked: the
- * three directories the forum lives in, plus any file named after a topic or a
- * forum wherever it sits. The directories alone left the deep-link resolver out
- * — pages/redirect/TopicRedirect.vue, the page a notification's "Перейти" passes
- * through, which said "Открываем тему...". "board" is not a marker here:
- * leaderboard and keyboard carry the letters and the доска of a leaderboard is
- * a different thing entirely.
+ * The empty-table wording, under the same rule and for the same reason.
+ *
+ * The finding was not "one string is written twice" but "one idea is worded
+ * five ways", and a check that knows only about the n/a token cannot say that.
+ * It was blind to the copy it was raised over: the IP list of a moderated
+ * profile printed the empty-table sentence by hand, right next to the
+ * DataTable default spelling the very same one.
  */
-const FORUM_SURFACE = ["pages/forum", "features/topic", "entities/forum"];
+const EMPTY_SPELLED = new RegExp(
+  `(^|[^\\p{L}])${NOTHING_TO_SHOW}([^\\p{L}]|$)`,
+  "u",
+);
 
-/** A file named after the entity names the entity, wherever the file lives. */
-const FORUM_FILE = /(topic|forum)/i;
+/** "тема" as a whole word: other words merely start with it. */
+const TEMA = /(?<![А-я])[Тт]ем(?:а|ы|е|у|ой|ам|ах|ами)(?![А-я])/g;
 
-function namesTheForumEntity(rel: string): boolean {
-  return (
-    FORUM_SURFACE.some((dir) => rel.startsWith(`${dir}/`)) ||
-    FORUM_FILE.test(rel)
-  );
+/**
+ * The context decides, not the path.
+ *
+ * The rule read "check the files whose path names the forum", which is a rule
+ * about where the word was last caught rather than about the word. It left out
+ * the dictionary of notification headings
+ * (entities/notification/lib/notificationTitle.ts): the line a reader sees over
+ * every forum notification sits in a file named after neither a topic nor a
+ * forum, so "Новая тема на форуме" would have passed it. Six more files name the
+ * entity from outside those directories -- the router, the home page, the news
+ * block, the testimonials page, the profile and the rules.
+ *
+ * So the whole client is read, and the word is flagged where the forum stands
+ * next to it. Next to it, and not in the same string: a .vue template is one
+ * blob of text and every forum page mentions the forum somewhere in it.
+ */
+const FORUM_NEARBY = /форум|топик|topic/i;
+
+/** How much text around the word counts as its neighbourhood, in characters. */
+const NEIGHBOURHOOD = 60;
+
+/**
+ * The senses the word keeps. Each is the subject of something -- a
+ * conversation, a letter, a ticket -- or the colour scheme, and none of them is
+ * the entity. They are listed because they do stand next to the forum: the
+ * rules page writes "уход от темы в служебных разделах форума", which is about
+ * staying on subject and not about a топик.
+ */
+const OTHER_SENSES: RegExp[] = [
+  // The subject at hand: "уход от темы", "не по теме", "на эту тему".
+  /(уход от|не по|по|на эту|об этой) тем[аыеу]/i,
+  // A subject line: of a letter, of a complaint, of a support ticket.
+  /тем[аыеу] (письма|жалобы|обращения)/i,
+  // The colour theme.
+  /(темн|светл)\w* тем|тем[аыеу] (оформления|сайта)|(переключени|настро)\w* темы|между темами/i,
+];
+
+/** The forum entity called by the other word, with the text around each hit. */
+function callsTheEntityATema(part: string): boolean {
+  TEMA.lastIndex = 0;
+  for (const hit of part.matchAll(TEMA)) {
+    const at = hit.index ?? 0;
+    const around = part.slice(
+      Math.max(0, at - NEIGHBOURHOOD),
+      at + hit[0].length + NEIGHBOURHOOD,
+    );
+    if (!FORUM_NEARBY.test(around)) continue;
+    if (OTHER_SENSES.some((sense) => sense.test(around))) continue;
+    return true;
+  }
+  return false;
 }
-
-/** "\u0442\u0435\u043C\u0430" as a whole word: other words merely start with it. */
-const TEMA =
-  /(?<![\u0410-\u044F])[\u0422\u0442]\u0435\u043C(?:\u0430|\u044B|\u0435|\u0443|\u043E\u0439|\u0430\u043C|\u0430\u0445|\u0430\u043C\u0438)(?![\u0410-\u044F])/;
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // lib -> shared -> src
@@ -499,26 +544,31 @@ describe("interface copy", () => {
 
   it("calls the forum entity a топик", () => {
     const offenders: string[] = [];
+    let scanned = 0;
     for (const file of collectFiles(CLIENT_SRC)) {
-      const rel = where(file);
-      if (!namesTheForumEntity(rel)) continue;
+      scanned++;
       const raw = readFileSync(file, "utf8");
-      if (copyOf(file, raw).some((part) => TEMA.test(part))) {
-        offenders.push(`${rel}: the forum entity is a "топик"`);
+      if (copyOf(file, raw).some(callsTheEntityATema)) {
+        offenders.push(`${where(file)}: the forum entity is a "топик"`);
       }
     }
     expect(offenders).toEqual([]);
+    // A rule that reads nothing passes.
+    expect(scanned).toBeGreaterThan(300);
   });
 
-  it("writes the missing-value token in one place", () => {
+  it.each([
+    ["missing value", VALUE_UNAVAILABLE, TOKEN_SPELLED],
+    ["empty table", NOTHING_TO_SHOW, EMPTY_SPELLED],
+  ])("writes the %s wording in one place", (_what, token, spelled) => {
     const offenders: string[] = [];
     for (const file of collectFiles(CLIENT_SRC)) {
       const rel = where(file);
       if (TOKEN_ALLOWED.has(rel)) continue;
       const raw = readFileSync(file, "utf8");
-      if (!raw.includes(VALUE_UNAVAILABLE)) continue;
-      if (copyOf(file, raw).some((part) => TOKEN_SPELLED.test(part))) {
-        offenders.push(`${rel}: spells the token instead of importing it`);
+      if (!raw.includes(token)) continue;
+      if (copyOf(file, raw).some((part) => spelled.test(part))) {
+        offenders.push(`${rel}: spells the wording instead of importing it`);
       }
     }
     expect(offenders).toEqual([]);

@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Registration;
@@ -142,4 +144,17 @@ internal class RegistrationRepository : IRegistrationRepository
             await _dbContext.SaveChangesAsync();
         }
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// A set-based delete rather than a load-and-remove: nothing references a
+    /// pending registration, so there is nothing to cascade and no reason to
+    /// bring the rows into the change tracker.
+    /// </remarks>
+    public Task<int> DeletePendingStartedBefore(
+        DateTimeOffset startedBefore, CancellationToken cancellationToken = default) =>
+        _dbContext.PendingRegistrations
+            .TagWith("DM.Account.PendingRegistrationRetention")
+            .Where(p => p.CreatedUtc < startedBefore)
+            .ExecuteDeleteAsync(cancellationToken);
 }

@@ -56,6 +56,95 @@ public class InterfaceVocabularyShould
     ];
 
     /// <summary>
+    /// The forum entity is a "топик". The word "тема" means other things here --
+    /// the colour theme, the subject of a ticket, the subject of a letter -- so
+    /// the context decides and not the path, exactly as on the client
+    /// (copy-rules.spec.ts).
+    /// </summary>
+    /// <remarks>
+    /// The rule used to read "check the files whose path names the forum", which
+    /// is a rule about where the word was last caught rather than about the word.
+    /// The dispatcher's dictionary of notification headings
+    /// (DM.Workers.NotificationDispatcher/Implementation/NotificationText.cs) is
+    /// named after neither a topic nor a forum, so the line a reader sees over
+    /// every forum notification was outside it; so were four passages of
+    /// AUTHORIZATION.md that call the entity by the retired word.
+    /// </remarks>
+    private static readonly Regex Tema =
+        new(@"(?<![А-Яа-я])[Тт]ем(а|ы|е|у|ой|ам|ах|ами)(?![А-Яа-я])", RegexOptions.Compiled);
+
+    /// <summary>The forum standing next to the word is what makes it the entity.</summary>
+    private static readonly Regex ForumNearby =
+        new("форум|топик|topic", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>Text around the word that counts as its neighbourhood, in characters.</summary>
+    private const int Neighbourhood = 60;
+
+    /// <summary>
+    /// The senses the word keeps: the subject of a conversation, of a letter, of
+    /// a ticket, and the colour scheme. Listed because they do stand next to the
+    /// forum -- the rules speak of "уход от темы в служебных разделах форума",
+    /// which is about staying on subject and not about a топик.
+    /// </summary>
+    private static readonly Regex[] OtherSenses =
+    [
+        new(@"(уход от|не по|по|на эту|об этой) тем[аыеу]", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+        new(@"тем[аыеу] (письма|жалобы|обращения)", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+        new(@"(темн|светл)\w* тем|тем[аыеу] (оформления|сайта)|(переключени|настро)\w* темы|между темами",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled)
+    ];
+
+    /// <summary>
+    /// Names, not terms. The achievement for a twenty-fifth topic is called
+    /// "Занятные темы" -- a title the owner wrote, and award titles are his to
+    /// write (a neighbouring one is called "Народное признание, например").
+    /// Renaming it would also be a seed change, and the seed is the same row in
+    /// the migration and in both model snapshots.
+    /// </summary>
+    private static readonly Regex[] ProperNames =
+    [
+        new("Занятные темы", RegexOptions.Compiled)
+    ];
+
+    /// <summary>
+    /// The seeded forum, which is simulated user speech rather than the site's
+    /// own words: a seeded post asks about "темная тема сайта" and announces a
+    /// contest whose "Тема" is its subject. Neither is the forum entity, and
+    /// rewriting quoted speech to a term of the interface is not the rule.
+    /// </summary>
+    private const string SimulatedSpeech = "src/DM.Tools.Seeder/Seeding/DataSeeder.Forum.cs";
+
+    /// <summary>The entity called by the other word, judged by the text around each hit.</summary>
+    private static bool CallsTheEntityATema(string text)
+    {
+        foreach (Match hit in Tema.Matches(text))
+        {
+            var from = Math.Max(0, hit.Index - Neighbourhood);
+            var to = Math.Min(text.Length, hit.Index + hit.Length + Neighbourhood);
+            var around = text[from..to];
+
+            if (!ForumNearby.IsMatch(around))
+            {
+                continue;
+            }
+
+            if (Array.Exists(OtherSenses, sense => sense.IsMatch(around)))
+            {
+                continue;
+            }
+
+            if (Array.Exists(ProperNames, name => name.IsMatch(around)))
+            {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// The letter at U+0451 and its capital, by number: a file that keeps a
     /// character out of the text should not carry it.
     /// </summary>
@@ -83,12 +172,19 @@ public class InterfaceVocabularyShould
             scanned++;
             var text = File.ReadAllText(file);
 
+            var relative = Relative(root, file);
+
             foreach (var (pattern, retired, instead) in RetiredWording)
             {
                 if (pattern.IsMatch(text))
                 {
-                    offenders.Add($"{Relative(root, file)}: \"{retired}\", use {instead}");
+                    offenders.Add($"{relative}: \"{retired}\", use {instead}");
                 }
+            }
+
+            if (relative != SimulatedSpeech && CallsTheEntityATema(text))
+            {
+                offenders.Add($"{relative}: the forum entity is a \"топик\"");
             }
         }
 

@@ -2,6 +2,7 @@
 import type { Column, SortState } from "./types";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import DataTableSkeleton from "./DataTableSkeleton.vue";
+import { NOTHING_TO_SHOW } from "@/shared/lib/constants/copy";
 
 const props = withDefaults(
   defineProps<{
@@ -32,7 +33,7 @@ const props = withDefaults(
   }>(),
   {
     loading: false,
-    emptyText: "Нет данных",
+    emptyText: NOTHING_TO_SHOW,
     showRowNumbers: false,
     startRowNumber: 1,
     ariaLabel: undefined,

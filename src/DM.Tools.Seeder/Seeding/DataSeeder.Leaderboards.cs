@@ -312,80 +312,23 @@ internal sealed partial class DataSeeder
         result.Details.Add("Ensured full top-10 rating coverage for the current month, the last closed month and the previous year");
     }
 
+    /// <summary>
+    /// Recalculates the popularity scores of the fixture through the same
+    /// processors the running site uses.
+    /// </summary>
+    /// <remarks>
+    /// This used to be a second copy of the calculation, query for query, and the
+    /// window the copies compared against had already diverged - the site read the
+    /// product constant, the fixture read a literal of its own. One definition
+    /// now, and the moment is the seed epoch rather than the wall clock, which is
+    /// what a fixture dates everything else from.
+    /// </remarks>
     private async Task UpdatePopularityScores(DateTimeOffset now, ComprehensiveSeedResult result)
     {
-        // The threshold is the product's definition of "active", not the seeder's.
-        // A literal here is a second definition of it, and the day the product rule
-        // moves the fixture disagrees with the screens that read what it wrote.
-        var activeThreshold = now - ActivityPolicy.ActivePeriod;
+        var (_, games) = await _gamePopularity.UpdateScoresAsync(now);
+        var (_, blogs) = await _blogPopularity.UpdateScoresAsync(now);
 
-        // Update game popularity scores (active players + readers)
-        var gameIds = await _dbContext.Set<DbGame>()
-            .Where(g => !g.IsRemoved && g.Status != ModuleStatus.Draft)
-            .Select(g => g.GameId)
-            .ToListAsync();
-
-        if (gameIds.Count > 0)
-        {
-            var playerCounts = await _dbContext.Set<Character>()
-                .Where(c => gameIds.Contains(c.GameId) &&
-                           c.Status == CharacterStatus.Active &&
-                           !c.IsNpc &&
-                           c.AuthorId.HasValue &&
-                           c.Author != null &&
-                           c.Author.LastActivityUtc.HasValue &&
-                           c.Author.LastActivityUtc.Value > activeThreshold)
-                .GroupBy(c => c.GameId)
-                .Select(g => new { GameId = g.Key, Count = g.Select(c => c.AuthorId!.Value).Distinct().Count() })
-                .ToDictionaryAsync(x => x.GameId, x => x.Count);
-
-            var gameReaderCounts = await _dbContext.Set<Subscription>()
-                .Where(s => s.TargetType == SubscriptionTargetType.Game &&
-                           gameIds.Contains(s.TargetId) &&
-                           s.Subscriber.LastActivityUtc.HasValue &&
-                           s.Subscriber.LastActivityUtc.Value > activeThreshold)
-                .GroupBy(s => s.TargetId)
-                .Select(g => new { GameId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.GameId, x => x.Count);
-
-            var games = await _dbContext.Set<DbGame>().Where(g => gameIds.Contains(g.GameId)).ToListAsync();
-            foreach (var game in games)
-            {
-                playerCounts.TryGetValue(game.GameId, out var playerCount);
-                gameReaderCounts.TryGetValue(game.GameId, out var readerCount);
-                game.PopularityScore = playerCount + readerCount;
-                game.PopularityScoreUpdatedUtc = now;
-            }
-        }
-
-        // Update blog popularity scores (active readers)
-        var blogIds = await _dbContext.Set<DbBlog>()
-            .Where(b => !b.IsRemoved)
-            .Select(b => b.BlogId)
-            .ToListAsync();
-
-        if (blogIds.Count > 0)
-        {
-            var blogReaderCounts = await _dbContext.Set<Subscription>()
-                .Where(s => s.TargetType == SubscriptionTargetType.Blog &&
-                           blogIds.Contains(s.TargetId) &&
-                           s.Subscriber.LastActivityUtc.HasValue &&
-                           s.Subscriber.LastActivityUtc.Value > activeThreshold)
-                .GroupBy(s => s.TargetId)
-                .Select(g => new { BlogId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.BlogId, x => x.Count);
-
-            var blogs = await _dbContext.Set<DbBlog>().Where(b => blogIds.Contains(b.BlogId)).ToListAsync();
-            foreach (var blog in blogs)
-            {
-                blogReaderCounts.TryGetValue(blog.BlogId, out var readerCount);
-                blog.PopularityScore = readerCount;
-                blog.PopularityScoreUpdatedUtc = now;
-            }
-        }
-
-        await _dbContext.SaveChangesAsync();
-        result.Details.Add($"Updated popularity scores for {gameIds.Count} games and {blogIds.Count} blogs");
+        result.Details.Add($"Updated popularity scores for {games} games and {blogs} blogs");
     }
 
     private async Task CreateLikes(List<DbUser> users, ComprehensiveSeedResult result)

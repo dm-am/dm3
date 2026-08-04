@@ -73,7 +73,7 @@ internal class TopicCommentService : ITopicCommentService
         var currentUser = _identityProvider.Current.User;
         if (topic.Author != null && await _userBlacklistChecker.IsBlockedAsync(topic.Author.UserId, currentUser.UserId))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Вы не можете комментировать эту тему");
+            throw new HttpException(HttpStatusCode.Forbidden, "Вы не можете комментировать этот топик");
         }
 
         var createEntity = new CreateTopicCommentEntity

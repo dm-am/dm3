@@ -4,7 +4,7 @@
 // subscriber count live in the info table (BlogDetails), not duplicated in a
 // header strip. All per-blog navigation and actions live in the left-sidebar
 // BlogPanel; role flags are lifted into the shared useBlogDetailsStore (SSOT).
-import { computed, onUnmounted, ref } from "vue";
+import { computed, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useBlogDetailsStore } from "@/entities/blog";
@@ -24,10 +24,24 @@ import { PageTitleSkeleton } from "@/shared/ui/Skeleton";
 
 const route = useRoute();
 const blogStore = useBlogDetailsStore();
-const { blog } = storeToRefs(blogStore);
+const { blog, blogError, blogErrorStatus } = storeToRefs(blogStore);
 
-// Same rule as the game shell: the failure is a page, not a sentence.
-const errorCode = ref<number | null>(null);
+// Same rule as the game shell, down to where the code is read from: the failure
+// is a page and not a sentence, and it is derived from the store rather than
+// kept in a local ref. Five call sites outside this shell reload the blog
+// (PublicationCreate, PublicationEdit, BlogInfoSection, RolesSection twice); a
+// refusal from any of them nulls `blog`, and a shell-local code stayed null, so
+// the zone held its title skeleton instead of saying anything.
+//
+// The status is read through the sentence and not instead of it: a refusal that
+// carries no status leaves blogErrorStatus null, and zero is a status too
+// (client.ts fills it for a request that never reached the API), so truthiness
+// is not the test either.
+const errorCode = computed(() =>
+  blogError.value
+    ? errorCodeForStatus(blogErrorStatus.value ?? undefined)
+    : null,
+);
 
 const blogId = computed(() => route.params.id as string);
 
@@ -45,10 +59,10 @@ useDocumentTitle(() =>
   errorCode.value ? getErrorConfig(errorCode.value).title : heading.value,
 );
 
+// The refusal itself is already in the store, which is what the error page
+// reads through errorCode above.
 async function load(id: string) {
-  errorCode.value = null;
-  const { ok, status } = await blogStore.loadBlog(id);
-  if (!ok) errorCode.value = errorCodeForStatus(status);
+  await blogStore.loadBlog(id);
 }
 
 useFetchData(

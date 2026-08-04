@@ -1,8 +1,8 @@
-using DM.Infrastructure.Core;
+using DM.Infrastructure.Core.Randomness;
 using FluentAssertions;
 using Xunit;
 
-namespace DM.Infrastructure.Core.Tests;
+namespace DM.Infrastructure.Core.Tests.Randomness;
 
 public class RandomNumberGeneratorShould
 {

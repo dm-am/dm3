@@ -18,14 +18,38 @@ import { ref } from "vue";
 import type { Post } from "./types";
 import gameApi from "../api/gameApi";
 import { getWeekStartUtc } from "@/shared/lib/utils/datetime";
+import { createKeyedCache } from "@/shared/lib/utils/keyedCache";
 
-/** Cache TTL: 5 minutes (rated posts don't change often) */
-const CACHE_TTL = 300_000;
+/**
+ * One cache for the three questions, not three sets of timestamps.
+ *
+ * Every widget here asks getRatedPosts a different question and each kept its
+ * own answer to "is mine still fresh" — two module-level `lastFetch*` counters
+ * and a `fetchedAt` on every per-user entry, all comparing against a `CACHE_TTL`
+ * this file declared for itself. That is the bookkeeping half of
+ * `shared/lib/utils/keyedCache`, written a fourth time; what is genuinely local
+ * is the render state around it (which block is loading, which has an error),
+ * and that stays below.
+ *
+ * The keys are literals rather than `stableCacheKey(query)` because the
+ * best-of-week query carries `createdAfter: getWeekStartUtc()` — a timestamp
+ * computed at call time. Keyed on the query, every call would be a new key and
+ * the cache would never hit once.
+ *
+ * The excluded post is part of the latest-rated key: the answer is picked out
+ * of the page by it, so two exclusions are two answers. The one call site
+ * passes the best-of-week id, which does not move inside five minutes.
+ */
+const RATED_POST_TTL = 300_000;
 
-/** Per-user cache entry for "лучший пост за все время". */
+const bestOfWeekKey = "best-of-week";
+const latestRatedKey = (excludeId?: string) =>
+  `latest-rated:${excludeId ?? ""}`;
+const userBestKey = (username: string) => `user-best:${username}`;
+
+/** Per-user render state for "лучший пост за все время". */
 interface UserBestPostEntry {
   post: Post | null;
-  fetchedAt: number;
   loading: boolean;
   loaded: boolean;
   /** Russian error message, or null when the last fetch succeeded. */
@@ -53,17 +77,23 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
    */
   const userBestPosts = ref<Map<string, UserBestPostEntry>>(new Map());
 
-  let lastFetchBest = 0;
-  let lastFetchLatest = 0;
+  const postCache = createKeyedCache<Post | null>({
+    ttlMs: RATED_POST_TTL,
+    // Two singletons plus one entry per profile visited in five minutes.
+    maxEntries: 32,
+  });
 
   async function fetchBestOfWeek(force = false) {
-    const now = Date.now();
-    if (
-      !force &&
-      bestOfWeek.value !== null &&
-      now - lastFetchBest < CACHE_TTL
-    ) {
-      return;
+    if (!force) {
+      // A week with no rated post at all is an answer too, and it is cached
+      // like any other: the counter this replaces treated "none" as "not
+      // loaded" and asked the server again on every visit to the home page.
+      const cached = postCache.get(bestOfWeekKey);
+      if (cached !== undefined) {
+        bestOfWeek.value = cached;
+        bestLoaded.value = true;
+        return;
+      }
     }
     if (loadingBest.value) return;
     loadingBest.value = true;
@@ -80,8 +110,9 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
         // text only when it has no post to render.
         bestError.value = "Не удалось загрузить лучший пост недели";
       } else {
-        bestOfWeek.value = response.data?.resources?.[0] ?? null;
-        lastFetchBest = now;
+        const post = response.data?.resources?.[0] ?? null;
+        bestOfWeek.value = post;
+        postCache.set(bestOfWeekKey, post);
       }
     } finally {
       loadingBest.value = false;
@@ -101,13 +132,14 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
    *   param (rather than dropped) so no existing call site breaks.
    */
   async function fetchLatestRated(excludeId?: string, force = false) {
-    const now = Date.now();
-    if (
-      !force &&
-      latestRated.value !== null &&
-      now - lastFetchLatest < CACHE_TTL
-    ) {
-      return;
+    const key = latestRatedKey(excludeId);
+    if (!force) {
+      const cached = postCache.get(key);
+      if (cached !== undefined) {
+        latestRated.value = cached;
+        latestLoaded.value = true;
+        return;
+      }
     }
     if (loadingLatest.value) return;
     loadingLatest.value = true;
@@ -124,10 +156,11 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
         latestError.value = "Не удалось загрузить последний оцененный пост";
       } else {
         const resources = response.data?.resources ?? [];
-        latestRated.value = excludeId
+        const post = excludeId
           ? (resources.find((p) => p.id !== excludeId) ?? resources[0] ?? null)
           : (resources[0] ?? null);
-        lastFetchLatest = now;
+        latestRated.value = post;
+        postCache.set(key, post);
       }
     } finally {
       loadingLatest.value = false;
@@ -141,21 +174,25 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
    * generic rated-posts filter (author + rating sort + take=1).
    */
   async function fetchBestPostOfUser(username: string, force = false) {
-    const now = Date.now();
+    const key = userBestKey(username);
     const existing = userBestPosts.value.get(username);
-    if (
-      !force &&
-      existing &&
-      !existing.loading &&
-      now - existing.fetchedAt < CACHE_TTL
-    ) {
-      return;
+
+    if (!force && !existing?.loading) {
+      const cached = postCache.get(key);
+      if (cached !== undefined) {
+        userBestPosts.value.set(username, {
+          post: cached,
+          loading: false,
+          loaded: true,
+          error: null,
+        });
+        return;
+      }
     }
     if (existing?.loading) return;
 
     userBestPosts.value.set(username, {
       post: existing?.post ?? null,
-      fetchedAt: existing?.fetchedAt ?? 0,
       loading: true,
       loaded: existing?.loaded ?? false,
       error: null,
@@ -170,19 +207,22 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
       });
       if (response.error) {
         // Keep the entry loaded-but-null so consumers can distinguish
-        // "failed" (error set) from "empty" (error null, post null).
+        // "failed" (error set) from "empty" (error null, post null). The
+        // refusal is not cached: the retry button exists to ask again, and
+        // the counter this replaces recorded the failure as a fetch and left
+        // the block refusing to try for five minutes.
         userBestPosts.value.set(username, {
           post: existing?.post ?? null,
-          fetchedAt: Date.now(),
           loading: false,
           loaded: true,
           error: "Не удалось загрузить лучший пост пользователя",
         });
         return;
       }
+      const post = response.data?.resources?.[0] ?? null;
+      postCache.set(key, post);
       userBestPosts.value.set(username, {
-        post: response.data?.resources?.[0] ?? null,
-        fetchedAt: Date.now(),
+        post,
         loading: false,
         loaded: true,
         error: null,
@@ -192,7 +232,6 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
       // can distinguish failure from a genuinely empty result.
       userBestPosts.value.set(username, {
         post: null,
-        fetchedAt: Date.now(),
         loading: false,
         loaded: true,
         error: "Не удалось загрузить лучший пост пользователя",

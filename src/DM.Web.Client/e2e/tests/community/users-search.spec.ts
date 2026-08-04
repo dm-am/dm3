@@ -1,41 +1,50 @@
 import { test, expect } from "@playwright/test";
 
+/**
+ * The community list, addressed the way the filter addresses itself.
+ *
+ * What this file was: `q`, `sort` and `filter` in every URL. The filter reads
+ * none of them — useUsersFilter binds `search`, `activity`, `role`, `sortBy` and
+ * `sortOrder` (buildQueryFromState / parseQueryToState) — so every one of those
+ * navigations asked for the plain unfiltered list, and the tests that then
+ * asserted "no .error-message" passed on a page that had never been filtered.
+ * Their titles named a feature; their bodies checked that the page rendered.
+ *
+ * Two more rules the URL follows and the assertions follow with it: a parameter
+ * is written only while it differs from the default (sortBy is lastActivity,
+ * activity is all), and the direction comes with the field — choosing "Имя"
+ * sets asc because that option declares it.
+ */
 test.describe("Users Search", () => {
   test.describe("Search Functionality", () => {
     test("should filter users by text search", async ({ page }) => {
       await page.goto("/community");
 
-      // Type search query
       const searchInput = page.getByPlaceholder("Поиск");
       await searchInput.fill("тест");
       await searchInput.press("Enter");
 
-      // URL should update with search parameter
-      await expect(page).toHaveURL(/q=тест/);
+      await expect(page).toHaveURL(/search=/);
     });
 
     test("should clear search input", async ({ page }) => {
-      await page.goto("/community?q=тест");
+      await page.goto("/community?search=тест");
 
-      // Verify search input has value
       const searchInput = page.getByPlaceholder("Поиск");
       await expect(searchInput).toHaveValue("тест");
 
-      // Clear search
       await searchInput.clear();
       await searchInput.press("Enter");
 
-      // URL should not have q parameter
-      await expect(page).not.toHaveURL(/q=/);
+      await expect(page).not.toHaveURL(/search=/);
     });
 
     test("should display search results", async ({ page }) => {
-      await page.goto("/community?q=Alice");
+      await page.goto("/community?search=a");
 
-      // Wait for results to load
-      await page.waitForSelector(".users-table, .user-card, .search-results");
-
-      // Page should show results (not error)
+      // ".users-table", ".user-card" and ".search-results" name nothing: the
+      // widget renders .users-data-table.
+      await expect(page.locator(".users-data-table")).toBeVisible();
       await expect(page.locator(".error-message")).not.toBeVisible();
     });
   });
@@ -44,102 +53,102 @@ test.describe("Users Search", () => {
     test("should sort by username", async ({ page }) => {
       await page.goto("/community");
 
-      // Open sort dropdown (implementation-dependent)
-      const sortBtn = page.locator(".sort-btn, .sort-select, [data-sort]");
-      if (await sortBtn.isVisible()) {
-        await sortBtn.click();
+      // The control is the SortButton: a .sort-btn opening a .sort-dropdown
+      // of .sort-option items. ".sort-select" and "[data-sort]" are not in
+      // the client, and the option reads "Имя", not "По имени" — so the
+      // guard was false and the body never ran.
+      await page.locator(".sort-btn").click();
+      await page
+        .locator(".sort-option")
+        .filter({ hasText: "Имя" })
+        .first()
+        .click();
 
-        // Select username sort
-        await page.locator("text=По имени").click();
-
-        // URL should have sort parameter
-        await expect(page).toHaveURL(/sort=Name|sortBy=username/);
-      }
+      await expect(page).toHaveURL(/sortBy=username/);
+      // The field carries its own direction: username declares asc.
+      await expect(page).toHaveURL(/sortOrder=asc/);
     });
 
     test("should sort by rating", async ({ page }) => {
-      await page.goto("/community?sort=Rating");
+      await page.goto("/community?sortBy=rating");
 
-      // Verify sort is applied (no error)
-      await expect(page.locator(".error-message")).not.toBeVisible();
+      await expect(page.locator(".users-data-table")).toBeVisible();
+      await expect(page).toHaveURL(/sortBy=rating/);
     });
 
-    test("should sort by last activity", async ({ page }) => {
-      await page.goto("/community?sort=LastActivity");
+    test("should keep the default sort out of the address", async ({
+      page,
+    }) => {
+      await page.goto("/community");
 
-      // Verify sort is applied (no error)
-      await expect(page.locator(".error-message")).not.toBeVisible();
+      await expect(page.locator(".users-data-table")).toBeVisible();
+      // lastActivity is the default, and a default is not written down.
+      await expect(page).not.toHaveURL(/sortBy=/);
     });
 
     test("should sort by registration date", async ({ page }) => {
-      await page.goto("/community?sort=Registered");
+      await page.goto("/community?sortBy=registered");
 
-      // Verify sort is applied (no error)
-      await expect(page.locator(".error-message")).not.toBeVisible();
+      await expect(page.locator(".users-data-table")).toBeVisible();
+      await expect(page).toHaveURL(/sortBy=registered/);
     });
 
     test("should combine search with explicit sort", async ({ page }) => {
-      // Search with explicit rating sort (should use rating, not relevance)
-      await page.goto("/community?q=тест&sort=Rating");
+      await page.goto("/community?search=тест&sortBy=rating");
 
-      // Both parameters should be in URL
-      await expect(page).toHaveURL(/q=тест/);
-      await expect(page).toHaveURL(/sort=Rating/);
-
-      // Page should load without error
+      await expect(page.getByPlaceholder("Поиск")).toHaveValue("тест");
+      await expect(page).toHaveURL(/sortBy=rating/);
       await expect(page.locator(".error-message")).not.toBeVisible();
     });
   });
 
   test.describe("Activity Filter", () => {
     test("should filter by active users", async ({ page }) => {
-      await page.goto("/community?filter=Active");
+      await page.goto("/community?activity=active");
 
-      // Verify filter is applied
-      await expect(page.locator(".error-message")).not.toBeVisible();
+      await expect(page.locator(".users-data-table")).toBeVisible();
+      await expect(page).toHaveURL(/activity=active/);
     });
 
     test("should filter by all users", async ({ page }) => {
-      await page.goto("/community?filter=All");
+      await page.goto("/community?activity=all");
 
-      // Verify filter is applied
-      await expect(page.locator(".error-message")).not.toBeVisible();
+      await expect(page.locator(".users-data-table")).toBeVisible();
+      // "all" is the default and is dropped from the address.
+      await expect(page).not.toHaveURL(/activity=/);
     });
 
     test("should combine search with activity filter", async ({ page }) => {
-      await page.goto("/community?q=тест&filter=Active");
+      await page.goto("/community?search=тест&activity=active");
 
-      // Both parameters should be in URL
-      await expect(page).toHaveURL(/q=тест/);
-      await expect(page).toHaveURL(/filter=Active/);
+      await expect(page.getByPlaceholder("Поиск")).toHaveValue("тест");
+      await expect(page).toHaveURL(/activity=active/);
     });
   });
 
   test.describe("URL State Persistence", () => {
     test("should restore filters from URL", async ({ page }) => {
-      await page.goto("/community?q=Alice&sort=Rating&filter=Active");
+      await page.goto("/community?search=Alice&sortBy=rating&activity=active");
 
-      // Search input should have value
       await expect(page.getByPlaceholder("Поиск")).toHaveValue("Alice");
-
-      // Page should load without error
+      await expect(page).toHaveURL(/sortBy=rating/);
+      await expect(page).toHaveURL(/activity=active/);
       await expect(page.locator(".error-message")).not.toBeVisible();
     });
 
-    test("should preserve search when paginating", async ({ page }) => {
-      await page.goto("/community?q=a&number=1");
+    test("should preserve the query when paginating", async ({ page }) => {
+      // A sort, not a search: the seed writes more accounts than fit on one
+      // page, so the paging strip is there whatever the search matches. The
+      // old version paginated on "q", which the filter does not read, and
+      // clicked behind an `if` — nothing was asserted either way.
+      await page.goto("/community?sortBy=username");
 
-      // Wait for page to load
-      await page.waitForTimeout(500);
+      const paging = page.locator(".paging").first();
+      await expect(paging).toBeVisible();
+      await paging.getByRole("link", { name: "2", exact: true }).click();
 
-      // Find pagination link
-      const nextPage = page.locator(".paging a, [data-page]").last();
-      if (await nextPage.isVisible()) {
-        await nextPage.click();
-
-        // Search should be preserved
-        await expect(page).toHaveURL(/q=a/);
-      }
+      await expect(page).toHaveURL(/sortBy=username/);
+      await expect(page).toHaveURL(/number=2/);
     });
   });
 

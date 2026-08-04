@@ -65,7 +65,8 @@ export {
 } from "./model/types";
 
 // Store
-export { useGamesStore, useGameDetailsStore } from "./model/store";
+export { useGamesStore } from "./model/store";
+export { useGameDetailsStore } from "./model/detailsStore";
 export { useRatedPostsStore } from "./model/ratedPostsStore";
 export { usePulseStore, getWeekStartUtc } from "./model/pulseStore";
 export { buildRatedPostsParams } from "./model/ratedPostsParams";

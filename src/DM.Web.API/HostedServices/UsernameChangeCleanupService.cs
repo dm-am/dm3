@@ -1,25 +1,23 @@
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Core.Enums;
-using DM.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
+using DM.Domain.Account.Features.UsernameChange;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace DM.Web.API.HostedServices;
 
 /// <summary>
-/// Background service that handles expiration of username change requests:
-/// 1. Auto-rejects pending requests that moderators haven't reviewed within 7 days
-/// 2. Expires approval tokens that users haven't used within 48 hours
+/// Runs the two name change deadlines on a schedule.
 /// </summary>
+/// <remarks>
+/// Both windows and both resolution comments belong to
+/// <see cref="IUsernameChangeExpiryProcessor" />; this only decides how often to
+/// ask, and keeps the two calls independent.
+/// </remarks>
 internal class UsernameChangeCleanupService : PeriodicHostedService
 {
     private readonly ILogger<UsernameChangeCleanupService> _logger;
-    private readonly int _pendingExpirationDays = 7;
-    private readonly int _approvalTokenExpirationHours = 48;
 
     public UsernameChangeCleanupService(
         IServiceProvider serviceProvider,
@@ -41,11 +39,21 @@ internal class UsernameChangeCleanupService : PeriodicHostedService
     /// </remarks>
     protected override async Task RunOnce(IServiceProvider scope, CancellationToken cancellationToken)
     {
-        var dbContext = scope.GetRequiredService<DmDbContext>();
+        var processor = scope.GetRequiredService<IUsernameChangeExpiryProcessor>();
 
         try
         {
-            await ExpirePendingRequests(dbContext, cancellationToken);
+            _logger.LogDebug("[Username Change Cleanup] Checking for expired pending requests");
+            var expiredCount = await processor.ExpireUnreviewedAsync(cancellationToken);
+            if (expiredCount > 0)
+            {
+                _logger.LogInformation(
+                    "[Username Change Cleanup] Expired {Count} unreviewed requests", expiredCount);
+            }
+            else
+            {
+                _logger.LogDebug("[Username Change Cleanup] No expired pending requests");
+            }
         }
         catch (OperationCanceledException)
         {
@@ -58,7 +66,17 @@ internal class UsernameChangeCleanupService : PeriodicHostedService
 
         try
         {
-            await ExpireApprovalTokens(dbContext, cancellationToken);
+            _logger.LogDebug("[Username Change Cleanup] Checking for expired approval tokens");
+            var expiredCount = await processor.ExpireApprovalTokensAsync(cancellationToken);
+            if (expiredCount > 0)
+            {
+                _logger.LogInformation(
+                    "[Username Change Cleanup] Expired {Count} approval tokens", expiredCount);
+            }
+            else
+            {
+                _logger.LogDebug("[Username Change Cleanup] No expired approval tokens");
+            }
         }
         catch (OperationCanceledException)
         {
@@ -67,73 +85,6 @@ internal class UsernameChangeCleanupService : PeriodicHostedService
         catch (Exception ex)
         {
             _logger.LogError(ex, "[Username Change Cleanup] Error expiring approval tokens");
-        }
-    }
-
-    /// <summary>
-    /// Auto-reject pending requests that moderators haven't reviewed within 7 days
-    /// </summary>
-    private async Task ExpirePendingRequests(DmDbContext dbContext, CancellationToken cancellationToken)
-    {
-        _logger.LogDebug("[Username Change Cleanup] Checking for expired pending requests");
-
-        var cutoffDate = DateTimeOffset.UtcNow.AddDays(-_pendingExpirationDays);
-
-        // Update pending requests older than 7 days to Expired status
-        var expiredCount = await dbContext.UsernameChangeRequests
-            .Where(r => r.Status == UsernameChangeRequestStatus.Pending &&
-                       r.CreatedUtc < cutoffDate)
-            .ExecuteUpdateAsync(
-                s => s.SetProperty(r => r.Status, UsernameChangeRequestStatus.Expired)
-                      .SetProperty(r => r.ResolvedUtc, DateTimeOffset.UtcNow)
-                      .SetProperty(r => r.ResolverComment, "Автоматически отклонено: истек срок ожидания модерации"),
-                cancellationToken);
-
-        if (expiredCount > 0)
-        {
-            _logger.LogInformation(
-                "[Username Change Cleanup] Expired {Count} pending requests older than {Days} days",
-                expiredCount,
-                _pendingExpirationDays);
-        }
-        else
-        {
-            _logger.LogDebug("[Username Change Cleanup] No expired pending requests");
-        }
-    }
-
-    /// <summary>
-    /// Expire approval tokens that users haven't used within 48 hours
-    /// </summary>
-    private async Task ExpireApprovalTokens(DmDbContext dbContext, CancellationToken cancellationToken)
-    {
-        _logger.LogDebug(
-            "[Username Change Cleanup] Checking for approval tokens older than {Hours} hours",
-            _approvalTokenExpirationHours);
-
-        var now = DateTimeOffset.UtcNow;
-
-        // Update approved requests with expired tokens to Expired status
-        var expiredCount = await dbContext.UsernameChangeRequests
-            .Where(r => r.Status == UsernameChangeRequestStatus.Approved &&
-                       r.ApprovalTokenExpiresUtc.HasValue &&
-                       r.ApprovalTokenExpiresUtc.Value < now)
-            .ExecuteUpdateAsync(
-                s => s.SetProperty(r => r.Status, UsernameChangeRequestStatus.Expired)
-                      .SetProperty(r => r.ApprovalToken, (Guid?)null)
-                      .SetProperty(r => r.ResolverComment,
-                          r => r.ResolverComment + " | Токен истек: пользователь не выбрал новое имя в отведенное время"),
-                cancellationToken);
-
-        if (expiredCount > 0)
-        {
-            _logger.LogInformation(
-                "[Username Change Cleanup] Expired {Count} approval tokens",
-                expiredCount);
-        }
-        else
-        {
-            _logger.LogDebug("[Username Change Cleanup] No expired approval tokens");
         }
     }
 }

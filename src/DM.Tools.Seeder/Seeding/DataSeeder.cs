@@ -6,7 +6,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Account.Features.Security;
+using DM.Domain.Blog.Features.Popularity;
 using DM.Domain.Community.Features.Polls;
+using DM.Domain.Game.Features.Popularity;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Identity;
 using DM.Domain.Personal.Features.Profiles;
@@ -65,6 +67,8 @@ internal sealed partial class DataSeeder
     private readonly IPublicIdService _publicIdService;
     private readonly IImageProcessingService _imageProcessing;
     private readonly Amazon.S3.IAmazonS3 _s3Client;
+    private readonly IGamePopularityProcessor _gamePopularity;
+    private readonly IBlogPopularityProcessor _blogPopularity;
     private readonly CdnConfiguration _cdnConfig;
 
     /// <summary>
@@ -92,6 +96,8 @@ internal sealed partial class DataSeeder
         IPublicIdService publicIdService,
         IImageProcessingService imageProcessing,
         Amazon.S3.IAmazonS3 s3Client,
+        IGamePopularityProcessor gamePopularity,
+        IBlogPopularityProcessor blogPopularity,
         IOptions<CdnConfiguration> cdnOptions)
     {
         _dbContext = dbContext;
@@ -102,6 +108,8 @@ internal sealed partial class DataSeeder
         _publicIdService = publicIdService;
         _imageProcessing = imageProcessing;
         _s3Client = s3Client;
+        _gamePopularity = gamePopularity;
+        _blogPopularity = blogPopularity;
         _cdnConfig = cdnOptions.Value;
         _random = determinism.Random;
         _now = determinism.Epoch;

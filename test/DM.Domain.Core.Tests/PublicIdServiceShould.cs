@@ -4,8 +4,16 @@ using DM.Domain.Core.Identity;
 using FluentAssertions;
 using Xunit;
 
-namespace DM.Infrastructure.Core.Tests;
+namespace DM.Domain.Core.Tests;
 
+/// <summary>
+/// The encoding every readable page address on the site is built out of.
+/// </summary>
+/// <remarks>
+/// It used to live in the mirror of DM.Infrastructure.Core, which is not the
+/// project that declares it: the kernel had no test project at all, so its one
+/// covered type was tested from somewhere else.
+/// </remarks>
 public class PublicIdServiceShould
 {
     private readonly PublicIdService service = new();

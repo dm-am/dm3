@@ -162,7 +162,7 @@ public class TopicCommentServiceShould : UnitTestBase
 
         var exception = await act.Should().ThrowAsync<HttpException>();
         exception.Which.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        exception.Which.Message.Should().Contain("Вы не можете комментировать эту тему");
+        exception.Which.Message.Should().Contain("Вы не можете комментировать этот топик");
     }
 
     [Fact]

@@ -427,6 +427,109 @@ public class OpenApiContractShould : IntegrationTestBase
     }
 
     /// <summary>
+    /// Every sort parameter names the values it takes.
+    /// </summary>
+    /// <remarks>
+    /// API_DESIGN says the allowed sort fields are declared beside the endpoint,
+    /// in the parameter, and that an unknown one is a validation error rather
+    /// than a silently different order. What was published instead was
+    /// <c>"type": "string"</c> on thirteen sortBy parameters and fourteen
+    /// sortOrder ones — a contract that names no vocabulary at all, over twelve
+    /// endpoints that answered 200 to any value and sorted by their default.
+    ///
+    /// This test is the reason the vocabulary cannot be forgotten: the enum is
+    /// published by SortVocabularySwaggerFilter out of the same table
+    /// SortVocabularyFilter enforces, so an endpoint added without an entry
+    /// there arrives here with a bare string and fails.
+    /// </remarks>
+    [Fact]
+    public async Task DeclareTheSortFieldsOfEveryListEndpoint()
+    {
+        var undeclared = new List<string>();
+        var declared = 0;
+
+        foreach (var group in SwaggerExtensions.ApiGroups)
+        {
+            var response = await Client.GetAsync($"/swagger/{group}/swagger.json");
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            foreach (var path in document.RootElement.GetProperty("paths").EnumerateObject())
+            {
+                foreach (var operation in path.Value.EnumerateObject())
+                {
+                    if (operation.Value.ValueKind != JsonValueKind.Object ||
+                        !operation.Value.TryGetProperty("parameters", out var parameters))
+                    {
+                        continue;
+                    }
+
+                    foreach (var parameter in parameters.EnumerateArray())
+                    {
+                        if (!parameter.TryGetProperty("name", out var name) ||
+                            name.GetString() is not ("sortBy" or "sortOrder" or "sort"))
+                        {
+                            continue;
+                        }
+
+                        if (DeclaresItsValues(parameter, document.RootElement))
+                        {
+                            declared++;
+                        }
+                        else
+                        {
+                            undeclared.Add(
+                                $"{operation.Name.ToUpperInvariant()} {path.Name} {name.GetString()}");
+                        }
+                    }
+                }
+            }
+        }
+
+        declared.Should().BeGreaterThan(20, "the API publishes sorted list endpoints");
+        undeclared.Should().BeEmpty(
+            "a sort parameter published as a bare string names no vocabulary, and the endpoint " +
+            "behind it used to answer 200 to any value and sort by its default instead");
+    }
+
+    /// <summary>
+    /// Whether a parameter's schema carries an enum, directly or through the
+    /// $ref an enum type is published as.
+    /// </summary>
+    private static bool DeclaresItsValues(JsonElement parameter, JsonElement document)
+    {
+        if (!parameter.TryGetProperty("schema", out var schema))
+        {
+            return false;
+        }
+
+        if (schema.TryGetProperty("enum", out var inline) &&
+            inline.ValueKind == JsonValueKind.Array &&
+            inline.GetArrayLength() > 0)
+        {
+            return true;
+        }
+
+        if (!schema.TryGetProperty("$ref", out var reference))
+        {
+            return false;
+        }
+
+        var schemaName = reference.GetString()?.Split('/')[^1];
+        if (schemaName == null ||
+            !document.TryGetProperty("components", out var components) ||
+            !components.TryGetProperty("schemas", out var schemas) ||
+            !schemas.TryGetProperty(schemaName, out var referenced))
+        {
+            return false;
+        }
+
+        return referenced.TryGetProperty("enum", out var values) &&
+               values.ValueKind == JsonValueKind.Array &&
+               values.GetArrayLength() > 0;
+    }
+
+    /// <summary>
     /// A parameter that repeats is not a parameter that splits on a comma, and
     /// the published description has to say which one it is.
     /// </summary>

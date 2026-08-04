@@ -1,8 +1,8 @@
-using DM.Infrastructure.Core;
+using DM.Infrastructure.Core.Identifiers;
 using FluentAssertions;
 using Xunit;
 
-namespace DM.Infrastructure.Core.Tests;
+namespace DM.Infrastructure.Core.Tests.Identifiers;
 
 public class GuidFactoryShould
 {

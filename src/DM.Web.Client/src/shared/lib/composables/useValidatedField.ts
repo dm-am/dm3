@@ -1,4 +1,5 @@
 import { ref, computed, type Ref } from "vue";
+import { pluralize } from "@/shared/lib/utils/pluralize";
 
 export type ValidationResult = string | null | undefined;
 export type SyncValidator = (value: string) => ValidationResult;
@@ -211,7 +212,10 @@ export const validators = {
   minLength:
     (min: number, message?: string): SyncValidator =>
     (v) =>
-      !v || v.length >= min ? null : message || `Минимум ${min} символов`,
+      !v || v.length >= min
+        ? null
+        : message ||
+          `Минимум ${min} ${pluralize(min, "символ", "символа", "символов")}`,
 
   combine:
     (...validators: SyncValidator[]): SyncValidator =>

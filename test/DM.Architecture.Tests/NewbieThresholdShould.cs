@@ -96,7 +96,12 @@ public class NewbieThresholdShould
     [Fact]
     public void BeSpelledNowhereElse()
     {
-        var rule = new Regex(@"QuantityRating(\\?"")?\s*[<>]=?\s*\d", RegexOptions.Compiled);
+        var rules = new[]
+        {
+            new Regex(@"QuantityRating(\\?"")?\s*[<>]=?\s*\d", RegexOptions.Compiled),
+            new Regex(@"[<>]=?\s*ProbationPolicy\.NewbiePostThreshold|NewbiePostThreshold\s*[<>]=?",
+                RegexOptions.Compiled)
+        };
 
         var offenders = Directory
             .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)
@@ -107,7 +112,8 @@ public class NewbieThresholdShould
                        && !path.Contains($"{Path.DirectorySeparatorChar}Migrations{Path.DirectorySeparatorChar}",
                            StringComparison.Ordinal)
                        && Path.GetFileName(path) != "DmDbContext.cs")
-            .Where(path => rule.IsMatch(File.ReadAllText(path)))
+            .Where(path => Path.GetFileName(path) != "ProbationPolicy.cs")
+            .Where(path => rules.Any(rule => rule.IsMatch(File.ReadAllText(path))))
             .Select(Path.GetFileName)
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
@@ -115,5 +121,90 @@ public class NewbieThresholdShould
         offenders.Should().BeEmpty(
             "the predicate lives on ProbationPolicy.IsNewbie and the number on the constant " +
             "beside it; a copy of either answers differently the first time the product rule moves");
+    }
+
+    /// <summary>
+    /// The number the published documentation states is the number the code uses.
+    /// </summary>
+    /// <remarks>
+    /// The endorsement and post-review endpoints spell the threshold out in their
+    /// XML docs, which is what a client reads in Swagger before deciding whether an
+    /// account qualifies. An XML doc cannot interpolate a constant, so the wording
+    /// is left alone and held to the constant from here instead: moving the product
+    /// rule without moving the sentence leaves the API promising the old number,
+    /// and there is nothing else in the build that would notice.
+    ///
+    /// Refusal messages are not matched - they interpolate the constant and carry
+    /// no digits of their own, which is the shape this test is asking the rest of
+    /// the prose to reach.
+    /// </remarks>
+    [Fact]
+    public void BeTheNumberTheApiDocumentationPromises()
+    {
+        var mention = new Regex(@"(?<number>\d+)\s+(game posts|постов)", RegexOptions.Compiled);
+
+        var stale = Directory
+            .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                       StringComparison.Ordinal)
+                       && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                           StringComparison.Ordinal))
+            .SelectMany(path => mention
+                .Matches(File.ReadAllText(path))
+                .Select(match => (File: Path.GetFileName(path), Number: match.Groups["number"].Value)))
+            .Where(pair => pair.Number != ProbationPolicy.NewbiePostThreshold.ToString())
+            .Select(pair => $"{pair.File}: {pair.Number}")
+            .OrderBy(entry => entry, StringComparer.Ordinal)
+            .ToArray();
+
+        stale.Should().BeEmpty(
+            $"the threshold is {ProbationPolicy.NewbiePostThreshold}, and a documented number " +
+            "that disagrees tells a client the account is eligible when the endpoint refuses it");
+    }
+
+    /// <summary>
+    /// One number is not enough: the count it is compared against comes from one
+    /// column too.
+    /// </summary>
+    /// <remarks>
+    /// "Game posts" had two readings - the denormalised QuantityRating the profile
+    /// badge and the user filter are built on, and a COUNT over Posts, which the
+    /// global !IsRemoved filter makes a different number the moment a post is
+    /// deleted. Three repositories answered the same question and one of them
+    /// counted, so a user could be shown the newbie badge and still be allowed to
+    /// review a game, or the reverse.
+    ///
+    /// Matched on the implementations rather than the declarations: the interfaces
+    /// spell the method without a body, and a rule stated on the name alone would
+    /// be satisfied by an interface nobody implements the same way.
+    /// </remarks>
+    [Fact]
+    public void BeCountedOffTheSameColumnInEveryRepository()
+    {
+        var implementation = new Regex(
+            @"GetUserPostCountAsync\s*\([^)]*\)\s*(=>|\{)(?<body>[\s\S]*?);",
+            RegexOptions.Compiled);
+
+        var implementations = Directory
+            .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*Repository.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                       StringComparison.Ordinal)
+                       && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                           StringComparison.Ordinal))
+            .SelectMany(path => implementation
+                .Matches(File.ReadAllText(path))
+                .Select(match => (File: Path.GetFileName(path), Body: match.Groups["body"].Value)))
+            .ToArray();
+
+        implementations.Should().NotBeEmpty(
+            "the eligibility repositories are what this rule is about, and an empty match " +
+            "would report a guard that is not there");
+
+        implementations
+            .Where(pair => !pair.Body.Contains("QuantityRating", StringComparison.Ordinal))
+            .Select(pair => pair.File)
+            .Should().BeEmpty(
+                "QuantityRating is the counter the stored IsNewbie column computes from, and a " +
+                "COUNT over Posts is a different number for anyone whose post was deleted");
     }
 }

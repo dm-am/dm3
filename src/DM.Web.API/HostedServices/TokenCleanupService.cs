@@ -1,17 +1,19 @@
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
+using DM.Domain.Account.Features.Tokens;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace DM.Web.API.HostedServices;
 
 /// <summary>
-/// Background service that periodically cleans up expired and removed tokens from the database
+/// Runs token retention on a schedule.
 /// </summary>
+/// <remarks>
+/// What is kept and for how long belongs to
+/// <see cref="ITokenCleanupProcessor" />; this only decides how often to ask.
+/// </remarks>
 internal class TokenCleanupService : PeriodicHostedService
 {
     private readonly ILogger<TokenCleanupService> _logger;
@@ -32,18 +34,13 @@ internal class TokenCleanupService : PeriodicHostedService
     {
         _logger.LogDebug("[Token Cleanup] Starting token cleanup");
 
-        var dbContext = scope.GetRequiredService<DmDbContext>();
-
-        var cutoffDate = DateTimeOffset.UtcNow.AddDays(-7);
-
-        var deletedCount = await dbContext.Tokens
-            .Where(t => t.IsRemoved || t.CreatedUtc < cutoffDate)
-            .ExecuteDeleteAsync(cancellationToken);
+        var deletedCount = await scope
+            .GetRequiredService<ITokenCleanupProcessor>()
+            .DeleteStaleAsync(cancellationToken);
 
         if (deletedCount > 0)
         {
-            _logger.LogInformation("[Token Cleanup] Deleted {Count} expired or removed tokens (older than {CutoffDate})",
-                deletedCount, cutoffDate);
+            _logger.LogInformation("[Token Cleanup] Deleted {Count} withdrawn or expired tokens", deletedCount);
         }
         else
         {

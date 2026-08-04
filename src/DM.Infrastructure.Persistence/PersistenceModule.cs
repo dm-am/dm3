@@ -9,16 +9,20 @@ using DM.Domain.Account.Features.Recovery;
 using DM.Domain.Account.Features.Registration;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Account.Features.UsernameChange;
+using DM.Domain.Account.Features.Tokens;
 using DM.Domain.Core.Blacklists;
 using DM.Domain.Blog.Features.Blacklists;
 using DM.Domain.Blog.Features.Blogs;
+using DM.Domain.Blog.Features.Popularity;
 using DM.Domain.Blog.Features.Comments;
 using DM.Domain.Blog.Features.Invitations;
 using DM.Domain.Blog.Features.PublicationComments;
 using DM.Domain.Forum.Features.Boards;
 using DM.Domain.Forum.Features.Comments;
 using DM.Domain.Forum.Features.Topics;
+using DM.Domain.Forum.Features.Digests;
 using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.Popularity;
 using DM.Domain.Game.Features.Rooms;
 using DM.Domain.Game.Features.Characters;
 using DM.Domain.Game.Features.Posts;
@@ -33,6 +37,7 @@ using DM.Domain.Game.Features.AttributeSchemas;
 using DM.Domain.Game.Features.Inactivity;
 using DM.Domain.Game.Features.Unread;
 using DM.Domain.Core.Likes;
+using DM.Domain.Core.Uploads;
 using DM.Domain.Core.Notepads;
 using DM.Domain.Community.Features.Fundraising;
 using DM.Domain.Community.Features.Polls;
@@ -65,6 +70,7 @@ using DM.Infrastructure.Persistence.Repositories.Forum;
 using DM.Infrastructure.Persistence.Repositories.Messaging;
 using DM.Infrastructure.Persistence.Repositories.Moderation;
 using DM.Infrastructure.Persistence.Repositories.Game;
+using DM.Infrastructure.Persistence.Repositories.General;
 using DM.Infrastructure.Persistence.Repositories.Personal;
 using DM.Infrastructure.Persistence.Shared.Likes;
 using DM.Infrastructure.Persistence.Shared.Notepads;
@@ -234,6 +240,10 @@ public class PersistenceModule : Module
             .As<IBlogRepository>()
             .InstancePerLifetimeScope();
 
+        builder.RegisterType<BlogPopularityRepository>()
+            .As<IBlogPopularityRepository>()
+            .InstancePerLifetimeScope();
+
         builder.RegisterType<BlogCommentRepository>()
             .As<IBlogCommentRepository>()
             .InstancePerLifetimeScope();
@@ -308,9 +318,27 @@ public class PersistenceModule : Module
             .As<IDeactivationRepository>()
             .InstancePerLifetimeScope();
 
+        // The maintenance side of the account tables: read by the background jobs
+        // and by nothing that serves a request.
+        builder.RegisterType<TokenMaintenanceRepository>()
+            .As<ITokenMaintenanceRepository>()
+            .InstancePerLifetimeScope();
+
+        builder.RegisterType<PeriodDigestRepository>()
+            .As<IPeriodDigestRepository>()
+            .InstancePerLifetimeScope();
+
+        builder.RegisterType<UploadOrphanCollector>()
+            .As<IUploadOrphanCollector>()
+            .InstancePerLifetimeScope();
+
         // Game repositories
         builder.RegisterType<GameRepository>()
             .As<IGameRepository>()
+            .InstancePerLifetimeScope();
+
+        builder.RegisterType<GamePopularityRepository>()
+            .As<IGamePopularityRepository>()
             .InstancePerLifetimeScope();
 
         builder.RegisterType<GameUserRepository>()

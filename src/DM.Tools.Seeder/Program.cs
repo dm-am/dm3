@@ -77,7 +77,18 @@ internal static class Program
         }
     }
 
-    private static IHostBuilder CreateHostBuilder() => Host
+    /// <summary>
+    /// The tool's composition, in one place so that the container it runs on is
+    /// the container a test can build.
+    /// </summary>
+    /// <remarks>
+    /// Internal rather than private for exactly that: the tool composes inside its
+    /// entry point rather than in a Startup class, so the architecture suite could
+    /// read this file as text and never resolve anything out of it. A dependency
+    /// the container cannot supply is not a build error here — it surfaces on a
+    /// developer's machine as a seeding run that dies before it writes a row.
+    /// </remarks>
+    internal static IHostBuilder CreateHostBuilder() => Host
         .CreateDefaultBuilder()
         .UseServiceProviderFactory(new AutofacServiceProviderFactory())
         .WithDmConfiguration()
@@ -101,8 +112,13 @@ internal static class Program
             builder.RegisterModuleOnce<PersistenceModule>();
 
             // Password hashing lives in the Account domain and its implementation is
-            // internal, so the assembly scan is what picks it up.
+            // internal, so the assembly scan is what picks it up. The same goes for
+            // the two popularity processors: the fixture scores its games and blogs
+            // by the site's definition rather than by a copy of it, and the classes
+            // that hold that definition are internal to their modules.
             builder.RegisterDefaultTypes(typeof(ISecurityManager).Assembly);
+            builder.RegisterDefaultTypes(typeof(DM.Domain.Game.Authorization.GameIntention).Assembly);
+            builder.RegisterDefaultTypes(typeof(DM.Domain.Blog.Authorization.BlogIntention).Assembly);
 
             // Last, and deliberately last: Autofac takes the final registration
             // as the default, so this is what replaces the infrastructure

@@ -12,7 +12,7 @@
  *   where the current user has the "Moderator" participation flag — the
  *   API serializes GameParticipation flags (Owner/Authority/Player/Reader/
  *   Moderator), NOT GameRole names, and Moderator is the game-mentor flag
- *   (see entities/game/model/store.ts). Draft/Active only; server order
+ *   (see entities/game/model/detailsStore.ts). Draft/Active only; server order
  *   (activatedUtc ?? createdUtc desc — GameRef carries no createdUtc, so
  *   the server default is the closest match to the doc's "created desc").
  *   Rows mirror the sidebar GameLink idiom: "- " prefix, title with hover

@@ -93,11 +93,10 @@ test.describe("Subscriptions API", () => {
       `${API_URL}/v1/users/me/subscriptions/check?type=Game&targetId=${targetId}`,
     );
 
+    // Only the status, and no branch on it: the shape of the 200 body is what
+    // the next test asserts, on a subscription it created itself and can
+    // therefore count on.
     expect([200, 404]).toContain(response.status());
-    if (response.status() === 200) {
-      const data = await response.json();
-      expect(data).toHaveProperty("id");
-    }
   });
 
   test("should subscribe to a game", async () => {

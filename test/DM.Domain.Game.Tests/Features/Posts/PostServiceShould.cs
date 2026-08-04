@@ -382,4 +382,68 @@ public class PostServiceShould : UnitTestBase
         _repository.Verify(r => r.DecrementAuthorQuantityRating(authorId), Times.Once);
         _unreadCountersRepository.Verify(r => r.DecrementAsync(roomId, UnreadEntryType.Message, createdUtc), Times.Once);
     }
+
+    /// <summary>
+    /// Submitted text the caller may not edit is refused, not swapped for the
+    /// stored text and saved. The refusal used to come back 200 with the post
+    /// exactly as it was, which is what a successful edit looks like, so a client
+    /// could not tell an edit that was denied from one that changed nothing.
+    /// </summary>
+    [Fact]
+    public async Task RefuseTextTheCallerMayNotEdit()
+    {
+        var roomId = Guid.NewGuid();
+        var postId = Guid.NewGuid();
+        var post = new Post
+        {
+            Id = postId,
+            RoomId = roomId,
+            Author = new GeneralUser { UserId = Guid.NewGuid() },
+            GameText = "как было"
+        };
+
+        _repository.Setup(r => r.Get(postId, It.IsAny<Guid>())).ReturnsAsync(post);
+        _roomRepository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(RoomWith(roomId));
+        _repository.Setup(r => r.Update(It.IsAny<UpdatePostEntity>())).ReturnsAsync(post);
+        _intentionManager
+            .Setup(m => m.ThrowIfForbidden(PostIntention.EditText, It.IsAny<object>()))
+            .Throws(new HttpException(HttpStatusCode.Forbidden, "нельзя"));
+
+        var act = () => _service.UpdateAsync(new UpdatePost
+        {
+            PostId = postId,
+            GameText = "как стало"
+        });
+
+        await act.Should().ThrowAsync<HttpException>();
+        _repository.Verify(r => r.Update(It.IsAny<UpdatePostEntity>()), Times.Never,
+            "a refused edit writes nothing");
+    }
+
+    /// <summary>
+    /// A request that submits no text asks for nothing: the lead who may change
+    /// only the character must not be refused for the text he never sent.
+    /// </summary>
+    [Fact]
+    public async Task NotAskForTextRightsWhenNoTextIsSubmitted()
+    {
+        var roomId = Guid.NewGuid();
+        var postId = Guid.NewGuid();
+        var post = new Post
+        {
+            Id = postId,
+            RoomId = roomId,
+            Author = new GeneralUser { UserId = Guid.NewGuid() },
+            GameText = "как было"
+        };
+
+        _repository.Setup(r => r.Get(postId, It.IsAny<Guid>())).ReturnsAsync(post);
+        _roomRepository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(RoomWith(roomId));
+        _repository.Setup(r => r.Update(It.IsAny<UpdatePostEntity>())).ReturnsAsync(post);
+
+        await _service.UpdateAsync(new UpdatePost { PostId = postId });
+
+        _intentionManager.Verify(
+            m => m.ThrowIfForbidden(PostIntention.EditText, It.IsAny<object>()), Times.Never);
+    }
 }
