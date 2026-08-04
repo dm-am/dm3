@@ -146,7 +146,7 @@ public class PublicationCommentController : ControllerBase
     ///     }
     /// </remarks>
     /// <param name="id">Comment identifier (GUID)</param>
-    /// <param name="comment">Updated comment data</param>
+    /// <param name="request">Updated comment text</param>
     /// <response code="200">Updated comment</response>
     /// <response code="400">Invalid comment data</response>
     /// <response code="401">User must be authenticated</response>
@@ -159,8 +159,8 @@ public class PublicationCommentController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PatchPublicationComment(Guid id, [FromBody] Comment comment) =>
-        Ok(await _commentApiService.Update(id, comment));
+    public async Task<IActionResult> PatchPublicationComment(Guid id, [FromBody] UpdateCommentRequest request) =>
+        Ok(await _commentApiService.Update(id, request));
 
     /// <summary>
     /// Delete publication comment
@@ -202,23 +202,20 @@ public class PublicationCommentController : ControllerBase
     ///     POST /v1/publications/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6/likes
     /// </remarks>
     /// <param name="id">Comment identifier (GUID)</param>
-    /// <response code="201">Like added, returns user who liked</response>
+    /// <response code="200">Like added, returns user who liked</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User cannot like this comment (e.g., own comment)</response>
     /// <response code="404">Comment not found</response>
     /// <response code="409">User already liked this comment</response>
     [HttpPost("comments/{id}/likes", Name = nameof(PostPublicationCommentLike))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> PostPublicationCommentLike(Guid id)
-    {
-        var result = await _likeApiService.LikePublicationComment(id);
-        return CreatedAtRoute(nameof(GetPublicationComment), new { id }, result);
-    }
+    public async Task<IActionResult> PostPublicationCommentLike(Guid id) =>
+        Ok(await _likeApiService.LikePublicationComment(id));
 
     /// <summary>
     /// Remove like from publication comment

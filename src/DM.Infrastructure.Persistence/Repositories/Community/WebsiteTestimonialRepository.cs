@@ -5,8 +5,10 @@ using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Domain.Community.Features.WebsiteTestimonials;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Extensions;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
 using DbWebsiteTestimonial = DM.Infrastructure.Persistence.Entities.Community.WebsiteTestimonial;
 
@@ -17,12 +19,17 @@ internal class WebsiteTestimonialRepository : IWebsiteTestimonialRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
-    public WebsiteTestimonialRepository(DmDbContext dbContext, IMapper mapper)
+    public WebsiteTestimonialRepository(
+        DmDbContext dbContext,
+        IMapper mapper,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _mapper = mapper;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     // READ
@@ -159,7 +166,7 @@ internal class WebsiteTestimonialRepository : IWebsiteTestimonialRepository
     }
 
     /// <inheritdoc />
-    public async Task Delete(Guid id)
+    public async Task Delete(Guid id, Guid deletedByUserId)
     {
         var dbTestimonial = await _dbContext.WebsiteTestimonials
             .FirstOrDefaultAsync(t => t.WebsiteTestimonialId == id);
@@ -169,7 +176,7 @@ internal class WebsiteTestimonialRepository : IWebsiteTestimonialRepository
             throw new InvalidOperationException($"Website testimonial {id} not found");
         }
 
-        dbTestimonial.IsRemoved = true;
+        SoftDelete.Mark(dbTestimonial, deletedByUserId, _dateTimeProvider.Now);
         await _dbContext.SaveChangesAsync();
     }
 }

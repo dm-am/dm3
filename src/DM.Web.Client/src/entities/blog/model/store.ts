@@ -3,7 +3,7 @@ import { computed, ref } from "vue";
 import type {
   Comment,
   ListEnvelope,
-  Paging,
+  PagingInfo,
   User,
 } from "@/shared/api/models/common";
 import { markRemoved } from "@/shared/api/models/common";
@@ -312,14 +312,14 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
 
   // Publications (feed) data
   const publications = ref<Publication[]>([]);
-  const publicationsPaging = ref<Paging | null>(null);
+  const publicationsPaging = ref<PagingInfo | null>(null);
   const publicationsLoading = ref(false);
   const publicationsError = ref<string | null>(null);
 
   // Discussion comments data. The failure is a flag and not a sentence: the
   // discussion section spells one wording for a failed load, wherever it fails.
   const comments = ref<Comment[]>([]);
-  const commentsPaging = ref<Paging | null>(null);
+  const commentsPaging = ref<PagingInfo | null>(null);
   const commentsLoading = ref(false);
   const commentsError = ref(false);
 

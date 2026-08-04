@@ -34,29 +34,42 @@ public class PostMappingProfileShould : UnitTestBase
     public PostMappingProfileShould() => _mapper = _configuration.CreateMapper();
 
     /// <summary>
-    /// The PATCH path maps the read model onto the update model, where CharacterId
-    /// is an Optional&lt;Guid&gt; — a wrapper with a private constructor and no
-    /// converter registered anywhere. AssertConfigurationIsValid does not exercise
-    /// the conversion, so this pins what actually happens at runtime.
+    /// Editing a post cannot touch its character.
+    /// </summary>
+    /// <remarks>
+    /// The PATCH path used to map the read model onto the update model, where
+    /// CharacterId is an Optional&lt;Guid&gt; — a wrapper with a private
+    /// constructor and no converter registered anywhere, which the service reads
+    /// as an instruction to detach the character when it arrives carrying no
+    /// value. The request DTO has no character field at all, so the hazard is
+    /// gone by construction rather than by a conversion that happens to work;
+    /// this pins that it stays gone.
+    /// </remarks>
+    [Fact]
+    public void MapAPostEditWithoutTouchingTheCharacter()
+    {
+        var request = new UpdatePostRequest { GameText = "text", MetagameText = "ooc" };
+
+        var update = _mapper.Map<DomainUpdatePost>(request);
+
+        update.GameText.Should().Be("text");
+        update.MetagameText.Should().Be("ooc");
+        update.CharacterId.Should().BeNull(
+            "an absent character is what leaves the stored one alone");
+    }
+
+    /// <summary>
+    /// The response DTO is not a request body, and the mapper has no route for it.
     /// </summary>
     [Fact]
-    public void MapPostToUpdatePostWithoutCorruptingTheCharacter()
+    public void NotMapTheResponseDtoOntoTheUpdateModel()
     {
-        var characterId = Guid.NewGuid();
-        var post = new Post
-        {
-            Character = new Character { Id = characterId },
-        };
+        var post = new Post { Character = new Character { Id = Guid.NewGuid() } };
 
-        var update = _mapper.Map<DomainUpdatePost>(post);
+        var map = () => _mapper.Map<DomainUpdatePost>(post);
 
-        // Either the wrapper carries the id, or the field stays absent — both are
-        // survivable. What must not happen is a wrapper carrying no value: the
-        // service reads that as an instruction to detach the character.
-        if (update.CharacterId != null)
-        {
-            update.CharacterId.Value.Should().Be(characterId);
-        }
+        map.Should().Throw<AutoMapperMappingException>(
+            "a body typed as the response DTO is the defect RequestBodyTypesShould names");
     }
     [Fact]
     public void MapCreateDiceRollRequestToDomainSpec()

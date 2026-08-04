@@ -8,7 +8,7 @@ import {
 } from "@/entities/game";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { SvgIcon } from "@/shared/ui/Icon";
-import { EmptyState } from "@/shared/ui";
+import { EmptyState } from "@/shared/ui/EmptyState";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { describeFailure, notifyFailure } from "@/shared/lib/errors";

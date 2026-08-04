@@ -62,7 +62,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 | Prometheus | 9090 | — |
 | Grafana | 3000 | из `docker/.env` |
 
-**Credentials:** Все пароли в `docker/.env` (создать из `docker/.env.example`).
+**Credentials:** Все пароли в `docker/.env`. Файл создает `docker/scripts/init-env.sh local`, его же зовут `dm.sh start` и `dm.ps1 start`. Копия `.env.example` руками оставляет крипто-ключ пустым, а compose объявляет его через `${...:?}` и останавливается на интерполяции до старта контейнеров.
 
 **Все порты:** `docker ps --format "table {{.Names}}\t{{.Ports}}"`
 
@@ -178,8 +178,12 @@ npm run test:unit     # Тесты
 
 ```bash
 docker stop dm-api
-dotnet run --project src/DM.Web.API --urls "http://localhost:5000"
+dotnet run --project src/DM.Web.API --urls "http://localhost:5000" --environment Development
 ```
+
+Окружение задается явно: без него хост считает себя Production, не читает
+`appsettings.Development.json` с учетными данными localhost и останавливается на
+проверке строк подключения. Там же включается Swagger.
 
 ### Миграции
 
@@ -229,7 +233,7 @@ VITE_API_HOST=http://localhost:5000
 
 ### Docker
 
-Все секреты — в `docker/.env` (создать из `.env.example`):
+Все секреты — в `docker/.env` (создает `docker/scripts/init-env.sh local`):
 ```bash
 POSTGRES_PASSWORD=...
 RABBITMQ_DEFAULT_PASS=...
@@ -248,7 +252,7 @@ IMGPROXY_SALT=...  # 64 hex chars (32 bytes), HMAC-SHA256 salt
 | Frontend не видит API | Проверить `.env.local`: `VITE_API_HOST=http://localhost:5000` |
 | Изображения не загружаются | API создает bucket автоматически на старте. Проверь `docker logs dm-api 2>&1 \| grep -i bucket` |
 | Thumbnails не отдаются (404 на imgproxy) | `docker ps \| grep imgproxy`. Проверить `IMGPROXY_KEY`/`IMGPROXY_SALT` в `docker/.env` (64 hex chars each) |
-| Seed: "API not available" | Запусти API: `dotnet run --project src/DM.Web.API` |
+| Seed: "API not available" | Запусти API: `dotnet run --project src/DM.Web.API --environment Development` |
 | Seed: "PostgreSQL not available" | Запусти: `docker compose up -d dm-pg` |
 | Пользователи не в "Активных" | Seed обновляет `LastActivityUtc`, перезапусти seed |
 

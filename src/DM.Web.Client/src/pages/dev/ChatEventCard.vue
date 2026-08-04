@@ -9,7 +9,7 @@
  * HTML and goes through the same content component the site uses everywhere.
  */
 import { computed } from "vue";
-import { ContentText } from "@/shared/ui";
+import { ContentText } from "@/shared/ui/Content";
 import { DETAILS, STATE_WORD, type MockEvent } from "./chatEventsMock";
 
 const props = defineProps<{

@@ -100,7 +100,7 @@ public class RoomController : ControllerBase
     /// Update room
     /// </summary>
     /// <param name="id">Room identifier</param>
-    /// <param name="room">Updated room details</param>
+    /// <param name="request">Editable room fields</param>
     /// <response code="200">Returns the updated room</response>
     /// <response code="400">Some of room changed properties were invalid or passed id was not recognized</response>
     /// <response code="401">User must be authenticated</response>
@@ -113,8 +113,8 @@ public class RoomController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PatchRoom(Guid id, [FromBody] Room room) =>
-        Ok(await _roomApiService.Update(id, room));
+    public async Task<IActionResult> PatchRoom(Guid id, [FromBody] UpdateRoomRequest request) =>
+        Ok(await _roomApiService.Update(id, request));
 
     /// <summary>
     /// Delete room
@@ -141,7 +141,7 @@ public class RoomController : ControllerBase
     /// </summary>
     /// <param name="id">Room identifier</param>
     /// <param name="access">Access details</param>
-    /// <response code="201">Resource created successfully</response>
+    /// <response code="200">Access created, returns the access with its identifier</response>
     /// <response code="400">Some of access parameters were invalid</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to create accesses in this room</response>
@@ -149,24 +149,24 @@ public class RoomController : ControllerBase
     /// <response code="404">Room not found</response>
     [HttpPost("{id}/accesses", Name = nameof(PostAccess))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<RoomAccess>), StatusCodes.Status201Created)]
+    // An access grant has no address of its own - there is no GET for one - so
+    // no Location is set. It used to point at the room, which is not what was
+    // created, and the identifier DELETE /v1/rooms/accesses/{id} needs was in
+    // the body all along.
+    [ProducesResponseType(typeof(Envelope<RoomAccess>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PostAccess(Guid id, [FromBody] RoomAccess access)
-    {
-        var result = await _accessApiService.Create(id, access);
-        return CreatedAtRoute(nameof(GetRoom),
-            new {id}, result);
-    }
+    public async Task<IActionResult> PostAccess(Guid id, [FromBody] RoomAccess access) =>
+        Ok(await _accessApiService.Create(id, access));
 
     /// <summary>
     /// Update access for room
     /// </summary>
     /// <param name="id">Room access identifier</param>
-    /// <param name="access">Updated access details</param>
+    /// <param name="request">Editable access fields</param>
     /// <response code="200">Returns the updated room access</response>
     /// <response code="400">Some of access parameters were invalid</response>
     /// <response code="401">User must be authenticated</response>
@@ -179,8 +179,8 @@ public class RoomController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PatchAccess(Guid id, [FromBody] RoomAccess access) =>
-        Ok(await _accessApiService.Update(id, access));
+    public async Task<IActionResult> PatchAccess(Guid id, [FromBody] UpdateRoomAccessRequest request) =>
+        Ok(await _accessApiService.Update(id, request));
 
     /// <summary>
     /// Delete access for room
@@ -207,7 +207,7 @@ public class RoomController : ControllerBase
     /// </summary>
     /// <param name="id">Room identifier</param>
     /// <param name="postPendency">Post pendency details</param>
-    /// <response code="201">Resource created successfully</response>
+    /// <response code="200">Pendency created, returns the pendency</response>
     /// <response code="400">Some of claim parameters were invalid</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not allowed to create post pendencies in this room</response>
@@ -215,17 +215,15 @@ public class RoomController : ControllerBase
     /// <response code="409">Post pendency already exists</response>
     [HttpPost("{id}/pendencies", Name = nameof(CreatePostPendency))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<PostPendency>), StatusCodes.Status201Created)]
+    // Same as the access above: a pendency has no address of its own.
+    [ProducesResponseType(typeof(Envelope<PostPendency>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> CreatePostPendency(Guid id, [FromBody] PostPendency postPendency)
-    {
-        var result = await _postPendencyApiService.Create(id, postPendency);
-        return CreatedAtRoute(nameof(GetRoom), new {id}, result);
-    }
+    public async Task<IActionResult> CreatePostPendency(Guid id, [FromBody] PostPendency postPendency) =>
+        Ok(await _postPendencyApiService.Create(id, postPendency));
 
     /// <summary>
     /// Delete post pendency

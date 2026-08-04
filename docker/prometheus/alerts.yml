@@ -139,3 +139,26 @@ groups:
         annotations:
           summary: "Dead-letter queue {{ $labels.queue }} is not empty"
           description: "A message survived every retry and stopped here. Nothing else will look at it."
+
+      # The rules above see the queue; this one sees the outcome. A consumer that
+      # takes every message and throws on every message keeps its queue short and
+      # its subscription alive, so it is invisible from the broker side alone.
+      - alert: ConsumerFailingMessages
+        expr: sum by (queue) (rate(dm_messaging_failed_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consumer of {{ $labels.queue }} is failing messages"
+          description: "Messages are exhausting every retry. Each one is on its way to the dead-letter queue."
+
+      # Retries rise long before failures do: a queue being processed on the
+      # second attempt is a queue about to stop being processed.
+      - alert: ConsumerRetryingHeavily
+        expr: sum by (queue) (rate(dm_messaging_retried_total[5m])) > 0.1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consumer of {{ $labels.queue }} is retrying"
+          description: "Processing keeps failing and succeeding on a later attempt. The dependency behind it is unwell."

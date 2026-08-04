@@ -28,6 +28,13 @@
             <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
+        <!-- The Development overlay holds the localhost credentials, and it stays out
+             of the image. The tool runs in the stack with DM_* supplied; a run without
+             them has to stop rather than reach for a database of its own choosing. -->
+        <None Update="appsettings.Development.json">
+            <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 
     <ItemGroup>

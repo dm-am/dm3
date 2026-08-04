@@ -13,12 +13,10 @@ import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import type { Post, PostReview } from "@/entities/game";
 import { gameApi, GameLink, PostReviewItem, RoomLink } from "@/entities/game";
-import {
-  ContentText,
-  SecondaryText,
-  Tooltip,
-  TruncatedContent,
-} from "@/shared/ui";
+import { ContentText } from "@/shared/ui/Content";
+import { SecondaryText } from "@/shared/ui/Layout";
+import { Tooltip } from "@/shared/ui/Tooltip";
+import { TruncatedContent } from "@/shared/ui/TruncatedContent";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { UserLink, AvatarImg, userIsModerator } from "@/entities/user";

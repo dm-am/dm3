@@ -16,7 +16,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
-import { Tooltip } from "@/shared/ui";
+import { Tooltip } from "@/shared/ui/Tooltip";
 import PostReviewItem from "./PostReviewItem.vue";
 import type { PostReview } from "../model/types";
 

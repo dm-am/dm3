@@ -30,13 +30,59 @@ public class SeededForumSummaryShould
     {
         var topicsPerBoard = SeededTopicsPerBoard();
 
-        foreach (var (boardId, title, topicsCount) in SeededBoards())
+        foreach (var board in SeededBoards())
         {
-            topicsCount.Should().Be(
-                topicsPerBoard.GetValueOrDefault(boardId, 0),
+            board.TopicsCount.Should().Be(
+                topicsPerBoard.GetValueOrDefault(board.BoardId, 0),
                 "the counter of the board \"{0}\" is what a freshly migrated forum shows, and " +
                 "what an anonymous visitor is shown as unread; nothing recomputes it until " +
-                "somebody creates or deletes a topic there", title);
+                "somebody creates or deletes a topic there", board.Title);
+        }
+    }
+
+    /// <summary>
+    /// The last-topic block of a seeded board names the newest topic seeded into it.
+    /// </summary>
+    /// <remarks>
+    /// Denormalised the same way the counter is, and left unset the same way: a board holding
+    /// two topics showed an empty "last activity" column until somebody created or deleted a
+    /// topic there. All five columns move together - a half-filled block is a board that names
+    /// a topic without saying when it appeared.
+    /// </remarks>
+    [Fact]
+    public void NameTheNewestTopicSeededIntoIt()
+    {
+        var newestPerBoard = SeededTopics()
+            .GroupBy(topic => topic.BoardId)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderByDescending(topic => topic.CreatedUtc)
+                    .ThenByDescending(topic => topic.TopicNumber)
+                    .First());
+
+        foreach (var board in SeededBoards())
+        {
+            var because =
+                $"the last-topic block of the board \"{board.Title}\" is what a freshly " +
+                "migrated forum shows as its latest activity, and nothing recomputes it until " +
+                "somebody creates or deletes a topic there";
+
+            if (!newestPerBoard.TryGetValue(board.BoardId, out var newest))
+            {
+                board.LastTopicId.Should().BeNull(because);
+                board.LastTopicNumber.Should().BeNull(because);
+                board.LastTopicTitle.Should().BeNull(because);
+                board.LastTopicAuthorId.Should().BeNull(because);
+                board.LastTopicCreatedUtc.Should().BeNull(because);
+                continue;
+            }
+
+            board.LastTopicId.Should().Be(newest.TopicId, because);
+            board.LastTopicNumber.Should().Be(newest.TopicNumber, because);
+            board.LastTopicTitle.Should().Be(newest.Title, because);
+            board.LastTopicAuthorId.Should().Be(newest.AuthorId, because);
+            board.LastTopicCreatedUtc.Should().Be(newest.CreatedUtc, because);
         }
     }
 
@@ -54,18 +100,59 @@ public class SeededForumSummaryShould
             "only while every counter is zero");
     }
 
-    private static IReadOnlyCollection<(Guid BoardId, string Title, int TopicsCount)> SeededBoards() =>
+    private sealed record SeededBoard(
+        Guid BoardId,
+        string Title,
+        int TopicsCount,
+        Guid? LastTopicId,
+        int? LastTopicNumber,
+        string? LastTopicTitle,
+        Guid? LastTopicAuthorId,
+        DateTimeOffset? LastTopicCreatedUtc);
+
+    private sealed record SeededTopic(
+        Guid TopicId,
+        Guid BoardId,
+        int TopicNumber,
+        string Title,
+        Guid AuthorId,
+        DateTimeOffset CreatedUtc);
+
+    private static IReadOnlyCollection<SeededBoard> SeededBoards() =>
         SeedRows<Board>()
-            .Select(row => (
-                BoardId: (Guid)row[nameof(Board.BoardId)]!,
-                Title: (string)row[nameof(Board.Title)]!,
-                TopicsCount: (int)row[nameof(Board.TopicsCount)]!))
+            .Select(row => new SeededBoard(
+                (Guid)row[nameof(Board.BoardId)]!,
+                (string)row[nameof(Board.Title)]!,
+                (int)row[nameof(Board.TopicsCount)]!,
+                (Guid?)Optional(row, nameof(Board.LastTopicId)),
+                (int?)Optional(row, nameof(Board.LastTopicNumber)),
+                (string?)Optional(row, nameof(Board.LastTopicTitle)),
+                (Guid?)Optional(row, nameof(Board.LastTopicAuthorId)),
+                (DateTimeOffset?)Optional(row, nameof(Board.LastTopicCreatedUtc))))
+            .ToList();
+
+    private static IReadOnlyCollection<SeededTopic> SeededTopics() =>
+        SeedRows<Topic>()
+            .Select(row => new SeededTopic(
+                (Guid)row[nameof(Topic.TopicId)]!,
+                (Guid)row[nameof(Topic.BoardId)]!,
+                (int)row[nameof(Topic.TopicNumber)]!,
+                (string)row[nameof(Topic.Title)]!,
+                (Guid)row[nameof(Topic.AuthorId)]!,
+                (DateTimeOffset)row[nameof(Topic.CreatedUtc)]!))
             .ToList();
 
     private static IReadOnlyDictionary<Guid, int> SeededTopicsPerBoard() =>
-        SeedRows<Topic>()
-            .GroupBy(row => (Guid)row[nameof(Topic.BoardId)]!)
+        SeededTopics()
+            .GroupBy(topic => topic.BoardId)
             .ToDictionary(group => group.Key, group => group.Count());
+
+    /// <summary>
+    /// A column the seed may leave unset: HasData over entity instances carries every property,
+    /// HasData over anonymous objects carries only the named ones.
+    /// </summary>
+    private static object? Optional(IDictionary<string, object?> row, string column) =>
+        row.TryGetValue(column, out var value) ? value : null;
 
     private static IReadOnlyCollection<IDictionary<string, object?>> SeedRows<TEntity>()
     {

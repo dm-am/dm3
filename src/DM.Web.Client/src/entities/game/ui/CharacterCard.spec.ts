@@ -85,4 +85,42 @@ describe("CharacterCard", () => {
     expect(wrapper.get(".character-details").text()).toContain("Класс");
     expect(wrapper.get(".character-details").text()).toContain("Варвар");
   });
+
+  /**
+   * The header opens the card on a click and can never open it on a key: it
+   * holds a link to the player and the consumer's controls slot, and a
+   * role="button" around those hides both from assistive technology. So the
+   * chevron is the control, and it has to be a real one — a button carries
+   * Enter and Space itself, and its state has to be readable without seeing
+   * the card.
+   */
+  it("gives the disclosure a control the keyboard can reach", async () => {
+    const wrapper = mountCard(fromSheet);
+    const toggle = wrapper.get("button.expand-toggle");
+
+    expect(toggle.attributes("aria-expanded")).toBe("false");
+    expect(toggle.attributes("aria-label")).toBe("Показать полностью");
+    expect(toggle.attributes("aria-controls")).toBeTruthy();
+
+    await toggle.trigger("click");
+
+    expect(toggle.attributes("aria-expanded")).toBe("true");
+    expect(wrapper.get(".character-details").text()).toContain("Варвар");
+    expect(toggle.attributes("aria-controls")).toBe(
+      wrapper.get(".character-details").attributes("id"),
+    );
+  });
+
+  /**
+   * The chevron sits inside the header, and the header toggles on click: a
+   * click that reaches both handlers opens the card and closes it again in one
+   * press. Nothing on screen would show which of the two ran.
+   */
+  it("does not let the chevron's click reach the header behind it", async () => {
+    const wrapper = mountCard(fromSheet);
+
+    await wrapper.get("button.expand-toggle").trigger("click");
+
+    expect(wrapper.find(".character-details").exists()).toBe(true);
+  });
 });

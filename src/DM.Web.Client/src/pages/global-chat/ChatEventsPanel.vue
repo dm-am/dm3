@@ -50,7 +50,7 @@ import {
   refreshExpandableStates,
   registerExpandable,
 } from "@/shared/lib/composables";
-import { ContentText } from "@/shared/ui";
+import { ContentText } from "@/shared/ui/Content";
 
 const store = useGlobalChatStore();
 const { liveEvent, upcomingEvents, eventDetails } = storeToRefs(store);

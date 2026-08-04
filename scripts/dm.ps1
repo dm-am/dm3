@@ -26,6 +26,37 @@ if (-not (Get-Command "docker" -ErrorAction SilentlyContinue)) {
     }
 }
 
+# Prepares docker/.env through docker/scripts/init-env.sh, the one script that
+# owns that file. It is a shell script because the server installer is one too,
+# and Git for Windows ships the interpreter for it - the same one this repository
+# already requires for its git hooks and for check-vulnerable-packages.sh. If it
+# is not on the machine, the command to run is printed rather than guessed at:
+# half-preparing the file is what produced a .env compose refused to interpolate.
+function Invoke-EnvironmentInit {
+    $bash = $null
+    $onPath = Get-Command "bash" -ErrorAction SilentlyContinue
+    if ($onPath) { $bash = $onPath.Source }
+    if (-not $bash) {
+        $gitBash = Join-Path $env:ProgramFiles "Git\bin\bash.exe"
+        if (Test-Path $gitBash) { $bash = $gitBash }
+    }
+
+    if (-not $bash) {
+        Write-Host "bash not found; docker/.env is prepared by a shell script." -ForegroundColor Red
+        Write-Host "  Install Git for Windows, or run: bash docker/scripts/init-env.sh local" -ForegroundColor Yellow
+        return $false
+    }
+
+    $script = Join-Path $DockerDir "scripts/init-env.sh"
+    & $bash $script local
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "docker/scripts/init-env.sh failed with exit code $LASTEXITCODE" -ForegroundColor Red
+        return $false
+    }
+
+    return $true
+}
+
 # Check Docker daemon is running
 $dockerCheck = & $script:DockerPath info 2>&1
 if ($LASTEXITCODE -ne 0) {
@@ -289,25 +320,14 @@ function Start-Services {
         Write-Host ""
     }
 
-    # Check .env file
-    $envFile = Join-Path $DockerDir ".env"
-    if (-not (Test-Path $envFile)) {
-        Write-Host "  Creating .env from template..." -ForegroundColor Yellow
-        Copy-Item (Join-Path $DockerDir ".env.example") $envFile
-    }
-
-    # The encryption key has no default in the repository on purpose, so the
-    # template ships it empty and the app refuses to start without it. Generate a
-    # per-machine key once instead of asking every developer to do it by hand.
-    $envContent = Get-Content $envFile -Raw
-    if ($envContent -match '(?m)^DM_CryptoConfiguration__KeyBase64=\s*$') {
-        $keyBytes = New-Object byte[] 32
-        [System.Security.Cryptography.RandomNumberGenerator]::Fill($keyBytes)
-        $key = [Convert]::ToBase64String($keyBytes)
-        $envContent = $envContent -replace '(?m)^DM_CryptoConfiguration__KeyBase64=\s*$', "DM_CryptoConfiguration__KeyBase64=$key"
-        Set-Content -Path $envFile -Value $envContent -Encoding utf8 -NoNewline
-        Write-Host "  Generated a local encryption key in docker/.env" -ForegroundColor Yellow
-    }
+    # docker/.env is prepared by the one script that owns it, the same call
+    # scripts/dm.sh makes. This used to be a second implementation of the same
+    # two steps - copy the template, generate the encryption key - and the two
+    # drifted the moment the generator learned anything the copy did not: the
+    # server credentials, and later the topping up of a file created by hand.
+    # Two implementations of "prepare the environment" is how the documented
+    # first run came to die on interpolation on one platform and not the other.
+    if (-not (Invoke-EnvironmentInit)) { exit 1 }
 
     Push-Location $DockerDir
     try {

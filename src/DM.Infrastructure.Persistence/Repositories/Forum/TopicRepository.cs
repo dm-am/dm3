@@ -10,6 +10,7 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
 using DM.Domain.Forum.Features.Topics;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 
@@ -460,12 +461,12 @@ internal class TopicRepository : ITopicRepository
     }
 
     /// <inheritdoc />
-    public async Task Delete(Guid topicId)
+    public async Task Delete(Guid topicId, Guid deletedByUserId)
     {
         var topic = await _dbContext.Topics.FindAsync(topicId);
         if (topic != null)
         {
-            topic.IsRemoved = true;
+            SoftDelete.Mark(topic, deletedByUserId, _dateTimeProvider.Now);
             await _dbContext.SaveChangesAsync();
             await RefreshBoardTopicSummary(topic.BoardId);
             await _dbContext.SaveChangesAsync();

@@ -7,11 +7,15 @@ using Autofac;
 using Autofac.Core;
 using Autofac.Core.Lifetime;
 using Autofac.Extensions.DependencyInjection;
+using DM.Domain.Core.Configuration;
 using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -90,6 +94,96 @@ public class CompositionRootShould
     }
 
     /// <summary>
+    /// A host refuses to start over the values its own components read, and over
+    /// no others.
+    /// </summary>
+    /// <remarks>
+    /// The shared configuration call demanded IntegrationSettings:WebUrl from
+    /// everyone, so the mail worker — which speaks SMTP, touches no store and
+    /// builds no link, the three senders that do being in an assembly it does not
+    /// scan — refused to start over a value it never reads: "OptionsValidation
+    /// Exception: IntegrationSettings:WebUrl is required. Hosting failed to
+    /// start." That is the same defect the Require* split was made to end, left
+    /// behind in the one demand that was not moved, and its cost is the next host
+    /// writing in a fake value to get past it.
+    ///
+    /// Run rather than read: ValidateOnStart hands its predicates to
+    /// IStartupValidator, and running that is exactly what the host does before it
+    /// serves anything. The host reads its own settings with one section withheld,
+    /// which is what a deployment that lost that variable gives it, so the
+    /// refusals it produces are the demands that host actually makes.
+    /// </remarks>
+    [Fact]
+    public void DemandOnlyTheConfigurationItsOwnComponentsRead()
+    {
+        var mail = Refusals("DM.Workers.Mail", nameof(IntegrationSettings), (configuration, environment) =>
+        {
+            var startup = new DM.Workers.Mail.Startup(configuration, environment);
+            return startup.ConfigureServices;
+        });
+
+        mail.Should().NotContain(failure => failure.Contains("IntegrationSettings", StringComparison.Ordinal),
+            "the mail worker renders what the message carries and builds no link of its own");
+
+        var api = Refusals("DM.Web.API", nameof(IntegrationSettings), (configuration, environment) =>
+        {
+            var startup = new DM.Web.API.Startup(configuration, environment);
+            return startup.ConfigureServices;
+        });
+
+        api.Should().Contain(failure => failure.Contains("IntegrationSettings", StringComparison.Ordinal),
+            "the API builds the activation, reset and email-change links, and an empty WebUrl " +
+            "sends a reader a link that points at nothing without a word in any log");
+    }
+
+    /// <summary>
+    /// What a host refuses to start over when <paramref name="withheld" /> is
+    /// absent, everything else being what it reads on a local run.
+    /// </summary>
+    private static IReadOnlyList<string> Refusals(
+        string project,
+        string withheld,
+        Func<IConfiguration, IWebHostEnvironment, Action<IServiceCollection>> compose)
+    {
+        var full = new ConfigurationBuilder()
+            .SetBasePath(Path.Combine(RepositoryRoot, "src", project))
+            .AddJsonFile("appsettings.json", optional: false)
+            .AddJsonFile("appsettings.Development.json", optional: true)
+            .Build();
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(full
+                .AsEnumerable()
+                .Where(pair => !pair.Key.StartsWith(withheld, StringComparison.OrdinalIgnoreCase)))
+            .Build();
+
+        var services = new ServiceCollection();
+        compose(configuration, new HostEnvironment(project))(services);
+
+        var validator = services.BuildServiceProvider().GetService<IStartupValidator>();
+        if (validator == null)
+        {
+            return Array.Empty<string>();
+        }
+
+        try
+        {
+            validator.Validate();
+            return Array.Empty<string>();
+        }
+        catch (OptionsValidationException single)
+        {
+            return single.Failures.ToList();
+        }
+        catch (AggregateException many)
+        {
+            return many.InnerExceptions.OfType<OptionsValidationException>()
+                .SelectMany(failure => failure.Failures)
+                .ToList();
+        }
+    }
+
+    /// <summary>
     /// The component each worker exists to run resolves, with everything under it.
     /// </summary>
     /// <remarks>
@@ -126,6 +220,86 @@ public class CompositionRootShould
         }
     }
 
+    /// <summary>
+    /// Every controller and every background job of a host resolves.
+    /// </summary>
+    /// <remarks>
+    /// The third thing this class was asked for and the one it never did. The
+    /// static walk above sees one kind of missing registration — a contract whose
+    /// name ends in Configuration — and nothing else: a repository, a generator or
+    /// a domain service that nobody registered is invisible to it, because a
+    /// container builds whether or not its graph can be walked. Autofac finds that
+    /// on the first request that reaches the controller, which is production for
+    /// an endpoint nobody opens in review.
+    ///
+    /// Controllers and hosted services because they are the roots: everything the
+    /// host can reach is under one of them. In a scope, since that is where a
+    /// request resolves and per-scope registrations are not resolvable from the
+    /// root.
+    ///
+    /// A controller is resolved through its dependencies rather than as itself,
+    /// because MVC activates controllers with its own activator and the container
+    /// never holds the type — what the container is asked for is exactly the list
+    /// of constructor parameters, which is what a request asks it for too.
+    /// </remarks>
+    [Fact]
+    public void ResolveEveryControllerAndBackgroundJobOfEveryHost()
+    {
+        var unresolvable = new List<string>();
+        var roots = 0;
+
+        foreach (var (host, container) in Hosts)
+        {
+            using var scope = container.BeginLifetimeScope();
+
+            try
+            {
+                // One resolution, because the host starts them as one list.
+                var jobs = scope.Resolve<IEnumerable<IHostedService>>().ToList();
+                roots += jobs.Count;
+            }
+            catch (Exception failure)
+            {
+                unresolvable.Add($"{host}: a hosted service - {failure.GetBaseException().Message}");
+            }
+
+            var controllers = container.ComponentRegistry.Registrations
+                .Select(registration => registration.Activator.LimitType)
+                .Where(IsAuthored)
+                .Select(type => type.Assembly)
+                .Distinct()
+                .SelectMany(assembly => assembly.GetTypes())
+                .Where(type => typeof(ControllerBase).IsAssignableFrom(type) && !type.IsAbstract)
+                .Distinct()
+                .ToList();
+
+            roots += controllers.Count;
+            foreach (var controller in controllers)
+            {
+                foreach (var dependency in Dependencies(controller))
+                {
+                    try
+                    {
+                        scope.Resolve(dependency);
+                    }
+                    catch (Exception failure)
+                    {
+                        unresolvable.Add(
+                            $"{host}: {controller.Name} -> {dependency.Name} - " +
+                            failure.GetBaseException().Message);
+                    }
+                }
+            }
+        }
+
+        roots.Should().BeGreaterThan(50,
+            "the hosts between them run some seventy controllers and a dozen jobs, and a walk " +
+            "that found a handful would report green over everything it never resolved");
+        unresolvable.Should().BeEmpty(
+            "a dependency the container cannot supply is not a build error and not a startup " +
+            "error: it surfaces on the first request or the first message that reaches the type");
+    }
+
     private static IReadOnlyList<(string, IContainer)> BuildHosts() =>
     [
         ("DM.Web.API", Build("DM.Web.API", (configuration, environment) =>
@@ -149,9 +323,24 @@ public class CompositionRootShould
         string project,
         Func<IConfiguration, IWebHostEnvironment, (Action<IServiceCollection>, Action<ContainerBuilder>)> compose)
     {
+        // The same two files a Development host reads, in the same order: the
+        // environment declared below is Development, and the credentials a local
+        // run needs live in the overlay rather than in the tracked base file, so
+        // reading only the base one composes a host no environment ever runs.
         var configuration = new ConfigurationBuilder()
             .SetBasePath(Path.Combine(RepositoryRoot, "src", project))
             .AddJsonFile("appsettings.json", optional: false)
+            .AddJsonFile("appsettings.Development.json", optional: true)
+            // The encryption key has no answer in the repository on purpose — a
+            // deployment supplies it — and five services validate it while being
+            // activated. A throwaway of the right shape stands in for it, so what
+            // this class reports is a graph that cannot be walked rather than a
+            // value a test environment was never given.
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["CryptoConfiguration:KeyBase64"] =
+                    Convert.ToBase64String(new byte[32]),
+            })
             .Build();
 
         var (configureServices, configureContainer) = compose(configuration, new HostEnvironment(project));

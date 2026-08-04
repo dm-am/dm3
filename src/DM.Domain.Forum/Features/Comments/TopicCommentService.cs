@@ -206,7 +206,9 @@ internal class TopicCommentService : ITopicCommentService
         {
             CommentId = commentId,
             TopicId = comment.TopicId,
-            NewLastCommentId = newLastCommentId
+            NewLastCommentId = newLastCommentId,
+            DeletedByUserId = _identityProvider.Current.User.UserId,
+            DeletedUtc = _dateTimeProvider.Now
         };
 
         await _repository.Delete(deleteComment);

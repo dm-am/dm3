@@ -28,8 +28,20 @@ public class StorageClockShould
     private static readonly Regex Comments = new(
         @"/\*.*?\*/|//[^\n]*", RegexOptions.Compiled | RegexOptions.Singleline);
 
+    /// <summary>
+    /// A read of the machine clock, under either spelling.
+    /// </summary>
+    /// <remarks>
+    /// The lookbehind exists to let a property called DateTime through — <c>row.DateTime.Now</c>
+    /// is a field of a row and not the framework type. Applied to the bare name alone it also let
+    /// the fully qualified form through, because <c>System.DateTimeOffset.UtcNow</c> carries a dot
+    /// right where the lookbehind looks: the rule was blind to the one spelling a developer
+    /// reaches for when the short one is flagged. The optional <c>System.</c> is therefore matched
+    /// explicitly, and the lookbehind now guards the front of the whole reference.
+    /// </remarks>
     private static readonly Regex Clock = new(
-        @"(?<![\w.])DateTime(Offset)?\s*\.\s*(Now|UtcNow|Today)\b", RegexOptions.Compiled);
+        @"(?<![\w.])(System\s*\.\s*)?DateTime(Offset)?\s*\.\s*(Now|UtcNow|Today)\b",
+        RegexOptions.Compiled);
 
     /// <summary>
     /// One source of "now" for the whole layer, and it is injected.

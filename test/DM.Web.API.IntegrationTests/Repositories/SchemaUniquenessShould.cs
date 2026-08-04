@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Subscriptions;
@@ -11,6 +12,8 @@ using Npgsql;
 using Xunit;
 using DbCharacter = DM.Infrastructure.Persistence.Entities.Game.Characters.Character;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
+using DbGameTag = DM.Infrastructure.Persistence.Entities.Game.Links.GameTag;
+using DbLike = DM.Infrastructure.Persistence.Entities.Shared.Like;
 using DbSubscription = DM.Infrastructure.Persistence.Entities.Subscriptions.Subscription;
 using DbUpload = DM.Infrastructure.Persistence.Entities.Shared.Upload;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
@@ -18,14 +21,16 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 namespace DM.Web.API.IntegrationTests.Repositories;
 
 /// <summary>
-/// Two rules that used to hold only while requests did not overlap: one
-/// subscription per (subscriber, target), and one live portrait per character.
+/// Three rules that used to hold only while requests did not overlap: one subscription per
+/// (subscriber, target), one live like per (entity, reader), and one live portrait per
+/// character.
 /// </summary>
 /// <remarks>
-/// Both writes are check-then-insert, and a check cannot see the request running
-/// beside it. Neither duplicate was something the person who caused it could undo:
+/// All three writes are check-then-insert, and a check cannot see the request running
+/// beside it. None of the duplicates was something the person who caused it could undo:
 /// unsubscribing removes one row per click while the button reads as subscribed
-/// either way, and a second portrait took the whole room's post list down with it.
+/// either way, a duplicated like inflates the counter and the award metric of somebody
+/// else, and a second portrait took the whole room's post list down with it.
 /// A rule about rows that do not exist yet can only be stated in the schema, so
 /// what is asserted here is that the refusal comes from there — the second insert
 /// reaches the database and the database is what says no.
@@ -86,6 +91,50 @@ public class SchemaUniquenessShould : IntegrationTestBase
         (await dbContext.Subscriptions.CountAsync(
                 s => s.SubscriberId == subscriberId && s.TargetId == targetId))
             .Should().Be(1);
+    }
+
+    /// <summary>
+    /// Refuses a second live like of one entity by one reader, and keeps accepting the next
+    /// one after it is withdrawn.
+    /// </summary>
+    /// <remarks>
+    /// Liking is check-then-insert over a loaded navigation, so two overlapping clicks both
+    /// find nothing and both insert. The counter then reports one person twice, and the same
+    /// duplicate reaches the LikesReceived metric, where somebody else's double click moves the
+    /// author towards an award. Partial on live rows for the reason the portrait index is:
+    /// unliking sets IsRemoved and liking again has to be allowed.
+    /// </remarks>
+    [Fact]
+    public async Task RefuseASecondLiveLikeOfOneEntityByOneReader()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var readerId = await AddUserAsync(dbContext);
+        var entityId = Guid.NewGuid();
+
+        var first = NewLike(readerId, entityId);
+        dbContext.Likes.Add(first);
+        await dbContext.SaveChangesAsync();
+
+        var second = NewLike(readerId, entityId);
+        dbContext.Likes.Add(second);
+        Func<Task> duplicate = () => dbContext.SaveChangesAsync();
+
+        var refusal = await duplicate.Should().ThrowAsync<DbUpdateException>(
+            "one reader likes one entity once, whatever identifier the row carries");
+        refusal.And.InnerException.Should().BeOfType<PostgresException>()
+            .Which.SqlState.Should().Be("23505", "that is unique_violation");
+
+        dbContext.Entry(second).State = EntityState.Detached;
+        first.IsRemoved = true;
+        await dbContext.SaveChangesAsync();
+
+        dbContext.Likes.Add(second);
+        Func<Task> afterUnlike = () => dbContext.SaveChangesAsync();
+
+        await afterUnlike.Should().NotThrowAsync(
+            "withdrawing a like is what frees the reader to leave another one");
     }
 
     /// <summary>
@@ -206,6 +255,73 @@ public class SchemaUniquenessShould : IntegrationTestBase
 
         return (userId, characterId);
     }
+
+    /// <summary>
+    /// One tag is on one game once.
+    /// </summary>
+    /// <remarks>
+    /// The required-tag filter of the game catalogue counts the rows a game has
+    /// among the tags asked for and compares that count to how many were asked
+    /// for, so a game carrying one tag twice answered a query for two tags it
+    /// holds one of. The write side deduplicates its input and computes a
+    /// difference on update, but neither can see the request running beside it —
+    /// the rule is about rows that do not exist yet, so it belongs to the schema.
+    ///
+    /// The other two finding of this shape, subscriptions and likes, were given a
+    /// fact each; this one was closed on the index alone and left with the
+    /// migration-versus-snapshot check named as its gate, which agrees with any
+    /// index the model happens to declare, unique or not.
+    /// </remarks>
+    [Fact]
+    public async Task RefuseTheSameTagTwiceOnOneGame()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var masterId = await AddUserAsync(dbContext);
+        var gameId = Guid.NewGuid();
+        dbContext.Games.Add(new DbGame
+        {
+            GameId = gameId,
+            PublicId = Guid.NewGuid().ToString("N")[..10],
+            Title = "Game for the tag uniqueness check",
+            MasterId = masterId,
+            Status = ModuleStatus.Active,
+            PremoderationStatus = PremoderationStatus.Approved,
+        });
+        await dbContext.SaveChangesAsync();
+
+        // A tag of the seeded catalogue: a new one would need a tag group of its own,
+        // and which tag it is has nothing to do with the rule.
+        var tagId = await dbContext.Tags.Select(tag => tag.TagId).FirstAsync();
+
+        dbContext.GameTags.Add(new DbGameTag
+        {
+            GameTagId = Guid.NewGuid(), GameId = gameId, TagId = tagId,
+        });
+        await dbContext.SaveChangesAsync();
+
+        dbContext.GameTags.Add(new DbGameTag
+        {
+            GameTagId = Guid.NewGuid(), GameId = gameId, TagId = tagId,
+        });
+        Func<Task> second = () => dbContext.SaveChangesAsync();
+
+        var refusal = await second.Should().ThrowAsync<DbUpdateException>(
+            "the required-tag filter counts rows, so a duplicate row answers a query for a " +
+            "tag the game does not carry");
+        refusal.And.InnerException.Should().BeOfType<PostgresException>()
+            .Which.SqlState.Should().Be("23505", "that is unique_violation");
+    }
+
+    private static DbLike NewLike(Guid userId, Guid entityId) => new()
+    {
+        LikeId = Guid.NewGuid(),
+        UserId = userId,
+        EntityId = entityId,
+        EntityType = LikeEntityType.Topic,
+        IsRemoved = false,
+    };
 
     private static DbSubscription NewSubscription(Guid subscriberId, Guid targetId) => new()
     {

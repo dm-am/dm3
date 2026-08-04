@@ -49,9 +49,9 @@ internal class PostApiService : IPostApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<Post>> Update(Guid postId, Post post)
+    public async Task<Envelope<Post>> Update(Guid postId, UpdatePostRequest request)
     {
-        var updatePost = _mapper.Map<UpdatePost>(post);
+        var updatePost = _mapper.Map<UpdatePost>(request);
         updatePost.PostId = postId;
         var updatedPost = await _postService.UpdateAsync(updatePost);
         return new Envelope<Post>(_mapper.Map<Post>(updatedPost));

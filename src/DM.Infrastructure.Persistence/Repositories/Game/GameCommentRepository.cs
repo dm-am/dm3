@@ -10,6 +10,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
 using DM.Domain.Game.Features.Comments;
 using DM.Domain.Game.Features.Games;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 using CommentDal = DM.Infrastructure.Persistence.Entities.Shared.Comment;
@@ -226,7 +227,7 @@ internal class GameCommentRepository : IGameCommentRepository
         var comment = await _dbContext.Comments.FindAsync(deleteComment.CommentId);
         if (comment != null)
         {
-            comment.IsRemoved = true;
+            SoftDelete.Mark(comment, deleteComment.DeletedByUserId, deleteComment.DeletedUtc);
         }
 
         var game = await _dbContext.Games.FindAsync(deleteComment.GameId);

@@ -60,6 +60,7 @@ public static class SwaggerExtensions
         options.OperationFilter<AuthenticationSwaggerFilter>();
         options.OperationFilter<BbAudienceSwaggerFilter>();
         options.OperationFilter<ResponseMediaTypeSwaggerFilter>();
+        options.OperationFilter<CreatedLocationSwaggerFilter>();
 
         var apiAssemblyName = Assembly.GetExecutingAssembly().GetName().Name;
         options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, $"{apiAssemblyName}.xml"));

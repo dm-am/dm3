@@ -9,7 +9,7 @@ import {
 } from "vue";
 import type { WebsiteTestimonial } from "@/shared/api/models/community";
 import type { UserRef } from "@/shared/api/models/common";
-import { Tooltip } from "@/shared/ui";
+import { Tooltip } from "@/shared/ui/Tooltip";
 import SvgIcon from "@/shared/ui/Icon/SvgIcon.vue";
 import {
   registerExpandable,

@@ -38,8 +38,14 @@ public interface IUploadRepository
     /// background sweeper drops the object from the bucket.
     /// </summary>
     /// <param name="uploadId">Upload identifier.</param>
+    /// <param name="deletedByUserId">
+    /// Who asked for the deletion, null when a background collector did. Deleting
+    /// somebody else's file is a moderation action, so the null case is the sweeper
+    /// and only the sweeper — an empty author after a person pressed delete is what
+    /// leaves moderation unable to answer who removed the file.
+    /// </param>
     /// <param name="deletedUtc">Moment the deletion was requested.</param>
-    Task SoftDeleteAsync(Guid uploadId, DateTimeOffset deletedUtc);
+    Task SoftDeleteAsync(Guid uploadId, Guid? deletedByUserId, DateTimeOffset deletedUtc);
 
     /// <summary>
     /// Persist a record for a file that has already been written to the bucket.

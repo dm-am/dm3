@@ -37,7 +37,7 @@ internal class RoomMappingProfile : Profile
         CreateMap<CreateRoomRequest, CreateRoom>()
             .ForMember(d => d.GameId, opt => opt.Ignore());
 
-        CreateMap<Room, UpdateRoom>()
+        CreateMap<UpdateRoomRequest, UpdateRoom>()
             .ForMember(d => d.RoomId, opt => opt.Ignore())
             // ChatId is server-managed (linked chat room); the API Room DTO
             // does not expose it, so an update never reassigns it.
@@ -68,8 +68,8 @@ internal class RoomMappingProfile : Profile
             .ForMember(d => d.ReaderUsername, s => s.MapFrom(r => r.User != null ? r.User.Username : null))
             .ForMember(d => d.RoomId, opt => opt.Ignore());
 
-        CreateMap<RoomAccess, UpdateRoomAccess>()
-            .ForMember(d => d.AccessId, s => s.MapFrom(r => r.Id));
+        CreateMap<UpdateRoomAccessRequest, UpdateRoomAccess>()
+            .ForMember(d => d.AccessId, opt => opt.Ignore());
 
         CreateMap<DomainPostPendency, PostPendency>()
             .ForMember(d => d.CreatedBy, s => s.MapFrom(p => p.CreatedBy))

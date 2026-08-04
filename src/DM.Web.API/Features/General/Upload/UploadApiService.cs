@@ -139,7 +139,7 @@ internal class UploadApiService : IUploadApiService
             throw new HttpException(System.Net.HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
         }
 
-        await _uploadRepository.SoftDeleteAsync(id, _dateTimeProvider.Now);
+        await _uploadRepository.SoftDeleteAsync(id, userId, _dateTimeProvider.Now);
     }
 
     /// <inheritdoc />

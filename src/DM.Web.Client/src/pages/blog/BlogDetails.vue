@@ -12,7 +12,7 @@ import {
   type Rubric,
 } from "@/entities/blog";
 import { UserLink } from "@/entities/user";
-import { ContentText } from "@/shared/ui";
+import { ContentText } from "@/shared/ui/Content";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import { DashSeparator } from "@/shared/ui/DashSeparator";

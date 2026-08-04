@@ -132,13 +132,23 @@ internal class LoginRecordRepository : ILoginRecordRepository
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<UserLoginRecord>> GetLoginHistory(Guid userId, int limit = 50)
+    public Task<int> CountLoginHistory(Guid userId) => _dbContext.UserLoginRecords
+        .TagWith("DM.LoginRecord.CountLoginHistory")
+        .CountAsync(r => r.UserId == userId);
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<UserLoginRecord>> GetLoginHistory(Guid userId, int skip, int take)
     {
+        // The page is the caller's, not a default hidden in a parameter. It used
+        // to be Take(50) with no way to ask for anything else and no total beside
+        // it, so an administrator reading an incident saw fifty logins and could
+        // not tell from the answer that there were more.
         var dbRecords = await _dbContext.UserLoginRecords
             .TagWith("DM.LoginRecord.GetLoginHistory")
             .Where(r => r.UserId == userId)
             .OrderByDescending(r => r.LoginUtc)
-            .Take(limit)
+            .Skip(skip)
+            .Take(take)
             .ToListAsync();
 
         return dbRecords.Select(r => new UserLoginRecord

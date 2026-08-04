@@ -285,22 +285,23 @@ public class TicketServiceShould : UnitTestBase
     {
         IReadOnlyCollection<TicketSubtype>? capturedSubtypes = null;
         _ticketRepository.Setup(r => r.GetTickets(
+                It.IsAny<PagingQuery>(),
                 It.IsAny<TicketStatus?>(),
                 It.IsAny<IReadOnlyCollection<TicketSubtype>?>(),
                 It.IsAny<CancellationToken>()))
-            .Callback<TicketStatus?, IReadOnlyCollection<TicketSubtype>?, CancellationToken>(
-                (_, subtypes, _) => capturedSubtypes = subtypes)
-            .ReturnsAsync(Array.Empty<Ticket>());
+            .Callback<PagingQuery, TicketStatus?, IReadOnlyCollection<TicketSubtype>?, CancellationToken>(
+                (_, _, subtypes, _) => capturedSubtypes = subtypes)
+            .ReturnsAsync((Array.Empty<Ticket>(), PagingResult.Empty(20)));
 
         // Junior moderator: user complaints and suggestions only
         SetCurrentUser(UserRole.Moderator);
-        await _service.GetTickets();
+        await _service.GetTickets(new PagingQuery());
         capturedSubtypes.Should().BeEquivalentTo(
             new[] { TicketSubtype.UserComplaint, TicketSubtype.SiteImprovementSuggestion });
 
         // Senior moderator: additionally complaints about junior moderator decisions
         SetCurrentUser(UserRole.SeniorModerator);
-        await _service.GetTickets();
+        await _service.GetTickets(new PagingQuery());
         capturedSubtypes.Should().BeEquivalentTo(new[]
         {
             TicketSubtype.UserComplaint,
@@ -310,7 +311,7 @@ public class TicketServiceShould : UnitTestBase
 
         // Admin: no subtype filter at all
         SetCurrentUser(UserRole.Admin);
-        await _service.GetTickets();
+        await _service.GetTickets(new PagingQuery());
         capturedSubtypes.Should().BeNull();
     }
 
@@ -319,10 +320,11 @@ public class TicketServiceShould : UnitTestBase
     {
         SetCurrentUser(UserRole.Moderator);
 
-        var tickets = await _service.GetTickets(subtype: TicketSubtype.Bug);
+        var (tickets, _) = await _service.GetTickets(new PagingQuery(), subtype: TicketSubtype.Bug);
 
         tickets.Should().BeEmpty();
         _ticketRepository.Verify(r => r.GetTickets(
+                It.IsAny<PagingQuery>(),
                 It.IsAny<TicketStatus?>(),
                 It.IsAny<IReadOnlyCollection<TicketSubtype>?>(),
                 It.IsAny<CancellationToken>()),

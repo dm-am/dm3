@@ -45,6 +45,14 @@
             <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </Content>
+        <!-- The Development overlay holds the localhost credentials, and it stays out
+             of the image. A deployed host runs as Production and would not read the
+             file anyway; not shipping it is what makes that a fact rather than a
+             property of one environment variable. -->
+        <Content Update="appsettings.Development.json">
+            <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </Content>
     </ItemGroup>
 
 </Project>

@@ -7,7 +7,6 @@ using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace DM.Web.API.HostedServices;
@@ -28,133 +27,96 @@ namespace DM.Web.API.HostedServices;
 /// The grace period allows short-term recovery: the user clicked "удалить
 /// аватар", changed their mind — restore works within the first 24h.
 /// </summary>
-internal class UploadOrphanCleanupService : BackgroundService
+internal class UploadOrphanCleanupService : PeriodicHostedService
 {
-    private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<UploadOrphanCleanupService> _logger;
-    private readonly TimeSpan _interval = TimeSpan.FromHours(6);
     private readonly TimeSpan _gracePeriod = TimeSpan.FromHours(24);
     private const int BatchSize = 200;
 
     public UploadOrphanCleanupService(
         IServiceProvider serviceProvider,
         ILogger<UploadOrphanCleanupService> logger)
-    {
-        _serviceProvider = serviceProvider;
-        _logger = logger;
-    }
+        : base(serviceProvider, logger) => _logger = logger;
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        _logger.LogInformation(
-            "[Upload Orphan Cleanup] Service started. Interval={Interval}h, grace={Grace}h",
-            _interval.TotalHours, _gracePeriod.TotalHours);
+    /// <inheritdoc />
+    protected override string Tag => "[Upload Orphan Cleanup]";
 
-        using var timer = new PeriodicTimer(_interval);
+    /// <inheritdoc />
+    protected override TimeSpan Interval => TimeSpan.FromHours(6);
 
-        // Initial pass on startup (catches anything that piled up during downtime).
-        await SweepAsync(stoppingToken);
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                await timer.WaitForNextTickAsync(stoppingToken);
-                await SweepAsync(stoppingToken);
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.LogInformation("[Upload Orphan Cleanup] Service is stopping");
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "[Upload Orphan Cleanup] Unexpected error in sweep loop");
-            }
-        }
-    }
+    /// <inheritdoc />
+    protected override Task RunOnce(IServiceProvider scope, CancellationToken cancellationToken) =>
+        SweepAsync(scope, cancellationToken);
 
     /// <summary>
     /// One sweep pass. Internal rather than private so the regression test can
     /// drive a single pass without running the timer loop.
     /// </summary>
-    internal async Task SweepAsync(CancellationToken ct)
+    internal async Task SweepAsync(IServiceProvider scope, CancellationToken ct)
     {
-        try
+        var db = scope.GetRequiredService<DmDbContext>();
+        var objectStorage = scope.GetRequiredService<IObjectStorage>();
+
+        // The grace period decides when a file is physically destroyed, so the
+        // deadline is measured by the injected clock: a test can move that one,
+        // the system clock it cannot.
+        var clock = scope.GetRequiredService<IDateTimeProvider>();
+        var cutoff = clock.Now - _gracePeriod;
+        var candidates = await db.Uploads
+            // Soft-deleted rows are exactly what this sweeper looks for, and
+            // the global query filter hides them: without IgnoreQueryFilters
+            // the predicate becomes "NOT IsRemoved AND IsRemoved" and no row
+            // can ever match, so nothing is ever deleted from S3.
+            .IgnoreQueryFilters()
+            .Where(u => u.IsRemoved && u.DeletedUtc != null && u.DeletedUtc < cutoff)
+            .OrderBy(u => u.DeletedUtc)
+            .Take(BatchSize)
+            .ToListAsync(ct);
+
+        if (candidates.Count == 0)
         {
-            using var scope = _serviceProvider.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-            var objectStorage = scope.ServiceProvider.GetRequiredService<IObjectStorage>();
+            _logger.LogDebug("[Upload Orphan Cleanup] No orphans to remove");
+            return;
+        }
 
-            // The grace period decides when a file is physically destroyed, so the
-            // deadline is measured by the injected clock: a test can move that one,
-            // the system clock it cannot.
-            var clock = scope.ServiceProvider.GetRequiredService<IDateTimeProvider>();
-            var cutoff = clock.Now - _gracePeriod;
-            var candidates = await db.Uploads
-                // Soft-deleted rows are exactly what this sweeper looks for, and
-                // the global query filter hides them: without IgnoreQueryFilters
-                // the predicate becomes "NOT IsRemoved AND IsRemoved" and no row
-                // can ever match, so nothing is ever deleted from S3.
-                .IgnoreQueryFilters()
-                .Where(u => u.IsRemoved && u.DeletedUtc != null && u.DeletedUtc < cutoff)
-                .OrderBy(u => u.DeletedUtc)
-                .Take(BatchSize)
-                .ToListAsync(ct);
+        var deletedDbRows = 0;
+        var removedObjects = 0;
 
-            if (candidates.Count == 0)
+        foreach (var upload in candidates)
+        {
+            var allObjectsRemoved = true;
+
+            foreach (var key in EnumerateKeys(upload.ObjectKey))
             {
-                _logger.LogDebug("[Upload Orphan Cleanup] No orphans to remove");
-                return;
-            }
-
-            var deletedDbRows = 0;
-            var removedObjects = 0;
-
-            foreach (var upload in candidates)
-            {
-                var allObjectsRemoved = true;
-
-                foreach (var key in EnumerateKeys(upload.ObjectKey))
+                // The store answers whether the key holds anything now, and it
+                // owns both the "already gone is fine" rule and the log line
+                // for a refusal. What is left here is the decision only this
+                // sweeper can make: keep the row for the next tick.
+                if (await objectStorage.DeleteAsync(key, ct))
                 {
-                    // The store answers whether the key holds anything now, and it
-                    // owns both the "already gone is fine" rule and the log line
-                    // for a refusal. What is left here is the decision only this
-                    // sweeper can make: keep the row for the next tick.
-                    if (await objectStorage.DeleteAsync(key, ct))
-                    {
-                        removedObjects++;
-                    }
-                    else
-                    {
-                        allObjectsRemoved = false;
-                    }
+                    removedObjects++;
                 }
-
-                if (allObjectsRemoved)
+                else
                 {
-                    db.Uploads.Remove(upload);
-                    deletedDbRows++;
+                    allObjectsRemoved = false;
                 }
             }
 
-            if (deletedDbRows > 0)
+            if (allObjectsRemoved)
             {
-                await db.SaveChangesAsync(ct);
+                db.Uploads.Remove(upload);
+                deletedDbRows++;
             }
+        }
 
-            _logger.LogInformation(
-                "[Upload Orphan Cleanup] Swept {Candidates} candidate(s): removed {ObjectCount} objects + {DbCount} DB rows",
-                candidates.Count, removedObjects, deletedDbRows);
-        }
-        catch (OperationCanceledException)
+        if (deletedDbRows > 0)
         {
-            throw;
+            await db.SaveChangesAsync(ct);
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[Upload Orphan Cleanup] Error during sweep");
-        }
+
+        _logger.LogInformation(
+            "[Upload Orphan Cleanup] Swept {Candidates} candidate(s): removed {ObjectCount} objects + {DbCount} DB rows",
+            candidates.Count, removedObjects, deletedDbRows);
     }
 
     /// <summary>

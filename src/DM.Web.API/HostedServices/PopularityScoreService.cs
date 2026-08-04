@@ -10,7 +10,6 @@ using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Shared;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace DM.Web.API.HostedServices;
@@ -22,63 +21,39 @@ namespace DM.Web.API.HostedServices;
 ///   - Active readers: subscribers who were active on site within 30 days
 /// Blog popularity = active readers (subscribers active within 30 days)
 /// </summary>
-internal class PopularityScoreService : BackgroundService
+internal class PopularityScoreService : PeriodicHostedService
 {
-    private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<PopularityScoreService> _logger;
-    private readonly TimeSpan _updateInterval = TimeSpan.FromHours(1);
 
     public PopularityScoreService(
         IServiceProvider serviceProvider,
         ILogger<PopularityScoreService> logger)
+        : base(serviceProvider, logger) => _logger = logger;
+
+    /// <inheritdoc />
+    protected override string Tag => "[Popularity Score]";
+
+    /// <inheritdoc />
+    protected override TimeSpan Interval => TimeSpan.FromHours(1);
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The first calculation happens on the first pass rather than being deferred
+    /// to the first tick. It used to be deferred on the strength of a comment
+    /// saying WarmupService did it at startup — that phase was deleted with the
+    /// duplicated copy of WarmupService it lived in, and nothing noticed, because
+    /// a stale score looks exactly like a correct one. The result was that
+    /// "популярные игры" and "популярные блоги" served whatever the previous run
+    /// had persisted for a full hour after every cold start, and zeroes for that
+    /// hour on a freshly reset database.
+    ///
+    /// The service that owns the calculation owns its first run: the coupling to
+    /// a warmup phase in another service is what allowed the gap to open.
+    /// </remarks>
+    protected override async Task RunOnce(IServiceProvider scope, CancellationToken cancellationToken)
     {
-        _serviceProvider = serviceProvider;
-        _logger = logger;
-    }
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        _logger.LogInformation(
-            "[Popularity Score] Service started. Calculating now, then every {Interval} hour(s).",
-            _updateInterval.TotalHours);
-
-        using var timer = new PeriodicTimer(_updateInterval);
-
-        // The first calculation happens here rather than being deferred to the
-        // first tick. It used to be deferred on the strength of a comment saying
-        // WarmupService did it at startup — that phase was deleted with the
-        // duplicated copy of WarmupService it lived in, and nothing noticed,
-        // because a stale score looks exactly like a correct one. The result was
-        // that "популярные игры" and "популярные блоги" served whatever the
-        // previous run had persisted for a full hour after every cold start, and
-        // zeroes for that hour on a freshly reset database.
-        //
-        // The service that owns the calculation owns its first run: the coupling
-        // to a warmup phase in another service is what allowed the gap to open.
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                await UpdatePopularityScores(stoppingToken);
-                await timer.WaitForNextTickAsync(stoppingToken);
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.LogInformation("[Popularity Score] Service is stopping");
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "[Popularity Score] Unexpected error in update loop");
-            }
-        }
-    }
-
-    private async Task UpdatePopularityScores(CancellationToken cancellationToken)
-    {
-        using var scope = _serviceProvider.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-        var dateTimeProvider = scope.ServiceProvider.GetRequiredService<IDateTimeProvider>();
+        var dbContext = scope.GetRequiredService<DmDbContext>();
+        var dateTimeProvider = scope.GetRequiredService<IDateTimeProvider>();
 
         var now = dateTimeProvider.Now;
         var activeThreshold = now - ActivityPolicy.ActivePeriod;

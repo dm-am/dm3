@@ -63,7 +63,7 @@ module.exports = {
     "@vue/eslint-config-typescript",
     "@vue/eslint-config-prettier",
   ],
-  plugins: ["boundaries"],
+  plugins: ["boundaries", "vuejs-accessibility"],
   parserOptions: {
     ecmaVersion: "latest",
   },
@@ -106,6 +106,82 @@ module.exports = {
     // The design system deliberately uses single-word names for shared UI
     // primitives (Button, Tooltip, Tabs, Form, Paging, Header, Footer, ...).
     "vue/multi-word-component-names": "off",
+
+    // Accessibility, as a rule of the build rather than of a review.
+    //
+    // Until this block there was nothing: `plugin:vue/vue3-essential` says
+    // nothing about accessibility, and the only automated check on the site was
+    // one e2e spec measuring one tooltip. A <div> that answers a click and not
+    // a key, an <img> with no alt, an aria-* attribute misspelt into silence —
+    // all of it type-checks, lints, builds and renders, and the defect is
+    // invisible to anyone holding a mouse and looking at the screen. Every
+    // instance found by hand came back in the next screen written from the same
+    // template.
+    //
+    // Named one by one rather than through the plugin's recommended preset. A
+    // preset is a set someone switches off on the first red build; a list is a
+    // set whose every member was measured against this tree. What is missing
+    // from it is missing for a reason, and the reasons are below.
+    "vuejs-accessibility/alt-text": "error",
+    "vuejs-accessibility/anchor-has-content": "error",
+    "vuejs-accessibility/aria-props": "error",
+    "vuejs-accessibility/aria-role": "error",
+    "vuejs-accessibility/aria-unsupported-elements": "error",
+    "vuejs-accessibility/click-events-have-key-events": "error",
+    "vuejs-accessibility/heading-has-content": "error",
+    "vuejs-accessibility/iframe-has-title": "error",
+    "vuejs-accessibility/media-has-caption": "error",
+    "vuejs-accessibility/no-access-key": "error",
+    "vuejs-accessibility/no-aria-hidden-on-focusable": "error",
+    "vuejs-accessibility/no-autofocus": "error",
+    "vuejs-accessibility/no-distracting-elements": "error",
+    "vuejs-accessibility/no-redundant-roles": "error",
+    "vuejs-accessibility/no-role-presentation-on-focusable": "error",
+    "vuejs-accessibility/role-has-required-aria-props": "error",
+    "vuejs-accessibility/tabindex-no-positive": "error",
+
+    // Held back, and why. Each of these was run over the whole tree before
+    // being left out, and the count is what it produced.
+    //
+    // label-has-for (76 in 31 files) and form-control-has-label (83 in 47) read
+    // the association between a label and its control out of the TEMPLATE.
+    // Where a form is built out of FormField (shared/ui/Form) it is not written
+    // there: the component generates the id, finds the single labelable control
+    // of its row after mount and wires `for`, `aria-describedby` and
+    // `aria-invalid` onto it, which is what lets a caller drop any control into
+    // the slot without repeating the plumbing. That part is covered by
+    // FormField.spec.ts and the rules cannot see it.
+    //
+    // That is not most of what they report, and saying it was is how these two
+    // came to be written off as false alarms. Measured over the tree: 56 of the
+    // 76 and 31 of the 83 are in files that do not use FormField at all — a
+    // <label> with no `for` beside an <input> with no id, in the award series
+    // screen, the poll editor, the game room, the game post, both range pickers
+    // and the topic view. Those are the defect the rules exist for, they are
+    // invisible to CI today, and a screen reader reaching one of them announces
+    // an unnamed field.
+    //
+    // Held back for the same reason as the two below, then: a red build nobody
+    // can make green is how a11y linting gets switched off. The way in is the
+    // primitives first (PasswordInput, TextArea, Select), then the seven screens
+    // above, then the rule.
+    //
+    // interactive-supports-focus (2) wants every role="option" focusable. Both
+    // sites are correct as they stand: the autocomplete keeps focus on the
+    // input and moves the selection with aria-activedescendant, and the
+    // notepad's roster uses a roving tabindex the rule cannot evaluate because
+    // it is a binding.
+    //
+    // no-onchange (1) objects to @change on a native <select>. jsx-a11y
+    // deprecated the same rule: the behaviour it protected against (VoiceOver
+    // submitting on arrow keys) is a decade gone, and @blur instead of @change
+    // would lose the value on the way out.
+    //
+    // mouse-events-have-key-events (19) and no-static-element-interactions (22)
+    // are a real backlog rather than a false alarm — hover-only affordances and
+    // clickable divs. Turning either on is a screen-by-screen job, not a config
+    // line, and a red build that nobody can make green is how a11y linting gets
+    // switched off. Take them one component at a time.
 
     // Nothing checked that a template's components resolve. Vue answers an
     // unregistered tag with a console warning, so lint, type-check and build

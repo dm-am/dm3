@@ -44,9 +44,9 @@ public interface IRoomApiService
     /// Update existing room
     /// </summary>
     /// <param name="roomId">Room identifier</param>
-    /// <param name="room">Room model</param>
+    /// <param name="request">Editable room fields</param>
     /// <returns>Envelope containing the updated room</returns>
-    Task<Envelope<Room>> Update(Guid roomId, Room room);
+    Task<Envelope<Room>> Update(Guid roomId, UpdateRoomRequest request);
 
     /// <summary>
     /// Delete existing room

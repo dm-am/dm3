@@ -19,7 +19,7 @@ import { useGameDetailsStore, gameApi } from "@/entities/game";
 import { useAuthStore } from "@/shared/stores/auth";
 import type { GameReview } from "@/shared/api/models/game/reviews";
 import type { ListEnvelope } from "@/shared/api/models/common";
-import { ContentText } from "@/shared/ui";
+import { ContentText } from "@/shared/ui/Content";
 import Button from "@/shared/ui/Button/Button.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import LeadText from "@/shared/ui/Layout/LeadText.vue";

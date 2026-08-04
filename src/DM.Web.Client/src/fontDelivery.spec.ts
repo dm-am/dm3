@@ -106,4 +106,33 @@ describe("font delivery", () => {
       .map((file) => `${file}: gzip_types omits font/ttf`);
     expect(offenders).toEqual([]);
   });
+
+  /**
+   * gzip_types matches the response's content type, and nginx derives that from
+   * mime.types, where the stock file names woff and woff2 and stops. A .ttf
+   * therefore left as application/octet-stream, no gzip_types entry could ever
+   * match it, and the megabyte the entry above was added for kept travelling
+   * raw with both configurations reading as though it did not. Measured in the
+   * image: `nginx:1.27-alpine` answers a .ttf with Content-Length 278612 and no
+   * Content-Encoding until the mapping is declared.
+   */
+  it("gives the font a type gzip_types can match, on both hops", () => {
+    const hops = [
+      join(CLIENT_ROOT, "nginx.conf"),
+      join(REPO_ROOT, "docker/nginx/nginx.conf"),
+    ];
+    const offenders = hops
+      .filter(
+        (file) =>
+          !/types\s*\{[^}]*\bfont\/ttf\s+ttf\s*;/s.test(
+            readFileSync(file, "utf8"),
+          ),
+      )
+      .map(
+        (file) =>
+          `${file}: no types block maps ttf, so the file is served as ` +
+          `application/octet-stream and gzip_types font/ttf matches nothing`,
+      );
+    expect(offenders).toEqual([]);
+  });
 });

@@ -26,7 +26,7 @@ import type {
   Comment,
   Envelope,
   GeneralError,
-  Paging,
+  PagingInfo,
 } from "@/shared/api/models/common";
 import type { CommentsQuery } from "@/shared/api";
 import { useUiStore } from "@/shared/stores/ui";
@@ -48,7 +48,7 @@ const props = defineProps<{
   /** Comments of the current page, as the caller's store holds them. */
   comments: Comment[];
   /** Server paging of the current page, null while unknown. */
-  paging: Paging | null;
+  paging: PagingInfo | null;
   /** A load is in flight. */
   loading: boolean;
   /**

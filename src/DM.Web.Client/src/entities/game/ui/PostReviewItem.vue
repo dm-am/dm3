@@ -3,7 +3,7 @@ import { computed } from "vue";
 import type { PostReview } from "../model/types";
 import { ReviewSign } from "@/shared/api/models/game/reviews";
 import { UserLink } from "@/entities/user/@x/game";
-import { ContentText } from "@/shared/ui";
+import { ContentText } from "@/shared/ui/Content";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { formatDateFull } from "@/shared/lib/utils/datetime";

@@ -9,6 +9,7 @@ using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Extensions;
 using DM.Domain.Forum.Features.Comments;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 
@@ -297,7 +298,7 @@ internal class TopicCommentRepository : ITopicCommentRepository
         var dbComment = await _dbContext.Comments.FindAsync(deleteComment.CommentId);
         if (dbComment != null)
         {
-            dbComment.IsRemoved = true;
+            SoftDelete.Mark(dbComment, deleteComment.DeletedByUserId, deleteComment.DeletedUtc);
         }
 
         // Update topic comment count and last comment ID

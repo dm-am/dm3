@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
@@ -33,16 +34,19 @@ internal class PostRepository : IPostRepository
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
     private readonly IGameRepository _gameRepository;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public PostRepository(
         DmDbContext dbContext,
         IMapper mapper,
-        IGameRepository gameRepository)
+        IGameRepository gameRepository,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _mapper = mapper;
         _gameRepository = gameRepository;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     #region Read Operations
@@ -534,12 +538,12 @@ internal class PostRepository : IPostRepository
             .FirstOrDefaultAsync();
     }
 
-    public async Task Delete(Guid postId)
+    public async Task Delete(Guid postId, Guid deletedByUserId)
     {
         var post = await _dbContext.Posts.FindAsync(postId);
         if (post != null)
         {
-            post.IsRemoved = true;
+            SoftDelete.Mark(post, deletedByUserId, _dateTimeProvider.Now);
             await _dbContext.SaveChangesAsync();
         }
     }

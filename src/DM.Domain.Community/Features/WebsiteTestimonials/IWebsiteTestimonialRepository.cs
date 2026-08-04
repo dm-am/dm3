@@ -61,5 +61,6 @@ public interface IWebsiteTestimonialRepository
     /// Mark website testimonial as removed
     /// </summary>
     /// <param name="id">Testimonial identifier</param>
-    Task Delete(Guid id);
+    /// <param name="deletedByUserId">Who pressed delete.</param>
+    Task Delete(Guid id, Guid deletedByUserId);
 }

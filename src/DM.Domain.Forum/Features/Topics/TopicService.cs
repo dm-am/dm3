@@ -393,7 +393,7 @@ internal class TopicService : ITopicService
         var topic = await GetAsync(topicId, ct);
         _intentionManager.ThrowIfForbidden(ForumIntention.AdministrateTopics, topic.Board);
 
-        await _repository.Delete(topicId);
+        await _repository.Delete(topicId, _identityProvider.Current.User.UserId);
         await _unreadCountersRepository.DeleteAsync(topicId, UnreadEntryType.Message);
         await _invokedEventProducer.SendAsync(EventType.DeletedTopic, topicId);
     }

@@ -11,7 +11,7 @@
 | **Порты сервисов** | `docker/docker-compose.yml` |
 | **Env vars** | `docker/docker-compose.yml` → секция `x-workload-env` |
 | **API конфиг** | `src/DM.Web.API/appsettings.json` |
-| **Docker секреты** | `docker/.env` (создать из `.env.example`) |
+| **Docker секреты** | `docker/.env` (создает `docker/scripts/init-env.sh`) |
 
 ---
 
@@ -24,12 +24,20 @@
 | `docker/.env` | Секреты Docker (пароли БД, Mongo, MinIO, RabbitMQ, ключ шифрования) |
 | `src/DM.Web.API/appsettings.json` | Главный конфиг API |
 | `src/DM.Workers.*/appsettings.json` | Конфиги workers |
+| `src/*/appsettings.Development.json` | Учетные данные localhost для запуска из исходников |
 
 **Что где лежит.** `appsettings.json` отслеживается гитом и содержит только
-значения по умолчанию для localhost, чтобы свежий клон собирался и запускался.
-Настоящие учетные данные приходят переменными `DM_*`, и у них нет дефолта в
-репозитории: отсутствие валит старт, а не подставляет значение, которое может
-прочитать кто угодно. Полное правило — в [SECURITY.md](../conventions/SECURITY.md).
+значения по умолчанию для localhost. Настоящие учетные данные приходят
+переменными `DM_*`, и у них нет дефолта в репозитории: отсутствие валит старт, а
+не подставляет значение, которое может прочитать кто угодно. Полное правило — в
+[SECURITY.md](../conventions/SECURITY.md).
+
+Ключи, без которых хост отказывается стартовать (`ConnectionStrings:Rdb`,
+`ConnectionStrings:Mongo`, `CdnConfiguration:AccessKey` и `SecretKey`), лежат не
+в `appsettings.json`, а в `appsettings.Development.json`. Хост в Production этот
+файл не читает, и в образ он не попадает, поэтому проверка на старте срабатывает
+там, где она нужна. Запуск из исходников — с явным окружением:
+`dotnet run --project src/DM.Web.API --environment Development`.
 
 **Обязательные переменные без дефолта:**
 

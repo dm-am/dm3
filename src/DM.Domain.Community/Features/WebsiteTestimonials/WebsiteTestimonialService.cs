@@ -122,6 +122,6 @@ internal class WebsiteTestimonialService : IWebsiteTestimonialService
     {
         var testimonial = await GetAsync(id);
         _intentionManager.ThrowIfForbidden(WebsiteTestimonialIntention.Delete, testimonial);
-        await _repository.Delete(id);
+        await _repository.Delete(id, _identityProvider.Current.User.UserId);
     }
 }

@@ -74,7 +74,9 @@ public interface ICharacterRepository
     /// <summary>
     /// Delete character
     /// </summary>
-    Task Delete(Guid characterId);
+    /// <param name="characterId">Character identifier</param>
+    /// <param name="deletedByUserId">User who removed the character</param>
+    Task Delete(Guid characterId, Guid deletedByUserId);
 
     /// <summary>
     /// Decline pending characters when user is blocked

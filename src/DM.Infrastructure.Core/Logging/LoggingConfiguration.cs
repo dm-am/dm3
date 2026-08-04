@@ -81,6 +81,10 @@ public static class LoggingConfiguration
                 .AddHttpClientInstrumentation()
                 .AddRuntimeInstrumentation()
                 .AddMeter(DM.Infrastructure.Core.Tracing.UploadMetrics.MeterName)
+                // Without this the consumers export nothing about the messages they
+                // handle, and a worker failing every one of them is indistinguishable
+                // from an idle worker on every panel and every rule.
+                .AddMeter(DM.Infrastructure.Core.Tracing.MessagingMetrics.MeterName)
                 .AddPrometheusExporter());
 
         return services.AddLogging(b => b.AddSerilog());

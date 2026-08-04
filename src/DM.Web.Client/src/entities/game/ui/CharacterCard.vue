@@ -15,7 +15,8 @@ import type { Character, CharacterAttribute } from "../model/types";
 import { characterStatusLabel } from "../model/characterStatus";
 import { UserLink } from "@/entities/user/@x/game";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import { AvatarImg, ContentText } from "@/shared/ui";
+import { AvatarImg } from "@/shared/ui/AvatarImg";
+import { ContentText } from "@/shared/ui/Content";
 import { SvgIcon } from "@/shared/ui/Icon";
 
 const props = defineProps<{
@@ -23,6 +24,11 @@ const props = defineProps<{
 }>();
 
 const isExpanded = ref(false);
+
+// The details block is named so the toggle can point at it. Two cards of the
+// same character can be on one page (roster and a game post), and a duplicate
+// id would send both toggles to the first block.
+const detailsId = `character-details-${Math.random().toString(36).slice(2, 9)}`;
 
 // Status badge for non-active characters (Retired is refined by the flags).
 // The caption itself is entity-level: the character's own page prints the same
@@ -60,7 +66,14 @@ function toggleExpand() {
 
 <template>
   <article class="character-card" :class="{ expanded: isExpanded }">
-    <!-- Character header -->
+    <!-- Character header.
+         The whole strip stays a mouse target for the disclosure, and it cannot
+         also be the keyboard one: it carries a link to the player and the
+         consumer's controls slot, and both disappear from assistive technology
+         once they sit inside a role="button". The keyboard path is the chevron
+         at its end, a real button with aria-expanded — which is the part the
+         rule below cannot see from one element. -->
+    <!-- eslint-disable-next-line vuejs-accessibility/click-events-have-key-events -->
     <header class="character-header" @click="toggleExpand">
       <!-- Character: no avatar = no image (differs from the User default silhouette). -->
       <AvatarImg
@@ -87,15 +100,28 @@ function toggleExpand() {
           <slot name="controls" />
         </div>
       </div>
-      <SvgIcon
+      <button
         v-if="hasDetails"
-        :name="isExpanded ? 'chevronUp' : 'chevronDown'"
-        class="expand-icon"
-      />
+        type="button"
+        class="expand-toggle"
+        :aria-expanded="isExpanded"
+        :aria-controls="detailsId"
+        :aria-label="isExpanded ? 'Свернуть' : 'Показать полностью'"
+        @click.stop="toggleExpand"
+      >
+        <SvgIcon
+          :name="isExpanded ? 'chevronUp' : 'chevronDown'"
+          class="expand-icon"
+        />
+      </button>
     </header>
 
     <!-- Character details (expanded) — schema-driven attributes -->
-    <div v-if="isExpanded && hasDetails" class="character-details">
+    <div
+      v-if="isExpanded && hasDetails"
+      :id="detailsId"
+      class="character-details"
+    >
       <div v-if="character.totalPostsCount" class="detail-section">
         <span class="detail-label">Постов:</span>
         <span class="detail-value">{{ character.totalPostsCount }}</span>
@@ -121,6 +147,8 @@ function toggleExpand() {
 </template>
 
 <style scoped lang="sass">
+@import "@/assets/styles/Inputs"
+
 .character-card
   background-color: $bg-element
   border-radius: $border-radius
@@ -167,9 +195,22 @@ function toggleExpand() {
 .character-controls
   font-size: $secondary-font-size
 
-.expand-icon
+// The disclosure the keyboard can reach. Drawn exactly as the bare glyph it
+// replaced — no fill, no border, the same colour and the same place in the row
+// — so a reader with a mouse sees no change; what is new is that the control
+// can be tabbed to and answers Enter and Space, which a <header> holding a link
+// and a slot could never do without hiding both.
+.expand-toggle
   color: $text-muted
   align-self: center
+  // The glyph is drawn at 1em, and a <button> does not inherit the page's font
+  // size — the user agent gives it one of its own. Without this the chevron
+  // would come out three pixels smaller than the icon it replaced.
+  font-size: inherit
+  +icon-button(1em)
+
+.expand-icon
+  color: inherit
 
 .character-details
   padding: $small

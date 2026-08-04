@@ -66,7 +66,9 @@ public interface IRoomRepository
     /// <summary>
     /// Delete room
     /// </summary>
-    Task Delete(Guid roomId);
+    /// <param name="roomId">Room identifier.</param>
+    /// <param name="deletedByUserId">Who pressed delete.</param>
+    Task Delete(Guid roomId, Guid deletedByUserId);
 
     #endregion
 }

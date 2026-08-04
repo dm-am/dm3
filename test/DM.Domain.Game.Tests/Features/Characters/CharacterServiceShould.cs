@@ -317,11 +317,14 @@ public class CharacterServiceShould : UnitTestBase
         var characterId = Guid.NewGuid();
         var character = new CharacterToUpdate { Id = characterId, GameId = Guid.NewGuid() };
         _repository.Setup(r => r.GetForUpdate(characterId)).ReturnsAsync(character);
-        _repository.Setup(r => r.Delete(characterId)).Returns(Task.CompletedTask);
+        _repository.Setup(r => r.Delete(characterId, _currentUserId)).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(characterId);
 
         _intentionManager.Verify(m => m.ThrowIfForbidden(CharacterIntention.Delete, character), Times.Once);
+        // The author of the removal travels with it: ISoftDeletable promises who deleted the
+        // row, and the column stays empty unless the service hands the identity over.
+        _repository.Verify(r => r.Delete(characterId, _currentUserId), Times.Once);
     }
 
     /// <summary>

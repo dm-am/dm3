@@ -62,9 +62,9 @@ internal class TopicCommentApiService : ITopicCommentApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<Comment>> Update(Guid commentId, Comment comment)
+    public async Task<Envelope<Comment>> Update(Guid commentId, UpdateCommentRequest request)
     {
-        var updateComment = _mapper.Map<UpdateComment>(comment);
+        var updateComment = _mapper.Map<UpdateComment>(request);
         updateComment.CommentId = commentId;
         var updatedComment = await _commentService.UpdateAsync(updateComment);
         return new Envelope<Comment>(_mapper.Map<Comment>(updatedComment));

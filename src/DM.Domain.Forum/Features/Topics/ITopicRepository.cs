@@ -111,7 +111,8 @@ public interface ITopicRepository
     /// Soft delete a topic
     /// </summary>
     /// <param name="topicId">Topic identifier</param>
-    Task Delete(Guid topicId);
+    /// <param name="deletedByUserId">User who removed the topic</param>
+    Task Delete(Guid topicId, Guid deletedByUserId);
 
     /// <summary>
     /// Update attach order for multiple topics (batch operation)

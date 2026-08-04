@@ -157,23 +157,20 @@ public class PublicationController : ControllerBase
     ///     POST /v1/publications/3fa85f64-5717-4562-b3fc-2c963f66afa6/likes
     /// </remarks>
     /// <param name="id">Publication identifier (GUID)</param>
-    /// <response code="201">Like added, returns user who liked</response>
+    /// <response code="200">Like added, returns user who liked</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User cannot like this publication (e.g., own publication)</response>
     /// <response code="404">Publication not found</response>
     /// <response code="409">User already liked this publication</response>
     [HttpPost("publications/{id:guid}/likes", Name = nameof(PostPublicationLike))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> PostPublicationLike(Guid id)
-    {
-        var result = await _likeApiService.LikePublication(id);
-        return CreatedAtRoute(nameof(GetPublication), new { id }, result);
-    }
+    public async Task<IActionResult> PostPublicationLike(Guid id) =>
+        Ok(await _likeApiService.LikePublication(id));
 
     /// <summary>
     /// Remove like from publication

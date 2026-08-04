@@ -49,8 +49,8 @@ public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
         _clock.SetupGet(c => c.Now).Returns(Now);
 
         var services = new ServiceCollection();
-        // Scoped, exactly as in production: the service resolves its context
-        // from a scope it creates and disposes itself.
+        // Scoped, exactly as in production: the periodic loop opens a scope per
+        // pass and the sweeper resolves its context out of that one.
         services.AddDbContext<DmDbContext>(options => options.UseInMemoryDatabase(_databaseName));
         services.AddScoped(_ => _objectStorage.Object);
         services.AddSingleton(_ => _clock.Object);
@@ -81,10 +81,18 @@ public class UploadOrphanCleanupShould : UnitTestBase, IDisposable
         await dbContext.SaveChangesAsync();
     }
 
-    private Task Sweep() => new UploadOrphanCleanupService(
-            _serviceProvider,
-            NullLogger<UploadOrphanCleanupService>.Instance)
-        .SweepAsync(CancellationToken.None);
+    /// <summary>
+    /// One pass, driven the way the periodic loop drives it: a scope per pass,
+    /// opened by the caller and handed to the sweeper.
+    /// </summary>
+    private async Task Sweep()
+    {
+        using var scope = _serviceProvider.CreateScope();
+        await new UploadOrphanCleanupService(
+                _serviceProvider,
+                NullLogger<UploadOrphanCleanupService>.Instance)
+            .SweepAsync(scope.ServiceProvider, CancellationToken.None);
+    }
 
     private async Task<int> RemainingUploads()
     {

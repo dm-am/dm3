@@ -1542,7 +1542,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                 columns: new[] { "BoardId", "Alias", "CreateTopicPolicy", "Description", "LastTopicAuthorId", "LastTopicCreatedUtc", "LastTopicId", "LastTopicNumber", "LastTopicTitle", "Order", "Title", "TopicsCount", "ViewPolicy" },
                 values: new object[,]
                 {
-                    { new Guid("00000000-0000-0000-0000-000000000001"), "general", 32, "Жизнь сообщества и решения администрации", null, null, null, null, null, 1, "Общий", 2, 64 },
+                    { new Guid("00000000-0000-0000-0000-000000000001"), "general", 32, "Жизнь сообщества и решения администрации", new Guid("00000000-0000-0000-0000-000000000001"), new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 1, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), new Guid("00000000-0000-0000-0000-000000000100"), 2, "Обсуждение действий администрации", 1, "Общий", 2, 64 },
                     { new Guid("00000000-0000-0000-0000-000000000002"), "game-systems", 32, "Обсуждение правил и помощь в выборе системы", null, null, null, null, null, 2, "Игровые системы", 0, 64 },
                     { new Guid("00000000-0000-0000-0000-000000000003"), "looking-for-group", 32, "Набор игроков в игру или поиск мастера", null, null, null, null, null, 3, "Поиск мастера и игроков", 0, 64 },
                     { new Guid("00000000-0000-0000-0000-000000000004"), "ideas", 32, "Обкатка задумок и поиск единомышленников", null, null, null, null, null, 4, "Котел идей", 0, 64 },

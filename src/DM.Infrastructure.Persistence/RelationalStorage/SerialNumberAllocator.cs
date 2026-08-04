@@ -24,8 +24,12 @@ namespace DM.Infrastructure.Persistence.RelationalStorage;
 ///
 /// A rolled back insert burns its number and leaves a gap. That is the trade an identity column
 /// already makes, and nothing reads the serial back: the encoded form is decoded nowhere.
+///
+/// Public rather than internal because the seeder writes the same three tables and used to carry
+/// its own copy of the two-phase pair, placeholder and all — "SSOT" was true of the three
+/// repositories and of nothing else.
 /// </remarks>
-internal static class SerialNumberAllocator
+public static class SerialNumberAllocator
 {
     /// <summary>
     /// The next value of the SerialNumber identity sequence of

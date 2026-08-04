@@ -159,6 +159,16 @@ public class DeleteTopicCommentEntity
     /// New last comment ID (if this was the last comment)
     /// </summary>
     public Guid? NewLastCommentId { get; set; }
+
+    /// <summary>
+    /// User who removed the comment
+    /// </summary>
+    public Guid DeletedByUserId { get; set; }
+
+    /// <summary>
+    /// When the comment was removed
+    /// </summary>
+    public DateTimeOffset DeletedUtc { get; set; }
 }
 
 /// <summary>

@@ -718,7 +718,7 @@ internal class GameService : IGameService
             }
         }
 
-        await _repository.Delete(gameId);
+        await _repository.Delete(gameId, _identityProvider.Current.User.UserId);
         await _producer.SendAsync(EventType.DeletedGame, gameId);
     }
 

@@ -286,20 +286,20 @@ public class TopicController : ControllerBase
     /// Each user can only like a topic once.
     /// </remarks>
     /// <param name="id">Topic identifier (GUID)</param>
-    /// <response code="201">Like added, returns user who liked</response>
+    /// <response code="200">Like added, returns user who liked</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User cannot like this topic (e.g., own topic)</response>
     /// <response code="409">User already liked this topic</response>
     /// <response code="404">Topic not found</response>
     [HttpPost("{id}/likes", Name = nameof(PostTopicLike))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(Envelope<User>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostTopicLike(Guid id) =>
-        CreatedAtRoute(nameof(GetTopic), new {id}, await _likeApiService.LikeTopic(id));
+        Ok(await _likeApiService.LikeTopic(id));
 
     /// <summary>
     /// Remove like from topic

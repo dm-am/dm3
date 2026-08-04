@@ -224,7 +224,7 @@ internal class RoomService : IRoomService
 
         _intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
 
-        await _repository.Delete(roomId);
+        await _repository.Delete(roomId, _identityProvider.Current.User.UserId);
         await _unreadCountersRepository.DeleteAsync(roomId, UnreadEntryType.Message);
         await _producer.SendAsync(EventType.DeletedRoom, roomId);
     }

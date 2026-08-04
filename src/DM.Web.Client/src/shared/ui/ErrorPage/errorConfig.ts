@@ -127,10 +127,10 @@ export function toErrorPageCode(status: number | undefined): number {
  * The default is "не найдено", because the API spends Gone on "no such board /
  * user"; `goneMeansRemoved` is the opt-in of the pages that read it literally.
  * The topic page has that distinction from the server (TopicService answers
- * Gone for a deleted topic and 404 for one that never existed). The game shell
- * does not, and asks for it anyway: GameService answers Gone for every id that
- * addresses nothing visible, and of those a game deleted by its master is the
- * one a reader arrives at from a link he was given.
+ * Gone for a deleted topic and 404 for one that never existed), so it is the
+ * page that asks. The game and blog shells do not ask: GameService answers Gone
+ * for every id that addresses nothing this reader may see, so a mistyped address
+ * would be reported to them as somebody having deleted the game.
  *
  * Everything else collapses on purpose: a status with no page of its own reads
  * as "not found", and a missing status or a 5xx as a fault on our side.

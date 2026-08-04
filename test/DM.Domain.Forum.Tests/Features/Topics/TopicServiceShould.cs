@@ -37,6 +37,7 @@ public class TopicServiceShould : UnitTestBase
     private readonly Mock<IUserLookupService> _userLookupService;
     private readonly Mock<IEventProducer> _eventProducer;
     private readonly ISetup<ITopicRepository, Task<Topic>> _createTopicSetup;
+    private readonly Guid _currentUserId = Guid.NewGuid();
     private readonly TopicService _service;
 
     public TopicServiceShould()
@@ -63,9 +64,8 @@ public class TopicServiceShould : UnitTestBase
         _intentionManager.Setup(m => m.IsAllowed(It.IsAny<ForumIntention>(), It.IsAny<Board>()))
             .Returns(false);
 
-        var userId = Guid.NewGuid();
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(userId, UserRole.RegularUser));
+        _identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
         _repository = Mock<ITopicRepository>();
         _createTopicSetup = _repository.Setup(r => r.Create(
@@ -272,7 +272,7 @@ public class TopicServiceShould : UnitTestBase
         };
         _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(topic);
-        _repository.Setup(r => r.Delete(topicId)).Returns(Task.CompletedTask);
+        _repository.Setup(r => r.Delete(topicId, _currentUserId)).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(topicId);
 
@@ -292,11 +292,13 @@ public class TopicServiceShould : UnitTestBase
         };
         _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(topic);
-        _repository.Setup(r => r.Delete(topicId)).Returns(Task.CompletedTask);
+        _repository.Setup(r => r.Delete(topicId, _currentUserId)).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(topicId);
 
-        _repository.Verify(r => r.Delete(topicId), Times.Once);
+        // The author of the removal travels with it: ISoftDeletable promises who deleted the
+        // row, and the column stays empty unless the service hands the identity over.
+        _repository.Verify(r => r.Delete(topicId, _currentUserId), Times.Once);
         _unreadCountersRepository.Verify(
             r => r.DeleteAsync(topicId, UnreadEntryType.Message),
             Times.Once);

@@ -92,6 +92,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .AddDmAccountConfiguration(configuration)
             .Configure<MessagingConfiguration>(configuration.GetSection(nameof(MessagingConfiguration)).Bind)
             .AddDmLogging("DM.API", configuration, _environment)
+            .RequireGeneratedLinks()
             .RequireRelationalStorage()
             .RequireDocumentStorage()
             .RequireObjectStorage();

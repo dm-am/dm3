@@ -32,17 +32,25 @@ case "$MODE" in
         ;;
 esac
 
-if [ -f "$ENV_FILE" ]; then
-    echo ".env already exists at $ENV_FILE"
-    exit 0
-fi
-
 if [ ! -f "$EXAMPLE_FILE" ]; then
     echo "Error: .env.example not found at $EXAMPLE_FILE" >&2
     exit 1
 fi
 
-cp "$EXAMPLE_FILE" "$ENV_FILE"
+EXISTING=0
+if [ -f "$ENV_FILE" ]; then
+    # An existing file is topped up rather than left alone. Returning success on
+    # sight was the same hole under a different door: two guides still tell the
+    # reader to copy .env.example by hand, and after that this script had nothing
+    # to say - the copy carries the encryption key empty, compose declares it
+    # through ${...:?}, and the documented first run died on interpolation before
+    # a single container started, on a file the tooling had just approved of.
+    # Only empty values are filled, so a key already chosen is never replaced.
+    EXISTING=1
+else
+    cp "$EXAMPLE_FILE" "$ENV_FILE"
+fi
+
 # The file holds every credential of the installation.
 chmod 600 "$ENV_FILE"
 
@@ -63,13 +71,30 @@ set_value() {
     fi
 }
 
-set_value DM_CryptoConfiguration__KeyBase64 "$(openssl rand -base64 32)"
+# True when the key is absent from the file or present with an empty value.
+is_empty() {
+    ! grep -qE "^${1}=.+$" "$ENV_FILE"
+}
 
-if [ "$MODE" = "server" ]; then
+# Generated values are per installation, so an existing one is kept: rerunning
+# this must not invalidate every session and every stored secret of a stand.
+set_if_empty() {
+    if is_empty "$1"; then
+        set_value "$1" "$2"
+    fi
+}
+
+set_if_empty DM_CryptoConfiguration__KeyBase64 "$(openssl rand -base64 32)"
+
+if [ "$MODE" = "server" ] && [ "$EXISTING" = 0 ]; then
     # The only moment these can be chosen: the Mongo application user is created
     # by the initdb hook and the MinIO accounts by minio-init, and both run once
     # per empty volume. Keeping the template values would put every password of
     # a public stand in a public repository.
+    #
+    # Only on a file this run created. Rotating the passwords of a stand that is
+    # already up locks the API out of stores whose users were created with the
+    # old ones, so an existing file keeps whatever it holds and says so below.
     for secret in POSTGRES_PASSWORD RABBITMQ_DEFAULT_PASS MINIO_ROOT_PASSWORD \
                   GF_SECURITY_ADMIN_PASSWORD MONGO_ROOT_PASSWORD MONGO_PASSWORD \
                   MINIO_APP_PASSWORD MINIO_IMGPROXY_PASSWORD; do
@@ -82,10 +107,17 @@ if [ "$MODE" = "server" ]; then
     # The template sets Development for local work, and a copied file must not
     # be the thing that opens the dev-only seed and role endpoints on a server.
     set_value ASPNETCORE_ENVIRONMENT Production
-
-    if [ -n "$IMAGE_TAG" ]; then
-        set_value IMAGE_TAG "$IMAGE_TAG"
-    fi
 fi
 
-echo "Created $ENV_FILE from .env.example (mode: $MODE)"
+if [ "$MODE" = "server" ] && [ -n "$IMAGE_TAG" ]; then
+    set_value IMAGE_TAG "$IMAGE_TAG"
+fi
+
+if [ "$EXISTING" = 1 ]; then
+    echo "Completed $ENV_FILE (mode: $MODE); values already present were kept"
+    if [ "$MODE" = "server" ]; then
+        echo "Note: credentials and ASPNETCORE_ENVIRONMENT were left as the file had them" >&2
+    fi
+else
+    echo "Created $ENV_FILE from .env.example (mode: $MODE)"
+fi

@@ -92,7 +92,7 @@ internal class TicketService : ITicketService
         };
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Ticket>> GetTickets(
+    public async Task<(IEnumerable<Ticket> tickets, PagingResult paging)> GetTickets(PagingQuery query,
         TicketStatus? status = null, TicketSubtype? subtype = null, CancellationToken ct = default)
     {
         var visibleSubtypes = GetVisibleSubtypes(_identityProvider.Current.User.Role);
@@ -103,7 +103,7 @@ internal class TicketService : ITicketService
             if (visibleSubtypes != null && !visibleSubtypes.Contains(subtype.Value))
             {
                 // Requested subtype is outside of the caller visibility scope
-                return [];
+                return ([], PagingResult.Empty(query.Take));
             }
 
             filter = [subtype.Value];
@@ -113,7 +113,7 @@ internal class TicketService : ITicketService
             filter = visibleSubtypes;
         }
 
-        return await _ticketRepository.GetTickets(status, filter, ct);
+        return await _ticketRepository.GetTickets(query, status, filter, ct);
     }
 
     /// <inheritdoc />

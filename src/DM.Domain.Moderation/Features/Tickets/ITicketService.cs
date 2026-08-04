@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Moderation.Features.Tickets;
@@ -132,7 +133,8 @@ public interface ITicketService
     /// complaints and suggestions, SeniorModerator additionally sees complaints
     /// about junior moderator decisions, Admin sees everything.
     /// </summary>
-    Task<IEnumerable<Ticket>> GetTickets(TicketStatus? status = null, TicketSubtype? subtype = null, CancellationToken ct = default);
+    Task<(IEnumerable<Ticket> tickets, PagingResult paging)> GetTickets(PagingQuery query,
+        TicketStatus? status = null, TicketSubtype? subtype = null, CancellationToken ct = default);
 
     /// <summary>
     /// Get tickets for the current moderator

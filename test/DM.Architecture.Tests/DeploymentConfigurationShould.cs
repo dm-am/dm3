@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using FluentAssertions;
 using Xunit;
@@ -488,21 +489,62 @@ public class DeploymentConfigurationShould
     /// about a step nobody wrote. The PowerShell path generated the key itself,
     /// which is exactly why nobody saw it: the platform the owner develops on
     /// worked.
+    ///
+    /// Asked of both scripts, because for a while it was asked of one. dm.sh was
+    /// moved onto the generator and dm.ps1 kept copying the template and drawing
+    /// its own key, so "the generator is the one place that creates docker/.env"
+    /// was the motivation of a test that read a single file and could not have
+    /// seen the second implementation it was written against.
     /// </remarks>
-    [Fact]
-    public void CreateTheEnvironmentFileBeforeTheDeveloperScriptStartsTheStack()
+    [Theory]
+    [InlineData("dm.sh", "docker compose up")]
+    [InlineData("dm.ps1", "compose up")]
+    public void CreateTheEnvironmentFileBeforeTheDeveloperScriptStartsTheStack(
+        string name, string startsWith)
     {
-        var script = File.ReadAllText(Path.Combine(RepositoryRoot, "scripts", "dm.sh"));
+        var script = File.ReadAllText(Path.Combine(RepositoryRoot, "scripts", name));
 
         var creation = script.IndexOf("init-env.sh", StringComparison.Ordinal);
-        var start = script.IndexOf("docker compose up", StringComparison.Ordinal);
+        var start = script.IndexOf(startsWith, StringComparison.Ordinal);
 
         creation.Should().BeGreaterThan(-1,
-            "the generator is the one place that creates docker/.env, and a second copy of that " +
-            "step is how the two platforms drifted apart in the first place");
-        start.Should().BeGreaterThan(-1, "the script is still the thing that starts the stack");
+            $"{name} has to reach the generator, which is the one place that creates " +
+            "docker/.env; a second copy of that step is how the two platforms drifted " +
+            "apart in the first place");
+        start.Should().BeGreaterThan(-1, $"{name} is still the thing that starts the stack");
         creation.Should().BeLessThan(start,
             "compose stops on interpolation before it starts anything");
+
+        script.Should().NotContainAny(
+            [".env.example\" \"$ENV", "Copy-Item", "cp \"$DOCKER_DIR/.env.example"],
+            $"{name} copying the template itself is the second implementation, and it is " +
+            "the half that never learns what the generator learns next");
+    }
+
+    /// <summary>
+    /// The generator completes a file it did not create.
+    /// </summary>
+    /// <remarks>
+    /// Returning success on sight of an existing docker/.env left the original
+    /// failure reachable by the documented route: two guides told the reader to
+    /// copy .env.example by hand, and after that the generator had nothing to
+    /// say — the copy carries the encryption key empty, compose declares it
+    /// through ${...:?}, and the first run died on interpolation on a file the
+    /// tooling had just approved of.
+    /// </remarks>
+    [Fact]
+    public void CompleteAnEnvironmentFileSomebodyElseCreated()
+    {
+        var generator = File.ReadAllText(
+            Path.Combine(DockerDirectory, "scripts", "init-env.sh"));
+
+        generator.Should().NotContain("already exists at",
+            "an existing file is topped up, not accepted as it is: the key is what is " +
+            "missing from a hand-made copy and the only thing compose refuses to start " +
+            "without");
+        generator.Should().Contain("set_if_empty",
+            "and topping up fills only what is empty, so rerunning it never invalidates " +
+            "a key a running stand already encrypts with");
     }
 
     /// <summary>
@@ -750,6 +792,14 @@ public class DeploymentConfigurationShould
     /// The overlay clears the dependencies of the API rather than listing
     /// services: compose starts whatever a named service depends on, and every
     /// one of those dependencies is a store that lives on main.
+    ///
+    /// Which is why the command has to name its services, and why that half is
+    /// asserted here too. "depends_on: !reset" narrows the closure of a named
+    /// service and nothing else: drop the trailing "nginx watchtower" and the
+    /// same command brings up the whole default profile again — Postgres, Mongo,
+    /// MinIO and a migration container pointed at the main database. The first
+    /// version of this test checked only that the two overlay files appeared in
+    /// the line, so exactly that edit passed.
     /// </remarks>
     [Fact]
     public void StartOnlyItsOwnEdgeAndApiOnAMirror()
@@ -773,6 +823,20 @@ public class DeploymentConfigurationShould
                 "the base file alone starts every store the mirror is meant to borrow");
             command.Should().Contain(PreviewCompose,
                 "the edge a mirror serves from lives in the overlay");
+
+            var arguments = command[(command.IndexOf("up -d", StringComparison.Ordinal) + 5)..]
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Select(argument => argument.Trim('`'))
+                .ToList();
+
+            arguments.Should().Contain("nginx",
+                "a mirror serves from its own edge, and nothing else in the command starts one");
+            foreach (var borrowed in new[] { "postgres", "mongo", "minio", "migration" })
+            {
+                arguments.Should().NotContain(borrowed,
+                    $"{borrowed} lives on main, and a mirror that starts its own runs the site " +
+                    "against an empty store - or, for migration, runs Migrate() against main");
+            }
         }
     }
 
@@ -811,6 +875,14 @@ public class DeploymentConfigurationShould
     /// minio/mc is the documented exception. It speaks to the server over the
     /// admin API and the two are released together, so pinning the client apart
     /// from the server is the failure mode rather than the fix.
+    ///
+    /// "Names a version" used to be checked as "the last path segment contains a
+    /// colon", which <c>containrrr/watchtower:latest</c> satisfies — the single
+    /// most dangerous reference here could go back to a floating tag with this
+    /// test green. The tag is now read out and refused by name, and the images
+    /// this repository publishes itself are checked separately: their tag comes
+    /// from IMAGE_TAG, chosen per branch by the deployment, so what is required
+    /// of them is that the choice stays a variable and is never written in.
     /// </remarks>
     [Fact]
     public void PinEveryImageTheDeploymentRuns()
@@ -836,10 +908,31 @@ public class DeploymentConfigurationShould
             .ToList();
 
         references.Should().HaveCountGreaterThan(10, "the parser must find the image references");
-        foreach (var reference in references)
+
+        var published = references.Where(reference => reference.Contains("${", StringComparison.Ordinal)).ToList();
+        var external = references.Except(published).ToList();
+
+        published.Should().NotBeEmpty("the stack runs the images this repository builds");
+        external.Should().HaveCountGreaterThan(10, "the parser must find the third-party references");
+
+        foreach (var reference in published)
         {
-            reference.Split('/')[^1].Should().Contain(":",
+            reference.Should().Contain("${IMAGE_TAG",
+                $"{reference} is built here, and which build a server runs is the deployment's " +
+                "choice through IMAGE_TAG; a tag written into the file takes that choice away");
+        }
+
+        foreach (var reference in external)
+        {
+            var name = reference.Split('/')[^1];
+            var separator = name.LastIndexOf(':');
+
+            separator.Should().BeGreaterThan(0,
                 $"{reference} resolves to whatever the registry holds on the day it is pulled");
+            name[(separator + 1)..].Should().NotBeEquivalentTo("latest",
+                $"{reference} follows the registry rather than this repository, so the same " +
+                "commit gives a different runtime a month later - and watchtower, the one that " +
+                "would decide it, mounts /var/run/docker.sock");
         }
     }
 
@@ -868,6 +961,59 @@ public class DeploymentConfigurationShould
     }
 
     /// <summary>
+    /// The branch the documented command downloads is the branch the installer
+    /// then clones.
+    /// </summary>
+    /// <remarks>
+    /// The install command is a raw URL with the branch in the path, and the
+    /// script it fetches clones a branch of its own from DM_BRANCH. The two are
+    /// written in three places — the guide, the usage comment, the default — and
+    /// nothing tied them together, so moving the stand to another branch takes
+    /// three edits and misses one. The failure is quiet in the worst way: the
+    /// operator runs the URL they were given, and the server ends up on the other
+    /// branch, with the image tag of the other branch, while the guide keeps
+    /// describing the one they asked for.
+    ///
+    /// This asserts coherence, not the choice. Which branch a stand tracks is an
+    /// operational decision — this repository develops on dev, publishes latest
+    /// from main and has no release tag flow, so the answer is not derivable from
+    /// the tree.
+    /// </remarks>
+    [Fact]
+    public void InstallFromTheBranchTheDocumentedCommandDownloads()
+    {
+        var installer = File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh"));
+
+        var fallback = Regex.Match(installer, @"DM_BRANCH=""\$\{DM_BRANCH:-([\w.\-/]+)\}""");
+        fallback.Success.Should().BeTrue(
+            "the installer picks the branch it clones, and it has to name a default");
+
+        // README.md is in the walk because it is the first page a reader meets and
+        // the earlier version of this test scanned docs/ alone: the one file most
+        // likely to carry the install command was the one file exempt from it.
+        var guides = Directory.GetFiles(
+            Path.Combine(RepositoryRoot, "docs"), "*.md", SearchOption.AllDirectories);
+        var sources = guides
+            .Append(Path.Combine(RepositoryRoot, "README.md"))
+            .Append(Path.Combine(DockerDirectory, "setup-server.sh"));
+
+        var branches = sources
+            .SelectMany(path => Regex.Matches(
+                File.ReadAllText(path),
+                @"raw\.githubusercontent\.com/[\w.\-]+/[\w.\-]+/([\w.\-]+)/docker/setup-server\.sh")
+                .Select(match => (Path.GetFileName(path), Branch: match.Groups[1].Value)))
+            .ToList();
+
+        branches.Should().NotBeEmpty(
+            "the automatic installation is documented as a URL with the branch in its path");
+        foreach (var (file, branch) in branches)
+        {
+            branch.Should().Be(fallback.Groups[1].Value,
+                $"{file} hands out a script that clones another branch than the one it downloads");
+        }
+    }
+
+    /// <summary>
     /// The gates exercise the environment that ships.
     /// </summary>
     /// <remarks>
@@ -876,19 +1022,80 @@ public class DeploymentConfigurationShould
     /// tier and the security scan ran against a build that maps Swagger and
     /// relaxes the script-src of its own content policy for it, while the
     /// configuration that reaches a server was exercised by nothing.
+    ///
+    /// Asked of every job that starts the stack, not of the file. Searching the
+    /// whole text for the line once made two jobs share one answer: the .NET
+    /// workflow starts the stack twice, in the end-to-end tier and in the
+    /// deployment smoke, and either of them could go back to Development while
+    /// the other kept the string and the test green. The named subject of the
+    /// finding, 235 end-to-end tests, was on the side that could slip.
     /// </remarks>
     [Theory]
     [InlineData("dotnet.yml")]
     [InlineData("security.yml")]
     public void RunTheGatesAgainstTheEnvironmentThatShips(string workflow)
     {
-        var text = File.ReadAllText(
-            Path.Combine(RepositoryRoot, ".github", "workflows", workflow));
+        var jobs = Jobs(Path.Combine(RepositoryRoot, ".github", "workflows", workflow));
 
-        text.Should().Contain("docker compose",
+        jobs.Should().NotBeEmpty($"{workflow} declares jobs");
+
+        var starters = jobs
+            .Where(job => job.Body.Contains("docker compose up", StringComparison.Ordinal))
+            .ToList();
+
+        starters.Should().NotBeEmpty(
             $"{workflow} is one of the workflows that start the stack");
-        text.Should().Contain("ASPNETCORE_ENVIRONMENT: Production",
-            "a gate that exercises Development proves nothing about what gets deployed");
+        foreach (var (name, body) in starters)
+        {
+            body.Should().Contain("ASPNETCORE_ENVIRONMENT: Production",
+                $"job {name} of {workflow} exercises Development, which proves nothing " +
+                "about what gets deployed");
+        }
+    }
+
+    /// <summary>
+    /// The jobs of a workflow, each with the text that belongs to it.
+    /// </summary>
+    /// <remarks>
+    /// A job is a two-space key under "jobs:", and everything up to the next one
+    /// is its body. Textual because that is the granularity the assertions need
+    /// and a YAML reader would have to be taught the same nesting anyway.
+    /// </remarks>
+    private static List<(string Name, string Body)> Jobs(string workflow)
+    {
+        var lines = File.ReadAllLines(workflow);
+        var header = new Regex(@"^  ([\w.\-]+):\s*$");
+        var jobs = new List<(string, string)>();
+
+        var start = Array.FindIndex(lines, line => line.StartsWith("jobs:", StringComparison.Ordinal));
+        start.Should().BeGreaterOrEqualTo(0, $"{Path.GetFileName(workflow)} declares jobs");
+
+        var current = string.Empty;
+        var body = new StringBuilder();
+        for (var index = start + 1; index < lines.Length; index++)
+        {
+            var match = header.Match(lines[index]);
+            if (match.Success)
+            {
+                if (current.Length > 0)
+                {
+                    jobs.Add((current, body.ToString()));
+                }
+
+                current = match.Groups[1].Value;
+                body.Clear();
+                continue;
+            }
+
+            body.AppendLine(lines[index]);
+        }
+
+        if (current.Length > 0)
+        {
+            jobs.Add((current, body.ToString()));
+        }
+
+        return jobs;
     }
 
     /// <summary>

@@ -15,6 +15,7 @@ using ApiLinkedProfile = DM.Web.API.Features.Moderation.Profiles.LinkedProfile;
 using ServiceUserIpInfo = DM.Domain.Account.Features.Authentication.UserIpInfo;
 using ServiceLinkedProfile = DM.Domain.Account.Features.Authentication.LinkedProfile;
 using ServiceUserLoginRecord = DM.Domain.Account.Features.Authentication.UserLoginRecord;
+using DM.Domain.Core.Dto;
 
 namespace DM.Web.API.Features.Moderation.Profiles;
 
@@ -79,7 +80,9 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
             ? MapIpAddresses(await _loginRecordService.GetIpAddresses(user.UserId))
             : null;
         var loginHistory = isAdmin
-            ? MapLoginHistory(await _loginRecordService.GetHistory(user.UserId))
+            // The moderation profile shows the most recent logins, not the whole
+            // journal: the page bound is the same one every other list obeys.
+            ? MapLoginHistory(await _loginRecordService.GetHistory(user.UserId, new PagingQuery { Take = 50 }))
             : null;
 
         // Map base UserProfile fields using AutoMapper, then add moderation-specific fields

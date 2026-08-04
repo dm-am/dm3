@@ -13,7 +13,6 @@ using DM.Infrastructure.Persistence.Entities.Community;
 using TopicEntity = DM.Infrastructure.Persistence.Entities.Forum.Topic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace DM.Web.API.HostedServices;
@@ -39,7 +38,7 @@ namespace DM.Web.API.HostedServices;
 /// if the service was down over a boundary it heals on the next start,
 /// without backfilling history.
 /// </summary>
-internal class PeriodDigestService : BackgroundService
+internal class PeriodDigestService : PeriodicHostedService
 {
     // The system author has a canonical definition; repeating its literal is how
     // copies drift apart.
@@ -48,71 +47,36 @@ internal class PeriodDigestService : BackgroundService
     // Well-known migration-seeded board, declared at its only point of use.
     private static readonly Guid NewsBoardId = Guid.Parse("00000000-0000-0000-0000-00000000000b");
 
-    // Month-boundary polling: the digest must appear shortly after midnight
-    // on the 1st; an hourly check is cheap (one indexed marker query).
-    private static readonly TimeSpan CheckInterval = TimeSpan.FromHours(1);
-
     private static readonly string[] MonthsGenitive =
     [
         "января", "февраля", "марта", "апреля", "мая", "июня",
         "июля", "августа", "сентября", "октября", "ноября", "декабря",
     ];
 
-    private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<PeriodDigestService> _logger;
 
     public PeriodDigestService(
         IServiceProvider serviceProvider,
         ILogger<PeriodDigestService> logger)
+        : base(serviceProvider, logger) => _logger = logger;
+
+    /// <inheritdoc />
+    protected override string Tag => "[Period Digest]";
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Month-boundary polling: the digest must appear shortly after midnight on
+    /// the 1st; an hourly check is cheap (one indexed marker query).
+    /// </remarks>
+    protected override TimeSpan Interval => TimeSpan.FromHours(1);
+
+    /// <inheritdoc />
+    protected override async Task RunOnce(IServiceProvider scope, CancellationToken cancellationToken)
     {
-        _serviceProvider = serviceProvider;
-        _logger = logger;
-    }
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        _logger.LogInformation("[Period Digest] Service started. Checking every {Interval}h", CheckInterval.TotalHours);
-
-        using var timer = new PeriodicTimer(CheckInterval);
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                // First pass runs immediately on startup (catch-up), inside
-                // the same guard as the periodic ones: a transient failure
-                // (e.g. the database not being up yet) must not crash the
-                // service — and with it the host.
-                await EnsureDigests(stoppingToken);
-                await timer.WaitForNextTickAsync(stoppingToken);
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.LogInformation("[Period Digest] Service is stopping");
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "[Period Digest] Unexpected error in digest loop");
-                try
-                {
-                    await timer.WaitForNextTickAsync(stoppingToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-            }
-        }
-    }
-
-    private async Task EnsureDigests(CancellationToken cancellationToken)
-    {
-        using var scope = _serviceProvider.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-        var topicRepository = scope.ServiceProvider.GetRequiredService<ITopicRepository>();
-        var unreadCountersRepository = scope.ServiceProvider.GetRequiredService<IUnreadCountersRepository>();
-        var eventProducer = scope.ServiceProvider.GetRequiredService<IEventProducer>();
+        var dbContext = scope.GetRequiredService<DmDbContext>();
+        var topicRepository = scope.GetRequiredService<ITopicRepository>();
+        var unreadCountersRepository = scope.GetRequiredService<IUnreadCountersRepository>();
+        var eventProducer = scope.GetRequiredService<IEventProducer>();
         var now = DateTimeOffset.UtcNow;
 
         // Last closed calendar month.

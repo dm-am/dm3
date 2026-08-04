@@ -1160,12 +1160,12 @@ internal class GameRepository : IGameRepository
             .FirstAsync(ct);
     }
 
-    public async Task Delete(Guid gameId, CancellationToken ct = default)
+    public async Task Delete(Guid gameId, Guid deletedByUserId, CancellationToken ct = default)
     {
         var game = await _dbContext.Games.FindAsync([gameId], ct);
         if (game != null)
         {
-            game.IsRemoved = true;
+            SoftDelete.Mark(game, deletedByUserId, _dateTimeProvider.Now);
             await _dbContext.SaveChangesAsync(ct);
         }
     }

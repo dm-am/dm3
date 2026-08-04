@@ -257,6 +257,41 @@ public class PrePushGateShould
     }
 
     /// <summary>
+    /// A job marked "+" runs the gates of that job, not a subset of them.
+    /// </summary>
+    /// <remarks>
+    /// The header claimed the frontend job while the hook ran "npx vitest run"
+    /// against a job that runs "npm run test:coverage" — the same tests, and not
+    /// the same gate: the thresholds live in coverage.thresholds of vite.config.ts
+    /// and apply only under --coverage, so deleting a suite passed locally and
+    /// failed in CI. AccountForEveryJobOfBothWorkflows compares job names only, so
+    /// a "+" over a subset was invisible to it.
+    ///
+    /// Read as scripts rather than as command lines: package.json is where a
+    /// frontend gate is defined, and both sides address it by the same name.
+    /// </remarks>
+    [Fact]
+    public void RunEveryScriptOfTheFrontendJob()
+    {
+        var scriptCall = new Regex(@"npm run ([\w:-]+)", RegexOptions.Compiled);
+
+        var ci = CiCommands("dotnet.yml", "frontend")
+            .SelectMany(command => scriptCall.Matches(command).Select(match => match.Groups[1].Value))
+            .Distinct()
+            .ToList();
+
+        ci.Should().NotBeEmpty("the frontend job runs its gates through npm scripts");
+
+        var hook = HookCommands();
+        foreach (var script in ci)
+        {
+            hook.Should().Contain(line => line.Contains($"npm run {script}", StringComparison.Ordinal),
+                $"the header marks frontend as run locally, and {script} is one of its gates; " +
+                "running an equivalent-looking command instead answers a different question");
+        }
+    }
+
+    /// <summary>
     /// Every job is either run by the hook or named in its header as left to CI.
     /// The third option, saying nothing, is the one that produced a local gate green
     /// on a push CI then failed.

@@ -1160,7 +1160,16 @@ public class DmDbContext : DbContext
                 // value that disagrees with the seeded rows is what a freshly migrated
                 // database shows the forum — and it also becomes the unread count for
                 // everyone who has never opened the board.
-                TopicsCount = 2
+                TopicsCount = 2,
+                // The last-topic block is denormalised the same way and was left unset,
+                // so a board with two topics showed an empty "last activity" column
+                // until somebody created or deleted a topic in it. Points at the newer
+                // of the two seeded topics.
+                LastTopicId = Guid.Parse("00000000-0000-0000-0000-000000000100"),
+                LastTopicNumber = 2,
+                LastTopicTitle = "Обсуждение действий администрации",
+                LastTopicAuthorId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                LastTopicCreatedUtc = new DateTimeOffset(2020, 1, 1, 0, 0, 1, TimeSpan.Zero)
             },
             new Board
             {

@@ -12,7 +12,7 @@ import type { User } from "@/shared/api/models/community";
 import { symbols } from "@/shared/lib/utils/icons";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
 import { SvgIcon } from "@/shared/ui/Icon";
-import { EmptyState } from "@/shared/ui";
+import { EmptyState } from "@/shared/ui/EmptyState";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { ChatPreviewSkeleton } from "@/shared/ui/Skeleton";
 

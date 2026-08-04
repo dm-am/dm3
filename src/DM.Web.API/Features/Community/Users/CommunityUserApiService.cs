@@ -10,6 +10,7 @@ using DM.Domain.Personal.Features.ProfileNotes;
 using DM.Infrastructure.Core.Parsing;
 using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
+using DM.Domain.Core.Dto;
 
 namespace DM.Web.API.Features.Community.Users;
 
@@ -145,16 +146,17 @@ internal class CommunityUserApiService : ICommunityUserApiService
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<LoginHistoryDto>> GetLoginHistory(string username)
+    public async Task<ListEnvelope<LoginHistoryDto>> GetLoginHistory(string username, PagingQuery query)
     {
         var user = await _userLookupService.GetAsync(username);
-        var loginHistory = await _loginRecordService.GetHistory(user.UserId);
+        var loginHistory = await _loginRecordService.GetHistory(user.UserId, query);
+        var total = await _loginRecordService.CountHistory(user.UserId);
         var dtos = loginHistory.Select(r => new LoginHistoryDto
         {
             LoginTimestampUtc = r.LoginUtc,
             IpAddress = r.IpAddress,
             UserAgent = r.UserAgent
         });
-        return new ListEnvelope<LoginHistoryDto>(dtos);
+        return new ListEnvelope<LoginHistoryDto>(dtos, new PagingInfo(query.Skip, query.Take, total));
     }
 }

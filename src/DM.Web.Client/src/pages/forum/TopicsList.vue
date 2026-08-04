@@ -7,7 +7,7 @@ import { Tooltip } from "@/shared/ui/Tooltip";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { LoginPrompt } from "@/features/auth";
-import { ContentText } from "@/shared/ui";
+import { ContentText } from "@/shared/ui/Content";
 import Paging from "@/shared/ui/Paging/Paging.vue";
 import { useBoardsStore, type Topic } from "@/entities/forum";
 import { UserLink, userIsModerator } from "@/entities/user";

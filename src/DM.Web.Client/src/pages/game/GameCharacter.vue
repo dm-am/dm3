@@ -30,7 +30,7 @@ import {
 import { UserLink } from "@/entities/user";
 import { CharacterForm } from "@/features/edit-character";
 import { CharacterManageLink } from "@/features/game-actions";
-import { AvatarImg } from "@/shared/ui";
+import { AvatarImg } from "@/shared/ui/AvatarImg";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { SvgIcon } from "@/shared/ui/Icon";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";

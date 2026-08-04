@@ -46,19 +46,10 @@ public class RequestBodyTypesShould
     private static readonly string[] Legacy =
     [
         "AttributeSchemaController.PostSchema",
-        "BlogCommentController.PatchBlogComment",
         "CharacterController.PostCharacter",
-        "CharacterController.PutCharacter",
         "GameBlacklistController.PostBlacklist",
-        "GameCommentController.PatchGameComment",
-        "GameController.PatchGameDetails",
-        "PostController.PatchPost",
-        "PublicationCommentController.PatchPublicationComment",
         "RoomController.CreatePostPendency",
-        "RoomController.PatchAccess",
-        "RoomController.PatchRoom",
         "RoomController.PostAccess",
-        "TopicCommentController.PatchTopicComment",
     ];
 
     /// <summary>Every controller action in the host.</summary>

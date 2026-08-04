@@ -13,6 +13,13 @@ launchSettings.json
 # vars or a secrets/ file; a missing value fails at startup rather than falling
 # back to a value everyone can read. Blanket-ignoring appsettings.json is what
 # left the worker projects without configuration on a fresh clone.
+#
+# The localhost values of the keys a host refuses to start without - the two
+# connection strings and the object-store account - live in the tracked
+# appsettings.Development.json instead, which a Production host does not read and
+# the image does not carry. In the base file they answered the very check written
+# to catch their absence, and a deployment that lost DM_ConnectionStrings__Rdb
+# started against localhost instead of stopping.
 appsettings.Local.json
 appsettings.*.local.json
 secrets/

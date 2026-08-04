@@ -14,7 +14,7 @@
 # запускать, а обойденный гейт не защищает ни от чего.
 #   build             +  сборка и тесты решения в Release. Порог покрытия
 #                        остается в CI: сбор ощутимо удлиняет интеграционный ярус
-#   frontend          +  линт, типы, юнит-тесты, сборка
+#   frontend          +  линт, типы, юнит-тесты с порогом покрытия, сборка
 #   dependency-scan   +  уязвимые пакеты .NET и npm
 #   e2e               -  поднятый стек и двадцать с лишним минут
 #   compose-topology  -  нужен docker и одиннадцать переменных развертывания
@@ -47,7 +47,10 @@ say "Фронтенд: типы"
 (cd "$CLIENT" && npm run type-check)
 
 say "Фронтенд: юнит-тесты"
-(cd "$CLIENT" && npx vitest run)
+# Через npm run test:coverage, а не npx vitest run: пороги покрытия объявлены в
+# блоке coverage.thresholds (vite.config.ts) и применяются только при --coverage.
+# Голой командой хук гонял те же тесты и не проверял тот же порог.
+(cd "$CLIENT" && npm run test:coverage)
 
 say "Фронтенд: сборка"
 (cd "$CLIENT" && npm run build)

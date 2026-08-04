@@ -5,6 +5,7 @@ using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using DM.Domain.Core.Dto;
 
 namespace DM.Web.API.Features.Moderation.Tickets;
 
@@ -40,6 +41,7 @@ public class TicketController : ControllerBase
     /// </remarks>
     /// <param name="status">Optional status filter</param>
     /// <param name="subtype">Optional subtype filter (within the caller visibility scope)</param>
+    /// <param name="q">Paging parameters</param>
     /// <response code="200">List of tickets</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">Moderator role required</response>
@@ -49,8 +51,9 @@ public class TicketController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetTickets(
+        [FromQuery] PagingQuery q,
         [FromQuery] TicketStatus? status = null, [FromQuery] TicketSubtype? subtype = null) =>
-        Ok(await _ticketApiService.GetTickets(status, subtype));
+        Ok(await _ticketApiService.GetTickets(q, status, subtype));
 
     /// <summary>
     /// Get ticket statistics

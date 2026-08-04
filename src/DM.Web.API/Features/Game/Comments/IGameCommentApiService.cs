@@ -40,9 +40,9 @@ public interface IGameCommentApiService
     /// Update comment by API DTO model
     /// </summary>
     /// <param name="commentId">Comment identifier</param>
-    /// <param name="comment">Comment DTO model</param>
+    /// <param name="request">Updated comment text</param>
     /// <returns>Envelope containing the updated comment</returns>
-    Task<Envelope<Comment>> Update(Guid commentId, Comment comment);
+    Task<Envelope<Comment>> Update(Guid commentId, UpdateCommentRequest request);
 
     /// <summary>
     /// Delete comment

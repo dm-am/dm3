@@ -21,9 +21,9 @@ public interface IRoomAccessApiService
     /// Update existing room access
     /// </summary>
     /// <param name="accessId">Access identifier</param>
-    /// <param name="access">Access</param>
+    /// <param name="request">Editable access fields</param>
     /// <returns>Envelope containing the updated room access</returns>
-    Task<Envelope<RoomAccess>> Update(Guid accessId, RoomAccess access);
+    Task<Envelope<RoomAccess>> Update(Guid accessId, UpdateRoomAccessRequest request);
 
     /// <summary>
     /// Delete existing room access

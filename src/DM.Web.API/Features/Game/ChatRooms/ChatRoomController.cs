@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
+using DM.Web.API.Features.Game.Games;
 using DM.Web.API.Features.Messaging.Messages;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
@@ -23,31 +24,33 @@ namespace DM.Web.API.Features.Game.ChatRooms;
 public class ChatRoomController : ControllerBase
 {
     private readonly IChatRoomApiService _apiService;
+    private readonly IGameApiService _gameApiService;
 
     /// <summary>
     /// Creates a new instance of ChatRoomController
     /// </summary>
-    public ChatRoomController(IChatRoomApiService apiService)
+    public ChatRoomController(IChatRoomApiService apiService, IGameApiService gameApiService)
     {
         _apiService = apiService;
+        _gameApiService = gameApiService;
     }
 
     /// <summary>
     /// Get chat rooms in game
     /// </summary>
-    /// <param name="id">Game identifier</param>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <response code="200">Returns the list of chat rooms</response>
     /// <response code="404">Game not found</response>
     [HttpGet("~/v1/games/{id}/chat-rooms", Name = nameof(GetChatRooms))]
     [ProducesResponseType(typeof(ListEnvelope<ChatRoom>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetChatRooms(Guid id) =>
-        Ok(await _apiService.GetChatRoomsAsync(id));
+    public async Task<IActionResult> GetChatRooms(string id) =>
+        Ok(await _apiService.GetChatRoomsAsync(await _gameApiService.ResolveId(id)));
 
     /// <summary>
     /// Create new chat room in game
     /// </summary>
-    /// <param name="id">Game identifier</param>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <param name="input">Chat room creation data</param>
     /// <response code="201">Chat room created successfully</response>
     /// <response code="400">Invalid input data</response>
@@ -61,9 +64,10 @@ public class ChatRoomController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PostChatRoom(Guid id, [FromBody] CreateChatRoom input)
+    public async Task<IActionResult> PostChatRoom(string id, [FromBody] CreateChatRoom input)
     {
-        var result = await _apiService.CreateChatRoomAsync(id, input);
+        var gameId = await _gameApiService.ResolveId(id);
+        var result = await _apiService.CreateChatRoomAsync(gameId, input);
         return CreatedAtRoute(nameof(GetChatRoom),
             new { id = result.Resource.Id }, result);
     }

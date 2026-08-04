@@ -23,7 +23,7 @@
  * instead of having to be caught by eye between two switch clicks.
  */
 import { computed } from "vue";
-import { AvatarImg } from "@/shared/ui";
+import { AvatarImg } from "@/shared/ui/AvatarImg";
 import { FEED, type FrameWidth } from "./chatEventsMock";
 
 const props = withDefaults(

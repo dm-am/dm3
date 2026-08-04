@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using DM.Web.API.Swagger;
 using DM.Domain.Core.Dto;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
@@ -91,6 +92,7 @@ public class BlacklistController : ControllerBase
     /// <response code="404">User not found</response>
     [HttpPost(Name = nameof(BlockUser))]
     [ProducesResponseType(typeof(BlacklistEntry), StatusCodes.Status201Created)]
+    [CreatedWithoutLocation]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]

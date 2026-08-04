@@ -34,6 +34,12 @@
  * Assets. A file under assets/ that nothing references is weight in every clone
  * and a candidate for being "used somewhere" forever. Five of them, 794 KB,
  * were reachable from nothing at all.
+ *
+ * Colour. A hex outside assets/styles/ is a colour that belongs to one theme:
+ * the palettes are switched by a class on <html>, and a literal is not. The two
+ * that were on the tree said so — a tooltip's error message in a red nobody
+ * picked, and a sample of the current button drawn in white letters that stayed
+ * white when the page went dark.
  */
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "fs";
@@ -74,6 +80,9 @@ const LOCAL_STACKING = new Set([-1, 0, 1, 2]);
 const Z_LITERAL = /^\s*z-index:\s*(-?\d+)\s*;?\s*$/gm;
 
 const MEDIA_LITERAL = /@media[^\n{]*\((?:max|min)-width:\s*(\d+)px/g;
+
+/** A colour written as itself: #abc, #aabbcc, and the alpha-carrying forms. */
+const HEX_LITERAL = /#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b/;
 
 /** Where a literal width may still stand, and what it is. */
 const MEDIA_LITERAL_ALLOWED: Record<string, string> = {
@@ -194,6 +203,36 @@ describe("the pointer target of an icon-only control", () => {
       (path) =>
         `${path}: an icon-only control sizing its own hit box again — the three that did measured 20x20, 20x20 and 36x18`,
     );
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe("a colour outside the palettes", () => {
+  it("is a token and not a literal", () => {
+    const offenders: string[] = [];
+    for (const file of styleFiles()) {
+      const path = asPath(file);
+      // assets/styles/ IS the palettes: ThemeVariables.css is where the hexes
+      // of both themes are declared and calibrated against each other.
+      if (path.startsWith("assets/styles/")) continue;
+      const source = readFileSync(file, "utf8");
+      // A .vue file's script may legitimately carry a hex — App.vue mirrors
+      // --bg-page into the theme-color meta, which is not a stylesheet value.
+      const styles = path.endsWith(".vue")
+        ? [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)]
+            .map((found) => found[1])
+            .join("\n")
+        : source;
+      for (const line of styles
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .split("\n")
+        .map((one) => one.replace(/\/\/.*$/, ""))) {
+        if (!HEX_LITERAL.test(line)) continue;
+        offenders.push(
+          `${path}: ${line.trim()} — a hex belongs to one theme, and the theme is switched by a class on <html>`,
+        );
+      }
+    }
     expect(offenders).toEqual([]);
   });
 });

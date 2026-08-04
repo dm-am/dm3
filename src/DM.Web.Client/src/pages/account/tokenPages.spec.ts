@@ -62,16 +62,34 @@ describe("pages reached from a letter", () => {
     expect(wrapper.text()).toContain("Проверяем ссылку...");
   });
 
-  it("does not offer support while nothing has gone wrong yet", () => {
-    // The support line is the whole card when every branch is false, and that
-    // is exactly what the reader used to get.
-    vi.spyOn(accountApi, "getActivationInfo").mockImplementation(pending);
+  /**
+   * The support line sits outside every branch and is drawn in all of them,
+   * loading included — which is fine now that the card says what it is doing,
+   * and was the whole card when it did not. What has to hold is that the card
+   * is not empty behind it and says nothing about a failure that has not
+   * happened.
+   *
+   * The assertion this replaces compared the position of the two strings, and
+   * `-1 < 0` holds when the checking line is missing entirely: removing the
+   * loading branch — the finding's own defect — left it green.
+   */
+  it.each([
+    ["the activation card", AccountActivationPage, "getActivationInfo"],
+    ["the reset card", PasswordResetPage, "getPasswordResetTokenInfo"],
+  ] as const)("says nothing about a failure in %s yet", (_, page, endpoint) => {
+    vi.spyOn(accountApi, endpoint).mockImplementation(pending);
 
-    const wrapper = mount(AccountActivationPage, options());
-    const text = wrapper.text();
+    const wrapper = mount(page, options());
+    const card = wrapper.text();
 
-    expect(text.indexOf("Проверяем ссылку...")).toBeLessThan(
-      text.indexOf("Нужна помощь?"),
+    expect(card).toContain("Проверяем ссылку...");
+    for (const failure of ["устарел", "истек", "не найден", "Выберите имя"]) {
+      expect(card).not.toContain(failure);
+    }
+
+    // And the card is more than the support line it used to consist of.
+    expect(card.replace(wrapper.find(".help-section").text(), "").trim()).toBe(
+      "Проверяем ссылку...",
     );
   });
 });

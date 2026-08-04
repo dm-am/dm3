@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Rooms;
 using DM.Infrastructure.Persistence.RelationalStorage;
@@ -17,14 +18,17 @@ internal class RoomRepository : IRoomRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public RoomRepository(
         DmDbContext dbContext,
-        IMapper mapper)
+        IMapper mapper,
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _mapper = mapper;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     #region Read Operations
@@ -299,7 +303,7 @@ internal class RoomRepository : IRoomRepository
             .FirstAsync();
     }
 
-    public async Task Delete(Guid roomId)
+    public async Task Delete(Guid roomId, Guid deletedByUserId)
     {
         var room = await _dbContext.Rooms.FindAsync(roomId);
         if (room == null) return;
@@ -319,7 +323,7 @@ internal class RoomRepository : IRoomRepository
                 nextRoom.PreviousRoomId = room.PreviousRoomId;
         }
 
-        room.IsRemoved = true;
+        SoftDelete.Mark(room, deletedByUserId, _dateTimeProvider.Now);
         await _dbContext.SaveChangesAsync();
     }
 

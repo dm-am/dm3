@@ -207,7 +207,7 @@ public class BoardTopicSummaryShould : IntegrationTestBase
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<ITopicRepository>();
-        await repository.Delete(topicId);
+        await repository.Delete(topicId, TestConstants.TestUserId);
     }
 
     private async Task<Board> ReadBoard(Guid boardId)

@@ -51,9 +51,9 @@ internal class CharacterApiService : ICharacterApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<CharacterDetails>> Update(Guid characterId, CharacterDetails character)
+    public async Task<Envelope<CharacterDetails>> Update(Guid characterId, UpdateCharacterRequest request)
     {
-        var updateCharacter = _mapper.Map<UpdateCharacter>(character);
+        var updateCharacter = _mapper.Map<UpdateCharacter>(request);
         updateCharacter.CharacterId = characterId;
         var updatedCharacter = await _characterService.UpdateAsync(updateCharacter);
 

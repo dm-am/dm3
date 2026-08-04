@@ -6,6 +6,14 @@ namespace DM.Web.API.Shared.Dto;
 /// <summary>
 /// Response for discussion endpoints with comments and metadata
 /// </summary>
+/// <remarks>
+/// Pages the same way every other list does. It used to carry its own Paging
+/// DTO, and the contract published two paging schemas whose <c>number</c> meant
+/// different things: the ordinal of an entity here, the page number in
+/// PagingInfo. Both travelled, so a shared pagination component could not be
+/// written — read <c>number</c> as a page and the discussion answered with the
+/// index of a comment.
+/// </remarks>
 public class DiscussionResponse
 {
     /// <summary>
@@ -13,7 +21,7 @@ public class DiscussionResponse
     /// </summary>
     public DiscussionResponse(
         IEnumerable<DiscussionComment> comments,
-        Paging paging,
+        PagingInfo paging,
         int totalLikes,
         bool canComment)
     {
@@ -31,7 +39,7 @@ public class DiscussionResponse
     /// <summary>
     /// Paging information
     /// </summary>
-    public Paging Paging { get; }
+    public PagingInfo Paging { get; }
 
     /// <summary>
     /// Total number of likes across all comments in this discussion

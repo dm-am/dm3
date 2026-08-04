@@ -77,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import type { Paging } from "@/shared/api/models/common";
+import type { PagingInfo } from "@/shared/api/models/common";
 import { computed, ref, watch, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import { Tooltip } from "@/shared/ui/Tooltip";
@@ -85,7 +85,7 @@ import { scrollBlockIntoView, scrollContentToTop } from "@/shared/lib/scroll";
 
 const props = withDefaults(
   defineProps<{
-    paging: Paging;
+    paging: PagingInfo;
     to: any;
     /** Use query param instead of route param for page number */
     useQuery?: boolean;
@@ -157,7 +157,7 @@ watch(
 );
 
 // Reactive local copy of paging for immediate UI updates
-const localPaging = ref<Paging>({
+const localPaging = ref<PagingInfo>({
   current: 1,
   size: 10,
   pages: 1,
@@ -189,7 +189,7 @@ const prematureUpdate = (page: number) => {
 };
 
 // Calculate window bounds (always 10 pages or fewer)
-function getWindowBounds(paging: Paging): {
+function getWindowBounds(paging: PagingInfo): {
   lowerBound: number;
   upperBound: number;
 } {

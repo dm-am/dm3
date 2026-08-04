@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.Dto;
+using DM.Domain.Core.Dto;
 
 namespace DM.Web.API.Features.Moderation.Tickets;
 
@@ -13,7 +14,7 @@ public interface ITicketApiService
     /// <summary>
     /// Get all tickets visible to the caller role
     /// </summary>
-    Task<ListEnvelope<Ticket>> GetTickets(TicketStatus? status = null, TicketSubtype? subtype = null);
+    Task<ListEnvelope<Ticket>> GetTickets(PagingQuery query, TicketStatus? status = null, TicketSubtype? subtype = null);
 
     /// <summary>
     /// Get tickets assigned to current moderator

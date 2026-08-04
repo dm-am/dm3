@@ -18,7 +18,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 import { createPinia } from "pinia";
-import type { Comment, Paging } from "@/shared/api/models/common";
+import type { Comment, PagingInfo } from "@/shared/api/models/common";
 import DiscussionSection from "./DiscussionSection.vue";
 
 /** The URL the section reads its filter, sort and page out of. */
@@ -78,7 +78,7 @@ const comment = (id: string): Comment =>
     modifiedUtc: null,
   }) as unknown as Comment;
 
-const paging = (over: Partial<Paging> = {}): Paging => ({
+const paging = (over: Partial<PagingInfo> = {}): PagingInfo => ({
   pages: 3,
   current: 1,
   size: 20,

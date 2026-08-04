@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using DM.Web.API.Shared.Http;
 using DM.Web.API.Shared.RateLimiting;
 using System.Net;
+using DM.Web.API.Swagger;
 using DM.Domain.Core.Exceptions;
 
 namespace DM.Web.API.Features.Account.Registration;
@@ -62,6 +63,7 @@ public class RegistrationController : ControllerBase
     /// <response code="429">Too many requests. Try again later.</response>
     [HttpPost("register", Name = nameof(Register))]
     [ProducesResponseType(StatusCodes.Status201Created)]
+    [CreatedWithoutLocation]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]

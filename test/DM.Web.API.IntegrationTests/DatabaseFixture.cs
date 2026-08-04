@@ -266,7 +266,9 @@ public class DatabaseFixture : IAsyncLifetime
         db.Set<Game>().AddRange(gameList.Select((g, i) => new Game
         {
             GameId = g.Id,
-            SerialNumber = i + 1,
+            // SerialNumber is left to the identity sequence: writing it by hand leaves the
+            // sequence pointing at a number the table already holds, so the next row the
+            // application creates collides with a seeded one on the readable address.
             PublicId = $"game{(char)('a' + i)}",
             MasterId = g.AuthorId,
             Title = g.Title,
@@ -324,7 +326,9 @@ public class DatabaseFixture : IAsyncLifetime
         db.Blogs.AddRange(blogs.Select((b, i) => new Blog
         {
             BlogId = b.Id,
-            SerialNumber = i + 1,
+            // SerialNumber is left to the identity sequence: writing it by hand leaves the
+            // sequence pointing at a number the table already holds, so the next row the
+            // application creates collides with a seeded one on the readable address.
             PublicId = $"blog{(char)('a' + i)}",
             AuthorId = b.AuthorId,
             Title = b.Title,
@@ -449,7 +453,9 @@ public class DatabaseFixture : IAsyncLifetime
         db.Chats.Add(new Chat
         {
             ChatId = TestConstants.TestChatId,
-            SerialNumber = 2,
+            // SerialNumber is left to the identity sequence: writing it by hand leaves the
+            // sequence pointing at a number the table already holds, so the next row the
+            // application creates collides with a seeded one on the readable address.
             PublicId = "chata",
             Type = ChatType.Direct,
             Title = string.Empty

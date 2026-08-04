@@ -245,7 +245,7 @@ public class GameController : ControllerBase
     /// Update game details
     /// </summary>
     /// <param name="id">Game public ID (5 letters) or GUID</param>
-    /// <param name="game">Game details</param>
+    /// <param name="request">Editable game fields</param>
     /// <response code="200">Returns the updated game details</response>
     /// <response code="400">Some of game properties were invalid</response>
     /// <response code="401">User must be authenticated</response>
@@ -258,9 +258,9 @@ public class GameController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PatchGameDetails(string id, [FromBody] GameDetails game)
+    public async Task<IActionResult> PatchGameDetails(string id, [FromBody] UpdateGameRequest request)
     {
         var gameId = await _gameApiService.ResolveId(id);
-        return Ok(await _gameApiService.Update(gameId, game));
+        return Ok(await _gameApiService.Update(gameId, request));
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Moderation.Features.Tickets;
@@ -15,7 +16,8 @@ public interface ITicketRepository
     /// Get all tickets with optional filtering.
     /// A null <paramref name="subtypes"/> means no subtype filtering
     /// </summary>
-    Task<IEnumerable<Ticket>> GetTickets(TicketStatus? status = null,
+    Task<(IEnumerable<Ticket> tickets, PagingResult paging)> GetTickets(PagingQuery query,
+        TicketStatus? status = null,
         IReadOnlyCollection<TicketSubtype>? subtypes = null, CancellationToken ct = default);
 
     /// <summary>

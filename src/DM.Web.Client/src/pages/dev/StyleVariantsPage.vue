@@ -821,7 +821,11 @@ html.theme_Dark .probe-024
   &
     background-color: $link
     border-color: $link
-    color: #fff
+    // The ink of a solid accent fill, the same token Button's primary variant
+    // takes. Written as #fff it was white in both themes, so this sample of the
+    // current button was the one place on the site where the dark theme drew
+    // white letters on the accent.
+    color: $text-on-fill
   &:hover:not(:disabled)
     background-color: $link-hover
     border-color: $link-hover

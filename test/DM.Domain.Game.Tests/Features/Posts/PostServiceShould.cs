@@ -39,6 +39,7 @@ public class PostServiceShould : UnitTestBase
     private readonly Mock<IUnreadCountersRepository> _unreadCountersRepository;
     private readonly Mock<IEventProducer> _producer;
     private readonly Mock<IIdentityProvider> _identityProvider;
+    private readonly Guid _currentUserId = Guid.NewGuid();
     private readonly PostService _service;
 
     public PostServiceShould()
@@ -82,7 +83,7 @@ public class PostServiceShould : UnitTestBase
             .Returns(Task.CompletedTask);
 
         _identityProvider = Mock<IIdentityProvider>();
-        var identity = Identities.User(Guid.NewGuid(), "testuser");
+        var identity = Identities.User(_currentUserId, "testuser");
         _identityProvider.Setup(p => p.Current).Returns(identity);
 
         _service = new PostService(
@@ -352,7 +353,7 @@ public class PostServiceShould : UnitTestBase
         var post = new Post { Id = postId, RoomId = Guid.NewGuid(), Author = new GeneralUser { UserId = Guid.NewGuid() }, CreatedUtc = DateTimeOffset.UtcNow };
 
         _repository.Setup(r => r.Get(postId, It.IsAny<Guid>())).ReturnsAsync(post);
-        _repository.Setup(r => r.Delete(postId)).Returns(Task.CompletedTask);
+        _repository.Setup(r => r.Delete(postId, _currentUserId)).Returns(Task.CompletedTask);
         _repository.Setup(r => r.DecrementAuthorQuantityRating(It.IsAny<Guid>())).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(postId);
@@ -370,12 +371,14 @@ public class PostServiceShould : UnitTestBase
         var post = new Post { Id = postId, RoomId = roomId, Author = new GeneralUser { UserId = authorId }, CreatedUtc = createdUtc };
 
         _repository.Setup(r => r.Get(postId, It.IsAny<Guid>())).ReturnsAsync(post);
-        _repository.Setup(r => r.Delete(postId)).Returns(Task.CompletedTask);
+        _repository.Setup(r => r.Delete(postId, _currentUserId)).Returns(Task.CompletedTask);
         _repository.Setup(r => r.DecrementAuthorQuantityRating(authorId)).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(postId);
 
-        _repository.Verify(r => r.Delete(postId), Times.Once);
+        // The author of the removal travels with it: ISoftDeletable promises who deleted the
+        // row, and the column stays empty unless the service hands the identity over.
+        _repository.Verify(r => r.Delete(postId, _currentUserId), Times.Once);
         _repository.Verify(r => r.DecrementAuthorQuantityRating(authorId), Times.Once);
         _unreadCountersRepository.Verify(r => r.DecrementAsync(roomId, UnreadEntryType.Message, createdUtc), Times.Once);
     }

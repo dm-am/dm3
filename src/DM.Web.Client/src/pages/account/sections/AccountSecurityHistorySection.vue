@@ -47,7 +47,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from "vue";
 import { accountApi } from "@/entities/user";
-import { EmptyState } from "@/shared/ui";
+import { EmptyState } from "@/shared/ui/EmptyState";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { pluralize } from "@/shared/lib/utils/pluralize";
 import type {

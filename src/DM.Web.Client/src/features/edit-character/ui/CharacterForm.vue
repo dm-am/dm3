@@ -28,7 +28,7 @@ import {
   type CharacterPrivacySettings,
 } from "@/entities/game";
 import { Form, FormField } from "@/shared/ui/Form";
-import { ContentText } from "@/shared/ui";
+import { ContentText } from "@/shared/ui/Content";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 import { describeFailure } from "@/shared/lib/errors";

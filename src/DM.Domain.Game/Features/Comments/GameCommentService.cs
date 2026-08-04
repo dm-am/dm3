@@ -181,7 +181,9 @@ internal class GameCommentService : IGameCommentService
             CommentId = commentId,
             GameId = comment.GameId,
             NewCommentCount = Math.Max(0, comment.GameCommentCount - 1),
-            NewLastCommentId = newLastCommentId
+            NewLastCommentId = newLastCommentId,
+            DeletedByUserId = _identityProvider.Current.User.UserId,
+            DeletedUtc = _dateTimeProvider.Now
         };
 
         await _repository.Delete(entity);

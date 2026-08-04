@@ -124,7 +124,7 @@ import { RouterLink } from "vue-router";
 import { useModal } from "vue-final-modal";
 import { blacklistApi } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
-import { EmptyState } from "@/shared/ui";
+import { EmptyState } from "@/shared/ui/EmptyState";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { formatDate } from "@/shared/lib/utils/datetime";
 import { BlockUserDialog } from "@/features/block-user";

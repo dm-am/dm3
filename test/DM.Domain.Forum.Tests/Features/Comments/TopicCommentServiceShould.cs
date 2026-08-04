@@ -33,6 +33,7 @@ public class TopicCommentServiceShould : UnitTestBase
     private readonly Mock<ITopicService> _topicService;
     private readonly Mock<IIntentionManager> _intentionManager;
     private readonly Mock<IIdentityProvider> _identityProvider;
+    private readonly Guid _currentUserId = Guid.NewGuid();
     private readonly Mock<ITopicCommentRepository> _repository;
     private readonly Mock<IUnreadCountersRepository> _countersRepository;
     private readonly Mock<IEventProducer> _eventProducer;
@@ -59,9 +60,8 @@ public class TopicCommentServiceShould : UnitTestBase
         _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<TopicIntention>(), It.IsAny<Topic>()));
         _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<CommentIntention>(), It.IsAny<Comment>()));
 
-        var userId = Guid.NewGuid();
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(userId, UserRole.RegularUser));
+        _identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
         var dateTimeProvider = Mock<IDateTimeProvider>();
         dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
@@ -192,11 +192,20 @@ public class TopicCommentServiceShould : UnitTestBase
             CreatedUtc = DateTimeOffset.UtcNow
         };
         _repository.Setup(r => r.GetForDelete(commentId)).ReturnsAsync(comment);
-        _repository.Setup(r => r.Delete(It.IsAny<DeleteTopicCommentEntity>())).Returns(Task.CompletedTask);
+        DeleteTopicCommentEntity? deleted = null;
+        _repository.Setup(r => r.Delete(It.IsAny<DeleteTopicCommentEntity>()))
+            .Callback<DeleteTopicCommentEntity>(entity => deleted = entity)
+            .Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(commentId);
 
         _intentionManager.Verify(m => m.ThrowIfForbidden(CommentIntention.Delete, It.IsAny<Comment>()), Times.Once);
+        // The author of the removal travels with it: Comment is ISoftDeletable and the
+        // column stays empty unless the service hands the identity over. Forum comments and
+        // blog comments live in one table, so a forum comment that does not carry it makes
+        // every report over that column wrong rather than incomplete.
+        deleted!.DeletedByUserId.Should().Be(_currentUserId);
+        deleted.DeletedUtc.Should().NotBe(default);
     }
 
     [Fact]

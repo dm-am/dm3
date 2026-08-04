@@ -71,7 +71,7 @@ import { ref, computed, onMounted } from "vue";
 import { accountApi } from "@/entities/user";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import Button from "@/shared/ui/Button/Button.vue";
-import { EmptyState } from "@/shared/ui";
+import { EmptyState } from "@/shared/ui/EmptyState";
 import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { SessionInfo } from "@/shared/api/models/account";

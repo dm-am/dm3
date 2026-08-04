@@ -12,7 +12,7 @@ import {
   type Character,
 } from "@/entities/game";
 import { UserLink, UserRating, useUserDisplay } from "@/entities/user";
-import { ContentText } from "@/shared/ui";
+import { ContentText } from "@/shared/ui/Content";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import { DashSeparator } from "@/shared/ui/DashSeparator";

@@ -218,14 +218,17 @@ public class BlogController : ControllerBase
     /// </summary>
     /// <param name="id">Blog public ID (5 letters) or GUID</param>
     /// <param name="request">Rubric creation request</param>
-    /// <response code="201">Rubric created successfully</response>
+    /// <response code="200">Rubric created, returns the rubric</response>
     /// <response code="400">Invalid request</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized</response>
     /// <response code="404">Blog not found</response>
     [HttpPost("{id}/rubrics", Name = nameof(PostRubric))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Rubric>), StatusCodes.Status201Created)]
+    // A rubric has no address of its own, so no Location is set and the status
+    // is 200. It used to answer 201 with an empty Location, which a consumer
+    // resolving it against the request reads as the address of the collection.
+    [ProducesResponseType(typeof(Envelope<Rubric>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
@@ -233,8 +236,7 @@ public class BlogController : ControllerBase
     public async Task<IActionResult> PostRubric(string id, [FromBody] CreateRubricRequest request)
     {
         var blogId = await _apiService.ResolveId(id);
-        var result = await _apiService.CreateRubric(blogId, request);
-        return Created("", result);
+        return Ok(await _apiService.CreateRubric(blogId, request));
     }
 
     /// <summary>

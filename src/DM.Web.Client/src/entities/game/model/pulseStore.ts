@@ -3,7 +3,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import type { Post } from "./types";
-import type { ListEnvelope, Paging } from "@/shared/api/models/common";
+import type { ListEnvelope, PagingInfo } from "@/shared/api/models/common";
 import gameApi from "../api/gameApi";
 import { getWeekStartUtc } from "@/shared/lib/utils/datetime";
 import { createKeyedCache } from "@/shared/lib/utils/keyedCache";
@@ -32,7 +32,7 @@ function buildApiParams(params: PulseSearchParams): RatedPostsApiParams {
 
 export const usePulseStore = defineStore("pulse", () => {
   const posts = ref<Post[]>([]);
-  const paging = ref<Paging | null>(null);
+  const paging = ref<PagingInfo | null>(null);
   const loading = ref(false);
   const error = ref<string | null>(null);
 

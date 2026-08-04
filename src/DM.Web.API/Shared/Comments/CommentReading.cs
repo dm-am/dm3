@@ -81,7 +81,7 @@ internal static class CommentReading
 
         return new DiscussionResponse(
             discussionComments,
-            new Paging(paging),
+            new PagingInfo(paging),
             discussionComments.Sum(c => c.LikesCount),
             isAuthenticated);
     }

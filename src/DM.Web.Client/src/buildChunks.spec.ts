@@ -15,6 +15,11 @@
  *
  * A comment cannot be checked against reality in general. These two can: one
  * names a number, the other names a set of pages.
+ *
+ * The third check is about the language they are written in. The project's rule
+ * is that documentation is Russian and code is English, and this file is code:
+ * the chunking notes were the last Russian ones left in it, next to English
+ * paragraphs added later, so one file explained itself in two languages.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
@@ -44,5 +49,16 @@ describe("vite.config.ts", () => {
       /chat\s*\/\s*messenger/i.test(CONFIG),
       "the editor is imported across the forum, blogs, games, profile, moderation and support: naming two sections here is a false premise for the next chunking decision",
     ).toBe(false);
+  });
+
+  it("is written in the language the code rule names", () => {
+    const cyrillic = CONFIG.split("\n")
+      .map((line, index) => [index + 1, line] as const)
+      .filter(([, line]) => /[Ѐ-ӿ]/.test(line))
+      .map(([number, line]) => `vite.config.ts:${number}: ${line.trim()}`);
+    expect(
+      cyrillic,
+      "code and comments are English (CLAUDE.md); Russian belongs in docs/",
+    ).toEqual([]);
   });
 });

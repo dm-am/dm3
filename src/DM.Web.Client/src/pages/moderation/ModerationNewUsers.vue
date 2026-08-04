@@ -9,7 +9,7 @@ import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { userApi } from "@/entities/user";
 import type { User } from "@/shared/api/models/community";
-import type { Paging as PagingModel } from "@/shared/api/models/common";
+import type { PagingInfo as PagingModel } from "@/shared/api/models/common";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import { Paging } from "@/shared/ui/Paging";
 import { ErrorState } from "@/shared/ui/ErrorState";

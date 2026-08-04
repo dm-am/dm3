@@ -243,7 +243,7 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
 
         await _service.DeleteAsync(testimonialId);
 
-        _repository.Verify(r => r.Delete(testimonialId), Times.Once);
+        _repository.Verify(r => r.Delete(testimonialId, _currentUserId), Times.Once);
     }
 
     #endregion

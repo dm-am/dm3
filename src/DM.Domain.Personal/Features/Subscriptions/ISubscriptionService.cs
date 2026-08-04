@@ -57,7 +57,14 @@ public interface ISubscriptionService
     Task<Subscription?> GetByIdAsync(Guid subscriptionId, CancellationToken ct = default);
 
     /// <summary>
-    /// Get subscribers (users) for a target entity
+    /// Get a page of subscribers (users) for a target entity
     /// </summary>
-    Task<IEnumerable<GeneralUser>> GetTargetSubscribersAsync(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default);
+    Task<IEnumerable<GeneralUser>> GetTargetSubscribersAsync(SubscriptionTargetType targetType, Guid targetId,
+        PagingQuery query, CancellationToken ct = default);
+
+    /// <summary>
+    /// Count subscribers of a target entity
+    /// </summary>
+    Task<int> CountTargetSubscribersAsync(SubscriptionTargetType targetType, Guid targetId,
+        CancellationToken ct = default);
 }

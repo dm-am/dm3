@@ -9,7 +9,7 @@
 import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { moderationApi, type Ban } from "@/entities/moderation";
-import type { Paging as PagingModel } from "@/shared/api/models/common";
+import type { PagingInfo as PagingModel } from "@/shared/api/models/common";
 import { Paging } from "@/shared/ui/Paging";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";

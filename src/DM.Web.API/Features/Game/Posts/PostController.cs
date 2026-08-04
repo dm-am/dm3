@@ -84,7 +84,7 @@ public class PostController : ControllerBase
     /// Update post
     /// </summary>
     /// <param name="id">Post identifier</param>
-    /// <param name="post">Updated post details</param>
+    /// <param name="request">Editable post fields</param>
     /// <response code="200">Returns the updated post</response>
     /// <response code="400">Some of post changed properties were invalid or passed id was not recognized</response>
     /// <response code="401">User must be authenticated</response>
@@ -97,8 +97,8 @@ public class PostController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PatchPost(Guid id, [FromBody] Post post) =>
-        Ok(await _postApiService.Update(id, post));
+    public async Task<IActionResult> PatchPost(Guid id, [FromBody] UpdatePostRequest request) =>
+        Ok(await _postApiService.Update(id, request));
 
     /// <summary>
     /// Delete post

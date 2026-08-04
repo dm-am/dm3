@@ -16,7 +16,7 @@ import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import uploadApi from "@/shared/api/uploadApi";
 import type { Upload } from "@/shared/api/models/common/upload";
-import type { Paging as PagingModel } from "@/shared/api/models/common";
+import type { PagingInfo as PagingModel } from "@/shared/api/models/common";
 import { UserRole } from "@/shared/api/models/common";
 import { useAuthStore } from "@/shared/stores/auth";
 import { useToast } from "@/shared/lib/composables/useToast";

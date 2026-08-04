@@ -31,6 +31,8 @@ public class RoomServiceShould : UnitTestBase
     private readonly Mock<IRoomRepository> _repository;
     private readonly Mock<IUnreadCountersRepository> _unreadCountersRepository;
     private readonly Mock<IEventProducer> _producer;
+    private static readonly Guid CurrentUserId = Guid.NewGuid();
+
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly RoomService _service;
 
@@ -60,7 +62,7 @@ public class RoomServiceShould : UnitTestBase
             .Returns(Task.CompletedTask);
 
         _identityProvider = Mock<IIdentityProvider>();
-        var identity = Identities.User(Guid.NewGuid(), "testuser");
+        var identity = Identities.User(CurrentUserId, "testuser");
         _identityProvider.Setup(p => p.Current).Returns(identity);
 
         var guidFactory = Mock<IGuidFactory>();
@@ -347,7 +349,7 @@ public class RoomServiceShould : UnitTestBase
         var room = new RoomToUpdate { Id = roomId, Game = game };
 
         _repository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(room);
-        _repository.Setup(r => r.Delete(roomId)).Returns(Task.CompletedTask);
+        _repository.Setup(r => r.Delete(roomId, CurrentUserId)).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(roomId);
 
@@ -368,11 +370,13 @@ public class RoomServiceShould : UnitTestBase
         };
 
         _repository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(room);
-        _repository.Setup(r => r.Delete(roomId)).Returns(Task.CompletedTask);
+        _repository.Setup(r => r.Delete(roomId, CurrentUserId)).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(roomId);
 
-        _repository.Verify(r => r.Delete(roomId), Times.Once);
+        // With the author, because the schema carries a column for it and the moderation
+        // screens read it: a room removed by a nameless somebody is the defect.
+        _repository.Verify(r => r.Delete(roomId, CurrentUserId), Times.Once);
         _unreadCountersRepository.Verify(r => r.DeleteAsync(roomId, UnreadEntryType.Message), Times.Once);
         _producer.Verify(p => p.SendAsync(EventType.DeletedRoom, roomId), Times.Once);
     }

@@ -393,7 +393,7 @@ internal class CharacterService : ICharacterService
         var character = await _repository.GetForUpdate(characterId);
         _intentionManager.ThrowIfForbidden(CharacterIntention.Delete, character);
 
-        await _repository.Delete(characterId);
+        await _repository.Delete(characterId, _identityProvider.Current.User.UserId);
         await _unreadCountersRepository.DecrementAsync(character.GameId, UnreadEntryType.Character, character.CreatedUtc);
         await _producer.SendAsync(EventType.DeletedCharacter, characterId);
     }

@@ -153,8 +153,12 @@ internal class GameMappingProfile : Profile
             // changes nothing and says nothing.
             .ForMember(g => g.CopyBlacklist, opt => opt.Ignore());
 
-        // For game update, use GameDetails (has PrivacySettings)
-        CreateMap<GameDetails, DtoUpdateGame>()
+        // Request DTO in, write model out. The source used to be GameDetails —
+        // the response — and every field of it that must not be writable needed
+        // its own Ignore() below. Now the request names the editable fields and
+        // nothing else, so a field added to the response cannot become writable
+        // by being added.
+        CreateMap<UpdateGameRequest, DtoUpdateGame>()
             .ForMember(g => g.SystemName, s => s.MapFrom(g => g.System))
             .ForMember(g => g.NarrativeSetting, s => s.MapFrom(g => g.Setting))
             .ForMember(g => g.AssistantUsername, opt => opt.Ignore())
@@ -168,6 +172,8 @@ internal class GameMappingProfile : Profile
             // Draft visibility is not part of the update contract (API has no
             // such field); leave null so the domain keeps the current value.
             .ForMember(g => g.DraftVisibility, opt => opt.Ignore())
+            .ForMember(g => g.MentorId, opt => opt.Ignore())
+            .ForMember(g => g.RecruitmentStartedUtc, opt => opt.Ignore())
             .ForMember(g => g.IsRemoved, opt => opt.Ignore())
             .ForMember(g => g.Tags, opt => opt.Ignore());
     }

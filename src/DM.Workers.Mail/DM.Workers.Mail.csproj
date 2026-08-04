@@ -19,11 +19,17 @@
         <ProjectReference Include="..\DM.Infrastructure.Messaging\DM.Infrastructure.Messaging.csproj" />
     </ItemGroup>
 
+    <!-- None, not Content: outside the Web SDK appsettings.json is not a Content
+         item by default, so a Content Update matches nothing and the file never
+         reached the output. The worker ran on DM_* variables alone, and every
+         value in its own settings file - the SMTP endpoint, the broker, the log
+         sink - was answered by the type default on any host that did not set
+         them, starting with a local run. -->
     <ItemGroup>
-        <Content Update="appsettings.json">
+        <None Update="appsettings.json">
             <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-        </Content>
+        </None>
     </ItemGroup>
 
 </Project>

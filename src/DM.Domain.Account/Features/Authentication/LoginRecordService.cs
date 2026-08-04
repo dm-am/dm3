@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using Microsoft.Extensions.Logging;
+using DM.Domain.Core.Dto;
 
 namespace DM.Domain.Account.Features.Authentication;
 
@@ -71,8 +72,11 @@ internal class LoginRecordService : ILoginRecordService
     }
 
     /// <inheritdoc />
-    public Task<IReadOnlyList<UserLoginRecord>> GetHistory(Guid userId) =>
-        _repository.GetLoginHistory(userId);
+    public Task<IReadOnlyList<UserLoginRecord>> GetHistory(Guid userId, PagingQuery query) =>
+        _repository.GetLoginHistory(userId, query.Skip, query.Take);
+
+    /// <inheritdoc />
+    public Task<int> CountHistory(Guid userId) => _repository.CountLoginHistory(userId);
 
     /// <inheritdoc />
     public Task<IReadOnlyList<UserIpInfo>> GetIpAddresses(Guid userId) =>

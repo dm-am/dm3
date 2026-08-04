@@ -12,7 +12,7 @@ import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { moderationApi } from "@/entities/moderation";
 import type { Upload } from "@/shared/api/models/common/upload";
-import type { Paging as PagingModel } from "@/shared/api/models/common";
+import type { PagingInfo as PagingModel } from "@/shared/api/models/common";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import { Paging } from "@/shared/ui/Paging";
 import { ErrorState } from "@/shared/ui/ErrorState";

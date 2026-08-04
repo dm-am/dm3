@@ -154,18 +154,18 @@ public class MessageController : ControllerBase
     /// Add new like for message
     /// </summary>
     /// <param name="id">Message identifier</param>
-    /// <response code="201">Like added successfully</response>
+    /// <response code="200">Like added successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="409">User already liked this message</response>
     /// <response code="404">Message not found</response>
     [HttpPost("{id:guid}/likes", Name = nameof(PostMessageLike))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<Message>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(Envelope<Message>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostMessageLike(Guid id) =>
-        CreatedAtRoute(nameof(GetMessage), new { id }, await _apiService.LikeMessageAsync(id));
+        Ok(await _apiService.LikeMessageAsync(id));
 
     /// <summary>
     /// Delete like from message

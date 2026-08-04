@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using DM.Domain.Core.Dto;
 
 namespace DM.Domain.Account.Features.Authentication;
 
@@ -38,7 +39,13 @@ public interface ILoginRecordService
     /// Get the recent sign-ins of a user, successful and failed
     /// </summary>
     /// <param name="userId">User identifier</param>
-    Task<IReadOnlyList<UserLoginRecord>> GetHistory(Guid userId);
+    /// <param name="query">Paging parameters</param>
+    Task<IReadOnlyList<UserLoginRecord>> GetHistory(Guid userId, PagingQuery query);
+
+    /// <summary>
+    /// Count the login records of a user
+    /// </summary>
+    Task<int> CountHistory(Guid userId);
 
     /// <summary>
     /// Get the addresses a user signed in from

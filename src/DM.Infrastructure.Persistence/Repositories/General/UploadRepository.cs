@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Uploads;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using DbUpload = DM.Infrastructure.Persistence.Entities.Shared.Upload;
@@ -70,7 +71,7 @@ internal class UploadRepository : IUploadRepository
     }
 
     /// <inheritdoc />
-    public async Task SoftDeleteAsync(Guid uploadId, DateTimeOffset deletedUtc)
+    public async Task SoftDeleteAsync(Guid uploadId, Guid? deletedByUserId, DateTimeOffset deletedUtc)
     {
         var upload = await _dbContext.Uploads.FirstOrDefaultAsync(u => u.UploadId == uploadId);
         if (upload == null)
@@ -81,11 +82,13 @@ internal class UploadRepository : IUploadRepository
             return;
         }
 
-        upload.IsRemoved = true;
         // DeletedUtc is what starts the grace period the orphan sweeper waits
         // out before deleting the object from S3; without it the row is hidden
-        // from the site but the file stays in the bucket forever.
-        upload.DeletedUtc = deletedUtc;
+        // from the site but the file stays in the bucket forever. The author
+        // travels with it: deleting somebody else's file is a moderation action,
+        // and the column that would answer who did it was left empty here while
+        // the request had the identity in hand.
+        SoftDelete.Mark(upload, deletedByUserId, deletedUtc);
         await _dbContext.SaveChangesAsync();
     }
 

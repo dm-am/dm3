@@ -17,7 +17,7 @@ import type {
 import { GameParticipation } from "./types";
 import type {
   ListEnvelope,
-  Paging,
+  PagingInfo,
   Comment,
   User,
 } from "@/shared/api/models/common";
@@ -296,7 +296,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   // Current room and posts
   const currentRoom = ref<Room | null>(null);
   const posts = ref<Post[]>([]);
-  const postsPaging = ref<Paging | null>(null);
+  const postsPaging = ref<PagingInfo | null>(null);
   const postsLoading = ref(false);
   const postsError = ref<string | null>(null);
 
@@ -308,7 +308,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   // Comments data. The failure is a flag and not a sentence: the discussion
   // section spells one wording for a failed load, wherever it fails.
   const comments = ref<Comment[]>([]);
-  const commentsPaging = ref<Paging | null>(null);
+  const commentsPaging = ref<PagingInfo | null>(null);
   const commentsLoading = ref(false);
   const commentsError = ref(false);
 

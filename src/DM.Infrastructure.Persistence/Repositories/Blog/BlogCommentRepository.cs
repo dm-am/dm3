@@ -11,6 +11,7 @@ using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
@@ -235,7 +236,7 @@ internal class BlogCommentRepository : IBlogCommentRepository
         var dbComment = await _dbContext.Comments.FindAsync([entity.CommentId], ct);
         if (dbComment != null)
         {
-            dbComment.IsRemoved = true;
+            SoftDelete.Mark(dbComment, entity.DeletedByUserId, entity.DeletedUtc);
         }
 
         // Update blog comment count and last comment ID

@@ -15,7 +15,7 @@ export * from "./message";
 // Shared ID types (for FSD compliance - shared modules use these instead of entity imports)
 export * from "./ids";
 
-export type Paging = {
+export type PagingInfo = {
   pages: number;
   current: number;
   size: number;
@@ -31,7 +31,7 @@ export type PagingQuery = {
 
 export type ListEnvelope<T> = {
   resources: T[];
-  paging: Paging | null;
+  paging: PagingInfo | null;
 };
 
 export type CursorPaging = {

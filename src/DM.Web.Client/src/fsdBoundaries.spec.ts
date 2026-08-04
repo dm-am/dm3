@@ -22,10 +22,25 @@
  * is measuring silence.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { createRequire } from "module";
-import { dirname, join, resolve } from "path";
+import { dirname, join, relative, resolve } from "path";
 import { fileURLToPath } from "url";
+
+/** Every .ts/.vue under a directory, node_modules and build output aside. */
+function sources(dir: string, out: string[] = []): string[] {
+  for (const name of readdirSync(dir)) {
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) {
+      if (!["node_modules", "dist", "coverage"].includes(name)) {
+        sources(full, out);
+      }
+    } else if (full.endsWith(".ts") || full.endsWith(".vue")) {
+      out.push(full);
+    }
+  }
+  return out;
+}
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // src -> DM.Web.Client
@@ -175,5 +190,31 @@ describe("FSD boundaries, as the linter actually applies them", () => {
     expect(message.message).toContain("pages");
     expect(message.message).toContain("entities");
     expect(message.message).toContain("docs/conventions/PATTERNS.md");
+  });
+});
+
+/**
+ * `shared` is a kit and not a layer of slices: a component of it is addressed by
+ * its own path, and the linter above allows exactly that. It also used to carry
+ * a barrel at the kit root, re-exporting twenty-seven of its thirty-six
+ * directories — an entry nineteen files used against six hundred that did not,
+ * with eight directories it never exported and one (BBCodeEditor, and its 360 kB
+ * of TipTap) it had to be told to leave out, because a kit barrel makes every
+ * consumer of the kit pay for everything in it. Two addresses for one component
+ * is not a convenience, it is a question a reader has to answer every time.
+ */
+describe("the shared UI kit", () => {
+  it("has one address per component and no root barrel", () => {
+    expect(
+      existsSync(join(CLIENT_ROOT, "src/shared/ui/index.ts")),
+      "a barrel at the kit root merges unrelated components into one module: it re-exports what a consumer did not ask for, and it competes with the per-component path the rest of the tree uses",
+    ).toBe(false);
+
+    const offenders: string[] = [];
+    for (const file of sources(join(CLIENT_ROOT, "src"))) {
+      if (!/from "@\/shared\/ui"/.test(readFileSync(file, "utf8"))) continue;
+      offenders.push(relative(CLIENT_ROOT, file).split("\\").join("/"));
+    }
+    expect(offenders).toEqual([]);
   });
 });

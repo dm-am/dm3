@@ -120,8 +120,9 @@ internal class PostMappingProfile : Profile
             .ForMember(d => d.ExplosionCount, opt => opt.MapFrom(s => s.Explosion))
             .ForMember(d => d.IsHidden, opt => opt.MapFrom(s => !s.Public));
 
-        CreateMap<Post, UpdatePost>()
+        CreateMap<UpdatePostRequest, UpdatePost>()
             .ForMember(d => d.PostId, opt => opt.Ignore())
+            .ForMember(d => d.CharacterId, opt => opt.Ignore())
             .ForMember(d => d.IsRemoved, opt => opt.Ignore());
     }
 }

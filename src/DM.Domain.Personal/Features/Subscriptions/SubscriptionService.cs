@@ -163,10 +163,19 @@ internal class SubscriptionService : ISubscriptionService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GeneralUser>> GetTargetSubscribersAsync(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default)
+    public async Task<int> CountTargetSubscribersAsync(SubscriptionTargetType targetType, Guid targetId,
+        CancellationToken ct = default) =>
+        (await _repository.GetTargetSubscriberIdsAsync(targetType, targetId, ct)).Count();
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<GeneralUser>> GetTargetSubscribersAsync(SubscriptionTargetType targetType, Guid targetId,
+        PagingQuery query, CancellationToken ct = default)
     {
         var subscriberIds = await _repository.GetTargetSubscriberIdsAsync(targetType, targetId, ct);
-        var subscriberIdList = subscriberIds.ToList();
+        // The slice is taken before the lookups, not after: hydrating every
+        // subscriber of a popular account to answer with twenty of them is one
+        // round trip per subscriber for a page nobody asked for.
+        var subscriberIdList = subscriberIds.Skip(query.Skip).Take(query.Take).ToList();
 
         if (!subscriberIdList.Any())
         {

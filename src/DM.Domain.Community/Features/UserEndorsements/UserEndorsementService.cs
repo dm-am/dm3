@@ -180,7 +180,11 @@ internal class UserEndorsementService : IUserEndorsementService
         var endorsement = await GetAsync(id);
         _intentionManager.ThrowIfForbidden(UserEndorsementIntention.Delete, endorsement);
 
-        var entity = new UpdateUserEndorsementEntity(id, IsRemoved: true);
+        var entity = new UpdateUserEndorsementEntity(
+            id,
+            IsRemoved: true,
+            DeletedUtc: _dateTimeProvider.Now,
+            DeletedByUserId: _identityProvider.Current.User.UserId);
         await _repository.UpdateAsync(entity);
     }
 
