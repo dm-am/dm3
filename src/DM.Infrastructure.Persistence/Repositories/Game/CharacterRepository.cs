@@ -262,17 +262,24 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
     }
 
     /// <summary>
-    /// Adjusts RecruitmentPcLimit when character status changes
+    /// Raises the stated limit when a character joins the active roster
     /// </summary>
+    /// <remarks>
+    /// Only upwards, and only to the live count. Nothing reads
+    /// RecruitmentPcLimit as a gate — whether recruitment is open is its own
+    /// flag — so the number exists to be read beside the count of active
+    /// characters, and the one state it must never be in is below it.
+    ///
+    /// A character leaving used to take the number down with it
+    /// (Math.Max(activeCount, limit - 1)). Nothing needed that: it quietly
+    /// rewrote what the master announced, so a game recruiting five players
+    /// began claiming four the moment one left.
+    /// </remarks>
     private async Task AdjustPcLimitAsync(Guid gameId, CharacterStatus oldStatus, CharacterStatus newStatus)
     {
         if (newStatus == CharacterStatus.Active && oldStatus != CharacterStatus.Active)
         {
             await AdjustPcLimitOnActivationAsync(gameId);
-        }
-        else if (oldStatus == CharacterStatus.Active && newStatus != CharacterStatus.Active)
-        {
-            await AdjustPcLimitOnDeactivationAsync(gameId);
         }
     }
 
@@ -281,39 +288,7 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
         var character = await _dbContext.Characters.FindAsync(characterId);
         if (character != null)
         {
-            var wasActive = !character.IsNpc && character.Status == CharacterStatus.Active;
-            var gameId = character.GameId;
-
             SoftDelete.Mark(character, deletedByUserId, _dateTimeProvider.Now);
-            await _dbContext.SaveChangesAsync();
-
-            // Adjust PcLimit if active non-NPC character was deleted
-            if (wasActive)
-            {
-                await AdjustPcLimitOnDeactivationAsync(gameId);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Decreases RecruitmentPcLimit when a player becomes inactive (but not below current count)
-    /// </summary>
-    private async Task AdjustPcLimitOnDeactivationAsync(Guid gameId)
-    {
-        var game = await _dbContext.Games.FindAsync(gameId);
-        if (game?.RecruitmentPcLimit == null)
-            return;
-
-        var activeCount = await _dbContext.Characters
-            .CountAsync(c => c.GameId == gameId &&
-                             !c.IsRemoved &&
-                             !c.IsNpc &&
-                             c.Status == CharacterStatus.Active);
-
-        var newLimit = Math.Max(activeCount, game.RecruitmentPcLimit.Value - 1);
-        if (newLimit != game.RecruitmentPcLimit.Value)
-        {
-            game.RecruitmentPcLimit = newLimit;
             await _dbContext.SaveChangesAsync();
         }
     }
