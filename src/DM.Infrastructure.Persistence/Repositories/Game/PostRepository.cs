@@ -75,9 +75,19 @@ internal class PostRepository : IPostRepository
         return posts;
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// Reached through the rooms, the same way the paged read above is, so the
+    /// reader's scope is applied by the one filter that expresses it. Asking
+    /// Posts directly answered with the text of any post whose identifier the
+    /// caller happened to know, private room or not: the userId argument was
+    /// accepted and never used, which the compiler has no reason to mention.
+    /// </remarks>
     public async Task<Post?> Get(Guid postId, Guid userId)
     {
-        var post = await _dbContext.Posts
+        var post = await _dbContext.Rooms
+            .Where(GameAccessibilityFilters.RoomAvailable(userId))
+            .SelectMany(r => r.Posts)
             .Where(p => p.PostId == postId)
             .ProjectTo<Post>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();

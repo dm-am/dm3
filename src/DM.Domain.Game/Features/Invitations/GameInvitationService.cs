@@ -242,7 +242,13 @@ internal class GameInvitationService : IGameInvitationService
 
     public async Task<IEnumerable<GameUser>> GetUsers(Guid gameId, CancellationToken ct = default)
     {
-        // No authorization - user list is public for accessible games
+        // The list is public for a game the reader may open, and that half of the
+        // sentence was the half nobody established: the repository filters only
+        // on IsRemoved, so an identifier was enough to enumerate the players of a
+        // game hidden from its holder. Fetching through GetGameOrThrow applies
+        // the reader's scope, the intention confirms the right to read.
+        var game = await GetGameOrThrow(gameId);
+        _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
         return await _repository.GetUsers(gameId, ct);
     }
 
