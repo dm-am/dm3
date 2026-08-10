@@ -46,7 +46,6 @@ public class EnvelopeCoverageShould : IntegrationTestBase
         "GET /v1/chats/can-start/{username}",
         "GET /v1/chats/{id}",
         "GET /v1/endorsements/{id}",
-        "GET /v1/mirrors",
         "GET /v1/moderation/notes/{id}",
         "GET /v1/moderation/tags/groups/{groupId}",
         "GET /v1/moderation/tags/{tagId}",

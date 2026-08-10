@@ -57,10 +57,6 @@ export type {
 export { useNewPasswordField } from "./useNewPasswordField";
 export type { UseNewPasswordFieldOptions } from "./useNewPasswordField";
 
-// Region and mirrors
-export { useRegion } from "./useRegion";
-export type { RegionConfig } from "./useRegion";
-
 // Paging preferences
 export { usePaging } from "./usePaging";
 

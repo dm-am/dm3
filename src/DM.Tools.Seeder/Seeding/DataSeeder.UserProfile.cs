@@ -202,7 +202,7 @@ internal sealed partial class DataSeeder
         // rewards REVIEWS (texts), so it only ever attaches to a literary
         // series; guesser (author guessing) and popular_vote (vote for a work)
         // fit any contest type.
-        const string sampleWork = "https://dm.am/forum/topic/sample-work-";
+        const string sampleWork = "/forum/topic/sample-work-";
         var demoAwards = new (Guid SeriesId, Guid AwardTypeId, DateTimeOffset At, string? WorkUrl)[]
         {
             (lit20, contestThird,  new DateTimeOffset(2022, 9,  1, 12, 0, 0, TimeSpan.Zero), sampleWork + "lit20-3"),

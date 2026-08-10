@@ -142,6 +142,24 @@ export const icons = {
   },
 
   /** Lock (closed topic) */
+  /**
+   * Замок закрытой комнаты, силуэт.
+   *
+   * Контур снят из глифа U+E02E шрифта Kontur-Iconic eco, который старый
+   * сайт подключает под именем DM Iconic. Шрифт не подключается: форма
+   * лежит здесь путем и живет по правилам остальных иконок.
+   *
+   * Отдельно от locked, потому что смысл другой: locked это "закрыто"
+   * у топика и приватное поле анкеты, а это комната с ограниченным
+   * доступом на чтение, и она остается закрытой даже для того, у кого
+   * доступ есть. Разницу несет цвет, не форма.
+   */
+  roomLocked: {
+    viewBox: "120 360 1080 1320",
+    path: '<path d="M240 1680L1080 1680Q1134 1680 1167 1647Q1200 1614 1200 1560L1200 1080Q1200 1026 1167 993Q1134 960 1080 960L1080 780Q1080 609 955.5 484.5Q831 360 660 360Q489 360 364.5 484.5Q240 609 240 780L240 960Q186 960 153 993Q120 1026 120 1080L120 1560Q120 1614 153 1647Q186 1680 240 1680ZM900 780L900 960L420 960L420 780Q420 681 490.5 610.5Q561 540 660 540Q759 540 829.5 610.5Q900 681 900 780Z" fill="currentColor"/>',
+    fill: "currentColor",
+  },
+
   locked: {
     viewBox: "0 0 24 24",
     path: '<rect x="3" y="11" width="18" height="11" rx="2" ry="2" stroke="currentColor" stroke-width="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
@@ -320,13 +338,6 @@ export const icons = {
   clock: {
     viewBox: "-1 -1 26 26",
     path: '<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
-    fill: "none",
-  },
-
-  /** Globe (the mirror switch) */
-  globe: {
-    viewBox: "-1 -1 26 26",
-    path: '<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
     fill: "none",
   },
 

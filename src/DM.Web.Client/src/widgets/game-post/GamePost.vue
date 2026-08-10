@@ -31,6 +31,7 @@ import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { scrollBlockIntoView } from "@/shared/lib/scroll";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { notifyFailure } from "@/shared/lib/errors";
+import { permalinkOrigin } from "@/shared/config/site";
 
 const props = withDefaults(
   defineProps<{
@@ -304,8 +305,8 @@ const postRoute = computed(() =>
 
 const postPermalink = computed(() =>
   postRoute.value
-    ? window.location.origin + router.resolve(postRoute.value).href
-    : window.location.origin + window.location.pathname + postAnchor.value,
+    ? permalinkOrigin() + router.resolve(postRoute.value).href
+    : permalinkOrigin() + window.location.pathname + postAnchor.value,
 );
 
 /**
@@ -326,7 +327,7 @@ function reviewPermalink(reviewId: string): string {
         query: { ...route.query, review: reviewId },
         hash: postAnchor.value,
       };
-  return window.location.origin + router.resolve(target).href;
+  return permalinkOrigin() + router.resolve(target).href;
 }
 
 /**

@@ -1,5 +1,8 @@
+using System;
 using System.Threading.Tasks;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Mail;
+using Microsoft.Extensions.Options;
 
 namespace DM.Domain.Account.Features.UsernameChange;
 
@@ -8,18 +11,25 @@ internal class UsernameChangeMailSender : IUsernameChangeMailSender
 {
     private readonly IMailSender _mailSender;
     private readonly IEmailAssetsProvider _emailAssetsProvider;
+    private readonly SiteAddressConfiguration _siteAddresses;
 
     public UsernameChangeMailSender(
         IMailSender mailSender,
-        IEmailAssetsProvider emailAssetsProvider)
+        IEmailAssetsProvider emailAssetsProvider,
+        IOptions<SiteAddressConfiguration> siteAddresses)
     {
         _mailSender = mailSender;
         _emailAssetsProvider = emailAssetsProvider;
+        _siteAddresses = siteAddresses.Value;
     }
 
     /// <inheritdoc />
-    public async Task SendApprovalAsync(string email, string username, string approvalLink)
+    public async Task SendApprovalAsync(string email, string username, Guid approvalToken)
     {
+        var approvalLink = new Uri(
+            new Uri(_siteAddresses.PublicUrl),
+            $"account/username-change/{approvalToken}");
+
         var body = $@"
 <html>
 <body style='font-family: Arial, sans-serif; color: #333;'>

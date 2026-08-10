@@ -57,7 +57,7 @@ internal class ApiCredentialsStorage : ICredentialsStorage
     {
         var isPersistent = identity.Session?.Persistent ?? false;
 
-        var cookieOptions = SessionCookieOptions(httpContext);
+        var cookieOptions = SessionCookieOptions(httpContext, _config);
 
         // Persistent sessions ("Remember Me"): cookie survives browser restart
         // Non-persistent sessions: session cookie, deleted when browser closes
@@ -73,7 +73,7 @@ internal class ApiCredentialsStorage : ICredentialsStorage
     /// <inheritdoc />
     public Task Unload(HttpContext httpContext)
     {
-        var cookieOptions = SessionCookieOptions(httpContext);
+        var cookieOptions = SessionCookieOptions(httpContext, _config);
         cookieOptions.Expires = DateTimeOffset.UnixEpoch;
 
         httpContext.Response.Cookies.Delete(AuthCookieName, cookieOptions);
@@ -88,9 +88,22 @@ internal class ApiCredentialsStorage : ICredentialsStorage
     /// attributes match the stored ones, so the login and the logout halves
     /// diverging leaves a session that logging out cannot clear.
     /// </remarks>
-    private static CookieOptions SessionCookieOptions(HttpContext httpContext) => new()
+    private static CookieOptions SessionCookieOptions(
+        HttpContext httpContext,
+        AuthenticationConfiguration config) => new()
     {
         HttpOnly = true,
+        // Empty means host-only, which is what an omitted Domain gives and what
+        // every deployment has today. A named domain widens the cookie to every
+        // host under it, so one session covers all the addresses the site
+        // answers on. It travels through the same helper as the logout half on
+        // purpose: a browser replaces a cookie only when the incoming
+        // attributes match the stored ones, and Domain is one of them, so the
+        // two halves disagreeing leaves a session that logging out cannot
+        // clear.
+        Domain = string.IsNullOrWhiteSpace(config.SessionCookieDomain)
+            ? null
+            : config.SessionCookieDomain,
         // Same-as-request, which is the framework's own cookie policy. The host
         // name says nothing about the transport: the deployed stand answers plain
         // http on a domain, and a Secure cookie there is dropped by the browser

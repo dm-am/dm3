@@ -411,6 +411,8 @@ jobs:
         GF_SECURITY_ADMIN_PASSWORD: ci-validation-placeholder
         IMGPROXY_KEY: ci-validation-placeholder
         IMGPROXY_SALT: ci-validation-placeholder
+        POP_UPSTREAM: https://ci-validation-placeholder
+        POP_UPSTREAM_HOST: ci-validation-placeholder
       run: |
         docker compose --env-file /dev/null -f docker-compose.yml config --quiet
         docker compose --env-file /dev/null -f docker-compose.yml -f docker-compose.preview.yml config --quiet
@@ -430,6 +432,8 @@ jobs:
         GF_SECURITY_ADMIN_PASSWORD: ci-validation-placeholder
         IMGPROXY_KEY: ci-validation-placeholder
         IMGPROXY_SALT: ci-validation-placeholder
+        POP_UPSTREAM: https://ci-validation-placeholder
+        POP_UPSTREAM_HOST: ci-validation-placeholder
       run: |
         # Take everything after the key rather than a whitespace-split field:
         # compose resolves contexts to absolute paths, and a path may contain
@@ -477,6 +481,23 @@ jobs:
         docker run --rm \
           -v "$PWD/src/DM.Web.Client/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
           nginx:1.27-alpine nginx -t
+        # The second door is a third edge, serving a whole public address of its
+        # own. It arrives as a template, so the image's own entrypoint renders it
+        # first; the certificate is generated here because the configuration
+        # refuses to start without one, which is the point of it.
+        mkdir -p /tmp/pop-ssl
+        openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+          -keyout /tmp/pop-ssl/privkey.pem -out /tmp/pop-ssl/fullchain.pem \
+          -subj "/CN=pop-syntax-check" 2>/dev/null
+        docker run --rm \
+          --add-host dmfront:127.0.0.1 \
+          -e POP_UPSTREAM=https://127.0.0.1 \
+          -e POP_UPSTREAM_HOST=pop-syntax-check \
+          -e NGINX_ENVSUBST_FILTER='^POP_' \
+          -v "$PWD/docker/nginx/pop.conf.template:/etc/nginx/templates/default.conf.template:ro" \
+          -v "/tmp/pop-ssl:/etc/nginx/ssl:ro" \
+          nginx:1.27-alpine \
+          sh -c '/docker-entrypoint.sh nginx -t'
 
     - name: The Prometheus configuration and its alert rules must parse
       run: |

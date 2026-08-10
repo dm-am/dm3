@@ -19,8 +19,8 @@ volumes:
   rmqdata:
   alertmanagerdata:
 
-# Переменные с дефолтами для локальной разработки
-# Для зеркала: переопределить в .env.mirror
+# Переменные с дефолтами для локальной разработки.
+# Точка присутствия свой набор переопределяет в .env.mirror — секретов там нет.
 x-workload-env: &workload-env
   # === ASP.NET Core ===
   # Production unless explicitly overridden. Development is what maps Swagger UI
@@ -39,9 +39,10 @@ x-workload-env: &workload-env
 
   # === Криптография ===
   # Дефолта нет: пустое значение валит старт приложения. Так и задумано - ключ,
-  # унаследованный из репозитория, секретом не является. Все зеркала должны
-  # получать одно и то же значение, иначе ссылка из письма, выданная одним
-  # зеркалом, не расшифруется другим.
+  # унаследованный из репозитория, секретом не является. Экземпляр приложения
+  # один, и ключ живет только на нем: точка присутствия кода приложения не
+  # выполняет, шифровать ей нечего, и копия ключа на ней отменяет весь смысл
+  # схемы.
   DM_CryptoConfiguration__KeyBase64: ${DM_CryptoConfiguration__KeyBase64:?DM_CryptoConfiguration__KeyBase64 is required, generate with openssl rand -base64 32}
 
   # === RabbitMQ ===
@@ -83,14 +84,20 @@ x-workload-env: &workload-env
   DM_EmailConfiguration__FromDisplayName: DM.am
   DM_EmailConfiguration__ReplyToAddress: test@dm.am
 
-  # === Интеграция ===
-  DM_IntegrationSettings__WebUrl: ${WEB_URL:-http://localhost:5173}
-  DM_IntegrationSettings__ApiUrl: ${API_URL:-http://localhost:5000}
-  DM_IntegrationSettings__CorsUrls__0: ${CORS_URL_0:-http://localhost:5173}
-  DM_IntegrationSettings__CorsUrls__1: ${CORS_URL_1:-http://localhost:8080}
+  # Область сессионной куки. Пусто — кука принадлежит хосту, который ее выдал,
+  # и вход на каждом адресе свой. Регистрируемый домен — один вход на все
+  # адреса; включать только когда каждый хост этого домена принадлежит нам.
+  DM_AuthenticationConfiguration__SessionCookieDomain: ${SESSION_COOKIE_DOMAIN:-}
 
-  # === Зеркало ===
-  DM_MirrorConfiguration__CurrentMirrorId: ${MIRROR_ID:-main}
+  # === Адреса сайта ===
+  # PublicUrl — адрес, которым это развертывание называет само себя: из него
+  # собираются все ссылки в письмах. AllowedOrigins читают и политика CORS, и
+  # проверка Origin вместо CSRF-токена, поэтому список один.
+  # Перечень адресов сайта (Addresses) живет в appsettings.json: он меняется
+  # раз в несколько лет и одинаков для всех развертываний.
+  DM_SiteAddressConfiguration__PublicUrl: ${WEB_URL:-http://localhost:5173}
+  DM_SiteAddressConfiguration__AllowedOrigins__0: ${CORS_URL_0:-http://localhost:5173}
+  DM_SiteAddressConfiguration__AllowedOrigins__1: ${CORS_URL_1:-http://localhost:8080}
 
 # Build context shared by every image this repository produces. CI builds them
 # and pushes them under one tag per run, which is why all four image references

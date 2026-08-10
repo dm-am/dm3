@@ -12,6 +12,7 @@
 |-----------|------------|
 | **Pattern** | BFF (Backend-For-Frontend) |
 | **Токен** | HttpOnly cookie `dm_session` |
+| **Область куки** | Настройка развертывания: пусто — хост, выдавший куку; регистрируемый домен — общий вход на всех его хостах ([MIRRORING.md](../guides/MIRRORING.md)) |
 | **Шифрование** | AES-256-GCM |
 | **Хеширование** | Argon2id (см. [SECURITY.md](../conventions/SECURITY.md)) |
 | **CSRF защита** | SameSite=Lax + CSRF middleware |

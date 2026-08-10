@@ -34,6 +34,7 @@ import { LoginPrompt } from "@/features/auth";
 import { DashSeparator } from "@/shared/ui/DashSeparator";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
 import { notifyFailure } from "@/shared/lib/errors";
+import { permalinkOrigin } from "@/shared/config/site";
 import {
   groupMessagesWithSeparators,
   isDateSeparator,
@@ -760,7 +761,7 @@ async function toggleLike(msg: GlobalChatMessage) {
 
 // Anchor
 async function copyAnchor(msgId: string) {
-  const url = `${window.location.origin}${window.location.pathname}#msg-${msgId}`;
+  const url = `${permalinkOrigin()}${window.location.pathname}#msg-${msgId}`;
   try {
     await navigator.clipboard.writeText(url);
     toast.success("Ссылка скопирована");
@@ -795,7 +796,7 @@ function handleWarn(msg: GlobalChatMessage) {
   if (!username) return;
   warnUsername.value = username;
   warnEntityId.value = msg.id;
-  warnEntityLink.value = `${window.location.origin}${window.location.pathname}#msg-${msg.id}`;
+  warnEntityLink.value = `${permalinkOrigin()}${window.location.pathname}#msg-${msg.id}`;
   openWarnDialog();
 }
 

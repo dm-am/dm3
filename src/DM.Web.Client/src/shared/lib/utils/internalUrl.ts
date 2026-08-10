@@ -1,11 +1,11 @@
 /**
  * Free-text URL fields coming from the backend (e.g. UserAward.workUrl,
  * ContestSeries.topicUrl — admin-entered "link to the forum topic with the
- * work/results") may be stored as either a same-origin absolute URL
- * (`https://dm.am/forum/general/1`) or an already-relative path
- * (`/forum/general/1`). Mirrors (see docs/guides/MIRRORING.md) mean the
- * current origin isn't a fixed constant, so we can't hardcode it — instead
- * we strip whatever origin the browser reports if it matches.
+ * work/results") may be stored as either an absolute URL on one of the site's
+ * own addresses or an already-relative path (`/forum/general/1`). The site
+ * answers on more than one address, so the origin a link was written on is not
+ * the origin the reader is on, and neither can be hardcoded here — instead we
+ * strip whatever origin the browser reports if it matches.
  *
  * Returns a router-relative path when the URL is internal (safe to render
  * as a `<router-link>` instead of a real `target="_blank"` anchor), or

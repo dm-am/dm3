@@ -71,7 +71,7 @@ git config core.hooksPath scripts/hooks
 | [LOCAL_SETUP](./docs/guides/LOCAL_SETUP.md) | "Как запустить проект локально?" |
 | [TESTING](./docs/guides/TESTING.md) | "Как запускать тесты? Какие паттерны?" |
 | [DEPLOYMENT](./docs/guides/DEPLOYMENT.md) | "Как развернуть на сервере?" |
-| [MIRRORING](./docs/guides/MIRRORING.md) | "Как настроить зеркало?" |
+| [MIRRORING](./docs/guides/MIRRORING.md) | "Зачем сайту второй адрес? Как поднять точку присутствия?" |
 | [MONITORING](./docs/guides/MONITORING.md) | "Где смотреть логи? Как настроить алерты?" |
 
 ### plans/ — Планы

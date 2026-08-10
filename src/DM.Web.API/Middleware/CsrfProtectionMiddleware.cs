@@ -43,7 +43,7 @@ public class CsrfProtectionMiddleware
     /// <summary>
     /// Validates Origin/Referer for state-changing requests
     /// </summary>
-    public async Task InvokeAsync(HttpContext context, IOptions<IntegrationSettings> settings)
+    public async Task InvokeAsync(HttpContext context, IOptions<SiteAddressConfiguration> settings)
     {
         // Only check state-changing methods
         if (!StateChangingMethods.Contains(context.Request.Method))
@@ -74,11 +74,11 @@ public class CsrfProtectionMiddleware
             return;
         }
 
-        if (!IsOriginAllowed(origin, settings.Value.CorsUrls))
+        if (!IsOriginAllowed(origin, settings.Value.AllowedOrigins))
         {
             _logger.LogWarning(
                 "CSRF protection blocked request from origin {Origin}. Allowed: {AllowedOrigins}",
-                origin, string.Join(", ", settings.Value.CorsUrls));
+                origin, string.Join(", ", settings.Value.AllowedOrigins));
 
             // Тело отказа собирает ErrorHandlingMiddleware, и только оно: оно
             // стоит выше в конвейере, поэтому исключение отсюда до него дойдет.

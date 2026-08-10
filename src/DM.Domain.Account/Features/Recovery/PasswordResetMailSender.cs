@@ -13,25 +13,25 @@ internal class PasswordResetMailSender : IPasswordResetMailSender
     private readonly ITemplateRenderer _renderer;
     private readonly IMailSender _mailSender;
     private readonly IEmailAssetsProvider _emailAssetsProvider;
-    private readonly IntegrationSettings _integrationSettings;
+    private readonly SiteAddressConfiguration _siteAddresses;
 
     /// <inheritdoc />
     public PasswordResetMailSender(
         ITemplateRenderer renderer,
         IMailSender mailSender,
         IEmailAssetsProvider emailAssetsProvider,
-        IOptions<IntegrationSettings> integrationOptions)
+        IOptions<SiteAddressConfiguration> siteAddresses)
     {
         _renderer = renderer;
         _mailSender = mailSender;
         _emailAssetsProvider = emailAssetsProvider;
-        _integrationSettings = integrationOptions.Value;
+        _siteAddresses = siteAddresses.Value;
     }
 
     /// <inheritdoc />
     public async Task Send(string email, string username, Guid token)
     {
-        var confirmationLinkUrl = new Uri(new Uri(_integrationSettings.WebUrl), $"reset-password/{token}");
+        var confirmationLinkUrl = new Uri(new Uri(_siteAddresses.PublicUrl), $"reset-password/{token}");
         var emailBody = await _renderer.RenderAsync(new PasswordResetConfirmationViewModel(
             Username: username,
             ConfirmationLinkUrl: confirmationLinkUrl.ToString()));

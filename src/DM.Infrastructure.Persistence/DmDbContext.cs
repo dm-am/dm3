@@ -1983,7 +1983,7 @@ public class DmDbContext : DbContext
                 ContestType = ContestType.Literary,
                 Number = 23,
                 Year = 2024,
-                TopicUrl = "https://dm.am/forum/topic/contest-results-lit-23",
+                TopicUrl = "/forum/topic/contest-results-lit-23",
                 IsActive = true
             },
             new ContestSeries
@@ -1992,7 +1992,7 @@ public class DmDbContext : DbContext
                 ContestType = ContestType.Literary,
                 Number = 22,
                 Year = 2023,
-                TopicUrl = "https://dm.am/forum/topic/contest-results-lit-22",
+                TopicUrl = "/forum/topic/contest-results-lit-22",
                 IsActive = true
             },
             new ContestSeries
@@ -2001,7 +2001,7 @@ public class DmDbContext : DbContext
                 ContestType = ContestType.Literary,
                 Number = 21,
                 Year = 2023,
-                TopicUrl = "https://dm.am/forum/topic/contest-results-lit-21",
+                TopicUrl = "/forum/topic/contest-results-lit-21",
                 IsActive = true
             },
             new ContestSeries
@@ -2010,7 +2010,7 @@ public class DmDbContext : DbContext
                 ContestType = ContestType.Literary,
                 Number = 20,
                 Year = 2022,
-                TopicUrl = "https://dm.am/forum/topic/contest-results-lit-20",
+                TopicUrl = "/forum/topic/contest-results-lit-20",
                 IsActive = true
             },
             new ContestSeries
@@ -2019,7 +2019,7 @@ public class DmDbContext : DbContext
                 ContestType = ContestType.Art,
                 Number = 2,
                 Year = 2024,
-                TopicUrl = "https://dm.am/forum/topic/contest-results-art-2",
+                TopicUrl = "/forum/topic/contest-results-art-2",
                 IsActive = true
             },
             new ContestSeries
@@ -2028,7 +2028,7 @@ public class DmDbContext : DbContext
                 ContestType = ContestType.Art,
                 Number = 1,
                 Year = 2023,
-                TopicUrl = "https://dm.am/forum/topic/contest-results-art-1",
+                TopicUrl = "/forum/topic/contest-results-art-1",
                 IsActive = true
             });
 

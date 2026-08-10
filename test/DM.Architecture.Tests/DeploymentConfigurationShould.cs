@@ -783,33 +783,37 @@ public class DeploymentConfigurationShould
     }
 
     /// <summary>
-    /// A mirror runs its own edge and API, and the stores of the main server.
+    /// The second door runs an edge and a frontend, and no application at all.
     /// </summary>
     /// <remarks>
     /// A profile widens the default set instead of narrowing it, so the
-    /// documented mirror command brought up seventeen services: a local Postgres,
-    /// Mongo and MinIO beside a working connection to main, a migration container
-    /// that would have run Migrate() against the main database, and no nginx at
-    /// all — the edge lives only in the overlay, so the topology the guide draws
-    /// was produced by no command.
+    /// documented command brought up seventeen services: a local Postgres, Mongo
+    /// and MinIO, a migration container that would have run Migrate() against the
+    /// main database, and no nginx at all — the edge lives only in the overlay,
+    /// so the topology the guide drew was produced by no command.
     ///
-    /// The overlay clears the dependencies of the API rather than listing
-    /// services: compose starts whatever a named service depends on, and every
-    /// one of those dependencies is a store that lives on main.
+    /// Two halves keep that shut, and both are asserted here because either one
+    /// alone is enough to bring the whole default profile back. The command names
+    /// its services, and the overlay clears the dependencies of the services it
+    /// names: compose starts whatever a named service depends on, and nginx and
+    /// the frontend both declared a dependency on the API.
     ///
-    /// Which is why the command has to name its services, and why that half is
-    /// asserted here too. "depends_on: !reset" narrows the closure of a named
-    /// service and nothing else: drop the trailing "nginx watchtower" and the
-    /// same command brings up the whole default profile again — Postgres, Mongo,
-    /// MinIO and a migration container pointed at the main database. The first
-    /// version of this test checked only that the two overlay files appeared in
-    /// the line, so exactly that edit passed.
+    /// The API is the point. A door that runs one is a second copy of the
+    /// application, and a second copy needs the password of the production
+    /// database and the key the session is signed with, on a machine chosen for
+    /// being reachable rather than for being trusted. The whole reason this
+    /// deployment is an edge and a static frontend is that neither holds a
+    /// secret.
     /// </remarks>
     [Fact]
-    public void StartOnlyItsOwnEdgeAndApiOnAMirror()
+    public void RunNoApplicationOnTheSecondDoor()
     {
-        Read(MirrorCompose).Should().Contain("depends_on: !reset",
-            "compose starts the dependencies of a named service, and all of them are on main");
+        var overlay = Read(MirrorCompose);
+        overlay.Should().MatchRegex(@"depends_on: !(reset|override)",
+            "compose starts the dependencies of a named service, and the edge declared one on the API");
+        overlay.Should().Contain("pop.conf.template",
+            "the door has its own edge configuration: its upstream is across the network, " +
+            "and the shared one points at a container that does not run here");
 
         var documents = new[] { "MIRRORING.md", "DEPLOYMENT.md" }
             .Select(name => File.ReadAllText(
@@ -820,13 +824,13 @@ public class DeploymentConfigurationShould
             .Where(line => line.Contains("--env-file .env.mirror", StringComparison.Ordinal))
             .ToList();
 
-        commands.Should().NotBeEmpty("the guides still document how a mirror is started");
+        commands.Should().NotBeEmpty("the guides still document how the door is started");
         foreach (var command in commands)
         {
             command.Should().Contain(MirrorCompose,
-                "the base file alone starts every store the mirror is meant to borrow");
+                "the base file alone starts every store the door has no business running");
             command.Should().Contain(PreviewCompose,
-                "the edge a mirror serves from lives in the overlay");
+                "the edge and the frontend live in the overlay");
 
             var arguments = command[(command.IndexOf("up -d", StringComparison.Ordinal) + 5)..]
                 .Split(' ', StringSplitOptions.RemoveEmptyEntries)
@@ -834,14 +838,45 @@ public class DeploymentConfigurationShould
                 .ToList();
 
             arguments.Should().Contain("nginx",
-                "a mirror serves from its own edge, and nothing else in the command starts one");
-            foreach (var borrowed in new[] { "postgres", "mongo", "minio", "migration" })
+                "the door serves from its own edge, and nothing else in the command starts one");
+            arguments.Should().Contain("dmfront",
+                "serving the frontend from the door is the reason it exists: markup, scripts and " +
+                "styles stop crossing the network on every page");
+
+            foreach (var elsewhere in new[] { "dmapi", "postgres", "mongo", "minio", "migration" })
             {
-                arguments.Should().NotContain(borrowed,
-                    $"{borrowed} lives on main, and a mirror that starts its own runs the site " +
-                    "against an empty store - or, for migration, runs Migrate() against main");
+                arguments.Should().NotContain(elsewhere,
+                    $"{elsewhere} belongs to the main server, and a door that runs its own holds " +
+                    "the secrets this deployment exists to keep away from it");
             }
         }
+    }
+
+    /// <summary>
+    /// The door's edge talks to the main server, not to a container beside it.
+    /// </summary>
+    /// <remarks>
+    /// The shared edge proxies to service names on the compose network. On the
+    /// door those names resolve to nothing, and nginx refuses to start rather
+    /// than serving a broken site — which is the good outcome and still an
+    /// outage. The door's own configuration names an upstream that arrives as
+    /// configuration, and every deployment fills it in.
+    /// </remarks>
+    [Fact]
+    public void SendTheDoorsApiTrafficAcrossTheNetwork()
+    {
+        var door = File.ReadAllText(Path.Combine(RepositoryRoot, "docker", "nginx", "pop.conf.template"));
+
+        door.Should().Contain("${POP_UPSTREAM}",
+            "the address of the main server is deployment configuration");
+        door.Should().Contain("proxy_cache",
+            "caching media on the door is why it is a door and not a redirect");
+
+        Regex.Matches(door, @"proxy_pass\s+http://dmapi")
+            .Should().BeEmpty("the API does not run here");
+
+        Read(MirrorCompose).Should().Contain("NGINX_ENVSUBST_FILTER",
+            "without a filter the substitution eats $host and $scheme, which belong to nginx");
     }
 
     /// <summary>

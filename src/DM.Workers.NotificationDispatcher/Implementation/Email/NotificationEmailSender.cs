@@ -13,7 +13,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Mail;
+using Microsoft.Extensions.Options;
+
 namespace DM.Workers.NotificationDispatcher.Implementation.Email;
 
 /// <inheritdoc />
@@ -22,15 +25,18 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
     private readonly DmDbContext _dbContext;
     private readonly IMailSender _mailSender;
     private readonly ILogger<NotificationEmailSender> _logger;
+    private readonly SiteAddressConfiguration _siteAddresses;
 
     public NotificationEmailSender(
         DmDbContext dbContext,
         DmMongoClient mongoClient,
         IMailSender mailSender,
+        IOptions<SiteAddressConfiguration> siteAddresses,
         ILogger<NotificationEmailSender> logger) : base(mongoClient)
     {
         _dbContext = dbContext;
         _mailSender = mailSender;
+        _siteAddresses = siteAddresses.Value;
         _logger = logger;
     }
 
@@ -93,7 +99,7 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
                 // Send the email
                 var subject = $"Dungeon Master: {NotificationText.GetTitle(eventType)}";
 
-                var body = BuildEmailBody(eventType, notification.Metadata);
+                var body = BuildEmailBody(eventType, notification.Metadata, _siteAddresses);
 
                 await _mailSender.SendAsync(new EmailLetter
                 {
@@ -123,14 +129,15 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
     /// become markup, so this is where they are escaped, through the encoder the Razor
     /// templates in DM.Infrastructure.Mail render through. A game titled with an
     /// anchor tag used to arrive as a working link to another site inside a letter
-    /// signed dm.am.
+    /// signed by this one.
     ///
     /// Internal rather than private so that the escaping can be checked without a
     /// database, a broker and a mailbox.
     /// </remarks>
     /// <param name="eventType">Event the letter is about</param>
     /// <param name="metadata">Metadata bag of the notification</param>
-    internal static string BuildEmailBody(EventType eventType, object metadata)
+    /// <param name="addresses">Addresses of the site, for the link and the list in the footer</param>
+    internal static string BuildEmailBody(EventType eventType, object metadata, SiteAddressConfiguration addresses)
     {
         var sb = new StringBuilder();
         sb.AppendLine("<!DOCTYPE html>");
@@ -168,7 +175,22 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
 
         // Footer
         sb.AppendLine("<div style=\"padding: 15px; background: #eee; text-align: center; color: #666; font-size: 12px;\">");
-        sb.AppendLine("<p>Это автоматическое уведомление с сайта <a href=\"https://dm.am\">Dungeon Master</a></p>");
+        // The address of the site is deployment configuration, not a constant:
+        // a letter built on one address and read by someone who only reaches
+        // the other one leads nowhere. This letter is the one a reader gets most
+        // often, so it is also where the full list of addresses is worth the two
+        // lines: a mailbox is the only place he can still be reached once the
+        // address he uses stops answering.
+        sb.AppendLine($"<p>Это автоматическое уведомление с сайта <a href=\"{addresses.PublicUrl}\">Dungeon Master</a></p>");
+        var hosts = addresses.Addresses.Values
+            .Where(url => !string.IsNullOrWhiteSpace(url))
+            .Select(url => new Uri(url).Host)
+            .Distinct()
+            .ToList();
+        if (hosts.Count > 1)
+        {
+            sb.AppendLine($"<p>Сайт открывается по адресам: {string.Join(", ", hosts)}</p>");
+        }
         sb.AppendLine("<p>Вы можете отключить email-уведомления в настройках профиля.</p>");
         sb.AppendLine("</div>");
 

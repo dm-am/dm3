@@ -24,9 +24,6 @@ import { Api, X_DM_ACCOUNT_TOKEN } from "@/shared/api";
  * The viewer's own account: how they get in (registration, activation,
  * recovery, password, email), which devices hold a session, and how the site
  * reaches them (notification channels and bots).
- *
- * The mirror list used to sit here too; it is deployment topology rather than
- * account data and now lives next to the transport (shared/api/mirrorApi).
  */
 export default new (class AccountApi {
   /**

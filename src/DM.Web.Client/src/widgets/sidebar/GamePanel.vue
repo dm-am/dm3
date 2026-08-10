@@ -433,10 +433,16 @@ async function confirmMod() {
 <style scoped lang="sass">
 // Rooms nest under their group row: the indent is the nesting, which is why
 // the room rows carry no "- " prefix of their own.
+//
+// The indent is the width of that prefix, so a room's lock starts exactly
+// where the text of a top level row does and the titles follow one gap after
+// it. Measured in the browser at the sidebar's own size, "- " renders 8.3 to
+// 8.8 pixels wide, which $small is; the previous $medium set the whole list
+// two dashes deep and left the locks hanging past the column.
 .room-list
   list-style: none
   margin: 0
-  padding: 0 0 0 $medium
+  padding: 0 0 0 $small
 
 // "(показать)/(скрыть)" spoiler toggle for archived rooms — an inline link
 // beside the group row (normal weight, so nothing in the row reads bold).

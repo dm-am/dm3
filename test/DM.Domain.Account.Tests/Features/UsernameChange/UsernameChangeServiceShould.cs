@@ -165,7 +165,7 @@ public class UsernameChangeServiceShould : UnitTestBase
         _notificationSender.Verify(n => n.SendApprovalAsync(
             request.UserEmail,
             request.UserUsername!,
-            It.IsAny<string>()
+            request.ApprovalToken!.Value
         ), Times.Once);
     }
 

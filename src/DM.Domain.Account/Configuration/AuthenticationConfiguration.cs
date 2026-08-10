@@ -63,4 +63,20 @@ public class AuthenticationConfiguration
     /// Default: 30 minutes
     /// </summary>
     public int AccountLockoutDurationMinutes { get; set; } = 30;
+
+    /// <summary>
+    /// Domain the session cookie is scoped to. Empty means host-only.
+    /// </summary>
+    /// <remarks>
+    /// A host-only cookie belongs to the exact name that issued it, so a visitor
+    /// who follows a link to another address of the same site arrives
+    /// unauthenticated and signs in again. Naming the registrable domain here
+    /// hands the cookie to every host under it, and one session then covers all
+    /// the addresses the site answers on.
+    ///
+    /// Empty by default, and deliberately: the value is only safe once every
+    /// host under that domain is this application. A domain shared with anything
+    /// else hands that thing the session cookie of every visitor.
+    /// </remarks>
+    public string SessionCookieDomain { get; set; } = "";
 }

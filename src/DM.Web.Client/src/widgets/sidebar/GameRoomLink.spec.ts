@@ -98,16 +98,23 @@ describe("GameRoomLink", () => {
   });
 
   it("locks a private room and colours the lock by access", () => {
-    expect(row(room()).find(".lock").exists()).toBe(false);
+    // The lock is rendered for every room and hidden on the public ones, so
+    // that the titles of a list start at one x. Asserted through the class
+    // rather than through presence: dropping the element is what left the
+    // column ragged.
+    const publicRoom = row(room());
+    expect(publicRoom.find(".lock").exists()).toBe(true);
+    expect(publicRoom.find(".lock").classes()).toContain("public");
 
     const closed = row(
       room({ access: RoomAccessType.Private, canView: false }),
     );
-    expect(closed.find(".lock").exists()).toBe(true);
+    expect(closed.find(".lock").classes()).not.toContain("public");
     expect(closed.find(".lock").classes()).not.toContain("granted");
 
     const open = row(room({ access: RoomAccessType.Private, canView: true }));
     expect(open.find(".lock").classes()).toContain("granted");
+    expect(open.find(".lock").classes()).not.toContain("public");
   });
 
   it("counts unread posts, zero included", () => {

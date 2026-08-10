@@ -1092,16 +1092,6 @@
     "role",
     "user"
   ],
-  "DM.Web.API.Features.General.Mirror.MirrorDto": [
-    "id",
-    "isCurrent",
-    "name",
-    "webUrl"
-  ],
-  "DM.Web.API.Features.General.Mirror.MirrorsResponse": [
-    "currentMirrorId",
-    "mirrors"
-  ],
   "DM.Web.API.Features.General.Tickets.CreateTicketIntakeRequest": [
     "contact",
     "subject",

@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Autofac;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Mail;
 using DM.Domain.Core.Mail.ViewModels;
 using DM.Infrastructure.Mail.Rendering;
@@ -11,6 +13,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace DM.Infrastructure.Mail.Tests;
@@ -36,13 +39,84 @@ public class EmailTemplatesShould : IAsyncDisposable
     private readonly HtmlRenderer _htmlRenderer;
     private readonly TemplateRenderer _renderer;
 
+    /// <summary>Two addresses, the shape every deployment of this site has.</summary>
+    private static readonly SiteAddressConfiguration SiteAddresses = new()
+    {
+        PublicUrl = "https://example.test",
+        Addresses = new Dictionary<string, string>
+        {
+            ["main"] = "https://example.test",
+            ["second"] = "https://second.example.test"
+        }
+    };
+
     public EmailTemplatesShould()
     {
         var services = new ServiceCollection();
         services.AddLogging();
         _services = services.BuildServiceProvider();
-        _htmlRenderer = EmailRendering.CreateHtmlRenderer(_services.GetRequiredService<ILoggerFactory>());
+        _htmlRenderer = EmailRendering.CreateHtmlRenderer(
+            _services.GetRequiredService<ILoggerFactory>(),
+            SiteAddresses);
         _renderer = new TemplateRenderer(NullLogger<TemplateRenderer>.Instance, _htmlRenderer);
+    }
+
+    /// <summary>
+    /// The mailbox is the one place a visitor can still be reached after the
+    /// address he uses stops answering, so a letter carries the addresses the
+    /// site answers on. A letter that names only the address it was built from
+    /// is no use to the reader who cannot open that one.
+    /// </summary>
+    [Fact]
+    public async Task NameEveryAddressOfTheSite()
+    {
+        var body = await _renderer.RenderAsync(
+            new PasswordChangeNotificationViewModel("Аллигатор"));
+
+        foreach (var url in SiteAddresses.Addresses.Values)
+        {
+            var host = new Uri(url).Host;
+            body.Should().Contain(host,
+                $"a letter is read when {host} may be the only address that answers");
+        }
+    }
+
+    /// <summary>
+    /// The addresses are printed by the shared layout, so a template that draws
+    /// its own frame silently loses them. This is what keeps the previous test
+    /// honest: it renders one letter, and this one says every letter is built
+    /// the same way.
+    /// </summary>
+    [Fact]
+    public void BuildEveryLetterOnTheSharedLayout()
+    {
+        var templates = Directory
+            .EnumerateFiles(TemplatesDirectory(), "*.razor")
+            .Where(path => !Path.GetFileName(path).StartsWith('_'))
+            .Where(path => Path.GetFileNameWithoutExtension(path) != "EmailLayout")
+            .ToList();
+
+        templates.Should().HaveCountGreaterOrEqualTo(5,
+            "a directory scan that stops matching turns this green by checking nothing");
+
+        foreach (var template in templates)
+        {
+            File.ReadAllText(template).Should().Contain("<EmailLayout",
+                $"{Path.GetFileName(template)} draws its own frame and drops everything the shared one carries");
+        }
+    }
+
+    /// <summary>Templates are content, not build output, so they are read from the source tree.</summary>
+    private static string TemplatesDirectory()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && directory.GetDirectories("src").Length == 0)
+        {
+            directory = directory.Parent;
+        }
+
+        directory.Should().NotBeNull("the repository root is found by walking up from the test binary");
+        return Path.Combine(directory!.FullName, "src", "DM.Infrastructure.Mail", "Templates");
     }
 
     /// <summary>Every view model the domain declares, found by reflection.</summary>
@@ -170,8 +244,11 @@ public class EmailTemplatesShould : IAsyncDisposable
         var html = await _renderer.RenderAsync(
             new SuspiciousLoginViewModel("user", IpAddress: null, DeviceInfo: null, "30.07.2026 15:00"));
 
-        html.Should().NotContain("Адрес");
-        html.Should().NotContain("Устройство");
+        // The label cell, not the word: a bare substring over the whole document
+        // also matched the footer, which names the addresses of the site and has
+        // nothing to do with the row this test is about.
+        html.Should().NotContain(">Адрес</td>");
+        html.Should().NotContain(">Устройство</td>");
         html.Should().Contain("30.07.2026 15:00");
     }
 
@@ -203,6 +280,7 @@ public class EmailTemplatesShould : IAsyncDisposable
         var builder = new ContainerBuilder();
         builder.RegisterInstance(NullLoggerFactory.Instance).As<ILoggerFactory>();
         builder.RegisterGeneric(typeof(NullLogger<>)).As(typeof(ILogger<>)).SingleInstance();
+        builder.RegisterInstance(Options.Create(SiteAddresses)).As<IOptions<SiteAddressConfiguration>>();
         builder.RegisterModule<MailModule>();
         await using var container = builder.Build();
 

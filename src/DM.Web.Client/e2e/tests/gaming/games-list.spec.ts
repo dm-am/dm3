@@ -141,7 +141,7 @@ function isGamesListRequest(url: URL): boolean {
  *
  * One load of /games costs seventeen API requests, of which three belong to
  * the table, its tag catalog and its host lookup; the rest is the site shell —
- * sidebar lists, stats, mirrors, chats, notifications, SignalR negotiate. The
+ * sidebar lists, stats, chats, notifications, SignalR negotiate. The
  * API allows 100 requests per address per minute (GlobalPermitLimit), so a
  * 38-test file burns the whole budget in its first three tests and everything
  * after that measures 429s. That failure is indistinguishable from the one

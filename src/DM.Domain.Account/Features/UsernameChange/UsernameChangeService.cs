@@ -144,11 +144,10 @@ internal partial class UsernameChangeService : IUsernameChangeService
         {
             if (resolve.Status == UsernameChangeRequestStatus.Approved && request.ApprovalToken.HasValue)
             {
-                var approvalLink = $"https://dm.am/account/username-change/{request.ApprovalToken.Value}";
                 await _notificationSender.SendApprovalAsync(
                     request.UserEmail,
                     request.UserUsername!,
-                    approvalLink);
+                    request.ApprovalToken.Value);
             }
             else if (resolve.Status == UsernameChangeRequestStatus.Rejected)
             {

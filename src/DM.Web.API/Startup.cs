@@ -100,9 +100,9 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
 
         // CORS is an API concern and no other host has an opinion on it, so this
         // one stays with the host rather than moving into the core extension.
-        services.AddOptions<IntegrationSettings>()
-            .Bind(configuration.GetSection(nameof(IntegrationSettings)))
-            .Validate(s => s.CorsUrls?.Length > 0, "IntegrationSettings:CorsUrls is required")
+        services.AddOptions<SiteAddressConfiguration>()
+            .Bind(configuration.GetSection(nameof(SiteAddressConfiguration)))
+            .Validate(s => s.AllowedOrigins?.Length > 0, "SiteAddressConfiguration:AllowedOrigins is required")
             .ValidateOnStart();
 
         // X-Forwarded-* is honoured for the configured proxy networks only.
@@ -233,11 +233,11 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
     /// <summary>
     /// Configure application
     /// </summary>
-    /// <param name="appBuilder"></param>
-    /// <param name="integrationOptions"></param>
-    /// <param name="logger"></param>
+    /// <param name="appBuilder">Application pipeline being assembled</param>
+    /// <param name="siteAddresses">Addresses the site answers on, source of the CORS policy</param>
+    /// <param name="logger">Logger of the startup itself</param>
     public void Configure(IApplicationBuilder appBuilder,
-        IOptions<IntegrationSettings> integrationOptions,
+        IOptions<SiteAddressConfiguration> siteAddresses,
         ILogger<Startup> logger)
     {
         if (_migrateOnStart)
@@ -292,7 +292,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             // CORS middleware emits Vary: Origin and the cache keys entries by
             // it - one caller's allowance is not served to another.
             .UseCors(b => b
-                .WithOrigins(integrationOptions.Value.CorsUrls)
+                .WithOrigins(siteAddresses.Value.AllowedOrigins)
                 // Two hand kept lists, both silent when wrong. A request header
                 // absent from the first never reaches the server at all: the
                 // preflight is answered without it and the browser drops the

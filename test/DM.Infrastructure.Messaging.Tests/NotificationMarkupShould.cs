@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Workers.NotificationDispatcher.Implementation.Bot;
 using DM.Workers.NotificationDispatcher.Implementation.Email;
@@ -34,6 +36,17 @@ public class NotificationMarkupShould
 
     private const string EscapedName = "Tom &amp; &quot;Jerry&quot;";
 
+    /// <summary>The addresses of the site, as configuration gives them.</summary>
+    private static readonly SiteAddressConfiguration Addresses = new()
+    {
+        PublicUrl = "https://example.test",
+        Addresses = new Dictionary<string, string>
+        {
+            ["main"] = "https://example.test",
+            ["second"] = "https://second.example.test"
+        }
+    };
+
     /// <summary>A game title and a username are whatever their owner typed.</summary>
     private static readonly object Metadata = new
     {
@@ -44,7 +57,7 @@ public class NotificationMarkupShould
     [Fact]
     public void KeepMetadataOutOfTheLetterAsMarkup()
     {
-        var body = NotificationEmailSender.BuildEmailBody(Event, Metadata);
+        var body = NotificationEmailSender.BuildEmailBody(Event, Metadata, Addresses);
 
         body.Should().NotContain(HostileTitle,
             "a title shaped like a link becomes a working link to another site in a letter signed dm.am");
@@ -80,7 +93,7 @@ public class NotificationMarkupShould
     [Fact]
     public void SayNothingAboutAMetadataBagThatIsNotAnObject()
     {
-        var body = NotificationEmailSender.BuildEmailBody(Event, "{}");
+        var body = NotificationEmailSender.BuildEmailBody(Event, "{}", Addresses);
 
         body.Should().NotContain("<pre",
             "the letter used to fall back to dumping the serialized bag into itself");

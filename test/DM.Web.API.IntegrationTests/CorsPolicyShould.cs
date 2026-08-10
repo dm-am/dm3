@@ -25,7 +25,7 @@ namespace DM.Web.API.IntegrationTests;
 /// </summary>
 public class CorsPolicyShould : IntegrationTestBase
 {
-    /// <summary>An origin from IntegrationSettings:CorsUrls that a browser really uses.</summary>
+    /// <summary>An origin from SiteAddressConfiguration:AllowedOrigins that a browser really uses.</summary>
     private const string AllowedOrigin = "http://localhost:5173";
 
     public CorsPolicyShould(DatabaseFixture databaseFixture) : base(databaseFixture)

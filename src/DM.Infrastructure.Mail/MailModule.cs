@@ -1,8 +1,10 @@
 using Autofac;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Mail;
 using DM.Infrastructure.Core.Extensions;
 using DM.Infrastructure.Mail.Rendering;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace DM.Infrastructure.Mail;
 
@@ -24,7 +26,9 @@ public class MailModule : Module
             .InstancePerLifetimeScope();
 
         // Register HtmlRenderer for Blazor template rendering
-        builder.Register(ctx => EmailRendering.CreateHtmlRenderer(ctx.Resolve<ILoggerFactory>()))
+        builder.Register(ctx => EmailRendering.CreateHtmlRenderer(
+                ctx.Resolve<ILoggerFactory>(),
+                ctx.Resolve<IOptions<SiteAddressConfiguration>>().Value))
             .AsSelf()
             .SingleInstance();
 

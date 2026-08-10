@@ -15,24 +15,24 @@ internal class RegistrationMailSender : IRegistrationMailSender
     private readonly ITemplateRenderer _renderer;
     private readonly IMailSender _mailSender;
     private readonly IEmailAssetsProvider _emailAssetsProvider;
-    private readonly IntegrationSettings _integrationSettings;
+    private readonly SiteAddressConfiguration _siteAddresses;
 
     public RegistrationMailSender(
         ITemplateRenderer renderer,
         IMailSender mailSender,
         IEmailAssetsProvider emailAssetsProvider,
-        IOptions<IntegrationSettings> integrationSettings)
+        IOptions<SiteAddressConfiguration> siteAddresses)
     {
         _renderer = renderer;
         _mailSender = mailSender;
         _emailAssetsProvider = emailAssetsProvider;
-        _integrationSettings = integrationSettings.Value;
+        _siteAddresses = siteAddresses.Value;
     }
 
     /// <inheritdoc />
     public async Task Send(string email, Guid token)
     {
-        var confirmationLinkUrl = new Uri(new Uri(_integrationSettings.WebUrl), $"activate/{token}");
+        var confirmationLinkUrl = new Uri(new Uri(_siteAddresses.PublicUrl), $"activate/{token}");
         var emailBody = await _renderer.RenderAsync(new RegistrationConfirmationViewModel(
             ConfirmationLinkUrl: confirmationLinkUrl.ToString()));
         await _mailSender.SendAsync(new EmailLetter

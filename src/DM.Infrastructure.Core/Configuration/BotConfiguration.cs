@@ -19,12 +19,6 @@ public class BotConfiguration
     public string? TelegramBotToken { get; set; }
 
     /// <summary>
-    /// Base URL of the site for generating links in notifications.
-    /// Defaults to https://dm.am if not configured.
-    /// </summary>
-    public string? BaseUrl { get; set; }
-
-    /// <summary>
     /// Discord channel ID for moderation notifications (optional).
     /// Moderation events will be sent to this channel.
     /// </summary>

@@ -177,8 +177,8 @@ $input-padding: ($minor + 1px) $small
 /// The drawn size is the caller's; the POINTER target is not. WCAG 2.5.8 puts
 /// its floor at $tap-target-min, and three controls on the site sat under it —
 /// 20x20 for "back" in every catalogue filter and for removing a contact, 36x18
-/// for the mirror switch. On a phone that is about three millimetres, and a
-/// miss on "back" counts as a click outside and closes the dropdown.
+/// for a switch since removed. On a phone that is about three millimetres, and
+/// a miss on "back" counts as a click outside and closes the dropdown.
 ///
 /// The target grows as a centred overlay rather than as padding: an overlay is
 /// out of flow, so the box the layout sees is still exactly the glyph and
@@ -187,6 +187,11 @@ $input-padding: ($minor + 1px) $small
 ///
 /// The interpolation inside max() is load-bearing: written plainly, Sass would
 /// try to fold a percentage and a length together and refuse.
+///
+/// This ends with a nested rule, so a caller that adds its own declarations
+/// after the include has to wrap them in "&". Sass is changing what a plain
+/// declaration after a nested rule means, and warns on every one of them until
+/// it does.
 @mixin icon-button($width, $height: $width)
   position: relative
   display: inline-flex

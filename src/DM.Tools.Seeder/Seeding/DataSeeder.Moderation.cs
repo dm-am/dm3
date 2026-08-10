@@ -91,7 +91,7 @@ internal sealed partial class DataSeeder
                 Subtype = TicketSubtype.UserComplaint,
                 CreatedUtc = now.AddDays(-2),
                 Description = $"Пользователь {target.Username} оскорбляет участников в комментариях к игре. " +
-                              "Прошу принять меры.\n\nСсылка на нарушение: https://dm.am/games/example",
+                              "Прошу принять меры.\n\nСсылка на нарушение: /games/example",
                 Comment = "Жалоба на поведение в комментариях"
             },
             // Authenticated suggestion, answered by a moderator (Moderator scope)

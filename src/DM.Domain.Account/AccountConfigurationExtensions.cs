@@ -36,7 +36,9 @@ public static class AccountConfigurationExtensions
             .Validate(IsUsableEncryptionKey,
                 "CryptoConfiguration:KeyBase64 must be a base64-encoded 32-byte key. " +
                 "Generate one with `openssl rand -base64 32` and supply it as " +
-                "DM_CryptoConfiguration__KeyBase64. All mirrors must share the same value.")
+                "DM_CryptoConfiguration__KeyBase64. It lives on the application " +
+                "instance and nowhere else: an edge that serves another address of " +
+                "the site runs no application code and has nothing to decrypt.")
             .ValidateOnStart();
 
         services.Configure<AuthenticationConfiguration>(

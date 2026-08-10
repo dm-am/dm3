@@ -184,7 +184,7 @@ onMounted(async () => {
           <input
             v-model="edit.topicUrl"
             type="url"
-            placeholder="https://dm.am/..."
+            placeholder="/forum/topic/..."
           />
         </div>
         <div class="form-row inline">
@@ -227,7 +227,7 @@ onMounted(async () => {
           <input
             v-model="grantForm.workUrl"
             type="url"
-            placeholder="https://dm.am/forum/topic/..."
+            placeholder="/forum/topic/..."
           />
         </div>
         <p v-if="grantError" class="form-error">{{ grantError }}</p>
