@@ -14,7 +14,8 @@ public interface IEmailChangeConfirmationRepository
     /// <param name="tokenId">Token identifier</param>
     /// <param name="createdSince">Minimum creation time</param>
     /// <returns>Token ID if found, null otherwise</returns>
-    Task<Guid?> FindEmailChangeToken(Guid tokenId, DateTimeOffset createdSince);
+    /// <remarks>Возвращает владельца токена: сам идентификатор токена у вызывающего уже есть.</remarks>
+    Task<Guid?> FindEmailChangeTokenOwner(Guid tokenId, DateTimeOffset createdSince);
 
     /// <summary>
     /// Mark the token as used

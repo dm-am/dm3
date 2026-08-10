@@ -22,9 +22,19 @@ public interface IEmailChangeRepository
     Task<bool> IsEmailFree(string email, CancellationToken ct);
 
     /// <summary>
-    /// Update user email and create confirmation token
+    /// Record the requested address as pending and create the confirmation token
     /// </summary>
-    Task Update(Guid userId, string newEmail, CreateToken token);
+    /// <remarks>
+    /// The account keeps answering at its current address until the link is
+    /// followed. Anything else makes the letter a formality and a typo a locked
+    /// account.
+    /// </remarks>
+    Task RequestChange(Guid userId, string newEmail, CreateToken token);
+
+    /// <summary>
+    /// Move the pending address into the account. False when nothing is pending
+    /// </summary>
+    Task<bool> ApplyPendingEmail(Guid userId);
 
     /// <summary>
     /// Invalidate old email change tokens for a user

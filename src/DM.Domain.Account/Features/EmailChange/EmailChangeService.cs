@@ -67,7 +67,7 @@ internal class EmailChangeService : IEmailChangeService
         var token = _tokenFactory.Create(user.UserId, TokenType.EmailChange);
 
         await _repository.InvalidateOldEmailChangeTokens(user.UserId);
-        await _repository.Update(user.UserId, emailChange.Email, token);
+        await _repository.RequestChange(user.UserId, emailChange.Email, token);
 
         // Send confirmation to NEW email
         await _mailSender.Send(emailChange.Email, emailChange.Username, token.TokenId);
@@ -94,17 +94,33 @@ internal class EmailChangeService : IEmailChangeService
     }
 
     /// <inheritdoc />
+    /// <inheritdoc />
+    /// <remarks>
+    /// This is where the address actually moves. It used to move on the request,
+    /// which left this method marking a token used and nothing else: the letter
+    /// confirmed a change that had already happened, and a mistyped address took
+    /// the account away from its owner before they could read the letter saying
+    /// so.
+    /// </remarks>
     public async Task Confirm(Guid tokenId)
     {
-        var foundTokenId = await _confirmationRepository.FindEmailChangeToken(
+        var ownerId = await _confirmationRepository.FindEmailChangeTokenOwner(
             tokenId,
             _dateTimeProvider.Now - TimeSpan.FromHours(_tokenConfig.EmailChangeTokenLifetimeHours));
 
-        if (!foundTokenId.HasValue)
+        if (!ownerId.HasValue)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.LinkInvalidOrExpired);
         }
 
-        await _confirmationRepository.MarkTokenUsed(foundTokenId.Value);
+        // A live token with nothing pending is a link followed twice, or one
+        // whose request was withdrawn. Same answer as an expired link: there is
+        // nothing here to confirm.
+        if (!await _repository.ApplyPendingEmail(ownerId.Value))
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.LinkInvalidOrExpired);
+        }
+
+        await _confirmationRepository.MarkTokenUsed(tokenId);
     }
 }
