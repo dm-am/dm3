@@ -54,7 +54,10 @@ public class GameSubscriptionServiceShould : UnitTestBase
             _identityProvider.Object,
             guidFactory.Object,
             dateTimeProvider.Object,
-            _blacklistRepository.Object);
+            // The real guard over the mocked store: the rule under test is the
+            // guard's, and the generic subscription endpoint asks the same object,
+            // so a stub here would test a copy of it that no caller uses.
+            new GameSubscriptionGuard(_blacklistRepository.Object));
     }
 
     [Fact]

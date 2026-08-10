@@ -732,10 +732,19 @@ internal class GameService : IGameService
         return await _userRepository.GetAssistants(gameId);
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// RemoveUser, not Edit. Removing an assistant has two handles — this one and
+    /// GameInvitationService.RemoveUser — and they asked different questions:
+    /// Edit resolves to master or assistant, so an assistant could remove a peer,
+    /// while the intention written for this very action resolves to master alone
+    /// and says so in its own comment. AUTHORIZATION.md describes the second
+    /// answer.
+    /// </remarks>
     public async Task RemoveAssistantAsync(Guid gameId, string username)
     {
         var game = await GetAsync(gameId);
-        _intentionManager.ThrowIfForbidden(GameIntention.Edit, game);
+        _intentionManager.ThrowIfForbidden(GameIntention.RemoveUser, game);
 
         if (!await _userRepository.IsAssistantByUsername(gameId, username))
         {
