@@ -80,12 +80,12 @@
 Пересчитывается из строк индекса при каждом закрытии, руками не пишется: число,
 написанное отдельно от таблицы, расходится с ней на первой же партии.
 
-**Закрыто 11 из 357 (3%), открыто 346.**
+**Закрыто 12 из 357 (3%), открыто 345.**
 
 | Тяжесть | Всего | Закрыто | Осталось |
 |---|---|---|---|
 | КРИТИЧНО | 6 | 6 | 0 |
-| ВАЖНО | 53 | 3 | 50 |
+| ВАЖНО | 53 | 4 | 49 |
 | ЗАМЕТНО | 140 | 1 | 139 |
 | МЕЛОЧЬ | 158 | 1 | 157 |
 
@@ -99,7 +99,7 @@
 | api | 23 | 0 | 23 |
 | comments | 23 | 0 | 23 |
 | security | 22 | 4 | 18 |
-| persistence | 21 | 0 | 21 |
+| persistence | 21 | 1 | 20 |
 | auth | 21 | 0 | 21 |
 | frontend-arch | 19 | 2 | 17 |
 | domain | 19 | 1 | 18 |
@@ -507,7 +507,7 @@
 | modules-09 | ВАЖНО | Срок жизни приглашения 30 дней записан семь раз в четырех файлах, принуждающая и показываемая копии разные | `GameInvitationService.cs:25 и :146, GameInvitationRepository.cs:274 и :312, BlogInvitatio…` | Открыто | |
 | modules-10 | ВАЖНО | Создание игры пишет в PostgreSQL, MongoDB и RabbitMQ без транзакции и компенсации; провал средней записи навсегда обнуляет счетчики непрочитанного | `src/DM.Domain.Game/Features/Games/GameService.cs:166-199, 794-801` | Открыто | |
 | domain-01 | ВАЖНО | Сайдбар грузит полные строки Rooms, PostPendencies и по два полных User на каждую отложку, а вызывающий все это выбрасывает | `src/DM.Infrastructure.Persistence/Repositories/Game/GameRepository.cs:765-790; src/DM.Dom…` | Открыто | |
-| persistence-01 | ВАЖНО | FlushAsync берет ParentId у произвольного живого маркера чата. Если выбранный документ принадлежит другому участнику (для диалога это примерно половина случаев… _(уточнено)_ | `src/DM.Infrastructure.Persistence/Shared/UnreadCounters/UnreadCountersRepository.cs:216-2…` | Открыто | |
+| persistence-01 | ВАЖНО | FlushAsync берет ParentId у произвольного живого маркера чата. Если выбранный документ принадлежит другому участнику (для диалога это примерно половина случаев… _(уточнено)_ | `src/DM.Infrastructure.Persistence/Shared/UnreadCounters/UnreadCountersRepository.cs:216-2…` | Закрыто | Исправлено — FlushAsync сначала читает собственный маркер читателя и обновляет его на месте, сохраняя ParentId. Заимствование родителя у соседнего маркера осталось только там, где его неоткуда больше взять, и где все читатели сущности делят одного родителя. Уточнение по ходу проверки: счетчик списывался верно, ломался ParentId, и беседа выпадала из родительских выборок, а не утекала чужому. Интеграционный тест KeepTheReadersOwnParentWhenAnotherParticipantsMarkerComesFirst на контейнерном Mongo, проверен снятием |
 | persistence-02 | ВАЖНО | Голосование не проверяет, что пользователь уже голосовал: одним аккаунтом можно занять все варианты | `src/DM.Infrastructure.Persistence/Repositories/Community/PollRepository.cs:294-305` | Открыто | |
 | persistence-03 | ВАЖНО | Непрочитанное в игровых чат-комнатах не работает: маркер на room.Id, инкремент и чтение по chat.Id | `src/DM.Domain.Game/Features/Rooms/RoomService.cs:82, src/DM.Domain.Messaging/Features/Mes…` | Открыто | |
 | auth-01 | ВАЖНО | Операций, объявляющих 401 без блока security, — 103, а не 105; под /v1/moderation их 49 из 52, а не "весь срез". Вторая причина, помимо class-level атрибута: R… | `src/DM.Web.API/Shared/Authentication/AuthenticationSwaggerFilter.cs:16` | Открыто | |

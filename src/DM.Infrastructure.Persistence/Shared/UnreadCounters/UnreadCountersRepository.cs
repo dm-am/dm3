@@ -205,10 +205,39 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     /// <inheritdoc />
     public async Task FlushAsync(Guid userId, UnreadEntryType entryType, Guid entityId)
     {
-        // Any user's counter for this entity carries the ParentId this one needs.
-        // When there is none, the entity was never counted for anyone: there is
-        // nothing to mark as read, and writing a marker with an invented ParentId
-        // would hide it from FlushAllAsync, which filters by exactly that field.
+        // The reader's own marker first, and when it exists nothing else is
+        // consulted: its ParentId is already the right one and must survive
+        // untouched.
+        //
+        // Borrowing a parent from whichever marker the entity happened to return
+        // is only sound where every reader of an entity shares one parent — a
+        // topic parented by its board, a room by its game. A conversation is the
+        // exception: its marker is parented by the reader themselves, which is
+        // what makes "all my conversations" answerable at all. Copying a
+        // neighbour's parent there stamped one participant's marker with another
+        // participant's identifier, and the conversation then matched neither of
+        // them in a parent-scoped read — it did not move to the wrong total, it
+        // dropped out of every total.
+        var own = await Collection.Find(
+                Key(userId, entityId, entryType) &
+                Filter.Eq(c => c.IsRemoved, false))
+            .FirstOrDefaultAsync();
+
+        if (own != null)
+        {
+            await Collection.UpdateOneAsync(
+                Key(userId, entityId, entryType) & Filter.Eq(c => c.IsRemoved, false),
+                Update
+                    .Set(c => c.Counter, 0)
+                    .Set(c => c.LastReadUtc, _dateTimeProvider.Now.UtcDateTime));
+            return;
+        }
+
+        // No marker of one's own: the parent has to come from somewhere, and a
+        // neighbour is the only place it exists. When there is none either, the
+        // entity was never counted for anyone — there is nothing to mark as read,
+        // and writing a marker with an invented ParentId would hide it from
+        // FlushAllAsync, which filters by exactly that field.
         // Mongo has no global soft-delete filter of its own, so IsRemoved has to be
         // spelled out. Without it a deleted entity still finds its own tombstoned
         // counter here, and the upsert below writes a live row back — the entity

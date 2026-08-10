@@ -87,6 +87,52 @@ public class UnreadCountersRepositoryShould : IntegrationTestBase
         unread[entityId].Should().Be(0, "the entity was marked as read, twice");
     }
 
+    /// <summary>
+    /// A conversation is parented by the reader, not by a container it shares with
+    /// the other participants. That is what makes "all my conversations" a query
+    /// at all, and it is why marking one as read must not copy a parent from
+    /// whichever marker the store returned first.
+    /// </summary>
+    /// <remarks>
+    /// The stamped marker matched neither reader afterwards: not the one whose
+    /// identifier it carried, because the row is keyed by user, and not its owner,
+    /// because the parent was somebody else. The conversation left every
+    /// parent-scoped total without appearing in any other.
+    /// </remarks>
+    [Fact]
+    public async Task KeepTheReadersOwnParentWhenAnotherParticipantsMarkerComesFirst()
+    {
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        var chatId = Guid.NewGuid();
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IUnreadCountersRepository>();
+
+        // Both markers are parented by their own owner, the way a conversation
+        // creates them.
+        await repository.CreateAsync(chatId, UnreadEntryType.Message, new[] { first, second });
+        await repository.IncrementExcludingAsync(chatId, UnreadEntryType.Message, first);
+
+        await repository.FlushAsync(second, UnreadEntryType.Message, chatId);
+
+        var stored = await Collection(scope)
+            .Find(Key(second, chatId))
+            .FirstOrDefaultAsync();
+        stored.Should().NotBeNull();
+        stored!.ParentId.Should().Be(second,
+            "the reader owns the parent of their own marker, and marking as read does not move it");
+        stored.Counter.Should().Be(0, "marking as read is still what this does");
+
+        // The marker has to remain reachable by its parent, which is the whole
+        // point of the field: a new message after the flush must show up in the
+        // reader own total. A marker stamped with somebody else parent
+        // matches neither them nor its owner, and the conversation goes quiet.
+        await repository.IncrementExcludingAsync(chatId, UnreadEntryType.Message, first);
+        var mine = await repository.SelectByParentsAsync(second, UnreadEntryType.Message, second);
+        mine.Should().ContainKey(second);
+        mine[second].Should().Be(1,
+            "a conversation that lost its parent disappears from every total that asks by parent");
+    }
     private static IMongoCollection<DbUnreadCounter> Collection(IServiceScope scope) =>
         scope.ServiceProvider.GetRequiredService<DmMongoClient>().GetCollection<DbUnreadCounter>();
 
