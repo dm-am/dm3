@@ -435,12 +435,26 @@ const editGameText = ref("");
 const editMetaText = ref("");
 const savingPost = ref(false);
 
-function startEditPost() {
-  // Seed from the currently displayed text (mirrors the Comment edit block;
-  // the dual-mode BBCodeEditor round-trips the rendered HTML).
+async function startEditPost() {
+  // Seeded from the display rendering, the editor received a post whose
+  // [private] blocks had already been flattened into ordinary markup: saving
+  // then published the private text to the whole room. The author's own view
+  // of their post is a different rendering, and it has to be asked for.
   editGameText.value = effectiveGameText.value ?? "";
   editMetaText.value = effectiveMetaText.value ?? "";
   isEditingPost.value = true;
+
+  try {
+    const { data } = await gameApi.getPostForEdit(props.post.id);
+    if (data && isEditingPost.value) {
+      editGameText.value = data.gameText ?? editGameText.value;
+      editMetaText.value = data.metaText ?? editMetaText.value;
+    }
+  } catch {
+    // The editor is already open on the display text. Refusing to open it at
+    // all would be worse than editing a post without private blocks, and the
+    // request failing is what the general interceptor reports.
+  }
 }
 
 function cancelEditPost() {

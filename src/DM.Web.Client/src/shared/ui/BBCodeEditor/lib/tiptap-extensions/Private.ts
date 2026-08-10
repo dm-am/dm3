@@ -49,7 +49,11 @@ export const Private = Mark.create<PrivateOptions>({
       },
       character: {
         default: "",
+        // data-bb-addressees is what the server writes on the AuthorEdit
+        // rendering. Without it the recipients were read as empty and the tag
+        // came back as a bare [private], addressed to nobody.
         parseHTML: (element) =>
+          element.getAttribute("data-bb-addressees") ||
           element.getAttribute("data-bb-character") ||
           element.getAttribute("data-bb-users") ||
           element.getAttribute("data-users"),
@@ -63,8 +67,20 @@ export const Private = Mark.create<PrivateOptions>({
     };
   },
 
+  // The server renders [private] as a div, and has done since the block became
+  // block-level; these span forms are what the editor used to emit. Matching
+  // only the spans meant the author's own edit view saw an ordinary div, the
+  // mark was never applied, and saving published the private text to the whole
+  // room. The div forms come first because that is what arrives from the server
+  // today; the spans stay for text already inside an open editor.
   parseHTML() {
     return [
+      {
+        tag: 'div[data-bb-tag="private"]',
+      },
+      {
+        tag: "div.private-message",
+      },
       {
         tag: 'span[data-bb-tag="private"]',
       },

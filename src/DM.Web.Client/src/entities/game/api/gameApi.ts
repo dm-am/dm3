@@ -349,6 +349,21 @@ class GameApi {
     return Api.get<Post>(`posts/${postId}`);
   }
 
+  /**
+   * Fetch a post's source for the editor. The AuthorEdit audience keeps
+   * [private] and [mod] in a form the editor can round-trip; the display
+   * rendering flattens [private] into ordinary markup, so seeding the editor
+   * from it dropped the block on save and published the private text to the
+   * whole room.
+   */
+  public getPostForEdit(postId: string) {
+    return Api.get<Post>(
+      `posts/${postId}`,
+      undefined,
+      RENDER_AUDIENCE.AuthorEdit,
+    );
+  }
+
   public createPost(roomId: string, post: CreatePostInput) {
     return Api.post<Post>(`rooms/${roomId}/posts`, post);
   }

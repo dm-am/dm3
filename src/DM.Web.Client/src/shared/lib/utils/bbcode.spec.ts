@@ -1421,3 +1421,36 @@ describe("cleanPastedHtml", () => {
     });
   });
 });
+
+describe("the private block the server renders", () => {
+  // The author's own view of a post arrives as a div carrying
+  // data-bb-addressees. Only the span the editor emits was recognised, so
+  // opening a post for editing and saving it dropped the tag and published the
+  // private text to the whole room.
+  const AUTHOR_EDIT_HTML =
+    '<div class="private-message" data-bb-tag="private" data-bb-addressees="Гэндальф">тайна</div>';
+
+  it("survives being loaded into the editor and saved", () => {
+    expect(htmlToBbcode(AUTHOR_EDIT_HTML, "post")).toContain(
+      "[private=Гэндальф]тайна[/private]",
+    );
+  });
+
+  it("survives without the marker attribute, by class alone", () => {
+    const html =
+      '<div class="private-message" data-bb-addressees="Гэндальф">тайна</div>';
+
+    expect(htmlToBbcode(html, "post")).toContain(
+      "[private=Гэндальф]тайна[/private]",
+    );
+  });
+
+  it("still recognises the span the editor itself emits", () => {
+    const html =
+      '<span class="bb-private" data-bb-tag="private" data-bb-character="Гэндальф">тайна</span>';
+
+    expect(htmlToBbcode(html, "post")).toContain(
+      "[private=Гэндальф]тайна[/private]",
+    );
+  });
+});

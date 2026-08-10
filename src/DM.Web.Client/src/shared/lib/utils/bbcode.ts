@@ -234,8 +234,14 @@ const HTML_TO_BB_MARKED = {
   // Plain image (default size) — bare <img class="bb-image" data-bb-tag="img" ...>
   img: /<img[^>]*data-bb-tag="img"[^>]*\/?>/gi,
 
+  // Span with data-bb-character is what the editor emits. The server renders
+  // the same tag as a div carrying data-bb-addressees, and the author's own
+  // view of a post arrives in that form: matching only the span dropped the
+  // block on save and published the private text to the whole room.
   private:
     /<span[^>]*data-bb-tag="private"[^>]*data-bb-character="([^"]*)"[^>]*>([\s\S]*?)<\/span>/gi,
+  privateBlock:
+    /<div[^>]*data-bb-tag="private"[^>]*data-bb-addressees="([^"]*)"[^>]*>([\s\S]*?)<\/div>/gi,
   // Legacy stripper: same reason as BB_TO_HTML.cutLegacy above. Removes any
   // lingering <hr data-bb-tag="cut"> elements from historical content when
   // converting rendered HTML back to BBCode.
@@ -275,6 +281,8 @@ const HTML_TO_BB_UNMARKED = {
   nsfw: /<div class="nsfw-spoiler">([\s\S]*?)<\/div>/gi,
   private:
     /<span[^>]*class="private-text"[^>]*data-(?:users|character)="([^"]*)"[^>]*>([\s\S]*?)<\/span>/gi,
+  privateBlock:
+    /<div[^>]*class="private-message"[^>]*data-bb-addressees="([^"]*)"[^>]*>([\s\S]*?)<\/div>/gi,
 } as const;
 
 /** Patterns for structural elements (Phase 4) */
@@ -1015,13 +1023,13 @@ function phase2_convertMarkedHtml(state: HtmlToBbcodeState): HtmlToBbcodeState {
     return `[img]${safeSrc}[/img]`;
   });
 
-  // Private - unescape character attribute to prevent entity accumulation on round-trip
-  bbcode = bbcode.replace(
-    HTML_TO_BB_MARKED.private,
-    (_, character, content) => {
-      return `[private=${unescapeHtml(character)}]${content}[/private]`;
-    },
-  );
+  // Private - unescape character attribute to prevent entity accumulation on
+  // round-trip. Two shapes, one rule: the span the editor emits and the div the
+  // server renders for the author's own view of a post.
+  const toPrivateTag = (_: string, character: string, content: string) =>
+    `[private=${unescapeHtml(character)}]${content}[/private]`;
+  bbcode = bbcode.replace(HTML_TO_BB_MARKED.private, toPrivateTag);
+  bbcode = bbcode.replace(HTML_TO_BB_MARKED.privateBlock, toPrivateTag);
   // Silently strip any stray legacy cut markers — see HTML_TO_BB_MARKED.cutLegacy note.
   bbcode = bbcode.replace(HTML_TO_BB_MARKED.cutLegacy, "");
 
@@ -1090,13 +1098,12 @@ function phase3_convertUnmarkedHtml(
 
   bbcode = bbcode.replace(HTML_TO_BB_UNMARKED.spoiler, "[spoiler]$1[/spoiler]");
   bbcode = bbcode.replace(HTML_TO_BB_UNMARKED.nsfw, "[nsfw]$1[/nsfw]");
-  // Unmarked private - unescape character name
-  bbcode = bbcode.replace(
-    HTML_TO_BB_UNMARKED.private,
-    (_, character, content) => {
-      return `[private=${unescapeHtml(character)}]${content}[/private]`;
-    },
-  );
+  // Unmarked private - unescape character name. Two shapes for one tag: the
+  // span older content carries and the div the server renders it as today.
+  const toPrivateTag = (_: string, character: string, content: string) =>
+    `[private=${unescapeHtml(character)}]${content}[/private]`;
+  bbcode = bbcode.replace(HTML_TO_BB_UNMARKED.private, toPrivateTag);
+  bbcode = bbcode.replace(HTML_TO_BB_UNMARKED.privateBlock, toPrivateTag);
 
   return { ...state, bbcode };
 }

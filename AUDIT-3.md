@@ -80,11 +80,11 @@
 Пересчитывается из строк индекса при каждом закрытии, руками не пишется: число,
 написанное отдельно от таблицы, расходится с ней на первой же партии.
 
-**Закрыто 9 из 357 (3%), открыто 348.**
+**Закрыто 10 из 357 (3%), открыто 347.**
 
 | Тяжесть | Всего | Закрыто | Осталось |
 |---|---|---|---|
-| КРИТИЧНО | 6 | 5 | 1 |
+| КРИТИЧНО | 6 | 6 | 0 |
 | ВАЖНО | 53 | 2 | 51 |
 | ЗАМЕТНО | 140 | 1 | 139 |
 | МЕЛОЧЬ | 158 | 1 | 157 |
@@ -98,7 +98,7 @@
 | docs | 24 | 0 | 24 |
 | api | 23 | 0 | 23 |
 | comments | 23 | 0 | 23 |
-| security | 22 | 3 | 19 |
+| security | 22 | 4 | 18 |
 | persistence | 21 | 0 | 21 |
 | auth | 21 | 0 | 21 |
 | frontend-arch | 19 | 2 | 17 |
@@ -492,7 +492,7 @@
 | ID | Тяжесть | Находка | Где | Статус | Чем закрыто |
 |---|---|---|---|---|---|
 | modules-01 | КРИТИЧНО | GET /v1/posts/{id} отдает пост из приватной комнаты кому угодно: PostRepository.Get(postId, userId) не применяет область доступа | `src/DM.Infrastructure.Persistence/Repositories/Game/PostRepository.cs:78-90` | Закрыто | Исправлено — PostRepository.Get(postId, userId) читает через Rooms с фильтром RoomAvailable(userId), как соседний постраничный метод. Гейт RepositoryScopeShould.UseTheReaderItAsksFor, проверен снятием исправления |
-| security-01 | КРИТИЧНО | Блок [private] уничтожается при правке поста автором: приватный текст становится виден всей комнате | `src/DM.Web.Client/src/widgets/game-post/GamePost.vue:438-441; src/DM.Web.Client/src/share…` | Открыто | |
+| security-01 | КРИТИЧНО | Блок [private] уничтожается при правке поста автором: приватный текст становится виден всей комнате | `src/DM.Web.Client/src/widgets/game-post/GamePost.vue:438-441; src/DM.Web.Client/src/share…` | Закрыто | Исправлено в трех местах, а дефект был в трех: пост не загружался в аудитории AuthorEdit (добавлен gameApi.getPostForEdit, GamePost подтягивает источник при открытии редактора); расширение Private разбирало только спаны, тогда как сервер рендерит блок дивом (добавлены div-формы и атрибут data-bb-addressees); путь сохранения htmlToBbcode тоже знал только спаны, поэтому в режиме BBCode блок терялся независимо от редактора. Тесты в bbcode.spec.ts на три формы, проверены снятием |
 | security-02 | КРИТИЧНО | Общий эндпоинт подписок обходит черный список игры | `src/DM.Domain.Personal/Features/Subscriptions/SubscriptionService.cs:54-82; src/DM.Web.AP…` | Закрыто | Исправлено — правило черного списка вынесено в GameSubscriptionGuard за контрактом ISubscriptionTargetGuard в ядре. Общий эндпоинт спрашивает охранника по типу цели, игровой сервис спрашивает того же: правило в одном месте, вторая дверь закрыта. Тесты SubscriptionServiceShould, проверены снятием проверки |
 | security-03 | КРИТИЧНО | Ассистент игры может удалить другого ассистента, хотя это право только мастера | `src/DM.Domain.Game/Features/Games/GameService.cs:736-739; src/DM.Domain.Game/Authorizatio…` | Закрыто | Исправлено — RemoveAssistantAsync спрашивает GameIntention.RemoveUser вместо Edit, как вторая ручка того же действия в GameInvitationService |
 | frontend-arch-01 | КРИТИЧНО | [AllowAnonymous] не работает: кастомный AuthenticationRequiredFilter его не читает, поэтому подтверждение смены почты и завершение смены имени требуют живой се… | `src/DM.Web.API/Shared/Authentication/AuthenticationRequiredAttribute.cs:25-42; src/DM.Web…` | Закрыто | Исправлено — AuthenticationRequiredFilter читает IAllowAnonymous из EndpointMetadata действия. Тесты AnonymousActionsShould на три случая, проверены снятием проверки: ссылка из письма открывается без сессии |
