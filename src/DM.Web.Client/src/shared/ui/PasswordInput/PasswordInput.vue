@@ -10,12 +10,19 @@
       @blur="$emit('blur', $event)"
       v-bind="$attrs"
     />
+    <!--
+      Reachable by keyboard, and the label names the action rather than both
+      halves of it. Out of the tab order the control existed for the mouse
+      alone, which is the one input method a person checking a typo-prone
+      password is least likely to be on; a label reading "показать/скрыть"
+      also left a screen reader unable to say which of the two a press does.
+    -->
     <button
       type="button"
       class="password-toggle"
+      :aria-label="visible ? 'Скрыть пароль' : 'Показать пароль'"
+      :aria-pressed="visible"
       @click="visible = !visible"
-      tabindex="-1"
-      aria-label="Показать/скрыть пароль"
     >
       <SvgIcon :name="visible ? 'eyeOpen' : 'eyeClosed'" />
     </button>
