@@ -24,7 +24,7 @@ internal class EmailChangeService : IEmailChangeService
     private readonly IEmailChangeMailSender _mailSender;
     private readonly IEmailChangeWarningMailSender _warningMailSender;
     private readonly IEventProducer _eventProducer;
-    private readonly ISecurityAuditService _auditService;
+    private readonly ISecurityAuditRepository _auditService;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly TokenConfiguration _tokenConfig;
 
@@ -37,7 +37,7 @@ internal class EmailChangeService : IEmailChangeService
         IEmailChangeMailSender mailSender,
         IEmailChangeWarningMailSender warningMailSender,
         IEventProducer eventProducer,
-        ISecurityAuditService auditService,
+        ISecurityAuditRepository auditService,
         IDateTimeProvider dateTimeProvider,
         IOptions<TokenConfiguration> tokenOptions)
     {

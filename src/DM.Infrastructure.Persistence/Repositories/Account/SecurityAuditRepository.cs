@@ -12,7 +12,7 @@ using DbEntry = DM.Infrastructure.Persistence.Entities.Account.SecurityAuditEntr
 namespace DM.Infrastructure.Persistence.Repositories.Account;
 
 /// <inheritdoc />
-internal class SecurityAuditRepository : ISecurityAuditService
+internal class SecurityAuditRepository : ISecurityAuditRepository
 {
     private readonly DmMongoClient _mongoClient;
     private readonly IGuidFactory _guidFactory;

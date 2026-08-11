@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using DM.Domain.Core.Identity;
 using DM.Domain.Account.Features.Security;
 using DomainSecurityEventType = DM.Domain.Account.Features.Security.SecurityEventType;
 using DM.Domain.Core.Enums;
@@ -11,36 +10,20 @@ namespace DM.Web.API.Features.Account.Security;
 /// <inheritdoc />
 internal class SecurityApiService : ISecurityApiService
 {
-    private readonly IIdentityProvider _identityProvider;
-    private readonly ISecurityAuditService _securityAuditService;
+    private readonly ISecurityJournalService _journal;
 
     /// <summary>
     /// Creates a new instance of SecurityApiService
     /// </summary>
-    public SecurityApiService(
-        IIdentityProvider identityProvider,
-        ISecurityAuditService securityAuditService)
+    public SecurityApiService(ISecurityJournalService journal)
     {
-        _identityProvider = identityProvider;
-        _securityAuditService = securityAuditService;
+        _journal = journal;
     }
 
     /// <inheritdoc />
     public async Task<IEnumerable<SecurityEvent>> GetSecurityLogs(SecurityLogType? type = null, int limit = 50)
     {
-        var currentUserId = _identityProvider.Current.User.UserId;
-
-        // The last arm is "no filter asked for" and nothing else: a word outside
-        // the vocabulary is refused by model binding, where the string form used
-        // to land here and answer with the whole journal.
-        IEnumerable<SecurityAuditEntry> events = type switch
-        {
-            SecurityLogType.Login => await _securityAuditService.GetLoginHistoryAsync(currentUserId, limit),
-            SecurityLogType.Password => await _securityAuditService.GetPasswordEventsAsync(currentUserId, limit),
-            SecurityLogType.Session => await _securityAuditService.GetSessionEventsAsync(currentUserId, limit),
-            _ => await _securityAuditService.GetRecentEventsAsync(currentUserId, limit)
-        };
-
+        var events = await _journal.GetOwnAsync(type, limit);
         return events.Select(MapToDto).ToList();
     }
 

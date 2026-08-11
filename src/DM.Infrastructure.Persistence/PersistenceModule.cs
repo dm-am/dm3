@@ -402,7 +402,7 @@ public class PersistenceModule : Module
             .InstancePerLifetimeScope();
 
         builder.RegisterType<SecurityAuditRepository>()
-            .As<ISecurityAuditService>()
+            .As<ISecurityAuditRepository>()
             .InstancePerLifetimeScope();
 
         // Shared repositories

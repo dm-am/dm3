@@ -30,12 +30,12 @@ public class SuspiciousLoginDetectorShould : UnitTestBase
     private const string NewAddress = "198.51.100.9";
 
     private readonly Guid _userId = Guid.NewGuid();
-    private readonly Mock<ISecurityAuditService> _auditService;
+    private readonly Mock<ISecurityAuditRepository> _auditService;
     private readonly SuspiciousLoginDetector _detector;
 
     public SuspiciousLoginDetectorShould()
     {
-        _auditService = Mock<ISecurityAuditService>();
+        _auditService = Mock<ISecurityAuditRepository>();
         _detector = new SuspiciousLoginDetector(_auditService.Object);
     }
 

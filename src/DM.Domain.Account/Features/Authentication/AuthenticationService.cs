@@ -24,7 +24,7 @@ internal class AuthenticationService : IAuthenticationService
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IIdentityProvider _identityProvider;
     private readonly ILoginAttemptTracker _loginAttemptTracker;
-    private readonly ISecurityAuditService _auditService;
+    private readonly ISecurityAuditRepository _auditService;
     private readonly IEventProducer _eventProducer;
     private readonly ILogger<AuthenticationService> _logger;
     private readonly AuthenticationConfiguration _config;
@@ -56,7 +56,7 @@ internal class AuthenticationService : IAuthenticationService
         IDateTimeProvider dateTimeProvider,
         IIdentityProvider identityProvider,
         ILoginAttemptTracker loginAttemptTracker,
-        ISecurityAuditService auditService,
+        ISecurityAuditRepository auditService,
         IEventProducer eventProducer,
         ILogger<AuthenticationService> logger,
         IOptions<AuthenticationConfiguration> authConfig)

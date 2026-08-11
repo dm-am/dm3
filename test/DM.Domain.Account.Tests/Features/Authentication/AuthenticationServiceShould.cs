@@ -29,7 +29,7 @@ public class AuthenticationServiceShould : UnitTestBase
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<ILoginAttemptTracker> _loginAttemptTracker;
-    private readonly Mock<ISecurityAuditService> _auditService;
+    private readonly Mock<ISecurityAuditRepository> _auditService;
     private readonly Mock<IEventProducer> _eventProducer;
     private readonly AuthenticationService _service;
 
@@ -42,7 +42,7 @@ public class AuthenticationServiceShould : UnitTestBase
         _dateTimeProvider = Mock<IDateTimeProvider>();
         _identityProvider = Mock<IIdentityProvider>();
         _loginAttemptTracker = Mock<ILoginAttemptTracker>();
-        _auditService = Mock<ISecurityAuditService>();
+        _auditService = Mock<ISecurityAuditRepository>();
         _eventProducer = Mock<IEventProducer>();
         var logger = Mock<ILogger<AuthenticationService>>();
         var config = Options.Create(new AuthenticationConfiguration

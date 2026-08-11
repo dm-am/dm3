@@ -18,7 +18,7 @@ internal class WebAuthenticationService : IWebAuthenticationService
     private readonly IIdentitySetter identitySetter;
     private readonly ISuspiciousLoginDetector suspiciousLoginDetector;
     private readonly ISuspiciousLoginNotificationSender suspiciousLoginNotificationSender;
-    private readonly ISecurityAuditService securityAuditService;
+    private readonly ISecurityAuditRepository securityAuditRepository;
     private readonly ILogger<WebAuthenticationService> logger;
 
     /// <inheritdoc />
@@ -28,7 +28,7 @@ internal class WebAuthenticationService : IWebAuthenticationService
         IIdentitySetter identitySetter,
         ISuspiciousLoginDetector suspiciousLoginDetector,
         ISuspiciousLoginNotificationSender suspiciousLoginNotificationSender,
-        ISecurityAuditService securityAuditService,
+        ISecurityAuditRepository securityAuditRepository,
         ILogger<WebAuthenticationService> logger)
     {
         this.authenticationService = authenticationService;
@@ -36,7 +36,7 @@ internal class WebAuthenticationService : IWebAuthenticationService
         this.identitySetter = identitySetter;
         this.suspiciousLoginDetector = suspiciousLoginDetector;
         this.suspiciousLoginNotificationSender = suspiciousLoginNotificationSender;
-        this.securityAuditService = securityAuditService;
+        this.securityAuditRepository = securityAuditRepository;
         this.logger = logger;
     }
 
@@ -85,7 +85,7 @@ internal class WebAuthenticationService : IWebAuthenticationService
                 // is what the owner of the account reads afterwards.
                 if (isSuspicious)
                 {
-                    await securityAuditService.LogAsync(identity.User.UserId, SecurityEventType.SuspiciousLogin,
+                    await securityAuditRepository.LogAsync(identity.User.UserId, SecurityEventType.SuspiciousLogin,
                         sessionContext?.IpAddress, sessionContext?.UserAgent);
                 }
 

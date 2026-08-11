@@ -5,9 +5,15 @@ using System.Threading.Tasks;
 namespace DM.Domain.Account.Features.Security;
 
 /// <summary>
-/// Service for logging and retrieving security audit events
+/// Storage of security audit events: one write and five reads, no rules
 /// </summary>
-public interface ISecurityAuditService
+/// <remarks>
+/// Named for what it is. Under its former name the boundary rule, which matches
+/// on the shape of a dependency, could not tell it from a domain service, and an
+/// API service held it directly for that reason alone. What a caller of the
+/// journal actually wants is <see cref="ISecurityJournalService" />.
+/// </remarks>
+public interface ISecurityAuditRepository
 {
     /// <summary>
     /// Log a security event

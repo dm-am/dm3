@@ -8,9 +8,9 @@ namespace DM.Domain.Account.Features.Authentication;
 /// <inheritdoc />
 internal class SuspiciousLoginDetector : ISuspiciousLoginDetector
 {
-    private readonly ISecurityAuditService _auditService;
+    private readonly ISecurityAuditRepository _auditService;
 
-    public SuspiciousLoginDetector(ISecurityAuditService auditService)
+    public SuspiciousLoginDetector(ISecurityAuditRepository auditService)
     {
         _auditService = auditService;
     }
