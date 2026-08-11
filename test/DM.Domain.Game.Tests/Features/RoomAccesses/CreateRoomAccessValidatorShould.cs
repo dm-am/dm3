@@ -41,7 +41,7 @@ public class CreateRoomAccessValidatorShould : UnitTestBase
     public async Task PassForValidReaderAccess()
     {
         userLookupServiceMock
-            .Setup(s => s.UserExistsAsync("reader", It.IsAny<CancellationToken>()))
+            .Setup(s => s.UsernameExistsAsync("reader", It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         var input = new CreateRoomAccess
@@ -89,7 +89,7 @@ public class CreateRoomAccessValidatorShould : UnitTestBase
     public async Task FailWhenReaderUsernameDoesNotExist()
     {
         userLookupServiceMock
-            .Setup(s => s.UserExistsAsync("nonexistent", It.IsAny<CancellationToken>()))
+            .Setup(s => s.UsernameExistsAsync("nonexistent", It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
         var input = new CreateRoomAccess
@@ -114,7 +114,7 @@ public class CreateRoomAccessValidatorShould : UnitTestBase
     public async Task PassForAReaderGrantedWriting()
     {
         userLookupServiceMock
-            .Setup(s => s.UserExistsAsync("reader", It.IsAny<CancellationToken>()))
+            .Setup(s => s.UsernameExistsAsync("reader", It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         var input = new CreateRoomAccess

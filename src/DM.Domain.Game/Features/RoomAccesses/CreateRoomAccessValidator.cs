@@ -28,6 +28,6 @@ internal class CreateRoomAccessValidator : AbstractValidator<CreateRoomAccess>
         When(c => !string.IsNullOrEmpty(c.ReaderUsername), () =>
             RuleFor(c => c.ReaderUsername)
                 .NotEmpty().WithMessage(ValidationError.Empty)
-                .MustAsync(userLookupService.UserExistsAsync).WithMessage(ValidationError.Invalid));
+                .MustAsync(userLookupService.UsernameExistsAsync).WithMessage(ValidationError.Invalid));
     }
 }

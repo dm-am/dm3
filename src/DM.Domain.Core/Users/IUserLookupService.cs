@@ -40,14 +40,6 @@ public interface IUserLookupService
     Task<bool> UsernameExistsAsync(string username, CancellationToken ct = default);
 
     /// <summary>
-    /// Check if user exists by username (alias for UsernameExists, for validator compatibility)
-    /// </summary>
-    /// <param name="username">Username to check</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>True if user exists</returns>
-    Task<bool> UserExistsAsync(string username, CancellationToken ct = default);
-
-    /// <summary>
     /// Find user ID by username (for game/blog resolvers)
     /// </summary>
     /// <param name="username">Username to find</param>

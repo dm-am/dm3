@@ -17,6 +17,6 @@ internal class CreatePostPendencyValidator : AbstractValidator<CreatePostPendenc
             .NotEmpty().WithMessage(ValidationError.Empty);
         RuleFor(e => e.WaitingForUsername)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MustAsync(userLookupService.UserExistsAsync).WithMessage(ValidationError.Invalid);
+            .MustAsync(userLookupService.UsernameExistsAsync).WithMessage(ValidationError.Invalid);
     }
 }

@@ -26,7 +26,7 @@ public class OperateBlacklistLinkValidatorShould : UnitTestBase
     public async Task PassForValidInput()
     {
         userLookupServiceMock
-            .Setup(s => s.UserExistsAsync("existinguser", It.IsAny<CancellationToken>()))
+            .Setup(s => s.UsernameExistsAsync("existinguser", It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         var input = new OperateBlacklistLink
@@ -84,7 +84,7 @@ public class OperateBlacklistLinkValidatorShould : UnitTestBase
     public async Task FailWhenUserDoesNotExist()
     {
         userLookupServiceMock
-            .Setup(s => s.UserExistsAsync("nonexistentuser", It.IsAny<CancellationToken>()))
+            .Setup(s => s.UsernameExistsAsync("nonexistentuser", It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
         var input = new OperateBlacklistLink

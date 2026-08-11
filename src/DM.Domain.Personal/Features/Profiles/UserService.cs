@@ -285,10 +285,6 @@ internal class UserService : IUserService
         await _repository.FindUserIdAsync(username) != null;
 
     /// <inheritdoc />
-    public Task<bool> UserExistsAsync(string username, CancellationToken ct = default) =>
-        UsernameExistsAsync(username, ct);
-
-    /// <inheritdoc />
     public async Task<(bool Found, Guid UserId)> FindUserIdAsync(string username, CancellationToken ct = default)
     {
         var userId = await _repository.FindUserIdAsync(username);
