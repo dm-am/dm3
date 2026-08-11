@@ -5,6 +5,7 @@ import { useSessionExit } from "@/features/auth";
 import { useMessagingStore } from "@/entities/message";
 import { useNotificationStore } from "@/entities/notification";
 import { useUiStore } from "@/shared/stores/ui";
+import { visibleMainNavSections } from "@/shared/config/mainNavigation";
 import { storeToRefs } from "pinia";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { SvgIcon } from "@/shared/ui/Icon";
@@ -23,6 +24,9 @@ const { unreadCount: unreadNotificationsCount } =
   storeToRefs(notificationStore);
 
 const isModerator = computed(() => userIsModerator(user.value));
+const mainNavSections = computed(() =>
+  visibleMainNavSections(isModerator.value),
+);
 
 const hasUnread = computed(() => totalUnreadCount.value > 0);
 const hasUnreadNotifications = computed(
@@ -202,26 +206,12 @@ async function handleSignOutAll() {
       </div>
     </div>
     <nav class="top-menu" aria-label="Основные разделы">
-      <router-link class="link" :to="{ name: 'about' }">О проекте</router-link>
-      <router-link class="link" :to="{ name: 'rules' }">Правила</router-link>
-      <router-link class="link" :to="{ name: 'games' }">Игры</router-link>
-      <router-link class="link" :to="{ name: 'blogs' }">Блоги</router-link>
-      <router-link class="link" :to="{ name: 'community' }"
-        >Сообщество</router-link
-      >
-      <router-link class="link" :to="{ name: 'forum-index' }"
-        >Форум</router-link
-      >
-      <router-link class="link" :to="{ name: 'global-chat' }">Чат</router-link>
-      <!-- Always visible to everyone (owner rule) — the newbies board is the
-           site's front door for prospective players, not a newbie-only tool. -->
       <router-link
+        v-for="section in mainNavSections"
+        :key="section.key"
         class="link"
-        :to="{ name: 'forum', params: { alias: 'newbies' } }"
-        >Для новичков</router-link
-      >
-      <router-link v-if="isModerator" class="link" :to="{ name: 'moderation' }"
-        >Модерация</router-link
+        :to="section.to"
+        >{{ section.title }}</router-link
       >
     </nav>
     <div class="stats-col">

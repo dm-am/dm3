@@ -218,3 +218,60 @@ describe("the shared UI kit", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * A globally registered component is usable in any template without an import,
+ * and that is an edge neither gate can see: `boundaries/dependencies` has no
+ * import to refuse, and `vue/no-undef-components` skips the name outright,
+ * because its whitelist is read out of the registration itself.
+ * `entities/testimonial` rendered `<user-link>` from `entities/user` through
+ * exactly that gap — a same-layer dependency with no `@x` door, both gates
+ * green.
+ *
+ * Only `shared` may be registered globally: it sits below every layer, so a
+ * hidden edge to it is one the rules would have allowed had it been written as
+ * an import, while a component of a sliced layer turns global registration into
+ * a way around the door. Asserted at the registration and not over every
+ * template, because that file is the only place a global can be created.
+ */
+describe("global component registration", () => {
+  /** Local binding -> module it came from, `import type` aside. */
+  function importOrigins(code: string): Map<string, string> {
+    const origins = new Map<string, string>();
+    for (const [, clause, from] of code.matchAll(
+      /^import\s+(?!type\s)([^;]+?)\s+from\s+"([^"]+)";/gm,
+    )) {
+      for (const part of clause.replace(/[{}]/g, " ").split(",")) {
+        const local = part
+          .trim()
+          .split(/\s+as\s+/)
+          .pop();
+        if (local) origins.set(local, from);
+      }
+    }
+    return origins;
+  }
+
+  it("registers primitives of shared and nothing else", () => {
+    const source = readFileSync(
+      join(CLIENT_ROOT, "src/app/providers/components.ts"),
+      "utf8",
+    );
+    const origins = importOrigins(source);
+    const registered = [
+      ...source.matchAll(/\.component\(\s*"([^"]+)"\s*,\s*([\w$]+)\s*\)/g),
+    ].map(([, name, local]) => [name, origins.get(local) ?? "?"] as const);
+
+    expect(
+      registered.length,
+      "no registration call was found: this check and the whitelist .eslintrc.cjs derives from the same file would both be reading nothing",
+    ).toBeGreaterThan(0);
+
+    expect(
+      registered
+        .filter(([, from]) => !from.startsWith("@/shared/"))
+        .map(([name, from]) => `${name} <- ${from}`),
+      "a global component of a sliced layer is a same-layer import no linter can refuse: open an @x door for the consumer and import it there",
+    ).toEqual([]);
+  });
+});

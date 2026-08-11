@@ -78,45 +78,9 @@
 
       <nav class="drawer-nav" aria-label="Основные разделы">
         <ul class="drawer-nav-list">
-          <li>
+          <li v-for="section in mainNavSections" :key="section.key">
             <span class="muted" aria-hidden="true">- </span
-            ><router-link :to="{ name: 'about' }">О проекте</router-link>
-          </li>
-          <li>
-            <span class="muted" aria-hidden="true">- </span
-            ><router-link :to="{ name: 'rules' }">Правила</router-link>
-          </li>
-          <li>
-            <span class="muted" aria-hidden="true">- </span
-            ><router-link :to="{ name: 'games' }">Игры</router-link>
-          </li>
-          <li>
-            <span class="muted" aria-hidden="true">- </span
-            ><router-link :to="{ name: 'blogs' }">Блоги</router-link>
-          </li>
-          <li>
-            <span class="muted" aria-hidden="true">- </span
-            ><router-link :to="{ name: 'community' }">Сообщество</router-link>
-          </li>
-          <li>
-            <span class="muted" aria-hidden="true">- </span
-            ><router-link :to="{ name: 'forum-index' }">Форум</router-link>
-          </li>
-          <li>
-            <span class="muted" aria-hidden="true">- </span
-            ><router-link :to="{ name: 'global-chat' }">Чат</router-link>
-          </li>
-          <!-- Always visible to everyone (owner rule) — mirrors the desktop
-               top menu. -->
-          <li>
-            <span class="muted" aria-hidden="true">- </span
-            ><router-link :to="{ name: 'forum', params: { alias: 'newbies' } }"
-              >Для новичков</router-link
-            >
-          </li>
-          <li v-if="isModerator">
-            <span class="muted" aria-hidden="true">- </span
-            ><router-link :to="{ name: 'moderation' }">Модерация</router-link>
+            ><router-link :to="section.to">{{ section.title }}</router-link>
           </li>
         </ul>
       </nav>
@@ -135,6 +99,7 @@ import { useSessionExit } from "@/features/auth";
 import { useMessagingStore } from "@/entities/message";
 import { useNotificationStore } from "@/entities/notification";
 import { setScrollContainer } from "@/shared/lib/scroll";
+import { visibleMainNavSections } from "@/shared/config/mainNavigation";
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { ModalsContainer } from "vue-final-modal";
@@ -159,6 +124,9 @@ const route = useRoute();
 const { signOut, signOutAll } = useSessionExit();
 
 const isModerator = computed(() => userIsModerator(userStore.user));
+const mainNavSections = computed(() =>
+  visibleMainNavSections(isModerator.value),
+);
 
 // Close the drawer on every navigation (path change) — reopening it after
 // following a link would be surprising, and a stale-open drawer would keep
