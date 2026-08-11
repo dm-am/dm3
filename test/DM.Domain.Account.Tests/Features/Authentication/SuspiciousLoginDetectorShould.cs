@@ -63,17 +63,50 @@ public class SuspiciousLoginDetectorShould : UnitTestBase
         suspicious.Should().BeFalse();
     }
 
+    /// <summary>
+    /// A failed attempt is not proof the address is the owner's.
+    /// </summary>
+    /// <remarks>
+    /// The detector asks for successes and nothing else, so the guessing never
+    /// reaches it: what is asserted here is that the address the guesses came
+    /// from is still unknown when a login finally succeeds from it.
+    /// </remarks>
     [Fact]
     public async Task NotTakeAFailedAttemptAsProofTheAddressIsTheOwners()
     {
         Trail(
             Entry(SecurityEventType.LoginSuccess, NewAddress),
-            Entry(SecurityEventType.LoginFailure, NewAddress),
             Entry(SecurityEventType.LoginSuccess, KnownAddress));
 
         var suspicious = await _detector.IsSuspiciousAsync(_userId, NewAddress, "agent");
 
         suspicious.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// A run of wrong passwords does not erase where the owner logs in from.
+    /// </summary>
+    /// <remarks>
+    /// This is the sequence the detector exists for — guess, guess, guess, then
+    /// succeed — and it was the one it could not see. The window was twenty
+    /// entries of any kind, filtered to successes afterwards, so nineteen
+    /// failures pushed every previous success out of it and the login that
+    /// followed met an empty history and was called ordinary.
+    /// </remarks>
+    [Fact]
+    public async Task StillKnowTheOwnersAddressAfterALongRunOfFailedAttempts()
+    {
+        // What the repository returns when it is asked for successes: the run of
+        // failures in between is filtered by the query, not by the caller.
+        Trail(
+            Entry(SecurityEventType.LoginSuccess, NewAddress),
+            Entry(SecurityEventType.LoginSuccess, KnownAddress));
+
+        var suspicious = await _detector.IsSuspiciousAsync(_userId, NewAddress, "agent");
+
+        suspicious.Should().BeTrue("the guessing did not make the new address the owner's");
+        _auditService.Verify(s => s.GetLoginHistoryAsync(It.IsAny<Guid>(), It.IsAny<int>()), Times.Never,
+            "the mixed trail spends the window on entries this cannot use");
     }
 
     [Fact]
@@ -88,7 +121,7 @@ public class SuspiciousLoginDetectorShould : UnitTestBase
 
     /// <param name="newestFirst">The trail as the repository returns it</param>
     private void Trail(params SecurityAuditEntry[] newestFirst) =>
-        _auditService.Setup(s => s.GetLoginHistoryAsync(_userId, It.IsAny<int>()))
+        _auditService.Setup(s => s.GetSuccessfulLoginsAsync(_userId, It.IsAny<int>()))
             .ReturnsAsync(newestFirst);
 
     private static SecurityAuditEntry Entry(SecurityEventType type, string address) =>

@@ -11,8 +11,7 @@ internal interface ISessionFactory
     /// Creates a session DTO to be stored in DB
     /// </summary>
     /// <param name="persistent">Persistence flag</param>
-    /// <param name="invisible">Invisibility flag</param>
     /// <param name="context">Session context with device info</param>
     /// <returns>Session DTO</returns>
-    CreateSession Create(bool persistent, bool invisible, SessionContext? context = null);
+    CreateSession Create(bool persistent, SessionContext? context = null);
 }

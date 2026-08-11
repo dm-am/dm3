@@ -203,7 +203,7 @@ public class AuthenticationServiceShould : UnitTestBase
         _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
         _securityManager.Setup(s => s.ComparePasswords("password", user.Salt, user.PasswordHash))
             .Returns(true);
-        _sessionFactory.Setup(f => f.Create(true, false, null)).Returns(createSession);
+        _sessionFactory.Setup(f => f.Create(true, null)).Returns(createSession);
         _repository.Setup(r => r.FindUserSettings(userId)).ReturnsAsync(settings);
         _repository.Setup(r => r.AddSession(userId, createSession)).ReturnsAsync(session);
         _cryptoService.Setup(c => c.Encrypt(It.IsAny<string>())).ReturnsAsync("encrypted-token");
@@ -328,7 +328,7 @@ public class AuthenticationServiceShould : UnitTestBase
         // the seed writes, and the refusal has to hold without them
         _securityManager.Setup(s => s.ComparePasswords("password", user.Salt, user.PasswordHash))
             .Returns(true);
-        _sessionFactory.Setup(f => f.Create(true, false, null))
+        _sessionFactory.Setup(f => f.Create(true, null))
             .Returns(new CreateSession { Id = Guid.NewGuid() });
         _repository.Setup(r => r.FindUserSettings(user.UserId)).ReturnsAsync(UserSettings.Default);
         _repository.Setup(r => r.AddSession(user.UserId, It.IsAny<CreateSession>()))

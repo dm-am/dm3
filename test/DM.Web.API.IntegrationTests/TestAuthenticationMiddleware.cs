@@ -78,7 +78,6 @@ public class TestAuthenticationMiddleware
             {
                 Id = Guid.NewGuid(),
                 Persistent = false,
-                Invisible = false,
                 ExpirationUtc = DateTimeOffset.UtcNow.AddHours(2)
             };
 

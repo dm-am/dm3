@@ -47,7 +47,7 @@ internal class WebAuthenticationService : IWebAuthenticationService
             ExtractSessionContext(httpContext)),
         TokenCredentials tokenCredentials => await authenticationService.Authenticate(tokenCredentials.Token),
         UnconditionalCredentials unconditionalCredentials => await authenticationService.Authenticate(
-            unconditionalCredentials.UserId),
+            unconditionalCredentials.UserId, ExtractSessionContext(httpContext)),
         _ => Identity.Guest()
     };
 
@@ -70,7 +70,7 @@ internal class WebAuthenticationService : IWebAuthenticationService
         await TryLoadAuthenticationResult(httpContext, identity);
 
         // Suspicious login detection for successful logins
-        if (identity.User.IsAuthenticated && credentials is LoginCredentials)
+        if (identity.User.IsAuthenticated && credentials is LoginCredentials or UnconditionalCredentials)
         {
             var sessionContext = ExtractSessionContext(httpContext);
             try

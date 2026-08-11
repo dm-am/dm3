@@ -44,11 +44,6 @@ public class Session
     public bool Persistent { get; set; }
 
     /// <summary>
-    /// Flag of invisible log in
-    /// </summary>
-    public bool Invisible { get; set; }
-
-    /// <summary>
     /// Session creation time (UTC)
     /// </summary>
     [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]

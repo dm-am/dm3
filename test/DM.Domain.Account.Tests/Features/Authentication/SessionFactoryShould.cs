@@ -42,12 +42,11 @@ public class SessionFactoryShould : UnitTestBase
         _guidFactory.Setup(f => f.Create()).Returns(sessionId);
         _dateTimeProvider.Setup(d => d.Now).Returns(now);
 
-        var result = _factory.Create(persistent: false, invisible: false);
+        var result = _factory.Create(persistent: false);
 
         result.Should().NotBeNull();
         result.Id.Should().Be(sessionId);
         result.Persistent.Should().BeFalse();
-        result.Invisible.Should().BeFalse();
         result.CreatedUtc.Should().Be(now.UtcDateTime);
         result.ExpirationUtc.Should().Be(now.UtcDateTime.AddHours(_config.SessionExpirationHours));
     }
@@ -60,26 +59,13 @@ public class SessionFactoryShould : UnitTestBase
         _guidFactory.Setup(f => f.Create()).Returns(sessionId);
         _dateTimeProvider.Setup(d => d.Now).Returns(now);
 
-        var result = _factory.Create(persistent: true, invisible: false);
+        var result = _factory.Create(persistent: true);
 
         result.Should().NotBeNull();
         result.Id.Should().Be(sessionId);
         result.Persistent.Should().BeTrue();
         result.CreatedUtc.Should().Be(now.UtcDateTime);
         result.ExpirationUtc.Should().Be(now.UtcDateTime.AddDays(_config.PersistentSessionExpirationDays));
-    }
-
-    [Fact]
-    public void CreateInvisibleSession()
-    {
-        var sessionId = Guid.NewGuid();
-        _guidFactory.Setup(f => f.Create()).Returns(sessionId);
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
-
-        var result = _factory.Create(persistent: false, invisible: true);
-
-        result.Should().NotBeNull();
-        result.Invisible.Should().BeTrue();
     }
 
     [Fact]
@@ -94,7 +80,7 @@ public class SessionFactoryShould : UnitTestBase
         _guidFactory.Setup(f => f.Create()).Returns(sessionId);
         _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
 
-        var result = _factory.Create(persistent: false, invisible: false, context);
+        var result = _factory.Create(persistent: false, context);
 
         result.Should().NotBeNull();
         result.IpAddress.Should().Be(context.IpAddress);

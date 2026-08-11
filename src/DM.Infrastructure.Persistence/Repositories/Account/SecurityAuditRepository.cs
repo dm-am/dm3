@@ -97,6 +97,24 @@ internal class SecurityAuditRepository : ISecurityAuditService
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<SecurityAuditEntry>> GetSuccessfulLoginsAsync(Guid userId, int limit = 20)
+    {
+        var collection = _mongoClient.GetCollection<DbEntry>();
+
+        var filter = Builders<DbEntry>.Filter.And(
+            Builders<DbEntry>.Filter.Eq(e => e.UserId, userId),
+            Builders<DbEntry>.Filter.Eq(e => e.EventType, (int)SecurityEventType.LoginSuccess));
+
+        var entries = await collection
+            .Find(filter)
+            .SortByDescending(e => e.TimestampUtc)
+            .Limit(limit)
+            .ToListAsync();
+
+        return entries.Select(ToDto).ToList();
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<SecurityAuditEntry>> GetPasswordEventsAsync(Guid userId, int limit = 20)
     {
         var collection = _mongoClient.GetCollection<DbEntry>();

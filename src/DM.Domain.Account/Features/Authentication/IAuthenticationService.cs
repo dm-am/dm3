@@ -30,9 +30,15 @@ public interface IAuthenticationService
     /// <summary>
     /// Authenticate unconditionally
     /// </summary>
+    /// <remarks>
+    /// A session without a password, and an ordinary one otherwise: it is written
+    /// into the security journal and the device list like any login, because the
+    /// person whose account it is has to be able to see it.
+    /// </remarks>
     /// <param name="userId">User identifier</param>
+    /// <param name="context">Address and agent the session is opened from</param>
     /// <returns>Authentication identity</returns>
-    Task<IIdentity> Authenticate(Guid userId);
+    Task<IIdentity> Authenticate(Guid userId, SessionContext? context = null);
 
     /// <summary>
     /// Logout as a current user

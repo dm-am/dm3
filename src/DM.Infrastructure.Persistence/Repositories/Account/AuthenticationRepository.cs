@@ -130,7 +130,6 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
             Id = session.Id,
             ExpirationUtc = session.ExpirationUtc,
             Persistent = session.Persistent,
-            Invisible = session.Invisible,
             CreatedUtc = session.CreatedUtc,
             IpAddress = session.IpAddress,
             UserAgent = session.UserAgent,
