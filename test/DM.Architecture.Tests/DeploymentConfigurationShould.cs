@@ -376,6 +376,69 @@ public class DeploymentConfigurationShould
     }
 
     /// <summary>
+    /// The point of presence gets its own environment template, and it holds no
+    /// real credential.
+    /// </summary>
+    /// <remarks>
+    /// Both guides told the operator to copy .env.example, which carries the
+    /// repository's Postgres, Mongo, MinIO, RabbitMQ and Grafana passwords — onto
+    /// a machine in another jurisdiction that runs no application code and
+    /// connects to no store. The same command then stopped on interpolation
+    /// anyway, demanding the session encryption key, which is the one thing the
+    /// whole scheme exists to keep off that machine.
+    ///
+    /// The five placeholders the template does carry are required by the base
+    /// compose file, whose environment anchor is resolved when the file is read
+    /// rather than when a service starts. Nothing the point of presence brings up
+    /// reads them, and they are spelled so that a real value could never be
+    /// mistaken for one of them.
+    /// </remarks>
+    [Fact]
+    public void GiveThePointOfPresenceATemplateWithNoRealSecretInIt()
+    {
+        var template = Path.Combine(DockerDirectory, ".env.mirror.example");
+        File.Exists(template).Should().BeTrue(
+            "the guides copy this file, and without it they name the one that holds every password");
+
+        var content = File.ReadAllText(template);
+        var example = File.ReadAllText(Path.Combine(DockerDirectory, ".env.example"));
+
+        foreach (var secret in new[]
+                 {
+                     "POSTGRES_PASSWORD", "RABBITMQ_DEFAULT_PASS", "MINIO_ROOT_PASSWORD",
+                     "GF_SECURITY_ADMIN_PASSWORD", "IMGPROXY_KEY", "IMGPROXY_SALT",
+                 })
+        {
+            content.Should().NotContain($"{secret}=",
+                $"{secret} belongs to the main server and has no use on a point of presence");
+        }
+
+        foreach (var required in new[]
+                 {
+                     "DM_CryptoConfiguration__KeyBase64", "MONGO_ROOT_PASSWORD", "MONGO_PASSWORD",
+                     "MINIO_APP_PASSWORD", "MINIO_IMGPROXY_PASSWORD",
+                 })
+        {
+            var line = content.Split('\n').FirstOrDefault(l => l.StartsWith($"{required}=", StringComparison.Ordinal));
+            line.Should().NotBeNull(
+                $"{required} is declared through ${{...:?}} in the base file, so compose stops without it");
+            line.Should().Contain("not-used-on-a-point-of-presence",
+                "a placeholder has to be unmistakable: a real-looking value here would be " +
+                "carried onto that machine and read as working");
+
+            var real = example.Split('\n').FirstOrDefault(l => l.StartsWith($"{required}=", StringComparison.Ordinal));
+            line.Should().NotBe(real, $"{required} must not be the value the repository publishes");
+        }
+
+        foreach (var guide in new[] { "MIRRORING.md", "DEPLOYMENT.md" })
+        {
+            var text = File.ReadAllText(Path.Combine(RepositoryRoot, "docs", "guides", guide));
+            text.Should().NotContain("cp .env.example .env.mirror",
+                $"{guide} would put every password of the installation on the point of presence");
+        }
+    }
+
+    /// <summary>
     /// The scoped accounts have to exist before the first upload, and only root
     /// can create them — which is the whole of what root is still for.
     /// </summary>
