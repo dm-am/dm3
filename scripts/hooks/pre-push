@@ -21,6 +21,8 @@
 #   deployment-smoke  -  поднимает деплойную пару целиком: docker и минуты
 #   publish           -  пишет образы в реестр по секретам GitHub
 #   publish-frontend  -  то же
+#   security          -  вызов security.yml из графа сборки; сам ничего не
+#                        считает, ждет двух джоб ниже
 #   codeql            -  анализ выполняется на стороне GitHub
 #   zap-scan          -  сканирует поднятый стенд: docker и минуты
 #

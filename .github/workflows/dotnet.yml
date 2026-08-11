@@ -287,8 +287,17 @@ jobs:
     - name: npm audit (production dependencies)
       run: cd src/DM.Web.Client && npm ci && npm audit --omit=dev --audit-level=high
 
+  # CodeQL and the ZAP scan, pulled into this graph so that publishing can wait
+  # for them. They used to live in a workflow of their own, triggered by the same
+  # push and reachable from no `needs` at all.
+  security:
+    uses: ./.github/workflows/security.yml
+    permissions:
+      contents: read
+      security-events: write
+
   publish:
-    needs: [build, frontend, e2e, dependency-scan]
+    needs: [build, frontend, e2e, dependency-scan, compose-topology, deployment-smoke, security]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
     permissions:
@@ -349,7 +358,7 @@ jobs:
   # SPA image was never built by CI at all: the only thing that referenced it was
   # a compose service pointing at a directory that does not exist.
   publish-frontend:
-    needs: [build, frontend, e2e, dependency-scan]
+    needs: [build, frontend, e2e, dependency-scan, compose-topology, deployment-smoke, security]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
     permissions:

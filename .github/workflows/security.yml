@@ -1,10 +1,14 @@
 name: Security Scanning
 
 on:
-  push:
-    branches: [main, dev]
-  pull_request:
-    branches: [main, dev]
+  # Called from the build workflow rather than triggered beside it, so that the
+  # jobs which publish images can name these in `needs`. Triggered separately,
+  # they ran on the same push and finished whenever they finished: an image with
+  # a red CodeQL or a red ZAP reached the registry, took the `latest` tag on
+  # main, and watchtower installed it within five minutes.
+  workflow_call:
+  # The weekly full scan stands on its own: it is about the code as it sits, not
+  # about a change, and there is no build to gate.
   schedule:
     - cron: '0 3 * * 0'
 
