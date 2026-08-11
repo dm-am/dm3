@@ -80,21 +80,21 @@
 Пересчитывается из строк индекса при каждом закрытии, руками не пишется: число,
 написанное отдельно от таблицы, расходится с ней на первой же партии.
 
-**Закрыто 241 из 357 (68%), открыто 116.**
+**Закрыто 242 из 357 (68%), открыто 115.**
 
 | Тяжесть | Всего | Закрыто | Осталось |
 |---|---|---|---|
 | КРИТИЧНО | 6 | 6 | 0 |
 | ВАЖНО | 53 | 51 | 2 |
 | ЗАМЕТНО | 140 | 73 | 67 |
-| МЕЛОЧЬ | 158 | 111 | 47 |
+| МЕЛОЧЬ | 158 | 112 | 46 |
 
 | Срез | Всего | Закрыто | Осталось |
 |---|---|---|---|
 | meta | 29 | 28 | 1 |
 | cicd | 25 | 10 | 15 |
 | modules | 24 | 19 | 5 |
-| authz | 24 | 7 | 17 |
+| authz | 24 | 8 | 16 |
 | docs | 24 | 23 | 1 |
 | api | 23 | 19 | 4 |
 | comments | 23 | 21 | 2 |
@@ -723,7 +723,7 @@
 | authz-13 | МЕЛОЧЬ | Два адреса подтверждены (5 потребителей через барррель entity, 4 через shared), принцип нарушает соседний файл того же слайса; при этом формального теста, кото… _(уточнено)_ | `src/DM.Web.Client/src/entities/user/ui/index.ts:7-9; src/entities/user/@x/game.ts:1-9; sr…` | Открыто | |
 | authz-14 | МЕЛОЧЬ | shared/lib/composables адресуется двумя способами — то, что fsdBoundaries.spec.ts объявляет недопустимым для shared/ui _(уточнено)_ | `src/DM.Web.Client/src/shared/lib/composables/index.ts; src/fsdBoundaries.spec.ts:196-209` | Открыто | |
 | authz-15 | МЕЛОЧЬ | Барррели слайсов содержат мертвые экспорты; в widgets/sidebar 27 имен, используются 3 _(уточнено)_ | `src/DM.Web.Client/src/widgets/sidebar/index.ts (30 экспортов); src/features/moderation-ac…` | Открыто | |
-| authz-16 | МЕЛОЧЬ | Четыре под-барrreля не импортируются ниоткуда, два разошлись с корневым барррелем слайса | `src/DM.Web.Client/src/entities/game/model/index.ts; src/features/comment-filter/model/ind…` | Открыто | |
+| authz-16 | МЕЛОЧЬ | Четыре под-барrreля не импортируются ниоткуда, два разошлись с корневым барррелем слайса | `src/DM.Web.Client/src/entities/game/model/index.ts; src/features/comment-filter/model/ind…` | Закрыто | Исправлено — четыре под-барреля удалены: entities/game/model/index.ts, features/comment-filter/model/index.ts, features/blog-filter/ui/index.ts и features/user-filter/ui/index.ts. Проверено, что в них не резолвится ни один спецификатор дерева — баррели слайсов адресуют внутренние модули напрямую, так что второй перечень публичных символов той же папки никогда не исполнялся и уже разошелся с первым в comment-filter. Второй вариант правки (ввести правило "баррель слайса собирается только из под-баррелей") не взят: его пришлось бы применять ко всем слайсам, а не к четырем |
 | authz-17 | МЕЛОЧЬ | Дефолты страничности заданы в трех местах и расходятся (бэкенд 10, usePaging 20, форма 50); пользователь этого не увидит, потому что бэкенд всегда персистит pa… _(уточнено)_ | `src/DM.Web.Client/src/pages/account/sections/AccountSettingsSection.vue:116-124,131-141; …` | Открыто | |
 | authz-18 | МЕЛОЧЬ | Мотивировка backwards compatibility в проекте без релизов прикрывает мертвый код и циклический реэкспорт | `src/DM.Web.Client/src/entities/message/model/store.ts:92-101,422; src/shared/api/models/c…` | Открыто | |
 | authz-19 | МЕЛОЧЬ | useProfileSubpageUser отдает шесть значений, до четырех невозможно добраться | `src/DM.Web.Client/src/pages/profile/useProfileSubpageUser.ts:19-28,74-81; src/pages/profi…` | Закрыто | Исправлено — useProfileSubpageUser отдает только то, до чего можно добраться: notFound и canonicalUsername. Недостижимые user, loading, error и retry убраны вместе с состоянием, которое их питало, а шапка модуля больше не обещает ErrorState с повтором, который каждая подстраница рисует по своему списку сама |
