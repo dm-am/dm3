@@ -163,7 +163,35 @@ internal class GameService : IGameService
             OrderNumber = 1
         };
 
-        var createdGame = await _repository.Create(createGameEntity, createRoomEntity);
+        // The counters go in first, and are undone if the game does not.
+        //
+        // There is no transaction across PostgreSQL and MongoDB and no outbox —
+        // DATA_STORAGE.md says both in as many words — so what a feature living
+        // in two stores owes is an explicit order: what is written first, and who
+        // clears the remainder. Written after the insert, a failed Mongo call
+        // left a committed game whose unread counters do not exist and never
+        // will: nothing recreates them, and the badge of that game reads zero for
+        // everybody forever. Written first, the same failure loses a game nobody
+        // has seen yet, and the caller may simply try again.
+        //
+        // The identifiers are ours already, generated above, so this needs no
+        // round trip to learn them.
+        await InitializeCountersAsync(gameId, roomId);
+
+        GameDetails createdGame;
+        try
+        {
+            createdGame = await _repository.Create(createGameEntity, createRoomEntity);
+        }
+        catch
+        {
+            // Compensation, by the mechanism the collection already has: the
+            // markers are stamped removed and the expiry index collects them.
+            await _unreadCountersRepository.DeleteAsync(roomId, UnreadEntryType.Message);
+            await _unreadCountersRepository.DeleteAsync(gameId, UnreadEntryType.Message);
+            await _unreadCountersRepository.DeleteAsync(gameId, UnreadEntryType.Character);
+            throw;
+        }
 
         if (!string.IsNullOrEmpty(createGame.AssistantUsername))
         {
@@ -178,20 +206,26 @@ internal class GameService : IGameService
             }
         }
 
+        // One statement instead of a round trip per blocked user, the way the
+        // blog side already copies the same list.
         if (createGame.CopyBlacklist)
         {
-            var personalBlacklist = await _userBlacklistChecker.GetBlockedUserIdsAsync(userId);
-            foreach (var blockedUserId in personalBlacklist)
-            {
-                await _gameBlacklistRepository.Add(createdGame.Id, blockedUserId, userId);
-            }
-            _logger.LogDebug("Copied personal blacklist to game blacklist with {Count} users",
-                personalBlacklist.Count());
+            var copied = await _gameBlacklistRepository.CopyFromPersonalBlacklist(createdGame.Id, userId);
+            _logger.LogDebug("Copied personal blacklist to game blacklist with {Count} users", copied);
         }
 
-        var firstRoomId = createdGame.Rooms.FirstOrDefault()?.Id ?? Guid.Empty;
-        await InitializeCountersAsync(createdGame.Id, firstRoomId);
-        await PublishGameCreatedAsync(createdGame.Id);
+        // The game is committed by now, so nothing below it may turn a created
+        // game into a 500: the caller would try again and end up with two. A lost
+        // event costs the subscribers one notification, which SYSTEM.md allows —
+        // an event is not the carrier of the fact.
+        try
+        {
+            await PublishGameCreatedAsync(createdGame.Id);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Failed to announce the new game {GameId}", createdGame.Id);
+        }
 
         _logger.LogInformation("Game created successfully. GameId={GameId}, Title={Title}, MasterId={MasterId}",
             createdGame.Id, createGame.Title, userId);
@@ -807,7 +841,11 @@ internal class GameService : IGameService
     /// </summary>
     private async Task InitializeCountersAsync(Guid gameId, Guid roomId)
     {
-        await _unreadCountersRepository.CreateAsync(roomId, UnreadEntryType.Message);
+        // The room is parented by its game, the way RoomService parents every
+        // room created afterwards. Left to the one-argument overload, the first
+        // room of a game was its own parent, so it alone was missing from every
+        // read that sums a game's rooms.
+        await _unreadCountersRepository.CreateAsync(roomId, gameId, UnreadEntryType.Message);
         await _unreadCountersRepository.CreateAsync(gameId, UnreadEntryType.Message);
         await _unreadCountersRepository.CreateAsync(gameId, UnreadEntryType.Character);
     }

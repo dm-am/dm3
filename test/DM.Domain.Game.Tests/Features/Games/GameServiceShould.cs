@@ -36,6 +36,7 @@ public class GameServiceShould : UnitTestBase
 {
     private readonly Mock<IIntentionManager> _intentionManager;
     private readonly Mock<IGameRepository> _repository;
+    private Mock<IUnreadCountersRepository> _unreadCountersRepository = null!;
     private readonly Mock<IEventProducer> _producer;
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<IGuidFactory> _guidFactory;
@@ -83,7 +84,8 @@ public class GameServiceShould : UnitTestBase
 
         var gameBlacklistRepository = Mock<IGameBlacklistRepository>();
 
-        var unreadCountersRepository = Mock<IUnreadCountersRepository>();
+        _unreadCountersRepository = Mock<IUnreadCountersRepository>();
+        var unreadCountersRepository = _unreadCountersRepository;
         unreadCountersRepository.Setup(r => r.CreateAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>()))
             .Returns(Task.CompletedTask);
         unreadCountersRepository.Setup(r => r.SelectByEntitiesAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>(), It.IsAny<Guid[]>()))
@@ -154,6 +156,79 @@ public class GameServiceShould : UnitTestBase
 
         result.Should().NotBeNull();
         _producer.Verify(p => p.SendAsync(EventType.NewGame, gameId), Times.Once);
+    }
+
+    /// <summary>
+    /// A game that failed to save leaves no counters behind.
+    /// </summary>
+    /// <remarks>
+    /// There is no transaction across PostgreSQL and MongoDB and no outbox, so
+    /// what a feature living in two stores owes is an explicit order. Written
+    /// after the insert, a failed Mongo call left a committed game whose unread
+    /// counters do not exist and never will — nothing recreates them, and that
+    /// game's badge reads zero for everybody forever. Written first, the same
+    /// failure loses a game nobody has seen yet.
+    /// </remarks>
+    [Fact]
+    public async Task LeaveNoCountersBehindWhenTheGameItselfFailsToSave()
+    {
+        var createGame = new CreateGame { Title = "Test Game", SystemName = "Test System" };
+        var gameId = Guid.NewGuid();
+        var roomId = Guid.NewGuid();
+        _guidFactory.SetupSequence(g => g.Create()).Returns(gameId).Returns(roomId);
+        _repository.Setup(r => r.Create(It.IsAny<CreateGameEntity>(), It.IsAny<CreateRoomEntity>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("storage refused"));
+
+        var act = async () => await _service.CreateAsync(createGame);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        _unreadCountersRepository.Verify(r => r.DeleteAsync(roomId, UnreadEntryType.Message), Times.Once);
+        _unreadCountersRepository.Verify(r => r.DeleteAsync(gameId, UnreadEntryType.Message), Times.Once);
+        _unreadCountersRepository.Verify(r => r.DeleteAsync(gameId, UnreadEntryType.Character), Times.Once);
+    }
+
+    /// <summary>
+    /// The first room of a game is parented by that game, like every room made
+    /// after it.
+    /// </summary>
+    [Fact]
+    public async Task ParentTheFirstRoomsCounterByItsGame()
+    {
+        var createGame = new CreateGame { Title = "Test Game", SystemName = "Test System" };
+        var gameId = Guid.NewGuid();
+        var roomId = Guid.NewGuid();
+        _guidFactory.SetupSequence(g => g.Create()).Returns(gameId).Returns(roomId);
+        _repository.Setup(r => r.Create(It.IsAny<CreateGameEntity>(), It.IsAny<CreateRoomEntity>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GameDetails { Id = gameId, Rooms = new[] { new Room { Id = roomId } } });
+
+        await _service.CreateAsync(createGame);
+
+        _unreadCountersRepository.Verify(
+            r => r.CreateAsync(roomId, gameId, UnreadEntryType.Message), Times.Once);
+    }
+
+    /// <summary>
+    /// A committed game is not turned into a 500 by the announcement of it.
+    /// </summary>
+    /// <remarks>
+    /// The caller would try again and end up with two games. A lost event costs
+    /// the subscribers one notification, and an event is not the carrier of the
+    /// fact.
+    /// </remarks>
+    [Fact]
+    public async Task ReturnTheGameEvenWhenTheAnnouncementFails()
+    {
+        var createGame = new CreateGame { Title = "Test Game", SystemName = "Test System" };
+        var gameId = Guid.NewGuid();
+        _guidFactory.SetupSequence(g => g.Create()).Returns(gameId).Returns(Guid.NewGuid());
+        _repository.Setup(r => r.Create(It.IsAny<CreateGameEntity>(), It.IsAny<CreateRoomEntity>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GameDetails { Id = gameId, Rooms = Array.Empty<Room>() });
+        _producer.Setup(p => p.SendAsync(EventType.NewGame, gameId))
+            .ThrowsAsync(new InvalidOperationException("broker down"));
+
+        var result = await _service.CreateAsync(createGame);
+
+        result.Id.Should().Be(gameId);
     }
 
     [Fact]
