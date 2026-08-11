@@ -99,11 +99,6 @@ function isTrimmableEmptyElement(elem: Element): boolean {
  * Uses a detached <template> element for parsing — no interaction with
  * the live DOM, no Vue reactivity side-effects. Callers pre-transform
  * their HTML in a computed before passing to v-html.
- *
- * This is the preferred entry point. The lower-level DOM mutators
- * trimLeadingWhitespace/trimTrailingWhitespace remain exported for
- * advanced callers that already hold a live element reference, but
- * new code should reach for trimHtmlWhitespace instead.
  */
 export function trimHtmlWhitespace(html: string | null | undefined): string {
   if (!html) return "";
@@ -158,90 +153,6 @@ function trimTrailingInFragment(root: DocumentFragment | Element): void {
       trimTrailingInFragment(elem);
       break;
     }
-    break;
-  }
-}
-
-/**
- * Remove trailing empty elements (br, empty p/div, whitespace-only text nodes)
- * from the end of a container. This prevents empty space at the bottom of
- * truncated content.
- */
-export function trimTrailingWhitespace(container: HTMLElement | null): void {
-  if (!container) return;
-
-  while (container.lastChild) {
-    const last = container.lastChild;
-
-    // Text node with only whitespace - remove
-    if (last.nodeType === Node.TEXT_NODE) {
-      if ((last.textContent || "").trim() === "") {
-        last.remove();
-        continue;
-      }
-      // Non-empty text, trim trailing whitespace and stop
-      last.textContent = (last.textContent || "").trimEnd();
-      break;
-    }
-
-    // Element node
-    if (last.nodeType === Node.ELEMENT_NODE) {
-      const elem = last as Element;
-
-      if (isTrimmableEmptyElement(elem)) {
-        elem.remove();
-        continue;
-      }
-
-      // Non-empty element - recursively trim its contents, then stop
-      trimTrailingWhitespace(elem as HTMLElement);
-      break;
-    }
-
-    // Other node types - stop
-    break;
-  }
-}
-
-/**
- * Mirror of trimTrailingWhitespace for the start of a container. Prevents
- * phantom leading empty lines (author-inserted blank lines at the top of a
- * post or topic) from eating into the truncation budget — without them,
- * scrollHeight no longer over-reports and the collapsed view shows real
- * content from the first line.
- */
-export function trimLeadingWhitespace(container: HTMLElement | null): void {
-  if (!container) return;
-
-  while (container.firstChild) {
-    const first = container.firstChild;
-
-    // Text node with only whitespace - remove
-    if (first.nodeType === Node.TEXT_NODE) {
-      if ((first.textContent || "").trim() === "") {
-        first.remove();
-        continue;
-      }
-      // Non-empty text, trim leading whitespace and stop
-      first.textContent = (first.textContent || "").trimStart();
-      break;
-    }
-
-    // Element node
-    if (first.nodeType === Node.ELEMENT_NODE) {
-      const elem = first as Element;
-
-      if (isTrimmableEmptyElement(elem)) {
-        elem.remove();
-        continue;
-      }
-
-      // Non-empty element - recursively trim its contents, then stop
-      trimLeadingWhitespace(elem as HTMLElement);
-      break;
-    }
-
-    // Other node types - stop
     break;
   }
 }

@@ -4,7 +4,6 @@ import type {
   UserProfile,
   Username,
   UserRole,
-  UsernameHistoryEntry,
   UserProfileNote,
   UserEndorsement,
   UserEndorsementId,

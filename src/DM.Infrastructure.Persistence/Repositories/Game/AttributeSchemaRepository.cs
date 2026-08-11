@@ -96,7 +96,7 @@ internal class AttributeSchemaRepository :
         var result = _mapper.Map<AttributeSchema>(schema);
         if (schema.UserId.HasValue)
         {
-            result.Author = (await GetSchemataAuthors(new[] { schema.UserId.Value })).First();
+            result.Author = (await GetSchemataAuthors(new[] { schema.UserId.Value })).FirstOrDefault();
         }
 
         return result;

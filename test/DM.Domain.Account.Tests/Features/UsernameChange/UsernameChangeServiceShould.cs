@@ -24,6 +24,7 @@ public class UsernameChangeServiceShould : UnitTestBase
     private readonly Mock<IUsernameChangeRepository> _repository;
     private readonly Mock<IUsernameHistoryRepository> _historyRepository;
     private readonly Mock<IIdentityProvider> _identityProvider;
+    private readonly Mock<IGuidFactory> _guidFactory;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
     private readonly Mock<IUsernameChangeMailSender> _notificationSender;
     private readonly UsernameChangeService _service;
@@ -34,6 +35,7 @@ public class UsernameChangeServiceShould : UnitTestBase
         _repository = Mock<IUsernameChangeRepository>();
         _historyRepository = Mock<IUsernameHistoryRepository>();
         _identityProvider = Mock<IIdentityProvider>();
+        _guidFactory = Mock<IGuidFactory>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
         _notificationSender = Mock<IUsernameChangeMailSender>();
 
@@ -43,12 +45,16 @@ public class UsernameChangeServiceShould : UnitTestBase
             .ReturnsAsync(new ValidationResult());
 
         _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        // A distinct value per call: the approval token and the history id are issued
+        // in one and the same flow, and a single fixed guid would hide a swap of them.
+        _guidFactory.Setup(g => g.Create()).Returns(() => Guid.NewGuid());
 
         _service = new UsernameChangeService(
             _validator.Object,
             _repository.Object,
             _historyRepository.Object,
             _identityProvider.Object,
+            _guidFactory.Object,
             _dateTimeProvider.Object,
             _notificationSender.Object);
     }

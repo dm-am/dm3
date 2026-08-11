@@ -126,7 +126,7 @@ public class UploadController : ControllerBase
     /// <param name="file">File (multipart/form-data)</param>
     /// <param name="type">Upload type/purpose</param>
     /// <param name="targetId">Optional target entity ID</param>
-    /// <response code="200">File uploaded, processed, and confirmed</response>
+    /// <response code="201">File uploaded, processed, and confirmed</response>
     /// <response code="400">Invalid file (wrong format, too large, not an image)</response>
     /// <response code="401">User not authenticated</response>
     /// <response code="429">Too many requests</response>
@@ -134,7 +134,7 @@ public class UploadController : ControllerBase
     [AuthenticationRequired]
     [EnableRateLimiting(RateLimitPolicies.Uploads)]
     [RequestSizeLimit(10 * 1024 * 1024)]
-    [ProducesResponseType(typeof(Shared.Dto.Upload), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Shared.Dto.Upload), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
@@ -143,7 +143,10 @@ public class UploadController : ControllerBase
         [FromQuery] UploadType type,
         [FromQuery] Guid? targetId = null)
     {
+        // 201 on an Idempotency-Key replay too: the cached answer is the record
+        // this logical request created, and the service does not report which
+        // call stored it.
         var result = await _uploadApiService.DirectUpload(file, type, targetId);
-        return Ok(result);
+        return CreatedAtRoute(nameof(GetUpload), new { id = result.Id }, result);
     }
 }

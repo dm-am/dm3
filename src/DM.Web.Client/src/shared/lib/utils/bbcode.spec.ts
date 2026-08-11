@@ -10,9 +10,6 @@ import {
   bbcodeToHtml,
   htmlToBbcode,
   validateBBCode,
-  bbcodeToPlainText,
-  isTagAvailable,
-  stripUnavailableTags,
   sanitizeUrl,
   sanitizeImageUrl,
   cleanPastedHtml,
@@ -633,110 +630,6 @@ describe("validateBBCode", () => {
 
   it("handles complex valid nested structures", () => {
     expect(validateBBCode("[quote][b][i]text[/i][/b][/quote]")).toEqual([]);
-  });
-});
-
-// ============================================================================
-// PLAIN TEXT EXTRACTION
-// ============================================================================
-
-describe("bbcodeToPlainText", () => {
-  it("removes all formatting tags", () => {
-    expect(bbcodeToPlainText("[b]bold[/b] [i]italic[/i]")).toBe("bold italic");
-  });
-
-  it("removes attribute tags", () => {
-    expect(bbcodeToPlainText("[link=http://example.com]text[/link]")).toBe(
-      "text",
-    );
-  });
-
-  it("removes standalone tags", () => {
-    expect(bbcodeToPlainText("before[tab]after")).toBe("before after");
-  });
-
-  it("normalizes whitespace", () => {
-    expect(bbcodeToPlainText("[b]text[/b]   [i]more[/i]")).toBe("text more");
-  });
-
-  it("handles empty input", () => {
-    expect(bbcodeToPlainText("")).toBe("");
-  });
-
-  it("handles complex nested BBCode", () => {
-    expect(bbcodeToPlainText("[quote][b]quoted[/b][/quote]")).toBe("quoted");
-  });
-});
-
-// ============================================================================
-// CONTEXT TAGS
-// ============================================================================
-
-describe("Context Tag Availability", () => {
-  describe("isTagAvailable", () => {
-    it("returns true for common tags", () => {
-      expect(isTagAvailable("b", "common")).toBe(true);
-      expect(isTagAvailable("i", "common")).toBe(true);
-      expect(isTagAvailable("strike", "common")).toBe(true);
-    });
-
-    it("[private] only available in post", () => {
-      expect(isTagAvailable("private", "post")).toBe(true);
-      expect(isTagAvailable("private", "message")).toBe(false);
-      expect(isTagAvailable("private", "common")).toBe(false);
-    });
-
-    it("[mod] available in common and message only", () => {
-      expect(isTagAvailable("mod", "common")).toBe(true);
-      expect(isTagAvailable("mod", "message")).toBe(true);
-      expect(isTagAvailable("mod", "post")).toBe(false);
-      expect(isTagAvailable("mod", "info")).toBe(false);
-    });
-
-    it("[nsfw] available in all contexts", () => {
-      expect(isTagAvailable("nsfw", "common")).toBe(true);
-      expect(isTagAvailable("nsfw", "message")).toBe(true);
-      expect(isTagAvailable("nsfw", "post")).toBe(true);
-    });
-
-    it("[noparse] available in all contexts", () => {
-      expect(isTagAvailable("noparse", "common")).toBe(true);
-      expect(isTagAvailable("noparse", "message")).toBe(true);
-      expect(isTagAvailable("noparse", "post")).toBe(true);
-    });
-
-    it("is case insensitive", () => {
-      expect(isTagAvailable("B", "common")).toBe(true);
-      expect(isTagAvailable("BOLD", "common")).toBe(false);
-    });
-  });
-
-  describe("stripUnavailableTags", () => {
-    it("removes [private] from message context", () => {
-      const result = stripUnavailableTags(
-        "[b]bold[/b] [private=char]secret[/private]",
-        "message",
-      );
-      expect(result).toBe("[b]bold[/b] secret");
-    });
-
-    it("keeps [private] in post context", () => {
-      const result = stripUnavailableTags(
-        "[private=char]secret[/private]",
-        "post",
-      );
-      expect(result).toBe("[private=char]secret[/private]");
-    });
-
-    it("removes [mod] from post context", () => {
-      const result = stripUnavailableTags("[mod]mod note[/mod]", "post");
-      expect(result).toBe("mod note");
-    });
-
-    it("keeps [mod] in message context", () => {
-      const result = stripUnavailableTags("[mod]mod note[/mod]", "message");
-      expect(result).toBe("[mod]mod note[/mod]");
-    });
   });
 });
 

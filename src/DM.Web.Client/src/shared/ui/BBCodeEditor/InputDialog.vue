@@ -229,7 +229,7 @@ function handleKeydown(e: KeyboardEvent) {
 .dialog-backdrop
   position: fixed
   inset: 0
-  z-index: $z-modal
+  z-index: $z-dialog
   display: flex
   align-items: center
   justify-content: center

@@ -25,6 +25,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
     private readonly IUsernameChangeRepository _repository;
     private readonly IUsernameHistoryRepository _historyRepository;
     private readonly IIdentityProvider _identityProvider;
+    private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IUsernameChangeMailSender _notificationSender;
 
@@ -33,6 +34,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         IUsernameChangeRepository repository,
         IUsernameHistoryRepository historyRepository,
         IIdentityProvider identityProvider,
+        IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
         IUsernameChangeMailSender notificationSender)
     {
@@ -40,6 +42,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         _repository = repository;
         _historyRepository = historyRepository;
         _identityProvider = identityProvider;
+        _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
         _notificationSender = notificationSender;
     }
@@ -61,7 +64,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         var now = _dateTimeProvider.Now;
         var dto = new UsernameChangeRequest
         {
-            RequestId = Guid.NewGuid(),
+            RequestId = _guidFactory.Create(),
             UserId = currentUser.UserId,
             // Username is NOT set here - user chooses it after approval
             RequestedUsername = null,
@@ -129,7 +132,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         if (resolve.Status == UsernameChangeRequestStatus.Approved)
         {
             // Generate approval token (user will use this to complete the change)
-            request.ApprovalToken = Guid.NewGuid();
+            request.ApprovalToken = _guidFactory.Create();
             request.ApprovalTokenExpiresUtc = now.AddHours(48); // Token valid for 48 hours
         }
 
@@ -212,7 +215,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         // Record history
         await _historyRepository.Add(new CreateUsernameHistory
         {
-            UsernameHistoryId = Guid.NewGuid(),
+            UsernameHistoryId = _guidFactory.Create(),
             UserId = request.UserId,
             OldUsername = request.UserUsername!,
             NewUsername = newUsername,
@@ -268,7 +271,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         // Record the rollback in history
         await _historyRepository.Add(new CreateUsernameHistory
         {
-            UsernameHistoryId = Guid.NewGuid(),
+            UsernameHistoryId = _guidFactory.Create(),
             UserId = request.UserId,
             OldUsername = currentUsername,
             NewUsername = previousUsername,

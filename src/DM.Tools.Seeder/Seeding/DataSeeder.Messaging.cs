@@ -18,6 +18,7 @@ using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Core.Storage;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.MongoIntegration;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using DbUserSettings = DM.Infrastructure.Persistence.Entities.Account.Settings.UserSettings;
 using DM.Infrastructure.Persistence.Entities.Account.Settings;
 using DM.Infrastructure.Persistence.Entities.Blog;
@@ -209,10 +210,16 @@ internal sealed partial class DataSeeder
         for (var index = 0; index < companions.Count; index++)
         {
             var companion = companions[index]!;
+            // The readable address is taken from the sequence before the insert, the way the
+            // repository takes it. Without it the seeded chat carries no PublicId, and the
+            // address GET /v1/chats/{publicId} resolves by does not exist for it at all.
+            var chatSerialNumber = await SerialNumberAllocator.NextAsync<Chat>(_dbContext);
             var chat = new Chat
             {
                 ChatId = _guidFactory.Create(),
-                Type = ChatType.Direct
+                Type = ChatType.Direct,
+                SerialNumber = chatSerialNumber,
+                PublicId = _publicIdService.Encode(chatSerialNumber)
             };
             _dbContext.Set<Chat>().Add(chat);
 

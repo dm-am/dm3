@@ -35,6 +35,8 @@ public class DomainBoundaryShould
         "Microsoft.EntityFrameworkCore",
         "Npgsql",
         "MongoDB",
+        "RabbitMQ",
+        "Jamq",
         "Microsoft.AspNetCore",
         "Serilog",
     ];

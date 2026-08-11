@@ -33,8 +33,7 @@ internal class AccountLockedNotificationGenerator : BaseNotificationGenerator
             .Select(u => new
             {
                 u.UserId,
-                u.Username,
-                u.Email
+                u.Username
             })
             .FirstOrDefaultAsync();
 

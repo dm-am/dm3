@@ -133,6 +133,7 @@ function clearSearch() {
           v-if="searchQuery"
           type="button"
           class="clear-input-btn"
+          aria-label="Очистить поиск"
           @click.stop="clearSearch"
         >
           {{ symbols.close }}

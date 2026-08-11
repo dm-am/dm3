@@ -7,6 +7,7 @@ import {
   expandAllExpandables,
   collapseAllExpandables,
 } from "@/shared/lib/composables";
+import { getScrollContainer } from "@/shared/lib/scroll";
 import { Theme } from "@/shared/api/models/personal";
 import { storeToRefs } from "pinia";
 import { SvgIcon } from "@/shared/ui/Icon";
@@ -18,10 +19,6 @@ function toggleAllExpandables() {
   } else {
     expandAllExpandables();
   }
-}
-
-function getScrollContainer(): HTMLElement | null {
-  return document.querySelector(".main");
 }
 
 function scrollToTop() {

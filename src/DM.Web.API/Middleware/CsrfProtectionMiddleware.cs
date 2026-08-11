@@ -113,8 +113,11 @@ public class CsrfProtectionMiddleware
             if (!Uri.TryCreate(allowed, UriKind.Absolute, out var allowedUri))
                 continue;
 
-            // Match host (case-insensitive) and port
-            if (allowedUri.Host.Equals(originUri.Host, StringComparison.OrdinalIgnoreCase) &&
+            // Scheme, host (case-insensitive) and port. UseCors is handed this same
+            // list and compares an origin whole, so a scheme dropped here makes one
+            // list mean two policies and moves the refusal to the other middleware.
+            if (allowedUri.Scheme.Equals(originUri.Scheme, StringComparison.OrdinalIgnoreCase) &&
+                allowedUri.Host.Equals(originUri.Host, StringComparison.OrdinalIgnoreCase) &&
                 allowedUri.Port == originUri.Port)
             {
                 return true;

@@ -94,24 +94,6 @@ public class BlogCommentServiceShould : UnitTestBase
     }
 
     [Fact]
-    public async Task ThrowWhenBlacklistedUserCreatesComment()
-    {
-        var blogId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
-        var blog = new BlogDto { Id = blogId, BlacklistedUserIds = new HashSet<Guid> { userId } };
-        var createComment = new CreateComment { EntityId = blogId, Text = "Test comment" };
-        var identity = CreateAuthenticatedIdentity(userId);
-
-        _identityProvider.Setup(p => p.Current).Returns(identity);
-        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
-
-        var act = async () => await _service.CreateAsync(createComment);
-
-        await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("черном списке"));
-    }
-
-    [Fact]
     public async Task PublishEventWhenCreatingComment()
     {
         var blogId = Guid.NewGuid();

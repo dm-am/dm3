@@ -57,18 +57,6 @@ export function getRoleBadge(
   return (role && ROLE_BADGES[role]) || null;
 }
 
-/**
- * Singular full name for every role — badge labels for the badge-carrying
- * roles plus the badge-less ones, so the two never drift apart.
- */
-export const ROLE_FULL_NAMES: Partial<Record<UserRole, string>> = {
-  ...(Object.fromEntries(
-    Object.entries(ROLE_BADGES).map(([role, badge]) => [role, badge.label]),
-  ) as Partial<Record<UserRole, string>>),
-  [UserRole.RegularUser]: "Пользователь",
-  [UserRole.Guest]: "Гость",
-};
-
 export interface RoleInfo {
   /** Section title as the staff table prints it: plural for the roles it groups
    * ("Администраторы", "Модераторы"), singular for the three that are not a group

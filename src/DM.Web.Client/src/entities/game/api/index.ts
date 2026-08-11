@@ -1,6 +1,5 @@
 // Game API
 export { default as gameApi } from "./gameApi";
-export { default } from "./gameApi";
 
 // Tag catalog administration
 export { default as gameTagApi } from "./gameTagApi";

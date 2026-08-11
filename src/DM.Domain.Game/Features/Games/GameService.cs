@@ -310,8 +310,8 @@ internal class GameService : IGameService
         }
 
         // Cache base data for authenticated users (short TTL, unread counters always fresh)
-        var queryHash = GetQueryHash(query);
-        var authCacheKey = $"AuthGames_{currentUserId}_{queryHash}_{pageSize}";
+        var queryKey = GetQueryKey(query);
+        var authCacheKey = $"AuthGames_{currentUserId}_{queryKey}_{pageSize}";
         var (games, pagingDataAuth) = await _cache.GetOrCreateAsync(authCacheKey, async e =>
         {
             e.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(15);
@@ -867,9 +867,9 @@ internal class GameService : IGameService
     }
 
     /// <summary>
-    /// Generate hash for query parameters (for cache key)
+    /// Build the query part of a cache key
     /// </summary>
-    private static string GetQueryHash(GamesQuery query)
+    private static string GetQueryKey(GamesQuery query)
     {
         var parts = new List<string>
         {
@@ -898,7 +898,11 @@ internal class GameService : IGameService
             query.RecruitmentStartedToUtc?.ToString("O") ?? "",
             query.PremoderationStatuses != null ? string.Join(",", query.PremoderationStatuses) : ""
         };
-        return string.Join("|", parts).GetHashCode().ToString();
+        // The key carries the values themselves: a 32-bit hash of them lets two
+        // different queries of one user share a cached page. Parts are
+        // length-prefixed because free text (search, usernames) may contain the
+        // separator, and a plain join would leave the same collision open.
+        return string.Join("|", parts.Select(p => $"{p.Length}:{p}"));
     }
 
     #endregion

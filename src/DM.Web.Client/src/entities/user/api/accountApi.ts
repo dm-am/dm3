@@ -263,12 +263,4 @@ export default new (class AccountApi {
       ...(type ? { type } : {}),
     });
   }
-
-  /**
-   * Get login history only (successful and failed logins)
-   * @param take Maximum number of events (default 20)
-   */
-  public getLoginHistory(take = 20) {
-    return this.getSecurityHistory(take, "login");
-  }
 })();

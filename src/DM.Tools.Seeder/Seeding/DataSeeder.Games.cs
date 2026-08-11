@@ -987,14 +987,19 @@ internal sealed partial class DataSeeder
                 // Both chat rooms are filled through one helper: the open and the
                 // closed example differ by who may open them and by what is said
                 // in them, not by how the chat behind them is built.
-                void SeedRoomChat(Room room, IReadOnlyList<Guid> speakerIds, IReadOnlyList<string> texts)
+                async Task SeedRoomChat(Room room, IReadOnlyList<Guid> speakerIds, IReadOnlyList<string> texts)
                 {
+                    // Same as the repository: the serial comes from the sequence before the
+                    // insert, so the room chat is written with the address it is opened by.
+                    var roomChatSerialNumber = await SerialNumberAllocator.NextAsync<Chat>(_dbContext);
                     var roomChat = new Chat
                     {
                         ChatId = _guidFactory.Create(),
                         Type = ChatType.GameRoom,
                         Title = room.Title,
-                        RoomId = room.RoomId
+                        RoomId = room.RoomId,
+                        SerialNumber = roomChatSerialNumber,
+                        PublicId = _publicIdService.Encode(roomChatSerialNumber)
                     };
                     _dbContext.Set<Chat>().Add(roomChat);
                     room.ChatId = roomChat.ChatId;
@@ -1025,7 +1030,7 @@ internal sealed partial class DataSeeder
                 // Open chat room: a short OOC exchange between the master and a
                 // couple of players, so the chat page and its cursor pagination
                 // have something to render.
-                SeedRoomChat(
+                await SeedRoomChat(
                     chatRoom,
                     new[] { master.UserId }.Concat(playersForGame.Take(2).Select(p => p.UserId)).ToList(),
                     new[]
@@ -1042,7 +1047,7 @@ internal sealed partial class DataSeeder
                 // kind of exchange, but only between the master and the players
                 // holding access, so the two chat examples differ in the lock
                 // and not in what is behind it.
-                SeedRoomChat(
+                await SeedRoomChat(
                     privateChatRoom!,
                     new[] { master.UserId }
                         .Concat(restrictedRoomMembers.Take(2).Select(c => c.AuthorId ?? master.UserId))

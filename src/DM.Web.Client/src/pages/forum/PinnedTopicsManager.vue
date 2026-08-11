@@ -233,7 +233,7 @@ const shell = useDialogShell({
   display: flex
   align-items: center
   justify-content: center
-  z-index: $z-modal
+  z-index: $z-dialog
 
 .pinned-manager-modal
   background: $bg-page

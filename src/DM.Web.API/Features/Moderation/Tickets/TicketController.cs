@@ -1,6 +1,8 @@
 using System;
+using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
@@ -127,7 +129,12 @@ public class TicketController : ControllerBase
     public async Task<IActionResult> GetTicket(Guid ticketId)
     {
         var ticket = await _ticketApiService.GetTicket(ticketId);
-        return ticket != null ? Ok(ticket) : NotFound();
+        if (ticket == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
+        }
+
+        return Ok(ticket);
     }
 
     /// <summary>

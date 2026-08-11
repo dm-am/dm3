@@ -78,9 +78,6 @@ onMounted(async () => {
     };
   }
 
-  // Store token in sessionStorage for retry
-  sessionStorage.setItem("dm_activation_token", token.value);
-
   // Try to get saved email from registration
   const savedEmail = sessionStorage.getItem("dm_pending_email");
   if (savedEmail) {
@@ -175,7 +172,6 @@ async function submitActivation() {
 
     // Clean up sessionStorage
     sessionStorage.removeItem("dm_pending_email");
-    sessionStorage.removeItem("dm_activation_token");
   }
 }
 

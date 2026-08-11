@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 
 namespace DM.Infrastructure.Core.Extensions;
@@ -10,20 +7,6 @@ namespace DM.Infrastructure.Core.Extensions;
 /// </summary>
 public static class AsyncExtensions
 {
-    /// <summary>
-    /// SelectMany for async callbacks
-    /// </summary>
-    /// <param name="source">Source enumerable</param>
-    /// <param name="selector">Target selector</param>
-    /// <typeparam name="TSource"></typeparam>
-    /// <typeparam name="TTarget"></typeparam>
-    /// <returns>Flattened collection of target elements</returns>
-    public static async Task<IEnumerable<TTarget>> SelectManyAsync<TSource, TTarget>(this IEnumerable<TSource> source,
-        Func<TSource, Task<IEnumerable<TTarget>>> selector)
-    {
-        return (await Task.WhenAll(source.Select(selector)).ConfigureAwait(false)).SelectMany(s => s);
-    }
-
     /// <summary>
     /// Typed results for parallel task execution
     /// </summary>

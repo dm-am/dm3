@@ -104,25 +104,6 @@ public class GameCommentServiceShould : UnitTestBase
     }
 
     [Fact]
-    public async Task ThrowForbiddenWhenUserIsBlacklistedFromGame()
-    {
-        var gameId = Guid.NewGuid();
-        var createComment = new CreateComment { EntityId = gameId, Text = "Test comment" };
-        var game = new GameDto
-        {
-            Id = gameId,
-            Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
-            BlacklistedUsers = new[] { new BlacklistedUser { UserId = _currentUserId } }
-        };
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-
-        var act = async () => await _service.CreateAsync(createComment);
-
-        await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-    }
-
-    [Fact]
     public async Task CreateCommentAndPublishEvent()
     {
         var gameId = Guid.NewGuid();

@@ -51,13 +51,15 @@ internal class UserProfileNoteService : IUserProfileNoteService
             return null;
         }
 
-        var subjectUser = await _userRepository.GetUserAsync(subjectUsername);
-        if (subjectUser == null)
+        // Only the identifier is needed to find the note, and GetUserAsync pays for
+        // the whole achievement profile to hand it over.
+        var subjectUserId = await _userRepository.FindUserIdAsync(subjectUsername);
+        if (subjectUserId == null)
         {
             return null;
         }
 
-        return await _repository.Get(currentUser.UserId, subjectUser.UserId, ct);
+        return await _repository.Get(currentUser.UserId, subjectUserId.Value, ct);
     }
 
     /// <inheritdoc />
@@ -70,20 +72,20 @@ internal class UserProfileNoteService : IUserProfileNoteService
             throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
         }
 
-        var subjectUser = await _userRepository.GetUserAsync(createNote.SubjectUsername);
-        if (subjectUser == null)
+        var subjectUserId = await _userRepository.FindUserIdAsync(createNote.SubjectUsername);
+        if (subjectUserId == null)
         {
             throw new HttpException(HttpStatusCode.NotFound,
                 RefusalMessage.UserNotFoundByUsername(createNote.SubjectUsername));
         }
 
-        if (subjectUser.UserId == currentUser.UserId)
+        if (subjectUserId.Value == currentUser.UserId)
         {
             throw new HttpException(HttpStatusCode.BadRequest,
                 "Нельзя оставить заметку о себе");
         }
 
-        var existingNote = await _repository.Get(currentUser.UserId, subjectUser.UserId, ct);
+        var existingNote = await _repository.Get(currentUser.UserId, subjectUserId.Value, ct);
 
         // Delete note if text is empty
         if (string.IsNullOrWhiteSpace(createNote.Text))
@@ -112,7 +114,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
         {
             Id = _guidFactory.Create(),
             OwnerId = currentUser.UserId,
-            SubjectUserId = subjectUser.UserId,
+            SubjectUserId = subjectUserId.Value,
             Text = createNote.Text,
             CreatedUtc = now
         };
@@ -129,13 +131,13 @@ internal class UserProfileNoteService : IUserProfileNoteService
             throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
         }
 
-        var subjectUser = await _userRepository.GetUserAsync(subjectUsername);
-        if (subjectUser == null)
+        var subjectUserId = await _userRepository.FindUserIdAsync(subjectUsername);
+        if (subjectUserId == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(subjectUsername));
         }
 
-        var note = await _repository.Get(currentUser.UserId, subjectUser.UserId, ct);
+        var note = await _repository.Get(currentUser.UserId, subjectUserId.Value, ct);
         if (note != null)
         {
             await _repository.Delete(note.Id, ct);

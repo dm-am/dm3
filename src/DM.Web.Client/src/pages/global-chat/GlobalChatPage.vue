@@ -1203,7 +1203,11 @@ async function confirmDelete() {
           </button>
         </Tooltip>
         <Tooltip text="Отмена">
-          <button class="toolbar-btn toolbar-btn-cancel" @click="cancelDelete">
+          <button
+            class="toolbar-btn toolbar-btn-cancel"
+            aria-label="Отмена"
+            @click="cancelDelete"
+          >
             {{ symbols.close }}
           </button>
         </Tooltip>

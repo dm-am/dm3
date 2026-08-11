@@ -76,7 +76,7 @@ public class GlobalChatController : ControllerBase
         // this carrier only ferries the raw text into the create pipeline.
         var message = new Message { Text = new GlobalChatBbText { Value = input.Text } };
         var result = await _apiService.CreateGlobalChatMessageAsync(message);
-        return CreatedAtRoute("GetMessage", new { id = result.Resource.Id }, result);
+        return CreatedAtRoute(nameof(MessageController.GetMessage), new { id = result.Resource.Id }, result);
     }
 
     /// <summary>

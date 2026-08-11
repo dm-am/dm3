@@ -45,8 +45,8 @@ const contentClass = computed(() => {
   justify-content: center
   align-items: center
   // Align vfm modals with the self-rolled dialog tier (ConfirmDialog,
-  // BBCodeEditor, InputDialog all sit at $z-modal).
-  z-index: $z-modal
+  // BBCodeEditor, InputDialog all sit at $z-dialog).
+  z-index: $z-dialog
 
 .dialog-overlay
   /* styled via ThemeVariables.css for proper cascade */

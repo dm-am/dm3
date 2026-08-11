@@ -1310,60 +1310,6 @@ export function htmlToBbcode(
 // ============================================================================
 
 /**
- * Check if a BBCode tag is available in a given context.
- *
- * @param tag - Tag name to check (case-insensitive)
- * @param context - Context to check against
- * @returns true if tag is available in context
- *
- * @example
- * ```typescript
- * isTagAvailable('private', 'post')    // => true
- * isTagAvailable('private', 'message') // => false
- * isTagAvailable('mod', 'message')     // => true
- * isTagAvailable('mod', 'post')        // => false
- * ```
- */
-export function isTagAvailable(tag: string, context: BBCodeContext): boolean {
-  const normalizedTag = tag.toLowerCase();
-  return CONTEXT_TAGS[context].includes(normalizedTag);
-}
-
-/**
- * Strip BBCode tags that aren't available in the given context.
- *
- * Removes tag pairs and standalone tags that don't exist in the context's
- * allowed tags list. Content inside removed tags is preserved.
- *
- * @param bbcode - BBCode string to filter
- * @param context - Context to filter against
- * @returns BBCode with unavailable tags removed (content preserved)
- *
- * @example
- * ```typescript
- * stripUnavailableTags('[private=char]secret[/private] public', 'message')
- * // => ' public' (private not available in message context)
- *
- * stripUnavailableTags('[mod]note[/mod] text', 'post')
- * // => ' text' (mod not available in post context)
- * ```
- */
-export function stripUnavailableTags(
-  bbcode: string,
-  context: BBCodeContext,
-): string {
-  const availableTags = CONTEXT_TAGS[context];
-  const tagPattern = /\[(\/?)([\w]+)(?:=[^\]]+)?\]/g;
-
-  return bbcode.replace(tagPattern, (match, slash, tag) => {
-    if (availableTags.includes(tag.toLowerCase())) {
-      return match;
-    }
-    return "";
-  });
-}
-
-/**
  * Clean up HTML pasted from Word, Google Docs, and other rich text editors.
  *
  * Removes junk markup (Office XML, styles, scripts) while preserving
@@ -1534,39 +1480,4 @@ export function validateBBCode(bbcode: string): string[] {
   });
 
   return errors;
-}
-
-/**
- * Get plain text content from BBCode (strips all tags).
- *
- * Useful for generating previews or search indexing.
- *
- * @param bbcode - BBCode string
- * @returns Plain text with all tags removed
- *
- * @example
- * ```typescript
- * bbcodeToPlainText('[b]Hello[/b] [i]World[/i]')
- * // => 'Hello World'
- *
- * bbcodeToPlainText('[quote]Some quote[/quote]')
- * // => 'Some quote'
- * ```
- */
-export function bbcodeToPlainText(bbcode: string): string {
-  if (!bbcode) return "";
-
-  let text = bbcode;
-
-  // Replace [tab] with space before removing tags
-  text = text.replace(/\[tab\]/gi, " ");
-
-  // Remove all BBCode tags
-  text = text.replace(/\[[\w]+(?:=[^\]]+)?\]/g, "");
-  text = text.replace(/\[\/[\w]+\]/g, "");
-
-  // Clean up whitespace
-  text = text.replace(/\s+/g, " ").trim();
-
-  return text;
 }

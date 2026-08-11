@@ -62,15 +62,12 @@ internal class GameCommentService : IGameCommentService
         await _createValidator.ValidateAndThrowAsync(createComment);
 
         var game = await _gameService.GetAsync(createComment.EntityId);
+        // The blacklist closes writing: reading this game is open to the user it
+        // blacklisted, commenting in it is not. The rule is part of the intention
+        // and is asked here, once.
         _intentionManager.ThrowIfForbidden(GameIntention.CreateComment, game);
 
-        // The blacklist closes writing: reading this game is open to the user it
-        // blacklisted, commenting in it is not.
         var currentUser = _identityProvider.Current.User;
-        if (game.IsBlacklisted(currentUser.UserId))
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
-        }
 
         var entity = new CreateGameCommentEntity
         {

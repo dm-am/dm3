@@ -5,6 +5,7 @@ using Amazon.S3;
 using Autofac;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Core.Authorization;
@@ -46,9 +47,19 @@ public class CoreModule : Module
             {
                 var amazonS3ClientProviders = ctx
                     .Resolve<IEnumerable<IAmazonS3ClientProvider>>();
-                return amazonS3ClientProviders
-                    .First(p => p.CanBeUsed())
-                    .GetClient();
+                var provider = amazonS3ClientProviders.FirstOrDefault(p => p.CanBeUsed());
+                if (provider is null)
+                {
+                    // S3Provider defaults to a member no implementation claims, so a host
+                    // that leaves CdnConfiguration:Provider unset lands here. First() used
+                    // to report that as "Sequence contains no matching element", which
+                    // names neither the setting nor the value it holds.
+                    var configured = ctx.Resolve<IOptions<CdnConfiguration>>().Value.Provider;
+                    throw new InvalidOperationException(
+                        $"No S3 client provider handles CdnConfiguration:Provider = {configured}.");
+                }
+
+                return provider.GetClient();
             })
             .AsSelf()
             .As<IAmazonS3>()

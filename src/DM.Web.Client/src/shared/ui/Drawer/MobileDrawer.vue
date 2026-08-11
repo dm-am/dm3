@@ -13,6 +13,7 @@
  */
 import { ref, computed, watch, onBeforeUnmount } from "vue";
 import { useDialogShell } from "@/shared/lib/composables/useDialogShell";
+import { getScrollContainer } from "@/shared/lib/scroll";
 import { symbols } from "@/shared/lib/utils/icons";
 
 const props = withDefaults(
@@ -40,10 +41,10 @@ function close() {
 }
 
 function lockScroll() {
-  // The app's real scroll container is `.main` (App.vue) — `body` is
-  // permanently `overflow: hidden` (Reset.sass), so locking body has no
-  // effect here.
-  lockedScrollEl = document.querySelector<HTMLElement>(".main");
+  // The app's real scroll container is App.vue's `.main`, published through
+  // the scroll registry — `body` is permanently `overflow: hidden`
+  // (Reset.sass), so locking body has no effect here.
+  lockedScrollEl = getScrollContainer();
   if (lockedScrollEl) {
     lockedScrollPrevOverflow = lockedScrollEl.style.overflow;
     lockedScrollEl.style.overflow = "hidden";

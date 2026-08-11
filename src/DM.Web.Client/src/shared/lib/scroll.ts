@@ -2,11 +2,20 @@
 // ".main" element (not the window), so window.scrollTo doesn't work.
 // App.vue registers the element on mount; paging and the router call
 // scrollContentToTop() to reset scroll position on navigation.
+//
+// Everything that needs the element takes it from here. A direct
+// document.querySelector(".main") works until the container is renamed, and
+// then it silently returns null instead of failing.
 
 let scrollContainer: HTMLElement | null = null;
 
 export function setScrollContainer(el: HTMLElement | null): void {
   scrollContainer = el;
+}
+
+/** The registered container, or null before App.vue has mounted. */
+export function getScrollContainer(): HTMLElement | null {
+  return scrollContainer;
 }
 
 /** Scrolls the registered container to top; no-op when unset. */

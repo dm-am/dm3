@@ -223,18 +223,13 @@ const charCountLabel = computed(() => {
   return `${charCount.value}${limit} ${pluralize(counted, "символ", "символа", "символов")}`;
 });
 
-// Draft status text
+// Draft status text. Relative time ("Сохранено 12 сек. назад") is deliberately
+// absent: a computed has no reactive dependency on the clock, so it would be
+// recomputed only when the status itself changes, i.e. always at zero seconds.
+// Bringing it back takes a ticking ref, not a wider computed.
 const draftStatusText = computed(() => {
   if (draftStatus.value === "saving") return "Сохранение...";
-  if (draftStatus.value === "saved" && draftSavedAt.value) {
-    const seconds = Math.floor((Date.now() - draftSavedAt.value) / 1000);
-    if (seconds < 5) return "Сохранено";
-    if (seconds < 60) return `Сохранено ${seconds} сек. назад`;
-    const minutes = Math.floor(seconds / 60);
-    if (minutes === 1) return "Сохранено 1 мин. назад";
-    if (minutes < 5) return `Сохранено ${minutes} мин. назад`;
-    return `Сохранено ${minutes} мин. назад`;
-  }
+  if (draftStatus.value === "saved" && draftSavedAt.value) return "Сохранено";
   return "";
 });
 
@@ -698,7 +693,6 @@ function loadDraftManual() {
 
 // Draft management with expiration
 const DRAFT_EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-let draftInterval: ReturnType<typeof setInterval> | null = null;
 let lastSavedDraft = "";
 
 interface DraftData {
@@ -709,8 +703,6 @@ interface DraftData {
 function getDraftKey(): string {
   return props.draftKey ? `bbcode_draft_${props.draftKey}` : "";
 }
-
-let draftStatusTimeout: ReturnType<typeof setTimeout> | null = null;
 
 function saveDraft(content: string) {
   const key = getDraftKey();
@@ -740,14 +732,6 @@ function saveDraft(content: string) {
     draftStatus.value = "idle";
     draftSavedAt.value = null;
   }
-
-  // Reset status after 30 seconds of inactivity
-  if (draftStatusTimeout) clearTimeout(draftStatusTimeout);
-  draftStatusTimeout = setTimeout(() => {
-    if (draftStatus.value === "saved") {
-      // Keep showing "saved" but refresh the time display
-    }
-  }, 30000);
 }
 
 function loadDraft(): string | null {
@@ -869,9 +853,6 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  if (draftInterval) {
-    clearInterval(draftInterval);
-  }
   editor.value?.destroy();
 });
 
@@ -1810,7 +1791,7 @@ defineExpose({
   top: 50%
   left: 50%
   transform: translate(-50%, -50%)
-  z-index: $z-modal
+  z-index: $z-dialog
   width: 520px
   max-width: calc(100vw - 32px)
   max-height: calc(100vh - 64px)

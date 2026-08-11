@@ -156,7 +156,7 @@ public class AuthenticationController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> TerminateOtherSessions()
     {
-        await _authenticationApiService.LogoutAll(HttpContext);
+        await _authenticationApiService.LogoutElsewhere(HttpContext);
         return NoContent();
     }
 }

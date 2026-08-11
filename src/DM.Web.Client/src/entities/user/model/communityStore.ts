@@ -204,6 +204,11 @@ export const useCommunityStore = defineStore("community", () => {
   const selectedUser = ref<User | null>(null);
   const loadingProfile = ref(false);
 
+  // A guard of its own: the profile page reloads on a change of the route
+  // param, and the answer for the name the reader already left must not land
+  // on the newer one.
+  const profileGuard = createRequestGuard();
+
   /**
    * Loads the profile. Returns the error instead of a boolean: the caller
    * needs the status to tell "no such user" from "server is down", and a
@@ -212,6 +217,7 @@ export const useCommunityStore = defineStore("community", () => {
   async function trySelectProfile(
     username: Username,
   ): Promise<GeneralError | null> {
+    const requestId = profileGuard.next();
     loadingProfile.value = true;
     selectedUser.value = null;
 
@@ -219,6 +225,11 @@ export const useCommunityStore = defineStore("community", () => {
     // birthday, location, contacts, info, mediumUrl picture) — not the
     // truncated User DTO from /v1/users/{username} which is meant for lists.
     const { data, error } = await userApi.getUserProfile(username);
+
+    // A superseded answer reports nothing: the newer request owns the spinner,
+    // the profile and the error the page draws.
+    if (!profileGuard.isCurrent(requestId)) return null;
+
     loadingProfile.value = false;
 
     if (error) return error;

@@ -37,6 +37,49 @@ export interface BlogsSearchParams {
 
 const searchCache = createKeyedCache<ListEnvelope<Blog>>({ ttlMs: 30_000 });
 
+type BlogsApiParams = Record<
+  string,
+  string | number | boolean | string[] | number[] | undefined
+>;
+
+/**
+ * Map frontend search params to backend API query params. Single source of
+ * truth used by both searchBlogs and prefetchPage: the cache key is built from
+ * the whole params object, so a filter added to one of them and not the other
+ * files an unfiltered page under a filtered key.
+ */
+function buildApiParams(params: BlogsSearchParams): BlogsApiParams {
+  const pageSize = params.size || 20;
+  const pageNumber = params.number || 1;
+  const apiParams: BlogsApiParams = { take: pageSize };
+
+  // Convert page number to skip (number is 1-indexed page)
+  if (pageNumber > 1) {
+    apiParams.skip = (pageNumber - 1) * pageSize;
+  }
+
+  if (params.search) apiParams.search = params.search;
+  if (params.status) apiParams.statuses = [params.status];
+
+  // Hosts (author OR assistant)
+  if (params.hostUsernames && params.hostUsernames.length > 0) {
+    apiParams.hostUsernames = params.hostUsernames;
+  }
+
+  if (params.createdFromUtc) apiParams.createdFromUtc = params.createdFromUtc;
+  if (params.createdToUtc) apiParams.createdToUtc = params.createdToUtc;
+  if (params.activatedFromUtc)
+    apiParams.activatedFromUtc = params.activatedFromUtc;
+  if (params.activatedToUtc) apiParams.activatedToUtc = params.activatedToUtc;
+  if (params.closedFromUtc) apiParams.closedFromUtc = params.closedFromUtc;
+  if (params.closedToUtc) apiParams.closedToUtc = params.closedToUtc;
+
+  if (params.sortBy) apiParams.sortBy = params.sortBy;
+  if (params.sortOrder) apiParams.sortOrder = params.sortOrder;
+
+  return apiParams;
+}
+
 export const useBlogsStore = defineStore("blogs", () => {
   // Sidebar lists with caching (60s TTL by default) - use lightweight BlogRef
   const active = useApiList<BlogRef>(() => blogApi.getActiveBlogs());
@@ -85,68 +128,10 @@ export const useBlogsStore = defineStore("blogs", () => {
 
     searchLoading.value = true;
 
-    // Map frontend params to backend API params
-    const pageSize = params.size || 20;
-    const pageNumber = params.number || 1;
-    const apiParams: Record<
-      string,
-      string | number | boolean | string[] | number[] | undefined
-    > = {
-      take: pageSize,
-    };
-
-    // Convert page number to skip (number is 1-indexed page)
-    if (pageNumber > 1) {
-      apiParams.skip = (pageNumber - 1) * pageSize;
-    }
-
-    // Search
-    if (params.search) {
-      apiParams.search = params.search;
-    }
-
-    // Status
-    if (params.status) {
-      apiParams.statuses = [params.status];
-    }
-
-    // Hosts (author OR assistant)
-    if (params.hostUsernames && params.hostUsernames.length > 0) {
-      apiParams.hostUsernames = params.hostUsernames;
-    }
-
-    // Date ranges
-    if (params.createdFromUtc) {
-      apiParams.createdFromUtc = params.createdFromUtc;
-    }
-    if (params.createdToUtc) {
-      apiParams.createdToUtc = params.createdToUtc;
-    }
-    if (params.activatedFromUtc) {
-      apiParams.activatedFromUtc = params.activatedFromUtc;
-    }
-    if (params.activatedToUtc) {
-      apiParams.activatedToUtc = params.activatedToUtc;
-    }
-    if (params.closedFromUtc) {
-      apiParams.closedFromUtc = params.closedFromUtc;
-    }
-    if (params.closedToUtc) {
-      apiParams.closedToUtc = params.closedToUtc;
-    }
-
-    // Sort
-    if (params.sortBy) {
-      apiParams.sortBy = params.sortBy;
-    }
-    if (params.sortOrder) {
-      apiParams.sortOrder = params.sortOrder;
-    }
-
     try {
       const { data, error } = await Api.get<ListEnvelope<Blog>>(
         "blogs",
-        apiParams,
+        buildApiParams(params),
       );
 
       // Ignore stale responses
@@ -195,35 +180,10 @@ export const useBlogsStore = defineStore("blogs", () => {
     // a prefetch.
     if (searchCache.get(cacheKey)) return;
 
-    // Map params to API params (same as searchBlogs)
-    const pageSize = params.size || 20;
-    const apiParams: Record<
-      string,
-      string | number | boolean | string[] | number[] | undefined
-    > = {
-      take: pageSize,
-    };
-
-    // Convert page number to skip (number is 1-indexed page)
-    if (page > 1) {
-      apiParams.skip = (page - 1) * pageSize;
-    }
-    if (params.search) apiParams.search = params.search;
-    if (params.status) apiParams.statuses = [params.status];
-    if (params.hostUsernames && params.hostUsernames.length > 0) {
-      apiParams.hostUsernames = params.hostUsernames;
-    }
-    if (params.createdFromUtc) apiParams.createdFromUtc = params.createdFromUtc;
-    if (params.createdToUtc) apiParams.createdToUtc = params.createdToUtc;
-    if (params.activatedFromUtc)
-      apiParams.activatedFromUtc = params.activatedFromUtc;
-    if (params.activatedToUtc) apiParams.activatedToUtc = params.activatedToUtc;
-    if (params.closedFromUtc) apiParams.closedFromUtc = params.closedFromUtc;
-    if (params.closedToUtc) apiParams.closedToUtc = params.closedToUtc;
-    if (params.sortBy) apiParams.sortBy = params.sortBy;
-    if (params.sortOrder) apiParams.sortOrder = params.sortOrder;
-
-    const { data } = await Api.get<ListEnvelope<Blog>>("blogs", apiParams);
+    const { data } = await Api.get<ListEnvelope<Blog>>(
+      "blogs",
+      buildApiParams(params),
+    );
     if (data) {
       searchCache.set(cacheKey, data);
     }

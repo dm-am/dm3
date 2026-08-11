@@ -1,9 +1,7 @@
 import { createVfm } from "vue-final-modal";
-import Toast, { type PluginOptions, POSITION } from "vue-toastification";
 import type { App } from "vue";
 
 import "vue-final-modal/style.css";
-import "vue-toastification/dist/index.css";
 
 // vue-i18n is deliberately absent. It used to be installed here with an empty
 // message catalogue and never called once — no $t, no useI18n, nothing — while
@@ -12,14 +10,13 @@ import "vue-toastification/dist/index.css";
 // plugin was cost without a purpose. If a second language ever appears, it
 // starts with a decision about the catalogue, not with reinstating a plugin.
 
-export const vfm = createVfm();
+// vue-toastification is deliberately absent for the same reason. It was
+// installed here with its stylesheet, in the entry chunk, while every toast on
+// the site goes through shared/lib/composables/useToast and shared/ui/Toast,
+// and not one call ever reached the plugin.
 
-export const toastOptions: PluginOptions = {
-  position: POSITION.TOP_RIGHT,
-  timeout: 5000,
-};
+export const vfm = createVfm();
 
 export function installPlugins(app: App) {
   app.use(vfm);
-  app.use(Toast, toastOptions);
 }

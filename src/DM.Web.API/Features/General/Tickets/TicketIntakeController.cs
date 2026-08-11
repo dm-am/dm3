@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Net;
 using System.Threading.Tasks;
 using DM.Web.API.Swagger;
 using DM.Web.API.Shared.Dto;
@@ -94,6 +95,11 @@ public class TicketIntakeController : ControllerBase
         [FromHeader(Name = TokenHeaders.Ticket)] string? token)
     {
         var ticket = await _ticketIntakeApiService.TrackTicket(token ?? string.Empty);
-        return ticket != null ? Ok(new Envelope<TrackedTicket>(ticket)) : NotFound();
+        if (ticket == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
+        }
+
+        return Ok(new Envelope<TrackedTicket>(ticket));
     }
 }

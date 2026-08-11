@@ -107,12 +107,16 @@ internal class BlogService : IBlogService
         }
 
         // The premoderation filter is a mentor review-queue tool; silently
-        // ignore it for regular callers instead of failing the request.
+        // ignore it for regular callers instead of failing the request. Who
+        // counts as one is answered by the intention the premoderation
+        // transitions ask, so the threshold stays in the resolver alone.
         var identity = _identityProvider.Current;
         var resolvedFilter = filter with
         {
             HostUserIds = hostUserIds,
-            PremoderationStatuses = identity.User.Role < UserRole.Mentor ? null : filter.PremoderationStatuses,
+            PremoderationStatuses = _intentionManager.IsAllowed(BlogIntention.SetStatusModeration)
+                ? filter.PremoderationStatuses
+                : null,
             CurrentUserId = identity.User.UserId
         };
 

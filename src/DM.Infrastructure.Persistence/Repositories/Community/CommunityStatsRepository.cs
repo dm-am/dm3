@@ -79,7 +79,9 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             })
             .OrderByDescending(x => x.RatingSum)
             .Take(1)
-            .Join(_dbContext.Posts.Include(p => p.Author).Include(p => p.Room).ThenInclude(r => r.Game),
+            // No Include on the join source: the result is an anonymous projection, and EF
+            // drops it there for the same reason it drops one before a Select.
+            .Join(_dbContext.Posts,
                 x => x.PostId,
                 p => p.PostId,
                 (x, p) => new

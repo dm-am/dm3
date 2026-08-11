@@ -5,6 +5,7 @@ import type { Chat, ChatId, Message, MessageId } from "./types";
 import type { Username } from "@/shared/api/models/common";
 import messagingApi from "../api/messagingApi";
 import { useAuthStore } from "@/shared/stores";
+import { usePaging } from "@/shared/lib/composables/usePaging";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 
 const PAGE_SIZE = 50;
@@ -12,6 +13,7 @@ const MAX_MESSAGES = 500;
 
 export const useMessagingStore = defineStore("messaging", () => {
   const { user: currentUser } = storeToRefs(useAuthStore());
+  const { entitiesPerPage } = usePaging();
 
   // Error state for messaging operations
   const error = ref<string | null>(null);
@@ -23,7 +25,7 @@ export const useMessagingStore = defineStore("messaging", () => {
   async function fetchChats(number: number = 1) {
     loadingChats.value = true;
     try {
-      const take = currentUser.value?.settings?.paging?.entitiesPerPage ?? 20;
+      const take = entitiesPerPage.value;
       const { data, error: err } = await messagingApi.getChats({
         number,
         take,

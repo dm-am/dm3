@@ -9,7 +9,8 @@ namespace DM.Architecture.Tests;
 
 /// <summary>
 /// A domain assembly names no infrastructure: not the database driver, not the
-/// logging library, not the web framework, not the persistence project.
+/// document store, not the broker client, not the logging library, not the web
+/// framework, not the persistence project.
 /// </summary>
 /// <remarks>
 /// This is the breach that came back the most. Serilog reached DM.Domain.Account
@@ -41,9 +42,12 @@ public class DomainPurityShould
     private static readonly string[] Infrastructure =
     [
         "Npgsql",
+        "MongoDB",
         "Serilog",
         "Microsoft.AspNetCore",
         "Microsoft.EntityFrameworkCore",
+        "RabbitMQ",
+        "Jamq",
         "DM.Infrastructure",
     ];
 

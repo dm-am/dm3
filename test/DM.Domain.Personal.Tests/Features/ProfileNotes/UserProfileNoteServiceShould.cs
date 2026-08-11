@@ -83,8 +83,8 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task ReturnNullWhenGettingNoteForNonexistentUser()
     {
-        _userRepository.Setup(r => r.GetUserAsync("Unknown"))
-            .ReturnsAsync((GeneralUser?)null);
+        _userRepository.Setup(r => r.FindUserIdAsync("Unknown"))
+            .ReturnsAsync((Guid?)null);
 
         var result = await _service.GetNote("Unknown");
 
@@ -94,10 +94,9 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task GetNoteSuccessfully()
     {
-        var subjectUser = new GeneralUser { UserId = _subjectUserId, Username = "Subject" };
         var note = new UserProfileNote { Id = _noteId };
 
-        _userRepository.Setup(r => r.GetUserAsync("Subject")).ReturnsAsync(subjectUser);
+        _userRepository.Setup(r => r.FindUserIdAsync("Subject")).ReturnsAsync(_subjectUserId);
         _repository.Setup(r => r.Get(_currentUserId, _subjectUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(note);
 
@@ -122,8 +121,8 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenUpsertingNoteForNonexistentUser()
     {
-        _userRepository.Setup(r => r.GetUserAsync("Unknown"))
-            .ReturnsAsync((GeneralUser?)null);
+        _userRepository.Setup(r => r.FindUserIdAsync("Unknown"))
+            .ReturnsAsync((Guid?)null);
 
         var createNote = new CreateUserProfileNote { SubjectUsername = "Unknown", Text = "Note" };
         var act = () => _service.UpsertNote(createNote);
@@ -136,8 +135,7 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenCreatingNoteAboutYourself()
     {
-        var currentUser = new GeneralUser { UserId = _currentUserId, Username = "CurrentUser" };
-        _userRepository.Setup(r => r.GetUserAsync("CurrentUser")).ReturnsAsync(currentUser);
+        _userRepository.Setup(r => r.FindUserIdAsync("CurrentUser")).ReturnsAsync(_currentUserId);
 
         var createNote = new CreateUserProfileNote { SubjectUsername = "CurrentUser", Text = "Note" };
         var act = () => _service.UpsertNote(createNote);
@@ -150,10 +148,9 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task DeleteNoteWhenUpsertingWithEmptyText()
     {
-        var subjectUser = new GeneralUser { UserId = _subjectUserId, Username = "Subject" };
         var existingNote = new UserProfileNote { Id = _noteId };
 
-        _userRepository.Setup(r => r.GetUserAsync("Subject")).ReturnsAsync(subjectUser);
+        _userRepository.Setup(r => r.FindUserIdAsync("Subject")).ReturnsAsync(_subjectUserId);
         _repository.Setup(r => r.Get(_currentUserId, _subjectUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(existingNote);
 
@@ -167,8 +164,7 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task CreateNewNoteWhenNoneExists()
     {
-        var subjectUser = new GeneralUser { UserId = _subjectUserId, Username = "Subject" };
-        _userRepository.Setup(r => r.GetUserAsync("Subject")).ReturnsAsync(subjectUser);
+        _userRepository.Setup(r => r.FindUserIdAsync("Subject")).ReturnsAsync(_subjectUserId);
         _repository.Setup(r => r.Get(_currentUserId, _subjectUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((UserProfileNote?)null);
 
@@ -191,10 +187,9 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task UpdateExistingNote()
     {
-        var subjectUser = new GeneralUser { UserId = _subjectUserId, Username = "Subject" };
         var existingNote = new UserProfileNote { Id = _noteId };
 
-        _userRepository.Setup(r => r.GetUserAsync("Subject")).ReturnsAsync(subjectUser);
+        _userRepository.Setup(r => r.FindUserIdAsync("Subject")).ReturnsAsync(_subjectUserId);
         _repository.Setup(r => r.Get(_currentUserId, _subjectUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(existingNote);
 
@@ -215,10 +210,9 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task DeleteNoteSuccessfully()
     {
-        var subjectUser = new GeneralUser { UserId = _subjectUserId, Username = "Subject" };
         var note = new UserProfileNote { Id = _noteId };
 
-        _userRepository.Setup(r => r.GetUserAsync("Subject")).ReturnsAsync(subjectUser);
+        _userRepository.Setup(r => r.FindUserIdAsync("Subject")).ReturnsAsync(_subjectUserId);
         _repository.Setup(r => r.Get(_currentUserId, _subjectUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(note);
 

@@ -4,6 +4,8 @@ using DM.Domain.Core.Exceptions;
 using DM.Web.API.Shared.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Personal.ProfileNotes;
 
@@ -24,6 +26,7 @@ namespace DM.Web.API.Features.Personal.ProfileNotes;
 [ApiExplorerSettings(GroupName = "Personal")]
 [Tags("ProfileNotes")]
 [AuthenticationRequired]
+[EnableRateLimiting(RateLimitPolicies.Default)]
 public class UserProfileNoteController : ControllerBase
 {
     private readonly IUserProfileNoteApiService _userProfileNoteApiService;

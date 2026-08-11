@@ -82,10 +82,9 @@ public class CompositionRootShould
         var program = File.ReadAllText(Path.Combine(
             RepositoryRoot, "src", "DM.Tools.Seeder", "Program.cs"));
 
-        if (!program.Contains("typeof(ISecurityManager).Assembly", StringComparison.Ordinal))
-        {
-            return;
-        }
+        program.Should().Contain("typeof(ISecurityManager).Assembly",
+            "the assertion below is about the assembly this marker names, so a seeder that " +
+            "scans another one has to be seen rather than silently excused");
 
         program.Should().Contain("AddDmAccountConfiguration",
             "the tool scans the whole account assembly, whose types read four option " +

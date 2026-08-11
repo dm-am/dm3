@@ -294,7 +294,11 @@ onMounted(fetchEntries);
               <h3>
                 {{ editingEntry ? "Редактирование записи" : "Новая запись" }}
               </h3>
-              <button class="close-btn" @click="closeEditor">
+              <button
+                class="close-btn"
+                aria-label="Закрыть"
+                @click="closeEditor"
+              >
                 {{ symbols.close }}
               </button>
             </div>

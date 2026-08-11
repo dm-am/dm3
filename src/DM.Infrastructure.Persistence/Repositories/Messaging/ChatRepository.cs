@@ -227,26 +227,15 @@ internal class ChatRepository : IChatRepository
     }
 
     /// <inheritdoc />
-    public async Task Delete(Guid chatId)
-    {
-        var chat = await _dbContext.Chats
-            .Include(c => c.UserLinks)
-            .FirstOrDefaultAsync(c => c.ChatId == chatId);
-
-        if (chat == null) return;
-
-        // Remove all user links
-        _dbContext.UserChatLinks.RemoveRange(chat.UserLinks);
-
-        // Remove all messages
-        var messages = await _dbContext.Messages
-            .Where(m => m.ChatId == chatId)
-            .ToArrayAsync();
-        _dbContext.Messages.RemoveRange(messages);
-
-        // Remove the chat itself
-        _dbContext.Chats.Remove(chat);
-
-        await _dbContext.SaveChangesAsync();
-    }
+    /// <remarks>
+    /// One statement, because the database already carries the rest: messages,
+    /// their edits and the participation links hang off the chat with ON DELETE
+    /// CASCADE. Reading the correspondence back to delete it row by row pulled
+    /// every message body into memory only to throw it away, and that cost grew
+    /// with the length of the conversation without any bound.
+    /// </remarks>
+    public async Task Delete(Guid chatId) =>
+        await _dbContext.Chats
+            .Where(c => c.ChatId == chatId)
+            .ExecuteDeleteAsync();
 }

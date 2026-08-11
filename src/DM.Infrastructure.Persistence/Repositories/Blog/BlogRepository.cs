@@ -315,10 +315,11 @@ internal class BlogRepository : IBlogRepository
     public async Task<IEnumerable<Publication>> GetPublications(
         Guid blogId, Guid? rubricId, bool includeUnpublished, PagingData paging, CancellationToken ct = default)
     {
+        // No Include: the query ends in ProjectTo, which builds its own Select and makes
+        // EF drop every Include with a warning. Author and rubric come from the mapping
+        // expression.
         var query = _dbContext.Publications
             .TagWith("DM.Blog.ListPublications")
-            .Include(p => p.Author)
-            .Include(p => p.Rubric)
             .Where(p => !p.IsRemoved && p.BlogId == blogId);
 
         if (!includeUnpublished)

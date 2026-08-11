@@ -11,6 +11,7 @@ using DM.Domain.Core.Extensions;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Posts;
 using DM.Infrastructure.Persistence.RelationalStorage;
+using DM.Infrastructure.Persistence.Repositories.Search;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 using DbPost = DM.Infrastructure.Persistence.Entities.Game.Posts.Post;
@@ -124,15 +125,18 @@ internal class PostRepository : IPostRepository
 
         // Search filter (case-insensitive contains on GameText, excluding [private] blocks).
         // Uses PostgreSQL regexp_replace via DbFunction mapping to strip [private=X]...[/private]
-        // before matching, so private text is never included in search results.
+        // before matching, so private text is never included in search results. Pattern and
+        // replacement are the ones Post.SearchVector and the snippet use: cutting the block
+        // out with nothing in its place welds the words on either side of it into one the
+        // post never contained, and that word then matches.
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             var pattern = $"%{query.Search}%";
             baseQuery = baseQuery.Where(p => EF.Functions.ILike(
                 DmDbContext.RegexpReplace(
                     p.GameText,
-                    @"\[private(=[^\]]*)?\][\s\S]*?\[/private\]",
-                    "",
+                    SearchSnippet.PrivateBlockPattern,
+                    " ",
                     "gi"),
                 pattern));
         }
@@ -540,10 +544,6 @@ internal class PostRepository : IPostRepository
         // Update character if requested
         if (updatePost.ShouldChangeCharacter)
             post.CharacterId = updatePost.CharacterId;
-
-        // Handle soft delete if requested
-        if (updatePost.IsRemoved.HasValue)
-            post.IsRemoved = updatePost.IsRemoved.Value;
 
         await _dbContext.SaveChangesAsync();
 

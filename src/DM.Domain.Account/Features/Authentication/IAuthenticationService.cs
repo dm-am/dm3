@@ -50,7 +50,7 @@ public interface IAuthenticationService
     /// <summary>
     /// Logout from all devices except this
     /// </summary>
-    /// <returns>Newly created authentication identity</returns>
+    /// <returns>The identity in hand: the current session is the one kept, not reissued</returns>
     Task<IIdentity> LogoutElsewhere();
 
     /// <summary>

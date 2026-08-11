@@ -72,8 +72,6 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
   <table
     class="data-table"
     :class="{ 'layout-auto': tableLayout === 'auto' }"
-    cellspacing="1"
-    cellpadding="4"
     :aria-busy="loading ? 'true' : undefined"
     :aria-label="ariaLabel"
   >

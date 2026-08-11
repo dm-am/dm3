@@ -57,7 +57,6 @@ public class DatabaseFixture : IAsyncLifetime
     public string ConnectionString { get; private set; } = string.Empty;
     public string MongoConnectionString { get; private set; } = string.Empty;
     public string RabbitMqConnectionString { get; private set; } = string.Empty;
-    public bool IsSeeded { get; private set; }
 
     public CustomWebApplicationFactory Factory => _sharedFactory ??= new CustomWebApplicationFactory(this);
 
@@ -88,7 +87,6 @@ public class DatabaseFixture : IAsyncLifetime
         // that need it, so no preparation is required here.
         await context.Database.MigrateAsync();
         await SeedAllAsync(context);
-        IsSeeded = true;
     }
 
     public async Task DisposeAsync()

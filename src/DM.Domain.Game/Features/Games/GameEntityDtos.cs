@@ -451,11 +451,6 @@ public class UpdatePostEntity
     /// earlier one already resolved. See <see cref="PrivateAddresseeSnapshot"/>.
     /// </summary>
     public string PrivateAddresseeSnapshotJson { get; set; } = PrivateAddresseeSnapshot.Empty;
-
-    /// <summary>
-    /// Soft delete flag (if changed)
-    /// </summary>
-    public bool? IsRemoved { get; set; }
 }
 
 /// <summary>

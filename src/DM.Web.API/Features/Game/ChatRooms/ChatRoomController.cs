@@ -176,7 +176,7 @@ public class ChatRoomController : ControllerBase
         [FromBody] CreateMessageInput input)
     {
         var result = await _apiService.CreateMessageAsync(id, input);
-        return CreatedAtRoute("GetMessage", new { id = result.Resource.Id }, result);
+        return CreatedAtRoute(nameof(MessageController.GetMessage), new { id = result.Resource.Id }, result);
     }
 
     /// <summary>
