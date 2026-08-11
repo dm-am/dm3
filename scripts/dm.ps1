@@ -443,8 +443,8 @@ function Start-Services {
             exit 1
         }
 
-        # The MinIO bucket is created by the API on start, by
-        # StorageBucketInitializer. There is no mc-init step to run by hand.
+        # The MinIO bucket and its policies come from the minio-init container,
+        # which the stack starts before the API. There is no step to run by hand.
 
         # Migration
         & $script:DockerPath compose up -d migration 2>&1 | Out-Null

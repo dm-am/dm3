@@ -89,5 +89,15 @@ public class UsernamePolicyShould
         policy.IsMatch("two  spaces").Should().BeFalse();
         policy.IsMatch("<script>").Should().BeFalse("HTML-unsafe characters are refused");
         policy.IsMatch("zero​width").Should().BeFalse("a zero-width character is refused");
+
+        // A name is a path segment, and every HTTP client resolves dot-segments
+        // away before the request leaves: /users/.. is /users/, so an account
+        // called ".." has no address. The allow-list this replaced happened to
+        // refuse these by demanding an alphanumeric first and last character.
+        policy.IsMatch("..").Should().BeFalse();
+        policy.IsMatch("...").Should().BeFalse();
+        policy.IsMatch("-.-").Should().BeFalse();
+        policy.IsMatch("___").Should().BeFalse("a name with nothing to read is not a name");
+        policy.IsMatch("_x_").Should().BeTrue("one letter among the punctuation is enough");
     }
 }

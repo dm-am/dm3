@@ -162,3 +162,29 @@ groups:
         annotations:
           summary: "Consumer of {{ $labels.queue }} is retrying"
           description: "Processing keeps failing and succeeding on a later attempt. The dependency behind it is unwell."
+
+  - name: dm-backups
+    rules:
+      # Проверка бэкапов идет ночью по cron и до этого правила сообщала о себе
+      # только кодом возврата в лог-файл, который никто не читает: получателя
+      # почты на машине нет. Первым признаком беды было неудавшееся
+      # восстановление.
+      - alert: BackupVerificationFailed
+        expr: dm_backup_verification_status > 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Ночная проверка бэкапов не прошла'
+          description: 'dm_backup_verification_status = {{ $value }} (1 - предупреждение, 2 - ошибка). Смотреть /var/log/dm3-backups.log.'
+
+      # Отсутствие результата - тоже результат: скрипт не запустился, упал до
+      # записи метрики или его вовсе нет в crontab.
+      - alert: BackupVerificationStale
+        expr: time() - dm_backup_verification_timestamp_seconds > 172800
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Проверка бэкапов не отчитывалась более двух суток'
+          description: 'Последний отчет: {{ $value | humanizeDuration }} назад.'

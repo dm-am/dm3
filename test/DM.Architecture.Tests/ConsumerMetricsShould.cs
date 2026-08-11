@@ -191,12 +191,43 @@ public class ConsumerMetricsShould
     }
 
     /// <summary>Instrument names declared in the sources, as the exporter sanitises them.</summary>
-    private static HashSet<string> Published() => Directory
-        .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)
-        .Where(IsAuthored)
-        .SelectMany(path => Instrument.Matches(File.ReadAllText(path)))
-        .Select(match => match.Groups[1].Value.Replace('.', '_'))
-        .ToHashSet(StringComparer.Ordinal);
+    private static HashSet<string> Published()
+    {
+        var fromCode = Directory
+            .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(IsAuthored)
+            .SelectMany(path => Instrument.Matches(File.ReadAllText(path)))
+            .Select(match => match.Groups[1].Value.Replace('.', '_'));
+
+        return fromCode.Concat(FromTextfileCollector()).ToHashSet(StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Series a maintenance script writes for node-exporter to pick up.
+    /// </summary>
+    /// <remarks>
+    /// Not every exporter of this project is a C# instrument. The nightly backup
+    /// check runs from cron and leaves its verdict in the textfile collector's
+    /// directory, which is how a shell script gets a series at all — and it is a
+    /// series an alert has every reason to read.
+    ///
+    /// Read from the scripts rather than trusted from the rule file, so the rule
+    /// still has to point at something somebody actually writes: that is the
+    /// whole point of the check above.
+    ///
+    /// Registered under the same normalisation the references go through. A
+    /// script writes the final name, unit suffix and all, while a C# instrument
+    /// is declared without one and Prometheus appends it — so the set is keyed on
+    /// the stem either way.
+    /// </remarks>
+    private static IEnumerable<string> FromTextfileCollector() => Directory
+        .EnumerateFiles(Path.Combine(RepositoryRoot, "docker", "scripts"), "*.sh")
+        .SelectMany(path => TextfileSeries.Matches(File.ReadAllText(path)))
+        .Select(match => Base(match.Groups[1].Value));
+
+    /// <summary>A HELP line, which is what names a series in the text exposition format.</summary>
+    private static readonly Regex TextfileSeries = new(
+        @"#\s*HELP\s+(dm_\w+)", RegexOptions.Compiled);
 
     /// <summary>Series named by the rule file and the boards.</summary>
     private static IReadOnlyCollection<(string File, string Series)> Referenced() =>

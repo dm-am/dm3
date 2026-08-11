@@ -34,7 +34,7 @@ public class ViolatorController : ControllerBase
     /// <remarks>
     /// Returns users having active warning points or an active ban,
     /// sorted by points descending. Each row contains the user reference,
-    /// current points (against the 6-point auto-ban threshold) and
+    /// current points (against the scale of 6 the table draws them on) and
     /// active ban details if the user is banned.
     ///
     /// **Filter values:**

@@ -39,7 +39,8 @@ export type Violator = {
   user: UserRef;
   /** Current active warning points (the N in "N/6") */
   points: number;
-  /** Auto-ban points threshold (the 6 in "N/6") */
+  /** The 6 in "N/6": the scale the table draws points on, not a limit that
+   * triggers anything. There is no automatic ban in DM3. */
   pointsThreshold: number;
   /** Moment of the latest active warning (null if the user only has a ban) */
   lastWarningUtc?: string | null;

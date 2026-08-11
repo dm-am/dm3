@@ -313,10 +313,6 @@ public class DeploymentConfigurationShould
     }
 
     /// <summary>
-    /// The scoped accounts have to exist before the first upload, and only root
-    /// can create them — which is the whole of what root is still for.
-    /// </summary>
-    /// <summary>
     /// Anonymous reads reach the prefixes the product declared public, and no
     /// others.
     /// </summary>
@@ -379,6 +375,10 @@ public class DeploymentConfigurationShould
         return end < 0 ? null : text[start..end];
     }
 
+    /// <summary>
+    /// The scoped accounts have to exist before the first upload, and only root
+    /// can create them — which is the whole of what root is still for.
+    /// </summary>
     [Fact]
     public void CreateTheScopedObjectStoreAccountsFromABootstrapContainer()
     {
@@ -642,9 +642,17 @@ public class DeploymentConfigurationShould
             .Split("set_value ASPNETCORE_ENVIRONMENT Production", StringSplitOptions.None);
         environmentBlock.Should().HaveCount(2,
             "the environment is set in exactly one place");
-        environmentBlock[0].Should().NotEndWith("EXISTING\" = 0 ]; then\n",
-            "setting it only on a freshly created file is what left a hand-copied " +
-            "server .env running in Development");
+
+        // The condition guarding it, whatever it is. Asserted as "does not test
+        // EXISTING" rather than as "does not end with a particular string": the
+        // first draft of this compared against a line the file cannot contain, so
+        // it was true no matter what the script said.
+        var guard = environmentBlock[0][(environmentBlock[0].LastIndexOf("if [", StringComparison.Ordinal))..];
+        guard.Should().NotContain("EXISTING",
+            "setting the environment only on a file this run created is what left a " +
+            "hand-copied server .env running in Development");
+        guard.Should().Contain("\"$MODE\" = \"server\"",
+            "and it is a server the rule is about");
 
         generator.Should().Contain("still holds the example values for",
             "an existing server file carrying the repository's passwords has to be " +

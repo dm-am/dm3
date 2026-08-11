@@ -500,11 +500,16 @@ services:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /:/rootfs:ro
+      - /var/lib/node_exporter/textfile:/var/lib/node_exporter/textfile:ro
     command:
       - '--path.procfs=/host/proc'
       - '--path.rootfs=/rootfs'
       - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($|/)'
+      # Where the nightly backup check leaves its verdict. Without a collector
+      # reading it, that verdict was an exit code going into a log file and into
+      # mail on a machine with no MTA.
+      - '--collector.textfile.directory=/var/lib/node_exporter/textfile'
     restart: unless-stopped
     deploy:
       resources:

@@ -16,7 +16,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # A literal name, not ${{ github.workflow }}. Called through workflow_call, this
+  # runs inside the caller and github.workflow is the CALLER's name, so that
+  # expression asks for the group the caller is already holding — GitHub answers
+  # that by cancelling the run this job lives in. Since publishing waits on this
+  # job, the whole graph would stop before an image ever reached the registry.
+  group: security-scanning-${{ github.ref }}
   cancel-in-progress: true
 
 env:

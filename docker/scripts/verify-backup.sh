@@ -139,4 +139,26 @@ else
     echo "ERRORS detected (see above)"
 fi
 
+# The verdict goes somewhere a human will meet it. Run from cron, this script's
+# exit code went into a log file and into mail for a machine with no MTA, so a
+# missing or corrupted backup announced itself for the first time at the restore.
+# Written for the node-exporter textfile collector the stack already runs, which
+# is what turns it into an alert; the directory is created by install-cron.sh, and
+# a machine without it simply skips this.
+if [ -n "${TEXTFILE_DIR:-/var/lib/node_exporter/textfile}" ] &&
+   [ -d "${TEXTFILE_DIR:-/var/lib/node_exporter/textfile}" ]; then
+    METRICS_DIR="${TEXTFILE_DIR:-/var/lib/node_exporter/textfile}"
+    TMP_METRICS="$(mktemp "$METRICS_DIR/.dm_backup.XXXXXX")"
+    {
+        echo "# HELP dm_backup_verification_status Result of the nightly backup check: 0 ok, 1 warning, 2 error."
+        echo "# TYPE dm_backup_verification_status gauge"
+        echo "dm_backup_verification_status $EXIT_CODE"
+        echo "# HELP dm_backup_verification_timestamp_seconds When the check last finished."
+        echo "# TYPE dm_backup_verification_timestamp_seconds gauge"
+        echo "dm_backup_verification_timestamp_seconds $(date +%s)"
+    } > "$TMP_METRICS"
+    # Moved into place, so the collector never reads a half-written file.
+    mv "$TMP_METRICS" "$METRICS_DIR/dm_backup.prom"
+fi
+
 exit $EXIT_CODE

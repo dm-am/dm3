@@ -134,10 +134,15 @@ fi
 # exit 0 is indistinguishable from a clean run to the installer that calls this,
 # and the stand came up on published passwords.
 if [ "$MODE" = "server" ]; then
+    # Every value the template ships with a real one in it, not only the
+    # passwords: IMGPROXY_KEY and IMGPROXY_SALT sign the image URLs, and left as
+    # published anybody can mint a signed link to any object the renderer can
+    # reach.
     SHARED=""
     for secret in POSTGRES_PASSWORD RABBITMQ_DEFAULT_PASS MINIO_ROOT_PASSWORD \
                   GF_SECURITY_ADMIN_PASSWORD MONGO_ROOT_PASSWORD MONGO_PASSWORD \
-                  MINIO_APP_PASSWORD MINIO_IMGPROXY_PASSWORD; do
+                  MINIO_APP_PASSWORD MINIO_IMGPROXY_PASSWORD \
+                  IMGPROXY_KEY IMGPROXY_SALT; do
         example_value="$(sed -n "s|^${secret}=||p" "$EXAMPLE_FILE" | head -1)"
         actual_value="$(sed -n "s|^${secret}=||p" "$ENV_FILE" | head -1)"
         if [ -n "$example_value" ] && [ "$example_value" = "$actual_value" ]; then

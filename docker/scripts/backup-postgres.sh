@@ -50,6 +50,12 @@ echo "[$(date)] Backup created: ${DATABASE}_$TIMESTAMP.sql.gz ($BACKUP_SIZE)"
 
 # Cleanup old backups
 DELETED=$(find "$BACKUP_DIR" -name "*.sql.gz" -mtime +"$RETENTION_DAYS" -delete -print | wc -l)
+
+# The dot-file a dump is written into before it is moved into place. The trap
+# above removes it on any ordinary exit, but a killed process leaves it behind,
+# and it matches none of the patterns swept above — a partial dump nobody
+# collects, under a name no restore would reach for either.
+find "$BACKUP_DIR" -name ".${DATABASE}_*" -mtime +1 -delete
 echo "[$(date)] Cleaned up $DELETED backups older than $RETENTION_DAYS days"
 
 # Optional: replicate to S3

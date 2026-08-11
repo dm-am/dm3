@@ -19,15 +19,23 @@ namespace DM.Domain.Core.Users;
 public static class UsernamePolicy
 {
     /// <summary>
-    /// Two to twenty characters, none of them a control character, an HTML or
-    /// URL-unsafe one, a quote, a bracket or a zero-width one, and no leading,
-    /// trailing or repeated whitespace. See docs/conventions/USERNAME_POLICY.md.
+    /// Two to twenty characters with at least one letter or digit among them,
+    /// none of them a control character, an HTML or URL-unsafe one, a quote, a
+    /// bracket or a zero-width one, and no leading, trailing or repeated
+    /// whitespace. See docs/conventions/USERNAME_POLICY.md.
     /// </summary>
     /// <remarks>
+    /// The "at least one letter or digit" is the one thing the allow-list this
+    /// replaced enforced and the deny-list did not: it required the first and
+    /// last character to be alphanumeric. Without it ".." is a valid name, and a
+    /// username is a path segment — both browsers and HTTP clients resolve
+    /// dot-segments away before the request leaves, so /users/.. is /users/ and
+    /// that account's profile has no address at all.
+    ///
     /// A const rather than a static readonly: <c>GeneratedRegex</c> needs a
     /// compile-time constant, and passing it one is what lets the three
     /// validators share this instead of each carrying its own copy.
     /// </remarks>
     public const string Pattern =
-        @"^(?!\s)(?!.*\s$)(?!.*\s{2})[^\p{Cc}<>""'`\\/@?#%&\[\](){}=~!$^*+|;:\u200B-\u200F\u2028-\u202F\uFEFF]{2,20}$";
+        @"^(?=.*[\p{L}\p{N}])(?!\s)(?!.*\s$)(?!.*\s{2})[^\p{Cc}<>""'`\\/@?#%&\[\](){}=~!$^*+|;:\u200B-\u200F\u2028-\u202F\uFEFF]{2,20}$";
 }

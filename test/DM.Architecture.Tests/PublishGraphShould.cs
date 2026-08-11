@@ -38,8 +38,17 @@ public class PublishGraphShould
     /// </remarks>
     private static readonly HashSet<string> NotAGate = new(StringComparer.Ordinal);
 
-    /// <summary>A top-level job key: two spaces, a name, a colon, nothing after it.</summary>
-    private static readonly Regex JobKey = new(@"^  ([a-z][a-z0-9-]*):\s*$", RegexOptions.Compiled);
+    /// <summary>
+    /// A top-level job key: two spaces, a name, a colon, nothing after it.
+    /// </summary>
+    /// <remarks>
+    /// The character class is what YAML and GitHub allow in a job id, not what
+    /// this file happens to use today. Written as lowercase-and-hyphen only, a
+    /// job named <c>publish_docs</c> or <c>Publish</c> would be invisible to the
+    /// rule — and a check the rule cannot see is a check the publishers are not
+    /// held to waiting for, which is the whole defect this guards.
+    /// </remarks>
+    private static readonly Regex JobKey = new(@"^  ([A-Za-z_][A-Za-z0-9_-]*):\s*$", RegexOptions.Compiled);
 
     /// <summary>The needs list of the job it follows, in the inline form the file uses.</summary>
     private static readonly Regex NeedsList = new(@"^    needs:\s*\[([^\]]*)\]", RegexOptions.Compiled);
@@ -108,14 +117,14 @@ public class PublishGraphShould
         var jobs = Jobs();
         jobs.Should().HaveCountGreaterThan(5, "a reader that finds no jobs asserts nothing");
 
-        var publishers = jobs.Keys.Where(name => name.StartsWith("publish", StringComparison.Ordinal)).ToArray();
+        var publishers = jobs.Keys.Where(name => name.StartsWith("publish", StringComparison.OrdinalIgnoreCase)).ToArray();
         publishers.Should().NotBeEmpty("the rule is about the jobs that push images");
 
         foreach (var publisher in publishers)
         {
             var expected = jobs.Keys
                 .Where(name => name != publisher)
-                .Where(name => !name.StartsWith("publish", StringComparison.Ordinal))
+                .Where(name => !name.StartsWith("publish", StringComparison.OrdinalIgnoreCase))
                 .Where(name => !NotAGate.Contains(name))
                 .OrderBy(name => name, StringComparer.Ordinal);
 
