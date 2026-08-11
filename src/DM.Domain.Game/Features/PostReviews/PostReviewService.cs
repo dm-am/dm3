@@ -63,7 +63,7 @@ internal class PostReviewService : IPostReviewService
         var postId = createReview.PostId;
 
         // Get post information for authorization and denormalization
-        var postInfo = await _repository.GetPostInfoAsync(postId);
+        var postInfo = await _repository.GetPostInfoAsync(postId, authorId);
         if (postInfo == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.PostNotFound);

@@ -86,7 +86,8 @@ public interface IPostReviewRepository
     /// Get post information for review creation (author ID, game ID)
     /// </summary>
     /// <param name="postId">Post ID</param>
-    Task<PostInfo?> GetPostInfoAsync(Guid postId);
+    /// <param name="userId">Identifier of the reader asking, whose room access scopes the read</param>
+    Task<PostInfo?> GetPostInfoAsync(Guid postId, Guid userId);
 
     /// <summary>
     /// Check if user has a recent post review in the specified game

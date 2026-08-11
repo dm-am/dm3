@@ -26,8 +26,11 @@ internal class UserEndorsementIntentionResolver :
         intention switch
         {
             UserEndorsementIntention.Edit => user.UserId == target.Author.UserId,
+            // Deleting somebody's stated opinion is a step above deleting a comment,
+            // and AUTHORIZATION.md puts it there with profile moderation: the author
+            // themselves, or a senior moderator.
             UserEndorsementIntention.Delete =>
-                user.UserId == target.Author.UserId || user.Role >= UserRole.Moderator,
+                user.UserId == target.Author.UserId || user.Role >= UserRole.SeniorModerator,
             _ => false
         };
 }

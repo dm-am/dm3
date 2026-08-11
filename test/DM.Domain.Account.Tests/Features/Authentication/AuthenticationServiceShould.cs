@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Account.Configuration;
 using DM.Domain.Account.Features.Authentication;
@@ -7,6 +8,7 @@ using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Testing.Dsl;
 using DM.Testing;
@@ -575,7 +577,11 @@ public class AuthenticationServiceShould : UnitTestBase
 
         _identityProvider.Setup(p => p.Current).Returns(identity);
 
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+        // Not the caller's session to end, and a refusal is a refusal: the error
+        // middleware maps HttpException and its kin and nothing else, so anything
+        // outside that family reaches the client as a server fault.
+        var thrown = await Assert.ThrowsAsync<HttpException>(
             () => _service.TerminateSession(otherUserId, sessionId));
+        thrown.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 }

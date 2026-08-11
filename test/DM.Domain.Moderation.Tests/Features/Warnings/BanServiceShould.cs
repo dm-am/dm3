@@ -128,8 +128,9 @@ public class BanServiceShould : UnitTestBase
 
         var act = () => _service.GetAllActiveBans();
 
-        await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Only moderators can view all bans");
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden)
+            .WithMessage("Список банов доступен модераторам");
     }
 
     [Fact]
@@ -152,8 +153,9 @@ public class BanServiceShould : UnitTestBase
 
         var act = () => _service.GetBanHistory(0, 20);
 
-        await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Only moderators can view ban history");
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden)
+            .WithMessage("История банов доступна модераторам");
     }
 
     [Fact]
@@ -178,8 +180,9 @@ public class BanServiceShould : UnitTestBase
         var createBan = new CreateBan { Username = "Target", IsVoluntary = false, DurationHours = 24 };
         var act = () => _service.CreateBan(createBan);
 
-        await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Only senior moderators can create bans");
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden)
+            .WithMessage("Банить может только старший модератор");
     }
 
     [Fact]
@@ -407,8 +410,9 @@ public class BanServiceShould : UnitTestBase
 
         var act = () => _service.LiftBan(_banId);
 
-        await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Only senior moderators can lift bans");
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden)
+            .WithMessage("Снимать бан может только старший модератор");
     }
 
     [Fact]

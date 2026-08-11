@@ -126,13 +126,11 @@ public class ReviewIntentionResolversShould : UnitTestBase
     }
 
     [Theory]
-    [InlineData(ReviewKind.Game, UserRole.Moderator)]
     [InlineData(ReviewKind.Game, UserRole.SeniorModerator)]
     [InlineData(ReviewKind.Game, UserRole.Admin)]
-    [InlineData(ReviewKind.Post, UserRole.Moderator)]
     [InlineData(ReviewKind.Post, UserRole.SeniorModerator)]
     [InlineData(ReviewKind.Post, UserRole.Admin)]
-    public void LetModerationDeleteAnyReview(ReviewKind kind, UserRole role)
+    public void LetSeniorModerationDeleteAnyReview(ReviewKind kind, UserRole role)
     {
         var user = Create.User(StrangerId).WithRole(role).Please();
 
@@ -142,14 +140,20 @@ public class ReviewIntentionResolversShould : UnitTestBase
     [Theory]
     [InlineData(ReviewKind.Game, UserRole.RegularUser)]
     [InlineData(ReviewKind.Game, UserRole.Mentor)]
+    [InlineData(ReviewKind.Game, UserRole.Moderator)]
     [InlineData(ReviewKind.Post, UserRole.RegularUser)]
     [InlineData(ReviewKind.Post, UserRole.Mentor)]
-    public void NotLetAnyoneBelowModerationDeleteSomebodyElsesReview(ReviewKind kind, UserRole role)
+    [InlineData(ReviewKind.Post, UserRole.Moderator)]
+    public void NotLetAnyoneBelowSeniorModerationDeleteSomebodyElsesReview(ReviewKind kind, UserRole role)
     {
         var user = Create.User(StrangerId).WithRole(role).Please();
 
         // A mentor curates games. That is not a moderation rank and buys nothing
         // over other people's reviews.
+        //
+        // A moderator stops at the rank AUTHORIZATION.md draws: forum topics and
+        // comments are theirs, a stated opinion about a game or a person is not.
+        // Deleting one silences its author and moves a rating with it.
         MayDelete(kind, user, AuthorId).Should().BeFalse();
     }
 

@@ -333,7 +333,8 @@ internal class AuthenticationService : IAuthenticationService
         // Security check: can only terminate own sessions
         if (identity.User.UserId != userId)
         {
-            throw new UnauthorizedAccessException("Cannot terminate sessions of other users");
+            throw new HttpException(HttpStatusCode.Forbidden,
+                "Завершить чужую сессию нельзя");
         }
 
         // Cannot terminate current session - use Logout instead

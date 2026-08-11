@@ -89,10 +89,9 @@ public class UserEndorsementIntentionResolverShould
     }
 
     [Theory]
-    [InlineData(UserRole.Moderator)]
     [InlineData(UserRole.SeniorModerator)]
     [InlineData(UserRole.Admin)]
-    public void LetModerationDeleteAnyEndorsement(UserRole role)
+    public void LetSeniorModerationDeleteAnyEndorsement(UserRole role)
     {
         var user = Create.User(StrangerId).WithRole(role).Please();
 
@@ -103,10 +102,14 @@ public class UserEndorsementIntentionResolverShould
     [Theory]
     [InlineData(UserRole.RegularUser)]
     [InlineData(UserRole.Mentor)]
-    public void NotLetAnyoneBelowModerationDeleteSomebodyElsesEndorsement(UserRole role)
+    [InlineData(UserRole.Moderator)]
+    public void NotLetAnyoneBelowSeniorModerationDeleteSomebodyElsesEndorsement(UserRole role)
     {
         var user = Create.User(StrangerId).WithRole(role).Please();
 
+        // An endorsement is a stated opinion about a person, and AUTHORIZATION.md
+        // keeps it with profile moderation rather than with comments: a moderator
+        // stops here.
         resolver.IsAllowed(user, UserEndorsementIntention.Delete, EndorsementBy(AuthorId))
             .Should().BeFalse();
     }
@@ -114,7 +117,6 @@ public class UserEndorsementIntentionResolverShould
     #region Behaviour as found
 
     [Theory]
-    [InlineData(UserRole.Moderator)]
     [InlineData(UserRole.SeniorModerator)]
     [InlineData(UserRole.Admin)]
     public void GiveModerationNoWayToCorrectAnEndorsementShortOfDeletingIt(UserRole role)
