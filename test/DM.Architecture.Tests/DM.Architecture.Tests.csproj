@@ -7,12 +7,10 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="AWSSDK.S3" />
         <PackageReference Include="FluentAssertions" />
         <!-- The transport type the disposability rule matches on. It also arrives
              transitively through the mail worker, but a rule that stops compiling
-             the day that project drops the package is not a rule. The same goes
-             for the S3 client the service-layer rule names. -->
+             the day that project drops the package is not a rule. -->
         <PackageReference Include="MailKit" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" />
         <PackageReference Include="TngTech.ArchUnitNET" />

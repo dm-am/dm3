@@ -13,15 +13,10 @@
     </ItemGroup>
 
     <ItemGroup>
-        <!-- Autofac only for the module that declares this assembly's lifetimes. The
-             options packages are for the configuration extension that ships next to
-             it, the same pairing the account domain uses. -->
+        <!-- Autofac only for the module that declares this assembly's lifetimes. No
+             options packages: this assembly reads no configuration and ships no
+             configuration extension, which is what the account domain has them for. -->
         <PackageReference Include="Autofac" />
         <PackageReference Include="FluentValidation" />
-        <PackageReference Include="Microsoft.Extensions.Configuration" />
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
-        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
-        <PackageReference Include="Microsoft.Extensions.Options" />
-        <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
     </ItemGroup>
 </Project>

@@ -14,12 +14,10 @@
       <PackageReference Include="Microsoft.Extensions.Configuration" />
       <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
       <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
-      <PackageReference Include="Polly" />
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\DM.Infrastructure.Core\DM.Infrastructure.Core.csproj" />
-      <ProjectReference Include="..\DM.Infrastructure.Persistence\DM.Infrastructure.Persistence.csproj" />
     </ItemGroup>
 
 
