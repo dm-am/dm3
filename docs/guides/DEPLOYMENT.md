@@ -21,12 +21,16 @@ Internet → Nginx → Frontend (Vue.js)
 
 | Workflow | Файл | Триггеры | Действия |
 |----------|------|----------|----------|
-| Build & Test | `dotnet.yml` | push/PR в main, dev | Сборка, тесты, проверки качества и публикация образов; перечень job и их зависимости — в самом файле |
-| Security | `security.yml` | push/PR + weekly | OWASP ZAP scan (full docker compose) |
+| Build & Test | `dotnet.yml` | push/PR в main, dev; теги `v*` | Сборка, тесты, проверки качества и публикация образов; перечень job и их зависимости — в самом файле |
+| Security | `security.yml` | вызывается из `dotnet.yml` + weekly | CodeQL и OWASP ZAP scan (full docker compose) |
+
+Сканы безопасности вызываются из графа сборки, а не запускаются рядом с ним: джобу
+другого воркфлоу нельзя назвать в `needs`, а публикация образов обязана их ждать.
 
 **Образы публикуются в:** GHCR, под префиксом `IMAGE_PREFIX` из `dotnet.yml`. Имя каждого публикуемого образа обязано совпадать с тем, что тянет `docker/docker-compose.yml`, иначе CI публикует артефакт, который никто не потребляет.
 
-**Теги:** короткий sha коммита (без приставки), `main`, `dev`, `latest` (только main).
+**Теги:** короткий sha коммита (без приставки), `main`, `dev`, имя тега для релизных
+тегов `v*`, `latest` (только main).
 Именно короткий sha, а не `sha-<commit>`: `docker/metadata-action` вызывается с пустым
 `prefix`, который отменяет ее приставку по умолчанию. Таблица отката ниже опирается на этот
 же формат.
@@ -96,8 +100,13 @@ docker compose --profile production -f docker-compose.yml -f docker-compose.prev
 watchtower: раз в пять минут он перечитывает тег и перезапускает контейнеры с
 меткой `com.centurylinklabs.watchtower.enable=true`. Пин на конкретный sha
 обновления останавливает, тег неподвижен. Миграции watchtower не прогоняет,
-контейнер `migration` одноразовый, поэтому релиз со схемой требует
-`systemctl restart dm3`.
+контейнер `migration` одноразовый и отрабатывает только на подъеме стенда. Пока
+действует правило единственной `InitialCreate`
+([DATA_STORAGE.md](../conventions/DATA_STORAGE.md)), релиз со схемой не доезжает
+и с перезапуском: пересозданная миграция уже числится в `__EFMigrationsHistory`,
+`Database.Migrate()` новых не находит, контейнер выходит нулем, и API поднимается
+на старой схеме. До триггера, описанного в том же разделе, схему на стенде
+обновляет только полный ресет базы.
 
 **Файлы:**
 - [`docker/docker-compose.preview.yml`](../../docker/docker-compose.preview.yml)
