@@ -63,7 +63,12 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
         var note = await _noteRepository.GetNote(noteId)
             ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ModerationNoteNotFound(noteId));
 
-        var user = await _userLookupService.GetAsync(note.User.UserId);
+        // Not a lookup: the value is unused and the call is the check. GetAsync
+        // answers 410 Gone for a user who is no longer there, so a note whose
+        // subject has departed is refused rather than served. Written as a bound
+        // variable it read as a leftover, and removing it as one would have
+        // changed what the endpoint answers.
+        await _userLookupService.GetAsync(note.User.UserId);
 
         _intentionManager.ThrowIfForbidden(ModerationIntention.ViewModNotes);
 
@@ -98,7 +103,12 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
         var note = await _noteRepository.GetNote(updateNote.Id)
             ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ModerationNoteNotFound(updateNote.Id));
 
-        var user = await _userLookupService.GetAsync(note.User.UserId);
+        // Not a lookup: the value is unused and the call is the check. GetAsync
+        // answers 410 Gone for a user who is no longer there, so a note whose
+        // subject has departed is refused rather than served. Written as a bound
+        // variable it read as a leftover, and removing it as one would have
+        // changed what the endpoint answers.
+        await _userLookupService.GetAsync(note.User.UserId);
 
         _intentionManager.ThrowIfForbidden(ModerationIntention.EditModNote);
 
@@ -127,7 +137,12 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
         var note = await _noteRepository.GetNote(noteId)
             ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ModerationNoteNotFound(noteId));
 
-        var user = await _userLookupService.GetAsync(note.User.UserId);
+        // Not a lookup: the value is unused and the call is the check. GetAsync
+        // answers 410 Gone for a user who is no longer there, so a note whose
+        // subject has departed is refused rather than served. Written as a bound
+        // variable it read as a leftover, and removing it as one would have
+        // changed what the endpoint answers.
+        await _userLookupService.GetAsync(note.User.UserId);
 
         _intentionManager.ThrowIfForbidden(ModerationIntention.DeleteModNote);
 
