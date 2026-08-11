@@ -552,6 +552,45 @@ public class DeploymentConfigurationShould
     }
 
     /// <summary>
+    /// A server never comes up in Development, and never on the passwords printed
+    /// in this repository.
+    /// </summary>
+    /// <remarks>
+    /// Topping up an existing file used to leave both. The environment stayed as
+    /// the template had it — Development, which mounts Swagger, relaxes the CSP
+    /// to script-src 'self' 'unsafe-inline' and drops Strict-Transport-Security —
+    /// and the credentials stayed as the template had them, which is to say
+    /// published. The script noted both on stderr and exited 0, and to the
+    /// installer calling it that is a clean run.
+    ///
+    /// The two are fixed differently on purpose. The environment is read at
+    /// startup and bound to nothing, so it is simply set. A password is baked
+    /// into the Mongo and MinIO users at first boot, so rotating it on a live
+    /// stand locks the API out of its own stores — the script refuses instead.
+    /// </remarks>
+    [Fact]
+    public void RefuseToApproveAServerFileStillHoldingTheTemplatesSecrets()
+    {
+        var generator = File.ReadAllText(
+            Path.Combine(DockerDirectory, "scripts", "init-env.sh"));
+
+        var environmentBlock = generator
+            .Split("set_value ASPNETCORE_ENVIRONMENT Production", StringSplitOptions.None);
+        environmentBlock.Should().HaveCount(2,
+            "the environment is set in exactly one place");
+        environmentBlock[0].Should().NotEndWith("EXISTING\" = 0 ]; then\n",
+            "setting it only on a freshly created file is what left a hand-copied " +
+            "server .env running in Development");
+
+        generator.Should().Contain("still holds the example values for",
+            "an existing server file carrying the repository's passwords has to be " +
+            "refused, not noted");
+        generator.Should().MatchRegex(@"still holds the example values for[\s\S]{0,400}exit 1",
+            "and refused with a non-zero code: a note on stderr beside exit 0 reads " +
+            "as success to whatever called this");
+    }
+
+    /// <summary>
     /// The server runs what CI published, it does not build.
     /// </summary>
     /// <remarks>

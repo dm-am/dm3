@@ -59,6 +59,20 @@ check_backup_dir() {
             EXIT_CODE=2
         fi
     fi
+
+    # Whole, not merely well formed. A dump cut off halfway is a valid gzip of a
+    # valid prefix: it decompresses, it is far over a kilobyte, and its timestamp
+    # is the newest in the directory — every check above says yes, and the file a
+    # restore would reach for first stops mid-table. The marker below is the last
+    # line pg_dump writes.
+    if echo "$LATEST_FILE" | grep -q '\.sql\.gz$'; then
+        if gunzip -c "$LATEST_FILE" 2>/dev/null | tail -c 4096 | grep -q "PostgreSQL database dump complete"; then
+            echo "  Completeness: OK"
+        else
+            echo "  ERROR: Backup is truncated — pg_dump did not finish!"
+            EXIT_CODE=2
+        fi
+    fi
 }
 
 # MinIO пишет не файл, а каталог на запуск: mc mirror раскладывает объекты
