@@ -1,7 +1,8 @@
 using System.Linq;
+using System.Net;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
@@ -38,20 +39,15 @@ internal class AuthenticationRequiredAttribute : TypeFilterAttribute
                 return;
             }
 
-            // Check if identity is set and user is authenticated
+            // Thrown rather than answered with a result of this filter's own.
+            // The body of a refusal has one author, ErrorHandlingMiddleware, and
+            // the hand-built one here carried neither the correlation token every
+            // other refusal carries nor a sentence in the language of the screen
+            // it is shown on.
             var identity = identityProvider.Current;
             if (identity?.User == null || !identity.User.IsAuthenticated)
             {
-                context.Result = new ObjectResult(new
-                {
-                    type = "https://tools.ietf.org/html/rfc9110#section-15.5.2",
-                    title = "User must be authenticated",
-                    status = StatusCodes.Status401Unauthorized
-                })
-                {
-                    StatusCode = StatusCodes.Status401Unauthorized,
-                    ContentTypes = { "application/problem+json" }
-                };
+                throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
             }
         }
     }

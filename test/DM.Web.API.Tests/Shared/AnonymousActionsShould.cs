@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Reflection;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Testing;
 using DM.Testing.Dsl;
@@ -76,9 +78,13 @@ public class AnonymousActionsShould : UnitTestBase
     {
         var context = ContextFor(authenticated: false);
 
-        Filter(authenticated: false).OnAuthorization(context);
+        Action refusal = () => Filter(authenticated: false).OnAuthorization(context);
 
-        context.Result.Should().NotBeNull("this is the rule the filter exists for");
+        refusal.Should().Throw<HttpException>("this is the rule the filter exists for")
+            .Which.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        context.Result.Should().BeNull(
+            "the refusal is thrown and not shaped here: ErrorHandlingMiddleware writes the " +
+            "body of every one of them, which is what puts the correlation token in");
     }
 
     [Fact]
