@@ -33,11 +33,13 @@ public class LoginRequest
     public string? Website { get; set; }
 
     /// <summary>
-    /// Remember session for 365 days (true) or 24 hours (false)
+    /// Keep the session past the browser being closed
     /// </summary>
     /// <remarks>
-    /// When true, the session cookie will persist for 365 days.
-    /// When false, the session expires after 24 hours of inactivity.
+    /// True issues a persistent session cookie and the longer of the two
+    /// configured lifetimes; false issues the ordinary one. Both are counted
+    /// from the moment of login and extended when the session is used close to
+    /// its expiry, so neither is a sliding window of inactivity.
     /// Defaults to true for convenience.
     /// </remarks>
     public bool RememberMe { get; set; } = true;

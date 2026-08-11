@@ -27,7 +27,7 @@ namespace DM.Web.API.Features.Blog.Comments;
 /// - Mark all blog comments as read
 ///
 /// ## Access Control
-/// - Viewing: Depends on blog ViewPolicy
+/// - Viewing: Whoever may see the blog — its draft visibility, its status and premoderation decide
 /// - Creating: Authenticated users (if blog has CommentsEnabled)
 /// - Editing: Author or moderators
 /// - Deleting: Author or moderators

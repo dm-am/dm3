@@ -8,7 +8,7 @@ using Xunit;
 namespace DM.Web.API.IntegrationTests.Controllers.Account;
 
 /// <summary>
-/// Integration tests for AccountController
+/// Integration tests for the account endpoints under /v1/account
 /// </summary>
 public class AccountControllerShould : IntegrationTestBase
 {

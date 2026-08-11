@@ -15,7 +15,8 @@ public interface IAuthenticationService
     /// </summary>
     /// <param name="email">User email address</param>
     /// <param name="password">User password</param>
-    /// <param name="rememberMe">If true, session is persistent (30 days); otherwise 24 hours</param>
+    /// <param name="rememberMe">If true, the session is persistent and lives for the configured
+    /// persistent lifetime; otherwise for the ordinary one</param>
     /// <param name="context">Session context with device info</param>
     /// <returns>Authentication identity</returns>
     Task<IIdentity> Authenticate(string email, string password, bool rememberMe = true, SessionContext? context = null);

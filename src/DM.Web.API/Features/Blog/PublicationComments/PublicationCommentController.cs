@@ -25,7 +25,7 @@ namespace DM.Web.API.Features.Blog.PublicationComments;
 /// - Like/unlike comments
 ///
 /// ## Access Control
-/// - Viewing: Same as parent publication's blog ViewPolicy
+/// - Viewing: Whoever may see the parent publication
 /// - Creating: Authenticated users (if publication is not closed)
 /// - Editing: Author or moderators
 /// - Deleting: Author or moderators

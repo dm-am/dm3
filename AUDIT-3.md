@@ -80,24 +80,24 @@
 Пересчитывается из строк индекса при каждом закрытии, руками не пишется: число,
 написанное отдельно от таблицы, расходится с ней на первой же партии.
 
-**Закрыто 155 из 357 (43%), открыто 202.**
+**Закрыто 161 из 357 (45%), открыто 196.**
 
 | Тяжесть | Всего | Закрыто | Осталось |
 |---|---|---|---|
 | КРИТИЧНО | 6 | 6 | 0 |
 | ВАЖНО | 53 | 51 | 2 |
-| ЗАМЕТНО | 140 | 34 | 106 |
-| МЕЛОЧЬ | 158 | 64 | 94 |
+| ЗАМЕТНО | 140 | 39 | 101 |
+| МЕЛОЧЬ | 158 | 65 | 93 |
 
 | Срез | Всего | Закрыто | Осталось |
 |---|---|---|---|
 | meta | 29 | 7 | 22 |
 | cicd | 25 | 4 | 21 |
-| modules | 24 | 15 | 9 |
+| modules | 24 | 16 | 8 |
 | authz | 24 | 1 | 23 |
-| docs | 24 | 17 | 7 |
+| docs | 24 | 18 | 6 |
 | api | 23 | 18 | 5 |
-| comments | 23 | 17 | 6 |
+| comments | 23 | 19 | 4 |
 | security | 22 | 11 | 11 |
 | persistence | 21 | 9 | 12 |
 | auth | 21 | 10 | 11 |
@@ -106,8 +106,8 @@
 | tests | 18 | 10 | 8 |
 | realtime | 17 | 5 | 12 |
 | deps-dead | 17 | 8 | 9 |
-| stores | 17 | 3 | 14 |
-| frontend-ux | 14 | 5 | 9 |
+| stores | 17 | 4 | 13 |
+| frontend-ux | 14 | 6 | 8 |
 
 ---
 ## Оценки сейчас
@@ -553,7 +553,7 @@
 | modules-12 | ЗАМЕТНО | BlogService держит три ресурса в одном классе (910 строк, 16 зависимостей), тогда как блюпринт PATTERNS.md:406-420 задает Features/{Feature}/I{Feature}Service.… _(уточнено)_ | `src/DM.Domain.Blog/Features/Blogs/BlogService.cs:1-910` | Открыто | |
 | modules-13 | ЗАМЕТНО | Проверка черного списка в GameCommentService.cs:70-73 и BlogCommentService.cs:66-69 недостижима — резолвер отказал строкой выше; ответ остается 403, но с англи… | `src/DM.Domain.Game/Features/Comments/GameCommentService.cs:65-73 и src/DM.Domain.Blog/Fea…` | Открыто | |
 | modules-14 | ЗАМЕТНО | Доменные сервисы модерации и профиля выражают авторизацию через UnauthorizedAccessException, который ErrorHandlingMiddleware не разбирает: любой путь в обход [… _(уточнено)_ | `src/DM.Domain.Moderation/Features/Warnings/BanService.cs:86, 99, 115, 212` | Закрыто | Исправлено — UnauthorizedAccessException не осталось нигде в src. Девять точек из двенадцати закрыты вместе с security-05 (BanService, WarningService, AuthenticationService.TerminateSession), оставшиеся три в UserProfileNoteService разобраны отдельно: чтение заметки для анонимного теперь отдает null, потому что личная заметка это заметка самого смотрящего и у анонима ее нет — а страница профиля ловила исключение, чтобы это узнать, то есть поток управления шел через границу слоя. Две записи отвечают 401 через HttpException. Заведен гейт DomainRefusalsShould, читающий код через SourceText, а не текст файла; проверен внесением нарушения |
-| modules-15 | ЗАМЕТНО | Remarks BanController.cs:125-133 объявляют третий вариант ("Leave both null for permanent ban"), который CreateBanValidator.cs:40-43 всегда отклоняет 400-м, по… _(уточнено)_ | `src/DM.Web.API/Features/Moderation/Bans/BanController.cs:125-133` | Открыто | |
+| modules-15 | ЗАМЕТНО | Remarks BanController.cs:125-133 объявляют третий вариант ("Leave both null for permanent ban"), который CreateBanValidator.cs:40-43 всегда отклоняет 400-м, по… _(уточнено)_ | `src/DM.Web.API/Features/Moderation/Bans/BanController.cs:125-133` | Закрыто | Исправлено — remarks CreateBan больше не обещают третьего варианта: вместо "Leave both null for permanent ban", который CreateBanValidator всегда отклонял 400-м, стоит "One of the two is required: a permanent ban is sent as a hundred-year duration". Ветка BanService, куда попадали запросы без срока, объяснена комментарием: по HTTP в нее не приходит никто, потому что валидатор требует срок или дату для любого бана от модератора |
 | modules-16 | ЗАМЕТНО | "Не найдено" отвечает 410 в играх и форуме и 404 в блогах, а API_DESIGN объявляет 410 только для истекших токенов | `GameCommentService.cs:114 против BlogCommentService.cs:105; TopicCommentService.cs:113 пр…` | Открыто | |
 | modules-17 | ЗАМЕТНО | Фильтр премодерации в играх дает 403, в блогах молча игнорируется, и в блогах роль сравнивается напрямую в обход intention | `src/DM.Domain.Blog/Features/Blogs/BlogService.cs:100-108 против src/DM.Domain.Game/Featur…` | Открыто | |
 | modules-18 | ЗАМЕТНО | GameService — единственный доменный сервис на IMemoryCache вместо ICache, ключ тегов никогда не сбрасывается, TTL 15 секунд вписан мимо CachePolicy | `src/DM.Domain.Game/Features/Games/GameService.cs:24, 54, 80, 208-213, 283` | Открыто | |
@@ -587,7 +587,7 @@
 | stores-04 | ЗАМЕТНО | В DM.Domain.Core лежат двадцать enum, называющих сущности ровно одного модуля, вопреки правилу PATTERNS.md:401; PollStatus не используется ни одним доменным мо… | `docs/conventions/PATTERNS.md:401 / src/DM.Domain.Core/Enums/` | Открыто | |
 | stores-05 | ЗАМЕТНО | CompositionRootShould молча отключает сам себя ранним выходом, если сидер сменит маркер сканируемой сборки | `test/DM.Architecture.Tests/CompositionRootShould.cs:85` | Открыто | |
 | stores-06 | ЗАМЕТНО | Гейты чистоты домена заявляют storage и transport, но транспорта нет ни в одном из двух списков, а в DomainPurityShould нет и MongoDB | `test/DM.Architecture.Tests/DomainBoundaryShould.cs:32` | Открыто | |
-| stores-07 | ЗАМЕТНО | Заголовок класса воркера уведомлений описывает другой воркер, а обоснование конфигурации привязано не к той строке и говорит о контракте, которого нет в контей… | `src/DM.Workers.NotificationDispatcher/Startup.cs:28` | Открыто | |
+| stores-07 | ЗАМЕТНО | Заголовок класса воркера уведомлений описывает другой воркер, а обоснование конфигурации привязано не к той строке и говорит о контракте, которого нет в контей… | `src/DM.Workers.NotificationDispatcher/Startup.cs:28` | Закрыто | Исправлено — заголовок класса Startup диспетчера уведомлений называет теперь свой воркер, а не поисковый; та же копипаста вычищена и в почтовом воркере. Осиротевший комментарий про probation contract, ссылавшийся на несуществующую регистрацию, заменен объяснением того, что рядом с ним на самом деле стоит: конфигурация аккаунтного домена нужна потому, что контейнер регистрирует домен целиком, а IOptions непривязанной секции молча отдает дефолт вместо отказа |
 | stores-08 | ЗАМЕТНО | Правило "опрос открыт" написано дважды: в домене и в API-слое | `src/DM.Web.API/Features/Community/Polls/PollStatusResolver.cs:26` | Открыто | |
 | auth-11 | ЗАМЕТНО | POST /v1/users/me/subscriptions объявляет ответ 200, который никогда не отдается | `src/DM.Web.API/Features/Personal/Subscriptions/SubscriptionController.cs:116,120` | Открыто | |
 | auth-12 | ЗАМЕТНО | Мест с NotFound() три: третье — WebhookController.cs:107, но там 404 осознан (fail closed для машинного вызывающего, объяснено комментарием строк 99-102), поэт… | `src/DM.Web.API/Features/General/Tickets/TicketIntakeController.cs:97` | Открыто | |
@@ -641,7 +641,7 @@
 | frontend-ux-04 | ЗАМЕТНО | Дублирование реально и правилом запрещено, но происходит оно на /v1/ и /whatsup, а не на /dm-uploads/ (там upstream — MinIO, своих политик он не ставит). Расхо… _(уточнено)_ | `docker/nginx/nginx.conf:85-89 против src/DM.Web.API/Middleware/SecurityHeadersMiddleware.…` | Открыто | |
 | frontend-ux-05 | ЗАМЕТНО | Факт верен, но самое сильное доказательство находка упустила: docs/guides/DEPLOYMENT.md:25 описывает этот job как "OWASP ZAP scan (full docker compose)" — это … _(уточнено)_ | `.github/workflows/security.yml:107-136` | Открыто | |
 | frontend-ux-06 | ЗАМЕТНО | Дефект есть и он шире: HttpUtility.HtmlEncode кодирует и апостроф (&#39;), поэтому ломается не экзотика вроде "Tom & Jerry", а обычное имя персонажа с апостроф… _(уточнено)_ | `src/DM.Infrastructure.Core/Parsing/BbParserWrapper.cs:318-322 против src/DM.Domain.Core/C…` | Открыто | |
-| frontend-ux-07 | ЗАМЕТНО | Это не "ложный комментарий", а объявленное и не реализованное требование: BBCODE_RENDERING.md:3 сам объявляет себя сводом правил, а не описанием имплементации.… _(уточнено)_ | `docs/architecture/BBCODE_RENDERING.md:15,27` | Открыто | |
+| frontend-ux-07 | ЗАМЕТНО | Это не "ложный комментарий", а объявленное и не реализованное требование: BBCODE_RENDERING.md:3 сам объявляет себя сводом правил, а не описанием имплементации.… _(уточнено)_ | `docs/architecture/BBCODE_RENDERING.md:15,27` | Закрыто | Исправлено — BBCODE_RENDERING.md больше не обещает write-time проверки, которой нет: вместо "невалидный тег для surface → BadRequestError" и "ошибка валидации при сохранении" описано фактическое поведение (тег вне своего surface не разбирается и остается в тексте буквально, отдельного отказа на сохранении нет) с оговоркой про defense-in-depth на стороне рендерера |
 | frontend-ux-08 | ЗАМЕТНО | Документация описывает permission-бакетный кеш рендера как действующий механизм, а ни кеша, ни бакетов в коде больше нет | `docs/architecture/BBCODE_RENDERING.md:136-138; docs/conventions/PERFORMANCE.md:319-325; d…` | Открыто | |
 | frontend-ux-09 | ЗАМЕТНО | Раскрытие реально, но осадок не в /var/log/nginx/access.log: в официальном образе nginx этот путь — симлинк на stdout, то есть строки уходят в лог-драйвер dock… _(уточнено)_ | `src/DM.Web.API/Features/Account/IdentifierProbeLog.cs:28-33; Availability/AvailabilityCon…` | Закрыто | Закрыто попутно коммитом 3937e3f1. Обе проверки стали POST с телом запроса, GET-формы больше нет (прежняя отвечает 405, на это есть тест). Осадка в access-log нет, потому что писать нечего: идентификатор не в URI. Половина, которой приложение управляет, была закрыта и раньше — IdentifierProbeLog пишет только поверхность, исход и адрес клиента. |
 | frontend-ux-10 | ЗАМЕТНО | Ключ подписи imgproxy лежит рабочим значением в репозитории, а его отсутствие не валит старт — оба правила SECURITY.md нарушены | `docker/.env.example:39-40; CoreConfigurationExtensions.cs:132-136; Storage/ImgproxyUrlBui…` | Открыто | |
@@ -666,7 +666,7 @@
 | docs-03 | ЗАМЕТНО | Комментарий "Store token in sessionStorage for retry" — ретрая нет, значение не читает никто | `src/DM.Web.Client/src/pages/account/AccountActivationPage.vue:81-82` | Открыто | |
 | docs-04 | ЗАМЕТНО | Комментарий ссылается на несуществующий ActivationPage, ключ dm_registration_email не совпадает с читаемым dm_pending_email | `src/DM.Web.Client/src/features/auth/ui/RegistrationSuccess.vue:15-19` | Открыто | |
 | docs-05 | ЗАМЕТНО | ContainsPrivacyTags документирован как публичная точка для cache bucket в BbConverter — ни кеша, ни вызывающих | `src/DM.Infrastructure.Core/Parsing/BbParserWrapper.Render.cs:58-63` | Открыто | |
-| docs-06 | ЗАМЕТНО | Пояснительные комментарии на русском в коде — нарушение конвенции "код и комментарии на английском" | `CsrfProtectionMiddleware.cs:83-88; ErrorHandlingMiddleware.cs:107-109; CharacterService.c…` | Открыто | |
+| docs-06 | ЗАМЕТНО | Пояснительные комментарии на русском в коде — нарушение конвенции "код и комментарии на английском" | `CsrfProtectionMiddleware.cs:83-88; ErrorHandlingMiddleware.cs:107-109; CharacterService.c…` | Закрыто | Исправлено — русская объяснительная проза в комментариях переведена на английский во всех названных местах (middleware, CharacterService, модули почты и очередей, конфигурация playwright, e2e-фикстуры, спека роутера). Русский остался только там, где комментарий цитирует строку интерфейса: цитата продуктовой копии — не нарушение конвенции языка |
 | docs-07 | ЗАМЕТНО | Комментарий утверждает, что API отдает registrationUtc — контрактный тест доказывает, что поле не отдается никогда | `src/DM.Web.Client/src/entities/user/model/useUserDisplay.ts:74-78` | Закрыто | Комментарий приведен к факту: поле не отдается ни одной схемой, фолбэк мертв и оставлен по правилу UNSERVED |
 | docs-08 | ЗАМЕТНО | Док AvatarPicture ссылается на несуществующий AvatarPictureResolver | `src/DM.Domain.Core/Dto/AvatarPicture.cs:9` | Закрыто | Ссылка исправлена на существующий тип |
 | docs-09 | ЗАМЕТНО | Док IUserReadRepository указывает несуществующий проект Infrastructure.Services и класс UserReadRepository | `src/DM.Domain.Core/Users/IUserReadRepository.cs:15` | Закрыто | Ссылка на реализацию исправлена на реально существующую |
@@ -677,7 +677,7 @@
 | comments-02 | ЗАМЕТНО | CODE_STYLE.md объявляет TicketId/NoteId неправильными именами PK, тогда как весь слой Entity именует ключи так | `docs/conventions/CODE_STYLE.md:79` | Открыто | |
 | comments-03 | ЗАМЕТНО | AUTHORIZATION.md подает иерархию UserRole как полную, но роль System (6) в ней отсутствует | `docs/architecture/AUTHORIZATION.md:9-27` | Закрыто | Исправлено. В раздел иерархии добавлен абзац про служебную роль над Admin: она не уровень привилегий, вход по паролю ей запрещен и отказ выносится до сравнения пароля, а выборки живых пользователей отсекают ее явным условием |
 | comments-04 | ЗАМЕТНО | Матрицы прав в AUTHORIZATION.md умалчивают о модераторе раздела, который в коде дает те же права | `docs/architecture/AUTHORIZATION.md:83` | Закрыто | Исправлено. Под матрицей администрирования добавлена оговорка: матрица описывает глобальные роли, а модератор раздела получает администрирование тем и правку чужих тем точечно, по привязке к объекту |
-| comments-05 | ЗАМЕТНО | Комментарий RenderAudience.Display утверждает, что [mod] фильтруется по правам зрителя | `src/DM.Infrastructure.Core/Parsing/RenderAudience.cs:10-11` | Открыто | |
+| comments-05 | ЗАМЕТНО | Комментарий RenderAudience.Display утверждает, что [mod] фильтруется по правам зрителя | `src/DM.Infrastructure.Core/Parsing/RenderAudience.cs:10-11` | Закрыто | Исправлено — описание RenderAudience.Display больше не утверждает, что [mod] фильтруется по правам зрителя. Формулировка приведена к реализации PermissionFilteringVisitor: по правам фильтруется [private], а [mod] публичен на чтение и рендерится всегда. Это третье и последнее место, где факт был записан наоборот |
 | comments-06 | ЗАМЕТНО | SYSTEM.md запрещает Infrastructure объявлять публичные интерфейсы, а PATTERNS.md это разрешает | `docs/architecture/SYSTEM.md:57` | Закрыто | Исправлено — правится SYSTEM.md, PATTERNS.md не тронут: он SSOT структуры кода по CLAUDE.md, и его формулировка совпадает с деревом. Оба места (ASCII-диаграмма и "Ключевое правило") больше не объявляют абсолютный запрет на интерфейсы в Infrastructure; ширина рамки сохранена, проверено сравнением длин. Ссылка на IObjectStorage из предложенного текста снята после проверки: интерфейс живет в Domain.Core, и упоминание его как инфраструктурного было бы новым ложным утверждением на месте старого |
 | deps-dead-02 | ЗАМЕТНО | Ратчет бэкенда отстает от измеряемого на текущем дереве значения на 7.4 пункта по строкам; удаление DM.Domain.Game.Tests роняет покрытие до 68.6% строк и 43.5%… _(уточнено)_ | `scripts/check-coverage.sh:22-23, комментарий строки 17-21` | Открыто | |
 | deps-dead-03 | ЗАМЕТНО | check-coverage.sh не работает на Windows при вызове без аргумента, то есть ровно так, как его зовет CI | `scripts/check-coverage.sh:27-28` | Открыто | |
@@ -804,7 +804,7 @@
 | comments-11 | МЕЛОЧЬ | Одна таблица живет в двух документах без ссылки на владельца, вопреки уже назначенному владельцу в DEPLOYMENT.md:217; описания одних и тех же эндпоинтов расход… _(уточнено)_ | `docs/conventions/API_DESIGN.md:388-393` | Закрыто | Исправлено. Вторая копия таблицы адресов проверки убрана, вместо нее ссылка на документ-владелец |
 | comments-12 | МЕЛОЧЬ | Конвенция содержит снимок значений из ThemeVariables.css вместо правила; снимок покрывает только светлую тему и умалчивает, что тем две. Расхождения значений н… _(уточнено)_ | `docs/conventions/CODE_STYLE.md:337-354` | Закрыто | Исправлено. Снимок значений заменен правилом: токен объявляется парой на две темы, контраст проверяется в каждой отдельно, значения живут в файле переменных тем и в конвенцию не копируются |
 | comments-13 | МЕЛОЧЬ | Шкала отступов нигде в docs не описана, хотя UI_STANDARDS пользуется ее токенами | `docs/conventions/UI_STANDARDS.md:148` | Закрыто | Исправлено. В документ добавлен раздел "Шкала отступов" по образцу разделов про z-index и брейкпоинты: правило, таблица токенов со значениями и указание файла |
-| comments-14 | МЕЛОЧЬ | AUTHENTICATION.md называет middleware именем, которого в коде нет | `docs/architecture/AUTHENTICATION.md:32` | Открыто | |
+| comments-14 | МЕЛОЧЬ | AUTHENTICATION.md называет middleware именем, которого в коде нет | `docs/architecture/AUTHENTICATION.md:32` | Закрыто | Исправлено — схема потока в AUTHENTICATION.md называла класс ApiAuthenticationMiddleware, которого в репозитории нет ни одного вхождения. Имя класса из схемы убрано совсем, а не заменено на верное: правило проекта держит документацию на конвенциях, а не на именах типов, и схема читается без него |
 | comments-15 | МЕЛОЧЬ | Блюпринт DM.Web.API требует Features/{Module}/{Feature}/, а часть кода лежит вне этой формы | `docs/conventions/PATTERNS.md:435-445` | Открыто | |
 | comments-16 | МЕЛОЧЬ | Блюпринт дает пару {Feature}Request.cs/{Feature}Response.cs, которой в коде нет ни разу: реально сосуществуют {Feature}Dtos.cs (26 файлов) и пооперационные {Ve… _(уточнено)_ | `docs/conventions/PATTERNS.md:77-84` | Закрыто | Исправлено. Блюпринт папки фичи приведен к живой раскладке: сгруппированный файл DTO плюс правило именования отдельных файлов запроса и ответа по операции |
 | comments-17 | МЕЛОЧЬ | PROGRESS.md использует термины модалка и Lightbox, запрещенные словарем UI_STANDARDS | `docs/PROGRESS.md:24` | Закрыто | Исправлено. Строка прогресса говорит на словаре интерфейса: диалоги на общем примитиве вместо запрещенных терминов |

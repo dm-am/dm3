@@ -85,11 +85,18 @@ npx playwright test --project=chromium
 
 ### Паттерн именования
 
+Класс и метод вместе читаются одной фразой: `{Субъект}Should` плюс окончание
+предложения.
+
 ```
-{Behavior}_When_{Condition}
+PollVotingShould.RefuseASecondOptionToTheSameVoter
 ```
 
-Примеры: `CreateTopic_When_ValidInput`, `ThrowException_When_UserNotFound`
+Фраза называет наблюдаемое поведение, а не вызванный метод и не механику
+проверки. Условие входит в нее естественным придаточным там, где оно
+существенно (`...WhenTheGameHasNoMaster`), а не отдельной секцией имени:
+разделители из подчеркиваний дробят предложение и вынуждают повторять субъект,
+который уже назван классом.
 
 ### Пример теста
 

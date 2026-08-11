@@ -6,7 +6,7 @@ using Xunit;
 namespace DM.Web.API.IntegrationTests.Controllers.Forums;
 
 /// <summary>
-/// Integration tests for Forum CommentController
+/// Integration tests for the forum comment endpoints
 /// </summary>
 public class CommentControllerShould : IntegrationTestBase
 {
