@@ -178,7 +178,7 @@ export default new (class ModerationApi {
   /**
    * Get uploads across the website (Admin only server-side:
    * UploadIntention.ListAll/ListUser). Passing `username` narrows to one
-   * user's uploads; otherwise scope=all returns everything. Newest first.
+   * user's uploads; otherwise allUsers=true returns everything. Newest first.
    */
   public getAllUploads(params?: {
     username?: string;
@@ -191,7 +191,7 @@ export default new (class ModerationApi {
     const pageSize = params?.size ?? 20;
     const pageNumber = params?.number ?? 1;
     return Api.get<ListEnvelope<Upload>>("uploads", {
-      ...(username ? { username } : { scope: "all" }),
+      ...(username ? { username } : { allUsers: true }),
       skip: pageNumber > 1 ? (pageNumber - 1) * pageSize : undefined,
       take: pageSize,
     });

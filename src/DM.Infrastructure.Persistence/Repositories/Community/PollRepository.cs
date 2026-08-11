@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
+using DM.Domain.Core.Enums;
 using DM.Domain.Community.Features.Polls;
 using DM.Infrastructure.Persistence.MongoIntegration;
 using DM.Infrastructure.Persistence.Shared.Queries;
@@ -115,23 +116,19 @@ internal class PollRepository : MongoCollectionRepository<DbPoll>, IPollReposito
         if (query == null)
             return filter;
 
-        // Status filter (3 statuses: pending, active, closed)
+        // Status is a position relative to now, so it is a comparison on the two
+        // dates rather than a stored field. Every member is spelled out and there
+        // is no arm for anything else: the binder refuses a word outside the
+        // vocabulary, where the string form used to fall past all three
+        // comparisons and answer with every poll.
         var now = _dateTimeProvider.Now.UtcDateTime;
-        if (string.Equals(query.Status, "pending", StringComparison.OrdinalIgnoreCase))
+        filter &= query.Status switch
         {
-            // now < StartsUtc
-            filter &= Filter.Gt(p => p.StartsUtc, now);
-        }
-        else if (string.Equals(query.Status, "active", StringComparison.OrdinalIgnoreCase))
-        {
-            // StartsUtc <= now < EndsUtc
-            filter &= Filter.Lte(p => p.StartsUtc, now) & Filter.Gt(p => p.EndsUtc, now);
-        }
-        else if (string.Equals(query.Status, "closed", StringComparison.OrdinalIgnoreCase))
-        {
-            // now >= EndsUtc
-            filter &= Filter.Lte(p => p.EndsUtc, now);
-        }
+            PollStatus.Pending => Filter.Gt(p => p.StartsUtc, now),
+            PollStatus.Active => Filter.Lte(p => p.StartsUtc, now) & Filter.Gt(p => p.EndsUtc, now),
+            PollStatus.Closed => Filter.Lte(p => p.EndsUtc, now),
+            _ => Filter.Empty
+        };
 
         // Search filter (Title + Details)
         if (!string.IsNullOrWhiteSpace(query.Search))

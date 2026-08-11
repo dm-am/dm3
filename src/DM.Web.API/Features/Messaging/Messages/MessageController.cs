@@ -6,6 +6,7 @@ using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel.DataAnnotations;
 
 namespace DM.Web.API.Features.Messaging.Messages;
 
@@ -63,7 +64,7 @@ public class MessageController : ControllerBase
         [FromQuery] string? cursor = null,
         [FromQuery] Guid? aroundMessageId = null,
         [FromQuery] DateTimeOffset? nearTimestampUtc = null,
-        [FromQuery] int limit = 50)
+        [FromQuery][Range(1, 100, ErrorMessage = "Размер страницы должен быть от 1 до 100")] int limit = 50)
     {
         var chatId = await _apiService.ResolveChatIdAsync(id);
         return Ok(await _apiService.GetMessagesWithCursorAsync(chatId, cursor, aroundMessageId, nearTimestampUtc, limit));

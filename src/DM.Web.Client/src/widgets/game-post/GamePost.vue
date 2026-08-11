@@ -448,7 +448,7 @@ async function startEditPost() {
     const { data } = await gameApi.getPostForEdit(props.post.id);
     if (data && isEditingPost.value) {
       editGameText.value = data.gameText ?? editGameText.value;
-      editMetaText.value = data.metaText ?? editMetaText.value;
+      editMetaText.value = data.metagameText ?? editMetaText.value;
     }
   } catch {
     // The editor is already open on the display text. Refusing to open it at

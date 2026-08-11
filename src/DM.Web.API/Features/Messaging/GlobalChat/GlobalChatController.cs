@@ -7,6 +7,7 @@ using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel.DataAnnotations;
 
 namespace DM.Web.API.Features.Messaging.GlobalChat;
 
@@ -51,7 +52,7 @@ public class GlobalChatController : ControllerBase
         [FromQuery] string? cursor = null,
         [FromQuery] Guid? aroundMessageId = null,
         [FromQuery] DateTimeOffset? nearTimestampUtc = null,
-        [FromQuery] int limit = 50) =>
+        [FromQuery][Range(1, 100, ErrorMessage = "Размер страницы должен быть от 1 до 100")] int limit = 50) =>
         Ok(await _apiService.GetGlobalChatMessagesAsync(cursor, aroundMessageId, nearTimestampUtc, limit));
 
     /// <summary>

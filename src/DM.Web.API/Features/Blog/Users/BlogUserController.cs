@@ -5,6 +5,7 @@ using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Blog.Blogs;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using DM.Domain.Core.Enums;
 
 namespace DM.Web.API.Features.Blog.Users;
 
@@ -52,7 +53,7 @@ public class BlogUserController : ControllerBase
     [HttpGet(Name = nameof(GetBlogUsers))]
     [ProducesResponseType(typeof(ListEnvelope<BlogUser>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetBlogUsers(string id, [FromQuery] string? role = null)
+    public async Task<IActionResult> GetBlogUsers(string id, [FromQuery] BlogRole? role = null)
     {
         var blogId = await _blogApiService.ResolveId(id);
         var users = await _userApiService.GetUsers(blogId, role);

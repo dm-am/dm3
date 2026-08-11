@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System;
 using System.Threading.Tasks;
+using DM.Domain.Core.Dto;
+using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Personal.Notifications;
 
@@ -12,7 +14,7 @@ public interface INotificationApiService
     /// <summary>
     /// Get notifications for current user
     /// </summary>
-    Task<IEnumerable<Notification>> GetNotifications(int skip = 0, int take = 20);
+    Task<ListEnvelope<Notification>> GetNotifications(PagingQuery query);
 
     /// <summary>
     /// Get unread notifications count

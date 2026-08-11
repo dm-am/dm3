@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Personal.Notifications;
 
@@ -24,10 +25,9 @@ internal class NotificationApiService : INotificationApiService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Notification>> GetNotifications(int skip = 0, int take = 20)
+    public async Task<ListEnvelope<Notification>> GetNotifications(PagingQuery query)
     {
-        var query = new PagingQuery { Skip = skip, Take = take };
-        var notifications = await _notificationService.GetAsync(query);
+        var (notifications, paging) = await _notificationService.GetAsync(query);
         var mapped = notifications.Select(n => new Notification
         {
             Id = n.NotificationId,
@@ -35,7 +35,7 @@ internal class NotificationApiService : INotificationApiService
             Payload = n.Metadata
         });
 
-        return mapped;
+        return new ListEnvelope<Notification>(mapped, new PagingInfo(paging));
     }
 
     /// <inheritdoc />

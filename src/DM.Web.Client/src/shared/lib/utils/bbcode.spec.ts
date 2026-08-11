@@ -1431,7 +1431,7 @@ describe("the private block the server renders", () => {
     '<div class="private-message" data-bb-tag="private" data-bb-addressees="Гэндальф">тайна</div>';
 
   it("survives being loaded into the editor and saved", () => {
-    expect(htmlToBbcode(AUTHOR_EDIT_HTML, "post")).toContain(
+    expect(htmlToBbcode(AUTHOR_EDIT_HTML)).toContain(
       "[private=Гэндальф]тайна[/private]",
     );
   });
@@ -1440,17 +1440,13 @@ describe("the private block the server renders", () => {
     const html =
       '<div class="private-message" data-bb-addressees="Гэндальф">тайна</div>';
 
-    expect(htmlToBbcode(html, "post")).toContain(
-      "[private=Гэндальф]тайна[/private]",
-    );
+    expect(htmlToBbcode(html)).toContain("[private=Гэндальф]тайна[/private]");
   });
 
   it("still recognises the span the editor itself emits", () => {
     const html =
       '<span class="bb-private" data-bb-tag="private" data-bb-character="Гэндальф">тайна</span>';
 
-    expect(htmlToBbcode(html, "post")).toContain(
-      "[private=Гэндальф]тайна[/private]",
-    );
+    expect(htmlToBbcode(html)).toContain("[private=Гэндальф]тайна[/private]");
   });
 });

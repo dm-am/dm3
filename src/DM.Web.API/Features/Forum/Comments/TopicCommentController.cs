@@ -56,14 +56,14 @@ public class TopicCommentController : ControllerBase
     /// </summary>
     /// <remarks>
     /// Returns paginated list of comments in the specified topic.
-    /// Supports filtering by authors, text search, date range and sorting.
+    /// Supports filtering by author usernames, text search, date range and sorting.
     /// Marks comments as read for authenticated users.
     ///
     /// ## Query Parameters
     /// - **skip**: Number of items to skip (pagination)
     /// - **take**: Number of items to return (max 100, default 20)
     /// - **search**: Text search in comment content (case-insensitive)
-    /// - **authors**: Filter by author usernames, repeated per author (`authors=alice&amp;authors=bob`), OR logic
+    /// - **authorUsernames**: Filter by author usernames, repeated per author (`authorUsernames=alice&amp;authorUsernames=bob`), OR logic
     /// - **createdFromUtc**: Filter by creation date start (ISO 8601)
     /// - **createdToUtc**: Filter by creation date end (ISO 8601)
     /// - **sortBy**: Sort field - "created" (default) or "likes"

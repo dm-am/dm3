@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using DM.Domain.Core.Enums;
 
 namespace DM.Web.API.Features.Game.Users;
 
@@ -16,7 +17,7 @@ public interface IGameUserApiService
     /// </summary>
     /// <param name="gameId">Game ID</param>
     /// <param name="role">Optional role filter (master, assistant, mentor, player, applicant, formerPlayer, reader)</param>
-    Task<IEnumerable<GameUser>> GetUsers(Guid gameId, string? role = null);
+    Task<IEnumerable<GameUser>> GetUsers(Guid gameId, GameRole? role = null);
 
     /// <summary>
     /// Remove a user from a game by user ID

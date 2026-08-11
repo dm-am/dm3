@@ -41,18 +41,19 @@ internal class GameUserApiService : IGameUserApiService
     #region Users
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GameUser>> GetUsers(Guid gameId, string? role = null)
+    public async Task<IEnumerable<GameUser>> GetUsers(Guid gameId, GameRole? role = null)
     {
         var users = await _invitationService.GetUsers(gameId);
 
         // Filtered on the role itself, before it is rendered. The filter compared
         // the rendered string against literals it wrote out a second time, and
         // three of them - "mentor", "applicant", "formerPlayer" - were values
-        // ToApiString never produced; the model has no former player at all. An
-        // unrecognised value returns everybody, as on the blog side.
-        if (!string.IsNullOrEmpty(role) && GameRoleExtensions.TryParseApiString(role, out var wanted))
+        // ToApiString never produced; the model has no former player at all.
+        // Bound as the enum now, so a word outside the vocabulary is a 400 rather
+        // than the whole roster answered as if it had been filtered.
+        if (role.HasValue)
         {
-            users = users.Where(u => u.Role == wanted);
+            users = users.Where(u => u.Role == role.Value);
         }
 
         return users.Select(MapToDto);

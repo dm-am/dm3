@@ -79,16 +79,16 @@ public class TopicController : ControllerBase
     /// </summary>
     /// <remarks>
     /// Cross-board topic search — primarily used by the user-profile
-    /// "Topics" tab, which scopes results with the <c>authors</c> filter
-    /// to render every topic authored by a given user.
+    /// "Topics" tab, which scopes results with the <c>authorUsernames</c>
+    /// filter to render every topic authored by a given user.
     ///
     /// Access policy is enforced on the server: topics on boards the
     /// viewer cannot see never appear in the response.
     ///
     /// Supports the same filters and sort options as the per-board
-    /// endpoint: search, authors, createdFromUtc, createdToUtc,
+    /// endpoint: search, authorUsernames, createdFromUtc, createdToUtc,
     /// sortBy (lastActivity / created / comments / title / likes),
-    /// sortOrder (asc / desc), and standard paging (number / size).
+    /// sortOrder (asc / desc), and standard paging (skip / take).
     /// </remarks>
     /// <param name="q">Filter, sort and paging parameters</param>
     /// <response code="200">Paginated list of topics</response>

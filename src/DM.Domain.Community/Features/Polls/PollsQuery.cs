@@ -1,5 +1,6 @@
 using System;
 using DM.Domain.Core.Dto;
+using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Community.Features.Polls;
 
@@ -11,7 +12,7 @@ public class PollsQuery : PagingQuery
     /// <summary>
     /// Filter by status: "pending", "active", "closed", or null for all
     /// </summary>
-    public string? Status { get; set; }
+    public PollStatus? Status { get; set; }
 
     /// <summary>
     /// Search by title and details
