@@ -115,7 +115,8 @@ public class WarningController : ControllerBase
     /// </summary>
     /// <remarks>
     /// Removes a warning from a user. Requires Moderator role.
-    /// Warning points are recalculated, which may lift automatic bans.
+    /// Warning points are recalculated. Nothing is lifted by that on its own:
+    /// bans are issued and lifted by a senior moderator, never by a point count.
     /// </remarks>
     /// <param name="id">Warning identifier</param>
     /// <response code="204">Warning removed</response>

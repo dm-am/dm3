@@ -17,9 +17,11 @@ import {
 import { StatLine } from "@/shared/ui/StatLine";
 import { useGuardedRequest } from "@/shared/lib/composables";
 
-// Mirrors the backend warning policy (6+ points in 30 days triggers an
-// automatic ban — see WarningController.cs remarks). Not exposed by the
-// public API, so it stays a client-side constant kept in sync by hand.
+// The scale the points are drawn against, matching Violator.WarningPointsScale
+// on the server. It triggers nothing: there is no automatic ban in DM3, a ban is
+// always issued by a senior moderator. The comment here used to claim the
+// opposite and cite WarningController.cs for it, where the remarks say in as
+// many words that points are read and never compared.
 const WARNING_LIMIT = 6;
 
 const props = defineProps<{

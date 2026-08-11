@@ -57,12 +57,21 @@ internal class RealtimeNotificationConsumer : BackgroundService
         }
         catch (Exception exception)
         {
-            // Realtime push is an enhancement: the client falls back to REST
-            // polling. Letting this escape would stop the host
+            // Realtime push is an enhancement, and the site keeps serving without
+            // it. Letting this escape would stop the host
             // (BackgroundServiceExceptionBehavior.StopHost is the default), so a
             // broker outage would take the entire API down with it — and, under
             // a container restart policy, into a crash loop. Push stays dead
-            // until the next restart; the site keeps serving.
+            // until the next restart.
+            //
+            // What the client does without it, exactly: the global chat is the one
+            // surface with a polling fallback of its own. The two badges have
+            // none — they are re-read when the application mounts and on every
+            // transition of the socket into the connected state (App.vue), so
+            // with the consumer dead they freeze for the length of the SPA
+            // session rather than forever. Nothing else falls back to REST at
+            // all; saying "the client falls back to REST polling" described one
+            // page as if it were the whole site.
             _logger.LogError(exception,
                 "[💥] Realtime notifications consumer failed to subscribe to {QueueName}; " +
                 "realtime push is unavailable until the API restarts",

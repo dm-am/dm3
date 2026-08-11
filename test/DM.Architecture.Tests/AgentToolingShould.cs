@@ -138,6 +138,66 @@ public class AgentToolingShould
             "owner's browser is pointed at, see the class remarks");
     }
 
+    /// <summary>
+    /// Commands that destroy the owner's data, spelled however the project spells
+    /// them.
+    /// </summary>
+    /// <remarks>
+    /// The port rule above and this one come from the same fact — a subagent runs
+    /// what its brief hands it — and only one of them was written down. The
+    /// debugger's brief listed `dm.ps1 reset` under the heading "Restart
+    /// services", and that command is `compose down -v`: every account, game and
+    /// post on the stand, gone, because a diagnosis wanted a fresh log.
+    ///
+    /// Matched on the wrapper as well as on the underlying compose flag. Checking
+    /// only for `-v` would pass the wrapper, which is the spelling a brief
+    /// actually uses, and checking only for the wrapper would pass the raw
+    /// command a brief might grow later.
+    /// </remarks>
+    private static readonly string[] DestroysTheStand =
+    {
+        "dm.ps1 reset",
+        "down -v",
+        "down --volumes",
+        "volume rm",
+        "volume prune",
+        "system prune",
+    };
+
+    [Fact]
+    public void HandOutNoCommandThatWipesTheOwnersData()
+    {
+        var briefs = Briefs();
+        briefs.Should().NotBeEmpty("the briefs are what this reads");
+
+        var offenders = briefs
+            .SelectMany(FencedLines)
+            .Where(command => DestroysTheStand.Any(destructive =>
+                command.Line.Contains(destructive, StringComparison.OrdinalIgnoreCase)))
+            .Select(command => $"{command.Brief}: {command.Line.Trim()}")
+            .OrderBy(offender => offender, StringComparer.Ordinal)
+            .ToArray();
+
+        offenders.Should().BeEmpty(
+            "a subagent runs what its brief hands it, and these empty the databases " +
+            "the owner's stand is running on");
+    }
+
+    [Fact]
+    public void RecogniseADestructiveCommandWhenItSeesOne()
+    {
+        // The rule is a substring scan, and a scan that stops matching passes in
+        // silence.
+        DestroysTheStand.Should().Contain(destructive =>
+            ".\\scripts\\dm.ps1 reset".Contains(destructive, StringComparison.OrdinalIgnoreCase),
+            "this is the line the rule exists for");
+        DestroysTheStand.Should().Contain(destructive =>
+            "docker compose down -v --remove-orphans".Contains(destructive, StringComparison.OrdinalIgnoreCase));
+        DestroysTheStand.Should().NotContain(destructive =>
+            ".\\scripts\\dm.ps1 status".Contains(destructive, StringComparison.OrdinalIgnoreCase),
+            "reading the state of the stand is what these briefs are for");
+    }
+
     [Fact]
     public void PreviewOnAPortOfItsOwn()
     {
