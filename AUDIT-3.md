@@ -80,14 +80,14 @@
 Пересчитывается из строк индекса при каждом закрытии, руками не пишется: число,
 написанное отдельно от таблицы, расходится с ней на первой же партии.
 
-**Закрыто 42 из 357 (12%), открыто 315.**
+**Закрыто 44 из 357 (12%), открыто 313.**
 
 | Тяжесть | Всего | Закрыто | Осталось |
 |---|---|---|---|
 | КРИТИЧНО | 6 | 6 | 0 |
 | ВАЖНО | 53 | 33 | 20 |
-| ЗАМЕТНО | 140 | 2 | 138 |
-| МЕЛОЧЬ | 158 | 1 | 157 |
+| ЗАМЕТНО | 140 | 3 | 137 |
+| МЕЛОЧЬ | 158 | 2 | 156 |
 
 | Срез | Всего | Закрыто | Осталось |
 |---|---|---|---|
@@ -99,7 +99,7 @@
 | api | 23 | 0 | 23 |
 | comments | 23 | 0 | 23 |
 | security | 22 | 7 | 15 |
-| persistence | 21 | 4 | 17 |
+| persistence | 21 | 6 | 15 |
 | auth | 21 | 9 | 12 |
 | frontend-arch | 19 | 5 | 14 |
 | domain | 19 | 1 | 18 |
@@ -573,7 +573,7 @@
 | domain-13 | ЗАМЕТНО | Все три части верны (MAX+1, отсутствие уникального индекса, физическое удаление). Механика вреда описана невнятно: при дублирующемся ShortId ломается не "две р… | `TagManagementRepository.cs:185-204, 225-233; Migrations/20260729122733_InitialCreate.cs:2…` | Открыто | |
 | domain-14 | ЗАМЕТНО | API документирует сортировку топиков sortBy=comments, которой нет ни в одном слое | `src/DM.Web.API/Features/Forum/Topics/TopicController.cs:90; TopicRepository.cs:74-98` | Открыто | |
 | domain-15 | ЗАМЕТНО | DATA_STORAGE.md декларирует полиморфную ссылку как TargetType + TargetId и приводит в пример комментарии, у которых дискриминатора нет | `docs/conventions/DATA_STORAGE.md:106, 157-163; Entities/Shared/Comment.cs:29` | Открыто | |
-| persistence-04 | ЗАМЕТНО | Счетчик исключенного участника не удаляется и продолжает расти на чат, который тот больше не видит; бейдж завышен, и из интерфейса сбросить его нечем (эндпоинт… _(уточнено)_ | `src/DM.Domain.Messaging/Features/Chats/ChatService.cs:217-237` | Открыто | |
+| persistence-04 | ЗАМЕТНО | Счетчик исключенного участника не удаляется и продолжает расти на чат, который тот больше не видит; бейдж завышен, и из интерфейса сбросить его нечем (эндпоинт… _(уточнено)_ | `src/DM.Domain.Messaging/Features/Chats/ChatService.cs:217-237` | Закрыто | Исправлено — заведена перегрузка DeleteAsync(entityId, entryType, userIds), зеркальная трехаргументному CreateAsync: участника можно было завести двумя способами и убрать нулем. ChatService.UpdateAsync гасит счетчики исключенных, определение погашенного маркера вынесено в один Tombstone(). Состязательная перепроверка плана нашла дыру, которую он открывал: MarkAsReadAsync читает чат нефильтрованным GetForUpdate и принимал любой запомненный идентификатор, так что после появления надгробия бывший участник вернул бы себе живой маркер с заимствованным ParentId и без метки удаления, то есть уже несобираемый — добавлена проверка участия для Group и Direct. Три теста, проверены снятием обеих половин. Уточнение по ходу: сегодня число на экране не завышено, потому что единственный читатель этого тотала (GetTotalUnreadCountAsync) не вызывается ниоткуда, а фронт считает бейдж по загруженному списку чатов |
 | persistence-05 | ЗАМЕТНО | Индекс IX_UserSessions_SessionId мертв, комментарий описывает несуществующий код | `src/DM.Infrastructure.Persistence/MongoIntegration/MongoIndexInitializer.cs:121-128, dock…` | Открыто | |
 | persistence-06 | ЗАМЕТНО | AutoMapper игнорирует UnreadCount с комментарием "Set in service", но сервис его не выставляет | `src/DM.Web.API/Features/Game/ChatRooms/ChatRoomMappingProfile.cs:18` | Закрыто | Исправлено — ChatRoom.UnreadCount маппится из UnreadPostsCount комнаты вместо Ignore с комментарием "Set in service": сервис его никогда не выставлял. Та же причина, что и у persistence-03, и закрыто тем же изменением; покрыто ChatRoomMessagesShould, который читает число именно из этого поля ответа |
 | persistence-07 | ЗАМЕТНО | UserSettings пишется тремя способами из двух репозиториев, два ломаются об уникальный индекс | `src/DM.Infrastructure.Persistence/Repositories/Personal/UserRepository.cs:368,396 и BotLi…` | Открыто | |
@@ -702,7 +702,7 @@
 | persistence-14 | МЕЛОЧЬ | Ключа идемпотентности нет, и это зафиксировано комментарием на месте; незакрытым остается только повтор со стороны брокера (падение воркера, рестарт), который … _(уточнено)_ | `src/DM.Infrastructure.Messaging/GeneralBus/InvokedEvent.cs:9-20, src/DM.Workers.Notificat…` | Открыто | |
 | persistence-15 | МЕЛОЧЬ | Остается один аргумент, и он про будущее, а не про ошибку: значения GUID нечитаемы из mongosh/Compass без перестановки байт, а окно бесплатного перехода на Sta… _(уточнено)_ | `src/DM.Infrastructure.Persistence/PersistenceModule.cs:93-98` | Открыто | |
 | persistence-16 | МЕЛОЧЬ | Комментарии в mongo-init.js ссылаются на четыре несуществующих класса | `docker/mongo-init.js:35 и docker/mongo-init.js:101` | Открыто | |
-| persistence-17 | МЕЛОЧЬ | Документация поля ParentId противоречит тому, что в него пишут для чатов | `src/DM.Infrastructure.Persistence/Entities/Shared/UnreadCounter.cs:33-36` | Открыто | |
+| persistence-17 | МЕЛОЧЬ | Документация поля ParentId противоречит тому, что в него пишут для чатов | `src/DM.Infrastructure.Persistence/Entities/Shared/UnreadCounter.cs:33-36` | Закрыто | Исправлено — правило про ParentId записано один раз у общего контракта IUnreadCountersRepository, как того требует CODE_STYLE ("причину пишем у общего контракта, а не у каждого вызывающего места"), и разложено по трем перегрузкам создания: контейнер для тем, комнат и публикаций, сам читатель для бесед, сама сущность для вырожденного случая. Комментарий у поля сущности заменен с "Aggregation entity identifier", называвшего только первую половину, на формулировку, покрывающую обе, со ссылкой на контракт вместо второй копии правила |
 | persistence-18 | МЕЛОЧЬ | MarkAsRead добавляет читателя через Push вместо AddToSet, массив может распухать дубликатами | `src/DM.Infrastructure.Persistence/Repositories/Personal/NotificationRepository.cs:69-79` | Открыто | |
 | persistence-19 | МЕЛОЧЬ | То же самое; длинная форма Builders<T>.Update в PollRepository.cs:235,289,299,312 и AttributeSchemaRepository.cs:195. _(уточнено)_ | `src/DM.Infrastructure.Persistence/Repositories/Community/PollRepository.cs:231 и src/DM.I…` | Открыто | |
 | persistence-20 | МЕЛОЧЬ | SecurityAuditRepository — единственный потребитель Mongo, не наследующий ни MongoCollectionRepository, ни MongoRepository; отсюда пятикратное получение коллекц… _(уточнено)_ | `src/DM.Infrastructure.Persistence/Repositories/Account/SecurityAuditRepository.cs:15` | Открыто | |
