@@ -446,25 +446,32 @@ jobs:
     # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 30
     runs-on: ubuntu-latest
+    # Declared once for the job rather than per step. Compose rejects an empty
+    # ${VAR:?} as firmly as a missing one, so every step that runs `config` needs
+    # the whole set, and the two that do carried identical copies of it: a
+    # variable added to one and not the other fails the second step with a
+    # message about the compose file rather than about the omission. The set is
+    # not secret — these are placeholders whose only job is to be non-empty, and
+    # naming them here says that plainly.
+    env:
+      DM_CryptoConfiguration__KeyBase64: ci-validation-placeholder
+      MONGO_ROOT_PASSWORD: ci-validation-placeholder
+      MONGO_PASSWORD: ci-validation-placeholder
+      POSTGRES_PASSWORD: ci-validation-placeholder
+      RABBITMQ_DEFAULT_PASS: ci-validation-placeholder
+      MINIO_ROOT_PASSWORD: ci-validation-placeholder
+      MINIO_APP_PASSWORD: ci-validation-placeholder
+      MINIO_IMGPROXY_PASSWORD: ci-validation-placeholder
+      GF_SECURITY_ADMIN_PASSWORD: ci-validation-placeholder
+      IMGPROXY_KEY: ci-validation-placeholder
+      IMGPROXY_SALT: ci-validation-placeholder
+      POP_UPSTREAM: https://ci-validation-placeholder
+      POP_UPSTREAM_HOST: ci-validation-placeholder
     steps:
     - uses: actions/checkout@v4
 
     - name: Validate the deployed overlay combination
       working-directory: docker
-      env:
-        DM_CryptoConfiguration__KeyBase64: ci-validation-placeholder
-        MONGO_ROOT_PASSWORD: ci-validation-placeholder
-        MONGO_PASSWORD: ci-validation-placeholder
-        POSTGRES_PASSWORD: ci-validation-placeholder
-        RABBITMQ_DEFAULT_PASS: ci-validation-placeholder
-        MINIO_ROOT_PASSWORD: ci-validation-placeholder
-        MINIO_APP_PASSWORD: ci-validation-placeholder
-        MINIO_IMGPROXY_PASSWORD: ci-validation-placeholder
-        GF_SECURITY_ADMIN_PASSWORD: ci-validation-placeholder
-        IMGPROXY_KEY: ci-validation-placeholder
-        IMGPROXY_SALT: ci-validation-placeholder
-        POP_UPSTREAM: https://ci-validation-placeholder
-        POP_UPSTREAM_HOST: ci-validation-placeholder
       run: |
         docker compose --env-file /dev/null -f docker-compose.yml config --quiet
         docker compose --env-file /dev/null -f docker-compose.yml -f docker-compose.preview.yml config --quiet
@@ -472,20 +479,6 @@ jobs:
 
     - name: Every build context the overlay names must exist
       working-directory: docker
-      env:
-        DM_CryptoConfiguration__KeyBase64: ci-validation-placeholder
-        MONGO_ROOT_PASSWORD: ci-validation-placeholder
-        MONGO_PASSWORD: ci-validation-placeholder
-        POSTGRES_PASSWORD: ci-validation-placeholder
-        RABBITMQ_DEFAULT_PASS: ci-validation-placeholder
-        MINIO_ROOT_PASSWORD: ci-validation-placeholder
-        MINIO_APP_PASSWORD: ci-validation-placeholder
-        MINIO_IMGPROXY_PASSWORD: ci-validation-placeholder
-        GF_SECURITY_ADMIN_PASSWORD: ci-validation-placeholder
-        IMGPROXY_KEY: ci-validation-placeholder
-        IMGPROXY_SALT: ci-validation-placeholder
-        POP_UPSTREAM: https://ci-validation-placeholder
-        POP_UPSTREAM_HOST: ci-validation-placeholder
       run: |
         # Take everything after the key rather than a whitespace-split field:
         # compose resolves contexts to absolute paths, and a path may contain
