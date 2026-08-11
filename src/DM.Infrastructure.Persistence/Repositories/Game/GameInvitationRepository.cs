@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
@@ -271,7 +272,7 @@ internal class GameInvitationRepository : IGameInvitationRepository
                          t.Type == TokenType.GameReaderInvitation ? GameRole.Reader :
                          t.Type == TokenType.GameAssistantInvitation ? GameRole.Assistant : GameRole.None,
             CreatedUtc = t.CreatedUtc,
-            ExpiresUtc = t.CreatedUtc.AddDays(30)
+            ExpiresUtc = t.CreatedUtc.AddDays(InvitationPolicy.ExpirationDays)
         };
 
     /// <inheritdoc />
@@ -309,7 +310,7 @@ internal class GameInvitationRepository : IGameInvitationRepository
                 : MapToGeneralUser(token.Game!.Master),
             TargetRole = MapTokenTypeToRole(token.Type),
             CreatedUtc = token.CreatedUtc,
-            ExpiresUtc = token.CreatedUtc.AddDays(30)
+            ExpiresUtc = token.CreatedUtc.AddDays(InvitationPolicy.ExpirationDays)
         };
 
         return (tokenDto, info);

@@ -37,20 +37,18 @@ internal class CharacterAvatarUploadAuthorizer : IUploadTargetAuthorizer
     /// easy to miss stated separately: an owner cannot edit while the game is not
     /// active, and a master needs either an NPC or the character's EditAllowed flag.
     ///
-    /// The existence probe comes first because GetForUpdate materializes with
-    /// FirstAsync, which answers 500 for an unknown identifier. Until this check
-    /// existed the same request answered 500 too, from the foreign key, but only
-    /// after the image had been written to the bucket.
+    /// Existence is settled here rather than left to the write: before this check
+    /// the same request answered 500 from the foreign key, and only after the
+    /// image had been written to the bucket.
     /// </remarks>
     public async Task EnsureAllowedAsync(Guid targetId)
     {
-        var character = await _repository.FindCharacter(targetId);
+        var character = await _repository.GetForUpdate(targetId);
         if (character == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CharacterNotFound);
         }
 
-        var characterToUpdate = await _repository.GetForUpdate(targetId);
-        _intentionManager.ThrowIfForbidden(CharacterIntention.Edit, characterToUpdate);
+        _intentionManager.ThrowIfForbidden(CharacterIntention.Edit, character);
     }
 }

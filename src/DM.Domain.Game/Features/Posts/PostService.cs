@@ -300,8 +300,10 @@ internal class PostService : IPostService
         var post = await GetAsync(postId);
         _intentionManager.ThrowIfForbidden(PostIntention.Delete, post);
 
+        // The author's post count moves inside Delete, in the transaction that
+        // removes the post: asked for separately here, the two could and did
+        // commit apart.
         await _repository.Delete(postId, _identityProvider.Current.User.UserId);
-        await _repository.DecrementAuthorQuantityRating(post.Author.UserId);
 
         await _unreadCountersRepository.DecrementAsync(post.RoomId, UnreadEntryType.Message, post.CreatedUtc);
         await _producer.SendAsync(EventType.DeletedPost, postId);

@@ -8,6 +8,7 @@ using DM.Domain.Blog.Authorization;
 using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
@@ -21,8 +22,6 @@ namespace DM.Domain.Blog.Features.Invitations;
 /// <inheritdoc />
 internal class BlogInvitationService : IBlogInvitationService
 {
-    private const int InvitationExpirationDays = 30;
-
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IBlogInvitationRepository _repository;
@@ -131,7 +130,7 @@ internal class BlogInvitationService : IBlogInvitationService
             InvitedBy = new GeneralUser { UserId = currentUser.UserId, Username = currentUser.Username },
             TargetRole = type == TokenType.BlogAssistantInvitation ? BlogRole.Assistant : BlogRole.Reader,
             CreatedUtc = now,
-            ExpiresUtc = now.AddDays(InvitationExpirationDays)
+            ExpiresUtc = InvitationPolicy.ExpiresAt(now)
         };
     }
 

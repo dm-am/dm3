@@ -101,27 +101,23 @@ internal class GameSubscriptionService : IGameSubscriptionService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GeneralUser>> GetSubscribersAsync(Guid gameId, CancellationToken ct = default)
+    public async Task<IEnumerable<UserReference>> GetSubscribersAsync(Guid gameId, CancellationToken ct = default)
     {
         var subscriberIds = await _repository.GetTargetSubscriberIdsAsync(SubscriptionTargetType.Game, gameId, ct);
         var subscriberIdList = subscriberIds.ToList();
 
         if (!subscriberIdList.Any())
         {
-            return Enumerable.Empty<GeneralUser>();
+            return Enumerable.Empty<UserReference>();
         }
 
-        var users = new List<GeneralUser>();
-        foreach (var subscriberId in subscriberIdList)
-        {
-            var user = await _userLookupService.GetAsync(subscriberId);
-            if (user != null)
-            {
-                users.Add(user);
-            }
-        }
-
-        return users;
+        // One read for the whole list. Asked one at a time, a hundred subscribers
+        // were a hundred round trips, and GetAsync throws on a user who is no
+        // longer there — a single removed subscriber answered the entire page
+        // with 410 Gone. The batch form returns the users that exist and says
+        // nothing about the ones that do not, which is what a list of readers
+        // needs.
+        return await _userLookupService.GetReferencesAsync(subscriberIdList);
     }
 
     /// <inheritdoc />

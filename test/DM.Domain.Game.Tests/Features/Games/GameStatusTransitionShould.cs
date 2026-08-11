@@ -90,7 +90,7 @@ public class GameStatusTransitionShould : UnitTestBase
 
         var subscriptionService = Mock<IGameSubscriptionService>();
         subscriptionService.Setup(s => s.GetSubscribersAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<DM.Domain.Core.Dto.GeneralUser>());
+            .ReturnsAsync(Array.Empty<DM.Domain.Core.Dto.UserReference>());
 
         var roomRepository = Mock<IRoomRepository>();
 

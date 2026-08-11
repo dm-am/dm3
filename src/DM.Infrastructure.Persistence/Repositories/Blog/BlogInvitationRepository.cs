@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Blog.Features.Invitations;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Entities.Account;
@@ -116,7 +117,7 @@ internal class BlogInvitationRepository : IBlogInvitationRepository
             InvitedBy = new GeneralUser { UserId = data.InviterUserId, Username = data.InviterUsername ?? "" },
             TargetRole = data.Type == TokenType.BlogAssistantInvitation ? BlogRole.Assistant : BlogRole.Reader,
             CreatedUtc = data.CreatedUtc,
-            ExpiresUtc = data.CreatedUtc.AddDays(30)
+            ExpiresUtc = data.CreatedUtc.AddDays(InvitationPolicy.ExpirationDays)
         };
     }
 
@@ -162,7 +163,7 @@ internal class BlogInvitationRepository : IBlogInvitationRepository
             InvitedBy = new GeneralUser { UserId = d.InviterUserId, Username = d.InviterUsername ?? "" },
             TargetRole = d.Type == TokenType.BlogAssistantInvitation ? BlogRole.Assistant : BlogRole.Reader,
             CreatedUtc = d.CreatedUtc,
-            ExpiresUtc = d.CreatedUtc.AddDays(30)
+            ExpiresUtc = d.CreatedUtc.AddDays(InvitationPolicy.ExpirationDays)
         });
     }
 
@@ -208,7 +209,7 @@ internal class BlogInvitationRepository : IBlogInvitationRepository
             InvitedBy = new GeneralUser { UserId = d.InviterUserId, Username = d.InviterUsername ?? "" },
             TargetRole = d.Type == TokenType.BlogAssistantInvitation ? BlogRole.Assistant : BlogRole.Reader,
             CreatedUtc = d.CreatedUtc,
-            ExpiresUtc = d.CreatedUtc.AddDays(30)
+            ExpiresUtc = d.CreatedUtc.AddDays(InvitationPolicy.ExpirationDays)
         });
     }
 }

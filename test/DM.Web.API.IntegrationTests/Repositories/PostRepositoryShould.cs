@@ -187,6 +187,62 @@ public class PostRepositoryShould : IntegrationTestBase
     /// A user subscribed to the game, so the feed has somebody to report as a
     /// reader.
     /// </summary>
+    /// <summary>
+    /// Removing a post takes the author's post count down with it, once.
+    /// </summary>
+    /// <remarks>
+    /// The two used to be separate commits: the soft delete saved, then a bare
+    /// ExecuteUpdate moved the counter. Creation had been wrapped in a
+    /// transaction for exactly this reason, with a comment saying so, and the
+    /// opposite direction was left open. QuantityRating feeds the user rating and
+    /// the stored IsNewbie column, and nothing recomputes either.
+    /// </remarks>
+    [Fact]
+    public async Task TakeTheAuthorsPostCountDownWithTheRemovedPost()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+        var context = await AddGameWithRoomAsync(dbContext);
+        var characterId = await AddPostByNewCharacterAsync(dbContext, context);
+        var postId = await dbContext.Posts.AsNoTracking()
+            .Where(p => p.CharacterId == characterId)
+            .Select(p => p.PostId)
+            .SingleAsync();
+
+        await dbContext.Users.Where(u => u.UserId == context.UserId)
+            .ExecuteUpdateAsync(u => u.SetProperty(x => x.QuantityRating, 7));
+
+        await repository.Delete(postId, context.UserId);
+
+        var author = await dbContext.Users.AsNoTracking().FirstAsync(u => u.UserId == context.UserId);
+        author.QuantityRating.Should().Be(6);
+        var post = await dbContext.Posts.IgnoreQueryFilters().AsNoTracking()
+            .FirstAsync(p => p.PostId == postId);
+        post.IsRemoved.Should().BeTrue();
+        post.DeletedByUserId.Should().Be(context.UserId);
+    }
+
+    /// <summary>
+    /// A post that is not there moves nobody's count.
+    /// </summary>
+    [Fact]
+    public async Task LeaveTheCountAloneWhenThereIsNoSuchPost()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+        var context = await AddGameWithRoomAsync(dbContext);
+
+        await dbContext.Users.Where(u => u.UserId == context.UserId)
+            .ExecuteUpdateAsync(u => u.SetProperty(x => x.QuantityRating, 7));
+
+        await repository.Delete(Guid.NewGuid(), context.UserId);
+
+        var author = await dbContext.Users.AsNoTracking().FirstAsync(u => u.UserId == context.UserId);
+        author.QuantityRating.Should().Be(7);
+    }
+
     private static async Task<Guid> AddSubscriberAsync(DmDbContext dbContext, Guid gameId)
     {
         var subscriberId = Guid.NewGuid();

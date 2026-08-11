@@ -164,7 +164,7 @@ public interface IBlogService
     /// <summary>
     /// Get blog readers (subscribers)
     /// </summary>
-    Task<IEnumerable<GeneralUser>> GetReaders(Guid blogId, CancellationToken ct = default);
+    Task<IEnumerable<UserReference>> GetReaders(Guid blogId, CancellationToken ct = default);
 
     /// <summary>
     /// Get blog assistants with role information

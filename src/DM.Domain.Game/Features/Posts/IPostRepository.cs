@@ -64,10 +64,5 @@ public interface IPostRepository
     /// <param name="deletedByUserId">User who removed the post</param>
     Task Delete(Guid postId, Guid deletedByUserId);
 
-    /// <summary>
-    /// Decrement author's quantity rating (post count)
-    /// </summary>
-    Task DecrementAuthorQuantityRating(Guid authorId);
-
     #endregion
 }

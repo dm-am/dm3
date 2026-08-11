@@ -553,21 +553,37 @@ internal class PostRepository : IPostRepository
             .FirstOrDefaultAsync();
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// The same transaction as Create, with the opposite sign. The removal and
+    /// the author's QuantityRating were two separate commits, so a failure
+    /// between them left a deleted post still counted or a live post uncounted —
+    /// and QuantityRating feeds the user rating and the stored IsNewbie column,
+    /// neither of which anything recomputes.
+    /// </remarks>
     public async Task Delete(Guid postId, Guid deletedByUserId)
     {
         var post = await _dbContext.Posts.FindAsync(postId);
-        if (post != null)
+        if (post == null)
         {
+            return;
+        }
+
+        var authorId = post.AuthorId;
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
             SoftDelete.Mark(post, deletedByUserId, _dateTimeProvider.Now);
             await _dbContext.SaveChangesAsync();
-        }
-    }
 
-    public async Task DecrementAuthorQuantityRating(Guid authorId)
-    {
-        await _dbContext.Users
-            .Where(u => u.UserId == authorId)
-            .ExecuteUpdateAsync(u => u.SetProperty(x => x.QuantityRating, x => x.QuantityRating - 1));
+            await _dbContext.Users
+                .Where(u => u.UserId == authorId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.QuantityRating, x => x.QuantityRating - 1));
+
+            await transaction.CommitAsync();
+        });
     }
 
     #endregion

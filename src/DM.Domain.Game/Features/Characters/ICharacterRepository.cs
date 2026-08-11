@@ -45,7 +45,7 @@ public interface ICharacterRepository
     /// <summary>
     /// Get character for update
     /// </summary>
-    Task<CharacterToUpdate> GetForUpdate(Guid characterId);
+    Task<CharacterToUpdate?> GetForUpdate(Guid characterId);
 
     /// <summary>
     /// Get character attribute IDs

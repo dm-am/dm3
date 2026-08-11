@@ -354,7 +354,6 @@ public class PostServiceShould : UnitTestBase
 
         _repository.Setup(r => r.Get(postId, It.IsAny<Guid>())).ReturnsAsync(post);
         _repository.Setup(r => r.Delete(postId, _currentUserId)).Returns(Task.CompletedTask);
-        _repository.Setup(r => r.DecrementAuthorQuantityRating(It.IsAny<Guid>())).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(postId);
 
@@ -362,7 +361,7 @@ public class PostServiceShould : UnitTestBase
     }
 
     [Fact]
-    public async Task DeletePostAndDecrementCounters()
+    public async Task DeletePostAndDecrementUnreadCounters()
     {
         var postId = Guid.NewGuid();
         var authorId = Guid.NewGuid();
@@ -372,14 +371,12 @@ public class PostServiceShould : UnitTestBase
 
         _repository.Setup(r => r.Get(postId, It.IsAny<Guid>())).ReturnsAsync(post);
         _repository.Setup(r => r.Delete(postId, _currentUserId)).Returns(Task.CompletedTask);
-        _repository.Setup(r => r.DecrementAuthorQuantityRating(authorId)).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(postId);
 
         // The author of the removal travels with it: ISoftDeletable promises who deleted the
         // row, and the column stays empty unless the service hands the identity over.
         _repository.Verify(r => r.Delete(postId, _currentUserId), Times.Once);
-        _repository.Verify(r => r.DecrementAuthorQuantityRating(authorId), Times.Once);
         _unreadCountersRepository.Verify(r => r.DecrementAsync(roomId, UnreadEntryType.Message, createdUtc), Times.Once);
     }
 

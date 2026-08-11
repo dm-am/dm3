@@ -154,6 +154,11 @@ internal class CharacterService : ICharacterService
     {
         await _updateValidator.ValidateAndThrowAsync(updateCharacter);
         var characterToUpdate = await _repository.GetForUpdate(updateCharacter.CharacterId);
+        if (characterToUpdate == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CharacterNotFound);
+        }
+
         _intentionManager.ThrowIfForbidden(CharacterIntention.Edit, characterToUpdate);
 
         // A field the caller may not set is refused, not dropped. Asking IsAllowed
@@ -205,15 +210,12 @@ internal class CharacterService : ICharacterService
     public async Task<Character> ChangeStatusAsync(
         Guid characterId, CharacterStatusTransition transition)
     {
-        // Существование проверяется отдельно: GetForUpdate материализуется через
-        // FirstAsync и на незнакомом идентификаторе отвечает 500, а эндпоинт
-        // объявляет 404.
-        if (await _repository.FindCharacter(characterId) == null)
+        var character = await _repository.GetForUpdate(characterId);
+        if (character == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CharacterNotFound);
         }
 
-        var character = await _repository.GetForUpdate(characterId);
         var entity = new UpdateCharacterEntity { CharacterId = characterId };
         EventType statusEvent;
 
@@ -391,6 +393,11 @@ internal class CharacterService : ICharacterService
     public async Task DeleteAsync(Guid characterId)
     {
         var character = await _repository.GetForUpdate(characterId);
+        if (character == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CharacterNotFound);
+        }
+
         _intentionManager.ThrowIfForbidden(CharacterIntention.Delete, character);
 
         await _repository.Delete(characterId, _identityProvider.Current.User.UserId);

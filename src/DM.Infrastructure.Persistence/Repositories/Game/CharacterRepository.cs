@@ -94,12 +94,12 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
             .FirstOrDefaultAsync();
     }
 
-    public Task<CharacterToUpdate> GetForUpdate(Guid characterId)
+    public Task<CharacterToUpdate?> GetForUpdate(Guid characterId)
     {
         return _dbContext.Characters
             .Where(c => c.CharacterId == characterId)
             .ProjectTo<CharacterToUpdate>(_mapper.ConfigurationProvider)
-            .FirstAsync();
+            .FirstOrDefaultAsync<CharacterToUpdate?>();
     }
 
     public async Task<IDictionary<Guid, Guid>> GetAttributeIds(Guid characterId)

@@ -33,7 +33,7 @@ public interface IGameSubscriptionService
     /// <summary>
     /// Get subscribers of a game
     /// </summary>
-    Task<IEnumerable<GeneralUser>> GetSubscribersAsync(Guid gameId, CancellationToken ct = default);
+    Task<IEnumerable<UserReference>> GetSubscribersAsync(Guid gameId, CancellationToken ct = default);
 
     /// <summary>
     /// Check if a user is subscribed to a game

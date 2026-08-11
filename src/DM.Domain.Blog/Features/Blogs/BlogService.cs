@@ -82,20 +82,28 @@ internal class BlogService : IBlogService
     public async Task<(IEnumerable<Blog> blogs, PagingResult paging)> GetPublicBlogs(
         PagingQuery query, BlogFilter filter, CancellationToken ct = default)
     {
-        // Resolve usernames to user IDs if provided
+        // Resolve usernames to user IDs if provided. A name nobody answers to is
+        // a filter that matches nothing, not a broken request: asked through
+        // GetAsync, one mistyped name in the query string answered the whole
+        // listing with 410 Gone. FindUserIdAsync is the form that says "not
+        // found" instead of throwing it.
         IReadOnlyCollection<Guid>? hostUserIds = null;
         if (filter.HostUsernames?.Count > 0)
         {
             var userIds = new List<Guid>();
             foreach (var username in filter.HostUsernames)
             {
-                var user = await _userLookupService.GetAsync(username);
-                if (user != null)
+                var (found, userId) = await _userLookupService.FindUserIdAsync(username, ct);
+                if (found)
                 {
-                    userIds.Add(user.UserId);
+                    userIds.Add(userId);
                 }
             }
-            hostUserIds = userIds.Count > 0 ? userIds : null;
+
+            // Every name unknown means every name filtered out. Falling back to
+            // null here would drop the filter and answer with all the blogs on
+            // the site, which is the opposite of what was asked.
+            hostUserIds = userIds;
         }
 
         // The premoderation filter is a mentor review-queue tool; silently
@@ -129,11 +137,10 @@ internal class BlogService : IBlogService
     /// <inheritdoc />
     public async Task<IEnumerable<Blog>> GetUserBlogs(string username, CancellationToken ct = default)
     {
+        // Unknown name throws out of the lookup; the branch that used to test for
+        // null below it could never run, and reading it suggested a second answer
+        // to the same case that does not exist.
         var user = await _userLookupService.GetAsync(username);
-        if (user == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(username));
-        }
 
         // Premoderation-pending blogs are hidden from other viewers just like
         // games; the owner, assistants, the curator, and senior moderation
@@ -347,8 +354,9 @@ internal class BlogService : IBlogService
     {
         // Resolve username → UserId via the cross-module lookup so we keep
         // the repository's parameter typed (Guid) — repositories never
-        // take usernames directly. Throws HttpException(410) on unknown
-        // user, which surfaces as a clean 404 to the API caller.
+        // take usernames directly. An unknown name throws HttpException(410),
+        // and 410 is what the caller receives: the error middleware passes an
+        // HttpException status through untouched.
         var user = await _userLookupService.GetAsync(username);
 
         var publication = await _repository.GetBestUserPublication(user.UserId, ct);
@@ -581,7 +589,7 @@ internal class BlogService : IBlogService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GeneralUser>> GetReaders(Guid blogId, CancellationToken ct = default)
+    public async Task<IEnumerable<UserReference>> GetReaders(Guid blogId, CancellationToken ct = default)
     {
         await GetAsync(blogId, ct);
         // Get subscribers via BlogSubscriptionService

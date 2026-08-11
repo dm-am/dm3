@@ -11,6 +11,7 @@ using DM.Domain.Game.Features.Games;
 using DM.Domain.Core.Blacklists;
 using DM.Domain.Game.Features.Subscriptions;
 using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Exceptions;
@@ -22,8 +23,6 @@ namespace DM.Domain.Game.Features.Invitations;
 /// <inheritdoc />
 internal class GameInvitationService : IGameInvitationService
 {
-    private const int InvitationExpirationDays = 30;
-
     private readonly IIdentityProvider _identityProvider;
     private readonly IIntentionManager _intentionManager;
     private readonly IGameRepository _gameRepository;
@@ -143,7 +142,7 @@ internal class GameInvitationService : IGameInvitationService
         }
 
         // Check if invitation has expired
-        var expiresUtc = token.CreatedUtc.AddDays(InvitationExpirationDays);
+        var expiresUtc = InvitationPolicy.ExpiresAt(token.CreatedUtc);
         if (_dateTimeProvider.Now > expiresUtc)
         {
             throw new HttpException(HttpStatusCode.Gone, RefusalMessage.InvitationExpired);

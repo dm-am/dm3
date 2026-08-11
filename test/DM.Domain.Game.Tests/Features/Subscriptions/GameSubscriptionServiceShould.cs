@@ -134,21 +134,24 @@ public class GameSubscriptionServiceShould : UnitTestBase
     {
         var gameId = Guid.NewGuid();
         var subscriberIds = new List<Guid> { Guid.NewGuid(), Guid.NewGuid() };
-        var users = subscriberIds.Select(id => new GeneralUser { UserId = id }).ToList();
+        var users = subscriberIds.Select(id => new UserReference { UserId = id }).ToList();
 
         _repository.Setup(r => r.GetTargetSubscriberIdsAsync(SubscriptionTargetType.Game, gameId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(subscriberIds);
 
-        foreach (var user in users)
-        {
-            _userLookupService.Setup(s => s.GetAsync(user.UserId))
-                .ReturnsAsync(user);
-        }
+        // Asked for all of them at once. One call per subscriber made the page
+        // cost as much as it had readers, and the single-user form throws on a
+        // user who is no longer there, so one removed reader answered the whole
+        // game page with 410 Gone.
+        _userLookupService
+            .Setup(s => s.GetReferencesAsync(It.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(subscriberIds))))
+            .ReturnsAsync(users);
 
         var result = await _service.GetSubscribersAsync(gameId);
 
         result.Should().HaveCount(2);
         result.Should().Contain(users);
+        _userLookupService.Verify(s => s.GetAsync(It.IsAny<Guid>()), Times.Never);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Blog.Features.Subscriptions;
 using DM.Domain.Core.Abstractions;
@@ -111,19 +112,26 @@ public class BlogSubscriptionServiceShould : UnitTestBase
         var userId1 = Guid.NewGuid();
         var userId2 = Guid.NewGuid();
         var subscriberIds = new List<Guid> { userId1, userId2 };
-        var user1 = new GeneralUser { UserId = userId1, Username = "user1" };
-        var user2 = new GeneralUser { UserId = userId2, Username = "user2" };
+        var user1 = new UserReference { UserId = userId1, Username = "user1" };
+        var user2 = new UserReference { UserId = userId2, Username = "user2" };
 
         _repository.Setup(r => r.GetTargetSubscriberIdsAsync(SubscriptionTargetType.Blog, blogId, default))
             .ReturnsAsync(subscriberIds);
-        _userLookupService.Setup(s => s.GetAsync(userId1)).ReturnsAsync(user1);
-        _userLookupService.Setup(s => s.GetAsync(userId2)).ReturnsAsync(user2);
+
+        // Asked for all of them at once. One call per reader made the page cost
+        // as much as it had readers, and the single-user form throws on a user
+        // who is no longer there, so one removed reader answered the whole blog
+        // with 410 Gone.
+        _userLookupService
+            .Setup(s => s.GetReferencesAsync(It.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(subscriberIds))))
+            .ReturnsAsync(new[] { user1, user2 });
 
         var result = await _service.GetReadersAsync(blogId);
 
         result.Should().HaveCount(2);
         result.Should().Contain(u => u.UserId == userId1);
         result.Should().Contain(u => u.UserId == userId2);
+        _userLookupService.Verify(s => s.GetAsync(It.IsAny<Guid>()), Times.Never);
     }
 
     [Fact]

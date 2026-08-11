@@ -113,9 +113,12 @@ internal class BlogRepository : IBlogRepository
             query = query.Where(b => statuses.Contains(b.Status));
         }
 
-        // Host filter (owner OR assistant, OR logic)
+        // Host filter (owner OR assistant, OR logic). Null means the caller is not
+        // filtering by host; an empty collection means they are, and nobody
+        // matched — answering that with every blog on the site reads the absence
+        // of results as the absence of a filter.
         var hostUserIds = filter.HostUserIds;
-        if (hostUserIds?.Count > 0)
+        if (hostUserIds != null)
         {
             var assistantBlogIds = _dbContext.BlogAssistants
                 .Where(a => hostUserIds.Contains(a.UserId))

@@ -1126,7 +1126,7 @@ public class GameDetails : Game
     /// <summary>
     /// Game subscribers
     /// </summary>
-    public IEnumerable<GeneralUser> Subscribers { get; set; } = [];
+    public IEnumerable<UserReference> Subscribers { get; set; } = [];
 
     /// <summary>
     /// Full assistant information for detail page

@@ -167,6 +167,32 @@ public class CharacterServiceShould : UnitTestBase
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
     }
 
+    /// <summary>
+    /// An identifier nobody answers to is a 404, on every verb.
+    /// </summary>
+    /// <remarks>
+    /// The read behind these two used to materialize with FirstAsync, so an
+    /// unknown character reached the caller as a server fault while the endpoint
+    /// documented 404. Fixed where it started rather than guarded at each call
+    /// site: the third caller had already grown a second query of its own to work
+    /// around exactly this.
+    /// </remarks>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AnswerNotFoundWhenTheCharacterIsUnknown(bool deleting)
+    {
+        var characterId = Guid.NewGuid();
+        _repository.Setup(r => r.GetForUpdate(characterId)).ReturnsAsync((CharacterToUpdate?)null);
+
+        Func<Task> act = deleting
+            ? () => _service.DeleteAsync(characterId)
+            : () => _service.UpdateAsync(new UpdateCharacter { CharacterId = characterId, Name = "Any" });
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.NotFound);
+    }
+
     [Fact]
     public async Task AuthorizeUpdateCharacterAction()
     {
