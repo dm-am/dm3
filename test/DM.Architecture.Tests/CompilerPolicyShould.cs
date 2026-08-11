@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using FluentAssertions;
 using Xunit;
@@ -23,6 +24,10 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class CompilerPolicyShould
 {
+    /// <summary>A dotnet-version a workflow asks setup-dotnet to install.</summary>
+    private static readonly Regex DotnetVersion = new(
+        @"dotnet-version:\s*(?<version>[0-9]+\.[0-9]+\.[0-9x]+)", RegexOptions.Compiled);
+
     private const string EntitiesSection = "[src/DM.Infrastructure.Persistence/Entities/**.cs]";
     private const string DocumentationExemption = "dotnet_diagnostic.CS1591.severity = none";
 
@@ -221,6 +226,57 @@ public class CompilerPolicyShould
         offenders.Should().BeEmpty(
             "the accepted language is the one the build images have, and a project that " +
             "raises it above the pin compiles locally and fails where nobody can see why");
+    }
+
+    /// <summary>
+    /// global.json and every setup-dotnet step name the same SDK band.
+    /// </summary>
+    /// <remarks>
+    /// global.json takes no comments, so the reason lives here. The pin is
+    /// worth something only while it names the band CI installs: raise the
+    /// workflow to a newer SDK and leave the pin behind, and the file that
+    /// looks like the source of truth stops describing anything.
+    ///
+    /// What this rule deliberately does NOT assert is the roll-forward, which
+    /// is latestMajor and therefore accepts any SDK from the eighth upwards. A
+    /// developer machine carrying only a newer SDK compiles the whole solution
+    /// with a compiler CI does not have, and warnings are errors here without
+    /// exception, so a local build can be green on code CI rejects and the
+    /// reverse. Narrowing it to latestFeature is the fix and it cannot be made
+    /// from inside the repository: it requires the 8.0 SDK present on the
+    /// machine, and a pin narrowed without one leaves the solution unbuildable
+    /// rather than merely divergent.
+    /// </remarks>
+    [Fact]
+    public void PinTheSdkToTheBandContinuousIntegrationInstalls()
+    {
+        var root = RepositoryRoot;
+
+        using var globalJson = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "global.json")));
+        var pinned = globalJson.RootElement.GetProperty("sdk").GetProperty("version").GetString();
+
+        var installed = InstalledSdkVersions(root);
+        installed.Should().NotBeEmpty("the workflows install the SDK before building");
+
+        var pinnedBand = Band(pinned!);
+        installed.Should().AllSatisfy(version => Band(version).Should().Be(pinnedBand,
+            "global.json and every setup-dotnet step name one band or the pin describes " +
+            "a compiler nobody uses"));
+    }
+
+    /// <summary>Every dotnet-version the workflows ask setup-dotnet to install.</summary>
+    private static IReadOnlyList<string> InstalledSdkVersions(string root) => Directory
+        .EnumerateFiles(Path.Combine(root, ".github", "workflows"), "*.yml")
+        .SelectMany(path => DotnetVersion.Matches(File.ReadAllText(path)))
+        .Select(match => match.Groups["version"].Value)
+        .ToList();
+
+    /// <summary>major.minor — the part a feature-level roll-forward cannot leave.</summary>
+    private static string Band(string version)
+    {
+        var parts = version.Split('.');
+        parts.Length.Should().BeGreaterOrEqualTo(2, $"'{version}' should name a major and a minor");
+        return parts[0] + "." + parts[1];
     }
 
     /// <summary>
