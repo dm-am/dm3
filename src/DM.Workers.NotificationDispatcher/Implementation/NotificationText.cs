@@ -43,6 +43,7 @@ internal static class NotificationText
         [EventType.StatusGameFrozen] = "Игра заморожена",
         [EventType.StatusGameFinished] = "Игра завершена",
         [EventType.GameClosureWarning] = "Предупреждение о закрытии игры",
+        [EventType.GameInactivityWarning] = "Предупреждение о простое игры",
         [EventType.GameRecruitmentOpened] = "Открыт набор в игру",
         [EventType.NewCharacter] = "Новая заявка на персонажа",
         [EventType.StatusCharacterAccepted] = "Персонаж принят",
@@ -58,7 +59,9 @@ internal static class NotificationText
         [EventType.ReaderInvitationCreated] = "Приглашение стать читателем",
         [EventType.RoomPendencyCreated] = "Ожидание поста",
         [EventType.RoomPendencyReminder] = "Напоминание о посте",
+        [EventType.RoomPendencyFulfilled] = "Ожидаемый пост написан",
         [EventType.PostReviewed] = "Пост оценен",
+        [EventType.LikedGameComment] = "Лайк на комментарий к игре",
 
         // Forum
         [EventType.NewTopic] = "Новый топик на форуме",
@@ -96,6 +99,7 @@ internal static class NotificationText
         [EventType.PasswordChanged] = "Пароль изменен",
         [EventType.EmailChanged] = "Почта изменена",
         [EventType.SuspiciousLoginActivity] = "Подозрительная активность входа",
+        [EventType.AccountLocked] = "Вход в аккаунт временно заблокирован",
 
         // Moderation
         [EventType.TicketCreated] = "Новое обращение",

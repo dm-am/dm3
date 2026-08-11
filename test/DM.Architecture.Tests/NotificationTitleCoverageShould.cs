@@ -52,6 +52,10 @@ public class NotificationTitleCoverageShould
     private static readonly Regex RenamesTheEvent = new(
         @"EventType\s*=\s*EventType\.(\w+)", RegexOptions.Compiled);
 
+    /// <summary>The event a generator declares it answers.</summary>
+    private static readonly Regex AnswersTheEvent = new(
+        @"EventType\s+EventType\s*=>\s*EventType\.(\w+)", RegexOptions.Compiled);
+
     private static readonly Assembly Dispatcher =
         typeof(DM.Workers.NotificationDispatcher.Startup).Assembly;
 
@@ -82,6 +86,112 @@ public class NotificationTitleCoverageShould
             .Should().BeEmpty(
                 "an unnamed event is delivered all the same: the subject line says only " +
                 "that something happened, and the letter never says what");
+    }
+
+    /// <summary>
+    /// Every event a generator can produce is either let out or deliberately
+    /// kept in.
+    /// </summary>
+    /// <remarks>
+    /// The other direction of the same rule, and the one that was missing. A
+    /// category is the permission to leave the site, and an event absent from the
+    /// table is refused it by omission — which looks exactly like an event
+    /// somebody chose to keep in the application. Five had fallen out that way,
+    /// each beside its own near neighbour in the same table.
+    ///
+    /// The exemption list is what makes "in the application only" a thing
+    /// somebody decides rather than forgets. It is empty, and an empty list is
+    /// the answer: every event the dispatcher can raise is worth telling its
+    /// recipient about through the channels they asked for.
+    /// </remarks>
+    [Fact]
+    public void SortEveryEventANotificationCanCarry()
+    {
+        // The three broadcasts of the global chat, and only those. Each leaves
+        // UsersInterested empty on purpose — nothing is stored for anybody, the
+        // API pushes them to every open connection and they are gone. A letter or
+        // a bot message for one of them would be addressed to nobody, and the
+        // firehose of a public chat is the last thing that belongs in either
+        // channel. Both generators say so in their own remarks.
+        var inApplicationOnly = new HashSet<EventType>
+        {
+            EventType.NewGlobalChatMessage,
+            EventType.GlobalChatEventStarted,
+            EventType.GlobalChatEventEnded
+        };
+
+        var carried = CarriedEvents();
+        carried.Should().HaveCountGreaterThan(20,
+            "a rule that matches nothing passes: the dispatcher carries dozens of generators");
+
+        carried
+            .Where(candidate => NotificationCategoryMapper.GetCategory(candidate) == null)
+            .Where(candidate => !inApplicationOnly.Contains(candidate))
+            .Select(candidate => candidate.ToString())
+            .Should().BeEmpty(
+                "an event with no category is delivered in the application and nowhere " +
+                "else, and nothing distinguishes that from a decision to keep it there");
+    }
+
+    /// <summary>
+    /// The events that end up ON a notification, as against the ones that merely
+    /// wake a generator up.
+    /// </summary>
+    /// <remarks>
+    /// Narrower than <see cref="SendableEvents" />, which unions both and is
+    /// right for the title rule: a title is looked up for whatever the
+    /// notification carries, and either kind can be it. A category, though, is
+    /// asked about the carried event only, so counting triggers here would
+    /// demand one for NewGame — an event no notification ever bears, because the
+    /// generator answering it renames its notification to
+    /// NewGameFromSubscribedAuthor.
+    /// </remarks>
+    private static IReadOnlyCollection<EventType> CarriedEvents()
+    {
+        var renamed = RenamedEvents();
+        var carried = new SortedSet<EventType>(renamed);
+
+        // A generator that renames carries the new name and nothing else; one
+        // that does not carries the event it answered.
+        foreach (var answered in AnsweredEvents())
+        {
+            if (!TriggersOnly().Contains(answered))
+            {
+                carried.Add(answered);
+            }
+        }
+
+        return carried;
+    }
+
+    /// <summary>
+    /// Events a generator answers and then renames away, so no notification ever
+    /// carries them.
+    /// </summary>
+    private static IReadOnlyCollection<EventType> TriggersOnly()
+    {
+        var sources = Directory.GetFiles(
+            Path.Combine(RepositoryRoot, NotifiersDirectory), "*.cs", SearchOption.AllDirectories);
+
+        var triggers = new SortedSet<EventType>();
+        foreach (var file in sources)
+        {
+            var source = File.ReadAllText(file);
+            if (!RenamesTheEvent.IsMatch(source))
+            {
+                continue;
+            }
+
+            foreach (Match match in AnswersTheEvent.Matches(source))
+            {
+                if (Enum.TryParse<EventType>(match.Groups[1].Value, false, out var answered))
+                {
+                    triggers.Add(answered);
+                }
+            }
+        }
+
+        return triggers;
     }
 
     private static string Title(EventType eventType) =>

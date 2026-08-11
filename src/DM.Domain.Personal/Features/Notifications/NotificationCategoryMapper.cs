@@ -11,6 +11,18 @@ public static class NotificationCategoryMapper
     /// Get notification category for the given event type.
     /// Returns null if the event should not be delivered via bots.
     /// </summary>
+    /// <remarks>
+    /// A category is the permission to leave the site, so an event missing from
+    /// this table is delivered in the application and nowhere else — silently,
+    /// and identically to an event somebody decided to keep in the application.
+    /// Five had fallen through that way, next to their own near neighbours:
+    /// a locked account beside a suspicious login, an inactivity warning beside
+    /// a closure warning, a pendency reminded and fulfilled beside a pendency
+    /// created, a liked game comment beside a liked topic comment. The
+    /// difference is now a decision somebody has to write down —
+    /// NotificationTitleCoverageShould refuses a sendable event with no
+    /// category.
+    /// </remarks>
     public static NotificationCategory? GetCategory(EventType eventType) => eventType switch
     {
         EventType.NewMessage or EventType.ChangedMessage or EventType.LikedMessage
@@ -38,7 +50,10 @@ public static class NotificationCategoryMapper
         EventType.StatusCharacterReturned or
         EventType.AssignmentRequestCreated or
         EventType.PlayerInvitationCreated or EventType.ReaderInvitationCreated or
-        EventType.RoomPendencyCreated or
+        EventType.RoomPendencyCreated or EventType.RoomPendencyReminder or
+        EventType.RoomPendencyFulfilled or
+        EventType.GameInactivityWarning or
+        EventType.LikedGameComment or
         EventType.PostReviewed
             => NotificationCategory.Games,
 
@@ -48,7 +63,7 @@ public static class NotificationCategoryMapper
             => NotificationCategory.Subscriptions,
 
         EventType.PasswordChanged or EventType.EmailChanged or
-        EventType.SuspiciousLoginActivity
+        EventType.SuspiciousLoginActivity or EventType.AccountLocked
             => NotificationCategory.Security,
 
         EventType.TicketCreated or EventType.TicketAssigned or EventType.TicketResolved or
