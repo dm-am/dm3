@@ -80,12 +80,12 @@
 Пересчитывается из строк индекса при каждом закрытии, руками не пишется: число,
 написанное отдельно от таблицы, расходится с ней на первой же партии.
 
-**Закрыто 15 из 357 (4%), открыто 342.**
+**Закрыто 18 из 357 (5%), открыто 339.**
 
 | Тяжесть | Всего | Закрыто | Осталось |
 |---|---|---|---|
 | КРИТИЧНО | 6 | 6 | 0 |
-| ВАЖНО | 53 | 6 | 47 |
+| ВАЖНО | 53 | 9 | 44 |
 | ЗАМЕТНО | 140 | 2 | 138 |
 | МЕЛОЧЬ | 158 | 1 | 157 |
 
@@ -98,7 +98,7 @@
 | docs | 24 | 0 | 24 |
 | api | 23 | 0 | 23 |
 | comments | 23 | 0 | 23 |
-| security | 22 | 4 | 18 |
+| security | 22 | 7 | 15 |
 | persistence | 21 | 4 | 17 |
 | auth | 21 | 0 | 21 |
 | frontend-arch | 19 | 2 | 17 |
@@ -532,9 +532,9 @@
 | api-08 | ВАЖНО | Проверка на пустой дамп в бэкапе Postgres недостижима, а обрезанный дамп остается свежайшим артефактом и проходит верификацию | `docker/scripts/backup-postgres.sh:2, :19, :24-27; docker/scripts/verify-backup.sh:43-61` | Открыто | |
 | realtime-01 | ВАЖНО | Пять событий публикуются и генерируются, но не имеют категории, поэтому оба внешних канала (почта и боты) молчат; уведомление в приложении при этом создается. | `src/DM.Domain.Personal/Features/Notifications/NotificationCategoryMapper.cs:59` | Открыто | |
 | realtime-02 | ВАЖНО | Комментарий ложен в части "клиент откатится на REST-поллинг": поллинг есть только у глобального чата. Уточнение вреда: бейджи не мертвы до рестарта API — они п… | `src/DM.Web.API/Realtime/RealtimeNotificationConsumer.cs:61` | Открыто | |
-| security-04 | ВАЖНО | Оценку посту можно поставить, не имея доступа к комнате: GetPostInfoAsync читает пост без GameAccessibilityFilters.RoomAvailable. Про удаленные посты утвержден… _(уточнено)_ | `src/DM.Infrastructure.Persistence/Repositories/Game/PostReviewRepository.cs:197-209; src/…` | Открыто | |
-| security-05 | ВАЖНО | Модерационные сервисы отвечают 500 вместо 403 на недостаток прав | `src/DM.Domain.Moderation/Features/Warnings/BanService.cs:86, 99, 115, 212; src/DM.Domain.…` | Открыто | |
-| security-06 | ВАЖНО | Удаление ревью разрешено модератору, а документация закрепляет это за старшим модератором | `src/DM.Domain.Game/Authorization/GameReviewIntentionResolver.cs:31; src/DM.Domain.Game/Au…` | Открыто | |
+| security-04 | ВАЖНО | Оценку посту можно поставить, не имея доступа к комнате: GetPostInfoAsync читает пост без GameAccessibilityFilters.RoomAvailable. Про удаленные посты утвержден… _(уточнено)_ | `src/DM.Infrastructure.Persistence/Repositories/Game/PostReviewRepository.cs:197-209; src/…` | Закрыто | Исправлено — GetPostInfoAsync читает пост через Rooms с GameAccessibilityFilters.RoomAvailable(userId), как и все прочие чтения постов; идентификатор оценивающего добавлен в контракт и передается из PostReviewService. Про удаленные посты вторая половина находки была отклонена еще при проверке и ничего не потребовала. Тест ReadThePostAsTheRaterSoRoomAccessApplies плюс моки, настроенные на конкретного пользователя; снятие фильтра ловит архитектурный гейт RepositoryScopeShould поименно |
+| security-05 | ВАЖНО | Модерационные сервисы отвечают 500 вместо 403 на недостаток прав | `src/DM.Domain.Moderation/Features/Warnings/BanService.cs:86, 99, 115, 212; src/DM.Domain.…` | Закрыто | Исправлено — восемь UnauthorizedAccessException в BanService и WarningService заменены на HttpException(Forbidden) с русскими сообщениями, ровно как в соседних проверках тех же файлов. Заодно найден и исправлен девятый такой же в AuthenticationService.TerminateSession, где строкой ниже стоит комментарий, объясняющий, почему непрокинутый тип исключения доезжает до клиента как 500. Middleware не трогали: глобальный маппинг UnauthorizedAccessException превратил бы в 403 и системные отказы доступа |
+| security-06 | ВАЖНО | Удаление ревью разрешено модератору, а документация закрепляет это за старшим модератором | `src/DM.Domain.Game/Authorization/GameReviewIntentionResolver.cs:31; src/DM.Domain.Game/Au…` | Закрыто | Исправлено — удаление ревью игры, ревью поста и признания поднято с Moderator до SeniorModerator в трех резолверах, по таблице "Модерация контента" в AUTHORIZATION.md. Правился код, а не документ: в той же таблице темы и комментарии форума стоят на Moderator, то есть разделение проведено сознательно, и удаление высказанного мнения вместе с рейтингом стоит рядом с модерацией профилей. Тесты трех резолверов перенесли Moderator из разрешающего набора в отказной |
 | frontend-arch-03 | ВАЖНО | Раздел истории безопасности бьет в несуществующий маршрут /v1/account/security | `src/DM.Web.Client/src/entities/user/api/accountApi.ts:252-255; src/DM.Web.API/Features/Ac…` | Открыто | |
 | frontend-arch-04 | ВАЖНО | Автовход после активации создает невидимую сессию без контекста: активность не обновляется, в списке устройств запись без адреса, входа в журнале нет | `src/DM.Domain.Account/Features/Authentication/AuthenticationService.cs:287` | Открыто | |
 | frontend-arch-05 | ВАЖНО | Детектор подозрительного входа слепнет: серия неудачных попыток вытесняет из окна прошлые успешные входы | `src/DM.Domain.Account/Features/Authentication/SuspiciousLoginDetector.cs:25,35-44; src/DM…` | Открыто | |
