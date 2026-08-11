@@ -117,10 +117,36 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
         return Collection.UpdateManyAsync(
             Filter.Eq(c => c.EntityId, entityId) &
             Filter.Eq(c => c.EntryType, entryType),
-            Update
-                .Set(c => c.IsRemoved, true)
-                .Set(c => c.RemovedUtc, _dateTimeProvider.Now.UtcDateTime));
+            Tombstone());
     }
+
+    /// <inheritdoc />
+    public Task DeleteAsync(Guid entityId, UnreadEntryType entryType, IEnumerable<Guid> userIds)
+    {
+        var readers = userIds.Distinct().ToArray();
+
+        // Nobody to forget is not an error, the same way nobody to count in is
+        // not one for CreateAsync above.
+        return readers.Length == 0
+            ? Task.CompletedTask
+            : Collection.UpdateManyAsync(
+                Filter.In(c => c.UserId, readers) &
+                Filter.Eq(c => c.EntityId, entityId) &
+                Filter.Eq(c => c.EntryType, entryType),
+                Tombstone());
+    }
+
+    /// <summary>
+    /// What a marker that no longer counts anything looks like.
+    /// </summary>
+    /// <remarks>
+    /// One spelling for both removals: the stamp is what the collection's expiry
+    /// index reads, so a second copy of this that forgot it would leave the
+    /// document behind forever.
+    /// </remarks>
+    private UpdateDefinition<UnreadCounter> Tombstone() => Update
+        .Set(c => c.IsRemoved, true)
+        .Set(c => c.RemovedUtc, _dateTimeProvider.Now.UtcDateTime);
 
     /// <inheritdoc />
     public async Task<IDictionary<Guid, int>> SelectByParentsAsync(

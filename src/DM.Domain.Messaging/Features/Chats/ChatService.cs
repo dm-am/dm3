@@ -190,6 +190,23 @@ internal class ChatService : IChatService
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
         }
 
+        // Reached through the unfiltered read, so participation is asked here.
+        // A conversation is only ever its participants': the endpoint took any
+        // identifier somebody remembered, and once removals started leaving a
+        // tombstone behind, "mark as read" from a former participant would have
+        // put a live marker back — the flush finds no marker of their own, falls
+        // through to borrowing a neighbour's parent, and writes a document with
+        // no removal stamp, which nothing collects afterwards.
+        //
+        // Narrowed to the two types that have participants at all. A game room
+        // chat and the global chat carry no participant rows by design, and their
+        // access is decided before this call.
+        if (chat.Type is ChatType.Group or ChatType.Direct &&
+            chat.Participants.All(p => p.UserId != _identityProvider.Current.User.UserId))
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
+        }
+
         await _unreadCountersRepository.FlushAsync(_identityProvider.Current.User.UserId,
             UnreadEntryType.Message, chat.UnreadEntityId);
     }
@@ -239,9 +256,23 @@ internal class ChatService : IChatService
         if (addParticipants.Length > 0)
         {
             await _unreadCountersRepository.CreateAsync(
-                updateChat.ChatId,
+                chat.UnreadEntityId,
                 UnreadEntryType.Message,
                 addParticipants);
+        }
+
+        // The other half of the same lifecycle. Without it a person removed from
+        // the chat kept a marker that every later message incremented, on a
+        // conversation the participation predicate no longer shows them, and
+        // nothing collected it: the expiry index reads the removal stamp, and an
+        // untouched marker has none. Coming back repairs itself — the create
+        // above replaces the document whole.
+        if (removeParticipants.Length > 0)
+        {
+            await _unreadCountersRepository.DeleteAsync(
+                chat.UnreadEntityId,
+                UnreadEntryType.Message,
+                removeParticipants);
         }
 
         return result;
