@@ -28,12 +28,6 @@ public sealed record RenderContext
     /// <summary>Game the post belongs to (for lead resolution and scoping).</summary>
     public Guid? GameId { get; init; }
 
-    /// <summary>Room the post belongs to (for bucket key scoping).</summary>
-    public Guid? RoomId { get; init; }
-
-    /// <summary>Post identifier (for per-post bucket scoping when SharePrivateWithAll).</summary>
-    public Guid? PostId { get; init; }
-
     /// <summary>Per-block snapshot of character-owner user ids allowed to see each
     /// [private] block in the content. Key = raw tag attribute value (e.g. the
     /// character-name list the author wrote); value = resolved owner user ids at
@@ -45,22 +39,6 @@ public sealed record RenderContext
         init;
     } = new Dictionary<string, IReadOnlySet<Guid>>(StringComparer.Ordinal);
 
-    /// <summary>Flat union of every allowed owner user id across every [private]
-    /// block; used for bucket computation only (bucketing is coarser than the
-    /// per-block visibility check).</summary>
-    public IReadOnlyCollection<Guid> PrivateAddresseeOwnerUserIdsUnion
-    {
-        get
-        {
-            if (PrivateAddresseeOwnerUserIdsByAttribute.Count == 0) return Array.Empty<Guid>();
-            var set = new HashSet<Guid>();
-            foreach (var kvp in PrivateAddresseeOwnerUserIdsByAttribute)
-                foreach (var userId in kvp.Value)
-                    set.Add(userId);
-            return set;
-        }
-    }
-
     /// <summary>Game leads (master + assistants). Mentors are NOT included.</summary>
     public IReadOnlyCollection<Guid> GameLeadUserIds { get; init; } = Array.Empty<Guid>();
 
@@ -71,15 +49,6 @@ public sealed record RenderContext
     /// <summary>Per-room override: when true, [private] blocks in any post of
     /// the room are visible to every room reader.</summary>
     public bool RoomViewPrivateText { get; init; }
-
-    /// <summary>Context for an anonymous public render (no privacy tags will be
-    /// visible even if surface allowed them).</summary>
-    public static RenderContext ForAnonymousDisplay(BbSurface surface) => new()
-    {
-        Viewer = null,
-        Audience = RenderAudience.Display,
-        Surface = surface
-    };
 
     /// <summary>Context for an author editing their own content. Endpoint-level
     /// authorization must have confirmed authorship before this is used.</summary>

@@ -26,33 +26,17 @@ public static class PermissionFilteringVisitor
     /// <summary>Tag name for the private addressee block.</summary>
     public const string PrivateTagName = "private";
 
-    /// <summary>
-    /// Prepared plan: the filter and transform delegates the tree walker
-    /// needs, plus metadata (whether the content contains any privacy-
-    /// sensitive tags) that callers use to pick a cache bucket.
-    /// </summary>
+    /// <summary>The filter and transform delegates the tree walker needs.</summary>
     public readonly record struct FilterPlan(
         Func<Node, bool> Filter,
-        Func<Node, string, string> Transform,
-        bool HasPrivacyTags);
+        Func<Node, string, string> Transform);
 
     /// <summary>
-    /// Build a filter plan for the given parsed tree + render context.
-    /// Detects privacy-sensitive tags by scanning the raw source string
-    /// (the BBCodeParser node tree does not expose child enumeration
-    /// from outside its assembly). False positives produced by plain-text
-    /// occurrences of the literal tokens are harmless — they only force
-    /// a per-user bucket when a coarse bucket would have sufficed, never
-    /// the other way around.
+    /// Build a filter plan for the given render context.
     /// </summary>
-    public static FilterPlan Prepare(string rawSource, RenderContext ctx)
-    {
-        var hasPrivacyTags = SourceContainsPrivacyTagMarker(rawSource);
-        return new FilterPlan(
-            Filter: node => IsNodeVisible(node, ctx),
-            Transform: (node, rendered) => Transform(node, rendered, ctx),
-            HasPrivacyTags: hasPrivacyTags);
-    }
+    public static FilterPlan Prepare(RenderContext ctx) =>
+        new(Filter: node => IsNodeVisible(node, ctx),
+            Transform: (node, rendered) => Transform(node, rendered, ctx));
 
     /// <summary>
     /// Check whether a tag name is privacy-sensitive (subject to filtering).
@@ -144,50 +128,6 @@ public static class PermissionFilteringVisitor
     // ───────────────────────────────────────────────────────────────────
 
     private static string Transform(Node node, string rendered, RenderContext ctx) => rendered;
-
-    // ───────────────────────────────────────────────────────────────────
-    // Utility: string-scan source for the [private] marker. Cheap enough at
-    // source size that we do it on every render; cache lookups then skip the
-    // heavy per-user buckets when the content has no [private]. [mod] is no
-    // longer scanned — it renders identically for every viewer, so it never
-    // forces a per-user bucket.
-    // ───────────────────────────────────────────────────────────────────
-
-    private static bool SourceContainsPrivacyTagMarker(string? source)
-    {
-        if (string.IsNullOrEmpty(source)) return false;
-        // Case-insensitive search for "[private" followed by an attribute /
-        // closing bracket. A bare "[private]" or "[private=foo]" both match.
-        // Inside [noparse] blocks this over-counts, which only affects
-        // bucketing (never filtering correctness).
-        var span = source.AsSpan();
-        for (var i = 0; i < span.Length - 3; i++)
-        {
-            if (span[i] != '[') continue;
-            if (StartsWithIgnoreCase(span[(i + 1)..], "private"))
-            {
-                var next = i + 1 + "private".Length;
-                if (next < span.Length && (span[next] == ']' || span[next] == '=' || span[next] == ' '))
-                    return true;
-            }
-        }
-        return false;
-    }
-
-    private static bool StartsWithIgnoreCase(ReadOnlySpan<char> span, string prefix)
-    {
-        if (span.Length < prefix.Length) return false;
-        for (var i = 0; i < prefix.Length; i++)
-        {
-            var c = span[i];
-            var p = prefix[i];
-            if (c == p) continue;
-            if (c >= 'A' && c <= 'Z') c = (char)(c + 32);
-            if (p >= 'A' && p <= 'Z') p = (char)(p + 32);
-            if (c != p) return false;
-        }
-        return true;
-    }
 
     private static bool ContainsGuid(IReadOnlyCollection<Guid> set, Guid value)
     {

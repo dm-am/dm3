@@ -42,9 +42,7 @@ internal class PostMappingProfile : Profile
                 {
                     Surface = BbSurface.GamePost,
                     PostAuthorUserId = src.AuthorUserId,
-                    PostId = src.Id,
                     GameId = src.GameId,
-                    RoomId = src.RoomId,
                     PrivateAddresseeOwnerUserIdsByAttribute = addresseeMap,
                     GameLeadUserIds = src.GameLeadUserIds,
                     PostSharePrivateWithAll = src.SharePrivateWithAll,
@@ -58,9 +56,7 @@ internal class PostMappingProfile : Profile
                         // (allows [mod] for moderators, never [private]).
                         Surface = BbSurface.Comment,
                         PostAuthorUserId = src.AuthorUserId,
-                        PostId = src.Id,
-                        GameId = src.GameId,
-                        RoomId = src.RoomId
+                        GameId = src.GameId
                     };
             });
 

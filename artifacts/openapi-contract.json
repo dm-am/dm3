@@ -1757,10 +1757,8 @@
     "gameId",
     "gameLeadUserIds",
     "postAuthorUserId",
-    "postId",
     "postSharePrivateWithAll",
     "privateAddresseeOwnerUserIdsByAttribute",
-    "roomId",
     "roomViewPrivateText",
     "surface"
   ],
