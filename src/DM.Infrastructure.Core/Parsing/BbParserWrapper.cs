@@ -235,6 +235,21 @@ public partial class BbParserWrapper : IBbParser
     [GeneratedRegex(@"\[img\]([\s\S]*?)\[/img\]", RegexOptions.IgnoreCase)]
     private static partial Regex ImgRegex();
 
+    /// <summary>Match [img="URL"] and [img=URL], the standalone attribute form</summary>
+    /// <remarks>
+    /// The URL is the attribute here, not the content, so none of the four
+    /// patterns above saw it and the tag went to the inner parser, which
+    /// substitutes the value into its template as written. That is the whole of
+    /// the URL handling this wrapper does — scheme check, loopback and private
+    /// address refusal, the spoiler gate on public surfaces, referrerpolicy and
+    /// lazy loading — skipped for a spelling a person can type.
+    ///
+    /// Applied after every content form, and the digits-only case is excluded,
+    /// so [img=200]…[/img] stays a size rather than becoming an address.
+    /// </remarks>
+    [GeneratedRegex(@"\[img=(?!\d+(?:x\d+)?[\]\s])""?([^""\]]+)""?\]", RegexOptions.IgnoreCase)]
+    private static partial Regex ImgAttributeRegex();
+
     /// <summary>Match [link=text]URL[/link]</summary>
     [GeneratedRegex(@"\[link=([^\]]+)\]([\s\S]*?)\[/link\]", RegexOptions.IgnoreCase)]
     private static partial Regex LinkWithTextRegex();
@@ -263,6 +278,12 @@ public partial class BbParserWrapper : IBbParser
     /// value never reaches the parser, and it is encoded where the element is
     /// built (see WrappedNodeTree), so it must not be encoded a second time.
     /// </summary>
+    /// <remarks>
+    /// The premise holds only because every spelling of both tags is extracted
+    /// above, and for img that took ImgAttributeRegex: until it existed,
+    /// [img="URL"] went to the parser with its value, and this list excused it
+    /// from encoding on the strength of a sentence that was not true of it.
+    /// </remarks>
     private static readonly string[] SelfRenderedTags = { "img", "link" };
 
     /// <summary>
@@ -414,6 +435,16 @@ public partial class BbParserWrapper : IBbParser
             var url = match.Groups[1].Value;
             var index = imgList.Count;
             imgList.Add((url, null, null, null)); // null = use default max dimensions
+            return Placeholder(ImageKind, index);
+        });
+
+        // Extract [img="URL"] / [img=URL] — the URL is the attribute, and this is
+        // the form that used to reach the inner parser untouched.
+        processed = ImgAttributeRegex().Replace(processed, match =>
+        {
+            var url = match.Groups[1].Value.Trim();
+            var index = imgList.Count;
+            imgList.Add((url, null, null, null));
             return Placeholder(ImageKind, index);
         });
 
