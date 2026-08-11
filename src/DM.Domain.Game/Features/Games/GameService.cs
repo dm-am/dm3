@@ -515,9 +515,17 @@ internal class GameService : IGameService
                 {
                     await _invitationService.InviteAssistant(game.Id, updateGame.AssistantUsername);
                 }
-                catch
+                catch (Exception exception)
                 {
-                    // Ignore invitation errors - user might not exist or be blacklisted
+                    // The two expected reasons — no such user, or one the game has
+                    // blacklisted — are why the invitation does not fail the update.
+                    // The exception is logged whole because this catches every kind,
+                    // including a store that is down, and the same swallow with no
+                    // record left nothing to look at afterwards. Same shape as
+                    // CreateAsync, which invites the assistant the same way.
+                    _logger.LogWarning(exception,
+                        "Failed to invite assistant {Username} for game {GameId}",
+                        updateGame.AssistantUsername, game.Id);
                 }
             }
         }

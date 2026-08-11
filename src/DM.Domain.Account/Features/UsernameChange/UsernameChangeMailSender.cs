@@ -1,4 +1,5 @@
 using System;
+using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Mail;
@@ -56,9 +57,15 @@ internal class UsernameChangeMailSender : IUsernameChangeMailSender
     /// <inheritdoc />
     public async Task SendRejectionAsync(string email, string username, string? reason)
     {
+        // Encoded, because this is the one value in the letter a person types
+        // freely: a moderator's comment goes into the markup as written, and the
+        // column behind it takes five hundred characters with no validator on
+        // the way. The name above it cannot carry markup — UsernamePolicy
+        // refuses angle brackets and quotes — so it is the reason and only the
+        // reason that needs this.
         var reasonText = string.IsNullOrEmpty(reason)
             ? "Причина не указана."
-            : $"Причина: {reason}";
+            : $"Причина: {WebUtility.HtmlEncode(reason)}";
 
         var body = $@"
 <html>

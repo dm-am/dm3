@@ -198,13 +198,47 @@ public class MessageServiceShould : UnitTestBase
         _eventProducer.Verify(p => p.SendAsync(EventType.NewGlobalChatMessage, It.IsAny<Guid>()), Times.Never);
     }
 
+    /// <summary>
+    /// A deleted message stops being counted.
+    /// </summary>
+    /// <remarks>
+    /// Every other kind of comment on the site decrements here — blog,
+    /// publication, topic, game, post and character. Messages did not, so the
+    /// badge went on counting a message that no longer exists until something
+    /// flushed the whole conversation.
+    ///
+    /// Addressed by the chat's counter identifier, not by its own: for a game
+    /// room chat those are different, and using the chat's own is exactly how
+    /// the room's unread went dead before.
+    /// </remarks>
+    [Fact]
+    public async Task TakeTheUnreadCounterDownWithTheDeletedMessage()
+    {
+        var messageId = Guid.NewGuid();
+        var chatId = Guid.NewGuid();
+        var roomId = Guid.NewGuid();
+        var createdUtc = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var message = new Message { Id = messageId, ChatId = chatId, ChatType = ChatType.GameRoom, CreatedUtc = createdUtc };
+        _repository.Setup(r => r.Get(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(message);
+        _repository.Setup(r => r.Delete(messageId, _currentUserId, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        _chatService.Setup(s => s.GetGameRoomAsync(chatId))
+            .ReturnsAsync(new Chat { Id = chatId, RoomId = roomId, Type = ChatType.GameRoom });
+
+        await _service.DeleteAsync(messageId);
+
+        _unreadCountersRepository.Verify(
+            r => r.DecrementAsync(roomId, UnreadEntryType.Message, createdUtc), Times.Once);
+    }
+
     [Fact]
     public async Task AuthorizeDeleteAction()
     {
         var messageId = Guid.NewGuid();
-        var message = new Message { Id = messageId };
+        var chatId = Guid.NewGuid();
+        var message = new Message { Id = messageId, ChatId = chatId };
         _repository.Setup(r => r.Get(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(message);
         _repository.Setup(r => r.Delete(messageId, _currentUserId, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        _chatService.Setup(s => s.GetAsync(chatId)).ReturnsAsync(new Chat { Id = chatId });
 
         await _service.DeleteAsync(messageId);
 

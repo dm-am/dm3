@@ -240,6 +240,26 @@ internal class MessageService : IMessageService
         _intentionManager.ThrowIfForbidden(MessageIntention.Delete, message);
 
         await _repository.Delete(messageId, currentUserId);
+
+        // The counter comes down with the message, the way it does for every
+        // other kind of comment on the site — blog, publication, topic, game,
+        // post and character all decrement here. Without it the badge kept
+        // counting a message that no longer exists, until something happened to
+        // flush the whole conversation.
+        //
+        // Addressed by the chat's counter identifier rather than by ChatId: for a
+        // game room chat those are different things, and using the chat's own is
+        // how the room's unread went dead in the first place.
+        //
+        // Read the same way the create path reads it. A game room chat has no
+        // participant rows, so the participation-filtered read refuses everyone
+        // for it — including the author of the message being deleted.
+        var chat = message.ChatType == ChatType.GameRoom
+            ? await _chatService.GetGameRoomAsync(message.ChatId)
+            : await _chatService.GetAsync(message.ChatId);
+        await _unreadCountersRepository.DecrementAsync(
+            chat.UnreadEntityId, UnreadEntryType.Message, message.CreatedUtc);
+
         await _producer.SendAsync(EventType.DeletedMessage, messageId);
     }
 }
