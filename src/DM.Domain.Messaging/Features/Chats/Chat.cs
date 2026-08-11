@@ -27,6 +27,24 @@ public class Chat
     public string Title { get; set; } = null!;
 
     /// <summary>
+    /// Room this chat belongs to, for a game room chat; null for every other type
+    /// </summary>
+    public Guid? RoomId { get; set; }
+
+    /// <summary>
+    /// Identifier this chat is counted under in unread markers
+    /// </summary>
+    /// <remarks>
+    /// A game room chat is one thing with two identifiers: the game module knows
+    /// it as a room and the messaging module as a chat. The unread marker is
+    /// created, aggregated into the game badge and deleted by the room half, so
+    /// the room identifier is the one that exists — counting messages under the
+    /// chat identifier wrote into markers nobody had made and read back zero
+    /// forever. Every other chat is only ever itself.
+    /// </remarks>
+    public Guid UnreadEntityId => RoomId ?? Id;
+
+    /// <summary>
     /// List of chat participants
     /// </summary>
     public IEnumerable<GeneralUser> Participants { get; set; } = [];

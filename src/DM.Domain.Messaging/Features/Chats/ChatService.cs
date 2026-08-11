@@ -87,7 +87,7 @@ internal class ChatService : IChatService
         var pagingData = new PagingData(query, identity.Settings.Paging.MessagesPerPage, totalCount);
         var chats = (await _repository.Get(currentUserId, pagingData)).ToArray();
         await _unreadCountersRepository.FillEntityCounters(chats, currentUserId,
-            c => c.Id, c => c.UnreadMessagesCount);
+            c => c.UnreadEntityId, c => c.UnreadMessagesCount);
 
         return (chats, pagingData.Result);
     }
@@ -103,7 +103,7 @@ internal class ChatService : IChatService
         }
 
         await _unreadCountersRepository.FillEntityCounters(new[] { chat }, currentUserId,
-            c => c.Id, c => c.UnreadMessagesCount);
+            c => c.UnreadEntityId, c => c.UnreadMessagesCount);
 
         return chat;
     }
@@ -121,7 +121,7 @@ internal class ChatService : IChatService
 
         var currentUserId = _identityProvider.Current.User.UserId;
         await _unreadCountersRepository.FillEntityCounters(new[] { chat }, currentUserId,
-            c => c.Id, c => c.UnreadMessagesCount);
+            c => c.UnreadEntityId, c => c.UnreadMessagesCount);
 
         return chat;
     }
@@ -137,7 +137,7 @@ internal class ChatService : IChatService
         }
 
         await _unreadCountersRepository.FillEntityCounters(new[] { chat }, currentUserId,
-            c => c.Id, c => c.UnreadMessagesCount);
+            c => c.UnreadEntityId, c => c.UnreadMessagesCount);
 
         return chat;
     }
@@ -161,7 +161,7 @@ internal class ChatService : IChatService
         if (existingChat != null)
         {
             await _unreadCountersRepository.FillEntityCounters(new[] { existingChat }, currentUserId,
-                c => c.Id, c => c.UnreadMessagesCount);
+                c => c.UnreadEntityId, c => c.UnreadMessagesCount);
             return existingChat;
         }
 
@@ -182,9 +182,17 @@ internal class ChatService : IChatService
     }
 
     /// <inheritdoc />
-    public Task MarkAsReadAsync(Guid chatId) =>
-        _unreadCountersRepository.FlushAsync(_identityProvider.Current.User.UserId,
-            UnreadEntryType.Message, chatId);
+    public async Task MarkAsReadAsync(Guid chatId)
+    {
+        var chat = await _repository.GetForUpdate(chatId);
+        if (chat == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
+        }
+
+        await _unreadCountersRepository.FlushAsync(_identityProvider.Current.User.UserId,
+            UnreadEntryType.Message, chat.UnreadEntityId);
+    }
 
     // ═══ UPDATE ═══
 
@@ -253,6 +261,6 @@ internal class ChatService : IChatService
         _intentionManager.ThrowIfForbidden(ChatIntention.DeleteChat, chat);
 
         await _repository.Delete(chatId);
-        await _unreadCountersRepository.DeleteAsync(chatId, UnreadEntryType.Message);
+        await _unreadCountersRepository.DeleteAsync(chat.UnreadEntityId, UnreadEntryType.Message);
     }
 }

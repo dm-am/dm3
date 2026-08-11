@@ -149,7 +149,7 @@ internal class MessageService : IMessageService
 
         var result = await _repository.Create(message, updateChat, ct);
         await _unreadCountersRepository.IncrementExcludingAsync(
-            chat.Id, UnreadEntryType.Message, userId);
+            chat.UnreadEntityId, UnreadEntryType.Message, userId);
         await _producer.SendAsync(EventType.NewMessage, message.MessageId);
         if (chat.Type == ChatType.Global)
         {

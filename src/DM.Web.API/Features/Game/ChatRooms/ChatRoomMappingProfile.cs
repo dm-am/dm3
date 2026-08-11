@@ -13,9 +13,12 @@ internal class ChatRoomMappingProfile : Profile
     /// <inheritdoc />
     public ChatRoomMappingProfile()
     {
+        // A chat room's unread messages are its room's unread counter: the room
+        // is the half of the pair the marker is keyed by, and RoomService fills
+        // the field on every read this profile maps from.
         CreateMap<DomainRoom, ChatRoom>()
             .ForMember(d => d.Id, s => s.MapFrom(r => r.Id))
-            .ForMember(d => d.UnreadCount, opt => opt.Ignore()); // Set in service
+            .ForMember(d => d.UnreadCount, s => s.MapFrom(r => r.UnreadPostsCount));
 
         CreateMap<DomainRoomAccess, ChatRoomAccess>()
             .ForMember(d => d.User, s => s.MapFrom(a =>
