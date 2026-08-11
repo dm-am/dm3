@@ -50,10 +50,22 @@ export default defineConfig({
         // one uncovered 500-line component costs about 0.6 points of lines.
         // Branches reads high because files with no tests contribute few branch
         // counters — lines and statements are the load-bearing numbers here.
-        lines: 16,
-        functions: 26,
-        branches: 66,
-        statements: 16,
+        //
+        // Measured on a full run of the suite (156 spec files, 1712 tests):
+        // 33.78% lines and statements, 36.4% functions, 74.44% branches. The
+        // measurement is written down for the same reason as in
+        // scripts/check-coverage.sh: without it nobody can tell a ratchet that
+        // was just raised from one that has stood still since the first audit —
+        // which is what these numbers had done, sitting at roughly half of what
+        // the suite actually covered and failing on nothing.
+        //
+        // The gap to the measurement is the backend's, 1.3 to 1.8 points: below
+        // it the gate stops catching a real loss, above it a single large
+        // untested component turns CI red.
+        lines: 32,
+        functions: 35,
+        branches: 73,
+        statements: 32,
       },
     },
   },

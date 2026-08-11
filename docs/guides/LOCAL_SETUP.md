@@ -249,7 +249,7 @@ IMGPROXY_SALT=...  # 64 hex chars (32 bytes), HMAC-SHA256 salt
 |----------|---------|
 | Порт занят | `taskkill //F //IM node.exe` (Windows) |
 | Frontend не видит API | Проверить `.env.local`: `VITE_API_HOST=http://localhost:5000` |
-| Изображения не загружаются | API создает bucket автоматически на старте. Проверь `docker logs dm-api 2>&1 \| grep -i bucket` |
+| Изображения не загружаются | Bucket и его политики создает контейнер `minio-init` до старта API. Проверь `docker logs dm-minio-init` |
 | Thumbnails не отдаются (404 на imgproxy) | `docker ps \| grep imgproxy`. Проверить `IMGPROXY_KEY`/`IMGPROXY_SALT` в `docker/.env` (64 hex chars each) |
 | Seed: "API not available" | Запусти API: `dotnet run --project src/DM.Web.API --environment Development` |
 | Seed: "PostgreSQL not available" | Запусти: `docker compose up -d dm-pg` |

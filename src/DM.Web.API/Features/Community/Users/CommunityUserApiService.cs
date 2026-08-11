@@ -80,22 +80,15 @@ internal class CommunityUserApiService : ICommunityUserApiService
     {
         var user = await _profileService.GetProfile(username);
 
-        // Username history is public — always fetch. Personal note is
-        // per-viewer (each authenticated user keeps their own private note
-        // about this subject) and the underlying service throws
-        // UnauthorizedAccessException for anonymous callers. Profile pages
-        // must remain accessible without login, so guard the note fetch.
+        // Username history is public — always fetch. A personal note is
+        // per-viewer: each signed-in user keeps their own private note about
+        // this subject, and a profile page has to stay readable without a login.
         var usernameHistory = await _profileService.GetUsernameHistory(user.UserId);
 
-        UserProfileNote? personalNote = null;
-        try
-        {
-            personalNote = await _profileNoteService.GetNote(username);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Anonymous viewer — no personal note to show. Continue.
-        }
+        // Null for an anonymous viewer, who has no note of their own to show.
+        // This used to be a try/catch around an exception the domain threw to
+        // mean exactly that.
+        var personalNote = await _profileNoteService.GetNote(username);
 
         var profile = _mapper.Map<UserProfile>(user);
         profile.UsernameHistory = usernameHistory.Select(_mapper.Map<UsernameHistoryEntry>).ToList();

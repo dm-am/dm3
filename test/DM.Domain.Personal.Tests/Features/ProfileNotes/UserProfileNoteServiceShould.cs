@@ -60,15 +60,24 @@ public class UserProfileNoteServiceShould : UnitTestBase
     }
 
     [Fact]
-    public async Task ThrowWhenGettingNoteWithoutAuthentication()
+    /// <summary>
+    /// An anonymous viewer has no note of their own, and that is an answer.
+    /// </summary>
+    /// <remarks>
+    /// This used to throw, and the profile page caught the exception to learn
+    /// that its viewer was not signed in — control flow across a layer boundary,
+    /// where the nullable return already said the same thing. The exception was
+    /// also one the error middleware does not map, so any other caller would
+    /// have met it as 500.
+    /// </remarks>
+    public async Task ReturnNothingWhenGettingNoteWithoutAuthentication()
     {
         var guestIdentity = Identities.Guest();
         _identityProvider.Setup(p => p.Current).Returns(guestIdentity);
 
-        var act = () => _service.GetNote("Subject");
+        var note = await _service.GetNote("Subject");
 
-        await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Authentication required");
+        note.Should().BeNull();
     }
 
     [Fact]
@@ -106,8 +115,8 @@ public class UserProfileNoteServiceShould : UnitTestBase
         var createNote = new CreateUserProfileNote { SubjectUsername = "Subject", Text = "Note" };
         var act = () => _service.UpsertNote(createNote);
 
-        await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Authentication required");
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -226,7 +235,7 @@ public class UserProfileNoteServiceShould : UnitTestBase
 
         var act = () => _service.DeleteNote("Subject");
 
-        await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Authentication required");
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Unauthorized);
     }
 }

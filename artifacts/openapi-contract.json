@@ -131,23 +131,6 @@
   "DM.Web.API.Features.Blog.Blogs.BlogPremoderationChangeRequest": [
     "transition"
   ],
-  "DM.Web.API.Features.Blog.Blogs.BlogRef": [
-    "activatedUtc",
-    "activeSubscribersCount",
-    "assistants",
-    "author",
-    "closedReason",
-    "closedUtc",
-    "createdUtc",
-    "id",
-    "publicId",
-    "status",
-    "subscriberUsernames",
-    "subscribersCount",
-    "title",
-    "unreadCommentsCount",
-    "unreadPublicationsCount"
-  ],
   "DM.Web.API.Features.Blog.Blogs.BlogStatusChangeRequest": [
     "transition"
   ],
@@ -1964,7 +1947,7 @@
     "paging",
     "resources"
   ],
-  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Blog.Blogs.BlogRef, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Blog.Blogs.Blog, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "paging",
     "resources"
   ],

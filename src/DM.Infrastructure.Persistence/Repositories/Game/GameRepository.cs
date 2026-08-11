@@ -762,33 +762,6 @@ internal class GameRepository : IGameRepository
             .ToArrayAsync(ct);
     }
 
-    public async Task<(IDictionary<Guid, IEnumerable<Guid>> rooms, IEnumerable<PostPendency> postPendencies)> GetRoomsAndPostPendencies(
-        IEnumerable<Guid> gameIds, Guid userId, CancellationToken ct = default)
-    {
-        var gameIdList = gameIds.ToList();
-
-        // Single query with Include instead of 2 separate queries
-        var rooms = await _dbContext.Rooms
-            .Include(r => r.PostPendencies)
-                .ThenInclude(p => p.WaitingForUser)
-            .Include(r => r.PostPendencies)
-                .ThenInclude(p => p.CreatedBy)
-            .Where(GameAccessibilityFilters.RoomAvailable(userId))
-            .Where(r => gameIdList.Contains(r.GameId))
-            .ToArrayAsync(ct);
-
-        var roomsDict = rooms
-            .GroupBy(r => r.GameId)
-            .ToDictionary(g => g.Key, g => g.Select(r => r.RoomId));
-
-        var postPendencies = rooms
-            .SelectMany(r => r.PostPendencies)
-            .Select(p => _mapper.Map<PostPendency>(p))
-            .ToArray();
-
-        return (roomsDict, postPendencies);
-    }
-
     public async Task<IDictionary<Guid, int>> GetTotalPostCounts(IEnumerable<Guid> gameIds, CancellationToken ct = default)
     {
         var gameIdList = gameIds.ToList();

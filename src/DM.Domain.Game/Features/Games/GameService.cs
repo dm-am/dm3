@@ -319,7 +319,10 @@ internal class GameService : IGameService
                 g => g.Id, g => g.UnreadCommentsCount);
         }
 
-        var (gameRooms, _) = await _repository.GetRoomsAndPostPendencies(gameIds, currentUserId);
+        // Identifiers, which is all the sum below reads. The method this replaces
+        // returned whole room rows with their pendencies and two whole users per
+        // pendency, and the caller discarded every one of them.
+        var gameRooms = await _repository.GetAvailableRoomIds(gameIds, currentUserId);
         var allRoomIds = gameRooms.SelectMany(r => r.Value).ToArray();
 
         if (allRoomIds.Length > 0)

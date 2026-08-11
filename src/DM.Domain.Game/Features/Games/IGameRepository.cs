@@ -34,12 +34,6 @@ public interface IGameRepository
     Task<IEnumerable<PostPendency>> GetPostPendencies(IEnumerable<Guid> gameIds, Guid userId, CancellationToken ct = default);
 
     /// <summary>
-    /// Get rooms and post pendencies for games
-    /// </summary>
-    Task<(IDictionary<Guid, IEnumerable<Guid>> rooms, IEnumerable<PostPendency> postPendencies)> GetRoomsAndPostPendencies(
-        IEnumerable<Guid> gameIds, Guid userId, CancellationToken ct = default);
-
-    /// <summary>
     /// Get total post counts for games
     /// </summary>
     Task<IDictionary<Guid, int>> GetTotalPostCounts(IEnumerable<Guid> gameIds, CancellationToken ct = default);

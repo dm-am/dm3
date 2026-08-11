@@ -40,10 +40,15 @@ internal class UserProfileNoteService : IUserProfileNoteService
     /// <inheritdoc />
     public async Task<UserProfileNote?> GetNote(string subjectUsername, CancellationToken ct = default)
     {
+        // A personal note is one the viewer wrote, so an anonymous viewer has
+        // none — null is the answer the nullable return type already promises.
+        // Throwing here made the profile page catch an exception to learn that,
+        // which is control flow across a layer boundary and the reason the
+        // refusal never reached anyone as a 401 either.
         var currentUser = _identityProvider.Current.User;
         if (!currentUser.IsAuthenticated)
         {
-            throw new UnauthorizedAccessException("Authentication required");
+            return null;
         }
 
         var subjectUser = await _userRepository.GetUserAsync(subjectUsername);
@@ -62,7 +67,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
         var currentUser = _identityProvider.Current.User;
         if (!currentUser.IsAuthenticated)
         {
-            throw new UnauthorizedAccessException("Authentication required");
+            throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
         }
 
         var subjectUser = await _userRepository.GetUserAsync(createNote.SubjectUsername);
@@ -121,7 +126,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
         var currentUser = _identityProvider.Current.User;
         if (!currentUser.IsAuthenticated)
         {
-            throw new UnauthorizedAccessException("Authentication required");
+            throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
         }
 
         var subjectUser = await _userRepository.GetUserAsync(subjectUsername);
