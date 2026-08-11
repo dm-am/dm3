@@ -15,10 +15,15 @@ on:
 permissions:
   contents: read
 
-# A newer push to the same branch supersedes the run in flight.
+# A newer push to the same branch supersedes the run in flight — except on the
+# refs that publish. Four images go to the registry as four separate steps, and
+# docker-compose.yml pins them to one tag on the promise that they were built
+# from one commit; a run cancelled between the second and the third leaves
+# `latest` naming a mixture, which nothing afterwards detects. On a pull request
+# there is nothing to publish, so superseding is free.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !(github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v')) }}
 
 env:
   REGISTRY: ghcr.io
@@ -30,6 +35,10 @@ env:
 
 jobs:
   build:
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Deliberately far above the real time:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 40
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -89,6 +98,10 @@ jobs:
         if-no-files-found: error
 
   frontend:
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Deliberately far above the real time:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -122,6 +135,10 @@ jobs:
   # asserts on what a browser renders — so the shape below is the one zap-scan
   # already uses, plus a seed.
   e2e:
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Deliberately far above the real time:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 45
     runs-on: ubuntu-latest
     env:
       # Every compose invocation in this job means the pair, and repeating the
@@ -272,6 +289,10 @@ jobs:
       run: docker compose logs --tail=300 dmapi migration
 
   dependency-scan:
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Deliberately far above the real time:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -305,6 +326,10 @@ jobs:
       security-events: write
 
   publish:
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Deliberately far above the real time:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 30
     needs: [build, frontend, e2e, dependency-scan, compose-topology, deployment-smoke, security]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v'))
@@ -367,6 +392,10 @@ jobs:
   # SPA image was never built by CI at all: the only thing that referenced it was
   # a compose service pointing at a directory that does not exist.
   publish-frontend:
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Deliberately far above the real time:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 30
     needs: [build, frontend, e2e, dependency-scan, compose-topology, deployment-smoke, security]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v'))
@@ -412,6 +441,10 @@ jobs:
   # server. This is the check that would have caught the frontend context
   # pointing at a directory removed long ago.
   compose-topology:
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Deliberately far above the real time:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -598,6 +631,10 @@ jobs:
   # perimeter, the session cookie, the unreachable transform layer - are that one
   # class, and none of them could have failed a gate.
   deployment-smoke:
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Deliberately far above the real time:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4

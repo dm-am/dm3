@@ -32,6 +32,10 @@ jobs:
   # defect classes that matter most here — unescaped output reaching a rendered
   # surface, injection, unsafe deserialisation — are source-level.
   codeql:
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Far above the real time on purpose:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -76,6 +80,10 @@ jobs:
           category: /language:${{ matrix.language }}
 
   zap-scan:
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Far above the real time on purpose:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     env:
       # docker/.env.example ends with Development for local work, and a scan of
