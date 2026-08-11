@@ -37,16 +37,6 @@ public class SeedDeterminismShould
     /// </summary>
     private const string DeterminismSource = "SeedDeterminism.cs";
 
-    /// <summary>
-    /// Line and block comments. A rule that matched inside one would fire on the
-    /// paragraph explaining why the call is not there, which is the one place the
-    /// name has to stay written down. It also truncates a line after a "//"
-    /// inside a string literal - a seeded URL does that - which can only ever
-    /// hide a violation sitting further right on that same line, never invent one.
-    /// </summary>
-    private static readonly Regex Comments = new(
-        @"/\*.*?\*/|//[^\n]*", RegexOptions.Compiled | RegexOptions.Singleline);
-
     private static readonly Regex Clock = new(
         @"(?<![\w.])DateTime(Offset)?\s*\.\s*(Now|UtcNow|Today)\b", RegexOptions.Compiled);
 
@@ -177,7 +167,7 @@ public class SeedDeterminismShould
 
     /// <summary>The file's text with its comments removed.</summary>
     private static string Code(string path) =>
-        Comments.Replace(File.ReadAllText(path), string.Empty);
+        SourceText.ReadCode(path);
 
     private static string SeederDirectory => Path.Combine(RepositoryRoot, "src", "DM.Tools.Seeder");
 

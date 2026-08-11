@@ -25,9 +25,6 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class StorageClockShould
 {
-    private static readonly Regex Comments = new(
-        @"/\*.*?\*/|//[^\n]*", RegexOptions.Compiled | RegexOptions.Singleline);
-
     /// <summary>
     /// A read of the machine clock, under either spelling.
     /// </summary>
@@ -86,7 +83,7 @@ public class StorageClockShould
         .ToList();
 
     private static string Code(string path) =>
-        Comments.Replace(File.ReadAllText(path), string.Empty);
+        SourceText.ReadCode(path);
 
     private static string StorageDirectory =>
         Path.Combine(RepositoryRoot, "src", "DM.Infrastructure.Persistence");

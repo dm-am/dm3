@@ -53,7 +53,10 @@ public class RateLimitPipelineShould
     [Fact]
     public void NameTheAccountBeforeTheLimiterCountsAgainstIt()
     {
-        var startup = File.ReadAllText(
+        // Read as code and not as text: two slashes in front of the pipeline move
+        // none of the three calls below, so a commented-out Startup satisfied
+        // every comparison in this method.
+        var startup = SourceText.ReadCode(
             Path.Combine(RepositoryRoot.FullName, "src", "DM.Web.API", "Startup.cs"));
 
         var account = startup.IndexOf(

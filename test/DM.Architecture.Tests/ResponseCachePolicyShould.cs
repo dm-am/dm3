@@ -32,10 +32,6 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class ResponseCachePolicyShould
 {
-    /// <summary>Line and block comments, in the syntax of the client's sources.</summary>
-    private static readonly Regex Comments = new(
-        @"/\*.*?\*/|//[^\n]*", RegexOptions.Compiled | RegexOptions.Singleline);
-
     /// <summary>A request header assignment, whatever quoting style is used.</summary>
     private static readonly Regex CacheControlHeader = new(
         @"[""']?Cache-Control[""']?\s*:", RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -46,7 +42,7 @@ public class ResponseCachePolicyShould
         var client = Path.Combine(RepositoryRoot, "src", "DM.Web.Client", "src", "shared", "api", "client.ts");
         File.Exists(client).Should().BeTrue("the HTTP client is where the default headers live");
 
-        var code = Comments.Replace(File.ReadAllText(client), string.Empty);
+        var code = SourceText.ReadCode(client);
 
         CacheControlHeader.IsMatch(code).Should().BeFalse(
             "a Cache-Control request header set for every call decides caching for endpoints it " +
