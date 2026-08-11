@@ -1,5 +1,15 @@
 import { ref } from "vue";
 
+/**
+ * How long the breach lookup is given before it is abandoned.
+ *
+ * Five seconds, which is the deadline the backend already gives the same
+ * service (Startup.cs, where HibpPasswordChecker's client is configured with
+ * the comment "Don't block registration on slow API"), so a person meets one
+ * wait rather than two different ones depending on which side asked.
+ */
+const REQUEST_TIMEOUT_MS = 5000;
+
 export interface HibpCheckOptions {
   /**
    * Custom fetch function for testing.
@@ -47,12 +57,20 @@ export function useHibpCheck(options: HibpCheckOptions = {}) {
       const prefix = hash.substring(0, 5).toUpperCase();
       const suffix = hash.substring(5).toUpperCase();
 
+      // A deadline, because the caller waits on this and the service answering
+      // it is not ours. Without one, a request that never settles leaves the
+      // form waiting for a third party indefinitely — and the catch below
+      // already says the right thing about an unavailable HIBP: it must not
+      // stand between somebody and their own registration.
+      const deadline = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+
       const response = await fetchFn(
         `https://api.pwnedpasswords.com/range/${prefix}`,
         {
           headers: {
             "Add-Padding": "true", // Enhanced privacy
           },
+          signal: deadline,
         },
       );
 
