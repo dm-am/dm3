@@ -68,9 +68,11 @@ export default new (class AccountApi {
    * Rate limited: 20 requests per minute
    */
   public checkUsername(username: string) {
-    return Api.get<UsernameAvailability>(
-      `account/check-username?username=${encodeURIComponent(username)}`,
-    );
+    // In the body, not the query: the value is exactly what must not end up in
+    // an access log, and the request line is logged with its query string.
+    return Api.post<UsernameAvailability>("account/check-username", {
+      username,
+    });
   }
 
   /**
@@ -87,9 +89,8 @@ export default new (class AccountApi {
    * Rate limited: 20 requests per minute
    */
   public checkEmail(email: string) {
-    return Api.get<EmailAvailability>(
-      `account/check-email?email=${encodeURIComponent(email)}`,
-    );
+    // Body, for the same reason as checkUsername above.
+    return Api.post<EmailAvailability>("account/check-email", { email });
   }
 
   /**

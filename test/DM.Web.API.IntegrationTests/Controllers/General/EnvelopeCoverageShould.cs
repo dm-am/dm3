@@ -38,8 +38,8 @@ public class EnvelopeCoverageShould : IntegrationTestBase
     private static readonly HashSet<string> Legacy = new(StringComparer.Ordinal)
     {
         "GET /v1/account/activation",
-        "GET /v1/account/check-email",
-        "GET /v1/account/check-username",
+        "POST /v1/account/check-email",
+        "POST /v1/account/check-username",
         "GET /v1/account/password-reset",
         "GET /v1/account/username-change",
         "GET /v1/account/username-change/approval",

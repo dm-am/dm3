@@ -18,9 +18,15 @@
     "isCurrent",
     "persistent"
   ],
+  "DM.Web.API.Features.Account.Availability.EmailAvailabilityRequest": [
+    "email"
+  ],
   "DM.Web.API.Features.Account.Availability.EmailAvailabilityResponse": [
     "isAvailable",
     "reason"
+  ],
+  "DM.Web.API.Features.Account.Availability.UsernameAvailabilityRequest": [
+    "username"
   ],
   "DM.Web.API.Features.Account.Availability.UsernameAvailabilityResponse": [
     "isAvailable",
