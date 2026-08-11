@@ -80,12 +80,12 @@
 Пересчитывается из строк индекса при каждом закрытии, руками не пишется: число,
 написанное отдельно от таблицы, расходится с ней на первой же партии.
 
-**Закрыто 24 из 357 (7%), открыто 333.**
+**Закрыто 28 из 357 (8%), открыто 329.**
 
 | Тяжесть | Всего | Закрыто | Осталось |
 |---|---|---|---|
 | КРИТИЧНО | 6 | 6 | 0 |
-| ВАЖНО | 53 | 15 | 38 |
+| ВАЖНО | 53 | 19 | 34 |
 | ЗАМЕТНО | 140 | 2 | 138 |
 | МЕЛОЧЬ | 158 | 1 | 157 |
 
@@ -100,7 +100,7 @@
 | comments | 23 | 0 | 23 |
 | security | 22 | 7 | 15 |
 | persistence | 21 | 4 | 17 |
-| auth | 21 | 0 | 21 |
+| auth | 21 | 4 | 17 |
 | frontend-arch | 19 | 2 | 17 |
 | domain | 19 | 1 | 18 |
 | tests | 18 | 0 | 18 |
@@ -510,11 +510,11 @@
 | persistence-01 | ВАЖНО | FlushAsync берет ParentId у произвольного живого маркера чата. Если выбранный документ принадлежит другому участнику (для диалога это примерно половина случаев… _(уточнено)_ | `src/DM.Infrastructure.Persistence/Shared/UnreadCounters/UnreadCountersRepository.cs:216-2…` | Закрыто | Исправлено — FlushAsync сначала читает собственный маркер читателя и обновляет его на месте, сохраняя ParentId. Заимствование родителя у соседнего маркера осталось только там, где его неоткуда больше взять, и где все читатели сущности делят одного родителя. Уточнение по ходу проверки: счетчик списывался верно, ломался ParentId, и беседа выпадала из родительских выборок, а не утекала чужому. Интеграционный тест KeepTheReadersOwnParentWhenAnotherParticipantsMarkerComesFirst на контейнерном Mongo, проверен снятием |
 | persistence-02 | ВАЖНО | Голосование не проверяет, что пользователь уже голосовал: одним аккаунтом можно занять все варианты | `src/DM.Infrastructure.Persistence/Repositories/Community/PollRepository.cs:294-305` | Закрыто | Исправлено — фильтр Vote отвергает документ, в котором голосующий уже числится в любом из вариантов, и возвращает null; PollService превращает null в 409 AlreadyVoted. Правило в фильтре, а не в проверке перед записью: два одновременных запроса иначе оба прочитали бы бюллетень без этого голоса. Три интеграционных теста PollVotingShould на живом Mongo, проверены снятием фильтра |
 | persistence-03 | ВАЖНО | Непрочитанное в игровых чат-комнатах не работает: маркер на room.Id, инкремент и чтение по chat.Id | `src/DM.Domain.Game/Features/Rooms/RoomService.cs:82, src/DM.Domain.Messaging/Features/Mes…` | Закрыто | Исправлено — Chat получил RoomId и вычисляемое UnreadEntityId (RoomId ?? Id): комната и чат это одна сущность под двумя идентификаторами, и маркер существует под идентификатором комнаты, потому что ее половина его создает, суммирует в бейдж игры и удаляет. Инкремент, чтение, сброс и удаление в модуле сообщений переведены на него. Два сквозных теста ChatRoomMessagesShould, проверены снятием |
-| auth-01 | ВАЖНО | Операций, объявляющих 401 без блока security, — 103, а не 105; под /v1/moderation их 49 из 52, а не "весь срез". Вторая причина, помимо class-level атрибута: R… | `src/DM.Web.API/Shared/Authentication/AuthenticationSwaggerFilter.cs:16` | Открыто | |
+| auth-01 | ВАЖНО | Операций, объявляющих 401 без блока security, — 103, а не 105; под /v1/moderation их 49 из 52, а не "весь срез". Вторая причина, помимо class-level атрибута: R… | `src/DM.Web.API/Shared/Authentication/AuthenticationSwaggerFilter.cs:16` | Закрыто | Исправлено — фильтр смотрит атрибут и на методе, и на объявляющем типе и вдобавок распознает RequireRole, который наследует TypeFilterAttribute и под прежний GetCustomAttribute не попадал вообще; AllowAnonymous имеет приоритет над обоими, как и в самом пайплайне. Замер по artifacts/openapi после правки: операций, объявляющих 401 без блока security, было 103, стало 0. Проверено точечно, что анонимные чтения (логин, профиль по имени, список игр) блок security не получили |
 | auth-02 | ВАЖНО | GET /v1/blogs публикует как единственную схему 200 проекцию BlogRef, форма по умолчанию не опубликована | `src/DM.Web.API/Features/Blog/Blogs/BlogController.cs:45-46` | Открыто | |
-| auth-03 | ВАЖНО | Optional<T> публикуется как объект {value}, а на проводе едет голое значение | `src/DM.Web.API/Features/Game/Rooms/UpdateRoomRequest.cs:47` | Открыто | |
-| auth-04 | ВАЖНО | GET /v1/users/by-role/{role} — анонимный, без страницы и верхней границы, дублирует GET /v1/users?role= | `src/DM.Web.API/Features/Community/Users/UserController.cs:48` | Открыто | |
-| auth-05 | ВАЖНО | Строки BoundedBySubject про /v1/moderation/warnings и /v1/users/by-role/{role} неверны | `test/DM.Web.API.IntegrationTests/Controllers/General/ListBoundsShould.cs:82,84` | Открыто | |
+| auth-03 | ВАЖНО | Optional<T> публикуется как объект {value}, а на проводе едет голое значение | `src/DM.Web.API/Features/Game/Rooms/UpdateRoomRequest.cs:47` | Закрыто | Исправлено — OptionalSchemaFilter публикует Optional<T> схемой самой величины с nullable: true, потому что конвертер читает и пишет голое значение, а null здесь означает "очистить поле". Снимок контракта потерял фантомное свойство value у Optional<Guid>. Схема врала и на запросе (клиент по документу получал 400), и на ответе |
+| auth-04 | ВАЖНО | GET /v1/users/by-role/{role} — анонимный, без страницы и верхней границы, дублирует GET /v1/users?role= | `src/DM.Web.API/Features/Community/Users/UserController.cs:48` | Закрыто | Исправлено — GET /v1/users/by-role/{role} удален вместе с методом API-сервиса и объявлением в интерфейсе. Доменный GetUsersByRole остался: им пользуется реестр модераторов, где число ограничено самой ролью. Правился адрес, а не его границы: API_DESIGN приводит GET /v1/users?role= эталоном и в разделе "Один endpoint — много сценариев" запрещает специализированный адрес рядом, а страничная выборка с фильтром по роли уже была |
+| auth-05 | ВАЖНО | Строки BoundedBySubject про /v1/moderation/warnings и /v1/users/by-role/{role} неверны | `test/DM.Web.API.IntegrationTests/Controllers/General/ListBoundsShould.cs:82,84` | Закрыто | Исправлено — строка by-role убрана вместе с самим адресом, строка /v1/moderation/warnings перенесена в GrowingWithoutAPage с причиной: репозиторий читает все предупреждения за историю сайта без Skip и Take, а экран над ним называется "Последние предупреждения". Страницу не заводили здесь по причине, уже записанной в том же наборе: экран рендерит всю выборку, поэтому размер страницы убирает строки с экрана, а это визуальное изменение и требует поштучного аппрува |
 | auth-06 | ВАЖНО | GET /v1/users/me/notifications урезает take, не проверяет skip, не отдает paging | `src/DM.Web.API/Features/Personal/Notifications/NotificationController.cs:59-64` | Открыто | |
 | auth-07 | ВАЖНО | Три курсорных списка клипают limit, а комментарий у четвертого утверждает общее правило по хосту | `src/DM.Web.API/Features/Game/ChatRooms/ChatRoomController.cs:148-151` | Открыто | |
 | auth-08 | ВАЖНО | Мест пять, а не четыре: Forum/Topics/TopicController.cs:82 и :89 тоже описывают прозой фильтр `authors` и вдобавок "standard paging (number / size)" — оба имен… | `src/DM.Web.API/Features/Forum/Comments/TopicCommentController.cs:66` | Открыто | |
