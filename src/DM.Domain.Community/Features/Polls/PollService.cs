@@ -111,7 +111,17 @@ internal class PollService : IPollService
         var poll = await GetAsync(pollId);
         _intentionManager.ThrowIfForbidden(PollIntention.Vote, (poll, optionId));
 
-        return await _repository.Vote(pollId, optionId, _identityProvider.Current.User.UserId);
+        // The store answers with nothing when this voter is already on the ballot:
+        // one voter, one option, decided by the write rather than by a check before
+        // it, so two requests arriving together cannot both land. Changing one's
+        // mind is the Unvote endpoint.
+        var voted = await _repository.Vote(pollId, optionId, _identityProvider.Current.User.UserId);
+        if (voted == null)
+        {
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyVoted);
+        }
+
+        return voted;
     }
 
     /// <inheritdoc />

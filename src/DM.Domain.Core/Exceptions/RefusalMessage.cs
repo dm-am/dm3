@@ -339,4 +339,7 @@ public static class RefusalMessage
     /// </summary>
     public const string PasswordBreached =
         "Этот пароль скомпрометирован утечкой, выберите другой";
+
+    /// <summary>Голос в этом опросе уже отдан</summary>
+    public const string AlreadyVoted = "Вы уже голосовали в этом опросе";
 }

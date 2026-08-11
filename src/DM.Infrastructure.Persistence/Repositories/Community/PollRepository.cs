@@ -291,17 +291,29 @@ internal class PollRepository : MongoCollectionRepository<DbPoll>, IPollReposito
     // ═══ VOTING ═══
 
     /// <inheritdoc />
-    public async Task<Poll> Vote(Guid pollId, Guid optionId, Guid userId)
+    /// <remarks>
+    /// One voter, one option, enforced by the write itself. The condition is part
+    /// of the filter rather than a read before it: two requests arriving together
+    /// both passed a preceding check and both landed, and nothing else in the
+    /// stack looked. A ballot that already carries this voter matches nothing
+    /// here, the update touches no document, and the caller is told.
+    ///
+    /// Changing one's mind goes through Unvote first — the endpoint for it exists —
+    /// because pulling from every option and pushing into one cannot be a single
+    /// update: both address the same array path, and the server refuses that.
+    /// </remarks>
+    public async Task<Poll?> Vote(Guid pollId, Guid optionId, Guid userId)
     {
         var dbPoll = await Collection.FindOneAndUpdateAsync(
             Filter.Eq(p => p.Id, pollId) &
-            Filter.ElemMatch(p => p.Options, o => o.Id == optionId),
+            Filter.ElemMatch(p => p.Options, o => o.Id == optionId) &
+            Filter.Not(Filter.ElemMatch(p => p.Options, o => o.UserIds.Contains(userId))),
             Builders<DbPoll>.Update.AddToSet(u => u.Options.FirstMatchingElement().UserIds, userId),
             new FindOneAndUpdateOptions<DbPoll>
             {
                 ReturnDocument = ReturnDocument.After
             });
-        return _mapper.Map<Poll>(dbPoll);
+        return dbPoll == null ? null : _mapper.Map<Poll>(dbPoll);
     }
 
     /// <inheritdoc />
