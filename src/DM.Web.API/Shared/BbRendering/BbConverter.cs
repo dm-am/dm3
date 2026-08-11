@@ -14,7 +14,7 @@ namespace DM.Web.API.Shared.BbRendering;
 /// JSON converter factory that turns every <see cref="BbText"/>-derived DTO
 /// into permission-aware rendered output at serialization time. The factory
 /// itself is a singleton (owned by <see cref="JsonSerializerOptions"/>);
-/// per-request scoped services (authorization context, render cache) are
+/// the per-request scoped authorization context is
 /// resolved through <see cref="HttpContext.RequestServices"/> at Write time.
 /// </summary>
 internal class BbConverterFactory : JsonConverterFactory

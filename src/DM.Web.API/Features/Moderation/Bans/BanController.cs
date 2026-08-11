@@ -128,7 +128,7 @@ public class BanController : ControllerBase
     /// **Duration options:**
     /// - Set `expiresUtc` for specific end time
     /// - Set `durationHours` for relative duration
-    /// - Leave both null for permanent ban
+    /// - One of the two is required: a permanent ban is sent as a hundred-year duration
     ///
     /// **Note:** Permanent bans can only be lifted by Admin.
     /// </remarks>

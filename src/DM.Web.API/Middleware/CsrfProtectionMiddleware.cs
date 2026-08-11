@@ -80,12 +80,12 @@ public class CsrfProtectionMiddleware
                 "CSRF protection blocked request from origin {Origin}. Allowed: {AllowedOrigins}",
                 origin, string.Join(", ", settings.Value.AllowedOrigins));
 
-            // Тело отказа собирает ErrorHandlingMiddleware, и только оно: оно
-            // стоит выше в конвейере, поэтому исключение отсюда до него дойдет.
-            // Своя сборка ProblemDetails давала ответ без traceId и без type —
-            // форму, которой нет ни у одного другого отказа. Токен корреляции
-            // существует ровно для того, чтобы связать отказ с записью в логе,
-            // и здесь его как раз не было.
+            // ErrorHandlingMiddleware assembles the refusal body, and nothing else
+            // does: it sits above this one in the pipeline, so an exception thrown
+            // here reaches it. Building ProblemDetails here gave an answer with no
+            // traceId and no type, a shape no other refusal has. The correlation
+            // token exists precisely to tie a refusal to its log entry, and this was
+            // the one place it was missing.
             throw new HttpException(HttpStatusCode.Forbidden, "Запрос пришел с недопустимого адреса");
         }
 

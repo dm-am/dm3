@@ -25,7 +25,7 @@ using DM.Domain.Account;
 namespace DM.Workers.NotificationDispatcher;
 
 /// <summary>
-/// Search consumer API configuration
+/// Notification dispatcher host configuration
 /// </summary>
 public class Startup
 {
@@ -59,10 +59,6 @@ public class Startup
             .AddDmMessageQueuing(_configuration)
             .AddDmMailConfiguration(_configuration)
             .AddDmAccountConfiguration(_configuration)
-            // Same reason as the account call above: ConfigureContainer registers the
-            // community assembly, whose endorsement service asks for the probation
-            // contract. Nothing registered it here, so the first notification that
-            // touched an endorsement would have failed to resolve on a live message.
             .AddDmLogging("DM.Notifications.Consumer", _configuration, _environment)
             .RequireRelationalStorage()
             .RequireDocumentStorage();
@@ -122,13 +118,13 @@ public class Startup
             .As<INotificationBotSender>()
             .InstancePerLifetimeScope();
 
-        // Продюсер вынесен из процессора отдельным типом. Jamq создает scope на каждое
-        // доставленное сообщение и резолвит процессор в нем, поэтому продюсер, который
-        // строился в конструкторе процессора, брал AMQP-канал на сообщение и не
-        // возвращал его: канал уходит обратно в пул только в Dispose, а процессор
-        // не был IDisposable. Здесь scope живет одно сообщение, так что несущая
-        // половина — именно Dispose, а не время жизни; scope выбран для единообразия
-        // с API, где одного продюсера просят несколько сервисов в одном запросе.
+        // The producer is a type of its own rather than a field the processor builds.
+        // Jamq opens a scope per delivered message and resolves the processor in it,
+        // so a producer constructed by the processor took an AMQP channel per message
+        // and never gave it back: a channel returns to the pool only in Dispose, and
+        // the processor was not IDisposable. Here a scope lives for one message, so
+        // Dispose is the load-bearing half rather than the lifetime. The scope matches
+        // the API, where several services ask for one producer within a request.
         builder.RegisterType<RealtimeNotificationProducer>()
             .As<IRealtimeNotificationProducer>()
             .InstancePerLifetimeScope();

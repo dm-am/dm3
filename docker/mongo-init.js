@@ -32,7 +32,7 @@ print('Creating indexes for DM3...');
 
 // ============================================================================
 // UnreadCounters Collection - Main performance-critical collection
-// Used by: GameReadingService, ForumReadingService, ConversationReadingService
+// Used by: UnreadCountersRepository
 // ============================================================================
 
 // The key every write addresses a marker by: FlushAsync, FlushAllAsync and the
@@ -98,7 +98,7 @@ print('UserSessions indexes created');
 
 // ============================================================================
 // UserSettings Collection
-// Used by: UserSettingsRepository, AuthenticationRepository
+// Used by: UserRepository, BotLinkRepository, AuthenticationRepository.FindUserSettings
 // Query: UserId = X (UserId is not the document _id)
 // ============================================================================
 

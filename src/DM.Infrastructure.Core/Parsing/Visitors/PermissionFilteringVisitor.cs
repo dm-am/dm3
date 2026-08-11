@@ -81,8 +81,10 @@ public static class PermissionFilteringVisitor
         if (ctx.Audience is RenderAudience.PlainText or RenderAudience.EmbedSafe)
             return false;
 
-        // AuthorEdit: both tags are always visible (authorship already
-        // confirmed by endpoint-level authorization).
+        // AuthorEdit: both tags are always visible. The audience only
+        // reaches this visitor after the render pipeline matched the viewer
+        // against the author id in the envelope; a mismatch is downgraded
+        // to Display before the context is built.
         if (ctx.Audience == RenderAudience.AuthorEdit)
             return true;
 

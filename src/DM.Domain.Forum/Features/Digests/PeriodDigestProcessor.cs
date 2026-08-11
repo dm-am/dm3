@@ -31,7 +31,6 @@ internal class PeriodDigestProcessor : IPeriodDigestProcessor
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ILogger<PeriodDigestProcessor> _logger;
 
-    /// <inheritdoc cref="PeriodDigestProcessor" />
     public PeriodDigestProcessor(
         IPeriodDigestRepository digestRepository,
         ITopicRepository topicRepository,

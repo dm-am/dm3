@@ -36,7 +36,7 @@ public enum GameRole
     Assistant = 5,
 
     /// <summary>
-    /// Master - game creator and owner (from Game.AuthorId)
+    /// Master - game creator and owner (from Game.MasterId)
     /// </summary>
     Master = 6
 }

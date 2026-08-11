@@ -12,7 +12,8 @@ namespace DM.Domain.Core.Users;
 /// </summary>
 /// <remarks>
 /// Full repository with write operations: Domain.Personal/Features/Profiles/IUserRepository
-/// Implementation: Infrastructure.Services/Shared/Users/UserReadRepository
+/// Implementation: Infrastructure.Persistence/Repositories/Personal/UserRepository,
+/// registered as both IUserRepository and IUserReadRepository
 /// </remarks>
 public interface IUserReadRepository
 {

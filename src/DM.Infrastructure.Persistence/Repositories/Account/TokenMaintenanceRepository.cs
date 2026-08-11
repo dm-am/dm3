@@ -12,7 +12,6 @@ internal class TokenMaintenanceRepository : ITokenMaintenanceRepository
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc cref="TokenMaintenanceRepository" />
     public TokenMaintenanceRepository(DmDbContext dbContext) => _dbContext = dbContext;
 
     /// <inheritdoc />

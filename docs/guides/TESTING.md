@@ -6,7 +6,9 @@
 
 | Слой | Фреймворк | Назначение |
 |------|-----------|------------|
-| Backend Unit | xUnit + Moq + FluentAssertions | Бизнес-логика, интеграция |
+| Backend Unit | xUnit + Moq + FluentAssertions | Бизнес-логика: ветки правил, валидация, маппинг |
+| Backend Integration | xUnit + Testcontainers | Контракт HTTP, трансляция в SQL, транзакции против реальных БД в контейнерах |
+| Architecture | xUnit + ArchUnitNET | Конвенции дерева: слои, зависимости, текстовые гейты по исходникам |
 | Frontend Unit | Vitest + Vue Test Utils | Компоненты, утилиты, BBCode |
 | E2E | Playwright | Сценарии в браузере против поднятого стека |
 
@@ -14,7 +16,7 @@
 
 ## Что требуется от контрибьютора
 
-**Новое поведение приезжает с тестом.** Правка, меняющая наблюдаемый результат (возвращаемые данные, статус-код, набор видимых зрителю данных), без теста не проходит ревью. Числового порога покрытия как цели нет: цель — покрытые ветки правил, а не процент.
+**Новое поведение приезжает с тестом.** Правка, меняющая наблюдаемый результат (возвращаемые данные, статус-код, набор видимых зрителю данных), без теста не проходит ревью. Числового порога покрытия как цели нет: цель — покрытые ветки правил, а не процент. Но пороги существуют и роняют сборку: свой ратчет есть у бэкенда и у фронтенда. Правило ратчета одно на оба: поднимать после роста и никогда не опускать после падения. Осознанное удаление кода, уронившее число, называется в ревью, и числа возвращаются следом. Нижняя граница при этом есть и работает как трещотка: CI краснеет, когда покрытие падает ниже уже достигнутого уровня. Границу поднимают после роста и никогда не опускают ради зеленого прогона.
 
 **Unit — вариант по умолчанию.** Он дешевый, быстрый и указывает на сломанное правило точно. Integration-тест пишется тогда, когда мок не способен доказать проверяемое утверждение.
 
@@ -53,9 +55,8 @@ dotnet test --logger "trx;LogFileName=results.trx"
 ```bash
 cd src/DM.Web.Client
 
-npm run test:unit              # Все тесты
-npm run test:unit -- --watch      # Watch mode
-npm run test:unit -- --coverage   # С покрытием
+npm run test:coverage          # Все тесты один раз, с покрытием
+npm run test:unit              # Watch mode
 ```
 
 ### E2E
@@ -95,23 +96,30 @@ npx playwright test --project=chromium
 ```csharp
 public class TopicCreatingServiceShould : UnitTestBase
 {
-    [Fact]
-    public async Task CreateTopic_When_ValidInput()
+    private readonly Mock<ITopicRepository> _repository;
+    private readonly TopicCreatingService _service;
+
+    public TopicCreatingServiceShould()
     {
-        // Arrange
-        var createTopic = new CreateTopic { Title = "Test" };
-        _repository
-            .Setup(r => r.Create(It.IsAny<Topic>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Topic { Id = Guid.NewGuid() });
+        _repository = Mock<ITopicRepository>();
+        _service = new TopicCreatingService(_repository.Object);
+    }
 
-        // Act
-        var result = await _service.CreateTopic(createTopic);
+    [Fact]
+    public async Task RejectTopicWithEmptyTitle()
+    {
+        var createTopic = new CreateTopic { Title = string.Empty };
 
-        // Assert
-        result.Should().NotBeNull();
+        var act = () => _service.CreateTopic(createTopic);
+
+        await act.Should().ThrowAsync<HttpException>();
+        _repository.Verify(
+            r => r.Create(It.IsAny<Topic>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }
 ```
+
+Утверждение направлено на наблюдаемый результат, а не на настройку мока. Тест, единственная проверка которого - что мок вернул подготовленное значение, остается зеленым после удаления проверяемого кода и поэтому не считается тестом.
 
 ### CancellationToken в Mocks
 

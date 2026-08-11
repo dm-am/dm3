@@ -148,7 +148,7 @@ const emptyText = computed(() =>
 );
 
 /**
- * Written mode (#68г): the "Автор" sort option and default search
+ * Written mode: the "Автор" sort option and default search
  * placeholder both talk about the wrong party — every item's author IS
  * the profile owner, so sorting/searching "by author" is meaningless here.
  * The backend already silently sorts this scope by the counterparty (see

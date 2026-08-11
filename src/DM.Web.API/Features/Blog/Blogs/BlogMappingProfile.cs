@@ -41,8 +41,7 @@ internal class BlogMappingProfile : Profile
             // JSON converter honors the owner's AuthorEdit round-trip (the
             // settings editor sends X-Dm-Audience: author_edit to load the raw
             // BBCode source) and downgrades any other viewer's author_edit
-            // request to permission-filtered Display. Inherited by BlogDetails
-            // via IncludeBase.
+            // request to permission-filtered Display.
             .AfterMap((src, dest) =>
             {
                 if (dest.Description is not null && src.Author is not null)

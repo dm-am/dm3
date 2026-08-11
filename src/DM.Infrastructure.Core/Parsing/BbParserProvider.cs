@@ -51,7 +51,8 @@ public class BbParserProvider : IBbParserProvider
 
     private static readonly Tag Head = new("head", $"<h4 class=\"{HeaderClassName}\">", "</h4>");
 
-    /// <inheritdoc cref="Nsfw" />
+    // Spoiler — same structure as NSFW, and the same href="#" for the same CSP
+    // reason: the client preventDefaults the click, so the href never navigates.
     private static readonly Tag Spoiler = new("spoiler",
         $"<a href=\"#\" class=\"{SpoilerHeadClassName}\" data-swaptext=\"Скрыть содержимое\">Показать содержимое</a><div class=\"{SpoilerClassName}\">",
         "</div>");

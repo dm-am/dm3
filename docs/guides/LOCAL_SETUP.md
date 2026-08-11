@@ -252,7 +252,7 @@ IMGPROXY_SALT=...  # 64 hex chars (32 bytes), HMAC-SHA256 salt
 | Изображения не загружаются | Bucket и его политики создает контейнер `minio-init` до старта API. Проверь `docker logs dm-minio-init` |
 | Thumbnails не отдаются (404 на imgproxy) | `docker ps \| grep imgproxy`. Проверить `IMGPROXY_KEY`/`IMGPROXY_SALT` в `docker/.env` (64 hex chars each) |
 | Seed: "API not available" | Запусти API: `dotnet run --project src/DM.Web.API --environment Development` |
-| Seed: "PostgreSQL not available" | Запусти: `docker compose up -d dm-pg` |
+| Seed: "PostgreSQL not available" | Запусти: `docker compose up -d postgres` |
 | Пользователи не в "Активных" | Seed обновляет `LastActivityUtc`, перезапусти seed |
 
 ---

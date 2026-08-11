@@ -43,9 +43,12 @@ jobs:
     # whole tree, and nothing checked it: 134 C# files had drifted out of the
     # first rule. A file without a final newline adds a line to every diff that
     # touches it, so review reads noise instead of the change, and the count only
-    # grows. The whitespace subcommand is deliberate — it checks exactly the
-    # rules .editorconfig states and skips the analyzer pass, which would make
-    # this a slow gate on rules the project never declared.
+    # grows. The whitespace subcommand is deliberate: it skips the analyzer pass,
+    # which would make this a slow gate on rules the project never declared. It
+    # is narrower than .editorconfig, though, and the comment used to claim they
+    # were equal. It reformats C# only, and inside C# it leaves trailing
+    # whitespace in comment lines alone, so trim_trailing_whitespace outside C#
+    # and inside comments is on review, not on this step.
     - name: Format
       run: dotnet format DM.sln whitespace --verify-no-changes
     # Release is what ships (docker/app.Dockerfile publishes -c Release), so it

@@ -11,7 +11,6 @@ internal class BlogPopularityProcessor : IBlogPopularityProcessor
 {
     private readonly IBlogPopularityRepository _repository;
 
-    /// <inheritdoc cref="BlogPopularityProcessor" />
     public BlogPopularityProcessor(IBlogPopularityRepository repository) => _repository = repository;
 
     /// <inheritdoc />

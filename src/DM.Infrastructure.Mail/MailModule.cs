@@ -18,9 +18,9 @@ public class MailModule : Module
     {
         builder.RegisterDefaultTypes();
 
-        // Один отправитель на scope. Причина та же, что у InvokedEventProducer:
-        // канал берется из пула при первой отправке и возвращается только в
-        // Dispose, а при InstancePerDependency возвращать его было некому.
+        // One sender per scope, for the same reason as InvokedEventProducer: the
+        // channel is taken from the pool on the first send and returned only in
+        // Dispose, and under InstancePerDependency there was nobody to return it.
         builder.RegisterType<MailSender>()
             .As<IMailSender>()
             .InstancePerLifetimeScope();
@@ -32,9 +32,10 @@ public class MailModule : Module
             .AsSelf()
             .SingleInstance();
 
-        // Один рендерер на процесс. Карта шаблонов строится рефлексией по сборке и
-        // не меняется, а HtmlRenderer под ним и так синглтон: сериализацию рендеров
-        // обеспечивает его собственный Dispatcher, через который идет каждый вызов.
+        // One renderer per process. The template map is built by reflection over the
+        // assembly and does not change, and the HtmlRenderer under it is a singleton
+        // anyway: its own Dispatcher, which every call goes through, serializes the
+        // renders.
         builder.RegisterType<TemplateRenderer>()
             .As<ITemplateRenderer>()
             .SingleInstance();

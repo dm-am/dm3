@@ -17,7 +17,7 @@ using DM.Infrastructure.Mail;
 namespace DM.Workers.Mail;
 
 /// <summary>
-/// Search consumer API configuration
+/// Mail worker host configuration
 /// </summary>
 public class Startup
 {

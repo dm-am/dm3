@@ -21,8 +21,11 @@ namespace DM.Architecture.Tests;
 /// and the quieter half of the cost is a screen changed without its spec.
 ///
 /// The runners are read out of the package scripts and the test projects instead
-/// of being listed here, so a tier added to the tree turns this red until the
-/// guide has a line for it.
+/// of being listed here, so a runner added to the tree turns this red until the
+/// guide has a line for it. A tier is not a runner: the backend unit, integration
+/// and architecture projects all reference xunit and collapse to one word here, so
+/// a fourth xunit tier passes this silently. Naming the tiers is on the guide and
+/// on review, and this gate only holds the runner names.
 /// </remarks>
 public class DocumentedTestTiersShould
 {

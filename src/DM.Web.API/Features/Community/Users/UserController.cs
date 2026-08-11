@@ -68,7 +68,7 @@ public class UserController : ControllerBase
     /// <remarks>
     /// Requires admin role: login records contain personal data (IP addresses
     /// and user agents). Users can view their own login history via
-    /// the /v1/account/security endpoints.
+    /// the /v1/account/logs endpoint.
     /// </remarks>
     /// <param name="username">User username</param>
     /// <param name="q">Paging parameters</param>

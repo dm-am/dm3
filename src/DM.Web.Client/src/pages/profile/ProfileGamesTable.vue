@@ -133,7 +133,7 @@ function fetchGames() {
     (data) => {
       envelope.value = data;
 
-      // Self-contained auto-switch (#65): if the *initial default* "Ведущий"
+      // Self-contained auto-switch: if the *initial default* "Ведущий"
       // fetch comes back empty and the user hasn't touched the toggle yet, flip
       // once to "Игрок" so a profile with no hosted games doesn't land on a
       // dead tab. Restricted to the unfiltered first load (no search typed
@@ -181,7 +181,7 @@ watch(paramsKey, () => fetchGames(), { immediate: true });
 
 function setRole(next: RoleScope) {
   // Any explicit click — even re-clicking the already-active role — counts
-  // as a manual choice and permanently disarms the auto-switch (#65).
+  // as a manual choice and permanently disarms the auto-switch.
   roleTouchedManually.value = true;
   if (role.value === next) return;
   role.value = next;

@@ -132,9 +132,12 @@ jobs:
           touch zap.yaml report_json.json report_md.md report_html.html
           chmod 777 zap.yaml report_json.json report_md.md report_html.html
 
-      # fail_action makes this a gate: any alert whose rule is marked FAIL in
-      # .zap/rules.tsv breaks the build. Triage lives in that file — a rule is
-      # either promoted to FAIL or explicitly IGNORE'd with a stated reason.
+      # fail_action makes this a gate: the scan fails the job on any alert its
+      # rule file does not silence, not only on rules marked FAIL. Triage lives
+      # in .zap/rules.tsv - a rule is either left alone, and then it breaks the
+      # build, or explicitly IGNORE'd with a stated reason. Reading it the other
+      # way round is the trap: the file holds no FAIL line and the gate still
+      # works, because silence is the failing state here, not the passing one.
       - name: OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.14.0
         with:

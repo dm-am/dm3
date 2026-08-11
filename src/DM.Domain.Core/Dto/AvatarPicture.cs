@@ -6,7 +6,7 @@ namespace DM.Domain.Core.Dto;
 ///
 /// The domain level stores ONLY the source URL and object key. Thumbnail variants
 /// (small/medium) are generated on-the-fly at the API layer via imgproxy when
-/// mapping to DTOs (see AvatarPictureResolver).
+/// mapping to DTOs (see AvatarPictureConverter).
 /// </summary>
 public sealed class AvatarPicture
 {

@@ -933,11 +933,12 @@ public class DeploymentConfigurationShould
     /// </summary>
     /// <remarks>
     /// The shell copy of this comparison in CI greps both files and compares the
-    /// results, and two empty results compare equal: a switch to --file, to
-    /// COMPOSE_FILE, or to a path outside the character class it matches would
-    /// have left the gate green on nothing at all. What it exists to catch is a
-    /// unit that brings up the base topology without nginx and the SPA, so a
-    /// reboot replaces the site with a bare API.
+    /// results. That step now rejects an empty extraction and matches the overlay
+    /// and the profile by name, so a switch to --file, to COMPOSE_FILE, or to a
+    /// path outside the character class it matches fails there instead of passing
+    /// on nothing. This test carries the same invariant off the runner. What both
+    /// exist to catch is a unit that brings up the base topology without nginx
+    /// and the SPA, so a reboot replaces the site with a bare API.
     /// </remarks>
     [Fact]
     public void DeployTheSameFilesAndProfilesFromTheUnitAndTheInstaller()

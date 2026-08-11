@@ -493,8 +493,11 @@ public class DmDbContext : DbContext
         // regenerated, which is the documented way to change the schema: the site
         // would come up with no boards, no tags, no system user and no global chat,
         // and nothing would say so. Declared in the model, EF emits it into every
-        // migration it generates, and EnsureCreated and Migrate produce the same
-        // database.
+        // migration it generates, so the seed travels with whichever migration is
+        // current. The two ways to build the schema are not interchangeable:
+        // EnsureCreated materialises the model as it stands, including the
+        // polymorphic foreign keys that are cut out of the migration by hand, so
+        // only Migrate produces the schema the code expects.
         //
         // Fixed identifiers from the zero family, so a repeated seed cannot create
         // duplicates and code outside migrations can reference a record by a
@@ -2261,8 +2264,6 @@ public class DmDbContext : DbContext
                 .IsUnique()
                 .HasFilter("\"Type\" = 2 AND \"IsRemoved\" = false");
 
-            // CHECK constraint: exactly one typed target column
-            // is non-null AND matches the Type discriminator.
             // CHECK: exactly one typed target column is non-null AND
             // matches the Type discriminator (UserAvatar=1, CharacterAvatar=2,
             // PostAttachment=3 in the UploadType enum).

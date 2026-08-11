@@ -11,8 +11,8 @@ namespace DM.Domain.Core.Dto;
 /// </summary>
 /// <remarks>
 /// Used for passing user data between services internally.
-/// NOT exposed via API - use User, UserProfile, or SelfProfile DTOs instead.
-/// Maps from User entity via UserReadingRepository.
+/// NOT exposed via API - use User, UserProfile, or PersonalProfile DTOs instead.
+/// Maps from the User entity via GeneralUserMappingProfile.
 /// </remarks>
 public class GeneralUser : IUser
 {

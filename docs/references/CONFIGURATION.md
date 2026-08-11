@@ -90,6 +90,7 @@
 | `/_health` | Liveness (Docker health check) |
 | `/_ready` | Readiness (PostgreSQL + MongoDB) |
 | `/_health/detail` | Детальная информация |
+| `/metrics` | Метрики в формате Prometheus |
 
 ---
 

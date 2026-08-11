@@ -95,7 +95,7 @@ export default new (class AccountApi {
   }
 
   /**
-   * Sign in with email/username and password (cookie-based)
+   * Sign in with email and password (cookie-based)
    *
    * The refusal here is the answer to the sign-in form: a 403 names the state
    * of the account — banned, removed, locked out after too many attempts — and

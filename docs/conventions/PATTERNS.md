@@ -79,9 +79,13 @@ Features/{Module}/{Feature}/
 ├── {Feature}Controller.cs
 ├── I{Feature}ApiService.cs
 ├── {Feature}ApiService.cs
-├── {Feature}Request.cs
-└── {Feature}Response.cs
+└── {Feature}Dtos.cs
 ```
+
+DTO фичи группируются в один файл `{Feature}Dtos.cs`. Тело запроса или ответа
+отдельной операции выносится своим файлом и называется по операции:
+`{Операция}Request.cs`, `{Операция}Response.cs`. Имени по фиче у таких файлов не
+бывает: операций у фичи несколько, и одно имя пришлось бы делить.
 
 **Примечание:** Feature Folders — это организация Web.API, не путать с Vertical Slices. Бизнес-логика остается в Domain.
 
@@ -296,7 +300,7 @@ DTOs организованы в иерархию наследования с т
 |---------|-----------|--------|
 | `{Entity}Ref` | Минимум для сайдбаров/меню | `GameRef`, `BlogRef`, `UserRef` |
 | `{Entity}` | Средний уровень для таблиц/карточек | `Game`, `Blog`, `User` |
-| `{Entity}Details` | Полный для детальных страниц | `GameDetails`, `BlogDetails`, `UserProfile` |
+| `{Entity}Details` | Полный для детальных страниц | `GameDetails`, `UserProfile` |
 
 ### Правила
 
@@ -377,7 +381,7 @@ UserRef → User → UserProfile → PersonalProfile
 
 GameRef → Game → GameDetails
 
-BlogRef → Blog → BlogDetails
+BlogRef → Blog
 ```
 
 ---

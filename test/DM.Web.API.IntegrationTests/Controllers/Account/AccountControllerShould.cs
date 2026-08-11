@@ -211,7 +211,10 @@ public class AccountControllerShould : IntegrationTestBase
     [Fact]
     public async Task RequestRecovery_WithNonexistentUser_ReturnsOk()
     {
-        // Recovery always returns OK to prevent email enumeration
+        // Recovery answers 200 for an unknown address too, and the body says which
+        // of the three outcomes happened. Telling a registered address from an
+        // unregistered one is deliberate here and recorded as an exception to the
+        // non-disclosure rule, so the form can say an address was mistyped.
         var recoveryData = new { email = "nonexistent@example.com" };
         var response = await Client.PostAsJsonAsync("/v1/account/recovery", recoveryData);
         response.StatusCode.Should().Be(HttpStatusCode.OK);

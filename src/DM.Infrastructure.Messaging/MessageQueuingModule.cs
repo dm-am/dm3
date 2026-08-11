@@ -30,12 +30,12 @@ public class MessageQueuingModule : Module
 
         builder.RegisterDefaultTypes();
 
-        // Один продюсер на scope, а не на каждое разрешение. Продюсер берет
-        // AMQP-канал из пула при первой отправке и возвращает его только в
-        // Dispose, поэтому при InstancePerDependency каждое разрешение, что-то
-        // опубликовавшее, оставляло канал открытым до перезапуска процесса. Не
-        // SingleInstance: публиковать в один канал из нескольких потоков нельзя,
-        // а singleton разделил бы его между всеми одновременными запросами.
+        // One producer per scope rather than per resolution. The producer takes an
+        // AMQP channel from the pool on its first send and returns it only in
+        // Dispose, so under InstancePerDependency every resolution that published
+        // anything left a channel open until the process restarted. Not
+        // SingleInstance: one channel may not be published to from several threads,
+        // and a singleton would share it across every concurrent request.
         builder.RegisterType<InvokedEventProducer>()
             .As<IEventProducer>()
             .InstancePerLifetimeScope();

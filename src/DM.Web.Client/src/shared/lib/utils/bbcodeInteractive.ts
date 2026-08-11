@@ -2,8 +2,8 @@
  * BBCode Interactive Elements
  *
  * Shared utilities for initializing interactive BBCode elements (spoilers, NSFW)
- * in server-rendered content. Used by ChatView, ChatPage, and any other
- * component that displays BBCode content.
+ * in server-rendered content. Used by every component that displays
+ * server-rendered BBCode content.
  *
  * This ensures consistent behavior across all places where BBCode is displayed.
  *

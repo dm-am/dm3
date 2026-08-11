@@ -35,7 +35,7 @@ const SKIP_DIRS = new Set(["node_modules", "dist", "coverage"]);
 /** Files that declare a modal without owning its behaviour, and why. */
 const NOT_A_SHELL: Record<string, string> = {
   "shared/ui/Layout/Dialog.vue":
-    "the vue-final-modal tier: the library owns focus, Escape and the scroll lock, and the attribute here is a prop forwarded to it",
+    "the vue-final-modal tier: the library owns focus and Escape, and the attribute here is a prop forwarded to it. It also forwards a scroll lock, and that one changes nothing on this site, because Reset.sass already holds html, body and #app at overflow: hidden and there is no page scroll under a dialog to take away. The prop stays as the library's own contract, not as what keeps the page still",
 };
 
 /** The self-rolled modals, so an empty walk cannot pass for a clean one. */

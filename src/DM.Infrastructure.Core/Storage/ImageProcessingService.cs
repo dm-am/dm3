@@ -30,7 +30,8 @@ internal class ImageProcessingService : IImageProcessingService
     /// <summary>
     /// Maximum decoded image area (W*H pixels) —
     /// protection from decompression-bomb attacks (a 1 KB PNG expanding
-    /// to 50000×50000). 67 million pixels ≈ 8K resolution.
+    /// to 50000×50000). 67 million pixels is the square of MaxDimension
+    /// (8192×8192), not 8K UHD — that is 33 million.
     /// </summary>
     public const long MaxDecodedPixels = 64L * 1024 * 1024;
 

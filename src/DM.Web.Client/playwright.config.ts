@@ -11,18 +11,18 @@ const baseURL = APP_BASE_URL;
 
 export default defineConfig({
   testDir: "./e2e/tests",
-  // Логин выполняется один раз за прогон и сохраняется в storageState:
-  // эндпоинт входа ограничен пятью запросами в минуту, а спеки логинились
-  // каждая сама из параллельных воркеров.
+  // Sign-in happens once per run and is saved into storageState: the login
+  // endpoint is limited to five requests a minute, and the specs used to sign in
+  // each on its own from parallel workers.
   globalSetup: "./e2e/fixtures/global-setup.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  // Машиночитаемый отчет рядом с человекочитаемым: с retries: 2 тест, прошедший
-  // с третьей попытки, оставляет джобу зеленой, и единственным следом флейка был
-  // HTML-артефакт, который надо скачать и открыть. Из этого файла шаг CI печатает
-  // список флейков в сводку прогона.
+  // A machine-readable report next to the human-readable one: with retries: 2 a
+  // test that passes on the third attempt leaves the job green, and the only trace
+  // of the flake was an HTML artifact somebody had to download and open. The CI
+  // step prints the list of flakes into the run summary from this file.
   reporter: [
     ["html"],
     ["list"],

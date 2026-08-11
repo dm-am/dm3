@@ -29,10 +29,10 @@ Browser (Vue.js)
     ▼
 DM.Web.API
     │
-    ├─► ApiAuthenticationMiddleware
+    ├─► Middleware аутентификации
     │   └─► Расшифровка токена → userId, sessionId
     │
-    └─► AuthenticationService
+    └─► Сервис аутентификации
         └─► Валидация сессии и пользователя
               │
     ┌─────────┴─────────┐

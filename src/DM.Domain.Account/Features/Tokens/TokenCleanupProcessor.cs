@@ -11,7 +11,6 @@ internal class TokenCleanupProcessor : ITokenCleanupProcessor
     private readonly ITokenMaintenanceRepository _repository;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc cref="TokenCleanupProcessor" />
     public TokenCleanupProcessor(
         ITokenMaintenanceRepository repository,
         IDateTimeProvider dateTimeProvider)

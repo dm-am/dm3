@@ -482,10 +482,10 @@ describe("character routes of a game", () => {
 });
 
 /**
- * Каталог вариантов доступен только в dev-сборке: роут лежит внутри ветки
- * import.meta.env.DEV, которую rollup выбрасывает вместе с динамическим
- * импортом. Проверка живет здесь, потому что страница по правилам FSD не
- * импортирует роутер сама.
+ * The variants catalog is reachable only in a development build: the route sits
+ * inside an import.meta.env.DEV branch that rollup drops along with the dynamic
+ * import. The check lives here because, by the FSD rules, the page does not
+ * import the router itself.
  */
 describe("the mockup catalogs", () => {
   it("answer at their own routes in a development build", () => {

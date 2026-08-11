@@ -41,7 +41,7 @@
 
 ### Файлы картинок
 
-Место хранения: `src/assets/images/errors/`.
+Место хранения: `src/DM.Web.Client/src/assets/images/errors/`.
 
 ---
 

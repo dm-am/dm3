@@ -24,7 +24,9 @@ public class Comment : ISoftDeletable, IHasEditHistory<CommentEdit>
     public Guid CommentId { get; set; }
 
     /// <summary>
-    /// Forum topic identifier
+    /// Owner identifier: a polymorphic reference to a topic, game, blog or
+    /// publication. No database foreign key stands behind it, and the column
+    /// carries no discriminator - the owner type comes from the reading query.
     /// </summary>
     public Guid EntityId { get; set; }
 

@@ -18,7 +18,6 @@ internal class UsernameChangeExpiryProcessor : IUsernameChangeExpiryProcessor
     private readonly IUsernameChangeRepository _repository;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc cref="UsernameChangeExpiryProcessor" />
     public UsernameChangeExpiryProcessor(
         IUsernameChangeRepository repository,
         IDateTimeProvider dateTimeProvider)

@@ -17,7 +17,6 @@ internal class GamePopularityRepository : IGamePopularityRepository
 
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc cref="GamePopularityRepository" />
     public GamePopularityRepository(DmDbContext dbContext) => _dbContext = dbContext;
 
     /// <inheritdoc />

@@ -385,12 +385,8 @@ API на один адрес, прячет обе ошибки до дня, ко
 
 ## Health Endpoints
 
-| Endpoint | Назначение |
-|----------|-----------|
-| `GET /_health` | Liveness (Docker) |
-| `GET /_ready` | Readiness (DB checks) |
-| `GET /_health/detail` | Детальная информация |
-| `GET /metrics` | Prometheus metrics |
+Адреса и что проверяет каждый описаны в справочнике конфигурации:
+[CONFIGURATION.md](../references/CONFIGURATION.md#health-endpoints).
 
 ---
 

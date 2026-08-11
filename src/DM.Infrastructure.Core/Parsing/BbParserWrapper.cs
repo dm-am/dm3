@@ -266,7 +266,7 @@ public partial class BbParserWrapper : IBbParser
     [GeneratedRegex(@"\[(code|noparse)\][\s\S]*?\[/\1\]", RegexOptions.IgnoreCase)]
     private static partial Regex VerbatimBlockRegex();
 
-    /// <inheritdoc cref="VerbatimBlockRegex"/>
+    /// <summary>Match the placeholder that stands in for one extracted verbatim block.</summary>
     private static readonly Regex VerbatimPlaceholder = PlaceholderPattern(VerbatimKind);
 
     /// <summary>Match empty spoiler-head anchor (no title text) for post-processing</summary>
@@ -495,11 +495,12 @@ public partial class BbParserWrapper : IBbParser
     /// NodeTree wrapper that restores [img] and [link] placeholders in output.
     /// Public so BbConverter can cast to it and call the correct methods.
     ///
-    /// Implementation note: Uses int.Parse() for placeholder indices (not TryParse) because:
-    /// 1. Placeholders are internally generated via List.Count - always valid integers
-    /// 2. Regex pattern (\d+) guarantees only digits are captured
-    /// 3. Parse() provides fail-fast behavior if internal contracts are violated
-    /// 4. TryParse() would mask bugs in placeholder generation logic
+    /// Implementation note: placeholder indices go through int.Parse(), not
+    /// TryParse, and that is safe rather than strict: the pattern captures (\d+)
+    /// and the indices are generated from List.Count, so a non-numeric index
+    /// cannot reach here. It is not a fail-fast guard either — an index past the
+    /// end of its list is not thrown on, the handler returns the placeholder into
+    /// the output as it stands.
     /// </summary>
     public class WrappedNodeTree : NodeTree
     {

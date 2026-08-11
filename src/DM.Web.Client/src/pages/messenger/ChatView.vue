@@ -245,7 +245,6 @@ function handleScroll() {
   }, 150);
 }
 
-// autoGrowEdit removed - BBCodeEditor handles its own sizing
 // Header formatting (time / tooltips) is fully owned by ChatMessage — the
 // page renders no header markup of its own.
 

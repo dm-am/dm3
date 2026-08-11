@@ -185,11 +185,12 @@ internal class CharacterService : ICharacterService
 
         var attributeInputs = await BuildAttributeInputs(characterToUpdate, updateCharacter.Attributes);
 
-        // Никакого статуса: место персонажа в игре меняет ChangeStatusAsync.
-        // Здесь оно менялось по паре "целевой статус плюс три флага", из которой
-        // намерение приходилось угадывать, а при неугаданном сочетании запрос
-        // отвечал 500. И право проверялось через IsAllowed: запрещенное изменение
-        // молча выпадало, а ответ был 200 со старым статусом.
+        // No status here: a character's place in the game is moved by
+        // ChangeStatusAsync. This method used to move it through a target status plus
+        // three flags, a pair the intent had to be guessed from, and a combination
+        // that guessed wrong answered 500. The right was checked through IsAllowed as
+        // well: a forbidden change fell through silently and the answer was 200 with
+        // the old status.
         var entity = new UpdateCharacterEntity
         {
             CharacterId = updateCharacter.CharacterId,
@@ -278,8 +279,8 @@ internal class CharacterService : ICharacterService
                 throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.UnknownStatusTransition);
         }
 
-        // Возврат в игру снимает все три причины ухода: иначе воскрешенный
-        // персонаж остается помеченным мертвым и второе воскрешение невозможно.
+        // Coming back to the game clears all three reasons for leaving: otherwise a
+        // revived character stays marked dead and a second revival is impossible.
         if (entity.Status == CharacterStatus.Active && character.Status == CharacterStatus.Retired)
         {
             entity.IsDead = false;
@@ -291,8 +292,8 @@ internal class CharacterService : ICharacterService
         await _producer.SendAsync(
             new List<EventType> { EventType.ChangedCharacter, statusEvent }, characterId);
 
-        // Игрок, потерявший последнего активного персонажа, остается у игры
-        // читателем, а не выпадает из нее совсем.
+        // A player who has lost their last active character stays with the game as a
+        // reader rather than dropping out of it entirely.
         if (entity.Status != CharacterStatus.Active &&
             character.Status == CharacterStatus.Active &&
             !character.IsNpc)

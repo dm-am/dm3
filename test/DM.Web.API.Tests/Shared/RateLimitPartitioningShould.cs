@@ -111,7 +111,7 @@ public class RateLimitPartitioningShould : UnitTestBase
 
     /// <summary>
     /// A token the cipher accepts, carrying the given account. The session half
-    /// is deliberately different every time: the budget belongs to the account, 
+    /// is deliberately different every time: the budget belongs to the account,
     /// not to the browser it was last opened in.
     /// </summary>
     private string TokenOf(Guid userId)

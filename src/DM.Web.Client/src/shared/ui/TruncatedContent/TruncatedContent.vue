@@ -3,8 +3,7 @@
  * Unified "показать полностью" truncation primitive.
  *
  * Wraps the shared useContentTruncation composable with a consistent
- * template + style for every caller (Topic, GamePost, Comment, ChatMessage,
- * ProfileBestPost). Handles:
+ * template + style for every caller. Handles:
  *
  *   - overflow detection against a (reactive) max-height budget
  *   - LINE-SNAPPED clamp: the applied collapsed max-height is derived from

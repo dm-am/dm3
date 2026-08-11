@@ -84,8 +84,6 @@ const {
   canLike: canLikeMsg,
 } = useMessagePermissions(user);
 
-// isModerator provided by useMessagePermissions above
-
 const canSendMessages = computed(() => Boolean(user.value));
 
 // ─────────────────────────────────────────────────────────────
@@ -156,8 +154,6 @@ const {
     failed: () => Boolean(errorAfter.value),
   },
 });
-
-// autoGrowEdit removed - BBCodeEditor handles its own sizing
 
 // Edit state — editText holds the message's original BBCode, used only to
 // seed ChatMessage's editor on entering edit mode (:edit-text is consumed
@@ -318,8 +314,6 @@ const expandedDeletedMessages = ref<Set<string>>(new Set());
 const messagesWithSeparators = computed((): MessageOrSeparator[] =>
   groupMessagesWithSeparators(messages.value ?? []),
 );
-
-// isDateSeparator imported from shared/lib/utils/chat
 
 // Virtual scroll for message list
 const itemCount = computed(() => messagesWithSeparators.value.length);

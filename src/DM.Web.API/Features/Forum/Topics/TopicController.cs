@@ -87,7 +87,7 @@ public class TopicController : ControllerBase
     ///
     /// Supports the same filters and sort options as the per-board
     /// endpoint: search, authorUsernames, createdFromUtc, createdToUtc,
-    /// sortBy (lastActivity / created / comments / title / likes),
+    /// sortBy (lastActivity / created / title / likes),
     /// sortOrder (asc / desc), and standard paging (skip / take).
     /// </remarks>
     /// <param name="q">Filter, sort and paging parameters</param>
