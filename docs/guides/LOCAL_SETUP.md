@@ -36,7 +36,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 - **Frontend:** http://localhost:5173
 - **API/Swagger:** http://localhost:5000
 - **Health:** http://localhost:5000/_health (liveness), http://localhost:5000/_ready (readiness)
-- **MinIO:** http://localhost:9001 (credentials из `docker/.env`) — bucket `dm-uploads` создается автоматически при первом старте API
+- **MinIO:** http://localhost:9001 (credentials из `docker/.env`) — bucket `dm-uploads` создает контейнер minio-init при подъеме стека, он же выставляет анонимный доступ на публичные префиксы
 - **imgproxy:** http://localhost:8080 (on-the-fly resize + AVIF/WebP negotiation)
 
 ---

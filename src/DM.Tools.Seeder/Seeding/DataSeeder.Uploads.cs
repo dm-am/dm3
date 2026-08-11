@@ -75,12 +75,11 @@ internal sealed partial class DataSeeder
             processed = await _imageProcessing.ProcessAsync(input, declaredContentType);
         }
 
-        var folder = type switch
-        {
-            UploadType.UserAvatar => "avatars",
-            UploadType.CharacterAvatar => "characters",
-            _ => "misc",
-        };
+        // The third copy of the same list, and the one that disagreed: a type
+        // outside the two it named landed in "misc", a prefix nothing serves and
+        // no policy grants. UploadFolder is where the mapping is decided, and it
+        // throws on an unknown type rather than inventing a folder for it.
+        var folder = UploadFolder.For(type);
         var objectKey = string.IsNullOrEmpty(_cdnConfig.Folder)
             ? $"{folder}/{userId:N}_{uploadId:N}{processed.Extension}"
             : $"{_cdnConfig.Folder}/{folder}/{userId:N}_{uploadId:N}{processed.Extension}";

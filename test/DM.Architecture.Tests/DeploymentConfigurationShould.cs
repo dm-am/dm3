@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using DM.Domain.Core.Uploads;
 using FluentAssertions;
 using Xunit;
 
@@ -315,6 +316,69 @@ public class DeploymentConfigurationShould
     /// The scoped accounts have to exist before the first upload, and only root
     /// can create them — which is the whole of what root is still for.
     /// </summary>
+    /// <summary>
+    /// Anonymous reads reach the prefixes the product declared public, and no
+    /// others.
+    /// </summary>
+    /// <remarks>
+    /// One invariant, one owner. The prefixes are a product decision and live in
+    /// UploadFolder; the policy is an administrative call and is applied by the
+    /// bootstrap container, because the account the application runs as is
+    /// deliberately not allowed to make one. Nothing held the two together, and
+    /// they disagreed: the script granted mc's readonly policy on the whole
+    /// bucket — GetObject on every key and anonymous ListBucket with it — while
+    /// the application asserted a per-prefix policy it had no right to set, and
+    /// swallowed the refusal. The declaration everybody read was the one that
+    /// never took effect.
+    ///
+    /// Compared as sets of prefixes rather than by matching the text: the script
+    /// spells them as ARNs and the domain as folder names, and the point is that
+    /// they name the same things.
+    /// </remarks>
+    [Fact]
+    public void GrantAnonymousReadsOnlyToThePrefixesTheProductDeclaredPublic()
+    {
+        var script = File.ReadAllText(Path.Combine(DockerDirectory, "minio-init.sh"));
+
+        var declared = UploadFolder.AnonymouslyReadable
+            .Select(UploadFolder.For)
+            .OrderBy(folder => folder, StringComparer.Ordinal)
+            .ToArray();
+        declared.Should().NotBeEmpty("the rule below is written in terms of those prefixes");
+
+        var anonymousBlock = Between(script, "dm-anonymous-policy.json <<EOF", "EOF");
+        anonymousBlock.Should().NotBeNullOrWhiteSpace(
+            "the anonymous policy is written as a document, not as `mc anonymous set`: " +
+            "a prefixed set adds a statement without removing the one already in place");
+
+        var granted = Regex.Matches(anonymousBlock!, @"arn:aws:s3:::\$BUCKET/([^""*]+)/\*")
+            .Select(match => match.Groups[1].Value)
+            .OrderBy(folder => folder, StringComparer.Ordinal)
+            .ToArray();
+
+        granted.Should().Equal(declared,
+            "UploadFolder.AnonymouslyReadable is where the decision is made, and a type " +
+            "added to it without the script following is a prefix nobody can read");
+        anonymousBlock.Should().NotContain("arn:aws:s3:::$BUCKET/\"",
+            "a bucket-wide grant makes every later type public by default");
+        anonymousBlock.Should().NotContain("s3:ListBucket",
+            "listing turns the random suffix in an object key into a lookup");
+    }
+
+    /// <summary>The text between two markers, or null when the opening one is absent.</summary>
+    private static string? Between(string text, string opening, string closing)
+    {
+        var start = text.IndexOf(opening, StringComparison.Ordinal);
+        if (start < 0)
+        {
+            return null;
+        }
+
+        start += opening.Length;
+        var end = text.IndexOf(closing, start, StringComparison.Ordinal);
+        return end < 0 ? null : text[start..end];
+    }
+
     [Fact]
     public void CreateTheScopedObjectStoreAccountsFromABootstrapContainer()
     {

@@ -54,9 +54,6 @@ public class CoreModule : Module
             .As<IAmazonS3>()
             .SingleInstance();
 
-        // StorageBucketInitializer is registered via AddHostedService in Startup.cs
-        // (Autofac.IHostedService is not picked up by the ASP.NET Core host loop).
-
         // The single avatar image processing service: resize+crop
         // into Medium/Small WebP thumbnails, EXIF strip of the original, decompression-
         // bomb protection, magic-byte content-type detection, atomic

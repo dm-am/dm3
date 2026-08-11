@@ -35,9 +35,6 @@ internal static class HostedServiceExtensions
         // them out of the migration is what lets the migration stay generated.
         services.AddHostedService<ExpressionIndexInitializer>();
 
-        // Creates the bucket the upload endpoints write into.
-        services.AddHostedService<StorageBucketInitializer>();
-
         services.AddHostedService<TokenCleanupService>();
         services.AddHostedService<SessionCleanupService>();
         services.AddHostedService<PendingRegistrationCleanupService>();
