@@ -329,18 +329,22 @@ public partial class BbParserWrapper : IBbParser
     /// positions the value lands in — element text (the quote author line, the
     /// addressee line) and attribute value (data-bb-addressees) — and it costs
     /// the reader nothing, because the browser decodes the entities back for
-    /// display and for getAttribute. It is deliberately limited to the
-    /// characters that carry meaning in HTML: brackets are left alone so that
-    /// the value stays the same string the private-addressee snapshot is keyed
-    /// by, and an [img] nested inside an attribute is left to render as the
-    /// element it is — harmless once a URL can no longer smuggle whitespace
-    /// (see SanitizeUrl), and visible to everyone who sees the post.
+    /// display and for getAttribute. Brackets are left alone, so an [img] nested
+    /// inside an attribute still renders as the element it is: harmless once a
+    /// URL can no longer smuggle whitespace (see SanitizeUrl), and visible to
+    /// everyone who sees the post.
+    ///
+    /// What it does change is the string the parser then reports as the
+    /// attribute value, while the private-addressee snapshot is keyed by the raw
+    /// text instead. The two ends are held together by
+    /// <see cref="BbAttributeEncoding"/>, whose Decode the visibility filter runs
+    /// before it looks a block up.
     /// </remarks>
     private string EncodeAttributeValues(string input) =>
         _attributeTagPattern is null
             ? input
             : _attributeTagPattern.Replace(input, match =>
-                $"[{match.Groups[1].Value}=\"{System.Web.HttpUtility.HtmlEncode(match.Groups[2].Value)}\"]");
+                $"[{match.Groups[1].Value}=\"{BbAttributeEncoding.Encode(match.Groups[2].Value)}\"]");
 
     /// <summary>
     /// Create wrapper around existing parser

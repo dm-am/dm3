@@ -99,9 +99,16 @@ public static class PermissionFilteringVisitor
             return true;
 
         // Addressee-forever: the character owner of an addressed character
-        // sees the block. Resolved per-block at post save time, keyed by
-        // the raw tag attribute string.
-        var attribute = tagNode.AttributeValue ?? string.Empty;
+        // sees the block. Resolved per-block at post save time, keyed by the raw
+        // tag attribute string - which is not what the parser reports, because
+        // the render path encodes the value before the parser ever sees it. So
+        // the encoding is undone here, at the one place that compares the two
+        // (see BbAttributeEncoding). Without that step every name carrying a
+        // character HTML gives meaning to - an apostrophe is enough, D'Artagnan
+        // is an ordinary name - missed its own entry, and the block was hidden
+        // from the player it was addressed to. Safe and silent, which is why
+        // nobody reported it.
+        var attribute = BbAttributeEncoding.Decode(tagNode.AttributeValue);
         if (viewerId.HasValue &&
             ctx.PrivateAddresseeOwnerUserIdsByAttribute.TryGetValue(attribute, out var allowed) &&
             allowed.Contains(viewerId.Value))
