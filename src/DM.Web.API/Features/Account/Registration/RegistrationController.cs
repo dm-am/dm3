@@ -25,8 +25,9 @@ namespace DM.Web.API.Features.Account.Registration;
 ///    (token in the X-Dm-Account-Token header)
 ///
 /// For availability checks, use AvailabilityController:
-/// - GET /v1/account/check-email - Check email availability
-/// - GET /v1/account/check-username - Check username availability
+/// - POST /v1/account/check-email - Check email availability
+/// - POST /v1/account/check-username - Check username availability
+///   (the value goes in the body: a query string is written to the access log)
 /// </remarks>
 [ApiController]
 [Route("v1/account")]

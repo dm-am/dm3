@@ -65,9 +65,9 @@ internal sealed partial class DataSeeder
         // there and not here.
         // Note: All records in Users table are fully activated. For pending activation testing, use PendingRegistration.
         //
-        // Username policy (see docs/conventions/USERNAME_POLICY.md):
-        // - Length: 2-20 characters
-        // - Allowed: a-z A-Z а-я А-Я еЕ 0-9 _ - . space
+        // Username policy: see docs/conventions/USERNAME_POLICY.md. The list that
+        // stood here was the allow-list model the document does not use, so it
+        // named characters the validators refuse and omitted ones they accept.
         var testAccounts = new[]
         {
             // === All roles (one per role) ===
