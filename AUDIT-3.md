@@ -80,13 +80,13 @@
 Пересчитывается из строк индекса при каждом закрытии, руками не пишется: число,
 написанное отдельно от таблицы, расходится с ней на первой же партии.
 
-**Закрыто 13 из 357 (4%), открыто 344.**
+**Закрыто 15 из 357 (4%), открыто 342.**
 
 | Тяжесть | Всего | Закрыто | Осталось |
 |---|---|---|---|
 | КРИТИЧНО | 6 | 6 | 0 |
-| ВАЖНО | 53 | 5 | 48 |
-| ЗАМЕТНО | 140 | 1 | 139 |
+| ВАЖНО | 53 | 6 | 47 |
+| ЗАМЕТНО | 140 | 2 | 138 |
 | МЕЛОЧЬ | 158 | 1 | 157 |
 
 | Срез | Всего | Закрыто | Осталось |
@@ -99,7 +99,7 @@
 | api | 23 | 0 | 23 |
 | comments | 23 | 0 | 23 |
 | security | 22 | 4 | 18 |
-| persistence | 21 | 2 | 19 |
+| persistence | 21 | 4 | 17 |
 | auth | 21 | 0 | 21 |
 | frontend-arch | 19 | 2 | 17 |
 | domain | 19 | 1 | 18 |
@@ -509,7 +509,7 @@
 | domain-01 | ВАЖНО | Сайдбар грузит полные строки Rooms, PostPendencies и по два полных User на каждую отложку, а вызывающий все это выбрасывает | `src/DM.Infrastructure.Persistence/Repositories/Game/GameRepository.cs:765-790; src/DM.Dom…` | Открыто | |
 | persistence-01 | ВАЖНО | FlushAsync берет ParentId у произвольного живого маркера чата. Если выбранный документ принадлежит другому участнику (для диалога это примерно половина случаев… _(уточнено)_ | `src/DM.Infrastructure.Persistence/Shared/UnreadCounters/UnreadCountersRepository.cs:216-2…` | Закрыто | Исправлено — FlushAsync сначала читает собственный маркер читателя и обновляет его на месте, сохраняя ParentId. Заимствование родителя у соседнего маркера осталось только там, где его неоткуда больше взять, и где все читатели сущности делят одного родителя. Уточнение по ходу проверки: счетчик списывался верно, ломался ParentId, и беседа выпадала из родительских выборок, а не утекала чужому. Интеграционный тест KeepTheReadersOwnParentWhenAnotherParticipantsMarkerComesFirst на контейнерном Mongo, проверен снятием |
 | persistence-02 | ВАЖНО | Голосование не проверяет, что пользователь уже голосовал: одним аккаунтом можно занять все варианты | `src/DM.Infrastructure.Persistence/Repositories/Community/PollRepository.cs:294-305` | Закрыто | Исправлено — фильтр Vote отвергает документ, в котором голосующий уже числится в любом из вариантов, и возвращает null; PollService превращает null в 409 AlreadyVoted. Правило в фильтре, а не в проверке перед записью: два одновременных запроса иначе оба прочитали бы бюллетень без этого голоса. Три интеграционных теста PollVotingShould на живом Mongo, проверены снятием фильтра |
-| persistence-03 | ВАЖНО | Непрочитанное в игровых чат-комнатах не работает: маркер на room.Id, инкремент и чтение по chat.Id | `src/DM.Domain.Game/Features/Rooms/RoomService.cs:82, src/DM.Domain.Messaging/Features/Mes…` | Открыто | |
+| persistence-03 | ВАЖНО | Непрочитанное в игровых чат-комнатах не работает: маркер на room.Id, инкремент и чтение по chat.Id | `src/DM.Domain.Game/Features/Rooms/RoomService.cs:82, src/DM.Domain.Messaging/Features/Mes…` | Закрыто | Исправлено — Chat получил RoomId и вычисляемое UnreadEntityId (RoomId ?? Id): комната и чат это одна сущность под двумя идентификаторами, и маркер существует под идентификатором комнаты, потому что ее половина его создает, суммирует в бейдж игры и удаляет. Инкремент, чтение, сброс и удаление в модуле сообщений переведены на него. Два сквозных теста ChatRoomMessagesShould, проверены снятием |
 | auth-01 | ВАЖНО | Операций, объявляющих 401 без блока security, — 103, а не 105; под /v1/moderation их 49 из 52, а не "весь срез". Вторая причина, помимо class-level атрибута: R… | `src/DM.Web.API/Shared/Authentication/AuthenticationSwaggerFilter.cs:16` | Открыто | |
 | auth-02 | ВАЖНО | GET /v1/blogs публикует как единственную схему 200 проекцию BlogRef, форма по умолчанию не опубликована | `src/DM.Web.API/Features/Blog/Blogs/BlogController.cs:45-46` | Открыто | |
 | auth-03 | ВАЖНО | Optional<T> публикуется как объект {value}, а на проводе едет голое значение | `src/DM.Web.API/Features/Game/Rooms/UpdateRoomRequest.cs:47` | Открыто | |
@@ -575,7 +575,7 @@
 | domain-15 | ЗАМЕТНО | DATA_STORAGE.md декларирует полиморфную ссылку как TargetType + TargetId и приводит в пример комментарии, у которых дискриминатора нет | `docs/conventions/DATA_STORAGE.md:106, 157-163; Entities/Shared/Comment.cs:29` | Открыто | |
 | persistence-04 | ЗАМЕТНО | Счетчик исключенного участника не удаляется и продолжает расти на чат, который тот больше не видит; бейдж завышен, и из интерфейса сбросить его нечем (эндпоинт… _(уточнено)_ | `src/DM.Domain.Messaging/Features/Chats/ChatService.cs:217-237` | Открыто | |
 | persistence-05 | ЗАМЕТНО | Индекс IX_UserSessions_SessionId мертв, комментарий описывает несуществующий код | `src/DM.Infrastructure.Persistence/MongoIntegration/MongoIndexInitializer.cs:121-128, dock…` | Открыто | |
-| persistence-06 | ЗАМЕТНО | AutoMapper игнорирует UnreadCount с комментарием "Set in service", но сервис его не выставляет | `src/DM.Web.API/Features/Game/ChatRooms/ChatRoomMappingProfile.cs:18` | Открыто | |
+| persistence-06 | ЗАМЕТНО | AutoMapper игнорирует UnreadCount с комментарием "Set in service", но сервис его не выставляет | `src/DM.Web.API/Features/Game/ChatRooms/ChatRoomMappingProfile.cs:18` | Закрыто | Исправлено — ChatRoom.UnreadCount маппится из UnreadPostsCount комнаты вместо Ignore с комментарием "Set in service": сервис его никогда не выставлял. Та же причина, что и у persistence-03, и закрыто тем же изменением; покрыто ChatRoomMessagesShould, который читает число именно из этого поля ответа |
 | persistence-07 | ЗАМЕТНО | UserSettings пишется тремя способами из двух репозиториев, два ломаются об уникальный индекс | `src/DM.Infrastructure.Persistence/Repositories/Personal/UserRepository.cs:368,396 и BotLi…` | Открыто | |
 | persistence-08 | ЗАМЕТНО | GetSchema падает на .First(), когда автора нет в Postgres, соседние методы тот же случай обрабатывают | `src/DM.Infrastructure.Persistence/Repositories/Game/AttributeSchemaRepository.cs:99` | Открыто | |
 | persistence-09 | ЗАМЕТНО | То же самое, но падение — InvalidOperationException из schemaId!.Value (а при удаленной схеме — из FirstAsync), результат 500 вместо 400. _(уточнено)_ | `src/DM.Domain.Game/Features/Characters/UpdateCharacterValidator.cs:40-47, src/DM.Infrastr…` | Открыто | |
