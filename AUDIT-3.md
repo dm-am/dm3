@@ -80,18 +80,18 @@
 Пересчитывается из строк индекса при каждом закрытии, руками не пишется: число,
 написанное отдельно от таблицы, расходится с ней на первой же партии.
 
-**Закрыто 33 из 357 (9%), открыто 324.**
+**Закрыто 35 из 357 (10%), открыто 322.**
 
 | Тяжесть | Всего | Закрыто | Осталось |
 |---|---|---|---|
 | КРИТИЧНО | 6 | 6 | 0 |
-| ВАЖНО | 53 | 24 | 29 |
+| ВАЖНО | 53 | 26 | 27 |
 | ЗАМЕТНО | 140 | 2 | 138 |
 | МЕЛОЧЬ | 158 | 1 | 157 |
 
 | Срез | Всего | Закрыто | Осталось |
 |---|---|---|---|
-| meta | 29 | 0 | 29 |
+| meta | 29 | 1 | 28 |
 | cicd | 25 | 0 | 25 |
 | modules | 24 | 10 | 14 |
 | authz | 24 | 0 | 24 |
@@ -101,7 +101,7 @@
 | security | 22 | 7 | 15 |
 | persistence | 21 | 4 | 17 |
 | auth | 21 | 9 | 12 |
-| frontend-arch | 19 | 2 | 17 |
+| frontend-arch | 19 | 3 | 16 |
 | domain | 19 | 1 | 18 |
 | tests | 18 | 0 | 18 |
 | realtime | 17 | 0 | 17 |
@@ -535,7 +535,7 @@
 | security-04 | ВАЖНО | Оценку посту можно поставить, не имея доступа к комнате: GetPostInfoAsync читает пост без GameAccessibilityFilters.RoomAvailable. Про удаленные посты утвержден… _(уточнено)_ | `src/DM.Infrastructure.Persistence/Repositories/Game/PostReviewRepository.cs:197-209; src/…` | Закрыто | Исправлено — GetPostInfoAsync читает пост через Rooms с GameAccessibilityFilters.RoomAvailable(userId), как и все прочие чтения постов; идентификатор оценивающего добавлен в контракт и передается из PostReviewService. Про удаленные посты вторая половина находки была отклонена еще при проверке и ничего не потребовала. Тест ReadThePostAsTheRaterSoRoomAccessApplies плюс моки, настроенные на конкретного пользователя; снятие фильтра ловит архитектурный гейт RepositoryScopeShould поименно |
 | security-05 | ВАЖНО | Модерационные сервисы отвечают 500 вместо 403 на недостаток прав | `src/DM.Domain.Moderation/Features/Warnings/BanService.cs:86, 99, 115, 212; src/DM.Domain.…` | Закрыто | Исправлено — восемь UnauthorizedAccessException в BanService и WarningService заменены на HttpException(Forbidden) с русскими сообщениями, ровно как в соседних проверках тех же файлов. Заодно найден и исправлен девятый такой же в AuthenticationService.TerminateSession, где строкой ниже стоит комментарий, объясняющий, почему непрокинутый тип исключения доезжает до клиента как 500. Middleware не трогали: глобальный маппинг UnauthorizedAccessException превратил бы в 403 и системные отказы доступа |
 | security-06 | ВАЖНО | Удаление ревью разрешено модератору, а документация закрепляет это за старшим модератором | `src/DM.Domain.Game/Authorization/GameReviewIntentionResolver.cs:31; src/DM.Domain.Game/Au…` | Закрыто | Исправлено — удаление ревью игры, ревью поста и признания поднято с Moderator до SeniorModerator в трех резолверах, по таблице "Модерация контента" в AUTHORIZATION.md. Правился код, а не документ: в той же таблице темы и комментарии форума стоят на Moderator, то есть разделение проведено сознательно, и удаление высказанного мнения вместе с рейтингом стоит рядом с модерацией профилей. Тесты трех резолверов перенесли Moderator из разрешающего набора в отказной |
-| frontend-arch-03 | ВАЖНО | Раздел истории безопасности бьет в несуществующий маршрут /v1/account/security | `src/DM.Web.Client/src/entities/user/api/accountApi.ts:252-255; src/DM.Web.API/Features/Ac…` | Открыто | |
+| frontend-arch-03 | ВАЖНО | Раздел истории безопасности бьет в несуществующий маршрут /v1/account/security | `src/DM.Web.Client/src/entities/user/api/accountApi.ts:252-255; src/DM.Web.API/Features/Ac…` | Закрыто | Исправлено — клиент зовет account/logs с параметром take (адреса account/security нет ни в одном контроллере, а cap назывался limit), getLoginHistory шлет type=login вместо logins. Фильтр типа на сервере стал перечислением SecurityLogType, чтобы неизвестное слово давало 400, а не весь журнал молча. Главное: заведен гейт против самого класса — OpenApiContractShould пишет artifacts/openapi-routes.json со всеми опубликованными адресами, а routes.spec.ts держит к нему каждый литеральный путь клиента. Проверен снятием: с прежним адресом краснеет поименно. Гейт нашел еще три расхождения, которых в аудите не было: вызов удаленного users/by-role, мертвый getUsernameHistory в никуда и склейка query с путем в подписках |
 | frontend-arch-04 | ВАЖНО | Автовход после активации создает невидимую сессию без контекста: активность не обновляется, в списке устройств запись без адреса, входа в журнале нет | `src/DM.Domain.Account/Features/Authentication/AuthenticationService.cs:287` | Открыто | |
 | frontend-arch-05 | ВАЖНО | Детектор подозрительного входа слепнет: серия неудачных попыток вытесняет из окна прошлые успешные входы | `src/DM.Domain.Account/Features/Authentication/SuspiciousLoginDetector.cs:25,35-44; src/DM…` | Открыто | |
 | frontend-ux-01 | ВАЖНО | Написание [img="URL"] обходит SanitizeUrl целиком: ни схемы, ни блокировки loopback/приватных адресов, ни spoiler-гейта, ни referrerpolicy | `src/DM.Infrastructure.Core/Parsing/BbParserProvider.cs:63-66,117-123; BbParserWrapper.cs:…` | Открыто | |
@@ -548,7 +548,7 @@
 | docs-01 | ВАЖНО | Комментарии обещают автобан по 6 баллам за 30 дней — в коде нет ни автобана, ни окна в 30 дней | `src/DM.Web.API/Features/Moderation/Warnings/ViolatorDtos.cs:14,29; WarningController.cs:1…` | Открыто | |
 | docs-02 | ВАЖНО | Расхождение не между активацией и сменой логина (обе DTO несут одну и ту же allow-list регулярку), а между DataAnnotations-слоем API и доменным deny-list: Acti… _(уточнено)_ | `src/DM.Web.API/Features/Account/Registration/ActivationRequest.cs:18,23; Credentials/User…` | Открыто | |
 | deps-dead-01 | ВАЖНО | Ратчет фронта не поднимали с первого аудита: 16/16 против измеренных 33.59/33.59 и 26 против 36.21. Утверждение комментария о "чуть ниже измеренного" верно тол… | `src/DM.Web.Client/vite.config.ts:42-56 (lines: 16 на строке 53), src/DM.Web.Client/covera…` | Открыто | |
-| meta-01 | ВАЖНО | Раздел "Журнал безопасности" ходит на несуществующий адрес account/security и всегда пуст | `src/DM.Web.Client/src/entities/user/api/accountApi.ts:255` | Открыто | |
+| meta-01 | ВАЖНО | Раздел "Журнал безопасности" ходит на несуществующий адрес account/security и всегда пуст | `src/DM.Web.Client/src/entities/user/api/accountApi.ts:255` | Закрыто | Исправлено тем же изменением, что и frontend-arch-03: это одна и та же находка с двух срезов — раздел "Журнал безопасности" ходил на account/security, которого не существует, и всегда был пуст |
 | modules-11 | ЗАМЕТНО | Машина статусов Start/Freeze/Finish/Close/Reopen и оба ее хелпера скопированы между GameService.cs:535-691 и BlogService.cs:691-785 вплоть до текста ошибки; те… _(уточнено)_ | `src/DM.Domain.Game/Features/Games/GameService.cs:535-691 и src/DM.Domain.Blog/Features/Bl…` | Открыто | |
 | modules-12 | ЗАМЕТНО | BlogService держит три ресурса в одном классе (910 строк, 16 зависимостей), тогда как блюпринт PATTERNS.md:406-420 задает Features/{Feature}/I{Feature}Service.… _(уточнено)_ | `src/DM.Domain.Blog/Features/Blogs/BlogService.cs:1-910` | Открыто | |
 | modules-13 | ЗАМЕТНО | Проверка черного списка в GameCommentService.cs:70-73 и BlogCommentService.cs:66-69 недостижима — резолвер отказал строкой выше; ответ остается 403, но с англи… | `src/DM.Domain.Game/Features/Comments/GameCommentService.cs:65-73 и src/DM.Domain.Blog/Fea…` | Открыто | |
