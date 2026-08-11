@@ -63,13 +63,6 @@ internal class CommunityUserApiService : ICommunityUserApiService
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<User>> GetUsersByRole(UserRole role)
-    {
-        var users = await _profileService.GetUsersByRole(role);
-        return new ListEnvelope<User>(users.Select(_mapper.Map<User>));
-    }
-
-    /// <inheritdoc />
     public async Task<Envelope<User>> GetUser(string username)
     {
         var user = await _userLookupService.GetAsync(username);

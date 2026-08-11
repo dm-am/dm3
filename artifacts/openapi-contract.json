@@ -1,7 +1,4 @@
 {
-  "DM.Domain.Core.Dto.Optional`1[[System.Guid, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]": [
-    "value"
-  ],
   "DM.Web.API.Features.Account.Authentication.LoginRequest": [
     "email",
     "password",

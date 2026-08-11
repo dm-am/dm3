@@ -79,9 +79,7 @@ public class ListBoundsShould : IntegrationTestBase
         "GET /v1/moderation/username-changes",
         "GET /v1/moderation/users/{username}/notes",
         "GET /v1/moderation/violators",
-        "GET /v1/moderation/warnings",
         "GET /v1/schemas",
-        "GET /v1/users/by-role/{role}",
         "GET /v1/users/me/invitations",
         "GET /v1/users/me/subscriptions",
         "GET /v1/users/{username}/achievements",
@@ -102,11 +100,17 @@ public class ListBoundsShould : IntegrationTestBase
     /// runs. Writing them down as "bounded by what they are" turned an open debt into
     /// a decision nobody made.
     ///
-    /// What closing them takes, and why it is not done here: paging a roster and a
-    /// notepad is not only a query change. Both screens render the whole collection
-    /// today, so a page size takes rows off the screen — a visible change, and this
-    /// project approves those one by one. The server half without the client half is
-    /// worse than either: the roster would silently lose its tail.
+    /// Sitewide warnings joined them for the same reason and a plainer one: the
+    /// repository reads every warning ever issued, ordered newest first, with no
+    /// Skip and no Take, while the screen above it is titled "latest warnings".
+    /// Nothing about a warning bounds how many there are.
+    ///
+    /// What closing them takes, and why it is not done here: paging a roster, a
+    /// notepad or a moderation log is not only a query change. All of those screens
+    /// render the whole collection today, so a page size takes rows off the screen —
+    /// a visible change, and this project approves those one by one. The server half
+    /// without the client half is worse than either: the roster would silently lose
+    /// its tail.
     /// </remarks>
     private static readonly HashSet<string> GrowingWithoutAPage = new(StringComparer.Ordinal)
     {
@@ -114,6 +118,7 @@ public class ListBoundsShould : IntegrationTestBase
         "GET /v1/characters/{id}/notepad",
         "GET /v1/games/{id}/characters",
         "GET /v1/games/{id}/notepad",
+        "GET /v1/moderation/warnings",
         "GET /v1/users/me/notepad",
     };
 

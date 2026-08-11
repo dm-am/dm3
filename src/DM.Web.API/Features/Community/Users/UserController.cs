@@ -41,16 +41,6 @@ public class UserController : ControllerBase
         Ok(await _userApiService.GetUsers(query));
 
     /// <summary>
-    /// Get users by role
-    /// </summary>
-    /// <param name="role">User role to filter by (e.g., Admin, Moderator, Player)</param>
-    /// <response code="200">List of users with the specified role</response>
-    [HttpGet("by-role/{role}", Name = nameof(GetUsersByRole))]
-    [ProducesResponseType(typeof(ListEnvelope<User>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetUsersByRole(UserRole role) =>
-        Ok(await _userApiService.GetUsersByRole(role));
-
-    /// <summary>
     /// Get user by username
     /// </summary>
     /// <param name="username">User username</param>

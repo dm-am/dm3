@@ -16,11 +16,6 @@ public interface ICommunityUserApiService
     Task<ListEnvelope<User>> GetUsers(UsersQuery query);
 
     /// <summary>
-    /// Get community users by role
-    /// </summary>
-    Task<ListEnvelope<User>> GetUsersByRole(UserRole role);
-
-    /// <summary>
     /// Get community user by username
     /// </summary>
     Task<Envelope<User>> GetUser(string username);
