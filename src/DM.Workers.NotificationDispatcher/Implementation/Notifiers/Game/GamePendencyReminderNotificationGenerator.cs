@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
 using DM.Infrastructure.Persistence;
@@ -16,11 +17,13 @@ namespace DM.Workers.NotificationDispatcher.Implementation.Notifiers.Game;
 internal class GamePendencyReminderNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
-    public GamePendencyReminderNotificationGenerator(DmDbContext dbContext)
+    public GamePendencyReminderNotificationGenerator(DmDbContext dbContext, IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
@@ -57,7 +60,7 @@ internal class GamePendencyReminderNotificationGenerator : BaseNotificationGener
         var recipientId = data.WaitingForUserId ?? data.CharacterAuthorId!.Value;
 
         // Calculate how long the pendency has been waiting
-        var daysPending = (int)(DateTimeOffset.UtcNow - data.CreatedUtc).TotalDays;
+        var daysPending = (int)(_dateTimeProvider.Now - data.CreatedUtc).TotalDays;
 
         // No ActorId: nobody performed this. The reminder comes from the schedule
         // that watches an unanswered pendency, and CreatedByUsername below names

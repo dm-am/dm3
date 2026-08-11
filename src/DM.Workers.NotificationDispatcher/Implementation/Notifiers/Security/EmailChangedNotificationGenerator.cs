@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
 using DM.Domain.Personal.Features.Notifications;
@@ -15,11 +16,13 @@ namespace DM.Workers.NotificationDispatcher.Implementation.Notifiers.Security;
 internal class EmailChangedNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
-    public EmailChangedNotificationGenerator(DmDbContext dbContext)
+    public EmailChangedNotificationGenerator(DmDbContext dbContext, IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
@@ -43,6 +46,10 @@ internal class EmailChangedNotificationGenerator : BaseNotificationGenerator
             yield break;
         }
 
+        // As a DateTime rather than the offset the clock answers with: the letter
+        // prints this field the way the serializer writes it down.
+        var eventTime = _dateTimeProvider.Now.UtcDateTime;
+
         yield return new CreateNotification
         {
             UsersInterested = new[] { userData.UserId },
@@ -52,7 +59,7 @@ internal class EmailChangedNotificationGenerator : BaseNotificationGenerator
             {
                 Username = userData.Username,
                 NewEmail = userData.Email,
-                EventTime = DateTime.UtcNow
+                EventTime = eventTime
             }
         };
     }

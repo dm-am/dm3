@@ -696,9 +696,7 @@ internal class BlogRepository : IBlogRepository
         var blog = await _dbContext.Blogs.FirstOrDefaultAsync(b => b.BlogId == blogId, ct);
         if (blog != null)
         {
-            blog.IsRemoved = true;
-            blog.DeletedByUserId = deletedByUserId;
-            blog.DeletedUtc = _dateTimeProvider.Now;
+            SoftDelete.Mark(blog, deletedByUserId, _dateTimeProvider.Now);
             await _dbContext.SaveChangesAsync(ct);
         }
     }
@@ -789,9 +787,7 @@ internal class BlogRepository : IBlogRepository
         var rubric = await _dbContext.Rubrics.FirstOrDefaultAsync(r => r.RubricId == rubricId, ct);
         if (rubric != null)
         {
-            rubric.IsRemoved = true;
-            rubric.DeletedByUserId = deletedByUserId;
-            rubric.DeletedUtc = _dateTimeProvider.Now;
+            SoftDelete.Mark(rubric, deletedByUserId, _dateTimeProvider.Now);
             await _dbContext.SaveChangesAsync(ct);
         }
     }
@@ -875,9 +871,7 @@ internal class BlogRepository : IBlogRepository
 
         if (publication != null)
         {
-            publication.IsRemoved = true;
-            publication.DeletedByUserId = deletedByUserId;
-            publication.DeletedUtc = _dateTimeProvider.Now;
+            SoftDelete.Mark(publication, deletedByUserId, _dateTimeProvider.Now);
 
             // Update blog publication count
             publication.Blog.PublicationCount--;

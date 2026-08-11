@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Caching;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
@@ -24,7 +25,6 @@ using DM.Testing;
 using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
@@ -108,9 +108,7 @@ public class GameStatusTransitionShould : UnitTestBase
         _producer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
         _producer.Setup(p => p.SendAsync(It.IsAny<IEnumerable<EventType>>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
 
-        var cache = Mock<IMemoryCache>();
-        var cacheEntry = Mock<ICacheEntry>();
-        cache.Setup(c => c.CreateEntry(It.IsAny<object>())).Returns(cacheEntry.Object);
+        var cache = Mock<ICache>();
 
         var logger = Mock<ILogger<GameService>>();
 

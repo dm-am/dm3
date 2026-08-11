@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Caching;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
@@ -25,7 +26,6 @@ using DM.Testing;
 using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
@@ -41,6 +41,7 @@ public class GameServiceShould : UnitTestBase
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<IGuidFactory> _guidFactory;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly Mock<ICache> _cache;
     private readonly GameService _service;
     private readonly Guid _currentUserId;
 
@@ -110,9 +111,7 @@ public class GameServiceShould : UnitTestBase
         _producer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
         _producer.Setup(p => p.SendAsync(It.IsAny<IEnumerable<EventType>>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
 
-        var cache = Mock<IMemoryCache>();
-        var cacheEntry = Mock<ICacheEntry>();
-        cache.Setup(c => c.CreateEntry(It.IsAny<object>())).Returns(cacheEntry.Object);
+        _cache = Mock<ICache>();
 
         var logger = Mock<ILogger<GameService>>();
 
@@ -136,7 +135,7 @@ public class GameServiceShould : UnitTestBase
             _guidFactory.Object,
             intentionConverter.Object,
             _producer.Object,
-            cache.Object,
+            _cache.Object,
             logger.Object);
     }
 
@@ -298,5 +297,33 @@ public class GameServiceShould : UnitTestBase
         // row, and the column stays empty unless the service hands the identity over.
         _repository.Verify(r => r.Delete(gameId, _currentUserId, It.IsAny<CancellationToken>()), Times.Once);
         _producer.Verify(p => p.SendAsync(EventType.DeletedGame, gameId), Times.Once);
+    }
+
+    /// <summary>
+    /// The tag list is not the tag catalog alone: every entry carries the number
+    /// of active games with that tag, so a day-long entry shows the filter the
+    /// counts of yesterday.
+    /// </summary>
+    [Fact]
+    public async Task CacheTheTagListOnlyAsLongAsItsGameCountsHold()
+    {
+        var tags = new[]
+        {
+            new GameTag
+            {
+                Id = Guid.NewGuid(), ShortId = 1, Title = "Fantasy", GroupTitle = "Setting", GamesCount = 3
+            }
+        };
+        _repository.Setup(r => r.GetTags(It.IsAny<CancellationToken>())).ReturnsAsync(tags);
+        _cache
+            .Setup(c => c.GetOrCreateAsync(
+                It.IsAny<object>(), It.IsAny<Func<Task<IEnumerable<GameTag>>>>(), It.IsAny<TimeSpan>()))
+            .Returns((object _, Func<Task<IEnumerable<GameTag>>> create, TimeSpan _) => create());
+
+        var result = await _service.GetTagsAsync();
+
+        result.Should().BeEquivalentTo(tags);
+        _cache.Verify(c => c.GetOrCreateAsync(
+            It.IsAny<object>(), It.IsAny<Func<Task<IEnumerable<GameTag>>>>(), CachePolicy.Medium), Times.Once);
     }
 }

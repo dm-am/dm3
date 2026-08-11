@@ -12,6 +12,7 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
 using DM.Infrastructure.Persistence.RelationalStorage;
+using DM.Infrastructure.Persistence.Shared.Comments;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
@@ -56,7 +57,7 @@ internal class PublicationCommentRepository : IPublicationCommentRepository
 
         dbQuery = ApplyFilters(dbQuery, query, excludeUserIds);
 
-        var orderedQuery = ApplySorting(dbQuery, query, _dbContext);
+        var orderedQuery = CommentSorting.Apply(dbQuery, query.SortBy, query.SortOrder, _dbContext);
 
         return await orderedQuery
             .Page(paging)
@@ -101,31 +102,6 @@ internal class PublicationCommentRepository : IPublicationCommentRepository
         }
 
         return query;
-    }
-
-    private static IOrderedQueryable<DbComment> ApplySorting(
-        IQueryable<DbComment> query,
-        PublicationCommentsQuery commentsQuery,
-        DmDbContext dbContext)
-    {
-        var sortBy = commentsQuery.SortBy?.ToLowerInvariant() ?? "created";
-        var isDescending = string.Equals(commentsQuery.SortOrder, "desc", StringComparison.OrdinalIgnoreCase);
-
-        return sortBy switch
-        {
-            "likes" => isDescending
-                ? query.OrderByDescending(c => dbContext.Likes.Count(l =>
-                    !l.IsRemoved &&
-                    l.EntityId == c.CommentId &&
-                    l.EntityType == LikeEntityType.Comment))
-                : query.OrderBy(c => dbContext.Likes.Count(l =>
-                    !l.IsRemoved &&
-                    l.EntityId == c.CommentId &&
-                    l.EntityType == LikeEntityType.Comment)),
-            _ => isDescending // "created" or default
-                ? query.OrderByDescending(c => c.CreatedUtc)
-                : query.OrderBy(c => c.CreatedUtc)
-        };
     }
 
     /// <inheritdoc />

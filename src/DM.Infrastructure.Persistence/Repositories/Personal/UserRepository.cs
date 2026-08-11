@@ -470,9 +470,9 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
 
         foreach (var oldUpload in oldUploads)
         {
-            oldUpload.IsRemoved = true;
-            // Starts the sweeper's grace period; see UnlinkAvatarUpload below.
-            oldUpload.DeletedUtc = _dateTimeProvider.Now;
+            // No author, and the moment starts the sweeper's grace period; see
+            // UnlinkAvatarUpload below.
+            SoftDelete.Mark(oldUpload, null, _dateTimeProvider.Now);
         }
 
         // Link new upload to user
@@ -504,8 +504,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
 
         foreach (var upload in avatarUploads)
         {
-            upload.IsRemoved = true;
-            upload.DeletedUtc = _dateTimeProvider.Now;
+            SoftDelete.Mark(upload, null, _dateTimeProvider.Now);
         }
 
         await _dmDbContext.SaveChangesAsync();

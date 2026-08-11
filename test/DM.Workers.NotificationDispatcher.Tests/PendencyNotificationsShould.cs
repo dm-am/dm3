@@ -31,7 +31,9 @@ public class PendencyNotificationsShould
     {
         await using var context = _fixture.CreateContext();
         var produced = await EveryNotificationGeneratorShould.DrainAsync(
-            new GamePendencyReminderNotificationGenerator(context), pendencyId);
+            new GamePendencyReminderNotificationGenerator(
+                context, EveryNotificationGeneratorShould.ClockAt(DateTimeOffset.UtcNow)),
+            pendencyId);
         return produced.SingleOrDefault();
     }
 

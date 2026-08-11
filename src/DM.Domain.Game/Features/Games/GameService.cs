@@ -21,7 +21,6 @@ using DM.Domain.Game.Features.Invitations;
 using DM.Domain.Game.Features.Rooms;
 using DM.Domain.Game.Features.Subscriptions;
 using FluentValidation;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Game = DM.Domain.Game.Features.Games.Game;
 
@@ -51,7 +50,7 @@ internal class GameService : IGameService
     private readonly IGuidFactory _guidFactory;
     private readonly IGameIntentionConverter _intentionConverter;
     private readonly IEventProducer _producer;
-    private readonly IMemoryCache _cache;
+    private readonly ICache _cache;
     private readonly ILogger<GameService> _logger;
 
     private const string TagListCacheKey = nameof(TagListCacheKey);
@@ -77,7 +76,7 @@ internal class GameService : IGameService
         IGuidFactory guidFactory,
         IGameIntentionConverter intentionConverter,
         IEventProducer producer,
-        IMemoryCache cache,
+        ICache cache,
         ILogger<GameService> logger)
     {
         _gamesQueryValidator = gamesQueryValidator;
@@ -237,14 +236,13 @@ internal class GameService : IGameService
 
     #region Read
 
-    public async Task<IEnumerable<GameTag>> GetTagsAsync()
-    {
-        return (await _cache.GetOrCreateAsync(TagListCacheKey, async e =>
-        {
-            e.AbsoluteExpirationRelativeToNow = CachePolicy.Permanent;
-            return await _repository.GetTags();
-        }))!;
-    }
+    // Not CachePolicy.Permanent: the entry is not the tag catalog alone, it carries
+    // the number of active games per tag, and that number moves with every game
+    // created, retagged, activated or closed. The manual invalidation Permanent
+    // asks for could not hold it either - this cache lives in the process, so a
+    // game created on one instance would leave the counters of the rest stale.
+    public Task<IEnumerable<GameTag>> GetTagsAsync() =>
+        _cache.GetOrCreateAsync(TagListCacheKey, () => _repository.GetTags(), CachePolicy.Medium);
 
     public async Task<(IEnumerable<Game> games, PagingResult paging)> GetGamesAsync(GamesQuery query)
     {
@@ -287,9 +285,8 @@ internal class GameService : IGameService
             var sortPart = !string.IsNullOrEmpty(query.SortBy) ? $"_sort_{query.SortBy}_{query.SortOrder ?? "desc"}" : "";
             var takePart = $"_take_{query.Take}";
             var cacheKey = $"{GamesByStatusCacheKeyPrefix}{statusPart}{recruitingPart}{closedReasonPart}{sortPart}{takePart}";
-            var cached = await _cache.GetOrCreateAsync(cacheKey, async e =>
+            var cached = await _cache.GetOrCreateAsync(cacheKey, async () =>
             {
-                e.AbsoluteExpirationRelativeToNow = CachePolicy.Medium;
                 var totalCount = await _repository.Count(query, Guid.Empty);
                 var pagingData = new PagingData(query, pageSize, totalCount);
                 var gamesList = (await _repository.GetGames(pagingData, query, Guid.Empty)).ToArray();
@@ -305,21 +302,20 @@ internal class GameService : IGameService
                     }
                 }
                 return (games: gamesList, paging: pagingData.Result);
-            });
+            }, CachePolicy.Medium);
             return cached;
         }
 
         // Cache base data for authenticated users (short TTL, unread counters always fresh)
         var queryKey = GetQueryKey(query);
         var authCacheKey = $"AuthGames_{currentUserId}_{queryKey}_{pageSize}";
-        var (games, pagingDataAuth) = await _cache.GetOrCreateAsync(authCacheKey, async e =>
+        var (games, pagingDataAuth) = await _cache.GetOrCreateAsync(authCacheKey, async () =>
         {
-            e.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(15);
             var totalCountAuth = await _repository.Count(query, currentUserId);
             var paging = new PagingData(query, pageSize, totalCountAuth);
             var gamesList = (await _repository.GetGames(paging, query, currentUserId)).ToArray();
             return (games: gamesList, paging);
-        });
+        }, CachePolicy.VeryShort);
 
         if (games.Length == 0)
         {

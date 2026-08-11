@@ -4,7 +4,7 @@ using DM.Infrastructure.Persistence.Entities.Contracts;
 namespace DM.Infrastructure.Persistence.RelationalStorage;
 
 /// <summary>
-/// The one place a tracked row is marked deleted.
+/// The one place a tracked row records who removed it and when.
 /// </summary>
 /// <remarks>
 /// <see cref="ISoftDeletable" /> declares who removed the row and when, and the schema carries
@@ -16,6 +16,11 @@ namespace DM.Infrastructure.Persistence.RelationalStorage;
 ///
 /// Marking through one call keeps the three assignments together: a path that has the author
 /// cannot write the flag and forget the audit, because there is nothing to forget.
+///
+/// SoftDeleteAuditShould is what turns that from a claim into a rule: the two audit columns
+/// are assigned in this file and in no other file of the assembly. Rows whose type carries no
+/// author and no moment - IRemovable without ISoftDeletable, a warning or a moderator's note -
+/// have nothing to record and are outside both the class and the rule.
 /// </remarks>
 internal static class SoftDelete
 {

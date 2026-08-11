@@ -7,6 +7,7 @@ using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Domain.Community.Features.Awards;
 using DM.Domain.Core.Abstractions;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
 using EntityAwardType = DM.Infrastructure.Persistence.Entities.Community.AwardType;
 using EntityContestSeries = DM.Infrastructure.Persistence.Entities.Community.ContestSeries;
@@ -194,9 +195,7 @@ internal class AwardRepository : IAwardRepository
     public async Task RevokeAsync(Guid id, Guid revokedByUserId, CancellationToken ct = default)
     {
         var entity = await _db.UserAwards.FirstAsync(a => a.UserAwardId == id, ct);
-        entity.IsRemoved = true;
-        entity.DeletedByUserId = revokedByUserId;
-        entity.DeletedUtc = _clock.Now;
+        SoftDelete.Mark(entity, revokedByUserId, _clock.Now);
         await _db.SaveChangesAsync(ct);
     }
 }

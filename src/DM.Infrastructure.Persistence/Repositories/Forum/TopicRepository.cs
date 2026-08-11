@@ -105,6 +105,13 @@ internal class TopicRepository : ITopicRepository
                 .ThenByDescending(t => t.CreatedUtc);
         }
 
+        // A last key nothing can tie on. Not one key above it is unique: two topics can
+        // share a title, a like count, an attach position or the second they were created
+        // in. Paging asks for the same order once per page, and rows the order cannot tell
+        // apart may be arranged differently between two of those asks, which shows one of
+        // them on both pages and the other on neither.
+        sortedDbQuery = sortedDbQuery.ThenBy(t => t.TopicId);
+
         // Read-only projection: AsNoTracking avoids EF Core's change
         // tracker overhead. See PERFORMANCE.md → "AsNoTracking".
         var topics = await sortedDbQuery
@@ -289,8 +296,10 @@ internal class TopicRepository : ITopicRepository
                 l.EntityId == t.TopicId &&
                 l.EntityType == Domain.Core.Enums.LikeEntityType.Topic))
             // Tie-breaker: newer-first so two zero-like topics still produce
-            // a deterministic result rather than relying on insertion order.
+            // a deterministic result rather than relying on insertion order,
+            // and the identifier after it for the two that also share a second.
             .ThenByDescending(t => t.CreatedUtc)
+            .ThenBy(t => t.TopicId)
             .AsNoTracking()
             .ProjectTo<Topic>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);

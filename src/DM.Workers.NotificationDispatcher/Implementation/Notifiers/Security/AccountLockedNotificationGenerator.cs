@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
 using DM.Domain.Personal.Features.Notifications;
@@ -15,11 +16,13 @@ namespace DM.Workers.NotificationDispatcher.Implementation.Notifiers.Security;
 internal class AccountLockedNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
-    public AccountLockedNotificationGenerator(DmDbContext dbContext)
+    public AccountLockedNotificationGenerator(DmDbContext dbContext, IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
@@ -42,6 +45,10 @@ internal class AccountLockedNotificationGenerator : BaseNotificationGenerator
             yield break;
         }
 
+        // As a DateTime rather than the offset the clock answers with: the letter
+        // prints this field the way the serializer writes it down.
+        var eventTime = _dateTimeProvider.Now.UtcDateTime;
+
         yield return new CreateNotification
         {
             UsersInterested = new[] { userData.UserId },
@@ -50,7 +57,7 @@ internal class AccountLockedNotificationGenerator : BaseNotificationGenerator
             Metadata = new
             {
                 Username = userData.Username,
-                EventTime = DateTime.UtcNow
+                EventTime = eventTime
             }
         };
     }

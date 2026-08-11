@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Notepads;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
 using NotepadEntryEntity = DM.Infrastructure.Persistence.Entities.Personal.Notepads.NotepadEntry;
 
@@ -111,9 +112,7 @@ internal class NotepadRepository : INotepadRepository
         var entry = await _dbContext.NotepadEntries.FindAsync(new object[] { entryId }, ct);
         if (entry != null)
         {
-            entry.IsRemoved = true;
-            entry.DeletedByUserId = deletedByUserId;
-            entry.DeletedUtc = _dateTimeProvider.Now;
+            SoftDelete.Mark(entry, deletedByUserId, _dateTimeProvider.Now);
             await _dbContext.SaveChangesAsync(ct);
         }
     }
