@@ -17,6 +17,7 @@ import type {
   UpdateNotificationPreferences,
   BotLinkResult,
   SecurityEvent,
+  SecurityLogType,
 } from "@/shared/api/models/account";
 import { Api, X_DM_ACCOUNT_TOKEN } from "@/shared/api";
 
@@ -247,20 +248,27 @@ export default new (class AccountApi {
 
   /**
    * Get security event history (logins, logouts, password changes, etc.)
-   * @param limit Maximum number of events (default 50)
-   * @param type Optional filter: "logins", "password", "sessions"
+   *
+   * GET v1/account/logs. The address used to be `account/security`, which no
+   * controller serves, and the cap used to be `limit`, which this endpoint does
+   * not take — the section rendered empty and said nothing, because its loader
+   * leaves the list alone on error.
+   *
+   * @param take Maximum number of events, 1..100 (default 50)
+   * @param type Optional filter
    */
-  public getSecurityHistory(limit = 50, type?: string) {
-    const params = new URLSearchParams({ limit: String(limit) });
-    if (type) params.append("type", type);
-    return Api.get<ListEnvelope<SecurityEvent>>(`account/security?${params}`);
+  public getSecurityHistory(take = 50, type?: SecurityLogType) {
+    return Api.get<ListEnvelope<SecurityEvent>>("account/logs", {
+      take,
+      ...(type ? { type } : {}),
+    });
   }
 
   /**
    * Get login history only (successful and failed logins)
-   * @param limit Maximum number of events (default 20)
+   * @param take Maximum number of events (default 20)
    */
-  public getLoginHistory(limit = 20) {
-    return this.getSecurityHistory(limit, "logins");
+  public getLoginHistory(take = 20) {
+    return this.getSecurityHistory(take, "login");
   }
 })();

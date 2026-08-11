@@ -238,6 +238,12 @@ export type SecurityEventType =
   | "SuspiciousLogin";
 
 /**
+ * Which slice of the security journal to ask for. Mirrors SecurityLogType on
+ * the server, which refuses anything else.
+ */
+export type SecurityLogType = "login" | "password" | "session";
+
+/**
  * Security audit log event
  */
 export type SecurityEvent = {

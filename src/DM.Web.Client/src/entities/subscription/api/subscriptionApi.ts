@@ -15,8 +15,10 @@ export default new (class SubscriptionApi {
    * @param type Optional filter by target type
    */
   public getMySubscriptions(type?: SubscriptionTargetType) {
-    const params = type !== undefined ? `?type=${type}` : "";
-    return Api.get<ListEnvelope<Subscription>>(`${this.basePath}${params}`);
+    return Api.get<ListEnvelope<Subscription>>(
+      this.basePath,
+      type !== undefined ? { type } : undefined,
+    );
   }
 
   /**
@@ -30,9 +32,10 @@ export default new (class SubscriptionApi {
    * Check subscription status for a specific target
    */
   public checkSubscription(type: SubscriptionTargetType, targetId: string) {
-    return Api.get<Subscription>(
-      `${this.basePath}/check?type=${type}&targetId=${targetId}`,
-    );
+    return Api.get<Subscription>(`${this.basePath}/check`, {
+      type,
+      targetId,
+    });
   }
 
   /**

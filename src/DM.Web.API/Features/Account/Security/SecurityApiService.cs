@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
 using DM.Domain.Account.Features.Security;
 using DomainSecurityEventType = DM.Domain.Account.Features.Security.SecurityEventType;
+using DM.Domain.Core.Enums;
 
 namespace DM.Web.API.Features.Account.Security;
 
@@ -25,15 +26,18 @@ internal class SecurityApiService : ISecurityApiService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<SecurityEvent>> GetSecurityLogs(string? type = null, int limit = 50)
+    public async Task<IEnumerable<SecurityEvent>> GetSecurityLogs(SecurityLogType? type = null, int limit = 50)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
 
-        IEnumerable<SecurityAuditEntry> events = type?.ToLowerInvariant() switch
+        // The last arm is "no filter asked for" and nothing else: a word outside
+        // the vocabulary is refused by model binding, where the string form used
+        // to land here and answer with the whole journal.
+        IEnumerable<SecurityAuditEntry> events = type switch
         {
-            "login" => await _securityAuditService.GetLoginHistoryAsync(currentUserId, limit),
-            "password" => await _securityAuditService.GetPasswordEventsAsync(currentUserId, limit),
-            "session" => await _securityAuditService.GetSessionEventsAsync(currentUserId, limit),
+            SecurityLogType.Login => await _securityAuditService.GetLoginHistoryAsync(currentUserId, limit),
+            SecurityLogType.Password => await _securityAuditService.GetPasswordEventsAsync(currentUserId, limit),
+            SecurityLogType.Session => await _securityAuditService.GetSessionEventsAsync(currentUserId, limit),
             _ => await _securityAuditService.GetRecentEventsAsync(currentUserId, limit)
         };
 

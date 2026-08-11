@@ -4,6 +4,7 @@ using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using DM.Domain.Core.Enums;
 
 namespace DM.Web.API.Features.Account.Security;
 
@@ -53,7 +54,7 @@ public class SecurityController : ControllerBase
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetSecurityLogs(
-        [FromQuery] string? type = null,
+        [FromQuery] SecurityLogType? type = null,
         // The page size is bounded by the same [Range] as every other list, and
         // for the same reason on both ends. Clipping only the top left zero to
         // mean "no limit" in the Mongo driver, so ?take=0 answered with the
