@@ -80,18 +80,18 @@
 Пересчитывается из строк индекса при каждом закрытии, руками не пишется: число,
 написанное отдельно от таблицы, расходится с ней на первой же партии.
 
-**Закрыто 240 из 357 (67%), открыто 117.**
+**Закрыто 241 из 357 (68%), открыто 116.**
 
 | Тяжесть | Всего | Закрыто | Осталось |
 |---|---|---|---|
 | КРИТИЧНО | 6 | 6 | 0 |
 | ВАЖНО | 53 | 51 | 2 |
 | ЗАМЕТНО | 140 | 73 | 67 |
-| МЕЛОЧЬ | 158 | 110 | 48 |
+| МЕЛОЧЬ | 158 | 111 | 47 |
 
 | Срез | Всего | Закрыто | Осталось |
 |---|---|---|---|
-| meta | 29 | 27 | 2 |
+| meta | 29 | 28 | 1 |
 | cicd | 25 | 10 | 15 |
 | modules | 24 | 19 | 5 |
 | authz | 24 | 7 | 17 |
@@ -830,7 +830,7 @@
 | meta-09 | МЕЛОЧЬ | AWSSDK.S3 в DM.Architecture.Tests не используется, а комментарий рядом утверждает обратное | `test/DM.Architecture.Tests/DM.Architecture.Tests.csproj:10` | Закрыто | AWSSDK.S3 убран из DM.Architecture.Tests, а комментарий перестал приписывать правилу сервисного слоя тип S3, которого оно не называет; обоснование для MailKit оставлено как есть — оно верное. |
 | meta-10 | МЕЛОЧЬ | Инструментация EF Core закреплена на предрелизной версии 1.0.0-beta2 пакета OpenTelemetry.Contrib.*, тогда как остальная телеметрия стоит на 1.17.0/1.12.0 — ап… _(уточнено)_ | `Directory.Packages.props:57` | Открыто | |
 | meta-11 | МЕЛОЧЬ | sass-loader (загрузчик webpack) числится в devDependencies проекта на Vite | `src/DM.Web.Client/package.json:64` | Закрыто | Не дефект на текущем коде — sass-loader уже удален из devDependencies, в package.json его нет |
-| meta-12 | МЕЛОЧЬ | start-server-and-test и @types/qs не используются ничем | `src/DM.Web.Client/package.json:65` | Открыто | |
+| meta-12 | МЕЛОЧЬ | start-server-and-test и @types/qs не используются ничем | `src/DM.Web.Client/package.json:65` | Закрыто | Исправлено — обе половины закрыты: @types/qs был снят более ранним заходом, start-server-and-test снят сейчас вместе с перегенерацией package-lock (331 строка зависимостей). Ни один скрипт его не зовет, в воркфлоу и docker-файлах он не встречается, а playwright поднимает сервер собственным webServer |
 | meta-13 | МЕЛОЧЬ | Класс BoardAccessPolicyExtension целиком мертв | `src/DM.Domain.Forum/Features/Boards/BoardAccessPolicyExtension.cs:9` | Закрыто | Исправлено — BoardAccessPolicyExtension.cs удален целиком: единственный метод GetAuthorizedRoles не вызывается ни из кода, ни из тестов, а разворачивал флаги политики доски в перечень ролей, которое нигде не нужно. Сборка солюшена подтверждает отсутствие потребителей |
 | meta-14 | МЕЛОЧЬ | SelectManyAsync, GetHighestRole, IsPendingAssistant — публичные расширения без вызовов | `src/DM.Infrastructure.Core/Extensions/AsyncExtensions.cs:21` | Закрыто | Три публичных расширения без вызывающих удалены. Вместе с SelectManyAsync из AsyncExtensions ушли ставшие лишними using System, System.Collections.Generic и System.Linq; в GameRoleExtensions все три using остаются нужны живым членам. |
 | meta-15 | МЕЛОЧЬ | AttributeValidationError.NumberNotInRange описывает проверку диапазона, которой в схеме атрибутов нет | `src/DM.Domain.Game/Features/Characters/AttributeValidationError.cs:55` | Закрыто | NumberNotInRange удален: проверки диапазона числового атрибута в схеме нет, полей Min/Max у AttributeSpecification тоже. Если ограничение понадобится, оно заводится тройкой поля-валидатор-тест. |
