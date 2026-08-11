@@ -107,7 +107,10 @@ function callsIn(file: string): { calls: Call[]; skipped: number } {
     // A known field first, then whatever is left is a path parameter; the
     // snapshot spells those {param}.
     const path = literal
-      .replace(/\$\{\s*this\.(\w+)\s*\}/g, (whole, name) => fields.get(name) ?? whole)
+      .replace(
+        /\$\{\s*this\.(\w+)\s*\}/g,
+        (whole, name) => fields.get(name) ?? whole,
+      )
       .replace(/\$\{[^}]*\}/g, "{param}")
       .split("?")[0];
     calls.push({ file: relative(repoRoot, file), method: METHOD[call], path });

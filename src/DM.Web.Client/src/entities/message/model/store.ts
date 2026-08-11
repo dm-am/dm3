@@ -5,6 +5,7 @@ import type { Chat, ChatId, Message, MessageId } from "./types";
 import type { Username } from "@/shared/api/models/common";
 import messagingApi from "../api/messagingApi";
 import { useAuthStore } from "@/shared/stores";
+import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 
 const PAGE_SIZE = 50;
 const MAX_MESSAGES = 500;
@@ -43,10 +44,23 @@ export const useMessagingStore = defineStore("messaging", () => {
   const selectedChat = ref<Chat | null>(null);
   const loadingChat = ref(false);
 
+  // One token per slice, as in the game details store: the conversation header
+  // and the message window are fetched by separate calls and land separately,
+  // so a single counter would let each cancel the other.
+  //
+  // Two quick moves between conversations put two of each on the wire, and the
+  // first answer arriving last used to overwrite the state — the reader saw a
+  // conversation they had navigated away from, while mark-as-read had already
+  // been sent for it.
+  const chatGuard = createRequestGuard();
+  const messagesGuard = createRequestGuard();
+
   async function selectChat(id: ChatId) {
+    const requestId = chatGuard.next();
     loadingChat.value = true;
     try {
       const { data, error: err } = await messagingApi.getChat(id);
+      if (!chatGuard.isCurrent(requestId)) return;
       if (err) {
         error.value = "Не удалось загрузить переписку";
         selectedChat.value = null;
@@ -55,15 +69,19 @@ export const useMessagingStore = defineStore("messaging", () => {
       error.value = null;
       selectedChat.value = data ?? null;
     } finally {
-      loadingChat.value = false;
+      if (chatGuard.isCurrent(requestId)) loadingChat.value = false;
     }
   }
 
   async function selectDirectChat(username: Username) {
+    const requestId = chatGuard.next();
     loadingChat.value = true;
     try {
       const { data, error: err } =
         await messagingApi.getOrCreateDirectChat(username);
+      // The caller navigates by the id it gets back, so a stale answer still
+      // returns its own chat — it just does not touch the store on the way.
+      if (!chatGuard.isCurrent(requestId)) return data ?? null;
       if (err) {
         error.value = "Не удалось загрузить прямую переписку";
         selectedChat.value = null;
@@ -73,7 +91,7 @@ export const useMessagingStore = defineStore("messaging", () => {
       selectedChat.value = data ?? null;
       return data ?? null;
     } finally {
-      loadingChat.value = false;
+      if (chatGuard.isCurrent(requestId)) loadingChat.value = false;
     }
   }
 
@@ -102,6 +120,7 @@ export const useMessagingStore = defineStore("messaging", () => {
 
   // Fetch initial messages (latest messages)
   async function fetchMessages(chatId: ChatId) {
+    const requestId = messagesGuard.next();
     loadingMessages.value = true;
     // A fresh window carries no failed page with it: the error belongs to the
     // window it happened in, and keeping it would park the new one's sentinel.
@@ -111,12 +130,13 @@ export const useMessagingStore = defineStore("messaging", () => {
         limit: PAGE_SIZE,
       });
 
+      if (!messagesGuard.isCurrent(requestId)) return;
       messagesList.value = data?.resources ?? [];
       currentCursor.value = data?.paging ?? null;
       hasMoreBefore.value = data?.paging?.hasPrev ?? false;
       hasMoreAfter.value = data?.paging?.hasNext ?? false;
     } finally {
-      loadingMessages.value = false;
+      if (messagesGuard.isCurrent(requestId)) loadingMessages.value = false;
     }
   }
 
@@ -183,6 +203,7 @@ export const useMessagingStore = defineStore("messaging", () => {
   // aroundMessageId, replaces the list, and flags the message for the view to
   // scroll/highlight.
   async function navigateToMessage(chatId: ChatId, messageId: MessageId) {
+    const requestId = messagesGuard.next();
     loadingMessages.value = true;
     errorBefore.value = null;
     try {
@@ -190,6 +211,7 @@ export const useMessagingStore = defineStore("messaging", () => {
         aroundMessageId: messageId,
         limit: PAGE_SIZE,
       });
+      if (!messagesGuard.isCurrent(requestId)) return;
       if (data && data.resources.length > 0) {
         messagesList.value = data.resources;
         currentCursor.value = data.paging ?? null;
@@ -198,7 +220,7 @@ export const useMessagingStore = defineStore("messaging", () => {
         highlightedMessageId.value = messageId as unknown as string;
       }
     } finally {
-      loadingMessages.value = false;
+      if (messagesGuard.isCurrent(requestId)) loadingMessages.value = false;
     }
   }
 

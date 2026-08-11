@@ -169,4 +169,63 @@ describe("useMessagingStore, sending a message", () => {
     expect(store.messagesList.map((m) => m.id)).toEqual(["m2", "m3", "m4"]);
     expect(store.selectedChat?.lastMessage?.id).toBe("m4");
   });
+
+  describe("ответы вне порядка", () => {
+    function deferred<T>() {
+      let resolve!: (value: T) => void;
+      const promise = new Promise<T>((settle) => {
+        resolve = settle;
+      });
+      return { promise, resolve };
+    }
+
+    // Два быстрых перехода между перепиской A и B кладут на провод по два
+    // запроса. Ответ A, пришедший позже ответа B, перезаписывал состояние:
+    // читатель видел переписку, из которой уже ушел, а отметка о прочтении для
+    // нее была отправлена.
+    it("оставляет ту переписку, которую выбрали последней", async () => {
+      const older = deferred<unknown>();
+      const newer = deferred<unknown>();
+      mockGetChat
+        .mockReturnValueOnce(older.promise)
+        .mockReturnValueOnce(newer.promise);
+
+      const store = useMessagingStore();
+      const first = store.selectChat("a" as never);
+      const second = store.selectChat("b" as never);
+
+      newer.resolve({ data: { id: "b" }, error: null });
+      await second;
+      older.resolve({ data: { id: "a" }, error: null });
+      await first;
+
+      expect(store.selectedChat?.id).toBe("b");
+    });
+
+    it("оставляет то окно сообщений, которое запросили последним", async () => {
+      const older = deferred<unknown>();
+      const newer = deferred<unknown>();
+      mockGetMessages
+        .mockReturnValueOnce(older.promise)
+        .mockReturnValueOnce(newer.promise);
+
+      const store = useMessagingStore();
+      const first = store.fetchMessages("a" as never);
+      const second = store.fetchMessages("b" as never);
+
+      newer.resolve({
+        data: { resources: [{ id: "mb" }], paging: null },
+        error: null,
+      });
+      await second;
+      older.resolve({
+        data: { resources: [{ id: "ma" }], paging: null },
+        error: null,
+      });
+      await first;
+
+      expect(store.messagesList.map((m) => m.id)).toEqual(["mb"]);
+      expect(store.loadingMessages).toBe(false);
+    });
+  });
 });
