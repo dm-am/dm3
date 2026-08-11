@@ -104,7 +104,6 @@ internal class UploadApiService : IUploadApiService
     /// <inheritdoc />
     public async Task<Shared.Dto.Upload> GetUpload(Guid id)
     {
-        var userId = _identityProvider.Current.User.UserId;
         var upload = await _uploadRepository.GetAsync(id);
 
         if (upload == null)
@@ -113,11 +112,10 @@ internal class UploadApiService : IUploadApiService
         }
 
         // Owner self-view; viewing another user's file is a moderation action
-        // (Moderator+), aligned with the list + delete endpoints.
-        if (upload.UserId != userId && _identityProvider.Current.User.Role < UserRole.Moderator)
-        {
-            throw new HttpException(System.Net.HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
-        }
+        // (Moderator+), aligned with the list + delete endpoints. Asked of the
+        // intention that names the rule: it used to be spelled out here and again
+        // in DeleteUpload, while UploadIntention.View resolved to nothing.
+        _intentionManager.ThrowIfForbidden(UploadIntention.View, upload);
 
         return MapToDto(upload);
     }
@@ -134,10 +132,7 @@ internal class UploadApiService : IUploadApiService
         }
 
         // Owner self-service; deleting others' files is a moderation action (Moderator+).
-        if (upload.UserId != userId && _identityProvider.Current.User.Role < UserRole.Moderator)
-        {
-            throw new HttpException(System.Net.HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
-        }
+        _intentionManager.ThrowIfForbidden(UploadIntention.Delete, upload);
 
         await _uploadRepository.SoftDeleteAsync(id, userId, _dateTimeProvider.Now);
     }

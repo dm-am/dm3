@@ -117,6 +117,18 @@ internal class BanService : IBanService
 
         var targetUser = await _userLookupService.GetAsync(createBan.Username);
 
+        // A voluntary ban skips the senior-moderator gate above and both role
+        // checks below, so the target has to be the person asking for it.
+        // Without this the flag alone bans anybody, an administrator included,
+        // and files the ban under the victim's own name; the branch is
+        // unreachable today only because both callers hard-code the flag to
+        // false, which is a property of the callers and not of the rule.
+        if (createBan.IsVoluntary && targetUser.UserId != currentUser.UserId)
+        {
+            throw new HttpException(HttpStatusCode.Forbidden,
+                "Добровольный бан можно наложить только на себя");
+        }
+
         if (!createBan.IsVoluntary)
         {
             // An administrator is a site owner. There is deliberately no in-app
