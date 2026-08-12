@@ -209,23 +209,25 @@ public class CompilerPolicyShould
     }
 
     /// <summary>
-    /// global.json and every setup-dotnet step name the same SDK band.
+    /// The SDK a developer compiles with is the one CI installs.
     /// </summary>
     /// <remarks>
-    /// global.json takes no comments, so the reason lives here. The pin is
-    /// worth something only while it names the band CI installs: raise the
-    /// workflow to a newer SDK and leave the pin behind, and the file that
-    /// looks like the source of truth stops describing anything.
+    /// global.json takes no comments, so the reason lives here, and it has two
+    /// halves.
     ///
-    /// What this rule deliberately does NOT assert is the roll-forward, which
-    /// is latestMajor and therefore accepts any SDK from the eighth upwards. A
-    /// developer machine carrying only a newer SDK compiles the whole solution
-    /// with a compiler CI does not have, and warnings are errors here without
-    /// exception, so a local build can be green on code CI rejects and the
-    /// reverse. Narrowing it to latestFeature is the fix and it cannot be made
-    /// from inside the repository: it requires the 8.0 SDK present on the
-    /// machine, and a pin narrowed without one leaves the solution unbuildable
-    /// rather than merely divergent.
+    /// The band: the pin is worth something only while it names what CI
+    /// installs. Raise the workflow to a newer SDK and leave the pin behind, and
+    /// the file that looks like the source of truth stops describing anything.
+    /// Matched against the workflow rather than against a number written here,
+    /// so this rule cannot go stale on its own.
+    ///
+    /// The roll-forward: it was latestMajor, which accepts any SDK from the
+    /// eighth upwards, and the machine carried only a newer one — so the whole
+    /// solution compiled with a compiler CI does not have, while warnings are
+    /// errors here without exception. Every SDK brings diagnostics the last one
+    /// did not, so neither direction of that divergence is safe to assume away.
+    /// Anything below "feature" stays inside one major.minor; the rest of the
+    /// vocabulary crosses it, which is the whole defect.
     /// </remarks>
     [Fact]
     public void PinTheSdkToTheBandContinuousIntegrationInstalls()
@@ -233,7 +235,16 @@ public class CompilerPolicyShould
         var root = RepositoryRoot;
 
         using var globalJson = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "global.json")));
-        var pinned = globalJson.RootElement.GetProperty("sdk").GetProperty("version").GetString();
+        var sdk = globalJson.RootElement.GetProperty("sdk");
+        var pinned = sdk.GetProperty("version").GetString();
+        var rollForward = sdk.TryGetProperty("rollForward", out var declared)
+            ? declared.GetString()
+            : "latestPatch";
+
+        rollForward.Should().BeOneOf(
+            ["latestFeature", "feature", "latestPatch", "patch", "disable"],
+            "a roll-forward that crosses a major or a minor hands the build to an SDK " +
+            "CI does not install, and warnings are errors in this solution");
 
         var installed = InstalledSdkVersions(root);
         installed.Should().NotBeEmpty("the workflows install the SDK before building");
