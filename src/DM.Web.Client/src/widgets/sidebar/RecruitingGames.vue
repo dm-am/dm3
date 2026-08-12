@@ -34,7 +34,7 @@ import { useGamesStore } from "@/entities/game";
 import { useAuthStore } from "@/entities/user";
 import { onMounted, watch } from "vue";
 import { useRoute } from "vue-router";
-import { useViewerChange } from "@/shared/lib/composables";
+import { useViewerChange } from "@/shared/lib/composables/useViewerChange";
 
 const store = useGamesStore();
 const userStore = useAuthStore();

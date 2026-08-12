@@ -7,7 +7,7 @@ import { useBoardsStore } from "@/entities/forum";
 import { useAuthStore } from "@/entities/user";
 import { onMounted, watch } from "vue";
 import { storeToRefs } from "pinia";
-import { useViewerChange } from "@/shared/lib/composables";
+import { useViewerChange } from "@/shared/lib/composables/useViewerChange";
 import { useRoute } from "vue-router";
 
 const store = useBoardsStore();

@@ -2,18 +2,22 @@
   <SidebarBlock token="GameTags">
     <template #title>Теги игр</template>
     <SidebarSkeleton v-if="gamesStore.tagsLoading && !tags.length" :lines="4" />
-    <SecondaryText v-else-if="gamesStore.tagsError && !tags.length">
-      Не удалось загрузить.
-      <button
-        type="button"
-        class="retry-link"
-        @click="gamesStore.fetchTags(true)"
-      >
-        Повторить
-      </button>
-    </SecondaryText>
-    <SecondaryText v-else-if="!tags.length">Тегов пока нет</SecondaryText>
-    <div v-else class="tag-cloud">
+    <li v-else-if="gamesStore.tagsError && !tags.length">
+      <SecondaryText>
+        Не удалось загрузить.
+        <button
+          type="button"
+          class="retry-link"
+          @click="gamesStore.fetchTags(true)"
+        >
+          Повторить
+        </button>
+      </SecondaryText>
+    </li>
+    <li v-else-if="!tags.length">
+      <SecondaryText>Тегов пока нет</SecondaryText>
+    </li>
+    <li v-else class="tag-cloud">
       <Tooltip v-for="tag in sortedTags" :key="tag.id">
         <template #content>
           <TooltipContent :text="tag.description || tag.title" />
@@ -26,7 +30,7 @@
           {{ tag.title }}
         </router-link>
       </Tooltip>
-    </div>
+    </li>
   </SidebarBlock>
 </template>
 

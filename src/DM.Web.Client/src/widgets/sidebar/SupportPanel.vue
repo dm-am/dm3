@@ -3,31 +3,36 @@
     <template #title>Поддержка проекта</template>
     <SidebarSkeleton v-if="loading && !fundraising" :lines="3" />
     <template v-else>
-      <ProgressBar
-        v-if="fundraising"
-        :current="fundraising.collectedAmount"
-        :goal="fundraising.goalAmount"
-      >
-        {{ fundraising.collectedAmount.toLocaleString("ru-RU") }} /
-        {{ fundraising.goalAmount.toLocaleString("ru-RU") }} р.
-      </ProgressBar>
-      <SecondaryText v-else-if="error" class="fetch-error">
-        Не удалось загрузить сбор.
-        <button type="button" class="retry-link" @click="fetch(true)">
-          Повторить
-        </button>
-      </SecondaryText>
-      Dungeon Master &ndash; некоммерческий проект.<br />
-      <router-link :to="{ name: 'support' }">Помогите нам</router-link> хотя бы
-      не испортить его!
-      <div v-if="isAdmin" class="admin-edit">
+      <li v-if="fundraising">
+        <ProgressBar
+          :current="fundraising.collectedAmount"
+          :goal="fundraising.goalAmount"
+        >
+          {{ fundraising.collectedAmount.toLocaleString("ru-RU") }} /
+          {{ fundraising.goalAmount.toLocaleString("ru-RU") }} р.
+        </ProgressBar>
+      </li>
+      <li v-else-if="error">
+        <SecondaryText class="fetch-error">
+          Не удалось загрузить сбор.
+          <button type="button" class="retry-link" @click="fetch(true)">
+            Повторить
+          </button>
+        </SecondaryText>
+      </li>
+      <li>
+        Dungeon Master &ndash; некоммерческий проект.<br />
+        <router-link :to="{ name: 'support' }">Помогите нам</router-link> хотя
+        бы не испортить его!
+      </li>
+      <li v-if="isAdmin" class="admin-edit">
         <router-link
           class="admin-edit-link"
           :to="{ name: 'moderation-fundraising' }"
         >
           <SvgIcon name="pencil" class="admin-edit-icon" />Изменить сбор
         </router-link>
-      </div>
+      </li>
     </template>
   </SidebarBlock>
 </template>

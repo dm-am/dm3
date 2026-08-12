@@ -1,7 +1,7 @@
 <template>
   <SidebarBlock token="Partners">
     <template #title>Партнеры</template>
-    <div v-once class="partners">
+    <li v-once class="partners">
       <Tooltip
         v-for="partner in partners"
         :key="partner.name"
@@ -16,7 +16,7 @@
           <img :src="partner.logo" :alt="partner.name" class="partner-logo" />
         </a>
       </Tooltip>
-    </div>
+    </li>
   </SidebarBlock>
 </template>
 

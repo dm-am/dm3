@@ -5,7 +5,7 @@
          aria-hidden keeps it out of the accessibility tree, and the
          block/inline flow (not flex) keeps the line copying as one line
          instead of "- \n<link text>". The prefix itself is selectable. -->
-    <div v-once class="contact-links">
+    <li v-once class="contact-links">
       <div class="contact-item">
         <span class="muted" aria-hidden="true">-&nbsp;</span>
         <router-link :to="{ name: 'support' }"
@@ -16,7 +16,7 @@
         <span class="muted" aria-hidden="true">-&nbsp;</span>
         <router-link :to="{ name: 'complaint' }">Оставить жалобу</router-link>
       </div>
-    </div>
+    </li>
   </SidebarBlock>
 </template>
 

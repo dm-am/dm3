@@ -5,16 +5,16 @@
       v-if="store.participatingBlogsLoading && !store.participatingBlogs"
       :lines="3"
     />
-    <SecondaryText v-else-if="store.participatingBlogsError" class="error">
-      Не удалось загрузить
-    </SecondaryText>
-    <template
+    <li v-else-if="store.participatingBlogsError">
+      <SecondaryText class="error">Не удалось загрузить</SecondaryText>
+    </li>
+    <li
       v-else-if="
         !store.participatingBlogs || store.participatingBlogs.length === 0
       "
     >
       <SecondaryText>У вас пока нет блогов</SecondaryText>
-    </template>
+    </li>
     <template v-else>
       <BlogLink
         v-for="blog in store.participatingBlogs"
@@ -24,15 +24,15 @@
         :always-show-counters="true"
       />
     </template>
-    <div class="separator" aria-hidden="true">
-      - - - - - - - - - - - - - - - - - - - - - - - - - -
-    </div>
-    <div>
+    <li aria-hidden="true">
+      <DashSeparator spacing="none" width="75%" />
+    </li>
+    <li>
       <span class="muted" aria-hidden="true">- </span>
       <router-link class="forward" :to="{ name: 'blogs' }"
         >Все блоги</router-link
       >
-    </div>
+    </li>
   </SidebarBlock>
 </template>
 
@@ -41,10 +41,11 @@ import SidebarBlock from "./SidebarBlock.vue";
 import SidebarSkeleton from "./SidebarSkeleton.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import BlogLink from "./BlogLink.vue";
+import { DashSeparator } from "@/shared/ui/DashSeparator";
 import { useBlogsStore } from "@/entities/blog";
 import { useAuthStore } from "@/entities/user";
 import { onMounted } from "vue";
-import { useViewerChange } from "@/shared/lib/composables";
+import { useViewerChange } from "@/shared/lib/composables/useViewerChange";
 
 const userStore = useAuthStore();
 const store = useBlogsStore();
@@ -68,9 +69,6 @@ useViewerChange((username) => {
 </script>
 
 <style scoped lang="sass">
-.separator
-  color: $text-muted
-
 .forward
   font-weight: bold
 

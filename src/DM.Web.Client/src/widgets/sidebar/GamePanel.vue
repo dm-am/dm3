@@ -39,7 +39,7 @@ import {
 import { GameStatusButtons, GameJoinActions } from "@/features/game-actions";
 import { useAuthStore } from "@/entities/user";
 import { UserRole } from "@/shared/api/models/common";
-import { useExpandableSection } from "@/shared/lib/composables";
+import { useExpandableSection } from "@/shared/lib/composables/useExpandableSection";
 import SidebarBlock from "./SidebarBlock.vue";
 import SidebarCounter from "./SidebarCounter.vue";
 import SidebarSectionTitle from "./SidebarSectionTitle.vue";
@@ -224,9 +224,9 @@ async function confirmMod() {
     <SidebarSkeleton v-if="gameLoading && !game" :lines="8" />
 
     <!-- 2. error -->
-    <SecondaryText v-else-if="gameError" class="error">
-      {{ gameError }}
-    </SecondaryText>
+    <li v-else-if="gameError">
+      <SecondaryText class="error">{{ gameError }}</SecondaryText>
+    </li>
 
     <!-- 3. content -->
     <template v-else-if="game">
@@ -236,19 +236,21 @@ async function confirmMod() {
         <span class="muted" aria-hidden="true">- </span>Активные комнаты
       </li>
       <SidebarSkeleton v-if="roomsLoading && !rooms.length" :lines="3" />
-      <SecondaryText v-else-if="roomsError" class="error">
-        {{ roomsError }}
-      </SecondaryText>
-      <ul v-else-if="activeRooms.length" class="room-list">
-        <GameRoomLink
-          v-for="room in activeRooms"
-          :key="room.id"
-          :room="room"
-          :game-public-id="publicId"
-          prefix=""
-        />
-      </ul>
-      <SecondaryText v-else>Комнат пока нет</SecondaryText>
+      <li v-else-if="roomsError">
+        <SecondaryText class="error">{{ roomsError }}</SecondaryText>
+      </li>
+      <li v-else-if="activeRooms.length">
+        <ul class="room-list">
+          <GameRoomLink
+            v-for="room in activeRooms"
+            :key="room.id"
+            :room="room"
+            :game-public-id="publicId"
+            prefix=""
+          />
+        </ul>
+      </li>
+      <li v-else><SecondaryText>Комнат пока нет</SecondaryText></li>
 
       <!-- "Архивные комнаты" — the same group row, with an inline
            "(показать)/(скрыть)" spoiler link; rooms appear below when
@@ -265,21 +267,23 @@ async function confirmMod() {
             {{ archivedToggleLabel }}
           </button>
         </li>
-        <div
-          ref="archivedZoneRef"
-          class="expand-zone"
-          v-bind="archivedZoneBindings"
-        >
-          <ul v-if="showArchived" class="room-list">
-            <GameRoomLink
-              v-for="room in archivedRooms"
-              :key="room.id"
-              :room="room"
-              :game-public-id="publicId"
-              prefix=""
-            />
-          </ul>
-        </div>
+        <li>
+          <div
+            ref="archivedZoneRef"
+            class="expand-zone"
+            v-bind="archivedZoneBindings"
+          >
+            <ul v-if="showArchived" class="room-list">
+              <GameRoomLink
+                v-for="room in archivedRooms"
+                :key="room.id"
+                :room="room"
+                :game-public-id="publicId"
+                prefix=""
+              />
+            </ul>
+          </div>
+        </li>
       </template>
 
       <!-- Game navigation — a flat list of links (like the old site's game
@@ -416,7 +420,7 @@ async function confirmMod() {
     </template>
 
     <!-- 4. empty / not found -->
-    <SecondaryText v-else>Игра не найдена</SecondaryText>
+    <li v-else><SecondaryText>Игра не найдена</SecondaryText></li>
 
     <ConfirmDialog
       :show="!!pendingMod"

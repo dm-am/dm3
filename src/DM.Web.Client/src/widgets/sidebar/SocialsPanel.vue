@@ -1,7 +1,7 @@
 <template>
   <SidebarBlock token="Socials">
     <template #title>Наши соцсети</template>
-    <div v-once class="socials">
+    <li v-once class="socials">
       <Tooltip
         v-for="social in socialLinks"
         :key="social.name"
@@ -21,7 +21,7 @@
           />
         </a>
       </Tooltip>
-    </div>
+    </li>
   </SidebarBlock>
 </template>
 

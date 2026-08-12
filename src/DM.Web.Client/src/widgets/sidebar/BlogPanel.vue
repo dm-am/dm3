@@ -154,9 +154,9 @@ async function confirmMod() {
     <SidebarSkeleton v-if="blogLoading && !blog" :lines="8" />
 
     <!-- 2. error -->
-    <SecondaryText v-else-if="blogError" class="error">
-      {{ blogError }}
-    </SecondaryText>
+    <li v-else-if="blogError">
+      <SecondaryText class="error">{{ blogError }}</SecondaryText>
+    </li>
 
     <!-- 3. content -->
     <template v-else-if="blog">
@@ -166,16 +166,18 @@ async function confirmMod() {
       <li class="link">
         <span class="muted" aria-hidden="true">- </span>Рубрики
       </li>
-      <ul v-if="rubrics.length" class="rubric-list">
-        <BlogRubricLink
-          v-for="rubric in rubrics"
-          :key="rubric.id"
-          :rubric="rubric"
-          :blog-id="routeId"
-          prefix=""
-        />
-      </ul>
-      <SecondaryText v-else>Рубрик пока нет</SecondaryText>
+      <li v-if="rubrics.length">
+        <ul class="rubric-list">
+          <BlogRubricLink
+            v-for="rubric in rubrics"
+            :key="rubric.id"
+            :rubric="rubric"
+            :blog-id="routeId"
+            prefix=""
+          />
+        </ul>
+      </li>
+      <li v-else><SecondaryText>Рубрик пока нет</SecondaryText></li>
 
       <!-- Blog navigation — a flat list of links, each carrying its counter. -->
       <li class="link">
@@ -273,7 +275,7 @@ async function confirmMod() {
     </template>
 
     <!-- 4. empty / not found -->
-    <SecondaryText v-else>Блог не найден</SecondaryText>
+    <li v-else><SecondaryText>Блог не найден</SecondaryText></li>
 
     <ConfirmDialog
       :show="!!pendingMod"

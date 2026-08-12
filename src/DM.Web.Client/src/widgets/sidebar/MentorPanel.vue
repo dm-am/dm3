@@ -44,7 +44,7 @@ import { useAuthStore } from "@/entities/user";
 import { UserRole } from "@/shared/api/models/common";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import { Api } from "@/shared/api";
-import { useGuardedRequest } from "@/shared/lib/composables";
+import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 import { CounterPair } from "@/shared/ui/CounterPair";
 import { Tooltip } from "@/shared/ui/Tooltip";
 
@@ -271,7 +271,7 @@ const visible = computed(
 
     <!-- "Курируемые игры" section -->
     <template v-if="mentorGames.length">
-      <div class="section-title">Курируемые игры</div>
+      <li class="section-title">Курируемые игры</li>
       <li v-for="game in mentorGames" :key="game.id" class="link">
         <span class="muted" aria-hidden="true">- </span>
         <GameLink :game="game" highlight-new muted-closed />{{ " "
@@ -301,7 +301,7 @@ const visible = computed(
 
     <!-- "Курируемые блоги" section -->
     <template v-if="mentorBlogs.length">
-      <div class="section-title">Курируемые блоги</div>
+      <li class="section-title">Курируемые блоги</li>
       <BlogLink
         v-for="blog in mentorBlogs"
         :key="blog.id"

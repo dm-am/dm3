@@ -21,27 +21,34 @@ onMounted(() => store.fetchActivePolls());
       v-if="activePolls === null && !activePollsError"
       :lines="3"
     />
-    <SecondaryText v-else-if="activePolls === null">
-      Не удалось загрузить.
-      <button
-        type="button"
-        class="retry-link"
-        @click="store.fetchActivePolls(true)"
-      >
-        Повторить
-      </button>
-    </SecondaryText>
-    <SecondaryText v-else-if="activePolls.length === 0">
-      Активных опросов пока нет
-    </SecondaryText>
-    <PollCard v-else v-for="poll in activePolls" :key="poll.id" :poll="poll" />
-    <DashSeparator spacing="tiny" width="75%" />
-    <div>
+    <li v-else-if="activePolls === null">
+      <SecondaryText>
+        Не удалось загрузить.
+        <button
+          type="button"
+          class="retry-link"
+          @click="store.fetchActivePolls(true)"
+        >
+          Повторить
+        </button>
+      </SecondaryText>
+    </li>
+    <li v-else-if="activePolls.length === 0">
+      <SecondaryText>Активных опросов пока нет</SecondaryText>
+    </li>
+    <!-- All the cards in one list item, because the first card drops its top
+         margin (PollCard's own `.poll:first-child`) and a card per item would
+         make every one of them the first. -->
+    <li v-else>
+      <PollCard v-for="poll in activePolls" :key="poll.id" :poll="poll" />
+    </li>
+    <li><DashSeparator spacing="tiny" width="75%" /></li>
+    <li>
       <span class="muted" aria-hidden="true">- </span
       ><router-link class="forward" :to="{ name: 'polls' }"
         >Все опросы</router-link
       >
-    </div>
+    </li>
   </SidebarBlock>
 </template>
 
