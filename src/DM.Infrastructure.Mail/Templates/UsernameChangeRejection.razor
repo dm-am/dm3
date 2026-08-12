@@ -1,0 +1,49 @@
+@*
+    Письмо об отклонении запроса на смену имени.
+
+    Комментарий модератора приходит необязательным: отклонить запрос можно и без
+    него. Тогда печатается отдельная фраза, потому что строка "Причина:" с пустым
+    хвостом читается как поломка.
+
+    Комментарий пишется через Razor и экранируется им: это единственный текст в
+    письме, который человек набирает свободно, и разметка из него до читателя
+    доходит текстом, а не разметкой.
+*@
+<EmailLayout Title="Запрос на смену имени отклонен">
+    <p style="@EmailConstants.ParagraphStyles">
+        Здравствуйте, @Model.Username!
+    </p>
+
+    <p style="@EmailConstants.ParagraphStyles">
+        К сожалению, ваш запрос на смену имени пользователя был <strong>отклонен</strong> модератором.
+    </p>
+
+    @if (string.IsNullOrEmpty(Model.Reason))
+    {
+        <p style="@EmailConstants.ParagraphStyles">
+            Причина не указана.
+        </p>
+    }
+    else
+    {
+        <p style="@EmailConstants.ParagraphStyles">
+            Причина: @Model.Reason
+        </p>
+    }
+
+    <p style="@EmailConstants.ParagraphStyles">
+        Вы можете подать новый запрос, предоставив более подробную причину для смены имени.
+    </p>
+
+    <p style="@EmailConstants.ParagraphStyles">
+        Если у вас есть вопросы, обратитесь к модераторам.
+    </p>
+</EmailLayout>
+
+@code {
+
+    /// <summary>Данные письма</summary>
+    [Parameter]
+    public UsernameChangeRejectionViewModel Model { get; set; } = null!;
+
+}

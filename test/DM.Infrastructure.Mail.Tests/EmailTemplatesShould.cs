@@ -172,6 +172,7 @@ public class EmailTemplatesShould : IAsyncDisposable
         { new RegistrationConfirmationViewModel("https://dm.am/activate/a"), "https://dm.am/activate/a" },
         { new PasswordResetConfirmationViewModel("user", "https://dm.am/reset/b"), "https://dm.am/reset/b" },
         { new EmailChangeConfirmationViewModel("user", "https://dm.am/email/c"), "https://dm.am/email/c" },
+        { new UsernameChangeApprovalViewModel("user", "https://dm.am/username/d"), "https://dm.am/username/d" },
     };
 
     [Theory]
@@ -192,6 +193,8 @@ public class EmailTemplatesShould : IAsyncDisposable
         new EmailChangeConfirmationViewModel("user", "https://dm.am/email/c"),
         new PasswordChangeNotificationViewModel("user"),
         new SuspiciousLoginViewModel("user", "203.0.113.9", "Firefox", "30.07.2026 15:00"),
+        new UsernameChangeApprovalViewModel("user", "https://dm.am/username/d"),
+        new UsernameChangeRejectionViewModel("user", "имя занято"),
     };
 
     /// <summary>
@@ -241,6 +244,39 @@ public class EmailTemplatesShould : IAsyncDisposable
         html.Should().NotContain(">Адрес</td>");
         html.Should().NotContain(">Устройство</td>");
         html.Should().Contain("30.07.2026 15:00");
+    }
+
+    /// <summary>
+    /// The moderator's comment is the only free-form text these letters carry, and
+    /// it reaches the reader escaped exactly once. The sender this replaces built
+    /// the letter as a string and encoded the comment itself; keeping that call in
+    /// front of a template that encodes as well would show the reader
+    /// &amp;lt;b&amp;gt; where the moderator typed a tag.
+    /// </summary>
+    [Fact]
+    public async Task EscapeTheModeratorsCommentExactlyOnce()
+    {
+        var html = await _renderer.RenderAsync(
+            new UsernameChangeRejectionViewModel("user", "<b>имя занято</b>"));
+
+        html.Should().Contain("&lt;b&gt;имя занято&lt;/b&gt;",
+            "a comment is text, and the tag a moderator typed is shown as typed");
+        html.Should().NotContain("&amp;lt;",
+            "encoding it twice puts the entity itself in front of the reader");
+    }
+
+    /// <summary>
+    /// A request may be rejected without a comment, and a line reading "Причина:"
+    /// with nothing after it looks broken, so the missing reason is named instead.
+    /// </summary>
+    [Fact]
+    public async Task NameTheMissingReasonRatherThanPrintAnEmptyOne()
+    {
+        var html = await _renderer.RenderAsync(
+            new UsernameChangeRejectionViewModel("user", Reason: null));
+
+        html.Should().Contain("Причина не указана.");
+        html.Should().NotContain("Причина:");
     }
 
     /// <summary>
