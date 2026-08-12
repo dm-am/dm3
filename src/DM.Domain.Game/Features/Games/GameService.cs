@@ -378,7 +378,7 @@ internal class GameService : IGameService
         var game = await _repository.GetGame(gameId, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
@@ -398,7 +398,7 @@ internal class GameService : IGameService
 
         // Same answer as the aggregate read gives for an id that addresses
         // nothing visible, so a caller cannot tell which path it took.
-        return gameId ?? throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
+        return gameId ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
     }
 
     public async Task<Game> GetByPublicIdAsync(string publicId)
@@ -407,7 +407,7 @@ internal class GameService : IGameService
         var game = await _repository.GetGameByPublicId(publicId, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
@@ -426,7 +426,7 @@ internal class GameService : IGameService
         var game = await _repository.GetGameDetails(gameId, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
@@ -451,7 +451,7 @@ internal class GameService : IGameService
         var game = await _repository.GetGameDetailsByPublicId(publicId, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
@@ -645,7 +645,7 @@ internal class GameService : IGameService
             : await _repository.GetGameDetailsByPublicId(id, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
         }
 
         var gameId = game.Id;
@@ -745,46 +745,6 @@ internal class GameService : IGameService
         }
 
         await _userRepository.RemoveAssistantByUsername(gameId, username);
-        await _producer.SendAsync(EventType.ChangedGame, gameId);
-    }
-
-    /// <inheritdoc />
-    public async Task LeaveAsync(Guid gameId)
-    {
-        _intentionManager.ThrowIfForbidden(GameIntention.Subscribe);
-        var game = await GetAsync(gameId);
-
-        var userId = _identityProvider.Current.User.UserId;
-
-        // Cannot leave own game
-        if (game.Master.UserId == userId)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя покинуть свою игру");
-        }
-
-        var isReader = await _userRepository.IsReader(userId, gameId);
-        var isAssistant = await _userRepository.IsAssistantByUserId(userId, gameId);
-        var charactersLeft = await _userRepository.MarkCharactersAsLeft(userId, gameId);
-
-        // Check if user is a member of the game
-        if (!isReader && !isAssistant && charactersLeft == 0)
-        {
-            throw new HttpException(HttpStatusCode.Conflict, "Вы не участвуете в этой игре");
-        }
-
-        // Remove reader subscription
-        if (isReader)
-        {
-            await _userRepository.RemoveReader(userId, gameId);
-        }
-
-        // Remove assistant role
-        if (isAssistant)
-        {
-            await _userRepository.RemoveAssistantByUserId(userId, gameId);
-        }
-
-        // Send event
         await _producer.SendAsync(EventType.ChangedGame, gameId);
     }
 

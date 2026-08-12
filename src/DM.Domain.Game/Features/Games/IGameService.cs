@@ -139,11 +139,5 @@ public interface IGameService
     /// </summary>
     Task RemoveAssistantAsync(Guid gameId, string username);
 
-    /// <summary>
-    /// Leave a game (as reader, player, or assistant)
-    /// </summary>
-    /// <param name="gameId">Game identifier</param>
-    Task LeaveAsync(Guid gameId);
-
     #endregion
 }

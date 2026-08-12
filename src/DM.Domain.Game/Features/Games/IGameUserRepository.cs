@@ -6,7 +6,7 @@ using DM.Domain.Core.Dto;
 namespace DM.Domain.Game.Features.Games;
 
 /// <summary>
-/// Repository for game user operations (players, assistants, readers)
+/// Repository for game user operations (players and assistants)
 /// </summary>
 public interface IGameUserRepository
 {
@@ -27,11 +27,6 @@ public interface IGameUserRepository
     /// </summary>
     Task<IEnumerable<Guid>> ExilePlayer(Guid gameId, string username);
 
-    /// <summary>
-    /// Mark characters as left when player leaves
-    /// </summary>
-    Task<int> MarkCharactersAsLeft(Guid userId, Guid gameId);
-
     #endregion
 
     #region Assistants
@@ -47,33 +42,9 @@ public interface IGameUserRepository
     Task<bool> IsAssistantByUsername(Guid gameId, string username);
 
     /// <summary>
-    /// Check if user is an assistant by user ID
-    /// </summary>
-    Task<bool> IsAssistantByUserId(Guid userId, Guid gameId);
-
-    /// <summary>
     /// Remove assistant by username
     /// </summary>
     Task RemoveAssistantByUsername(Guid gameId, string username);
-
-    /// <summary>
-    /// Remove assistant by user ID
-    /// </summary>
-    Task RemoveAssistantByUserId(Guid userId, Guid gameId);
-
-    #endregion
-
-    #region Readers
-
-    /// <summary>
-    /// Check if user is a reader
-    /// </summary>
-    Task<bool> IsReader(Guid userId, Guid gameId);
-
-    /// <summary>
-    /// Remove reader subscription
-    /// </summary>
-    Task RemoveReader(Guid userId, Guid gameId);
 
     #endregion
 }
