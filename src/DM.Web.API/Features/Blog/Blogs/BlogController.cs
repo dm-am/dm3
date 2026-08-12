@@ -276,13 +276,16 @@ public class BlogController : ControllerBase
     /// Reorder a blog's rubrics
     /// </summary>
     /// <remarks>
-    /// Accepts the rubric identifiers in the desired order; each rubric's sort
-    /// order becomes its position in the list. Only the blog owner may reorder.
+    /// Replaces the order of the blog's rubrics: a rubric's sort order becomes
+    /// its position in the list. The list names every rubric of the blog exactly
+    /// once. A body that skips one, repeats one or names a rubric of another blog
+    /// is refused: the rubrics it left out would keep the sort orders this
+    /// request has just handed to others. Only the blog owner may reorder.
     /// </remarks>
     /// <param name="id">Blog public ID (5 letters) or GUID</param>
     /// <param name="request">Ordered rubric identifiers</param>
     /// <response code="200">Rubrics reordered; returns the rubrics in their new order</response>
-    /// <response code="400">Invalid request</response>
+    /// <response code="400">The list is not the blog's rubrics, each named once</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized</response>
     /// <response code="404">Blog not found</response>

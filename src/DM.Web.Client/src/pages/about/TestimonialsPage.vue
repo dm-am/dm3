@@ -43,7 +43,7 @@ function retryFetch() {
 const currentPageOutOfRange = computed(() => {
   const list = testimonials.value;
   if (!list || !list.paging) return false;
-  return list.resources.length === 0 && list.paging.number > 1;
+  return list.resources.length === 0 && list.paging.current > 1;
 });
 
 // Paging scrolls the testimonials block (top separator + rows) back into

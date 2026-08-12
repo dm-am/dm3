@@ -58,29 +58,29 @@ public class UserControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Get user by login should return 410 for non-existent user
+    /// Get user by login should return 404 for non-existent user
     /// </summary>
     [Fact]
-    public async Task GetUserByLogin_WithNonExistentUser_ReturnsGone()
+    public async Task GetUserByLogin_WithNonExistentUser_ReturnsNotFound()
     {
         // Act
         var response = await Client.GetAsync("/v1/users/nonexistentuser123");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Gone);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     /// <summary>
-    /// Get user profile by login should return 410 for non-existent user
+    /// Get user profile by login should return 404 for non-existent user
     /// </summary>
     [Fact]
-    public async Task GetUserProfile_WithNonExistentUser_ReturnsGone()
+    public async Task GetUserProfile_WithNonExistentUser_ReturnsNotFound()
     {
         // Act
         var response = await Client.GetAsync("/v1/users/nonexistentuser123/profile");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Gone);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     /// <summary>

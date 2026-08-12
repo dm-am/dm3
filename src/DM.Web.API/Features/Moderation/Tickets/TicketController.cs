@@ -78,8 +78,11 @@ public class TicketController : ControllerBase
     /// Get my assigned tickets
     /// </summary>
     /// <remarks>
-    /// Returns tickets assigned to the current moderator.
+    /// Returns tickets assigned to the current moderator. The roster grows with
+    /// everything the moderator ever took in hand, so it takes a page like the
+    /// intake queue next to it.
     /// </remarks>
+    /// <param name="q">Paging parameters</param>
     /// <response code="200">List of assigned tickets</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">Moderator role required</response>
@@ -88,8 +91,8 @@ public class TicketController : ControllerBase
     [ProducesResponseType(typeof(ListEnvelope<Ticket>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetMyAssignedTickets() =>
-        Ok(await _ticketApiService.GetMyAssignedTickets());
+    public async Task<IActionResult> GetMyAssignedTickets([FromQuery] PagingQuery q) =>
+        Ok(await _ticketApiService.GetMyAssignedTickets(q));
 
     /// <summary>
     /// Get my filed tickets
@@ -98,6 +101,7 @@ public class TicketController : ControllerBase
     /// Returns tickets filed by the current user. Can be filtered by status and
     /// subtype server-side.
     /// </remarks>
+    /// <param name="q">Paging parameters</param>
     /// <param name="status">Optional status filter</param>
     /// <param name="subtype">Optional subtype filter</param>
     /// <response code="200">List of filed tickets</response>
@@ -107,8 +111,9 @@ public class TicketController : ControllerBase
     [ProducesResponseType(typeof(ListEnvelope<Ticket>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetMyFiledTickets(
+        [FromQuery] PagingQuery q,
         [FromQuery] TicketStatus? status = null, [FromQuery] TicketSubtype? subtype = null) =>
-        Ok(await _ticketApiService.GetMyFiledTickets(status, subtype));
+        Ok(await _ticketApiService.GetMyFiledTickets(q, status, subtype));
 
     /// <summary>
     /// Get ticket by ID

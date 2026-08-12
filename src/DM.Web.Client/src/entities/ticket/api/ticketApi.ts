@@ -1,6 +1,19 @@
 import type { Envelope, ListEnvelope } from "@/shared/api/models/common";
 import { Api, X_DM_TICKET_TOKEN } from "@/shared/api";
 
+/**
+ * The page size the wire accepts, and the one it assumes.
+ *
+ * PagingQuery caps take at 100 ([Range(1, 100)]) while the "Сущностей на
+ * странице" preference offers 200, so a caller that forwards the preference
+ * verbatim is refused with 400 and the reader gets an error banner where the
+ * list was. The clamp lives here, next to the only code that knows the wire
+ * contract; 20 is what the server assumes when no page is named, spelled out so
+ * the offset is computed from the size actually requested.
+ */
+const MAX_PAGE_SIZE = 100;
+const DEFAULT_PAGE_SIZE = 20;
+
 // ==================== Ticket Intake Types ====================
 
 /** Ticket ("обращение") categories; mirrors backend TicketSubtype */
@@ -141,17 +154,29 @@ export default new (class TicketApi {
   }
 
   /**
-   * Get tickets filed by the current user ("Мои обращения").
+   * Get a page of tickets filed by the current user ("Мои обращения").
    * GET /v1/moderation/tickets/mine - authentication required. Status and
-   * subtype are filtered server-side (omit for all).
+   * subtype are filtered server-side (omit for all), and so is the page: the
+   * pile of a long-standing member only grows.
+   *
+   * The page number is the caller's own vocabulary; the wire takes skip/take
+   * like every other list.
    */
   public getMyTickets(params?: {
     status?: TicketStatus;
     subtype?: TicketSubtype;
+    /** 1-based page number */
+    number?: number;
+    /** Page size; clamped to what the wire accepts */
+    take?: number;
   }) {
+    const pageSize = Math.min(params?.take ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+    const pageNumber = params?.number ?? 1;
     return Api.get<ListEnvelope<Ticket>>("moderation/tickets/mine", {
       status: params?.status,
       subtype: params?.subtype,
+      skip: pageNumber > 1 ? (pageNumber - 1) * pageSize : undefined,
+      take: pageSize,
     });
   }
 

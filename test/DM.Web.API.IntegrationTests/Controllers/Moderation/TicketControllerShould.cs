@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using FluentAssertions;
 using Xunit;
 
@@ -65,6 +66,43 @@ public class TicketControllerShould : IntegrationTestBase
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GetMyFiledTickets_TakesThePageAndReportsTheTotal()
+    {
+        // Both lists used to answer with everything and say nothing about it.
+        // The parameters have to bind on the wire, not only in the signature,
+        // and the envelope has to carry the total: a truncated answer that does
+        // not say how much it truncated leaves the caller unable to ask for the
+        // rest.
+        var request = CreateAuthenticatedRequest(
+            HttpMethod.Get, "/v1/moderation/tickets/mine?skip=0&take=1");
+
+        var response = await Client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "body was: {0}", body);
+        var paging = JsonDocument.Parse(body).RootElement.GetProperty("paging");
+        paging.GetProperty("take").GetInt32().Should().Be(1);
+        paging.TryGetProperty("total", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetMyAssignedTickets_TakesThePageAndReportsTheTotal()
+    {
+        // The moderator queue: same contract, and it is reached with a role that
+        // passes the moderator gate.
+        var request = CreateAdminRequest(
+            HttpMethod.Get, "/v1/moderation/tickets/assigned?skip=0&take=1");
+
+        var response = await Client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "body was: {0}", body);
+        var paging = JsonDocument.Parse(body).RootElement.GetProperty("paging");
+        paging.GetProperty("take").GetInt32().Should().Be(1);
+        paging.TryGetProperty("total", out _).Should().BeTrue();
     }
 
     [Fact]

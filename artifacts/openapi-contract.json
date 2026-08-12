@@ -1579,6 +1579,7 @@
     "title"
   ],
   "DM.Web.API.Features.Personal.Notepads.NotepadEntryResponse": [
+    "authorId",
     "containerId",
     "content",
     "createdUtc",
@@ -2143,9 +2144,7 @@
   ],
   "DM.Web.API.Shared.Dto.PagingInfo": [
     "current",
-    "number",
     "pages",
-    "size",
     "skip",
     "take",
     "total"

@@ -74,8 +74,6 @@ public class ListBoundsShould : IntegrationTestBase
         "GET /v1/moderation/tags",
         "GET /v1/moderation/tags/groups",
         "GET /v1/moderation/tags/groups/{groupId}/tags",
-        "GET /v1/moderation/tickets/assigned",
-        "GET /v1/moderation/tickets/mine",
         "GET /v1/moderation/username-changes",
         "GET /v1/moderation/users/{username}/notes",
         "GET /v1/moderation/violators",

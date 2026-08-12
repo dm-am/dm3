@@ -81,8 +81,8 @@ const comment = (id: string): Comment =>
 const paging = (over: Partial<PagingInfo> = {}): PagingInfo => ({
   pages: 3,
   current: 1,
-  size: 20,
-  number: 1,
+  skip: 0,
+  take: 20,
   total: 45,
   ...over,
 });
@@ -165,7 +165,7 @@ describe("the discussion section", () => {
   it("numbers a comment by its place in the discussion, not on the page", () => {
     const { wrapper } = render({
       comments: [comment("c-21"), comment("c-22")],
-      paging: paging({ current: 2 }),
+      paging: paging({ current: 2, skip: 20 }),
     });
 
     expect(wrapper.findAll(".comment-stub").map((item) => item.text())).toEqual(

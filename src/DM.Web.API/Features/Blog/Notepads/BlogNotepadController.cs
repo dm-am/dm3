@@ -95,7 +95,7 @@ public class BlogNotepadController : ControllerBase
     /// <param name="request">Update request</param>
     /// <response code="200">Entry updated</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User must be blog owner or assistant</response>
+    /// <response code="403">Only the author of the entry may edit it</response>
     /// <response code="404">Entry not found</response>
     [HttpPatch("{entryId:guid}", Name = nameof(UpdateBlogNotepadEntry))]
     [ProducesResponseType(typeof(Envelope<NotepadEntryResponse>), StatusCodes.Status200OK)]
@@ -112,7 +112,7 @@ public class BlogNotepadController : ControllerBase
     /// <param name="entryId">Entry identifier</param>
     /// <response code="204">Entry deleted</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User must be blog owner or assistant</response>
+    /// <response code="403">Only the author of the entry or the blog owner may delete it</response>
     /// <response code="404">Entry not found</response>
     [HttpDelete("{entryId:guid}", Name = nameof(DeleteBlogNotepadEntry))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

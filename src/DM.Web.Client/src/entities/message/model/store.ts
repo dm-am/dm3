@@ -8,12 +8,14 @@ import { useAuthStore } from "@/shared/stores";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 
-const PAGE_SIZE = 50;
 const MAX_MESSAGES = 500;
 
 export const useMessagingStore = defineStore("messaging", () => {
   const { user: currentUser } = storeToRefs(useAuthStore());
-  const { entitiesPerPage } = usePaging();
+  // Both sizes are the reader's own. The message window used to hold a constant
+  // of its own, so the "messages per page" preference was saved and moved
+  // nothing.
+  const { entitiesPerPage, messagesPerPage } = usePaging();
 
   // Error state for messaging operations
   const error = ref<string | null>(null);
@@ -120,7 +122,7 @@ export const useMessagingStore = defineStore("messaging", () => {
     errorBefore.value = null;
     try {
       const { data } = await messagingApi.getMessages(chatId, {
-        limit: PAGE_SIZE,
+        limit: messagesPerPage.value,
       });
 
       if (!messagesGuard.isCurrent(requestId)) return;
@@ -149,7 +151,7 @@ export const useMessagingStore = defineStore("messaging", () => {
       const { data, error: apiError } = await messagingApi.getMessagesBefore(
         selectedChat.value.id,
         currentCursor.value.prevCursor,
-        PAGE_SIZE,
+        messagesPerPage.value,
       );
 
       if (apiError) {
@@ -202,7 +204,7 @@ export const useMessagingStore = defineStore("messaging", () => {
     try {
       const { data } = await messagingApi.getMessages(chatId, {
         aroundMessageId: messageId,
-        limit: PAGE_SIZE,
+        limit: messagesPerPage.value,
       });
       if (!messagesGuard.isCurrent(requestId)) return;
       if (data && data.resources.length > 0) {

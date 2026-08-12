@@ -94,8 +94,8 @@ const errorCode = ref<number | null>(null);
 async function loadProfile(name: Username) {
   errorCode.value = null;
   const error = await communityStore.trySelectProfile(name);
-  // The profile endpoint answers an unknown username with 410, which here means
-  // "no such user" and not "deleted" - that is the default of the shared map,
+  // The profile endpoint answers an unknown username with 404, and the shared
+  // map turns anything without a page of its own into the same "не найдено",
   // so this page reads the same as it did with its own copy.
   if (error) errorCode.value = errorCodeForStatus(error.status);
 }

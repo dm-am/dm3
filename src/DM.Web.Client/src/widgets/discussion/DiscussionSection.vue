@@ -135,7 +135,7 @@ watch(
 /** Position of a comment in the whole discussion, not on this page. */
 function commentNumber(index: number): number {
   if (!props.paging) return index + 1;
-  return (props.paging.current - 1) * props.paging.size + index + 1;
+  return props.paging.skip + index + 1;
 }
 
 const emptyText = computed(() =>

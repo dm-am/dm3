@@ -222,9 +222,7 @@ function pagingAnchor(): HTMLElement | null {
       :loading="searchLoading"
       :show-row-numbers="true"
       :start-row-number="
-        searchResult?.paging
-          ? (searchResult.paging.current - 1) * searchResult.paging.size + 1
-          : 1
+        searchResult?.paging ? searchResult.paging.skip + 1 : 1
       "
       :sort="currentSort"
       :empty-text="emptyText"

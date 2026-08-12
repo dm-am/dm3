@@ -328,7 +328,7 @@ function pagingAnchor(): HTMLElement | null {
       :data="games"
       :loading="loading"
       :show-row-numbers="true"
-      :start-row-number="paging ? (paging.current - 1) * paging.size + 1 : 1"
+      :start-row-number="paging ? paging.skip + 1 : 1"
       :sort="currentSort"
       :empty-text="emptyText"
     >

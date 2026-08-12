@@ -29,6 +29,7 @@ import { markRemoved } from "@/shared/api/models/common";
 import gameApi from "../api/gameApi";
 import { unwrapResource, type CommentsQuery } from "@/shared/api";
 import { useAuthStore } from "@/shared/stores";
+import { usePaging } from "@/shared/lib/composables/usePaging";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 import { requestNotSent } from "@/shared/lib/errors";
 // One edge, and it points this way on purpose: deleting a game has to drop the
@@ -40,6 +41,12 @@ import { useGamesStore } from "./store";
  * Store for single game details (game page)
  */
 export const useGameDetailsStore = defineStore("gameDetails", () => {
+  // The room asks the API for the reader's own page size, the same shape the
+  // forum store uses for its topics and its comments. Read here and not in the
+  // API module: that one has no store to ask, and a size spelled there is a
+  // number no setting can move.
+  const { postsPerPage } = usePaging();
+
   // Game data
   const game = ref<Game | null>(null);
   const gameLoading = ref(false);
@@ -241,7 +248,10 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
       currentRoom.value = room;
     }
 
-    const { data, error } = await gameApi.getPosts(roomId, { number: page });
+    const { data, error } = await gameApi.getPosts(roomId, {
+      number: page,
+      take: postsPerPage.value,
+    });
 
     // Stale continuation. currentRoom is assigned synchronously above, so
     // without this the header names the room the newer call selected while the

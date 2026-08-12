@@ -6,12 +6,12 @@ using DM.Web.API.Shared.BbRendering;
 using SvcBlog = DM.Domain.Blog.Features.Blogs.Blog;
 using SvcBlogFilter = DM.Domain.Blog.Features.Blogs.BlogFilter;
 using SvcRubric = DM.Domain.Blog.Features.Blogs.Rubric;
-using SvcPublication = DM.Domain.Blog.Features.Blogs.Publication;
+using SvcPublication = DM.Domain.Blog.Features.Publications.Publication;
 using SvcCreateBlog = DM.Domain.Blog.Features.Blogs.CreateBlog;
 using SvcUpdateBlog = DM.Domain.Blog.Features.Blogs.UpdateBlog;
 using SvcCreateRubric = DM.Domain.Blog.Features.Blogs.CreateRubric;
-using SvcCreatePublication = DM.Domain.Blog.Features.Blogs.CreatePublication;
-using SvcUpdatePublication = DM.Domain.Blog.Features.Blogs.UpdatePublication;
+using SvcCreatePublication = DM.Domain.Blog.Features.Publications.CreatePublication;
+using SvcUpdatePublication = DM.Domain.Blog.Features.Publications.UpdatePublication;
 
 namespace DM.Web.API.Features.Blog.Blogs;
 

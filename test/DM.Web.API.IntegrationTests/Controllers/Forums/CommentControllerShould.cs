@@ -115,23 +115,25 @@ public class CommentControllerShould : IntegrationTestBase
     #region GetForumComment Tests
 
     /// <summary>
-    /// Get existing comment should return Gone (comment not seeded in test DB due to FK constraints)
+    /// Get existing comment should return NotFound (comment not seeded in test DB due to FK constraints)
     /// </summary>
     [Fact]
-    public async Task GetForumComment_WithValidId_ReturnsGone()
+    public async Task GetForumComment_WithValidId_ReturnsNotFound()
     {
         // Act
         var response = await Client.GetAsync($"/v1/forum/comments/{TestConstants.TestCommentId}");
 
-        // Assert - comment is not seeded, so returns Gone
-        response.StatusCode.Should().Be(HttpStatusCode.Gone);
+        // Assert - comment is not seeded, so returns NotFound
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     /// <summary>
-    /// Get non-existent comment should return Gone
+    /// Get non-existent comment should return NotFound, the same code the delete
+    /// of the same missing comment has always answered. The read used to answer
+    /// Gone, so one resource had two codes for one absence.
     /// </summary>
     [Fact]
-    public async Task GetForumComment_WithNonExistentId_ReturnsGone()
+    public async Task GetForumComment_WithNonExistentId_ReturnsNotFound()
     {
         // Arrange
         var nonExistentId = Guid.NewGuid();
@@ -140,7 +142,7 @@ public class CommentControllerShould : IntegrationTestBase
         var response = await Client.GetAsync($"/v1/forum/comments/{nonExistentId}");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Gone);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     /// <summary>

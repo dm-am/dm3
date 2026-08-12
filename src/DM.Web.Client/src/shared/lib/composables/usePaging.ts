@@ -25,50 +25,68 @@ export const DEFAULT_PAGE_SIZES = {
 } as const;
 
 /**
+ * The largest page the API serves.
+ *
+ * A take or limit above it is a validation error and not a shortened page
+ * (API_DESIGN.md, "Pagination"), while the preference saved through
+ * PATCH /v1/users/me/preferences goes up to 200: its whitelist allows that and
+ * the account form offers it. The two are reconciled here, at the single point
+ * where a saved preference becomes a request size, so that a reader who picked
+ * 200 gets the largest page there is instead of a refused request and a list
+ * that failed to load.
+ */
+export const MAX_API_PAGE_SIZE = 100;
+
+/** The reader's preference, or the default, within what the API will serve. */
+function pageSize(preference: number | undefined, fallback: number): number {
+  return Math.min(preference ?? fallback, MAX_API_PAGE_SIZE);
+}
+
+/**
  * Returns reactive paging preferences from current user or defaults
  */
 export function usePaging() {
   const authStore = useAuthStore();
 
   /** Posts per page (for game rooms) */
-  const postsPerPage = computed(() => {
-    return (
-      authStore.user?.settings?.paging?.postsPerPage ??
-      DEFAULT_PAGE_SIZES.postsPerPage
-    );
-  });
+  const postsPerPage = computed(() =>
+    pageSize(
+      authStore.user?.settings?.paging?.postsPerPage,
+      DEFAULT_PAGE_SIZES.postsPerPage,
+    ),
+  );
 
   /** Comments per page (for game/topic comments) */
-  const commentsPerPage = computed(() => {
-    return (
-      authStore.user?.settings?.paging?.commentsPerPage ??
-      DEFAULT_PAGE_SIZES.commentsPerPage
-    );
-  });
+  const commentsPerPage = computed(() =>
+    pageSize(
+      authStore.user?.settings?.paging?.commentsPerPage,
+      DEFAULT_PAGE_SIZES.commentsPerPage,
+    ),
+  );
 
   /** Topics per page (for forum boards) */
-  const topicsPerPage = computed(() => {
-    return (
-      authStore.user?.settings?.paging?.topicsPerPage ??
-      DEFAULT_PAGE_SIZES.topicsPerPage
-    );
-  });
+  const topicsPerPage = computed(() =>
+    pageSize(
+      authStore.user?.settings?.paging?.topicsPerPage,
+      DEFAULT_PAGE_SIZES.topicsPerPage,
+    ),
+  );
 
   /** Messages per page (for chats) */
-  const messagesPerPage = computed(() => {
-    return (
-      authStore.user?.settings?.paging?.messagesPerPage ??
-      DEFAULT_PAGE_SIZES.messagesPerPage
-    );
-  });
+  const messagesPerPage = computed(() =>
+    pageSize(
+      authStore.user?.settings?.paging?.messagesPerPage,
+      DEFAULT_PAGE_SIZES.messagesPerPage,
+    ),
+  );
 
   /** Entities per page (for lists: games, users, blogs, etc.) */
-  const entitiesPerPage = computed(() => {
-    return (
-      authStore.user?.settings?.paging?.entitiesPerPage ??
-      DEFAULT_PAGE_SIZES.entitiesPerPage
-    );
-  });
+  const entitiesPerPage = computed(() =>
+    pageSize(
+      authStore.user?.settings?.paging?.entitiesPerPage,
+      DEFAULT_PAGE_SIZES.entitiesPerPage,
+    ),
+  );
 
   /** Polls per page (divisible by 3 for grid layout) */
   const pollsPerPage = computed(() => {

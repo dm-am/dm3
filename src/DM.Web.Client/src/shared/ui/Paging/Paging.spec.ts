@@ -30,8 +30,8 @@ describe("Paging", () => {
   const defaultPaging = {
     pages: 10,
     current: 5,
-    size: 20,
-    number: 5,
+    skip: 80,
+    take: 20,
     total: 200,
   };
 

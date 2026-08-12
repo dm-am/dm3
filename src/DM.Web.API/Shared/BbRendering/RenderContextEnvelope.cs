@@ -4,8 +4,6 @@ using DM.Infrastructure.Core.Parsing;
 
 namespace DM.Web.API.Shared.BbRendering;
 
-#pragma warning disable CS1591
-
 /// <summary>
 /// API-layer carrier of BBCode content provenance. Mapping profiles
 /// populate this envelope at the boundary that knows where the content

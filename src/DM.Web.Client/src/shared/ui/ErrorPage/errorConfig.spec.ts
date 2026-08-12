@@ -6,14 +6,16 @@
  * The status-to-page map, as a table.
  *
  * There were three copies of it and they had already diverged. The forum board
- * page turned everything but 404 into "ошибка сервера", and since the API
- * answers a missing board with 410 Gone that is what a mistyped alias actually
- * drew; the topic page next to it read the same 410 as "Страница удалена"; the
+ * page turned everything but 404 into "ошибка сервера", and a missing board was
+ * answered with 410 back then, so that is what a mistyped alias actually drew;
+ * the topic page next to it read the same 410 as "Страница удалена"; the
  * profile page had a third spelling. Games and blogs had no map at all and drew
  * one paragraph for every failure.
  *
- * 410 is the one status that means two things in this API, so both readings are
- * pinned here rather than left to whoever writes the fourth copy.
+ * 410 now carries one meaning on the wire, a resource that was deleted, and only
+ * the topic endpoint spends it. Both readings stay pinned here rather than left
+ * to whoever writes the fourth copy: the default has to survive a 410 from an
+ * endpoint that has no business sending one.
  */
 import { describe, it, expect } from "vitest";
 import { errorCodeForStatus, getErrorConfig } from "./errorConfig";
@@ -41,7 +43,8 @@ describe("errorCodeForStatus", () => {
   }
 
   it("reads Gone as not-found by default", () => {
-    // Boards, users and games are answered with Gone when they do not exist.
+    // Boards, users and games answer 404 now, so a Gone from anywhere but the
+    // topic endpoint is a stray one and must not claim a deletion.
     expect(errorCodeForStatus(410)).toBe(404);
   });
 

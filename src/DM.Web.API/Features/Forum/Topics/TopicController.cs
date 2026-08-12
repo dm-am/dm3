@@ -353,18 +353,23 @@ public class TopicController : ControllerBase
     /// Reorder pinned topics in board
     /// </summary>
     /// <remarks>
-    /// Updates the display order of pinned topics.
-    /// The first topic ID in the array will appear first (top).
+    /// Replaces the display order of the board's pinned topics. The body carries
+    /// the whole order rather than a correction to it: a topic's position is its
+    /// index in the array, so the first id in it is shown at the top.
+    /// The array names every pinned topic of the board exactly once. A body that
+    /// skips one, repeats one or names a topic pinned in another board is
+    /// refused: the topics it left out would keep the positions this request has
+    /// just handed to others.
     /// Only board moderators and administrators can perform this action.
     /// </remarks>
     /// <param name="id">Board identifier (GUID or URL slug)</param>
     /// <param name="request">Reorder request with topic IDs in desired order</param>
     /// <response code="204">Topics reordered successfully</response>
-    /// <response code="400">Invalid request (empty array, invalid IDs)</response>
+    /// <response code="400">The array is not the board's pinned topics, each named once</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not a board moderator</response>
     /// <response code="404">Board not found</response>
-    [HttpPatch("~/v1/boards/{id}/topics/pinned/order", Name = nameof(ReorderPinnedTopics))]
+    [HttpPut("~/v1/boards/{id}/topics/pinned/order", Name = nameof(ReorderPinnedTopics))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]

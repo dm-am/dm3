@@ -22,6 +22,7 @@ vi.mock("../api/messagingApi", () => ({
 }));
 
 import { useMessagingStore } from "./store";
+import { useAuthStore } from "@/shared/stores";
 
 const message = (id: number) => ({
   id: `m${id}`,
@@ -227,5 +228,54 @@ describe("useMessagingStore, sending a message", () => {
       expect(store.messagesList.map((m) => m.id)).toEqual(["mb"]);
       expect(store.loadingMessages).toBe(false);
     });
+  });
+});
+
+describe("useMessagingStore, the size of the window", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+  });
+
+  /** A reader who set "messages per page" to thirty. */
+  function readerChose(messagesPerPage: number) {
+    useAuthStore().user = {
+      settings: { paging: { messagesPerPage } },
+    } as never;
+  }
+
+  // The preference was saved and never read: the window held a constant of its
+  // own, so the choice moved nothing.
+  it("asks for as many messages as the reader chose", async () => {
+    readerChose(30);
+    mockGetMessages.mockResolvedValue(page([1]));
+
+    const store = useMessagingStore();
+    await store.fetchMessages("c1" as never);
+
+    expect(mockGetMessages).toHaveBeenCalledWith("c1", { limit: 30 });
+  });
+
+  it("keeps that size when it loads older messages", async () => {
+    readerChose(30);
+    const store = await openChatWithHistory();
+    mockGetMessagesBefore.mockResolvedValue(page([0]));
+
+    await store.fetchMoreBefore();
+
+    expect(mockGetMessagesBefore).toHaveBeenCalledWith("c1", "cursor-1", 30);
+  });
+
+  // 200 is a legal preference and an illegal page. Unclamped it comes back 400,
+  // and fetchMessages reads only `data`: the conversation would be drawn empty,
+  // with nothing on screen saying why.
+  it("asks for no more than the API serves", async () => {
+    readerChose(200);
+    mockGetMessages.mockResolvedValue(page([1]));
+
+    const store = useMessagingStore();
+    await store.fetchMessages("c1" as never);
+
+    expect(mockGetMessages).toHaveBeenCalledWith("c1", { limit: 100 });
   });
 });

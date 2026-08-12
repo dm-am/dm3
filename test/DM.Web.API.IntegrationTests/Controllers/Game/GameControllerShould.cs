@@ -284,10 +284,12 @@ public class GameControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Get non-existent game should return Gone
+    /// Get non-existent game should return NotFound. The game endpoints answer
+    /// the same code for an id that never existed and for one this reader may
+    /// not see, and neither of those is "somebody deleted it".
     /// </summary>
     [Fact]
-    public async Task GetGame_WithNonExistentId_ReturnsGone()
+    public async Task GetGame_WithNonExistentId_ReturnsNotFound()
     {
         // Arrange
         var nonExistentId = Guid.NewGuid();
@@ -296,7 +298,7 @@ public class GameControllerShould : IntegrationTestBase
         var response = await Client.GetAsync($"/v1/games/{nonExistentId}");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Gone);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     #endregion
@@ -567,10 +569,10 @@ public class GameControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Get non-existent game details should return Gone
+    /// Get non-existent game details should return NotFound
     /// </summary>
     [Fact]
-    public async Task GetGameDetails_WithNonExistentId_ReturnsGone()
+    public async Task GetGameDetails_WithNonExistentId_ReturnsNotFound()
     {
         // Arrange
         var nonExistentId = Guid.NewGuid();
@@ -579,7 +581,7 @@ public class GameControllerShould : IntegrationTestBase
         var response = await Client.GetAsync($"/v1/games/{nonExistentId}/details");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Gone);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     #endregion
@@ -745,10 +747,10 @@ public class GameControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Get readers of non-existent game should return Gone
+    /// Get readers of non-existent game should return NotFound
     /// </summary>
     [Fact]
-    public async Task GetReaders_WithNonExistentId_ReturnsGone()
+    public async Task GetReaders_WithNonExistentId_ReturnsNotFound()
     {
         // Arrange
         var nonExistentId = Guid.NewGuid();
@@ -757,7 +759,7 @@ public class GameControllerShould : IntegrationTestBase
         var response = await Client.GetAsync($"/v1/games/{nonExistentId}/readers");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Gone);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     #endregion

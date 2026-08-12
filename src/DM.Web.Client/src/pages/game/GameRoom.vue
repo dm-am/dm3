@@ -87,7 +87,7 @@ const gameId = computed(() => route.params.id as string);
 function postNumber(index: number): number {
   const paging = postsPaging.value;
   if (!paging) return index + 1;
-  return (paging.current - 1) * paging.size + index + 1;
+  return paging.skip + index + 1;
 }
 
 // Paging scrolls the posts list back into view (not the page top)

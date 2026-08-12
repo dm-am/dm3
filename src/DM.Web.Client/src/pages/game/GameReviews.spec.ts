@@ -65,7 +65,13 @@ async function render(
       : {
           data: {
             resources: reviews,
-            paging: { current: 1, pages: 1, size: 20, total: reviews.length },
+            paging: {
+              current: 1,
+              pages: 1,
+              skip: 0,
+              take: 20,
+              total: reviews.length,
+            },
           },
           error: null,
         },

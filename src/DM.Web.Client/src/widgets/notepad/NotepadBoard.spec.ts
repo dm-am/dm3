@@ -20,6 +20,7 @@ const entry = (over: Partial<NotepadEntry> = {}): NotepadEntry => ({
   id: "1",
   notepadType: "User",
   containerId: "c",
+  authorId: "u",
   title: "Первая",
   content: "Текст",
   sortOrder: 0,

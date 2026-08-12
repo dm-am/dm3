@@ -30,7 +30,7 @@ const emptyTitle = computed(() =>
 const currentPageOutOfRange = computed(() => {
   const list = polls.value;
   if (!list || !list.paging) return false;
-  return list.resources.length === 0 && list.paging.number > 1;
+  return list.resources.length === 0 && list.paging.current > 1;
 });
 
 function retry() {
