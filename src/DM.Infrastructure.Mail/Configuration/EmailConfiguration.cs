@@ -39,4 +39,18 @@ public class EmailConfiguration
     /// Send emails with reply to address
     /// </summary>
     public string ReplyToAddress { get; set; } = null!;
+
+    /// <summary>
+    /// Refuse to send at all unless the session is encrypted
+    /// </summary>
+    /// <remarks>
+    /// Off by default because the local and preview stacks send through MailHog,
+    /// which offers no TLS and would refuse every letter under a stricter
+    /// setting. Opportunistic upgrade is also a downgrade anyone on the path can
+    /// force by stripping STARTTLS out of the greeting, and what travels in these
+    /// letters is activation and password reset links - so a deployment with a
+    /// real relay behind it turns this on and the session fails instead of
+    /// quietly continuing in the clear.
+    /// </remarks>
+    public bool RequireTls { get; set; }
 }

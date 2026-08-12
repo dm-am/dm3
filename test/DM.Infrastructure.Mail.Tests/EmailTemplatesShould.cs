@@ -107,17 +107,8 @@ public class EmailTemplatesShould : IAsyncDisposable
     }
 
     /// <summary>Templates are content, not build output, so they are read from the source tree.</summary>
-    private static string TemplatesDirectory()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && directory.GetDirectories("src").Length == 0)
-        {
-            directory = directory.Parent;
-        }
-
-        directory.Should().NotBeNull("the repository root is found by walking up from the test binary");
-        return Path.Combine(directory!.FullName, "src", "DM.Infrastructure.Mail", "Templates");
-    }
+    private static string TemplatesDirectory() =>
+        Path.Combine(DM.Testing.RepositoryLayout.Root, "src", "DM.Infrastructure.Mail", "Templates");
 
     /// <summary>Every view model the domain declares, found by reflection.</summary>
     public static TheoryData<Type> ViewModelTypes()

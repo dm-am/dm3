@@ -1,71 +1,39 @@
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Infrastructure.Core.Tracing;
+using DM.Infrastructure.Messaging;
 using Jamq.Client.Abstractions.Consuming;
 using Microsoft.Extensions.Logging;
-using Polly;
-using Polly.Retry;
 
 namespace DM.Workers.Mail;
 
+/// <summary>
+/// Retries and counts the letters this worker takes off its queue.
+/// </summary>
+/// <remarks>
+/// Every letter passes through here, which is why the counters are written on
+/// this side at all: the warning a retry leaves behind was the only trace of a
+/// failing sender, and it reached no dashboard and no rule.
+///
+/// The policy and the instruments live in <see cref="MeasuredConsumerPipeline"/>,
+/// one copy for every host that consumes. What is left here is what belongs to
+/// this host and to no other: the queue it reads, and the logger the retries are
+/// written to.
+/// </remarks>
 internal class ConsumerRetryMiddleware : IConsumerMiddleware
 {
     /// <summary>Queue this middleware sits in front of, as the metrics label it.</summary>
     private const string Queue = "dm.mail.sending";
 
-    private readonly AsyncRetryPolicy _retryPolicy;
+    private readonly MeasuredConsumerPipeline _pipeline;
 
     public ConsumerRetryMiddleware(
-        ILogger<ConsumerRetryMiddleware> logger)
-    {
-        _retryPolicy = Policy.Handle<Exception>().WaitAndRetryAsync(5,
-            attempt => TimeSpan.FromSeconds(1 << attempt),
-            (exception, _) =>
-            {
-                MessagingMetrics.Retried.Add(1, MessagingMetrics.Queue(Queue));
-                logger.LogWarning(exception, "Something is wrong with mail sending");
-            });
-    }
+        ILogger<ConsumerRetryMiddleware> logger) =>
+        _pipeline = MeasuredConsumerPipeline.Retrying(Queue, logger);
 
-    /// <summary>
-    /// Runs the rest of the pipeline under the retry policy and measures it.
-    /// </summary>
-    /// <remarks>
-    /// Every letter passes through here, which is why the counters are written
-    /// here: the warning below was the only trace a failing sender left, and it
-    /// reached no dashboard and no rule.
-    /// </remarks>
-    /// <param name="context">Consumer context.</param>
-    /// <param name="next">Rest of the pipeline.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    public async Task<ProcessResult> InvokeAsync(
+    /// <inheritdoc />
+    public Task<ProcessResult> InvokeAsync(
         ConsumerContext context,
         ConsumerDelegate next,
-        CancellationToken cancellationToken)
-    {
-        var started = Stopwatch.GetTimestamp();
-        try
-        {
-            var result = await _retryPolicy.ExecuteAsync(() => next.Invoke(context, cancellationToken));
-            MessagingMetrics.Consumed.Add(1,
-                MessagingMetrics.Queue(Queue),
-                new KeyValuePair<string, object?>("result", result.ToString()));
-            return result;
-        }
-        catch (Exception exception)
-        {
-            MessagingMetrics.Failed.Add(1,
-                MessagingMetrics.Queue(Queue),
-                new KeyValuePair<string, object?>("reason", exception.GetType().Name));
-            throw;
-        }
-        finally
-        {
-            MessagingMetrics.Duration.Record(
-                Stopwatch.GetElapsedTime(started).TotalSeconds, MessagingMetrics.Queue(Queue));
-        }
-    }
+        CancellationToken cancellationToken) =>
+        _pipeline.InvokeAsync(context, next, cancellationToken);
 }

@@ -23,7 +23,13 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
     private readonly ILogger<MailSendingProcessor> _logger;
     private readonly ICorrelationTokenProvider _correlationTokenProvider;
     private readonly EmailConfiguration _configuration;
-    private readonly Lazy<IMailTransport> _client;
+
+    /// <summary>
+    /// The session this processor sends its letter through. Built here and opened
+    /// on first use: a constructor cannot await, and opening it is several network
+    /// round trips.
+    /// </summary>
+    private readonly SmtpClient _client = new();
 
     /// <inheritdoc />
     public MailSendingProcessor(
@@ -34,21 +40,47 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
         _logger = logger;
         _correlationTokenProvider = correlationTokenProvider;
         _configuration = configuration.Value;
-        _client = new Lazy<IMailTransport>(() =>
+    }
+
+    /// <summary>
+    /// The connected transport, opening the session on the first call.
+    /// </summary>
+    /// <remarks>
+    /// Every step is the asynchronous overload. The handshake is several round
+    /// trips - TCP, greeting, STARTTLS, greeting again, AUTH - and the blocking
+    /// overloads spent all of them holding a thread pool thread inside a pipeline
+    /// that is asynchronous everywhere else. The NoOp that used to close the
+    /// sequence was one more round trip, asking a connection that had just
+    /// finished answering whether it was there.
+    ///
+    /// A session per letter is deliberate and stays: a processor is resolved from
+    /// its own scope for every delivered letter and closes what it opened, which
+    /// is what MailTransportOwnershipShould holds.
+    /// </remarks>
+    private async Task<IMailTransport> ConnectedClient(CancellationToken cancellationToken)
+    {
+        if (_client.IsConnected)
         {
-            var smtpClient = new SmtpClient();
-            smtpClient.Connect(_configuration.ServerHost, _configuration.ServerPort,
-                SecureSocketOptions.StartTlsWhenAvailable);
-            smtpClient.Authenticate(_configuration.Username, _configuration.Password);
-            smtpClient.NoOp();
-            return smtpClient;
-        });
+            return _client;
+        }
+
+        await _client.ConnectAsync(_configuration.ServerHost, _configuration.ServerPort,
+            TransportSecurity(), cancellationToken);
+        await _client.AuthenticateAsync(_configuration.Username, _configuration.Password, cancellationToken);
+        return _client;
     }
 
     /// <inheritdoc />
     public async Task<ProcessResult> Process(string key, EmailLetter message, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Sending letter to {Address}", message.Address.Obfuscate());
+        // Logged, not only written into the header: the identifier is the one
+        // part of a letter that comes back — a bounce report, a relay's log and
+        // the reader's own client all quote it — and without it here there was
+        // nothing on this side to match any of them against.
+        var messageId = MessageIdentifier.Build(
+            _correlationTokenProvider.Current, _configuration.FromAddress);
+        _logger.LogInformation("Sending letter {MessageId} to {Address}",
+            messageId, message.Address.Obfuscate());
 
         var mimeMessage = new MimeMessage
         {
@@ -56,13 +88,42 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
             ReplyTo = { new MailboxAddress(_configuration.FromDisplayName, _configuration.ReplyToAddress) },
             To = { MailboxAddress.Parse(message.Address) },
             Subject = message.Subject,
-            MessageId = _correlationTokenProvider.Current.ToString()
+            MessageId = messageId
         };
 
         mimeMessage.Body = BuildMessageBody(message);
 
-        await _client.Value.SendAsync(mimeMessage, cancellationToken);
+        var client = await ConnectedClient(cancellationToken);
+        await client.SendAsync(mimeMessage, cancellationToken);
         return ProcessResult.Success;
+    }
+
+    /// <summary>The submission port that is encrypted from the first byte.</summary>
+    private const int ImplicitTlsPort = 465;
+
+    /// <summary>
+    /// How much of the encryption this deployment is willing to give up.
+    /// </summary>
+    /// <remarks>
+    /// The mode used to be a constant written into the call, so a deployment that
+    /// wanted encryption had no way to ask for it: an attacker on the path strips
+    /// STARTTLS out of the greeting and the same session continues in the clear,
+    /// carrying activation and password reset links. Opportunistic upgrade stays
+    /// the default only because the local and preview stacks send through MailHog.
+    /// </remarks>
+    private SecureSocketOptions TransportSecurity()
+    {
+        if (!_configuration.RequireTls)
+        {
+            return SecureSocketOptions.StartTlsWhenAvailable;
+        }
+
+        // Port 465 is encrypted from the first byte: there is no plaintext greeting
+        // to upgrade, and demanding STARTTLS on it fails a session that is already
+        // encrypted.
+        return _configuration.ServerPort == ImplicitTlsPort
+            ? SecureSocketOptions.SslOnConnect
+            : SecureSocketOptions.StartTls;
     }
 
     /// <summary>
@@ -78,20 +139,16 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
     /// </remarks>
     public async ValueTask DisposeAsync()
     {
-        // A lazy factory that threw leaves IsValueCreated false: nothing was opened
-        if (!_client.IsValueCreated)
-        {
-            return;
-        }
-
-        var client = _client.Value;
         try
         {
-            if (client.IsConnected)
+            // A processor whose letter never reached the relay opened nothing, and
+            // now that the transport is built rather than deferred, IsConnected is
+            // what says so
+            if (_client.IsConnected)
             {
                 // Quit rather than drop: a socket closed without QUIT leaves the
                 // relay counting the session until its own idle timeout expires
-                await client.DisconnectAsync(true, CancellationToken.None);
+                await _client.DisconnectAsync(true, CancellationToken.None);
             }
         }
         catch (Exception e)
@@ -101,7 +158,7 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
             _logger.LogWarning(e, "Could not close the SMTP session cleanly");
         }
 
-        client.Dispose();
+        _client.Dispose();
     }
 
     /// <summary>
@@ -114,17 +171,11 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
     /// </remarks>
     public void Dispose()
     {
-        if (!_client.IsValueCreated)
-        {
-            return;
-        }
-
-        var client = _client.Value;
         try
         {
-            if (client.IsConnected)
+            if (_client.IsConnected)
             {
-                client.Disconnect(true, CancellationToken.None);
+                _client.Disconnect(true, CancellationToken.None);
             }
         }
         catch (Exception e)
@@ -132,7 +183,7 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
             _logger.LogWarning(e, "Could not close the SMTP session cleanly");
         }
 
-        client.Dispose();
+        _client.Dispose();
     }
 
     private static MimeEntity BuildMessageBody(EmailLetter message)

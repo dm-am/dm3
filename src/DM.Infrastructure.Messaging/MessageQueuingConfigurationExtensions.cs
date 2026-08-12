@@ -51,8 +51,12 @@ public static class MessageQueuingConfigurationExtensions
     /// the client on its own, and a producer default written in one of them would
     /// have been absent from the other two — persistence has to hold for every
     /// publisher in the system or the queue it protects is emptied by whichever
-    /// process forgot it. The consumer pipeline stays per host: only the two
-    /// workers consume, and they run different retry middleware.
+    /// process forgot it. The consumer pipeline stays per host, because the
+    /// middleware of a host is what names its queue to the metrics. All three
+    /// hosts consume: the two workers off the queues they were written for, the
+    /// API off the realtime push, and each passes a middleware of its own built
+    /// on <see cref="MeasuredConsumerPipeline"/>. Only the API's leaves the retry
+    /// out, for the reason its own middleware states.
     /// </remarks>
     /// <param name="services">Service collection.</param>
     /// <param name="consumerBuilderDefaults">Consumer pipeline of this host, if it consumes at all.</param>

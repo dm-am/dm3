@@ -14,9 +14,12 @@ namespace DM.Web.API.Realtime;
 
 internal class RealtimeNotificationConsumer : BackgroundService
 {
+    /// <summary>Queue this host reads, as both the topology and the metrics name it.</summary>
+    internal const string QueueName = "dm.notifications.api";
+
     private readonly ILogger<RealtimeNotificationConsumer> _logger;
     private readonly IConsumerBuilder _consumerBuilder;
-    private readonly RetryPolicy _consumeRetryPolicy;
+    private readonly AsyncRetryPolicy _consumeRetryPolicy;
 
     public RealtimeNotificationConsumer(
         ILogger<RealtimeNotificationConsumer> logger,
@@ -24,7 +27,7 @@ internal class RealtimeNotificationConsumer : BackgroundService
     {
         _logger = logger;
         _consumerBuilder = consumerBuilder;
-        _consumeRetryPolicy = Policy.Handle<Exception>().WaitAndRetry(5,
+        _consumeRetryPolicy = Policy.Handle<Exception>().WaitAndRetryAsync(5,
             attempt => TimeSpan.FromSeconds(1 << attempt),
             (exception, _) => _logger.LogWarning(exception, "Could not subscribe to the queue"));
     }
@@ -37,7 +40,7 @@ internal class RealtimeNotificationConsumer : BackgroundService
         // part of host startup, so a RabbitMQ outage would abort the whole host.
         await Task.Yield();
 
-        var parameters = new RabbitConsumerParameters("dm.api", "dm.notifications.api", ProcessingOrder.Sequential)
+        var parameters = new RabbitConsumerParameters("dm.api", QueueName, ProcessingOrder.Sequential)
         {
             ExchangeName = RealtimeNotificationsTransport.ExchangeName,
             RoutingKeys = new[] { "#" },
@@ -53,7 +56,25 @@ internal class RealtimeNotificationConsumer : BackgroundService
         try
         {
             var consumer = _consumerBuilder.BuildRabbit<RealtimeNotification, RealtimeNotificationProcessor>(parameters);
-            _consumeRetryPolicy.Execute(consumer.Subscribe);
+
+            // Retried under the token the host stops with, the way both workers do
+            // it. The waits double from one second over five attempts, 62 seconds
+            // end to end: the synchronous overload spent them in Thread.Sleep on a
+            // pool thread and was handed no token at all, so a stop arriving inside
+            // a broker outage waited every remaining attempt out with nothing able
+            // to interrupt it.
+            await _consumeRetryPolicy.ExecuteAsync(_ =>
+            {
+                consumer.Subscribe();
+                return Task.CompletedTask;
+            }, stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // The host is stopping between attempts, which is not a failure worth
+            // reporting: the message below would name a broker outage that is not
+            // happening.
+            return;
         }
         catch (Exception exception)
         {
