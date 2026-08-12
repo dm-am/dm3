@@ -4,6 +4,21 @@ import dayjs from "dayjs";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 /**
+ * The two spellings the site renders a date in, and the two short forms used
+ * where the year is implied by context.
+ *
+ * Written here and nowhere else. The pattern used to be a literal at every call
+ * site — seventeen of them across nine files — and a literal repeated that many
+ * times is not a format but a coincidence: one of the copies said "DD.MM" where
+ * its neighbour two lines down said "DD.MM.YYYY", and nothing in either file
+ * says which was meant. DateFormatSpellingShould keeps them here.
+ */
+export const DATE_FORMAT = "DD.MM.YYYY";
+export const DATE_TIME_FORMAT = "DD.MM.YYYY [в] HH:mm";
+export const DAY_MONTH_FORMAT = "DD.MM";
+export const DAY_MONTH_TIME_FORMAT = "DD.MM [в] HH:mm";
+
+/**
  * Format a date string as "DD.MM.YYYY" (local time), date only, no time.
  *
  * The empty token is a parameter so that exactly one place owns the format
@@ -21,7 +36,7 @@ export function formatDate(
   emptyToken = VALUE_UNAVAILABLE,
 ): string {
   if (!dateStr) return emptyToken;
-  return dayjs(dateStr).format("DD.MM.YYYY");
+  return dayjs(dateStr).format(DATE_FORMAT);
 }
 
 /**
@@ -30,7 +45,7 @@ export function formatDate(
  */
 export function formatDateFull(dateStr: string | null | undefined): string {
   if (!dateStr) return VALUE_UNAVAILABLE;
-  return dayjs(dateStr).format("DD.MM.YYYY [в] HH:mm");
+  return dayjs(dateStr).format(DATE_TIME_FORMAT);
 }
 
 /**

@@ -22,6 +22,7 @@ import type { MessageWithContinuation } from "@/shared/lib/utils/chat";
 import { AvatarImg } from "@/shared/ui/AvatarImg";
 import { SvgIcon } from "@/shared/ui/Icon";
 import dayjs from "dayjs";
+import { DATE_TIME_FORMAT } from "@/shared/lib/utils/datetime";
 
 const props = withDefaults(
   defineProps<{
@@ -90,10 +91,10 @@ const formattedTime = computed(() => formatChatTime(props.message.createdUtc));
 const hasEdits = computed(() => (props.message.edits?.length ?? 0) > 0);
 
 const fullDateTooltip = computed(() => {
-  let result = `Отправлено: ${dayjs(props.message.createdUtc).format("DD.MM.YYYY [в] HH:mm")}`;
+  let result = `Отправлено: ${dayjs(props.message.createdUtc).format(DATE_TIME_FORMAT)}`;
   if (props.message.edits?.length) {
     for (const edit of props.message.edits) {
-      result += `\nРедактирование: ${dayjs(edit.modifiedUtc).format("DD.MM.YYYY [в] HH:mm")}`;
+      result += `\nРедактирование: ${dayjs(edit.modifiedUtc).format(DATE_TIME_FORMAT)}`;
     }
   }
   return result;
@@ -104,7 +105,7 @@ const deletedDateTooltip = computed(() => {
   const msg = props.message;
   const deleterName = msg.deletedBy?.username || "неизвестно";
   const deletedUtcStr = msg.deletedUtc
-    ? dayjs(msg.deletedUtc).format("DD.MM.YYYY [в] HH:mm")
+    ? dayjs(msg.deletedUtc).format(DATE_TIME_FORMAT)
     : "";
   result += deletedUtcStr
     ? `\nУдалено: ${deletedUtcStr} (${deleterName})`

@@ -448,7 +448,7 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
         </template>
 
         <template #cell-created="{ row }">
-          <HumanDate :date="row.createdUtc" format="DD.MM.YYYY [в] HH:mm" />
+          <HumanDate :date="row.createdUtc" />
         </template>
 
         <template #cell-lastActivity="{ row }">
@@ -462,10 +462,7 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
                 :to="lastCommentLink(row)"
                 class="last-activity-link"
               >
-                <HumanDate
-                  :date="row.lastComment.createdUtc"
-                  format="DD.MM.YYYY [в] HH:mm"
-                />
+                <HumanDate :date="row.lastComment.createdUtc" />
               </router-link>
             </Tooltip>
           </template>

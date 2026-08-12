@@ -7,6 +7,7 @@ import { highlightMatch } from "@/shared/lib/utils/highlight";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { computed, ref } from "vue";
 import dayjs from "dayjs";
+import { DATE_TIME_FORMAT } from "@/shared/lib/utils/datetime";
 import { storeToRefs } from "pinia";
 import { useAuthStore, userIsSeniorModerator } from "@/entities/user";
 import { usePollVote, PollEditForm } from "@/features/poll-vote";
@@ -31,10 +32,10 @@ const props = withDefaults(
 const isActive = computed(() => props.poll.status === "Active");
 
 const startsFormatted = computed(() =>
-  dayjs(props.poll.startsUtc).format("DD.MM.YYYY [в] HH:mm"),
+  dayjs(props.poll.startsUtc).format(DATE_TIME_FORMAT),
 );
 const endsFormatted = computed(() =>
-  dayjs(props.poll.endsUtc).format("DD.MM.YYYY [в] HH:mm"),
+  dayjs(props.poll.endsUtc).format(DATE_TIME_FORMAT),
 );
 const totalVotes = computed(() =>
   props.poll.options.reduce((sum, option) => sum + option.votesCount, 0),

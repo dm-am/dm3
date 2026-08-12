@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatDate } from "@/shared/lib/utils/datetime";
+import { DATE_TIME_FORMAT, formatDate } from "@/shared/lib/utils/datetime";
 import { computed, onMounted, reactive, ref, toRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { LocationQueryRaw } from "vue-router";
@@ -264,7 +264,7 @@ const isOnline = computed(() => {
 
 const lastActivityFormatted = computed(() =>
   user.value?.lastActivityUtc
-    ? dayjs(user.value.lastActivityUtc).format("DD.MM.YYYY [в] HH:mm")
+    ? dayjs(user.value.lastActivityUtc).format(DATE_TIME_FORMAT)
     : "",
 );
 

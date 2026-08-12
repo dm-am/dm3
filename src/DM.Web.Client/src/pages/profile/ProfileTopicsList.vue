@@ -197,7 +197,7 @@ function boardLink(row: Topic) {
       </template>
 
       <template #cell-created="{ row }">
-        <HumanDate :date="row.createdUtc" format="DD.MM.YYYY [в] HH:mm" />
+        <HumanDate :date="row.createdUtc" />
       </template>
 
       <template #cell-lastActivity="{ row }">
@@ -209,10 +209,7 @@ function boardLink(row: Topic) {
               :to="`${topicLink(row)}#comment-${row.lastComment.id}`"
               class="last-activity-link"
             >
-              <HumanDate
-                :date="row.lastComment.createdUtc"
-                format="DD.MM.YYYY [в] HH:mm"
-              />
+              <HumanDate :date="row.lastComment.createdUtc" />
             </router-link>
           </Tooltip>
         </template>

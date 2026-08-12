@@ -202,9 +202,7 @@ onMounted(() => store.fetchBoards());
         <Tooltip
           :text="`Комментарий в &quot;${row.lastComment.topicTitle}&quot;`"
           ><router-link :to="lastCommentLink(row)!" class="last-activity-link"
-            ><human-date
-              :date="row.lastComment.createdUtc"
-              format="DD.MM.YYYY [в] HH:mm" /></router-link
+            ><human-date :date="row.lastComment.createdUtc" /></router-link
         ></Tooltip>
       </template>
       <!-- Last activity is a new topic -->
@@ -216,9 +214,7 @@ onMounted(() => store.fetchBoards());
         /><span v-else class="muted">удаленный пользователь</span>,
         <Tooltip :text="`Новый топик &quot;${row.lastTopic.title}&quot;`"
           ><router-link :to="lastTopicLink(row)!" class="last-activity-link"
-            ><human-date
-              :date="row.lastTopic.createdUtc"
-              format="DD.MM.YYYY [в] HH:mm" /></router-link
+            ><human-date :date="row.lastTopic.createdUtc" /></router-link
         ></Tooltip>
       </template>
       <!-- No activity -->
