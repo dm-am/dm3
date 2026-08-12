@@ -59,8 +59,6 @@ public class BlogStatusTransitionShould : UnitTestBase
         var updateBlogValidator = Mock<IValidator<UpdateBlog>>();
         var createRubricValidator = Mock<IValidator<CreateRubric>>();
         var updateRubricValidator = Mock<IValidator<UpdateRubric>>();
-        var createPublicationValidator = Mock<IValidator<CreatePublication>>();
-        var updatePublicationValidator = Mock<IValidator<UpdatePublication>>();
 
         var guidFactory = Mock<IGuidFactory>();
         guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
@@ -86,8 +84,6 @@ public class BlogStatusTransitionShould : UnitTestBase
             updateBlogValidator.Object,
             createRubricValidator.Object,
             updateRubricValidator.Object,
-            createPublicationValidator.Object,
-            updatePublicationValidator.Object,
             guidFactory.Object,
             dateTimeProvider.Object,
             _eventProducer.Object);

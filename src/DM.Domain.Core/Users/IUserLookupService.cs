@@ -20,7 +20,7 @@ public interface IUserLookupService
     /// </summary>
     /// <param name="username">Username to find</param>
     /// <returns>User info</returns>
-    /// <exception cref="DM.Domain.Core.Exceptions.HttpException">User not found (410 Gone)</exception>
+    /// <exception cref="DM.Domain.Core.Exceptions.HttpException">User not found (404 Not Found)</exception>
     Task<GeneralUser> GetAsync(string username);
 
     /// <summary>
@@ -28,7 +28,7 @@ public interface IUserLookupService
     /// </summary>
     /// <param name="userId">User identifier</param>
     /// <returns>User info</returns>
-    /// <exception cref="DM.Domain.Core.Exceptions.HttpException">User not found (410 Gone)</exception>
+    /// <exception cref="DM.Domain.Core.Exceptions.HttpException">User not found (404 Not Found)</exception>
     Task<GeneralUser> GetAsync(Guid userId);
 
     /// <summary>

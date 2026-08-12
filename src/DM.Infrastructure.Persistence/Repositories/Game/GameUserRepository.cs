@@ -73,24 +73,6 @@ internal class GameUserRepository : IGameUserRepository
         return characterIds;
     }
 
-    /// <inheritdoc />
-    public async Task<int> MarkCharactersAsLeft(Guid userId, Guid gameId)
-    {
-        var characters = await _dbContext.Characters
-            .Where(c => c.AuthorId == userId && c.GameId == gameId &&
-                        !c.IsRemoved && c.Status == CharacterStatus.Active)
-            .ToListAsync();
-
-        foreach (var character in characters)
-        {
-            character.Status = CharacterStatus.Retired;
-            character.IsPlayerLeft = true;
-        }
-
-        await _dbContext.SaveChangesAsync();
-        return characters.Count;
-    }
-
     #endregion
 
     #region Assistants
@@ -119,58 +101,12 @@ internal class GameUserRepository : IGameUserRepository
     }
 
     /// <inheritdoc />
-    public async Task<bool> IsAssistantByUserId(Guid userId, Guid gameId)
-    {
-        return await _dbContext.GameAssistants
-            .AnyAsync(a => a.UserId == userId && a.GameId == gameId);
-    }
-
-    /// <inheritdoc />
     public async Task RemoveAssistantByUsername(Guid gameId, string username)
     {
         var usernameLower = username.ToLower();
         await _dbContext.GameAssistants
             .Where(ga => ga.GameId == gameId && ga.User.Username.ToLower() == usernameLower)
             .ExecuteDeleteAsync();
-    }
-
-    /// <inheritdoc />
-    public async Task RemoveAssistantByUserId(Guid userId, Guid gameId)
-    {
-        var assistant = await _dbContext.GameAssistants
-            .FirstOrDefaultAsync(a => a.UserId == userId && a.GameId == gameId);
-        if (assistant != null)
-        {
-            _dbContext.GameAssistants.Remove(assistant);
-            await _dbContext.SaveChangesAsync();
-        }
-    }
-
-    #endregion
-
-    #region Readers
-
-    /// <inheritdoc />
-    public async Task<bool> IsReader(Guid userId, Guid gameId)
-    {
-        return await _dbContext.Subscriptions
-            .AnyAsync(s => s.SubscriberId == userId &&
-                          s.TargetType == SubscriptionTargetType.Game &&
-                          s.TargetId == gameId);
-    }
-
-    /// <inheritdoc />
-    public async Task RemoveReader(Guid userId, Guid gameId)
-    {
-        var subscription = await _dbContext.Subscriptions
-            .FirstOrDefaultAsync(s => s.SubscriberId == userId &&
-                                      s.TargetType == SubscriptionTargetType.Game &&
-                                      s.TargetId == gameId);
-        if (subscription != null)
-        {
-            _dbContext.Subscriptions.Remove(subscription);
-            await _dbContext.SaveChangesAsync();
-        }
     }
 
     #endregion

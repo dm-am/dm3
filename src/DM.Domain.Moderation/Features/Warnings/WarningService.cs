@@ -55,7 +55,7 @@ internal class WarningService : IWarningService
             var user = await _userLookupService.GetAsync(username);
             return await _warningRepository.GetUserWarnings(user.UserId, ct);
         }
-        catch (HttpException e) when (e.StatusCode == HttpStatusCode.Gone)
+        catch (HttpException e) when (e.StatusCode == HttpStatusCode.NotFound)
         {
             // See BanService: an empty list answers "no such user" and nothing
             // else. Every other failure belongs to ErrorHandlingMiddleware.
@@ -139,7 +139,7 @@ internal class WarningService : IWarningService
             var user = await _userLookupService.GetAsync(username);
             return await _warningRepository.GetUserWarningPoints(user.UserId, ct);
         }
-        catch (HttpException e) when (e.StatusCode == HttpStatusCode.Gone)
+        catch (HttpException e) when (e.StatusCode == HttpStatusCode.NotFound)
         {
             // Zero points is what an unblemished profile looks like, so this
             // catch may only stand for a user who does not exist.

@@ -17,6 +17,7 @@ using DM.Domain.Blog.Features.Popularity;
 using DM.Domain.Blog.Features.Comments;
 using DM.Domain.Blog.Features.Invitations;
 using DM.Domain.Blog.Features.PublicationComments;
+using DM.Domain.Blog.Features.Publications;
 using DM.Domain.Forum.Features.Boards;
 using DM.Domain.Forum.Features.Comments;
 using DM.Domain.Forum.Features.Topics;
@@ -238,6 +239,10 @@ public class PersistenceModule : Module
         // Blog repositories
         builder.RegisterType<BlogRepository>()
             .As<IBlogRepository>()
+            .InstancePerLifetimeScope();
+
+        builder.RegisterType<PublicationRepository>()
+            .As<IPublicationRepository>()
             .InstancePerLifetimeScope();
 
         builder.RegisterType<BlogPopularityRepository>()

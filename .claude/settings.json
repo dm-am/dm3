@@ -3,8 +3,18 @@
     "deny": [
       "Bash(git checkout:*)",
       "Bash(git reset --hard:*)",
+      "Bash(git reset --merge:*)",
       "Bash(git clean:*)",
+      "Bash(git restore:*)",
       "Bash(git stash drop:*)",
+      "Bash(git stash clear:*)",
+      "Bash(git branch -D:*)",
+      "Bash(git branch --delete --force:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git gc:*)",
+      "Bash(git prune:*)",
+      "Bash(git reflog expire:*)",
       "Bash(dotnet ef migrations add:*)"
     ]
   },

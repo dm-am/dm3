@@ -86,7 +86,7 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
     }
 
     [Fact]
-    public async Task ThrowGoneWhenUserAlreadyHasTestimonial()
+    public async Task ThrowConflictWhenUserAlreadyHasTestimonial()
     {
         var existingTestimonial = new WebsiteTestimonial
         {
@@ -99,7 +99,7 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
         var act = async () => await _service.CreateAsync(new CreateWebsiteTestimonial { Text = "New testimonial!" });
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Gone);
+            .Where(e => e.StatusCode == HttpStatusCode.Conflict);
     }
 
     [Fact]

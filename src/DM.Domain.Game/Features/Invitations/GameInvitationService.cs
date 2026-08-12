@@ -291,7 +291,7 @@ internal class GameInvitationService : IGameInvitationService
         var game = await _gameRepository.GetGame(gameId, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
         }
         return game;
     }

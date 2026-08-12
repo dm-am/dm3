@@ -137,15 +137,18 @@ public interface ITicketService
         TicketStatus? status = null, TicketSubtype? subtype = null, CancellationToken ct = default);
 
     /// <summary>
-    /// Get tickets for the current moderator
+    /// Get a page of tickets assigned to the current moderator. The roster grows
+    /// with everything the moderator ever took in hand, so the page is the
+    /// caller's, exactly as on the intake queue
     /// </summary>
-    Task<IEnumerable<Ticket>> GetMyAssignedTickets(CancellationToken ct = default);
+    Task<(IEnumerable<Ticket> tickets, PagingResult paging)> GetMyAssignedTickets(PagingQuery query,
+        CancellationToken ct = default);
 
     /// <summary>
-    /// Get tickets filed by the current user, with optional status and subtype
-    /// filters (applied server-side)
+    /// Get a page of tickets filed by the current user, with optional status and
+    /// subtype filters (applied server-side)
     /// </summary>
-    Task<IEnumerable<Ticket>> GetMyFiledTickets(
+    Task<(IEnumerable<Ticket> tickets, PagingResult paging)> GetMyFiledTickets(PagingQuery query,
         TicketStatus? status = null, TicketSubtype? subtype = null, CancellationToken ct = default);
 
     /// <summary>

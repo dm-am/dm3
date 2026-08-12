@@ -65,35 +65,53 @@ internal class TicketRepository : ITicketRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Ticket>> GetModeratorTickets(Guid moderatorId, CancellationToken ct = default)
+    public async Task<(IEnumerable<Ticket> tickets, PagingResult paging)> GetModeratorTickets(Guid moderatorId,
+        PagingQuery query, CancellationToken ct = default)
     {
-        return await _dbContext.Tickets
-            .Where(t => t.AssignedModeratorId == moderatorId)
+        var tickets = _dbContext.Tickets.Where(t => t.AssignedModeratorId == moderatorId);
+
+        // The roster of one moderator grows with everything they ever took in
+        // hand, so the page is taken in the database, exactly as on the intake
+        // queue above.
+        var total = await tickets.CountAsync(ct);
+        var page = await tickets
             .OrderByDescending(t => t.CreatedUtc)
+            .Skip(query.Skip)
+            .Take(query.Take)
             .ProjectTo<Ticket>(_mapper.ConfigurationProvider)
             .ToListAsync(ct);
+
+        return (page, PagingResult.Create(total, query.Skip + 1, query.Take));
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Ticket>> GetUserTickets(Guid userId,
+    public async Task<(IEnumerable<Ticket> tickets, PagingResult paging)> GetUserTickets(Guid userId,
+        PagingQuery query,
         TicketStatus? status = null, TicketSubtype? subtype = null, CancellationToken ct = default)
     {
-        var query = _dbContext.Tickets.Where(t => t.UserId == userId);
+        var tickets = _dbContext.Tickets.Where(t => t.UserId == userId);
 
         if (status.HasValue)
         {
-            query = query.Where(t => t.Status == status.Value);
+            tickets = tickets.Where(t => t.Status == status.Value);
         }
 
         if (subtype.HasValue)
         {
-            query = query.Where(t => t.Subtype == subtype.Value);
+            tickets = tickets.Where(t => t.Subtype == subtype.Value);
         }
 
-        return await query
+        // The pile of a long-standing member only grows: the filters narrow it,
+        // the page bounds it.
+        var total = await tickets.CountAsync(ct);
+        var page = await tickets
             .OrderByDescending(t => t.CreatedUtc)
+            .Skip(query.Skip)
+            .Take(query.Take)
             .ProjectTo<Ticket>(_mapper.ConfigurationProvider)
             .ToListAsync(ct);
+
+        return (page, PagingResult.Create(total, query.Skip + 1, query.Take));
     }
 
     /// <inheritdoc />

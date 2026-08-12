@@ -26,6 +26,24 @@
              Silencing CS8524 once, here, is what lets those arms go. CS8509 is
              deliberately not silenced. -->
         <NoWarn>$(NoWarn);CS8524</NoWarn>
+        <!-- CS1591 required an XML comment on every public member. A build can require
+             that the text exist and cannot require that it mean anything, so what the
+             rule produced was <inheritdoc /> on constructors, where the tag inherits
+             nothing because a constructor has no base member to inherit from, and
+             one-line summaries restating the name of the member below them. The cost
+             is not neutral: a reader who opens enough empty comments stops opening the
+             ones that are not empty. The only generated XML that anything reads is
+             DM.Web.API.xml, which Swagger loads into the API document, and that project
+             had silenced the diagnostic for itself long ago, so the requirement pressed
+             hardest exactly where the output is never opened. That local silencing goes
+             with this line, and so does the per-folder exemption the persistence
+             entities carried: a folder cannot be exempt from a diagnostic the solution
+             no longer raises. What an endpoint owes its readers is enforced elsewhere
+             and is untouched: an architecture gate matches the response codes an action
+             declares by attribute against the ones its doc comment describes, and fails
+             when either side is missing. The comments already written stay where they
+             are; removing them is a separate pass, and nothing demands the next one. -->
+        <NoWarn>$(NoWarn);CS1591</NoWarn>
         <!-- Pinned, not "preview". The accepted language used to be whatever SDK
              happened to be installed: CI pins 8.0.x and the images use sdk:8.0, so a
              developer on a newer SDK could write a feature that compiles locally and

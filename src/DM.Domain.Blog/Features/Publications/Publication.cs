@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
+using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Likes;
 
-namespace DM.Domain.Blog.Features.Blogs;
+namespace DM.Domain.Blog.Features.Publications;
 
 /// <summary>
 /// DTO for blog publication

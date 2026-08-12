@@ -68,7 +68,7 @@ public class WarningServiceShould : UnitTestBase
     public async Task ReturnEmptyListWhenGettingWarningsForNonexistentUser()
     {
         _userLookupService.Setup(s => s.GetAsync("Unknown"))
-            .ThrowsAsync(new HttpException(HttpStatusCode.Gone, "Пользователь не найден"));
+            .ThrowsAsync(new HttpException(HttpStatusCode.NotFound, "Пользователь не найден"));
 
         var result = await _service.GetUserWarnings("Unknown");
 

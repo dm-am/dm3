@@ -8,6 +8,7 @@ using BlogDto = DM.Domain.Blog.Features.Blogs.Blog;
 using DM.Domain.Blog.Features.Comments;
 using DM.Domain.Blog.Features.Likes;
 using DM.Domain.Blog.Features.PublicationComments;
+using DM.Domain.Blog.Features.Publications;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
@@ -27,6 +28,7 @@ namespace DM.Domain.Blog.Tests.Features.Likes;
 public class BlogLikeServiceShould : UnitTestBase
 {
     private readonly Mock<IBlogService> _blogService;
+    private readonly Mock<IPublicationService> _publicationService;
     private readonly Mock<IBlogCommentService> _blogCommentService;
     private readonly Mock<IPublicationCommentService> _publicationCommentService;
     private readonly Mock<IIntentionManager> _intentionManager;
@@ -37,6 +39,7 @@ public class BlogLikeServiceShould : UnitTestBase
     public BlogLikeServiceShould()
     {
         _blogService = Mock<IBlogService>();
+        _publicationService = Mock<IPublicationService>();
         _blogCommentService = Mock<IBlogCommentService>();
         _publicationCommentService = Mock<IPublicationCommentService>();
         _intentionManager = Mock<IIntentionManager>();
@@ -47,6 +50,7 @@ public class BlogLikeServiceShould : UnitTestBase
 
         _service = new BlogLikeService(
             _blogService.Object,
+            _publicationService.Object,
             _blogCommentService.Object,
             _publicationCommentService.Object,
             _intentionManager.Object,
@@ -106,7 +110,7 @@ public class BlogLikeServiceShould : UnitTestBase
         var identity = CreateAuthenticatedIdentity(userId);
 
         _identityProvider.Setup(p => p.Current).Returns(identity);
-        _blogService.Setup(s => s.GetPublication(publicationId, default)).ReturnsAsync(publication);
+        _publicationService.Setup(s => s.GetPublication(publicationId, default)).ReturnsAsync(publication);
         _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
         _likeOperations.Setup(o => o.LikeAsync(publication, EventType.LikedPublication))
             .ReturnsAsync(new GeneralUser { UserId = userId });
@@ -127,7 +131,7 @@ public class BlogLikeServiceShould : UnitTestBase
         var identity = CreateAuthenticatedIdentity(userId);
 
         _identityProvider.Setup(p => p.Current).Returns(identity);
-        _blogService.Setup(s => s.GetPublication(publicationId, default)).ReturnsAsync(publication);
+        _publicationService.Setup(s => s.GetPublication(publicationId, default)).ReturnsAsync(publication);
         _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
 
         var act = async () => await _service.LikePublicationAsync(publicationId);

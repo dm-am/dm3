@@ -94,7 +94,7 @@ internal class BlogSubscriptionService : IBlogSubscriptionService
         // One read for the whole list. Asked one at a time, a hundred subscribers
         // were a hundred round trips, and GetAsync throws on a user who is no
         // longer there — a single removed subscriber answered the entire page
-        // with 410 Gone. The batch form returns the users that exist and says
+        // with 404. The batch form returns the users that exist and says
         // nothing about the ones that do not, which is what a list of readers
         // needs.
         return await _userLookupService.GetReferencesAsync(subscriberIdList);

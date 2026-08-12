@@ -153,7 +153,7 @@ public class BlogSubscriptionServiceShould : UnitTestBase
         // Asked for all of them at once. One call per reader made the page cost
         // as much as it had readers, and the single-user form throws on a user
         // who is no longer there, so one removed reader answered the whole blog
-        // with 410 Gone.
+        // with 404.
         _userLookupService
             .Setup(s => s.GetReferencesAsync(It.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(subscriberIds))))
             .ReturnsAsync(new[] { user1, user2 });

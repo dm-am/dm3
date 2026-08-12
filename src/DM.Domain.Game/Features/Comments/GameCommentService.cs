@@ -108,7 +108,7 @@ internal class GameCommentService : IGameCommentService
     public async Task<Comment> GetAsync(Guid commentId)
     {
         return await _repository.Get(commentId) ??
-               throw new HttpException(HttpStatusCode.Gone, RefusalMessage.CommentNotFound(commentId));
+               throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));
     }
 
     /// <inheritdoc />

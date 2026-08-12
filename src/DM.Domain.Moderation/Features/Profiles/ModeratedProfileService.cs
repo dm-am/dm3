@@ -42,7 +42,7 @@ internal class ModeratedProfileService : IModeratedProfileService
 
         if (user == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.UserNotFoundByUsername(username));
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(username));
         }
 
         return user;

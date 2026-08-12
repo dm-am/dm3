@@ -117,20 +117,22 @@ internal class TicketService : ITicketService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Ticket>> GetMyAssignedTickets(CancellationToken ct = default)
+    public async Task<(IEnumerable<Ticket> tickets, PagingResult paging)> GetMyAssignedTickets(
+        PagingQuery query, CancellationToken ct = default)
     {
         var userId = _identityProvider.Current.User.UserId;
-        return await _ticketRepository.GetModeratorTickets(userId, ct);
+        return await _ticketRepository.GetModeratorTickets(userId, query, ct);
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Ticket>> GetMyFiledTickets(
+    public async Task<(IEnumerable<Ticket> tickets, PagingResult paging)> GetMyFiledTickets(
+        PagingQuery query,
         TicketStatus? status = null, TicketSubtype? subtype = null, CancellationToken ct = default)
     {
         // The reporter owns these tickets, so no subtype visibility gating is
         // needed — the filters are the user's own view preference.
         var userId = _identityProvider.Current.User.UserId;
-        return await _ticketRepository.GetUserTickets(userId, status, subtype, ct);
+        return await _ticketRepository.GetUserTickets(userId, query, status, subtype, ct);
     }
 
     /// <inheritdoc />

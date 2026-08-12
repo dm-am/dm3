@@ -33,7 +33,14 @@ x-workload-env: &workload-env
 
   # === Базы данных ===
   DM_ConnectionStrings__Rdb: Host=${DB_HOST:-dm-pg};Port=5432;User ID=postgres;Password=${POSTGRES_PASSWORD};Database=dm3;Pooling=true;MinPoolSize=0;MaxPoolSize=100;Connection Idle Lifetime=60;${DB_SSL_MODE:-}
-  DM_ConnectionStrings__Mongo: mongodb://${MONGO_USER:-dm}:${MONGO_PASSWORD}@${MONGO_HOST:-dm-mongo}:27017/dm3?authSource=dm3&maxPoolSize=1000${MONGO_TLS:-}
+  # maxPoolSize repeats the MaxPoolSize of the line above on purpose: both cap the
+  # connections one process holds at once, and this driver returns a connection
+  # after each operation where Npgsql holds one for a whole unit of work, so the
+  # document pool covers the same concurrency with no more connections than the
+  # relational one already gets. Spelled out rather than left to the driver so it
+  # moves when that line moves; ConnectionPoolCeilingShould keeps the two equal in
+  # all four files that carry the pair.
+  DM_ConnectionStrings__Mongo: mongodb://${MONGO_USER:-dm}:${MONGO_PASSWORD}@${MONGO_HOST:-dm-mongo}:27017/dm3?authSource=dm3&maxPoolSize=100${MONGO_TLS:-}
   DM_ConnectionStrings__Logs: http://${LOGS_HOST:-dm-loki}:3100
   DM_ConnectionStrings__TracingEndpoint: http://${TRACING_HOST:-dm-jaeger}:4317
 

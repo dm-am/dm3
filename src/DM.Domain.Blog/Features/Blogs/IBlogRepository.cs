@@ -59,30 +59,6 @@ public interface IBlogRepository
     Task<Blog?> GetByOwnerUsernameAsync(string username, CancellationToken ct = default);
 
     /// <summary>
-    /// Count publications for a blog
-    /// </summary>
-    Task<int> CountPublications(Guid blogId, Guid? rubricId, bool includeUnpublished, CancellationToken ct = default);
-
-    /// <summary>
-    /// Get publications for a blog
-    /// </summary>
-    Task<IEnumerable<Publication>> GetPublications(
-        Guid blogId, Guid? rubricId, bool includeUnpublished, PagingData paging, CancellationToken ct = default);
-
-    /// <summary>
-    /// Get publication by ID
-    /// </summary>
-    Task<Publication?> GetPublication(Guid publicationId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Get the user's most-liked publication across every blog they author.
-    /// Published-only — drafts and unpublished posts are excluded so the
-    /// profile widget never shows content the user hasn't released yet.
-    /// Returns null when the user has no published publications at all.
-    /// </summary>
-    Task<Publication?> GetBestUserPublication(Guid authorId, CancellationToken ct = default);
-
-    /// <summary>
     /// Get rubrics for a blog
     /// </summary>
     Task<IEnumerable<Rubric>> GetRubrics(Guid blogId, CancellationToken ct = default);
@@ -162,10 +138,15 @@ public interface IBlogRepository
     Task<Rubric> UpdateRubric(UpdateRubricEntity entity, CancellationToken ct = default);
 
     /// <summary>
-    /// Reorder the blog's rubrics: assign each rubric's sort order from its
-    /// position in <paramref name="orderedRubricIds"/>. Ids not belonging to
-    /// the blog are ignored.
+    /// Replace the order of the blog's rubrics: assign each rubric's sort order
+    /// from its position in <paramref name="orderedRubricIds"/>. The blog bounds
+    /// the write, so an id belonging to another blog is not written.
     /// </summary>
+    /// <remarks>
+    /// The caller passes the blog's rubrics in full, which is what the service
+    /// enforces: a rubric this method does not write keeps a sort order the same
+    /// call has just handed to another one.
+    /// </remarks>
     Task ReorderRubrics(Guid blogId, IReadOnlyList<Guid> orderedRubricIds, CancellationToken ct = default);
 
     /// <summary>
@@ -179,23 +160,6 @@ public interface IBlogRepository
     /// Delete rubric (soft delete)
     /// </summary>
     Task DeleteRubric(Guid rubricId, Guid deletedByUserId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Create a new publication
-    /// </summary>
-    /// <param name="entity">Publication creation entity</param>
-    /// <param name="ct">Cancellation token</param>
-    Task<Publication> CreatePublication(CreatePublicationEntity entity, CancellationToken ct = default);
-
-    /// <summary>
-    /// Update publication
-    /// </summary>
-    Task<Publication> UpdatePublication(UpdatePublicationEntity entity, CancellationToken ct = default);
-
-    /// <summary>
-    /// Delete publication (soft delete)
-    /// </summary>
-    Task DeletePublication(Guid publicationId, Guid deletedByUserId, CancellationToken ct = default);
 
     /// <summary>
     /// Add an assistant to a blog

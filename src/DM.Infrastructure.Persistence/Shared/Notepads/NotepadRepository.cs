@@ -127,6 +127,7 @@ internal class NotepadRepository : INotepadRepository
         NotepadType = entry.NotepadType,
         ContainerId = entry.ContainerId,
         OwnerId = entry.OwnerId,
+        AuthorId = entry.AuthorId,
         Title = entry.Title,
         Content = entry.Content,
         SortOrder = entry.SortOrder,

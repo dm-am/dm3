@@ -5,6 +5,7 @@ using AutoMapper;
 using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Blog.Features.Comments;
 using DM.Domain.Blog.Features.PublicationComments;
+using DM.Domain.Blog.Features.Publications;
 using DM.Domain.Core.Comments;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;

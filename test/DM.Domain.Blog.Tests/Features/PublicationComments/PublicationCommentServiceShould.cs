@@ -7,6 +7,7 @@ using DM.Domain.Blog.Authorization;
 using DM.Domain.Blog.Features.Blogs;
 using BlogDto = DM.Domain.Blog.Features.Blogs.Blog;
 using DM.Domain.Blog.Features.PublicationComments;
+using DM.Domain.Blog.Features.Publications;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Comments;
@@ -32,6 +33,7 @@ public class PublicationCommentServiceShould : UnitTestBase
     private readonly Mock<IValidator<CreateComment>> _createValidator;
     private readonly Mock<IValidator<UpdateComment>> _updateValidator;
     private readonly Mock<IBlogService> _blogService;
+    private readonly Mock<IPublicationService> _publicationService;
     private readonly Mock<IIntentionManager> _intentionManager;
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
@@ -45,6 +47,7 @@ public class PublicationCommentServiceShould : UnitTestBase
         _createValidator = Mock<IValidator<CreateComment>>();
         _updateValidator = Mock<IValidator<UpdateComment>>();
         _blogService = Mock<IBlogService>();
+        _publicationService = Mock<IPublicationService>();
         _intentionManager = Mock<IIntentionManager>();
         _identityProvider = Mock<IIdentityProvider>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
@@ -66,6 +69,7 @@ public class PublicationCommentServiceShould : UnitTestBase
             _createValidator.Object,
             _updateValidator.Object,
             _blogService.Object,
+            _publicationService.Object,
             _intentionManager.Object,
             _identityProvider.Object,
             _dateTimeProvider.Object,
@@ -87,7 +91,7 @@ public class PublicationCommentServiceShould : UnitTestBase
         var identity = CreateAuthenticatedIdentity(userId);
 
         _identityProvider.Setup(p => p.Current).Returns(identity);
-        _blogService.Setup(s => s.GetPublication(publicationId, default)).ReturnsAsync(publication);
+        _publicationService.Setup(s => s.GetPublication(publicationId, default)).ReturnsAsync(publication);
         _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
         _repository.Setup(r => r.Create(It.IsAny<CreateComment>(), userId, publicationId, It.IsAny<int>(), default))
             .ReturnsAsync((new Comment { Id = commentId }, commentId));
@@ -109,7 +113,7 @@ public class PublicationCommentServiceShould : UnitTestBase
         var identity = CreateAuthenticatedIdentity(userId);
 
         _identityProvider.Setup(p => p.Current).Returns(identity);
-        _blogService.Setup(s => s.GetPublication(publicationId, default)).ReturnsAsync(publication);
+        _publicationService.Setup(s => s.GetPublication(publicationId, default)).ReturnsAsync(publication);
         _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
 
         var act = async () => await _service.CreateAsync(createComment);
@@ -131,7 +135,7 @@ public class PublicationCommentServiceShould : UnitTestBase
         var identity = CreateAuthenticatedIdentity(userId);
 
         _identityProvider.Setup(p => p.Current).Returns(identity);
-        _blogService.Setup(s => s.GetPublication(publicationId, default)).ReturnsAsync(publication);
+        _publicationService.Setup(s => s.GetPublication(publicationId, default)).ReturnsAsync(publication);
         _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
         _repository.Setup(r => r.Create(It.IsAny<CreateComment>(), userId, publicationId, It.IsAny<int>(), default))
             .ReturnsAsync((new Comment { Id = commentId }, commentId));

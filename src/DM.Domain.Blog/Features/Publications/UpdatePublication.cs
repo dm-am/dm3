@@ -1,6 +1,6 @@
 using System;
 
-namespace DM.Domain.Blog.Features.Blogs;
+namespace DM.Domain.Blog.Features.Publications;
 
 /// <summary>
 /// DTO for updating a publication

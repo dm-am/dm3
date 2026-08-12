@@ -126,7 +126,7 @@ internal class BoardService : IBoardService
             string.Equals(b.Title, aliasOrTitle, System.StringComparison.OrdinalIgnoreCase));
         if (board == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.BoardNotFound(aliasOrTitle));
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BoardNotFound(aliasOrTitle));
         }
 
         return board;
@@ -201,7 +201,7 @@ internal class BoardService : IBoardService
             string.Equals(b.Alias, alias, System.StringComparison.OrdinalIgnoreCase));
         if (board == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.BoardNotFound(alias));
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BoardNotFound(alias));
         }
 
         return board;

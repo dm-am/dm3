@@ -1,7 +1,7 @@
 using DM.Domain.Core.Exceptions;
 using FluentValidation;
 
-namespace DM.Domain.Blog.Features.Blogs;
+namespace DM.Domain.Blog.Features.Publications;
 
 /// <inheritdoc />
 internal class CreatePublicationValidator : AbstractValidator<CreatePublication>

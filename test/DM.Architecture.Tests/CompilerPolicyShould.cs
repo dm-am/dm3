@@ -17,9 +17,10 @@ namespace DM.Architecture.Tests;
 /// Both rules guard the same failure from opposite sides. A file-level nullable
 /// directive reads as a claim that the rest of the tree is not annotated, which is
 /// the reverse of the truth, and nothing in the file tells the reader it changes
-/// nothing. A per-file CS1591 pragma is worse: it leaves one folder split between
-/// two documentation policies, so the author of the next entity has to guess which
-/// one is in force. Neither is visible to the compiler, which is why they are
+/// nothing. A per-file CS1591 pragma says the same about documentation: the props
+/// suppress that diagnostic for every project, so the pragma silences nothing and
+/// leaves the next reader believing this one file answers to a rule the others do
+/// not. Neither is visible to the compiler, which is why they are
 /// asserted against the sources rather than against the loaded assemblies.
 /// </remarks>
 public class CompilerPolicyShould
@@ -28,8 +29,13 @@ public class CompilerPolicyShould
     private static readonly Regex DotnetVersion = new(
         @"dotnet-version:\s*(?<version>[0-9]+\.[0-9]+\.[0-9x]+)", RegexOptions.Compiled);
 
-    private const string EntitiesSection = "[src/DM.Infrastructure.Persistence/Entities/**.cs]";
-    private const string DocumentationExemption = "dotnet_diagnostic.CS1591.severity = none";
+    /// <summary>A file silencing the documentation diagnostic on its own account.</summary>
+    private static readonly Regex DocumentationPragma = new(
+        @"#pragma\s+warning\s+disable[^\r\n]*\b(?:CS)?1591\b", RegexOptions.Compiled);
+
+    /// <summary>The documentation switch, written in a project that already inherits it.</summary>
+    private const string DocumentationFileSetting =
+        "<GenerateDocumentationFile>true</GenerateDocumentationFile>";
 
     /// <summary>A per-project grant of internals, which the props already give.</summary>
     private static readonly Regex InternalsGrant = new(
@@ -41,30 +47,43 @@ public class CompilerPolicyShould
 
     private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
+    /// <summary>
+    /// The documentation policy is one decision, and no file states it a second time.
+    /// </summary>
+    /// <remarks>
+    /// CS1591 was an error for years, and the exemptions grew wherever the requirement
+    /// hurt most: a pragma at the top of a file, a severity line for a folder, a NoWarn
+    /// inside the one project whose XML is ever read. The props suppress the diagnostic
+    /// for the whole solution now, so each of those silences nothing while still reading
+    /// as a rule that holds there and not elsewhere. A suppression that changes nothing
+    /// is also the hardest kind to remove later: nobody can tell what it was holding up.
+    /// </remarks>
     [Fact]
-    public void DeclareTheEntityDocumentationExemptionInOnePlace()
+    public void DeclareTheDocumentationPolicyInOnePlace()
     {
         var root = RepositoryRoot;
-        var editorConfig = File.ReadAllText(Path.Combine(root, ".editorconfig"));
-
-        editorConfig.Should().Contain(EntitiesSection,
-            "the exemption is declared for the folder, so a new entity file inherits it");
-        editorConfig.Should().Contain(DocumentationExemption,
-            "without the severity line the exemption lives nowhere and the build stops on CS1591");
 
         var withOwnPragma = Directory
-            .EnumerateFiles(
-                Path.Combine(root, "src", "DM.Infrastructure.Persistence", "Entities"),
-                "*.cs",
-                SearchOption.AllDirectories)
-            .Where(path => File
-                .ReadAllText(path)
-                .Contains("#pragma warning disable CS1591", StringComparison.Ordinal))
+            .EnumerateFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(IsAuthored)
+            .Where(path => DocumentationPragma.IsMatch(File.ReadAllText(path)))
             .Select(path => Path.GetRelativePath(root, path))
             .ToList();
 
         withOwnPragma.Should().BeEmpty(
-            "a per-file pragma is a second documentation policy in a folder that already has one");
+            "the props silence CS1591 for every project, so a pragma silences nothing and only " +
+            "tells the next reader that this file answers to a documentation rule of its own");
+
+        var withOwnSwitch = ProjectFiles(root)
+            .Where(path => File
+                .ReadAllText(path)
+                .Contains(DocumentationFileSetting, StringComparison.Ordinal))
+            .Select(path => Path.GetRelativePath(root, path))
+            .ToList();
+
+        withOwnSwitch.Should().BeEmpty(
+            "the props already generate the XML file for every project, and a project that " +
+            "repeats the value moves nothing while looking like the place it is decided");
     }
 
     /// <summary>
@@ -125,11 +144,14 @@ public class CompilerPolicyShould
     /// </summary>
     /// <remarks>
     /// The props travel with the solution and were copied from the start;
-    /// .editorconfig was not, and the day the CS1591 exemption moved into it the
+    /// .editorconfig was not, and the day a CS1591 exemption moved into it the
     /// image build began failing on warnings no developer could see. The failure
     /// named a source file and a missing XML comment, which is the one thing that
     /// was not wrong — and it took every image down at once, so a green solution
-    /// still shipped nothing.
+    /// still shipped nothing. That exemption is gone, since the props now suppress
+    /// the diagnostic for every project, and the file still travels: it is where a
+    /// per-folder severity goes when the next one is needed, and its absence fails
+    /// the build with a message that names everything except its own cause.
     /// </remarks>
     [Fact]
     public void GiveTheImageBuildTheSamePolicyFiles()

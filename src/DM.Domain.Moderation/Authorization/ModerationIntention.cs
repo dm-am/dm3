@@ -5,30 +5,13 @@ namespace DM.Domain.Moderation.Authorization;
 /// </summary>
 public enum ModerationIntention
 {
-    /// <summary>
-    /// View all active bans
-    /// </summary>
-    ViewAllBans,
-
-    /// <summary>
-    /// Create a ban for a user
-    /// </summary>
-    CreateBan,
-
-    /// <summary>
-    /// Lift an existing ban
-    /// </summary>
-    LiftBan,
-
-    /// <summary>
-    /// Create a warning for a user
-    /// </summary>
-    CreateWarning,
-
-    /// <summary>
-    /// Remove a warning
-    /// </summary>
-    RemoveWarning,
+    // Bans, warnings, curatorship and the ban issued while resolving a ticket
+    // compare the role inside their domain services, because the refusal there
+    // has to name the role it wants (docs/architecture/AUTHORIZATION.md).
+    // They get no intention here: an intention declared and resolved for an
+    // action nobody routes through it is a second copy of the same threshold,
+    // kept green by its own tests and free to drift away from the check that
+    // actually runs.
 
     /// <summary>
     /// View moderator notes about users

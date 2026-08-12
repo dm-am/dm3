@@ -90,9 +90,9 @@ public class ConsumerMetricsShould
             .Where(path => File.ReadAllText(path).Contains(ConsumerSide, StringComparison.Ordinal))
             .ToArray();
 
-        middlewares.Should().HaveCountGreaterOrEqualTo(3,
-            "all three hosts consume - the two workers off the queues they were written for " +
-            "and the API off the realtime push - and a walk that finds fewer checks nothing");
+        middlewares.Should().NotBeEmpty(
+            "the hosts consume through middlewares of this shape, and a walk that finds none " +
+            "of them checks nothing");
 
         middlewares
             .Where(path => !Measures(File.ReadAllText(path)))
@@ -101,6 +101,91 @@ public class ConsumerMetricsShould
                 "every message of a consumer passes through its middleware, so this is " +
                 "the one place that can count them; without it a consumer failing everything " +
                 "is indistinguishable from an idle one");
+
+        var hosts = ConsumingHosts();
+        hosts.Should().NotBeEmpty(
+            "three hosts take messages off a queue, and a walk that finds none of them to " +
+            "read passes whatever they do");
+
+        foreach (var host in hosts)
+        {
+            var installed = InstalledConsumerMiddlewares(
+                File.ReadAllText(Path.Combine(host.FullName, Composition)));
+
+            installed.Should().NotBeEmpty(
+                $"{host.Name} takes messages off a queue, and a host whose consumer pipeline " +
+                "installs nothing counts nothing of what it took");
+
+            installed
+                .Where(name => !middlewares.Any(path => path.EndsWith(
+                    $"{Path.DirectorySeparatorChar}{name}.cs", StringComparison.Ordinal)))
+                .Should().BeEmpty(
+                    $"{host.Name} consumes through a middleware no file of this walk measures, " +
+                    "and a queue read through one is a queue whose failures reach no dashboard " +
+                    "and no rule");
+        }
+    }
+
+    /// <summary>The file a host composes itself in.</summary>
+    private const string Composition = "Startup.cs";
+
+    /// <summary>The interface a host takes its consumers from.</summary>
+    private const string ConsumerFactory = "IConsumerBuilder";
+
+    /// <summary>The argument a host declares its consumer pipeline in.</summary>
+    private const string ConsumerPipeline = "consumerBuilderDefaults:";
+
+    /// <summary>A middleware installed into a pipeline, as the builder spells it.</summary>
+    private static readonly Regex Installation = new(@"WithMiddleware<(\w+)>", RegexOptions.Compiled);
+
+    /// <summary>
+    /// The hosts that consume, read off the tree rather than listed here.
+    /// </summary>
+    /// <remarks>
+    /// Counting the middleware files was the whole of this rule while every host
+    /// carried one of its own. The workers share one now, so the count says nothing
+    /// about how many hosts are covered - three consume through two files, and a
+    /// fourth would consume through the same two. A list written out here would be no
+    /// better: a consuming host forgotten in it is exactly as invisible as it was to
+    /// the count, which is the failure a hand-kept mirror of the notification
+    /// generators had already caused once. So a host is a project that composes
+    /// itself, and it consumes when something in it asks the client for a consumer.
+    /// </remarks>
+    private static IReadOnlyCollection<DirectoryInfo> ConsumingHosts() =>
+        new DirectoryInfo(Path.Combine(RepositoryRoot, "src"))
+            .EnumerateDirectories()
+            .Where(project => File.Exists(Path.Combine(project.FullName, Composition)))
+            .Where(Consumes)
+            .ToArray();
+
+    private static bool Consumes(DirectoryInfo project) => project
+        .EnumerateFiles("*.cs", SearchOption.AllDirectories)
+        .Where(file => IsAuthored(file.FullName))
+        .Any(file => File.ReadAllText(file.FullName).Contains(ConsumerFactory, StringComparison.Ordinal));
+
+    /// <summary>
+    /// The consumer middlewares a host installs, out of the argument that declares its
+    /// consumer pipeline.
+    /// </summary>
+    /// <remarks>
+    /// Not every middleware in a composition is a consumer's: the producer pipeline is
+    /// declared with the same call, and a host that added one of its own to it would
+    /// otherwise be asked here for counters a producer middleware has no consumed
+    /// message to write. So the reading starts at the named argument and stops at the
+    /// end of the statement it belongs to.
+    /// </remarks>
+    private static IReadOnlyCollection<string> InstalledConsumerMiddlewares(string composition)
+    {
+        var declaration = composition.IndexOf(ConsumerPipeline, StringComparison.Ordinal);
+        if (declaration < 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        var end = composition.IndexOf(';', declaration);
+        var pipeline = composition[declaration..(end < 0 ? composition.Length : end)];
+
+        return Installation.Matches(pipeline).Select(match => match.Groups[1].Value).ToArray();
     }
 
     /// <summary>The interface a consumer middleware implements, which is what selects one.</summary>

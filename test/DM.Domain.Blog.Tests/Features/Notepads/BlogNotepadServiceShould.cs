@@ -178,6 +178,146 @@ public class BlogNotepadServiceShould : UnitTestBase
             default), Times.Once);
     }
 
+    [Fact]
+    public async Task LetTheAuthorOfAnEntryEditIt()
+    {
+        var blogId = Guid.NewGuid();
+        var assistantId = Guid.NewGuid();
+        var entryId = Guid.NewGuid();
+        var blog = BlogWithAssistant(blogId, Guid.NewGuid(), assistantId);
+        var entry = BlogEntry(entryId, blogId, assistantId);
+
+        _identityProvider.Setup(p => p.Current).Returns(CreateAuthenticatedIdentity(assistantId));
+        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
+        _repository.Setup(r => r.GetEntryAsync(entryId, default)).ReturnsAsync(entry);
+        _repository.Setup(r => r.UpdateEntryAsync(It.IsAny<UpdateNotepadEntryInternal>(), default))
+            .ReturnsAsync(entry);
+
+        var result = await _service.UpdateEntry(entryId, new UpdateNotepadEntry { Title = "Updated Entry" });
+
+        result.Should().BeSameAs(entry);
+    }
+
+    [Fact]
+    public async Task RefuseToLetAnAssistantEditSomebodyElsesEntry()
+    {
+        var blogId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        var assistantId = Guid.NewGuid();
+        var entryId = Guid.NewGuid();
+        var blog = BlogWithAssistant(blogId, ownerId, assistantId);
+        var entry = BlogEntry(entryId, blogId, ownerId);
+
+        _identityProvider.Setup(p => p.Current).Returns(CreateAuthenticatedIdentity(assistantId));
+        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
+        _repository.Setup(r => r.GetEntryAsync(entryId, default)).ReturnsAsync(entry);
+
+        var act = async () => await _service.UpdateEntry(entryId, new UpdateNotepadEntry { Title = "Updated Entry" });
+
+        // The notepad is open to an assistant, the words in it are not theirs to
+        // rewrite: the entry would still stand under the owner's name.
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+        _repository.Verify(
+            r => r.UpdateEntryAsync(It.IsAny<UpdateNotepadEntryInternal>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task RefuseToLetTheBlogOwnerEditAnEntryTheyDidNotWrite()
+    {
+        var blogId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        var assistantId = Guid.NewGuid();
+        var entryId = Guid.NewGuid();
+        var blog = BlogWithAssistant(blogId, ownerId, assistantId);
+        var entry = BlogEntry(entryId, blogId, assistantId);
+
+        _identityProvider.Setup(p => p.Current).Returns(CreateAuthenticatedIdentity(ownerId));
+        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
+        _repository.Setup(r => r.GetEntryAsync(entryId, default)).ReturnsAsync(entry);
+
+        var act = async () => await _service.UpdateEntry(entryId, new UpdateNotepadEntry { Title = "Updated Entry" });
+
+        // Owning the blog is the right to remove an entry, not to rewrite one.
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task LetTheBlogOwnerDeleteAnEntryWrittenBySomebodyElse()
+    {
+        var blogId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        var assistantId = Guid.NewGuid();
+        var entryId = Guid.NewGuid();
+        var blog = BlogWithAssistant(blogId, ownerId, assistantId);
+        var entry = BlogEntry(entryId, blogId, assistantId);
+
+        _identityProvider.Setup(p => p.Current).Returns(CreateAuthenticatedIdentity(ownerId));
+        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
+        _repository.Setup(r => r.GetEntryAsync(entryId, default)).ReturnsAsync(entry);
+
+        await _service.DeleteEntry(entryId);
+
+        _repository.Verify(r => r.DeleteEntryAsync(entryId, ownerId, default), Times.Once);
+    }
+
+    [Fact]
+    public async Task RefuseToLetAnAssistantDeleteSomebodyElsesEntry()
+    {
+        var blogId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        var assistantId = Guid.NewGuid();
+        var entryId = Guid.NewGuid();
+        var blog = BlogWithAssistant(blogId, ownerId, assistantId);
+        var entry = BlogEntry(entryId, blogId, ownerId);
+
+        _identityProvider.Setup(p => p.Current).Returns(CreateAuthenticatedIdentity(assistantId));
+        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
+        _repository.Setup(r => r.GetEntryAsync(entryId, default)).ReturnsAsync(entry);
+
+        var act = async () => await _service.DeleteEntry(entryId);
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+        _repository.Verify(
+            r => r.DeleteEntryAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), default), Times.Never);
+    }
+
+    [Fact]
+    public async Task LetTheAuthorDeleteTheirOwnEntry()
+    {
+        var blogId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        var assistantId = Guid.NewGuid();
+        var entryId = Guid.NewGuid();
+        var blog = BlogWithAssistant(blogId, ownerId, assistantId);
+        var entry = BlogEntry(entryId, blogId, assistantId);
+
+        _identityProvider.Setup(p => p.Current).Returns(CreateAuthenticatedIdentity(assistantId));
+        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
+        _repository.Setup(r => r.GetEntryAsync(entryId, default)).ReturnsAsync(entry);
+
+        await _service.DeleteEntry(entryId);
+
+        _repository.Verify(r => r.DeleteEntryAsync(entryId, assistantId, default), Times.Once);
+    }
+
+    private static BlogDto BlogWithAssistant(Guid blogId, Guid ownerId, Guid assistantId) => new()
+    {
+        Id = blogId,
+        Author = new GeneralUser { UserId = ownerId },
+        Assistants = new List<BlogAssistantInfo> { new() { UserId = assistantId } }
+    };
+
+    private static NotepadEntry BlogEntry(Guid entryId, Guid blogId, Guid authorId) => new()
+    {
+        Id = entryId,
+        NotepadType = NotepadType.Blog,
+        ContainerId = blogId,
+        AuthorId = authorId
+    };
+
     private static IIdentity CreateAuthenticatedIdentity(Guid userId)
     {
         var user = new AuthenticatedUser { UserId = userId, Username = "testuser" };

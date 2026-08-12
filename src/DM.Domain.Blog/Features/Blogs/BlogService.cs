@@ -36,8 +36,6 @@ internal class BlogService : IBlogService
     private readonly IValidator<UpdateBlog> _updateBlogValidator;
     private readonly IValidator<CreateRubric> _createRubricValidator;
     private readonly IValidator<UpdateRubric> _updateRubricValidator;
-    private readonly IValidator<CreatePublication> _createPublicationValidator;
-    private readonly IValidator<UpdatePublication> _updatePublicationValidator;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IEventProducer _eventProducer;
@@ -55,8 +53,6 @@ internal class BlogService : IBlogService
         IValidator<UpdateBlog> updateBlogValidator,
         IValidator<CreateRubric> createRubricValidator,
         IValidator<UpdateRubric> updateRubricValidator,
-        IValidator<CreatePublication> createPublicationValidator,
-        IValidator<UpdatePublication> updatePublicationValidator,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
         IEventProducer eventProducer)
@@ -72,8 +68,6 @@ internal class BlogService : IBlogService
         _updateBlogValidator = updateBlogValidator;
         _createRubricValidator = createRubricValidator;
         _updateRubricValidator = updateRubricValidator;
-        _createPublicationValidator = createPublicationValidator;
-        _updatePublicationValidator = updatePublicationValidator;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
         _eventProducer = eventProducer;
@@ -86,8 +80,8 @@ internal class BlogService : IBlogService
         // Resolve usernames to user IDs if provided. A name nobody answers to is
         // a filter that matches nothing, not a broken request: asked through
         // GetAsync, one mistyped name in the query string answered the whole
-        // listing with 410 Gone. FindUserIdAsync is the form that says "not
-        // found" instead of throwing it.
+        // listing with 404. FindUserIdAsync is the form that says "not found"
+        // instead of throwing it.
         IReadOnlyCollection<Guid>? hostUserIds = null;
         if (filter.HostUsernames?.Count > 0)
         {
@@ -321,137 +315,15 @@ internal class BlogService : IBlogService
         await _repository.DeleteBlog(blogId, userId, ct);
     }
 
-    /// <inheritdoc />
-    public async Task<(IEnumerable<Publication> publications, PagingResult paging)> GetPublications(
-        Guid blogId, Guid? rubricId, PagingQuery query, CancellationToken ct = default)
-    {
-        var blog = await GetAsync(blogId, ct);
-        var includeUnpublished = _intentionManager.IsAllowed(BlogIntention.ViewDraft, blog);
-
-        var totalCount = await _repository.CountPublications(blogId, rubricId, includeUnpublished, ct);
-        var pagingData = new PagingData(query, _identityProvider.Current.Settings.Paging.EntitiesPerPage, totalCount);
-
-        var publications = (await _repository.GetPublications(blogId, rubricId, includeUnpublished, pagingData, ct)).ToArray();
-        await FillPublicationUnreadCounters(publications);
-        return (publications, pagingData.Result);
-    }
-
-    /// <inheritdoc />
-    public async Task<Publication> GetPublication(Guid publicationId, CancellationToken ct = default)
-    {
-        var publication = await _repository.GetPublication(publicationId, ct);
-        if (publication == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, "Публикация не найдена");
-        }
-
-        if (!publication.IsPublished)
-        {
-            _intentionManager.ThrowIfForbidden(PublicationIntention.ViewDraft, publication);
-        }
-
-        await FillPublicationUnreadCounters(new[] { publication });
-        return publication;
-    }
-
-    /// <inheritdoc />
-    public async Task<Publication?> GetBestUserPublication(string username, CancellationToken ct = default)
-    {
-        // Resolve username → UserId via the cross-module lookup so we keep
-        // the repository's parameter typed (Guid) — repositories never
-        // take usernames directly. An unknown name throws HttpException(410),
-        // and 410 is what the caller receives: the error middleware passes an
-        // HttpException status through untouched.
-        var user = await _userLookupService.GetAsync(username);
-
-        var publication = await _repository.GetBestUserPublication(user.UserId, ct);
-        if (publication != null)
-        {
-            await FillPublicationUnreadCounters(new[] { publication });
-        }
-        return publication;
-    }
-
-    /// <inheritdoc />
-    public async Task<Publication> CreatePublication(CreatePublication createPublication, CancellationToken ct = default)
-    {
-        await _createPublicationValidator.ValidateAndThrowAsync(createPublication, ct);
-
-        var blog = await GetAsync(createPublication.BlogId, ct);
-        _intentionManager.ThrowIfForbidden(BlogIntention.CreatePublication, blog);
-
-        var user = _identityProvider.Current.User;
-        var userId = user.UserId;
-        var now = _dateTimeProvider.Now;
-        var entity = new CreatePublicationEntity
-        {
-            PublicationId = _guidFactory.Create(),
-            BlogId = createPublication.BlogId,
-            RubricId = createPublication.RubricId,
-            AuthorId = userId,
-            Title = createPublication.Title,
-            // Publication bodies render on the Comment surface where [mod] is a
-            // green mod block; strip it when authored by a non-moderator.
-            Content = ModBlockSanitizer.SanitizeForAuthor(createPublication.Content, user.Role),
-            Preview = createPublication.Preview,
-            CommentsEnabled = createPublication.CommentsEnabled,
-            PublishImmediately = createPublication.PublishImmediately,
-            CreatedUtc = now
-        };
-        var createdPublication = await _repository.CreatePublication(entity, ct);
-        await Task.WhenAll(
-            _unreadCountersRepository.CreateAsync(createdPublication.Id, createPublication.BlogId, UnreadEntryType.Message),
-            _eventProducer.SendAsync(EventType.NewPublication, createdPublication.Id));
-        return createdPublication;
-    }
-
-    /// <inheritdoc />
-    public async Task<Publication> UpdatePublication(UpdatePublication updatePublication, CancellationToken ct = default)
-    {
-        await _updatePublicationValidator.ValidateAndThrowAsync(updatePublication, ct);
-
-        var publication = await GetPublication(updatePublication.PublicationId, ct);
-        _intentionManager.ThrowIfForbidden(PublicationIntention.Edit, publication);
-
-        // Check if publishing for the first time
-        if (updatePublication.IsPublished == true && !publication.IsPublished)
-        {
-            _intentionManager.ThrowIfForbidden(PublicationIntention.Publish, publication);
-        }
-
-        var entity = new UpdatePublicationEntity
-        {
-            PublicationId = updatePublication.PublicationId,
-            RubricId = updatePublication.RubricId,
-            ClearRubric = updatePublication.ClearRubric,
-            Title = updatePublication.Title,
-            // Publication bodies render on the Comment surface where [mod] is a
-            // green mod block; strip it when the editor is a non-moderator.
-            Content = ModBlockSanitizer.SanitizeForAuthor(
-                updatePublication.Content, _identityProvider.Current.User.Role),
-            Preview = updatePublication.Preview,
-            CommentsEnabled = updatePublication.CommentsEnabled,
-            IsPublished = updatePublication.IsPublished,
-            UpdatedUtc = _dateTimeProvider.Now,
-            ModifiedByUserId = _identityProvider.Current.User.UserId
-        };
-        var updatedPublication = await _repository.UpdatePublication(entity, ct);
-        await _eventProducer.SendAsync(EventType.ChangedPublication, updatedPublication.Id);
-        return updatedPublication;
-    }
-
-    /// <inheritdoc />
-    public async Task DeletePublication(Guid publicationId, CancellationToken ct = default)
-    {
-        var publication = await GetPublication(publicationId, ct);
-        _intentionManager.ThrowIfForbidden(PublicationIntention.Delete, publication);
-
-        var userId = _identityProvider.Current.User.UserId;
-        await _repository.DeletePublication(publicationId, userId, ct);
-        await Task.WhenAll(
-            _unreadCountersRepository.DeleteAsync(publicationId, UnreadEntryType.Message),
-            _eventProducer.SendAsync(EventType.DeletedPublication, publicationId));
-    }
+    // ═══ RUBRICS ═══
+    //
+    // Rubrics get no feature folder of their own. The blog read path fills
+    // their derived counters (FillBlogRubricCounters below), and every rubric
+    // operation starts by reading the blog. Moving them out either hands the
+    // blog a dependency on a rubric service that already depends on the blog,
+    // which the container refuses to build, or leaves the counter fill behind
+    // as a second copy of the same computation. PATTERNS.md states the
+    // exception this is an instance of.
 
     /// <inheritdoc />
     public async Task<Rubric> CreateRubric(CreateRubric createRubric, CancellationToken ct = default)
@@ -501,8 +373,23 @@ internal class BlogService : IBlogService
         var blog = await GetAsync(blogId, ct);
         _intentionManager.ThrowIfForbidden(BlogIntention.CreateRubric, blog);
 
+        // What this call replaces is the order of the blog as a whole, so the body
+        // names every rubric of that blog once. A subset would leave the rubrics it
+        // skipped holding the sort orders this call has just handed to others.
+        var known = (await _repository.GetRubrics(blogId, ct)).Select(r => r.Id).ToArray();
+        var named = new HashSet<Guid>(orderedRubricIds);
+        if (named.Count != orderedRubricIds.Count || !named.SetEquals(known))
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                ["rubricIds"] = "Порядок должен перечислять все рубрики блога, каждую по одному разу"
+            });
+        }
+
         await _repository.ReorderRubrics(blogId, orderedRubricIds, ct);
 
+        // Read back rather than predicted: the response carries the sort orders
+        // storage now holds.
         var rubrics = (await _repository.GetRubrics(blogId, ct)).ToArray();
         await FillRubricCounters(blogId, rubrics);
         return rubrics;
@@ -846,26 +733,5 @@ internal class BlogService : IBlogService
 
         await FillRubricCounters(blog.Id, rubrics);
         blog.Rubrics = rubrics;
-    }
-
-    private async Task FillPublicationUnreadCounters(Publication[] publications)
-    {
-        if (publications.Length == 0) return;
-
-        var identity = _identityProvider.Current;
-
-        // Anonymous users: show total counts
-        if (!identity.User.IsAuthenticated)
-        {
-            foreach (var publication in publications)
-            {
-                publication.UnreadCommentsCount = publication.CommentCount;
-            }
-            return;
-        }
-
-        // Authenticated users: show actual unread counts
-        await _unreadCountersRepository.FillEntityCounters(publications, identity.User.UserId,
-            p => p.Id, p => p.UnreadCommentsCount);
     }
 }

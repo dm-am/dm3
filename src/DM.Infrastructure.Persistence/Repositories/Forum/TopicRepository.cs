@@ -558,22 +558,38 @@ internal class TopicRepository : ITopicRepository
     }
 
     /// <inheritdoc />
-    public async Task UpdateAttachOrder(IReadOnlyDictionary<Guid, int> topicOrders, CancellationToken ct = default)
-    {
-        if (topicOrders.Count == 0)
-        {
-            return;
-        }
-
-        var topicIds = topicOrders.Keys.ToArray();
-        var topics = await _dbContext.Topics
-            .TagWith("DM.Forum.UpdateAttachOrder")
-            .Where(t => topicIds.Contains(t.TopicId))
+    public async Task<IReadOnlyList<Guid>> GetAttachedTopicIds(Guid boardId, CancellationToken ct = default) =>
+        await _dbContext.Topics
+            .TagWith("DM.Forum.AttachedTopicIds")
+            .AsNoTracking()
+            .Where(t => t.BoardId == boardId && t.IsAttached && !t.IsRemoved)
+            .OrderBy(t => t.AttachOrder ?? int.MaxValue)
+            .ThenBy(t => t.TopicId)
+            .Select(t => t.TopicId)
             .ToArrayAsync(ct);
+
+    /// <inheritdoc />
+    public async Task ReplaceAttachOrder(
+        Guid boardId, IReadOnlyList<Guid> orderedTopicIds, CancellationToken ct = default)
+    {
+        // The board is in the predicate and not only in the caller's address:
+        // keyed by topic id alone, this write moved whatever ids the body
+        // happened to carry, and the moderator of one board could renumber the
+        // pinned topics of another.
+        var topics = await _dbContext.Topics
+            .TagWith("DM.Forum.ReplaceAttachOrder")
+            .Where(t => t.BoardId == boardId && t.IsAttached && !t.IsRemoved)
+            .ToArrayAsync(ct);
+
+        var positions = new Dictionary<Guid, int>();
+        for (var position = 0; position < orderedTopicIds.Count; position++)
+        {
+            positions[orderedTopicIds[position]] = position;
+        }
 
         foreach (var topic in topics)
         {
-            if (topicOrders.TryGetValue(topic.TopicId, out var order))
+            if (positions.TryGetValue(topic.TopicId, out var order))
             {
                 topic.AttachOrder = order;
             }

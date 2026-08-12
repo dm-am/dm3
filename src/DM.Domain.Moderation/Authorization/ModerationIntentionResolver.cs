@@ -13,9 +13,6 @@ internal class ModerationIntentionResolver : IIntentionResolver<ModerationIntent
         intention switch
         {
             // Moderator+ actions
-            ModerationIntention.ViewAllBans => user.Role >= UserRole.Moderator,
-            ModerationIntention.CreateWarning => user.Role >= UserRole.Moderator,
-            ModerationIntention.RemoveWarning => user.Role >= UserRole.Moderator,
             ModerationIntention.ViewModNotes => user.Role >= UserRole.Moderator,
             ModerationIntention.CreateModNote => user.Role >= UserRole.Moderator,
             ModerationIntention.EditModNote => user.Role >= UserRole.Moderator,
@@ -27,9 +24,7 @@ internal class ModerationIntentionResolver : IIntentionResolver<ModerationIntent
             // Any authenticated user can create tickets
             ModerationIntention.CreateTicket => user.IsAuthenticated,
 
-            // Senior moderator+ actions (bans per AUTHORIZATION.md role matrix)
-            ModerationIntention.CreateBan => user.Role >= UserRole.SeniorModerator,
-            ModerationIntention.LiftBan => user.Role >= UserRole.SeniorModerator,
+            // Senior moderator+ actions
             ModerationIntention.ManageCredentials => user.Role >= UserRole.SeniorModerator,
 
             // Admin only actions

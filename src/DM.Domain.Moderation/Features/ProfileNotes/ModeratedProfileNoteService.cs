@@ -64,8 +64,8 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
             ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ModerationNoteNotFound(noteId));
 
         // Not a lookup: the value is unused and the call is the check. GetAsync
-        // answers 410 Gone for a user who is no longer there, so a note whose
-        // subject has departed is refused rather than served. Written as a bound
+        // answers 404 for a user who is no longer there, so a note whose subject
+        // has departed is refused rather than served. Written as a bound
         // variable it read as a leftover, and removing it as one would have
         // changed what the endpoint answers.
         await _userLookupService.GetAsync(note.User.UserId);
@@ -104,8 +104,8 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
             ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ModerationNoteNotFound(updateNote.Id));
 
         // Not a lookup: the value is unused and the call is the check. GetAsync
-        // answers 410 Gone for a user who is no longer there, so a note whose
-        // subject has departed is refused rather than served. Written as a bound
+        // answers 404 for a user who is no longer there, so a note whose subject
+        // has departed is refused rather than served. Written as a bound
         // variable it read as a leftover, and removing it as one would have
         // changed what the endpoint answers.
         await _userLookupService.GetAsync(note.User.UserId);
@@ -138,8 +138,8 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
             ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ModerationNoteNotFound(noteId));
 
         // Not a lookup: the value is unused and the call is the check. GetAsync
-        // answers 410 Gone for a user who is no longer there, so a note whose
-        // subject has departed is refused rather than served. Written as a bound
+        // answers 404 for a user who is no longer there, so a note whose subject
+        // has departed is refused rather than served. Written as a bound
         // variable it read as a leftover, and removing it as one would have
         // changed what the endpoint answers.
         await _userLookupService.GetAsync(note.User.UserId);

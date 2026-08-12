@@ -1,54 +1,53 @@
 using System;
-using DM.Domain.Blog.Features.Blogs;
+using DM.Domain.Blog.Features.Publications;
 using DM.Domain.Core.Exceptions;
 using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
-namespace DM.Domain.Blog.Tests.Features.Blogs;
+namespace DM.Domain.Blog.Tests.Features.Publications;
 
-public class CreatePublicationValidatorShould : UnitTestBase
+public class UpdatePublicationValidatorShould : UnitTestBase
 {
-    private readonly CreatePublicationValidator validator;
+    private readonly UpdatePublicationValidator validator;
 
-    public CreatePublicationValidatorShould()
+    public UpdatePublicationValidatorShould()
     {
-        validator = new CreatePublicationValidator();
+        validator = new UpdatePublicationValidator();
     }
 
     [Fact]
     public void PassForValidInput()
     {
-        var input = new CreatePublication
+        var input = new UpdatePublication
         {
-            BlogId = Guid.NewGuid(),
-            Title = "My Publication",
-            Content = "Publication content",
-            Preview = "Short preview",
-            PublishImmediately = true,
-            CommentsEnabled = true
+            PublicationId = Guid.NewGuid(),
+            Title = "Updated Publication",
+            Content = "Updated content",
+            Preview = "Updated preview",
+            IsPublished = true,
+            CommentsEnabled = false
         };
         var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();
     }
 
     [Fact]
-    public void FailWhenBlogIdIsEmpty()
+    public void FailWhenPublicationIdIsEmpty()
     {
-        var input = new CreatePublication { BlogId = Guid.Empty };
+        var input = new UpdatePublication { PublicationId = Guid.Empty };
         var result = validator.TestValidate(input);
-        result.ShouldHaveValidationErrorFor(x => x.BlogId)
+        result.ShouldHaveValidationErrorFor(x => x.PublicationId)
             .WithErrorMessage(ValidationError.Empty);
     }
 
     [Fact]
-    public void FailWhenTitleIsEmpty()
+    public void FailWhenTitleIsEmptyString()
     {
-        var input = new CreatePublication
+        var input = new UpdatePublication
         {
-            BlogId = Guid.NewGuid(),
-            Title = "",
-            Content = "Content"
+            PublicationId = Guid.NewGuid(),
+            Title = ""
         };
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Title)
@@ -58,11 +57,10 @@ public class CreatePublicationValidatorShould : UnitTestBase
     [Fact]
     public void FailWhenTitleExceedsMaxLength()
     {
-        var input = new CreatePublication
+        var input = new UpdatePublication
         {
-            BlogId = Guid.NewGuid(),
-            Title = new string('a', 301),
-            Content = "Content"
+            PublicationId = Guid.NewGuid(),
+            Title = new string('a', 301)
         };
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Title)
@@ -70,12 +68,11 @@ public class CreatePublicationValidatorShould : UnitTestBase
     }
 
     [Fact]
-    public void FailWhenContentIsEmpty()
+    public void FailWhenContentIsEmptyString()
     {
-        var input = new CreatePublication
+        var input = new UpdatePublication
         {
-            BlogId = Guid.NewGuid(),
-            Title = "Title",
+            PublicationId = Guid.NewGuid(),
             Content = ""
         };
         var result = validator.TestValidate(input);
@@ -86,11 +83,9 @@ public class CreatePublicationValidatorShould : UnitTestBase
     [Fact]
     public void FailWhenPreviewExceedsMaxLength()
     {
-        var input = new CreatePublication
+        var input = new UpdatePublication
         {
-            BlogId = Guid.NewGuid(),
-            Title = "Title",
-            Content = "Content",
+            PublicationId = Guid.NewGuid(),
             Preview = new string('a', 501)
         };
         var result = validator.TestValidate(input);
@@ -101,11 +96,9 @@ public class CreatePublicationValidatorShould : UnitTestBase
     [Fact]
     public void PassWhenPreviewIsAtMaxLength()
     {
-        var input = new CreatePublication
+        var input = new UpdatePublication
         {
-            BlogId = Guid.NewGuid(),
-            Title = "Title",
-            Content = "Content",
+            PublicationId = Guid.NewGuid(),
             Preview = new string('a', 500)
         };
         var result = validator.TestValidate(input);

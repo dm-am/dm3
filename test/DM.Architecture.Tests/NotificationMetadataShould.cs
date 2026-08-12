@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text.RegularExpressions;
 using FluentAssertions;
 using Xunit;
 
@@ -49,14 +48,6 @@ public class NotificationMetadataShould
 
     private static readonly MethodInfo HiddenFrom =
         Wording.GetMethod("IsHiddenFromText", BindingFlags.Public | BindingFlags.Static)!;
-
-    /// <summary>"Name = expression": a member of the payload spelled out.</summary>
-    private static readonly Regex NamedMember = new(
-        @"^\s*([A-Za-z_]\w*)\s*=(?!=)", RegexOptions.Compiled);
-
-    /// <summary>"source.Name": a member that borrows its name from the source.</summary>
-    private static readonly Regex BorrowedMember = new(
-        @"\.\s*([A-Za-z_]\w*)\s*$", RegexOptions.Compiled);
 
     [Fact]
     public void NameEveryFieldItShowsTheReader()
@@ -135,8 +126,9 @@ public class NotificationMetadataShould
                 var opening = source.IndexOf('{', at);
                 opening.Should().BeGreaterThan(at, "an anonymous payload opens with a brace");
 
-                var closing = ClosingBrace(source, opening);
-                foreach (var member in Members(source.Substring(opening + 1, closing - opening - 1)))
+                var closing = ObjectInitializer.ClosingBrace(source, opening);
+                foreach (var member in ObjectInitializer.Members(
+                             source.Substring(opening + 1, closing - opening - 1)))
                 {
                     keys.Add(member);
                 }
@@ -146,107 +138,6 @@ public class NotificationMetadataShould
         }
 
         return keys;
-    }
-
-    /// <summary>
-    /// Members of one object initializer, both spellings of a member.
-    /// </summary>
-    private static IEnumerable<string> Members(string body)
-    {
-        foreach (var member in TopLevelParts(body))
-        {
-            var named = NamedMember.Match(member);
-            if (named.Success)
-            {
-                yield return named.Groups[1].Value;
-                continue;
-            }
-
-            var borrowed = BorrowedMember.Match(member.Trim());
-            if (borrowed.Success)
-            {
-                yield return borrowed.Groups[1].Value;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Splits an initializer at the commas that belong to it, leaving alone those
-    /// inside a nested call, collection or literal.
-    /// </summary>
-    private static IEnumerable<string> TopLevelParts(string body)
-    {
-        var depth = 0;
-        var start = 0;
-        for (var i = 0; i < body.Length; i++)
-        {
-            var symbol = body[i];
-            if (symbol is '"' or '\'')
-            {
-                i = EndOfLiteral(body, i);
-            }
-            else if (symbol is '{' or '(' or '[')
-            {
-                depth++;
-            }
-            else if (symbol is '}' or ')' or ']')
-            {
-                depth--;
-            }
-            else if (symbol == ',' && depth == 0)
-            {
-                yield return body.Substring(start, i - start);
-                start = i + 1;
-            }
-        }
-
-        yield return body.Substring(start);
-    }
-
-    /// <summary>Index of the brace that closes the one opened at the given position.</summary>
-    private static int ClosingBrace(string source, int opening)
-    {
-        var depth = 0;
-        for (var i = opening; i < source.Length; i++)
-        {
-            var symbol = source[i];
-            if (symbol is '"' or '\'')
-            {
-                i = EndOfLiteral(source, i);
-            }
-            else if (symbol == '{')
-            {
-                depth++;
-            }
-            else if (symbol == '}' && --depth == 0)
-            {
-                return i;
-            }
-        }
-
-        throw new InvalidOperationException("A notification payload is left open.");
-    }
-
-    /// <summary>
-    /// Index of the quote that closes the literal opened at the given position, so
-    /// that a brace or a comma inside it is not read as punctuation.
-    /// </summary>
-    private static int EndOfLiteral(string source, int opening)
-    {
-        var quote = source[opening];
-        for (var i = opening + 1; i < source.Length; i++)
-        {
-            if (source[i] == '\\')
-            {
-                i++;
-            }
-            else if (source[i] == quote)
-            {
-                return i;
-            }
-        }
-
-        return source.Length - 1;
     }
 
     /// <summary>
