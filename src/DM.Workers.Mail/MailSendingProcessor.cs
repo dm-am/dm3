@@ -66,7 +66,22 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
 
         await _client.ConnectAsync(_configuration.ServerHost, _configuration.ServerPort,
             TransportSecurity(), cancellationToken);
-        await _client.AuthenticateAsync(_configuration.Username, _configuration.Password, cancellationToken);
+
+        // Credentials that are set are still sent, and a relay that then refuses
+        // them still fails loudly. What this skips is the attempt with none.
+        // MailKit answers an authentication attempt against a relay that advertises
+        // no AUTH extension by refusing it outright - "The SMTP server does not
+        // support authentication." - rather than by sending nothing, and the letter
+        // that triggered it would be retried, dead lettered and never delivered.
+        // Nothing changes on a stand: MailHog advertises AUTH PLAIN and answers
+        // empty credentials with 235, which is why the shipped empty values work
+        // there today. The relay this opens the way to is an internal one with no
+        // AUTH at all, which until now could not be configured here.
+        if (_configuration.UsesAuthentication)
+        {
+            await _client.AuthenticateAsync(_configuration.Username, _configuration.Password, cancellationToken);
+        }
+
         return _client;
     }
 

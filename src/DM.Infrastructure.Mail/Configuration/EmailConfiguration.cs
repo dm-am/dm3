@@ -26,6 +26,24 @@ public class EmailConfiguration
     public string Password { get; set; } = null!;
 
     /// <summary>
+    /// Whether the relay is to be authenticated against at all.
+    /// </summary>
+    /// <remarks>
+    /// A blank user name is the switch, which is the reading the alert receiver
+    /// beside this stack already gives the same value for the same relay
+    /// (docker/prometheus/alertmanager.yml). Blank rather than merely empty: a user
+    /// name of spaces is a slip in an environment file, not a credential.
+    ///
+    /// It exists because the two answers are not interchangeable. MailKit refuses
+    /// an authentication attempt against a relay that advertises no AUTH extension
+    /// - "The SMTP server does not support authentication." - rather than sending
+    /// nothing, and the letter that triggered it would be retried, dead lettered
+    /// and never delivered. Without a way to say "no credentials", a relay of that
+    /// kind could not be configured here at all.
+    /// </remarks>
+    public bool UsesAuthentication => !string.IsNullOrWhiteSpace(Username);
+
+    /// <summary>
     /// Send emails from address
     /// </summary>
     public string FromAddress { get; set; } = null!;
