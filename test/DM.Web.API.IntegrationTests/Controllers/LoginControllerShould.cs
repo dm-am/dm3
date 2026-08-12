@@ -7,7 +7,7 @@ using Xunit;
 namespace DM.Web.API.IntegrationTests.Controllers;
 
 /// <summary>
-/// Integration tests for LoginController
+/// Integration tests for logging in and for what the resulting session opens
 /// </summary>
 public class LoginControllerShould : IntegrationTestBase
 {

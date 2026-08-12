@@ -17,7 +17,10 @@ public class BlacklistSettings
     /// <summary>Hide blogs from blocked users in listings</summary>
     public bool HideBlogs { get; set; }
 
-    /// <summary>Block direct messages from blocked users</summary>
+    /// <summary>
+    /// Block private correspondence from blocked users: a direct chat, a group
+    /// chat of two, and being added to a group chat by them at all
+    /// </summary>
     public bool BlockDirectMessages { get; set; }
 
     /// <summary>Auto-populate game/blog blacklists from personal blacklist when creating new content</summary>

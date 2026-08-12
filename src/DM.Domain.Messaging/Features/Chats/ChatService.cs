@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
@@ -26,6 +27,7 @@ internal class ChatService : IChatService
     private readonly IIntentionManager _intentionManager;
     private readonly IGuidFactory _guidFactory;
     private readonly IIdentityProvider _identityProvider;
+    private readonly IUserBlacklistChecker _userBlacklistChecker;
 
     public ChatService(
         IValidator<CreateChat> createValidator,
@@ -35,7 +37,8 @@ internal class ChatService : IChatService
         IUnreadCountersRepository unreadCountersRepository,
         IIntentionManager intentionManager,
         IGuidFactory guidFactory,
-        IIdentityProvider identityProvider)
+        IIdentityProvider identityProvider,
+        IUserBlacklistChecker userBlacklistChecker)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -45,6 +48,7 @@ internal class ChatService : IChatService
         _intentionManager = intentionManager;
         _guidFactory = guidFactory;
         _identityProvider = identityProvider;
+        _userBlacklistChecker = userBlacklistChecker;
     }
 
     // ═══ CREATE ═══
@@ -59,6 +63,8 @@ internal class ChatService : IChatService
             .Append(currentUserId)
             .Distinct()
             .ToArray();
+
+        await ThrowIfAnyBlocksTheAuthor(allParticipants);
 
         var (chat, chatLinks) = _factory.CreateGroup(createChat.Title, allParticipants);
         var result = await _repository.Create(chat, chatLinks);
@@ -87,7 +93,7 @@ internal class ChatService : IChatService
         var pagingData = new PagingData(query, identity.Settings.Paging.MessagesPerPage, totalCount);
         var chats = (await _repository.Get(currentUserId, pagingData)).ToArray();
         await _unreadCountersRepository.FillEntityCounters(chats, currentUserId,
-            c => c.Id, c => c.UnreadMessagesCount);
+            c => c.UnreadEntityId, c => c.UnreadMessagesCount);
 
         return (chats, pagingData.Result);
     }
@@ -103,7 +109,7 @@ internal class ChatService : IChatService
         }
 
         await _unreadCountersRepository.FillEntityCounters(new[] { chat }, currentUserId,
-            c => c.Id, c => c.UnreadMessagesCount);
+            c => c.UnreadEntityId, c => c.UnreadMessagesCount);
 
         return chat;
     }
@@ -121,7 +127,7 @@ internal class ChatService : IChatService
 
         var currentUserId = _identityProvider.Current.User.UserId;
         await _unreadCountersRepository.FillEntityCounters(new[] { chat }, currentUserId,
-            c => c.Id, c => c.UnreadMessagesCount);
+            c => c.UnreadEntityId, c => c.UnreadMessagesCount);
 
         return chat;
     }
@@ -137,7 +143,7 @@ internal class ChatService : IChatService
         }
 
         await _unreadCountersRepository.FillEntityCounters(new[] { chat }, currentUserId,
-            c => c.Id, c => c.UnreadMessagesCount);
+            c => c.UnreadEntityId, c => c.UnreadMessagesCount);
 
         return chat;
     }
@@ -161,7 +167,7 @@ internal class ChatService : IChatService
         if (existingChat != null)
         {
             await _unreadCountersRepository.FillEntityCounters(new[] { existingChat }, currentUserId,
-                c => c.Id, c => c.UnreadMessagesCount);
+                c => c.UnreadEntityId, c => c.UnreadMessagesCount);
             return existingChat;
         }
 
@@ -182,9 +188,34 @@ internal class ChatService : IChatService
     }
 
     /// <inheritdoc />
-    public Task MarkAsReadAsync(Guid chatId) =>
-        _unreadCountersRepository.FlushAsync(_identityProvider.Current.User.UserId,
-            UnreadEntryType.Message, chatId);
+    public async Task MarkAsReadAsync(Guid chatId)
+    {
+        var chat = await _repository.GetForUpdate(chatId);
+        if (chat == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
+        }
+
+        // Reached through the unfiltered read, so participation is asked here.
+        // A conversation is only ever its participants': the endpoint took any
+        // identifier somebody remembered, and once removals started leaving a
+        // tombstone behind, "mark as read" from a former participant would have
+        // put a live marker back — the flush finds no marker of their own, falls
+        // through to borrowing a neighbour's parent, and writes a document with
+        // no removal stamp, which nothing collects afterwards.
+        //
+        // Narrowed to the two types that have participants at all. A game room
+        // chat and the global chat carry no participant rows by design, and their
+        // access is decided before this call.
+        if (chat.Type is ChatType.Group or ChatType.Direct &&
+            chat.Participants.All(p => p.UserId != _identityProvider.Current.User.UserId))
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
+        }
+
+        await _unreadCountersRepository.FlushAsync(_identityProvider.Current.User.UserId,
+            UnreadEntryType.Message, chat.UnreadEntityId);
+    }
 
     // ═══ UPDATE ═══
 
@@ -205,6 +236,8 @@ internal class ChatService : IChatService
             .Except(chat.Participants.Select(p => p.UserId))
             .Distinct()
             .ToArray() ?? Array.Empty<Guid>();
+
+        await ThrowIfAnyBlocksTheAuthor(addParticipants);
 
         var linksToAdd = addParticipants.Select(userId => new CreateChatLinkEntity
         {
@@ -231,12 +264,70 @@ internal class ChatService : IChatService
         if (addParticipants.Length > 0)
         {
             await _unreadCountersRepository.CreateAsync(
-                updateChat.ChatId,
+                chat.UnreadEntityId,
                 UnreadEntryType.Message,
                 addParticipants);
         }
 
+        // The other half of the same lifecycle. Without it a person removed from
+        // the chat kept a marker that every later message incremented, on a
+        // conversation the participation predicate no longer shows them, and
+        // nothing collected it: the expiry index reads the removal stamp, and an
+        // untouched marker has none. Coming back repairs itself — the create
+        // above replaces the document whole.
+        if (removeParticipants.Length > 0)
+        {
+            await _unreadCountersRepository.DeleteAsync(
+                chat.UnreadEntityId,
+                UnreadEntryType.Message,
+                removeParticipants);
+        }
+
         return result;
+    }
+
+    // ═══ BLACKLIST ═══
+
+    /// <summary>
+    /// Refuses to put somebody into a group chat with a person who blocked them
+    /// </summary>
+    /// <remarks>
+    /// A group chat used to be the way around a personal blacklist: the message
+    /// path asked about BlockDirectMessages for a direct chat alone, so somebody
+    /// who had been blocked opened a group with the same person and wrote there
+    /// instead. The message path now reads a conversation of two as private
+    /// correspondence whatever its type, and this is the other half of that rule.
+    /// Neither half closes the hole alone: the pair check is silent while a third
+    /// participant is in the room, and that third one can be removed a second
+    /// later, while this check cannot see a group that shrinks to a pair after it
+    /// was allowed.
+    ///
+    /// The flag asked about is the same BlockDirectMessages the message path
+    /// asks about, and deliberately so: a blacklist entry without it leaves
+    /// private messages from that person allowed, so refusing them a shared room
+    /// while accepting their letters would be two answers to one question.
+    ///
+    /// The refusal names nobody and gives no reason. Which of the participants
+    /// keeps the author on a blacklist is theirs to know, and the module already
+    /// declines to say it elsewhere: the block status answers a general "cannot
+    /// communicate" rather than "they blocked you".
+    /// </remarks>
+    private async Task ThrowIfAnyBlocksTheAuthor(IReadOnlyCollection<Guid> participantIds)
+    {
+        var currentUserId = _identityProvider.Current.User.UserId;
+        var others = participantIds.Where(id => id != currentUserId).Distinct().ToArray();
+        if (others.Length == 0)
+        {
+            return;
+        }
+
+        var blocking = await _userBlacklistChecker.GetOwnersBlockingIfFlagEnabledAsync(
+            currentUserId, others, UserBlacklistSettings.BlockDirectMessages);
+        if (blocking.Count > 0)
+        {
+            throw new HttpException(HttpStatusCode.Forbidden,
+                "Нельзя добавить в чат этого пользователя");
+        }
     }
 
     // ═══ DELETE ═══
@@ -253,6 +344,6 @@ internal class ChatService : IChatService
         _intentionManager.ThrowIfForbidden(ChatIntention.DeleteChat, chat);
 
         await _repository.Delete(chatId);
-        await _unreadCountersRepository.DeleteAsync(chatId, UnreadEntryType.Message);
+        await _unreadCountersRepository.DeleteAsync(chat.UnreadEntityId, UnreadEntryType.Message);
     }
 }

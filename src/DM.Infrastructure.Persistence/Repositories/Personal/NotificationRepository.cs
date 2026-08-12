@@ -65,18 +65,22 @@ internal class NotificationRepository : MongoCollectionRepository<Notification>,
         return Collection.InsertManyAsync(entities);
     }
 
+    // AddToSet rather than Push: the UserToBeNotified filter is evaluated by the
+    // server as part of the same update, so two requests racing each other both
+    // pass it and Push would leave the same reader in the array twice.
+
     /// <inheritdoc />
     public Task MarkAsRead(Guid notificationId, Guid userId) =>
         Collection.UpdateOneAsync(
             Filter.Eq(n => n.NotificationId, notificationId) &
             UserToBeNotified(userId),
-            Update.Push(n => n.UsersNotified, userId));
+            UpdateBuilder.AddToSet(n => n.UsersNotified, userId));
 
     /// <inheritdoc />
     public Task MarkAsRead(Guid userId) =>
         Collection.UpdateManyAsync(
             UserToBeNotified(userId),
-            Update.Push(n => n.UsersNotified, userId));
+            UpdateBuilder.AddToSet(n => n.UsersNotified, userId));
 
     // ═══ PRIVATE ═══
 

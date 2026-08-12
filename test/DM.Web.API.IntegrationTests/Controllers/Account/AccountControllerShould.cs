@@ -8,7 +8,7 @@ using Xunit;
 namespace DM.Web.API.IntegrationTests.Controllers.Account;
 
 /// <summary>
-/// Integration tests for AccountController
+/// Integration tests for the account endpoints under /v1/account
 /// </summary>
 public class AccountControllerShould : IntegrationTestBase
 {
@@ -127,11 +127,16 @@ public class AccountControllerShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
+    /// <remarks>
+    /// Posted, not queried. The name being checked is the one value that must
+    /// not reach an access log, and the request line is logged with its query.
+    /// </remarks>
     [Fact]
     public async Task CheckUsername_WithAvailableUsername_ReturnsAvailable()
     {
         var uniqueUsername = $"available{Guid.NewGuid():N}"[..15];
-        var response = await Client.GetAsync($"/v1/account/check-username?username={uniqueUsername}");
+        var response = await Client.PostAsJsonAsync(
+            "/v1/account/check-username", new { username = uniqueUsername });
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var content = await response.Content.ReadAsStringAsync();
         content.Should().Contain("\"isAvailable\":true");
@@ -141,10 +146,23 @@ public class AccountControllerShould : IntegrationTestBase
     public async Task CheckUsername_WithTakenUsername_ReturnsNotAvailable()
     {
         // TestUser is from seed data
-        var response = await Client.GetAsync($"/v1/account/check-username?username={TestConstants.TestUserUsername}");
+        var response = await Client.PostAsJsonAsync(
+            "/v1/account/check-username", new { username = TestConstants.TestUserUsername });
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var content = await response.Content.ReadAsStringAsync();
         content.Should().Contain("\"isAvailable\":false");
+    }
+
+    /// <summary>
+    /// The checked identifier never appears in the request line.
+    /// </summary>
+    [Fact]
+    public async Task CheckUsername_RefusesTheQueryStringForm()
+    {
+        var response = await Client.GetAsync("/v1/account/check-username?username=whoever");
+
+        // The address is still there, the verb is not: 405 rather than 404.
+        response.StatusCode.Should().Be(HttpStatusCode.MethodNotAllowed);
     }
 
     #endregion
@@ -193,7 +211,10 @@ public class AccountControllerShould : IntegrationTestBase
     [Fact]
     public async Task RequestRecovery_WithNonexistentUser_ReturnsOk()
     {
-        // Recovery always returns OK to prevent email enumeration
+        // Recovery answers 200 for an unknown address too, and the body says which
+        // of the three outcomes happened. Telling a registered address from an
+        // unregistered one is deliberate here and recorded as an exception to the
+        // non-disclosure rule, so the form can say an address was mistyped.
         var recoveryData = new { email = "nonexistent@example.com" };
         var response = await Client.PostAsJsonAsync("/v1/account/recovery", recoveryData);
         response.StatusCode.Should().Be(HttpStatusCode.OK);

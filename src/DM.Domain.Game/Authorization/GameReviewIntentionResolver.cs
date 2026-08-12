@@ -27,8 +27,11 @@ internal class GameReviewIntentionResolver :
         // Edit is allowed for the author
         GameReviewIntention.Edit => user.UserId == target.Author.UserId,
 
-        // Delete is allowed for author or moderator
-        GameReviewIntention.Delete => user.UserId == target.Author.UserId || user.Role >= UserRole.Moderator,
+        // Deleting somebody's stated opinion is a step above deleting a comment,
+        // and AUTHORIZATION.md puts it there with profile moderation: the author
+        // themselves, or a senior moderator.
+        GameReviewIntention.Delete =>
+            user.UserId == target.Author.UserId || user.Role >= UserRole.SeniorModerator,
 
         _ => false
     };

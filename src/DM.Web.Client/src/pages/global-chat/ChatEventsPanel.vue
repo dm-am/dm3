@@ -49,6 +49,11 @@ import {
   watch,
 } from "vue";
 import dayjs from "dayjs";
+import {
+  DATE_TIME_FORMAT,
+  DAY_MONTH_FORMAT,
+  DAY_MONTH_TIME_FORMAT,
+} from "@/shared/lib/utils/datetime";
 import { storeToRefs } from "pinia";
 import { useGlobalChatStore } from "@/entities/global-chat";
 import { ChatEventActions } from "@/features/chat-event-actions";
@@ -56,7 +61,7 @@ import {
   notifyExpandableChanged,
   refreshExpandableStates,
   registerExpandable,
-} from "@/shared/lib/composables";
+} from "@/shared/lib/composables/useExpandableRegistry";
 import { ContentText } from "@/shared/ui/Content";
 
 const store = useGlobalChatStore();
@@ -100,7 +105,9 @@ const countLabel = computed(() => `+${restCount.value}`);
 const nearestText = computed(() => {
   if (!isPrimaryLive.value) return "";
   const first = upcomingEvents.value[0];
-  return first ? `, ближайший ${dayjs(first.startsUtc).format("DD.MM")}` : "";
+  return first
+    ? `, ближайший ${dayjs(first.startsUtc).format(DAY_MONTH_FORMAT)}`
+    : "";
 });
 
 /** Parse a .NET TimeSpan string ("[d.]hh:mm:ss[.fffffff]") into minutes. */
@@ -124,7 +131,7 @@ function liveEndText(ev: { startsUtc: string; id: string }): string {
   if (end.isBefore(dayjs())) return "";
   return end.isSame(dayjs(), "day")
     ? `до ${end.format("HH:mm")}`
-    : `до ${end.format("DD.MM.YYYY [в] HH:mm")}`;
+    : `до ${end.format(DATE_TIME_FORMAT)}`;
 }
 
 // Muted tail after the title: time (may be empty for a live event whose end is
@@ -135,7 +142,7 @@ const primaryMeta = computed(() => {
   if (!ev) return "";
   const time = isPrimaryLive.value
     ? liveEndText(ev)
-    : dayjs(ev.startsUtc).format("DD.MM [в] HH:mm");
+    : dayjs(ev.startsUtc).format(DAY_MONTH_TIME_FORMAT);
   const parts = [time, ev.isOpen ? "" : "закрытый"].filter(Boolean);
   return parts.length ? `, ${parts.join(", ")}` : "";
 });
@@ -223,7 +230,7 @@ const overlayMetaText = computed(() => {
   if (!ev) return "";
   const time = isPrimaryLive.value
     ? liveEndText(ev) || "идет"
-    : dayjs(ev.startsUtc).format("DD.MM.YYYY [в] HH:mm");
+    : dayjs(ev.startsUtc).format(DATE_TIME_FORMAT);
   const parts = [
     time,
     `участников: ${overlayDetails.value?.participants?.length ?? ev.participantCount}`,
@@ -344,7 +351,7 @@ onUnmounted(() => {
           <div v-for="ev in restEvents" :key="ev.id" class="rest-item">
             <span class="rest-title">{{ ev.title }}</span
             ><span class="rest-meta"
-              >, {{ dayjs(ev.startsUtc).format("DD.MM [в] HH:mm")
+              >, {{ dayjs(ev.startsUtc).format(DAY_MONTH_TIME_FORMAT)
               }}<template v-if="!ev.isOpen">, закрытый</template></span
             >
           </div>

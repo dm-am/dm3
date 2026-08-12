@@ -20,6 +20,7 @@ import { CommentSkeleton } from "@/shared/ui/Skeleton";
 import { errorCodeForStatus } from "@/shared/ui/ErrorPage";
 import { reportForumShellError } from "./forumShell";
 import { notifyFailure } from "@/shared/lib/errors";
+import { permalinkOrigin } from "@/shared/config/site";
 
 const route = useRoute();
 const router = useRouter();
@@ -204,7 +205,7 @@ function handleWarn(id: string) {
   warnUsername.value = username;
   warnEntityId.value = id;
   warnEntityLink.value =
-    window.location.origin +
+    permalinkOrigin() +
     router.resolve({
       name: "topic",
       params: { alias: route.params.alias, num: route.params.num },

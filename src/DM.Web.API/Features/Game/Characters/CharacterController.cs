@@ -246,7 +246,7 @@ public class CharacterController : ControllerBase
     /// <param name="request">Update request</param>
     /// <response code="200">Entry updated</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User must own the character or be master/assistant</response>
+    /// <response code="403">Only the author of the entry may edit it</response>
     /// <response code="404">Entry not found</response>
     [HttpPatch("{id}/notepad/{entryId:guid}", Name = nameof(UpdateCharacterNotepadEntry))]
     [AuthenticationRequired]
@@ -264,7 +264,7 @@ public class CharacterController : ControllerBase
     /// <param name="entryId">Entry identifier</param>
     /// <response code="204">Entry deleted</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User must own the character or be master/assistant</response>
+    /// <response code="403">Only the author of the entry or the game master may delete it</response>
     /// <response code="404">Entry not found</response>
     [HttpDelete("{id}/notepad/{entryId:guid}", Name = nameof(DeleteCharacterNotepadEntry))]
     [AuthenticationRequired]

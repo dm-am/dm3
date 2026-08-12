@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
+using DM.Domain.Core.Statuses;
 
 namespace DM.Domain.Game.Features.Games;
 
@@ -95,7 +96,7 @@ public interface IGameService
     /// </summary>
     /// <param name="gameId">Game identifier</param>
     /// <param name="transition">Requested transition</param>
-    Task<GameDetails> ChangeStatusAsync(Guid gameId, GameStatusTransition transition);
+    Task<GameDetails> ChangeStatusAsync(Guid gameId, ModuleStatusTransition transition);
 
     /// <summary>
     /// Apply a premoderation transition (send to / remove from premoderation).
@@ -106,7 +107,7 @@ public interface IGameService
     /// </summary>
     /// <param name="id">Game public id (5 letters) or GUID</param>
     /// <param name="transition">Requested transition</param>
-    Task<GameDetails> ChangePremoderationAsync(string id, GamePremoderationTransition transition);
+    Task<GameDetails> ChangePremoderationAsync(string id, ModulePremoderationTransition transition);
 
     /// <summary>
     /// Reset the recruitment start date (nulls RecruitmentStartedUtc). Admin only.
@@ -137,12 +138,6 @@ public interface IGameService
     /// Remove assistant from game
     /// </summary>
     Task RemoveAssistantAsync(Guid gameId, string username);
-
-    /// <summary>
-    /// Leave a game (as reader, player, or assistant)
-    /// </summary>
-    /// <param name="gameId">Game identifier</param>
-    Task LeaveAsync(Guid gameId);
 
     #endregion
 }

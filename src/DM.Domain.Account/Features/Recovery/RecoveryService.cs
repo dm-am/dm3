@@ -20,7 +20,7 @@ internal class RecoveryService : IRecoveryService
     private readonly IRegistrationMailSender _activationEmailSender;
     private readonly ITokenFactory _tokenFactory;
     private readonly IGuidFactory _guidFactory;
-    private readonly ISecurityAuditService _auditService;
+    private readonly ISecurityAuditRepository _auditService;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ILogger<RecoveryService> _logger;
 
@@ -32,7 +32,7 @@ internal class RecoveryService : IRecoveryService
         IRegistrationMailSender activationEmailSender,
         ITokenFactory tokenFactory,
         IGuidFactory guidFactory,
-        ISecurityAuditService auditService,
+        ISecurityAuditRepository auditService,
         IDateTimeProvider dateTimeProvider,
         ILogger<RecoveryService> logger)
     {

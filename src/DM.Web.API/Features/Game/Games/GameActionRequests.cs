@@ -1,4 +1,4 @@
-using DM.Domain.Game.Features.Games;
+using DM.Domain.Core.Statuses;
 
 namespace DM.Web.API.Features.Game.Games;
 
@@ -10,7 +10,7 @@ public class GameStatusChangeRequest
     /// <summary>
     /// Requested status transition (Start / Freeze / Finish / Close / Reopen)
     /// </summary>
-    public GameStatusTransition Transition { get; set; }
+    public ModuleStatusTransition Transition { get; set; }
 }
 
 /// <summary>
@@ -21,5 +21,5 @@ public class GamePremoderationChangeRequest
     /// <summary>
     /// Requested premoderation transition (SendToPremoderation / RemoveFromPremoderation)
     /// </summary>
-    public GamePremoderationTransition Transition { get; set; }
+    public ModulePremoderationTransition Transition { get; set; }
 }

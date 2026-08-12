@@ -141,7 +141,7 @@ const buttonVariants = [
   },
 ];
 
-// --- Секция 5: календарные реплики (июль 2026, сегодня 22, выбрано 15) ---
+// --- Section 5: calendar replicas (July 2026, today 22, selected 15) ---
 
 const CAL_WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const CAL_MONTHS_SHORT = [
@@ -748,7 +748,7 @@ const calYears = Array.from({ length: 12 }, (_, i) => 2015 + i);
   margin: 0 0 $small
   line-height: 1.5
 
-// --- Секция 1: дайджест-контекст -------------------------------------
+// --- Section 1: digest context ---------------------------------------
 
 // Replica of the topic-card chrome (dashed border + element surface) the
 // digest boards actually sit in.
@@ -801,7 +801,7 @@ html.theme_Dark .probe-024
   .boards-grid
     grid-template-columns: 1fr
 
-// --- Секция 2: полоса футера формы -----------------------------------
+// --- Section 2: form footer bar --------------------------------------
 
 // Replica of Form's .controls strip (real primary-button context).
 .controls-replica
@@ -854,7 +854,7 @@ html.theme_Dark .probe-024
     background-color: $bg-element-accent
     font-weight: bold
 
-// --- Секция 3: диалог и empty-состояния ------------------------------
+// --- Section 3: dialog and empty states ------------------------------
 
 // Static stand-in for the narrow Dialog (380px, $bg-page surface). The
 // border exists only so the box is visible on the same-colored page.
@@ -919,7 +919,7 @@ html.theme_Dark .probe-024
   font-size: $secondary-font-size
   color: $text-muted
 
-// --- Секция 4: инфо-секции -------------------------------------------
+// --- Section 4: info sections -----------------------------------------
 
 .dialog-width
   width: 380px
@@ -965,10 +965,10 @@ html.theme_Dark .probe-024
 .info-fullsize
   font-size: $font-size
 
-// --- Секция 5: календарь ----------------------------------------------
-// Панель и сетки зеркалят реальные CalendarGrid / MonthYearPicker; шапка
-// здесь flex (в реальной реализации остается inline-flow ради RULE-14
-// копируемости).
+// --- Section 5: calendar ----------------------------------------------
+// The panel and the grids mirror the real CalendarGrid / MonthYearPicker; the
+// header is flex here (the real implementation keeps inline flow so the bar
+// stays copyable, per RULE-14).
 
 .cal-row
   display: flex

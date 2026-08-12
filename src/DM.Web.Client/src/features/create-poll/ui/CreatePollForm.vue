@@ -45,6 +45,7 @@ const {
         <div class="poll-form">
           <form-field label="Название" name="pollTitle">
             <input
+              id="poll-title"
               v-model="pollTitle"
               type="text"
               placeholder="Вопрос опроса"
@@ -59,11 +60,15 @@ const {
           </form-field>
 
           <form-field label="Начало" name="pollStartsUtc">
-            <input v-model="pollStartsUtc" type="datetime-local" />
+            <input
+              id="poll-starts"
+              v-model="pollStartsUtc"
+              type="datetime-local"
+            />
           </form-field>
 
           <form-field label="Окончание" name="pollEndsUtc">
-            <input v-model="pollEndsUtc" type="datetime-local" />
+            <input id="poll-ends" v-model="pollEndsUtc" type="datetime-local" />
           </form-field>
 
           <form-field label="Тип опроса">
@@ -92,6 +97,7 @@ const {
                 v-model="option.text"
                 type="text"
                 :placeholder="`Вариант ${index + 1}`"
+                :aria-label="`Вариант ${index + 1}`"
               />
               <button
                 v-if="pollOptions.length > 2"
@@ -109,8 +115,8 @@ const {
           </form-field>
 
           <div class="form-actions">
-            <Button :disabled="isSubmitting" @click="submitPoll">
-              {{ isSubmitting ? "Создание..." : "Создать опрос" }}
+            <Button :loading="isSubmitting" @click="submitPoll">
+              Создать опрос
             </Button>
             <span v-if="errorMessage" class="error-message">{{
               errorMessage

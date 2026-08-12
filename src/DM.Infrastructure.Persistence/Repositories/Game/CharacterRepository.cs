@@ -7,23 +7,29 @@ using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Domain.Game.Features.AttributeSchemas;
 using DM.Domain.Game.Features.Characters;
 using DM.Domain.Game.Features.Games;
-using DM.Infrastructure.Persistence.MongoIntegration;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
-using MongoDB.Driver;
 using DbCharacterAttribute = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.CharacterAttribute;
 using DbCharacter = DM.Infrastructure.Persistence.Entities.Game.Characters.Character;
-using DbSchema = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
 /// <inheritdoc />
-internal class CharacterRepository : MongoCollectionRepository<DbSchema>, ICharacterRepository
+/// <remarks>
+/// Relational only. The attribute schema of a game is a Mongo document, and it
+/// is read through the repository that owns that collection rather than through
+/// a second view of it opened here: the class used to derive the Mongo
+/// collection base for one read, which also took the name Update - the one this
+/// repository publishes - away from the driver's builder.
+/// </remarks>
+internal class CharacterRepository : ICharacterRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
+    private readonly IAttributeSchemaRepository _attributeSchemas;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
 
@@ -31,12 +37,13 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
     public CharacterRepository(
         DmDbContext dbContext,
         IMapper mapper,
-        DmMongoClient client,
+        IAttributeSchemaRepository attributeSchemas,
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider) : base(client)
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _mapper = mapper;
+        _attributeSchemas = attributeSchemas;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
     }
@@ -49,19 +56,23 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
             .Select(g => g.AttributeSchemaId.HasValue)
             .FirstAsync(cancellationToken);
 
-    public async Task<AttributeSchema> GetGameSchema(Guid gameId)
-    {
-        var schemaId = await _dbContext.Games
-            .Where(g => g.GameId == gameId)
-            .Select(g => g.AttributeSchemaId)
-            .FirstAsync();
+    // FirstOrDefault rather than First: a character nobody can find requires no
+    // attributes, and answering "no such character" belongs to the service that
+    // is asked for it, not to a validator rule that would throw out of the
+    // pipeline as a 500 before the service ever ran.
+    public Task<bool> CharacterRequiresAttributes(Guid characterId, CancellationToken cancellationToken) =>
+        _dbContext.Characters
+            .Where(c => c.CharacterId == characterId)
+            .Select(c => c.Game.AttributeSchemaId.HasValue)
+            .FirstOrDefaultAsync(cancellationToken);
 
-        var schema = await Collection
-            .Find(Filter.Eq(s => s.Id, schemaId!.Value))
-            .FirstAsync();
-
-        return _mapper.Map<AttributeSchema>(schema);
-    }
+    // Reached only after GameRequiresAttributes or CharacterRequiresAttributes
+    // answered yes, which is what makes the identifier below present: both the
+    // create and the update rules ask first, and the one other caller
+    // (CharacterService, hiding specifications from a reader) checks the game's
+    // AttributeSchemaId itself.
+    public Task<AttributeSchema> GetGameSchema(Guid gameId) =>
+        _attributeSchemas.GetGameSchema(gameId);
 
     public async Task<AttributeSchema> GetCharacterSchema(Guid characterId)
     {
@@ -70,7 +81,7 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
             .Select(c => c.GameId)
             .FirstAsync();
 
-        return await GetGameSchema(gameId);
+        return await _attributeSchemas.GetGameSchema(gameId);
     }
 
     #endregion
@@ -94,12 +105,12 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
             .FirstOrDefaultAsync();
     }
 
-    public Task<CharacterToUpdate> GetForUpdate(Guid characterId)
+    public Task<CharacterToUpdate?> GetForUpdate(Guid characterId)
     {
         return _dbContext.Characters
             .Where(c => c.CharacterId == characterId)
             .ProjectTo<CharacterToUpdate>(_mapper.ConfigurationProvider)
-            .FirstAsync();
+            .FirstOrDefaultAsync<CharacterToUpdate?>();
     }
 
     public async Task<IDictionary<Guid, Guid>> GetAttributeIds(Guid characterId)
@@ -185,7 +196,7 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
         }
     }
 
-    public new async Task<Character> Update(UpdateCharacterEntity updateCharacter)
+    public async Task<Character> Update(UpdateCharacterEntity updateCharacter)
     {
         var character = await _dbContext.Characters.FindAsync(updateCharacter.CharacterId);
         if (character == null)
@@ -262,17 +273,24 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
     }
 
     /// <summary>
-    /// Adjusts RecruitmentPcLimit when character status changes
+    /// Raises the stated limit when a character joins the active roster
     /// </summary>
+    /// <remarks>
+    /// Only upwards, and only to the live count. Nothing reads
+    /// RecruitmentPcLimit as a gate — whether recruitment is open is its own
+    /// flag — so the number exists to be read beside the count of active
+    /// characters, and the one state it must never be in is below it.
+    ///
+    /// A character leaving used to take the number down with it
+    /// (Math.Max(activeCount, limit - 1)). Nothing needed that: it quietly
+    /// rewrote what the master announced, so a game recruiting five players
+    /// began claiming four the moment one left.
+    /// </remarks>
     private async Task AdjustPcLimitAsync(Guid gameId, CharacterStatus oldStatus, CharacterStatus newStatus)
     {
         if (newStatus == CharacterStatus.Active && oldStatus != CharacterStatus.Active)
         {
             await AdjustPcLimitOnActivationAsync(gameId);
-        }
-        else if (oldStatus == CharacterStatus.Active && newStatus != CharacterStatus.Active)
-        {
-            await AdjustPcLimitOnDeactivationAsync(gameId);
         }
     }
 
@@ -281,39 +299,7 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
         var character = await _dbContext.Characters.FindAsync(characterId);
         if (character != null)
         {
-            var wasActive = !character.IsNpc && character.Status == CharacterStatus.Active;
-            var gameId = character.GameId;
-
             SoftDelete.Mark(character, deletedByUserId, _dateTimeProvider.Now);
-            await _dbContext.SaveChangesAsync();
-
-            // Adjust PcLimit if active non-NPC character was deleted
-            if (wasActive)
-            {
-                await AdjustPcLimitOnDeactivationAsync(gameId);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Decreases RecruitmentPcLimit when a player becomes inactive (but not below current count)
-    /// </summary>
-    private async Task AdjustPcLimitOnDeactivationAsync(Guid gameId)
-    {
-        var game = await _dbContext.Games.FindAsync(gameId);
-        if (game?.RecruitmentPcLimit == null)
-            return;
-
-        var activeCount = await _dbContext.Characters
-            .CountAsync(c => c.GameId == gameId &&
-                             !c.IsRemoved &&
-                             !c.IsNpc &&
-                             c.Status == CharacterStatus.Active);
-
-        var newLimit = Math.Max(activeCount, game.RecruitmentPcLimit.Value - 1);
-        if (newLimit != game.RecruitmentPcLimit.Value)
-        {
-            game.RecruitmentPcLimit = newLimit;
             await _dbContext.SaveChangesAsync();
         }
     }

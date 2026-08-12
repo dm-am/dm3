@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Registration;
 using DM.Domain.Account.Features.UsernameChange;
+using DM.Domain.Core.Users;
 
 namespace DM.Domain.Account.Features.Availability;
 
@@ -18,7 +19,7 @@ internal partial class AvailabilityService : IAvailabilityService
     // Forbidden: control chars, HTML/URL unsafe, quotes, brackets, special chars, zero-width
     // Whitespace: not at start/end, not consecutive
     // See: docs/conventions/USERNAME_POLICY.md
-    [GeneratedRegex(@"^(?!\s)(?!.*\s$)(?!.*\s{2})[^\p{Cc}<>""'`\\/@?#%&\[\](){}=~!$^*+|;:\u200B-\u200F\u2028-\u202F\uFEFF]{2,20}$")]
+    [GeneratedRegex(UsernamePolicy.Pattern)]
     private static partial Regex UsernameValidationRegex();
 
     public AvailabilityService(

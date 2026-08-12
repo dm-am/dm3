@@ -1,9 +1,9 @@
 /**
  * Russian pluralization helper
  * @param count - number to pluralize
- * @param one - form for 1 (пост)
- * @param few - form for 2-4 (поста)
- * @param many - form for 5-20, 0 (постов)
+ * @param one - form for 1 ("пост")
+ * @param few - form for 2-4 ("поста")
+ * @param many - form for 5-20, 0 ("постов")
  */
 export function pluralize(
   count: number,

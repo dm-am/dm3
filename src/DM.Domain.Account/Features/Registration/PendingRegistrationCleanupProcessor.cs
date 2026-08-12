@@ -11,7 +11,6 @@ internal class PendingRegistrationCleanupProcessor : IPendingRegistrationCleanup
     private readonly IRegistrationRepository _repository;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc cref="PendingRegistrationCleanupProcessor" />
     public PendingRegistrationCleanupProcessor(
         IRegistrationRepository repository,
         IDateTimeProvider dateTimeProvider)

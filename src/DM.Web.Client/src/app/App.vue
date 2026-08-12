@@ -78,45 +78,9 @@
 
       <nav class="drawer-nav" aria-label="Основные разделы">
         <ul class="drawer-nav-list">
-          <li>
+          <li v-for="section in mainNavSections" :key="section.key">
             <span class="muted" aria-hidden="true">- </span
-            ><router-link :to="{ name: 'about' }">О проекте</router-link>
-          </li>
-          <li>
-            <span class="muted" aria-hidden="true">- </span
-            ><router-link :to="{ name: 'rules' }">Правила</router-link>
-          </li>
-          <li>
-            <span class="muted" aria-hidden="true">- </span
-            ><router-link :to="{ name: 'games' }">Игры</router-link>
-          </li>
-          <li>
-            <span class="muted" aria-hidden="true">- </span
-            ><router-link :to="{ name: 'blogs' }">Блоги</router-link>
-          </li>
-          <li>
-            <span class="muted" aria-hidden="true">- </span
-            ><router-link :to="{ name: 'community' }">Сообщество</router-link>
-          </li>
-          <li>
-            <span class="muted" aria-hidden="true">- </span
-            ><router-link :to="{ name: 'forum-index' }">Форум</router-link>
-          </li>
-          <li>
-            <span class="muted" aria-hidden="true">- </span
-            ><router-link :to="{ name: 'global-chat' }">Чат</router-link>
-          </li>
-          <!-- Always visible to everyone (owner rule) — mirrors the desktop
-               top menu. -->
-          <li>
-            <span class="muted" aria-hidden="true">- </span
-            ><router-link :to="{ name: 'forum', params: { alias: 'newbies' } }"
-              >Для новичков</router-link
-            >
-          </li>
-          <li v-if="isModerator">
-            <span class="muted" aria-hidden="true">- </span
-            ><router-link :to="{ name: 'moderation' }">Модерация</router-link>
+            ><router-link :to="section.to">{{ section.title }}</router-link>
           </li>
         </ul>
       </nav>
@@ -135,6 +99,7 @@ import { useSessionExit } from "@/features/auth";
 import { useMessagingStore } from "@/entities/message";
 import { useNotificationStore } from "@/entities/notification";
 import { setScrollContainer } from "@/shared/lib/scroll";
+import { visibleMainNavSections } from "@/shared/config/mainNavigation";
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { ModalsContainer } from "vue-final-modal";
@@ -159,6 +124,9 @@ const route = useRoute();
 const { signOut, signOutAll } = useSessionExit();
 
 const isModerator = computed(() => userIsModerator(userStore.user));
+const mainNavSections = computed(() =>
+  visibleMainNavSections(isModerator.value),
+);
 
 // Close the drawer on every navigation (path change) — reopening it after
 // following a link would be surprising, and a stale-open drawer would keep
@@ -259,15 +227,21 @@ watch(isSignalRConnected, (connected) => {
   notificationStore.fetchUnreadCount();
 });
 
+// Subscribed once, for the life of the application, and never behind the result
+// of a connect attempt. Handlers live in a Set keyed by function identity, so
+// registering is idempotent; the socket, on the other hand, can come up on an
+// attempt later than the first, and the automatic reconnect of the client only
+// revives a connection that already started. Tying the handler to the outcome of
+// the first connect left the two badges frozen for the whole SPA session whenever
+// that attempt failed. The global chat page subscribes the same way.
+onNotification(handleNotification);
+
 // Connect/disconnect SignalR based on authentication state
 watch(
   () => userStore.isAuthenticated,
   async (isAuthenticated) => {
     if (isAuthenticated) {
-      const connected = await connectSignalR();
-      if (connected) {
-        onNotification(handleNotification);
-      }
+      await connectSignalR();
     } else {
       await disconnectSignalR();
     }
@@ -286,10 +260,7 @@ onMounted(async () => {
 
   // Connect to SignalR if already authenticated
   if (userStore.isAuthenticated) {
-    const connected = await connectSignalR();
-    if (connected) {
-      onNotification(handleNotification);
-    }
+    await connectSignalR();
   }
 });
 </script>

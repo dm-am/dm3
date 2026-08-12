@@ -115,11 +115,25 @@ public interface ITopicRepository
     Task Delete(Guid topicId, Guid deletedByUserId);
 
     /// <summary>
-    /// Update attach order for multiple topics (batch operation)
+    /// Ids of the board's pinned topics, in the order they are shown now
     /// </summary>
-    /// <param name="topicOrders">Dictionary of topic ID to attach order</param>
+    /// <param name="boardId">Board identifier</param>
     /// <param name="ct">Cancellation token</param>
-    Task UpdateAttachOrder(IReadOnlyDictionary<Guid, int> topicOrders, CancellationToken ct = default);
+    Task<IReadOnlyList<Guid>> GetAttachedTopicIds(Guid boardId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Replace the attach order of the board's pinned topics: a topic's order
+    /// becomes its position in <paramref name="orderedTopicIds"/>
+    /// </summary>
+    /// <remarks>
+    /// The board bounds the write. An id belonging to another board is not
+    /// written at all, so whose topics move is decided by the board in the
+    /// caller's address and not by the ids in its body.
+    /// </remarks>
+    /// <param name="boardId">Board identifier</param>
+    /// <param name="orderedTopicIds">Pinned topic ids in the desired order</param>
+    /// <param name="ct">Cancellation token</param>
+    Task ReplaceAttachOrder(Guid boardId, IReadOnlyList<Guid> orderedTopicIds, CancellationToken ct = default);
 }
 
 /// <summary>

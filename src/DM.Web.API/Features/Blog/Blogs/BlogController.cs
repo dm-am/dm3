@@ -40,10 +40,12 @@ public class BlogController : ControllerBase
     /// Use `projection=ref` for lightweight sidebar/menu data (no rubrics).
     /// Default projection returns full Blog with rubrics array.
     /// </remarks>
-    /// <response code="200">List of blogs</response>
+    /// <response code="200">List of blogs. With `projection=ref` the items are
+    /// `BlogRef` (no rubrics) rather than `Blog`; one operation cannot declare
+    /// two schemas for one status, so only the default projection is described
+    /// below — and it is the wider of the two, since Blog derives from BlogRef.</response>
     [HttpGet(Name = nameof(GetBlogs))]
     [ProducesResponseType(typeof(ListEnvelope<Blog>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ListEnvelope<BlogRef>), StatusCodes.Status200OK)]
     // Response carries per-caller unread counts, so it must not be cached
     // anywhere. Declared, not assigned by hand: one mechanism for cache policy.
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
@@ -274,13 +276,16 @@ public class BlogController : ControllerBase
     /// Reorder a blog's rubrics
     /// </summary>
     /// <remarks>
-    /// Accepts the rubric identifiers in the desired order; each rubric's sort
-    /// order becomes its position in the list. Only the blog owner may reorder.
+    /// Replaces the order of the blog's rubrics: a rubric's sort order becomes
+    /// its position in the list. The list names every rubric of the blog exactly
+    /// once. A body that skips one, repeats one or names a rubric of another blog
+    /// is refused: the rubrics it left out would keep the sort orders this
+    /// request has just handed to others. Only the blog owner may reorder.
     /// </remarks>
     /// <param name="id">Blog public ID (5 letters) or GUID</param>
     /// <param name="request">Ordered rubric identifiers</param>
     /// <response code="200">Rubrics reordered; returns the rubrics in their new order</response>
-    /// <response code="400">Invalid request</response>
+    /// <response code="400">The list is not the blog's rubrics, each named once</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized</response>
     /// <response code="404">Blog not found</response>
@@ -300,19 +305,24 @@ public class BlogController : ControllerBase
     /// <summary>
     /// Delete rubric
     /// </summary>
+    /// <param name="id">Blog public ID (5 letters) or GUID</param>
     /// <param name="rubricId">Rubric identifier</param>
     /// <response code="204">Rubric deleted successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized</response>
     /// <response code="404">Rubric not found</response>
-    [HttpDelete("rubrics/{rubricId:guid}", Name = nameof(DeleteRubric))]
+    [HttpDelete("{id}/rubrics/{rubricId:guid}", Name = nameof(DeleteRubric))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> DeleteRubric(Guid rubricId)
+    public async Task<IActionResult> DeleteRubric(string id, Guid rubricId)
     {
+        // Same shape as PatchRubric: the rubric id alone identifies the rubric,
+        // and the blog {id} stays in the route so that all four rubric
+        // addresses are nested under their blog. The domain resolves and
+        // authorizes via the rubric's own blog.
         await _apiService.DeleteRubric(rubricId);
         return NoContent();
     }

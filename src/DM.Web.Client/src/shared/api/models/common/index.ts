@@ -18,8 +18,8 @@ export * from "./ids";
 export type PagingInfo = {
   pages: number;
   current: number;
-  size: number;
-  number: number;
+  skip: number;
+  take: number;
   total: number;
 };
 

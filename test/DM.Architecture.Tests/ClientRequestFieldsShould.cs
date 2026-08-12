@@ -34,10 +34,6 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class ClientRequestFieldsShould
 {
-    /// <summary>Line and block comments, in the syntax both client files use.</summary>
-    private static readonly Regex Comments = new(
-        @"/\*.*?\*/|//[^\n]*", RegexOptions.Compiled | RegexOptions.Singleline);
-
     [Fact]
     public void SpellTheActivationRetryEmailTheWayTheDtoBindsIt()
     {
@@ -64,7 +60,7 @@ public class ClientRequestFieldsShould
             var path = Path.Combine(root, "src", "DM.Web.Client", "src", sender);
             File.Exists(path).Should().BeTrue($"{sender} is where the activation body is built");
 
-            Comments.Replace(File.ReadAllText(path), string.Empty)
+            SourceText.ReadCode(path)
                 .Should().Contain(wireName,
                     $"the activation body key is the DTO property camelCased ({wireName}), " +
                     $"and a mismatch reaches the server as a silent null; {sender} spells it " +
@@ -75,23 +71,5 @@ public class ClientRequestFieldsShould
             "the pair holds by one spelling, not by a rename attribute nobody reads");
     }
 
-    /// <summary>
-    /// Walks up from the test binary to the repository root: the sources are not
-    /// copied to the output directory, and copying them would assert against a
-    /// stale snapshot.
-    /// </summary>
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null && !Directory.Exists(Path.Combine(directory.FullName, "docs")))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

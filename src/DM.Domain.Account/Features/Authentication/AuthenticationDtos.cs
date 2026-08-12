@@ -23,11 +23,6 @@ public class CreateSession
     public bool Persistent { get; set; }
 
     /// <summary>
-    /// Flag of invisible log in
-    /// </summary>
-    public bool Invisible { get; set; }
-
-    /// <summary>
     /// Session creation time (UTC)
     /// </summary>
     public DateTime CreatedUtc { get; set; }

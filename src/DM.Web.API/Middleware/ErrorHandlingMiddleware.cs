@@ -104,9 +104,9 @@ internal class ErrorHandlingMiddleware
             httpContext.Response.StatusCode = error is ProblemDetails { Status: not null } problemDetails
                 ? problemDetails.Status.Value
                 : StatusCodes.Status500InternalServerError;
-            // Через перегрузку с contentType: присваивание ContentType до
-            // WriteAsJsonAsync перетиралось им на application/json, и клиент не мог
-            // отличить ошибку по типу содержимого.
+            // Through the contentType overload: assigning ContentType before
+            // WriteAsJsonAsync was overwritten by it with application/json, and the
+            // client could not tell an error apart by content type.
             await httpContext.Response.WriteAsJsonAsync(error, error.GetType(), options: null, ProblemJsonContentType);
         }
     }

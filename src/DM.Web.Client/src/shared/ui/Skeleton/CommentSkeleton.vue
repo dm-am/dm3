@@ -100,6 +100,13 @@ withDefaults(
   height: 12px
   +skeleton-shimmer
 
+// The bars repeat on a 20px pitch: 14px of bar plus this 6px, five steps of the
+// 4px grid. The gap alone is on no step of the scale, and neither neighbouring
+// step keeps the pitch on the grid ($minor gives 18px, $small gives 22px), so
+// the literal stays. It promises nothing about the real body: .comment-text
+// runs at line-height 1.6 on the 16px page font, so the three lines these 54px
+// stand in for measure 76.8px, and the card resizes at the handoff whatever
+// this gap is.
 .skeleton-content
   display: flex
   flex-direction: column

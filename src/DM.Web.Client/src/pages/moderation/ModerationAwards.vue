@@ -8,7 +8,6 @@
  * fresh list.
  */
 import { computed, onMounted, reactive } from "vue";
-import { useRouter } from "vue-router";
 import { useModal } from "vue-final-modal";
 import {
   achievementApi,
@@ -21,7 +20,6 @@ import ContestSeriesCreateDialog from "./dialogs/ContestSeriesCreateDialog.vue";
 import { useRoleGate } from "./lib/useRoleGate";
 
 const { hasAccess, deniedText } = useRoleGate("SeniorModerator");
-const router = useRouter();
 const { series, loading, load, reload } = useContestSeries();
 
 onMounted(() => load());
@@ -54,13 +52,6 @@ const { open: openCreate, close: closeCreate } = useModal({
 async function toggleActive(id: string, isActive: boolean) {
   await achievementApi.updateContestSeries(id, { isActive: !isActive });
   await reload();
-}
-
-function openSeries(id: string) {
-  router.push({
-    name: "moderation-awards-series",
-    params: { id },
-  });
 }
 </script>
 
@@ -105,9 +96,11 @@ function openSeries(id: string) {
           :class="{ 'is-inactive': !s.isActive }"
         >
           <td>
-            <a href="#" @click.prevent="openSeries(s.id)">
+            <router-link
+              :to="{ name: 'moderation-awards-series', params: { id: s.id } }"
+            >
               {{ formatContestSeriesTitle(s.contestType, s.number) }}
-            </a>
+            </router-link>
           </td>
           <td>{{ s.year }}</td>
           <td>

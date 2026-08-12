@@ -39,6 +39,14 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from "vue";
 
+// The body of a block is a <ul>, so every child a caller hands to the default
+// slot has to be an <li> of its own: a bare <div> in there, or a bare
+// sentence, is invalid nesting. A wrapper <li> is exactly the box its content
+// had — `list-style: none` on .list is inherited, so no marker appears, and
+// the global reset zeroes li margin and padding, so the row gains no indent
+// and no height of its own. SidebarBlockNesting.spec.ts holds every block in
+// this directory to that, this one included.
+//
 // One heading, two ways in. A block whose title is a constant passes the
 // prop alone: it renders as the slot's fallback and names the toggle. A block
 // that builds its heading out of loaded data fills the slot instead, and then

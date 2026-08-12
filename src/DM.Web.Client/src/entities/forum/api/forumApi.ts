@@ -115,8 +115,13 @@ export default new (class ForumApi {
     return queryParams;
   }
 
+  /**
+   * The body is the whole pinned order of the board, so the verb is PUT: the
+   * server refuses a list that is not the board's pinned topics, each named
+   * once. The caller passes everything the pinned block holds.
+   */
   public reorderPinnedTopics(boardId: BoardId, topicIds: string[]) {
-    return Api.patch(`boards/${boardId}/topics/pinned/order`, { topicIds });
+    return Api.put(`boards/${boardId}/topics/pinned/order`, { topicIds });
   }
 
   public updateTopic(id: TopicId, topic: Patch<Topic>) {

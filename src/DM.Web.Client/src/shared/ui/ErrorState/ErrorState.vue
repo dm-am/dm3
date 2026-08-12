@@ -2,9 +2,9 @@
 /**
  * Unified block-level load-error box.
  *
- * Matches the red error boxes duplicated across the app (e.g.
- * widgets/games-table GamesDataTable .error-message,
- * pages/global-chat GlobalChatPage .globalChat-error / .globalChat-retry).
+ * It replaces the red error boxes that pages used to each carry a copy of.
+ * A page that still has its own has not moved over yet: this component is the
+ * destination, not a list of who uses it today.
  */
 import { ref } from "vue";
 

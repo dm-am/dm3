@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
+using DM.Domain.Core.Enums;
 using DM.Domain.Community.Features.Polls;
 using DM.Infrastructure.Persistence.MongoIntegration;
 using DM.Infrastructure.Persistence.Shared.Queries;
@@ -78,7 +79,10 @@ internal class PollRepository : MongoCollectionRepository<DbPoll>, IPollReposito
         var now = _dateTimeProvider.Now.UtcDateTime;
         var isDesc = string.Equals(query.SortOrder, "desc", StringComparison.OrdinalIgnoreCase);
 
-        // Build aggregation pipeline with computed statusOrder field
+        // Build aggregation pipeline with computed statusOrder field. The window
+        // is Poll.StatusAt in the community domain, restated here for the same
+        // reason as in BuildFilter: the server sorts, so the ladder has to travel
+        // as a document.
         // Pending: StartsUtc > now → order 0
         // Active: StartsUtc <= now AND EndsUtc > now → order 1
         // Closed: EndsUtc <= now → order 2
@@ -115,23 +119,21 @@ internal class PollRepository : MongoCollectionRepository<DbPoll>, IPollReposito
         if (query == null)
             return filter;
 
-        // Status filter (3 statuses: pending, active, closed)
+        // Status is a position relative to now, so it is a comparison on the two
+        // dates rather than a stored field. The window is Poll.StatusAt in the
+        // community domain; a Mongo filter is built and shipped rather than
+        // called, so these three arms restate it and have to move with it.
+        // Every member is spelled out and there is no arm for anything else: the
+        // binder refuses a word outside the vocabulary, where the string form
+        // used to fall past all three comparisons and answer with every poll.
         var now = _dateTimeProvider.Now.UtcDateTime;
-        if (string.Equals(query.Status, "pending", StringComparison.OrdinalIgnoreCase))
+        filter &= query.Status switch
         {
-            // now < StartsUtc
-            filter &= Filter.Gt(p => p.StartsUtc, now);
-        }
-        else if (string.Equals(query.Status, "active", StringComparison.OrdinalIgnoreCase))
-        {
-            // StartsUtc <= now < EndsUtc
-            filter &= Filter.Lte(p => p.StartsUtc, now) & Filter.Gt(p => p.EndsUtc, now);
-        }
-        else if (string.Equals(query.Status, "closed", StringComparison.OrdinalIgnoreCase))
-        {
-            // now >= EndsUtc
-            filter &= Filter.Lte(p => p.EndsUtc, now);
-        }
+            PollStatus.Pending => Filter.Gt(p => p.StartsUtc, now),
+            PollStatus.Active => Filter.Lte(p => p.StartsUtc, now) & Filter.Gt(p => p.EndsUtc, now),
+            PollStatus.Closed => Filter.Lte(p => p.EndsUtc, now),
+            _ => Filter.Empty
+        };
 
         // Search filter (Title + Details)
         if (!string.IsNullOrWhiteSpace(query.Search))
@@ -228,7 +230,7 @@ internal class PollRepository : MongoCollectionRepository<DbPoll>, IPollReposito
     }
 
     /// <inheritdoc />
-    public new async Task<Poll> Update(Guid pollId, string? title, string? details,
+    public async Task<Poll> Update(Guid pollId, string? title, string? details,
         DateTimeOffset? startDate, DateTimeOffset? endDate, bool? isAnonymous)
     {
         var currentPoll = await Collection.Find(Filter.Eq(p => p.Id, pollId)).FirstAsync();
@@ -291,17 +293,29 @@ internal class PollRepository : MongoCollectionRepository<DbPoll>, IPollReposito
     // ═══ VOTING ═══
 
     /// <inheritdoc />
-    public async Task<Poll> Vote(Guid pollId, Guid optionId, Guid userId)
+    /// <remarks>
+    /// One voter, one option, enforced by the write itself. The condition is part
+    /// of the filter rather than a read before it: two requests arriving together
+    /// both passed a preceding check and both landed, and nothing else in the
+    /// stack looked. A ballot that already carries this voter matches nothing
+    /// here, the update touches no document, and the caller is told.
+    ///
+    /// Changing one's mind goes through Unvote first — the endpoint for it exists —
+    /// because pulling from every option and pushing into one cannot be a single
+    /// update: both address the same array path, and the server refuses that.
+    /// </remarks>
+    public async Task<Poll?> Vote(Guid pollId, Guid optionId, Guid userId)
     {
         var dbPoll = await Collection.FindOneAndUpdateAsync(
             Filter.Eq(p => p.Id, pollId) &
-            Filter.ElemMatch(p => p.Options, o => o.Id == optionId),
+            Filter.ElemMatch(p => p.Options, o => o.Id == optionId) &
+            Filter.Not(Filter.ElemMatch(p => p.Options, o => o.UserIds.Contains(userId))),
             Builders<DbPoll>.Update.AddToSet(u => u.Options.FirstMatchingElement().UserIds, userId),
             new FindOneAndUpdateOptions<DbPoll>
             {
                 ReturnDocument = ReturnDocument.After
             });
-        return _mapper.Map<Poll>(dbPoll);
+        return dbPoll == null ? null : _mapper.Map<Poll>(dbPoll);
     }
 
     /// <inheritdoc />

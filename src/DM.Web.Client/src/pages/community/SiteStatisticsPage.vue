@@ -2,9 +2,9 @@
 /**
  * SiteStatisticsPage — "Статистика сайта" (doc 4.2.3.4.3 / block 4.2.2.8):
  * the leaderboard cards for a user-selected period. Period is chosen with a
- * Месяц/Год/Все время segmented control + a month/year picker; there is no
- * period heading — the controls themselves state the period (the h1 + lead +
- * controls + content composition matches the other list pages).
+ * "Месяц" / "Год" / "Все время" segmented control + a month/year picker; there
+ * is no period heading — the controls themselves state the period (the h1 +
+ * lead + controls + content composition matches the other list pages).
  *
  * The selected period lives in the URL query (per URL_STRUCTURE: filters are
  * query parameters): /statistics?year=2026&month=7 (month), ?year=2026

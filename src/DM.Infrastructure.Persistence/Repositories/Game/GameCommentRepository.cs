@@ -7,11 +7,10 @@ using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Extensions;
 using DM.Domain.Game.Features.Comments;
 using DM.Domain.Game.Features.Games;
 using DM.Infrastructure.Persistence.RelationalStorage;
-using DM.Infrastructure.Persistence.Shared.Queries;
+using DM.Infrastructure.Persistence.Shared.Comments;
 using Microsoft.EntityFrameworkCore;
 using CommentDal = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 
@@ -32,107 +31,16 @@ internal class GameCommentRepository : IGameCommentRepository
     }
 
     /// <inheritdoc />
-    public Task<int> Count(Guid gameId, GameCommentsQuery query, IReadOnlyCollection<Guid>? excludeUserIds = null)
-    {
-        var dbQuery = _dbContext.Comments
-            .TagWith("DM.GameComments.Count")
-            .Where(c => !c.IsRemoved && c.EntityId == gameId);
-
-        dbQuery = ApplyFilters(dbQuery, query, excludeUserIds);
-
-        return dbQuery.CountAsync();
-    }
+    public Task<int> Count(Guid gameId, GameCommentsQuery query, IReadOnlyCollection<Guid>? excludeUserIds = null) =>
+        CommentQueries.Count(_dbContext, gameId, query, excludeUserIds, "DM.GameComments.Count");
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Comment>> Get(Guid gameId, GameCommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null)
-    {
-        var dbQuery = _dbContext.Comments
-            .TagWith("DM.GameComments.List")
-            .Where(c => !c.IsRemoved && c.EntityId == gameId);
-
-        dbQuery = ApplyFilters(dbQuery, query, excludeUserIds);
-
-        var orderedQuery = ApplySorting(dbQuery, query, _dbContext);
-
-        return await orderedQuery
-            .Page(paging)
-            .ProjectTo<Comment>(_mapper.ConfigurationProvider)
-            .ToArrayAsync();
-    }
-
-    private static IQueryable<CommentDal> ApplyFilters(
-        IQueryable<CommentDal> query,
-        GameCommentsQuery commentsQuery,
-        IReadOnlyCollection<Guid>? excludeUserIds)
-    {
-        // Exclude blocked users
-        if (excludeUserIds is { Count: > 0 })
-        {
-            query = query.Where(c => !excludeUserIds.Contains(c.AuthorId));
-        }
-
-        // Filter by authors (OR logic)
-        if (commentsQuery.AuthorUsernames is { Count: > 0 })
-        {
-            var authorNames = commentsQuery.AuthorUsernames.Select(a => a.ToLowerInvariant()).ToArray();
-            query = query.Where(c => c.Author != null && authorNames.Contains(c.Author.Username.ToLower()));
-        }
-
-        // Filter by created date range
-        if (commentsQuery.CreatedFromUtc.HasValue)
-        {
-            query = query.Where(c => c.CreatedUtc >= commentsQuery.CreatedFromUtc.Value);
-        }
-
-        if (commentsQuery.CreatedToUtc.HasValue)
-        {
-            query = query.WhereAtOrBefore(c => c.CreatedUtc, commentsQuery.CreatedToUtc.Value);
-        }
-
-        // Search by text content
-        if (!string.IsNullOrWhiteSpace(commentsQuery.Search))
-        {
-            var searchLower = commentsQuery.Search.ToLowerInvariant();
-            query = query.Where(c => c.Text.ToLower().Contains(searchLower));
-        }
-
-        return query;
-    }
-
-    private static IOrderedQueryable<CommentDal> ApplySorting(
-        IQueryable<CommentDal> query,
-        GameCommentsQuery commentsQuery,
-        DmDbContext dbContext)
-    {
-        var sortBy = commentsQuery.SortBy?.ToLowerInvariant() ?? "created";
-        var isDescending = string.Equals(commentsQuery.SortOrder, "desc", StringComparison.OrdinalIgnoreCase);
-
-        return sortBy switch
-        {
-            "likes" => isDescending
-                ? query.OrderByDescending(c => dbContext.Likes.Count(l =>
-                    !l.IsRemoved &&
-                    l.EntityId == c.CommentId &&
-                    l.EntityType == LikeEntityType.Comment))
-                : query.OrderBy(c => dbContext.Likes.Count(l =>
-                    !l.IsRemoved &&
-                    l.EntityId == c.CommentId &&
-                    l.EntityType == LikeEntityType.Comment)),
-            _ => isDescending // "created" or default
-                ? query.OrderByDescending(c => c.CreatedUtc)
-                : query.OrderBy(c => c.CreatedUtc)
-        };
-    }
+    public Task<IEnumerable<Comment>> Get(Guid gameId, GameCommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null) =>
+        CommentQueries.Page(_dbContext, _mapper, gameId, query, paging, excludeUserIds, "DM.GameComments.List");
 
     /// <inheritdoc />
-    public Task<Comment?> Get(Guid commentId)
-    {
-        return _dbContext.Comments
-            .TagWith("DM.GameComments.Get")
-            .Where(c => !c.IsRemoved && c.CommentId == commentId)
-            .ProjectTo<Comment>(_mapper.ConfigurationProvider)
-            .FirstOrDefaultAsync();
-    }
+    public Task<Comment?> Get(Guid commentId) =>
+        CommentQueries.Single(_dbContext, _mapper, commentId, "DM.GameComments.Get");
 
     /// <inheritdoc />
     public async Task<Comment> Create(CreateGameCommentEntity createComment)
@@ -210,16 +118,9 @@ internal class GameCommentRepository : IGameCommentRepository
     }
 
     /// <inheritdoc />
-    public async Task<Guid?> GetNewestCommentIdExcept(Guid gameId, Guid exceptCommentId)
-    {
-        return await _dbContext.Comments
-            .TagWith("DM.GameComments.NewestCommentIdExcept")
-            .Where(c => !c.IsRemoved && c.EntityId == gameId && c.CommentId != exceptCommentId)
-            .OrderByDescending(c => c.CreatedUtc)
-            .ThenByDescending(c => c.CommentId)
-            .Select(c => (Guid?)c.CommentId)
-            .FirstOrDefaultAsync();
-    }
+    public Task<Guid?> GetNewestCommentIdExcept(Guid gameId, Guid exceptCommentId) =>
+        CommentQueries.NewestExcept(
+            _dbContext, gameId, exceptCommentId, "DM.GameComments.NewestCommentIdExcept");
 
     /// <inheritdoc />
     public async Task Delete(DeleteGameCommentEntity deleteComment)

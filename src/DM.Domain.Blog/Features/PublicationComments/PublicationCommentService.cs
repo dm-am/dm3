@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
 using DM.Domain.Blog.Authorization;
 using DM.Domain.Blog.Features.Blogs;
+using DM.Domain.Blog.Features.Publications;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Comments;
@@ -24,6 +25,7 @@ internal class PublicationCommentService : IPublicationCommentService
     private readonly IValidator<CreateComment> _createValidator;
     private readonly IValidator<UpdateComment> _updateValidator;
     private readonly IBlogService _blogService;
+    private readonly IPublicationService _publicationService;
     private readonly IIntentionManager _intentionManager;
     private readonly IIdentityProvider _identityProvider;
     private readonly IDateTimeProvider _dateTimeProvider;
@@ -35,6 +37,7 @@ internal class PublicationCommentService : IPublicationCommentService
         IValidator<CreateComment> createValidator,
         IValidator<UpdateComment> updateValidator,
         IBlogService blogService,
+        IPublicationService publicationService,
         IIntentionManager intentionManager,
         IIdentityProvider identityProvider,
         IDateTimeProvider dateTimeProvider,
@@ -45,6 +48,7 @@ internal class PublicationCommentService : IPublicationCommentService
         _createValidator = createValidator;
         _updateValidator = updateValidator;
         _blogService = blogService;
+        _publicationService = publicationService;
         _intentionManager = intentionManager;
         _identityProvider = identityProvider;
         _dateTimeProvider = dateTimeProvider;
@@ -58,7 +62,7 @@ internal class PublicationCommentService : IPublicationCommentService
     {
         await _createValidator.ValidateAndThrowAsync(createComment);
 
-        var publication = await _blogService.GetPublication(createComment.EntityId);
+        var publication = await _publicationService.GetPublication(createComment.EntityId);
         _intentionManager.ThrowIfForbidden(PublicationIntention.CreateComment, publication);
 
         // Check blacklist
@@ -97,7 +101,7 @@ internal class PublicationCommentService : IPublicationCommentService
     public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid publicationId, PublicationCommentsQuery query,
         IReadOnlyCollection<Guid>? excludeUserIds = null)
     {
-        await _blogService.GetPublication(publicationId);
+        await _publicationService.GetPublication(publicationId);
 
         var totalCount = await _repository.Count(publicationId, query, excludeUserIds);
         var paging = new PagingData(query, _identityProvider.Current.Settings.Paging.CommentsPerPage, totalCount);
@@ -131,7 +135,7 @@ internal class PublicationCommentService : IPublicationCommentService
         var currentUser = _identityProvider.Current.User;
         if (comment.Author?.UserId == currentUser.UserId && !currentUser.MaySpeak())
         {
-            var publication = await _blogService.GetPublication(comment.EntityId);
+            var publication = await _publicationService.GetPublication(comment.EntityId);
             var blog = await _blogService.GetBlogAsync(publication.BlogId);
             currentUser.ThrowIfMayNotComment(inOwnSpace: blog.IsOwnBlog(currentUser.UserId));
         }
@@ -196,7 +200,7 @@ internal class PublicationCommentService : IPublicationCommentService
     /// <inheritdoc />
     public async Task MarkAsReadAsync(Guid publicationId)
     {
-        await _blogService.GetPublication(publicationId);
+        await _publicationService.GetPublication(publicationId);
         await _countersRepository.FlushAsync(_identityProvider.Current.User.UserId,
             UnreadEntryType.Message, publicationId);
     }

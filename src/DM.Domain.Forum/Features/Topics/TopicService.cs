@@ -422,11 +422,21 @@ internal class TopicService : ITopicService
         var board = await _boardService.GetBoard(boardTitle);
         _intentionManager.ThrowIfForbidden(ForumIntention.AdministrateTopics, board);
 
-        // Create order map: first topic in list = order 0
-        var orderMap = topicIds
-            .Select((id, index) => (id, index))
-            .ToDictionary(x => x.id, x => x.index);
+        // What this call replaces is the order of the board as a whole, so the
+        // body has to name every pinned topic of that board and name each of them
+        // once. A body naming a subset would leave the topics it skipped on the
+        // positions this request has just handed to others: two topics on one
+        // place, one of them moved by a request that never mentioned it.
+        var pinned = await _repository.GetAttachedTopicIds(board.Id, ct);
+        var named = new HashSet<Guid>(topicIds);
+        if (named.Count != topicIds.Count || !named.SetEquals(pinned))
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                ["topicIds"] = "Порядок должен перечислять все закрепленные топики раздела, каждый по одному разу"
+            });
+        }
 
-        await _repository.UpdateAttachOrder(orderMap, ct);
+        await _repository.ReplaceAttachOrder(board.Id, topicIds, ct);
     }
 }

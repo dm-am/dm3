@@ -7,6 +7,7 @@ using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Domain.Community.Features.Awards;
 using DM.Domain.Core.Abstractions;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
 using EntityAwardType = DM.Infrastructure.Persistence.Entities.Community.AwardType;
 using EntityContestSeries = DM.Infrastructure.Persistence.Entities.Community.ContestSeries;
@@ -142,8 +143,8 @@ internal class AwardRepository : IAwardRepository
     public async Task<IReadOnlyCollection<UserAward>> GetUserAwardsAsync(Guid userId, CancellationToken ct = default) =>
         // Sort oldest first — the older the award, the earlier it appears. Ties
         // on the same date (a placement + a special award from the same contest)
-        // break by award type (SortOrder ASC: 1st → 2nd → 3rd → Народное →
-        // Критик → Угадайка). Non-contest honours dated to the user's early
+        // break by award type (SortOrder ASC: 1st → 2nd → 3rd → "Народное" →
+        // "Критик" → "Угадайка"). Non-contest honours dated to the user's early
         // years (the honorary goblin) therefore lead the list.
         await _db.UserAwards
             .AsNoTracking()
@@ -194,9 +195,7 @@ internal class AwardRepository : IAwardRepository
     public async Task RevokeAsync(Guid id, Guid revokedByUserId, CancellationToken ct = default)
     {
         var entity = await _db.UserAwards.FirstAsync(a => a.UserAwardId == id, ct);
-        entity.IsRemoved = true;
-        entity.DeletedByUserId = revokedByUserId;
-        entity.DeletedUtc = _clock.Now;
+        SoftDelete.Mark(entity, revokedByUserId, _clock.Now);
         await _db.SaveChangesAsync(ct);
     }
 }

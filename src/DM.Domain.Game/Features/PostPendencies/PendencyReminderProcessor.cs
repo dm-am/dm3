@@ -14,7 +14,6 @@ internal class PendencyReminderProcessor : IPendencyReminderProcessor
     private readonly IEventProducer _eventProducer;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc cref="PendencyReminderProcessor" />
     public PendencyReminderProcessor(
         IPostPendencyRepository repository,
         IEventProducer eventProducer,

@@ -41,6 +41,19 @@ public class User : IUser, IRemovable
     public string Email { get; set; } = null!;
 
     /// <summary>
+    /// Address a change was requested to and not yet confirmed
+    /// </summary>
+    /// <remarks>
+    /// The account keeps answering at Email until the link in the letter is
+    /// followed. Writing the new address straight into Email made the letter a
+    /// formality and a typo a locked account: the confirmation had nothing left
+    /// to confirm, and the person could no longer receive the letter telling them
+    /// so. Null whenever no change is waiting.
+    /// </remarks>
+    [MaxLength(100)]
+    public string? PendingEmail { get; set; }
+
+    /// <summary>
     /// Registration moment (UTC)
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }

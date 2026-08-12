@@ -85,21 +85,135 @@ public class ConsumerMetricsShould
     public void MeasureEveryMessageThatPassesThroughAConsumer()
     {
         var middlewares = Directory
-            .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*RetryMiddleware.cs", SearchOption.AllDirectories)
+            .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*Middleware.cs", SearchOption.AllDirectories)
             .Where(IsAuthored)
+            .Where(path => File.ReadAllText(path).Contains(ConsumerSide, StringComparison.Ordinal))
             .ToArray();
 
-        middlewares.Should().HaveCountGreaterOrEqualTo(2,
-            "both workers wrap their pipeline in one, and a walk that finds fewer checks nothing");
+        middlewares.Should().NotBeEmpty(
+            "the hosts consume through middlewares of this shape, and a walk that finds none " +
+            "of them checks nothing");
 
         middlewares
-            .Where(path => !File.ReadAllText(path).Contains("MessagingMetrics", StringComparison.Ordinal))
+            .Where(path => !Measures(File.ReadAllText(path)))
             .Select(Relative)
             .Should().BeEmpty(
-                "every message of a worker passes through its retry middleware, so this is " +
+                "every message of a consumer passes through its middleware, so this is " +
                 "the one place that can count them; without it a consumer failing everything " +
                 "is indistinguishable from an idle one");
+
+        var hosts = ConsumingHosts();
+        hosts.Should().NotBeEmpty(
+            "three hosts take messages off a queue, and a walk that finds none of them to " +
+            "read passes whatever they do");
+
+        foreach (var host in hosts)
+        {
+            var installed = InstalledConsumerMiddlewares(
+                File.ReadAllText(Path.Combine(host.FullName, Composition)));
+
+            installed.Should().NotBeEmpty(
+                $"{host.Name} takes messages off a queue, and a host whose consumer pipeline " +
+                "installs nothing counts nothing of what it took");
+
+            installed
+                .Where(name => !middlewares.Any(path => path.EndsWith(
+                    $"{Path.DirectorySeparatorChar}{name}.cs", StringComparison.Ordinal)))
+                .Should().BeEmpty(
+                    $"{host.Name} consumes through a middleware no file of this walk measures, " +
+                    "and a queue read through one is a queue whose failures reach no dashboard " +
+                    "and no rule");
+        }
     }
+
+    /// <summary>The file a host composes itself in.</summary>
+    private const string Composition = "Startup.cs";
+
+    /// <summary>The interface a host takes its consumers from.</summary>
+    private const string ConsumerFactory = "IConsumerBuilder";
+
+    /// <summary>The argument a host declares its consumer pipeline in.</summary>
+    private const string ConsumerPipeline = "consumerBuilderDefaults:";
+
+    /// <summary>A middleware installed into a pipeline, as the builder spells it.</summary>
+    private static readonly Regex Installation = new(@"WithMiddleware<(\w+)>", RegexOptions.Compiled);
+
+    /// <summary>
+    /// The hosts that consume, read off the tree rather than listed here.
+    /// </summary>
+    /// <remarks>
+    /// Counting the middleware files was the whole of this rule while every host
+    /// carried one of its own. The workers share one now, so the count says nothing
+    /// about how many hosts are covered - three consume through two files, and a
+    /// fourth would consume through the same two. A list written out here would be no
+    /// better: a consuming host forgotten in it is exactly as invisible as it was to
+    /// the count, which is the failure a hand-kept mirror of the notification
+    /// generators had already caused once. So a host is a project that composes
+    /// itself, and it consumes when something in it asks the client for a consumer.
+    /// </remarks>
+    private static IReadOnlyCollection<DirectoryInfo> ConsumingHosts() =>
+        new DirectoryInfo(Path.Combine(RepositoryRoot, "src"))
+            .EnumerateDirectories()
+            .Where(project => File.Exists(Path.Combine(project.FullName, Composition)))
+            .Where(Consumes)
+            .ToArray();
+
+    private static bool Consumes(DirectoryInfo project) => project
+        .EnumerateFiles("*.cs", SearchOption.AllDirectories)
+        .Where(file => IsAuthored(file.FullName))
+        .Any(file => File.ReadAllText(file.FullName).Contains(ConsumerFactory, StringComparison.Ordinal));
+
+    /// <summary>
+    /// The consumer middlewares a host installs, out of the argument that declares its
+    /// consumer pipeline.
+    /// </summary>
+    /// <remarks>
+    /// Not every middleware in a composition is a consumer's: the producer pipeline is
+    /// declared with the same call, and a host that added one of its own to it would
+    /// otherwise be asked here for counters a producer middleware has no consumed
+    /// message to write. So the reading starts at the named argument and stops at the
+    /// end of the statement it belongs to.
+    /// </remarks>
+    private static IReadOnlyCollection<string> InstalledConsumerMiddlewares(string composition)
+    {
+        var declaration = composition.IndexOf(ConsumerPipeline, StringComparison.Ordinal);
+        if (declaration < 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        var end = composition.IndexOf(';', declaration);
+        var pipeline = composition[declaration..(end < 0 ? composition.Length : end)];
+
+        return Installation.Matches(pipeline).Select(match => match.Groups[1].Value).ToArray();
+    }
+
+    /// <summary>The interface a consumer middleware implements, which is what selects one.</summary>
+    /// <remarks>
+    /// The walk went by a file name ending in RetryMiddleware, which is the name the
+    /// two workers happened to give theirs. The third consumer has no retry to
+    /// name a file after - the realtime push of the API is a copy of a stored
+    /// notification and is dropped rather than redelivered - so the one queue
+    /// nobody counted was also the one queue this rule could not see.
+    /// </remarks>
+    private const string ConsumerSide = "IConsumerMiddleware";
+
+    /// <summary>The helper that holds the policy and the instruments they share.</summary>
+    private const string SharedPipeline = "MeasuredConsumerPipeline";
+
+    /// <summary>
+    /// A middleware that counts what passes through it: either it writes the
+    /// instruments itself, or it hands the pipeline to the helper that does.
+    /// </summary>
+    /// <remarks>
+    /// Reading every middleware for the name of the metrics class was the whole
+    /// check while each of them carried its own copy of the counters. They share
+    /// one now, and a check that still demanded the name in every file would have
+    /// demanded the duplication back with it.
+    /// </remarks>
+    private static bool Measures(string source) =>
+        source.Contains("MessagingMetrics", StringComparison.Ordinal) ||
+        source.Contains(SharedPipeline, StringComparison.Ordinal);
 
     [Fact]
     public void RegisterTheMeterWithTheExporter() =>
@@ -191,12 +305,43 @@ public class ConsumerMetricsShould
     }
 
     /// <summary>Instrument names declared in the sources, as the exporter sanitises them.</summary>
-    private static HashSet<string> Published() => Directory
-        .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)
-        .Where(IsAuthored)
-        .SelectMany(path => Instrument.Matches(File.ReadAllText(path)))
-        .Select(match => match.Groups[1].Value.Replace('.', '_'))
-        .ToHashSet(StringComparer.Ordinal);
+    private static HashSet<string> Published()
+    {
+        var fromCode = Directory
+            .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(IsAuthored)
+            .SelectMany(path => Instrument.Matches(File.ReadAllText(path)))
+            .Select(match => match.Groups[1].Value.Replace('.', '_'));
+
+        return fromCode.Concat(FromTextfileCollector()).ToHashSet(StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Series a maintenance script writes for node-exporter to pick up.
+    /// </summary>
+    /// <remarks>
+    /// Not every exporter of this project is a C# instrument. The nightly backup
+    /// check runs from cron and leaves its verdict in the textfile collector's
+    /// directory, which is how a shell script gets a series at all — and it is a
+    /// series an alert has every reason to read.
+    ///
+    /// Read from the scripts rather than trusted from the rule file, so the rule
+    /// still has to point at something somebody actually writes: that is the
+    /// whole point of the check above.
+    ///
+    /// Registered under the same normalisation the references go through. A
+    /// script writes the final name, unit suffix and all, while a C# instrument
+    /// is declared without one and Prometheus appends it — so the set is keyed on
+    /// the stem either way.
+    /// </remarks>
+    private static IEnumerable<string> FromTextfileCollector() => Directory
+        .EnumerateFiles(Path.Combine(RepositoryRoot, "docker", "scripts"), "*.sh")
+        .SelectMany(path => TextfileSeries.Matches(File.ReadAllText(path)))
+        .Select(match => Base(match.Groups[1].Value));
+
+    /// <summary>A HELP line, which is what names a series in the text exposition format.</summary>
+    private static readonly Regex TextfileSeries = new(
+        @"#\s*HELP\s+(dm_\w+)", RegexOptions.Compiled);
 
     /// <summary>Series named by the rule file and the boards.</summary>
     private static IReadOnlyCollection<(string File, string Series)> Referenced() =>
@@ -254,25 +399,5 @@ public class ConsumerMetricsShould
 
     private static string Relative(string path) => Path.GetRelativePath(RepositoryRoot, path);
 
-    /// <summary>
-    /// Walks up from the test binary to the repository root. Neither the sources
-    /// nor the monitoring configuration is copied to the output directory, and
-    /// copying them would let this assert against a stale snapshot.
-    /// </summary>
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null &&
-                   !(Directory.Exists(Path.Combine(directory.FullName, "src")) &&
-                     Directory.Exists(Path.Combine(directory.FullName, "test"))))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

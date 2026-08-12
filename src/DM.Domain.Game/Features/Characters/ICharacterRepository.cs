@@ -19,6 +19,16 @@ public interface ICharacterRepository
     Task<bool> GameRequiresAttributes(Guid gameId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Check if the game this character belongs to requires attributes
+    /// </summary>
+    /// <remarks>
+    /// The same question as <see cref="GameRequiresAttributes"/>, asked by the
+    /// only identifier an update carries. Without it the update had to load the
+    /// schema in order to find out whether there was one.
+    /// </remarks>
+    Task<bool> CharacterRequiresAttributes(Guid characterId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Get game's attribute schema
     /// </summary>
     Task<AttributeSchema> GetGameSchema(Guid gameId);
@@ -45,7 +55,7 @@ public interface ICharacterRepository
     /// <summary>
     /// Get character for update
     /// </summary>
-    Task<CharacterToUpdate> GetForUpdate(Guid characterId);
+    Task<CharacterToUpdate?> GetForUpdate(Guid characterId);
 
     /// <summary>
     /// Get character attribute IDs

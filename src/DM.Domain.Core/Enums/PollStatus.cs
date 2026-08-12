@@ -1,22 +1,22 @@
 namespace DM.Domain.Core.Enums;
 
 /// <summary>
-/// Poll status based on StartsUtc and EndsUtc dates
+/// Where a poll stands relative to now.
 /// </summary>
+/// <remarks>
+/// Derived from the two dates rather than stored: a poll starts and closes by
+/// the clock, so there is no state to keep in step. Named here because the
+/// listing filters by it, and a filter spelled as a free string answered an
+/// unrecognised word with every poll on the site.
+/// </remarks>
 public enum PollStatus
 {
-    /// <summary>
-    /// Poll has not started yet (now &lt; StartsUtc)
-    /// </summary>
+    /// <summary>Not open yet: now is before the start.</summary>
     Pending = 0,
 
-    /// <summary>
-    /// Poll is currently active (StartsUtc &lt;= now &lt; EndsUtc)
-    /// </summary>
+    /// <summary>Open: the start has passed and the end has not.</summary>
     Active = 1,
 
-    /// <summary>
-    /// Poll has ended (now &gt;= EndsUtc)
-    /// </summary>
+    /// <summary>Over: the end has passed.</summary>
     Closed = 2
 }

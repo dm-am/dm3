@@ -79,16 +79,16 @@ public class TopicController : ControllerBase
     /// </summary>
     /// <remarks>
     /// Cross-board topic search — primarily used by the user-profile
-    /// "Topics" tab, which scopes results with the <c>authors</c> filter
-    /// to render every topic authored by a given user.
+    /// "Topics" tab, which scopes results with the <c>authorUsernames</c>
+    /// filter to render every topic authored by a given user.
     ///
     /// Access policy is enforced on the server: topics on boards the
     /// viewer cannot see never appear in the response.
     ///
     /// Supports the same filters and sort options as the per-board
-    /// endpoint: search, authors, createdFromUtc, createdToUtc,
-    /// sortBy (lastActivity / created / comments / title / likes),
-    /// sortOrder (asc / desc), and standard paging (number / size).
+    /// endpoint: search, authorUsernames, createdFromUtc, createdToUtc,
+    /// sortBy (lastActivity / created / title / likes),
+    /// sortOrder (asc / desc), and standard paging (skip / take).
     /// </remarks>
     /// <param name="q">Filter, sort and paging parameters</param>
     /// <response code="200">Paginated list of topics</response>
@@ -353,18 +353,23 @@ public class TopicController : ControllerBase
     /// Reorder pinned topics in board
     /// </summary>
     /// <remarks>
-    /// Updates the display order of pinned topics.
-    /// The first topic ID in the array will appear first (top).
+    /// Replaces the display order of the board's pinned topics. The body carries
+    /// the whole order rather than a correction to it: a topic's position is its
+    /// index in the array, so the first id in it is shown at the top.
+    /// The array names every pinned topic of the board exactly once. A body that
+    /// skips one, repeats one or names a topic pinned in another board is
+    /// refused: the topics it left out would keep the positions this request has
+    /// just handed to others.
     /// Only board moderators and administrators can perform this action.
     /// </remarks>
     /// <param name="id">Board identifier (GUID or URL slug)</param>
     /// <param name="request">Reorder request with topic IDs in desired order</param>
     /// <response code="204">Topics reordered successfully</response>
-    /// <response code="400">Invalid request (empty array, invalid IDs)</response>
+    /// <response code="400">The array is not the board's pinned topics, each named once</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not a board moderator</response>
     /// <response code="404">Board not found</response>
-    [HttpPatch("~/v1/boards/{id}/topics/pinned/order", Name = nameof(ReorderPinnedTopics))]
+    [HttpPut("~/v1/boards/{id}/topics/pinned/order", Name = nameof(ReorderPinnedTopics))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]

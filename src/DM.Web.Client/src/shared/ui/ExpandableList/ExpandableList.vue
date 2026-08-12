@@ -17,7 +17,7 @@
  */
 
 import { computed } from "vue";
-import { useExpandable } from "@/shared/lib/composables";
+import { useExpandable } from "@/shared/lib/composables/useExpandable";
 
 export interface ExpandableItem {
   id: string;

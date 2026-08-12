@@ -37,16 +37,6 @@ public class SeedDeterminismShould
     /// </summary>
     private const string DeterminismSource = "SeedDeterminism.cs";
 
-    /// <summary>
-    /// Line and block comments. A rule that matched inside one would fire on the
-    /// paragraph explaining why the call is not there, which is the one place the
-    /// name has to stay written down. It also truncates a line after a "//"
-    /// inside a string literal - a seeded URL does that - which can only ever
-    /// hide a violation sitting further right on that same line, never invent one.
-    /// </summary>
-    private static readonly Regex Comments = new(
-        @"/\*.*?\*/|//[^\n]*", RegexOptions.Compiled | RegexOptions.Singleline);
-
     private static readonly Regex Clock = new(
         @"(?<![\w.])DateTime(Offset)?\s*\.\s*(Now|UtcNow|Today)\b", RegexOptions.Compiled);
 
@@ -177,31 +167,11 @@ public class SeedDeterminismShould
 
     /// <summary>The file's text with its comments removed.</summary>
     private static string Code(string path) =>
-        Comments.Replace(File.ReadAllText(path), string.Empty);
+        SourceText.ReadCode(path);
 
     private static string SeederDirectory => Path.Combine(RepositoryRoot, "src", "DM.Tools.Seeder");
 
-    /// <summary>
-    /// Walks up from the test binary to the repository root. The sources are not
-    /// copied to the output directory, and copying them would let this assert
-    /// against a stale snapshot.
-    /// </summary>
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null &&
-                   !(Directory.Exists(Path.Combine(directory.FullName, "src")) &&
-                     Directory.Exists(Path.Combine(directory.FullName, "test"))))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     private static bool IsAuthored(string path) =>
         !path

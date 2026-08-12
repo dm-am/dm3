@@ -78,9 +78,6 @@ onMounted(async () => {
     };
   }
 
-  // Store token in sessionStorage for retry
-  sessionStorage.setItem("dm_activation_token", token.value);
-
   // Try to get saved email from registration
   const savedEmail = sessionStorage.getItem("dm_pending_email");
   if (savedEmail) {
@@ -175,7 +172,6 @@ async function submitActivation() {
 
     // Clean up sessionStorage
     sessionStorage.removeItem("dm_pending_email");
-    sessionStorage.removeItem("dm_activation_token");
   }
 }
 
@@ -225,8 +221,11 @@ function goToProfile() {
         <dialog-title>Выберите имя</dialog-title>
 
         <div class="username-form">
-          <label class="field-label">Имя пользователя</label>
+          <label class="field-label" for="activation-username">
+            Имя пользователя
+          </label>
           <username-input
+            id="activation-username"
             v-model="username"
             @availability="usernameAvailable = $event"
           />
@@ -260,12 +259,14 @@ function goToProfile() {
           <div class="username-display">
             <div class="username-display__label">
               <span>Имя пользователя</span>
-              <a
-                href="#"
-                @click.prevent="goBackToSelect"
-                :class="{ disabled: phase === 'submitting' }"
-                >Изменить</a
+              <button
+                type="button"
+                class="change-username"
+                :disabled="phase === 'submitting'"
+                @click="goBackToSelect"
               >
+                Изменить
+              </button>
             </div>
             <div class="username-display__value">{{ username }}</div>
           </div>
@@ -355,6 +356,8 @@ function goToProfile() {
 </template>
 
 <style scoped lang="sass">
+@import "@/assets/styles/Inputs"
+
 .activation-page
   max-width: 380px
   margin: $major auto
@@ -409,9 +412,17 @@ function goToProfile() {
     span
       color: $text-muted
 
-    a.disabled
-      pointer-events: none
-      opacity: 0.5
+    // "Изменить" goes back a step in code and nowhere in the address bar, so
+    // the control is a button, wearing the inline link reset to read as the
+    // <a> it replaces. While the request is in flight it is disabled for
+    // real: the class it used to carry dimmed the link and took the mouse
+    // away from it, leaving the keyboard free to step back mid-request.
+    .change-username
+      +inline-link-button
+
+      &:disabled
+        opacity: $disabled-opacity
+        cursor: default
 
   &__value
     padding: ($minor + 1px) $small

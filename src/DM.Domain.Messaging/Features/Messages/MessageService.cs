@@ -92,15 +92,24 @@ internal class MessageService : IMessageService
     {
         var userId = _identityProvider.Current.User.UserId;
 
-        // For direct chats, check if recipient has blocked sender with BlockDirectMessages enabled
-        if (chat.Type == ChatType.Direct)
+        // Private correspondence is a conversation of exactly two people, and its
+        // one addressee answers for it with BlockDirectMessages. A direct chat is
+        // always that; a group left with two participants is the same conversation
+        // wearing another type, and asking about the type alone left the setting
+        // one "create a group" away from being worked around.
+        //
+        // The other half of the rule stands at the door in ChatService, which
+        // refuses to put somebody into a group with a person who blocked them.
+        // Both are needed: the door cannot see a group that shrinks to a pair
+        // afterwards, and this cannot see a group of three.
+        if (chat.Type is ChatType.Direct or ChatType.Group)
         {
-            var otherUser = chat.Participants.FirstOrDefault(p => p.UserId != userId);
-            if (otherUser != null)
+            var addressees = chat.Participants.Where(p => p.UserId != userId).ToArray();
+            if (addressees.Length == 1)
             {
-                // Check if recipient has BlockDirectMessages enabled AND has blocked sender
+                // Check if the addressee has BlockDirectMessages enabled AND has blocked the sender
                 var blockedIds = await _userBlacklistChecker.GetBlockedUserIdsIfFlagEnabledAsync(
-                    otherUser.UserId, UserBlacklistSettings.BlockDirectMessages, ct);
+                    addressees[0].UserId, UserBlacklistSettings.BlockDirectMessages, ct);
                 if (blockedIds.Contains(userId))
                 {
                     throw new HttpException(HttpStatusCode.Forbidden, "Нельзя отправить сообщение этому пользователю");
@@ -149,7 +158,7 @@ internal class MessageService : IMessageService
 
         var result = await _repository.Create(message, updateChat, ct);
         await _unreadCountersRepository.IncrementExcludingAsync(
-            chat.Id, UnreadEntryType.Message, userId);
+            chat.UnreadEntityId, UnreadEntryType.Message, userId);
         await _producer.SendAsync(EventType.NewMessage, message.MessageId);
         if (chat.Type == ChatType.Global)
         {
@@ -240,6 +249,26 @@ internal class MessageService : IMessageService
         _intentionManager.ThrowIfForbidden(MessageIntention.Delete, message);
 
         await _repository.Delete(messageId, currentUserId);
+
+        // The counter comes down with the message, the way it does for every
+        // other kind of comment on the site — blog, publication, topic, game,
+        // post and character all decrement here. Without it the badge kept
+        // counting a message that no longer exists, until something happened to
+        // flush the whole conversation.
+        //
+        // Addressed by the chat's counter identifier rather than by ChatId: for a
+        // game room chat those are different things, and using the chat's own is
+        // how the room's unread went dead in the first place.
+        //
+        // Read the same way the create path reads it. A game room chat has no
+        // participant rows, so the participation-filtered read refuses everyone
+        // for it — including the author of the message being deleted.
+        var chat = message.ChatType == ChatType.GameRoom
+            ? await _chatService.GetGameRoomAsync(message.ChatId)
+            : await _chatService.GetAsync(message.ChatId);
+        await _unreadCountersRepository.DecrementAsync(
+            chat.UnreadEntityId, UnreadEntryType.Message, message.CreatedUtc);
+
         await _producer.SendAsync(EventType.DeletedMessage, messageId);
     }
 }

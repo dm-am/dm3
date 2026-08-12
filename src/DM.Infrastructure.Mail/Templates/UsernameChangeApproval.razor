@@ -1,0 +1,41 @@
+@*
+    Письмо об одобрении запроса на смену имени. Ссылка ведет на страницу, где
+    человек выбирает новое имя. Срок в тексте письма обязан совпадать со сроком,
+    который проставляет сервис при одобрении.
+*@
+<EmailLayout Title="Запрос на смену имени одобрен">
+    <p style="@EmailConstants.ParagraphStyles">
+        Здравствуйте, @Model.Username!
+    </p>
+
+    <p style="@EmailConstants.ParagraphStyles">
+        Ваш запрос на смену имени пользователя был <strong>одобрен</strong> модератором.
+    </p>
+
+    <p style="@EmailConstants.ParagraphStyles">
+        Для завершения смены имени перейдите по ссылке:
+    </p>
+
+    <a href="@Model.ApprovalLinkUrl" style="@EmailConstants.ButtonStyles">Выбрать новое имя</a>
+
+    <p style="@EmailConstants.ParagraphStyles">
+        Если кнопка не работает, откройте ссылку вручную:<br/>
+        <a href="@Model.ApprovalLinkUrl">@Model.ApprovalLinkUrl</a>
+    </p>
+
+    <p style="@EmailConstants.ParagraphStyles">
+        Ссылка действительна 48 часов.
+    </p>
+
+    <p style="@EmailConstants.ParagraphStyles">
+        Если вы не запрашивали смену имени, проигнорируйте это письмо.
+    </p>
+</EmailLayout>
+
+@code {
+
+    /// <summary>Данные письма</summary>
+    [Parameter]
+    public UsernameChangeApprovalViewModel Model { get; set; } = null!;
+
+}

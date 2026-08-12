@@ -2,6 +2,7 @@
   <div v-click-outside="closeDropdown" class="user-autocomplete">
     <template v-if="!selectedUser">
       <input
+        :id="id"
         ref="inputRef"
         v-model="searchQuery"
         type="text"
@@ -80,6 +81,8 @@ const props = defineProps<{
   modelValue: string;
   placeholder?: string;
   autofocus?: boolean;
+  /** Id for the search <input>, so a caller's <label for> reaches it. */
+  id?: string;
 }>();
 
 const inputRef = ref<HTMLInputElement | null>(null);

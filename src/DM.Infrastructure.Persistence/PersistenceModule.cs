@@ -17,6 +17,7 @@ using DM.Domain.Blog.Features.Popularity;
 using DM.Domain.Blog.Features.Comments;
 using DM.Domain.Blog.Features.Invitations;
 using DM.Domain.Blog.Features.PublicationComments;
+using DM.Domain.Blog.Features.Publications;
 using DM.Domain.Forum.Features.Boards;
 using DM.Domain.Forum.Features.Comments;
 using DM.Domain.Forum.Features.Topics;
@@ -240,6 +241,10 @@ public class PersistenceModule : Module
             .As<IBlogRepository>()
             .InstancePerLifetimeScope();
 
+        builder.RegisterType<PublicationRepository>()
+            .As<IPublicationRepository>()
+            .InstancePerLifetimeScope();
+
         builder.RegisterType<BlogPopularityRepository>()
             .As<IBlogPopularityRepository>()
             .InstancePerLifetimeScope();
@@ -299,10 +304,6 @@ public class PersistenceModule : Module
 
         builder.RegisterType<ActivationRepository>()
             .As<IActivationRepository>()
-            .InstancePerLifetimeScope();
-
-        builder.RegisterType<TokenVerificationRepository>()
-            .As<ITokenVerificationRepository>()
             .InstancePerLifetimeScope();
 
         builder.RegisterType<UsernameChangeRepository>()
@@ -402,7 +403,7 @@ public class PersistenceModule : Module
             .InstancePerLifetimeScope();
 
         builder.RegisterType<SecurityAuditRepository>()
-            .As<ISecurityAuditService>()
+            .As<ISecurityAuditRepository>()
             .InstancePerLifetimeScope();
 
         // Shared repositories

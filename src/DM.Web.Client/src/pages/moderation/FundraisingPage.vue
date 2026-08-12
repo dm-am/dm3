@@ -79,17 +79,13 @@ onMounted(load);
         />
       </div>
       <div class="form-actions">
-        <button type="submit" class="btn-save" :disabled="saving">
-          {{ saving ? "Сохранение..." : "Сохранить" }}
-        </button>
+        <Button :loading="saving">Сохранить</Button>
       </div>
     </form>
   </div>
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-
 .loading,
 .error
   padding: $large
@@ -132,7 +128,4 @@ onMounted(load);
 .form-actions
   display: flex
   justify-content: flex-end
-
-.btn-save
-  +button
 </style>

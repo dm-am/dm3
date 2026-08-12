@@ -105,6 +105,13 @@ internal class TopicRepository : ITopicRepository
                 .ThenByDescending(t => t.CreatedUtc);
         }
 
+        // A last key nothing can tie on. Not one key above it is unique: two topics can
+        // share a title, a like count, an attach position or the second they were created
+        // in. Paging asks for the same order once per page, and rows the order cannot tell
+        // apart may be arranged differently between two of those asks, which shows one of
+        // them on both pages and the other on neither.
+        sortedDbQuery = sortedDbQuery.ThenBy(t => t.TopicId);
+
         // Read-only projection: AsNoTracking avoids EF Core's change
         // tracker overhead. See PERFORMANCE.md → "AsNoTracking".
         var topics = await sortedDbQuery
@@ -183,8 +190,8 @@ internal class TopicRepository : ITopicRepository
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            var searchTerm = query.Search.Trim();
-            dbQuery = dbQuery.Where(t => EF.Functions.ILike(t.Title, $"%{searchTerm}%"));
+            var searchPattern = LikePatterns.Contains(query.Search.Trim());
+            dbQuery = dbQuery.Where(t => EF.Functions.ILike(t.Title, searchPattern));
         }
 
         if (query.AuthorUsernames is { Count: > 0 })
@@ -289,8 +296,10 @@ internal class TopicRepository : ITopicRepository
                 l.EntityId == t.TopicId &&
                 l.EntityType == Domain.Core.Enums.LikeEntityType.Topic))
             // Tie-breaker: newer-first so two zero-like topics still produce
-            // a deterministic result rather than relying on insertion order.
+            // a deterministic result rather than relying on insertion order,
+            // and the identifier after it for the two that also share a second.
             .ThenByDescending(t => t.CreatedUtc)
+            .ThenBy(t => t.TopicId)
             .AsNoTracking()
             .ProjectTo<Topic>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
@@ -549,22 +558,38 @@ internal class TopicRepository : ITopicRepository
     }
 
     /// <inheritdoc />
-    public async Task UpdateAttachOrder(IReadOnlyDictionary<Guid, int> topicOrders, CancellationToken ct = default)
-    {
-        if (topicOrders.Count == 0)
-        {
-            return;
-        }
-
-        var topicIds = topicOrders.Keys.ToArray();
-        var topics = await _dbContext.Topics
-            .TagWith("DM.Forum.UpdateAttachOrder")
-            .Where(t => topicIds.Contains(t.TopicId))
+    public async Task<IReadOnlyList<Guid>> GetAttachedTopicIds(Guid boardId, CancellationToken ct = default) =>
+        await _dbContext.Topics
+            .TagWith("DM.Forum.AttachedTopicIds")
+            .AsNoTracking()
+            .Where(t => t.BoardId == boardId && t.IsAttached && !t.IsRemoved)
+            .OrderBy(t => t.AttachOrder ?? int.MaxValue)
+            .ThenBy(t => t.TopicId)
+            .Select(t => t.TopicId)
             .ToArrayAsync(ct);
+
+    /// <inheritdoc />
+    public async Task ReplaceAttachOrder(
+        Guid boardId, IReadOnlyList<Guid> orderedTopicIds, CancellationToken ct = default)
+    {
+        // The board is in the predicate and not only in the caller's address:
+        // keyed by topic id alone, this write moved whatever ids the body
+        // happened to carry, and the moderator of one board could renumber the
+        // pinned topics of another.
+        var topics = await _dbContext.Topics
+            .TagWith("DM.Forum.ReplaceAttachOrder")
+            .Where(t => t.BoardId == boardId && t.IsAttached && !t.IsRemoved)
+            .ToArrayAsync(ct);
+
+        var positions = new Dictionary<Guid, int>();
+        for (var position = 0; position < orderedTopicIds.Count; position++)
+        {
+            positions[orderedTopicIds[position]] = position;
+        }
 
         foreach (var topic in topics)
         {
-            if (topicOrders.TryGetValue(topic.TopicId, out var order))
+            if (positions.TryGetValue(topic.TopicId, out var order))
             {
                 topic.AttachOrder = order;
             }

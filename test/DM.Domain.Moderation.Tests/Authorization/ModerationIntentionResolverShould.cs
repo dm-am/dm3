@@ -19,9 +19,6 @@ public class ModerationIntentionResolverShould : UnitTestBase
     }
 
     [Theory]
-    [InlineData(ModerationIntention.ViewAllBans)]
-    [InlineData(ModerationIntention.CreateWarning)]
-    [InlineData(ModerationIntention.RemoveWarning)]
     [InlineData(ModerationIntention.ViewModNotes)]
     [InlineData(ModerationIntention.CreateModNote)]
     [InlineData(ModerationIntention.EditModNote)]
@@ -36,29 +33,6 @@ public class ModerationIntentionResolverShould : UnitTestBase
     }
 
     [Theory]
-    [InlineData(ModerationIntention.CreateBan)]
-    [InlineData(ModerationIntention.LiftBan)]
-    public void AllowBanIntentionsForSeniorModerator(ModerationIntention intention)
-    {
-        var user = Create.User().WithRole(UserRole.SeniorModerator).Please();
-        resolver.IsAllowed(user, intention).Should().BeTrue();
-    }
-
-    [Theory]
-    [InlineData(ModerationIntention.CreateBan)]
-    [InlineData(ModerationIntention.LiftBan)]
-    public void ForbidBanIntentionsForModerator(ModerationIntention intention)
-    {
-        var user = Create.User().WithRole(UserRole.Moderator).Please();
-        resolver.IsAllowed(user, intention).Should().BeFalse();
-    }
-
-    [Theory]
-    [InlineData(ModerationIntention.ViewAllBans)]
-    [InlineData(ModerationIntention.CreateBan)]
-    [InlineData(ModerationIntention.LiftBan)]
-    [InlineData(ModerationIntention.CreateWarning)]
-    [InlineData(ModerationIntention.RemoveWarning)]
     [InlineData(ModerationIntention.ViewModNotes)]
     [InlineData(ModerationIntention.CreateModNote)]
     [InlineData(ModerationIntention.EditModNote)]
@@ -107,9 +81,6 @@ public class ModerationIntentionResolverShould : UnitTestBase
     }
 
     [Theory]
-    [InlineData(ModerationIntention.ViewAllBans)]
-    [InlineData(ModerationIntention.CreateBan)]
-    [InlineData(ModerationIntention.LiftBan)]
     [InlineData(ModerationIntention.ViewTickets)]
     [InlineData(ModerationIntention.ResolveTicket)]
     public void ForbidAllModeratorIntentionsForGuest(ModerationIntention intention)

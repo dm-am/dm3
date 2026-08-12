@@ -122,6 +122,43 @@ groups:
           summary: "Queue {{ $labels.queue }} has no consumer"
           description: "Work is accumulating with nobody to process it. The worker process can be up and unsubscribed at the same time."
 
+      # The realtime push queue, a rule of its own rather than another name in the
+      # matcher above, for three reasons.
+      #
+      # Name: the broker does not report this queue under the name the consumer is
+      # configured with. It reports that name with a suffix that is new on every
+      # subscription - one stack produced dm.notifications.api-9iugW5 and
+      # dm.notifications.api-wIBPmu across two restarts. PromQL anchors every regex
+      # whole, so a matcher spelled dm.notifications.api matches nothing at any
+      # time, healthy or broken, and only the prefix below finds the queue at all.
+      #
+      # Severity: warning against the critical above, because the message here is a
+      # copy of a notification the dispatcher has already stored and the client
+      # reads over REST. Nothing that exists only in this queue is lost by dropping
+      # it, which is also why its consumer declares no dead-letter exchange.
+      #
+      # Shape: the queue is exclusive to the connection of the API instance that
+      # consumes it, so a subscription that never came up leaves no queue, no
+      # series, and nothing for `== 0` to compare - the failure this rule exists
+      # for is the absent one. That branch is guarded on both processes answering,
+      # because absent() is equally true when the broker is down or its target is
+      # unscraped: firing then would blame the consumer for an outage BrokerDown
+      # and BrokerScrapeTargetMissing already name.
+      - alert: RealtimePushWithoutConsumer
+        expr: |
+          (rabbitmq_queue_consumers{queue=~"dm.notifications.api.*"} == 0)
+          or (
+            absent(rabbitmq_queue_consumers{queue=~"dm.notifications.api.*"})
+            and on() (up{job="dm-api"} == 1)
+            and on() (up{job="rabbitmq"} == 1)
+          )
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The realtime push queue has no consumer"
+          description: "The API and the broker are both up and the notification consumer of the API is not subscribed, so every push is dropped at the broker. The global chat page catches up on its own; the two badges are re-read only when the application mounts or the socket reconnects, and it stays that way until the API restarts."
+
       - alert: QueueBacklog
         expr: rabbitmq_queue_messages_ready{queue=~"dm.*"} > 1000
         for: 10m
@@ -150,7 +187,7 @@ groups:
           severity: warning
         annotations:
           summary: "Consumer of {{ $labels.queue }} is failing messages"
-          description: "Messages are exhausting every retry. Each one is on its way to the dead-letter queue."
+          description: "Messages are leaving the pipeline as exceptions. Where the queue has a dead-letter exchange each one waits there; the realtime push queue has none, and its messages are gone."
 
       # Retries rise long before failures do: a queue being processed on the
       # second attempt is a queue about to stop being processed.
@@ -162,3 +199,29 @@ groups:
         annotations:
           summary: "Consumer of {{ $labels.queue }} is retrying"
           description: "Processing keeps failing and succeeding on a later attempt. The dependency behind it is unwell."
+
+  - name: dm-backups
+    rules:
+      # Проверка бэкапов идет ночью по cron и до этого правила сообщала о себе
+      # только кодом возврата в лог-файл, который никто не читает: получателя
+      # почты на машине нет. Первым признаком беды было неудавшееся
+      # восстановление.
+      - alert: BackupVerificationFailed
+        expr: dm_backup_verification_status > 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Ночная проверка бэкапов не прошла'
+          description: 'dm_backup_verification_status = {{ $value }} (1 - предупреждение, 2 - ошибка). Смотреть /var/log/dm3-backups.log.'
+
+      # Отсутствие результата - тоже результат: скрипт не запустился, упал до
+      # записи метрики или его вовсе нет в crontab.
+      - alert: BackupVerificationStale
+        expr: time() - dm_backup_verification_timestamp_seconds > 172800
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Проверка бэкапов не отчитывалась более двух суток'
+          description: 'Последний отчет: {{ $value | humanizeDuration }} назад.'

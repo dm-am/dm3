@@ -244,7 +244,7 @@ export enum BlogStatusTransition {
 
 /**
  * Requested premoderation transition (mentor action).
- * @see src/DM.Domain.Blog/Features/Blogs/BlogPremoderationTransition.cs
+ * @see src/DM.Domain.Core/Statuses/ModuleStatusTransition.cs
  */
 export enum BlogPremoderationTransition {
   /** AwaitingEdits -> AwaitingApproval (take into premoderation) */

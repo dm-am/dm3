@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Autofac;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Mail;
 using DM.Domain.Core.Mail.ViewModels;
 using DM.Infrastructure.Mail.Rendering;
@@ -11,6 +13,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace DM.Infrastructure.Mail.Tests;
@@ -36,14 +39,76 @@ public class EmailTemplatesShould : IAsyncDisposable
     private readonly HtmlRenderer _htmlRenderer;
     private readonly TemplateRenderer _renderer;
 
+    /// <summary>Two addresses, the shape every deployment of this site has.</summary>
+    private static readonly SiteAddressConfiguration SiteAddresses = new()
+    {
+        PublicUrl = "https://example.test",
+        Addresses = new Dictionary<string, string>
+        {
+            ["main"] = "https://example.test",
+            ["second"] = "https://second.example.test"
+        }
+    };
+
     public EmailTemplatesShould()
     {
         var services = new ServiceCollection();
         services.AddLogging();
         _services = services.BuildServiceProvider();
-        _htmlRenderer = EmailRendering.CreateHtmlRenderer(_services.GetRequiredService<ILoggerFactory>());
+        _htmlRenderer = EmailRendering.CreateHtmlRenderer(
+            _services.GetRequiredService<ILoggerFactory>(),
+            SiteAddresses);
         _renderer = new TemplateRenderer(NullLogger<TemplateRenderer>.Instance, _htmlRenderer);
     }
+
+    /// <summary>
+    /// The mailbox is the one place a visitor can still be reached after the
+    /// address he uses stops answering, so a letter carries the addresses the
+    /// site answers on. A letter that names only the address it was built from
+    /// is no use to the reader who cannot open that one.
+    /// </summary>
+    [Fact]
+    public async Task NameEveryAddressOfTheSite()
+    {
+        var body = await _renderer.RenderAsync(
+            new PasswordChangeNotificationViewModel("Аллигатор"));
+
+        foreach (var url in SiteAddresses.Addresses.Values)
+        {
+            var host = new Uri(url).Host;
+            body.Should().Contain(host,
+                $"a letter is read when {host} may be the only address that answers");
+        }
+    }
+
+    /// <summary>
+    /// The addresses are printed by the shared layout, so a template that draws
+    /// its own frame silently loses them. This is what keeps the previous test
+    /// honest: it renders one letter, and this one says every letter is built
+    /// the same way.
+    /// </summary>
+    [Fact]
+    public void BuildEveryLetterOnTheSharedLayout()
+    {
+        var templates = Directory
+            .EnumerateFiles(TemplatesDirectory(), "*.razor")
+            .Where(path => !Path.GetFileName(path).StartsWith('_'))
+            .Where(path => Path.GetFileNameWithoutExtension(path) != "EmailLayout")
+            .ToList();
+
+        templates.Should().HaveCountGreaterOrEqualTo(5,
+            "a directory scan that stops matching turns this green by checking nothing");
+
+        foreach (var template in templates)
+        {
+            File.ReadAllText(template).Should().Contain("<EmailLayout",
+                $"{Path.GetFileName(template)} draws its own frame and drops everything the shared one carries");
+        }
+    }
+
+    /// <summary>Templates are content, not build output, so they are read from the source tree.</summary>
+    private static string TemplatesDirectory() =>
+        Path.Combine(DM.Testing.RepositoryLayout.Root, "src", "DM.Infrastructure.Mail", "Templates");
 
     /// <summary>Every view model the domain declares, found by reflection.</summary>
     public static TheoryData<Type> ViewModelTypes()
@@ -107,6 +172,7 @@ public class EmailTemplatesShould : IAsyncDisposable
         { new RegistrationConfirmationViewModel("https://dm.am/activate/a"), "https://dm.am/activate/a" },
         { new PasswordResetConfirmationViewModel("user", "https://dm.am/reset/b"), "https://dm.am/reset/b" },
         { new EmailChangeConfirmationViewModel("user", "https://dm.am/email/c"), "https://dm.am/email/c" },
+        { new UsernameChangeApprovalViewModel("user", "https://dm.am/username/d"), "https://dm.am/username/d" },
     };
 
     [Theory]
@@ -127,6 +193,8 @@ public class EmailTemplatesShould : IAsyncDisposable
         new EmailChangeConfirmationViewModel("user", "https://dm.am/email/c"),
         new PasswordChangeNotificationViewModel("user"),
         new SuspiciousLoginViewModel("user", "203.0.113.9", "Firefox", "30.07.2026 15:00"),
+        new UsernameChangeApprovalViewModel("user", "https://dm.am/username/d"),
+        new UsernameChangeRejectionViewModel("user", "имя занято"),
     };
 
     /// <summary>
@@ -170,9 +238,45 @@ public class EmailTemplatesShould : IAsyncDisposable
         var html = await _renderer.RenderAsync(
             new SuspiciousLoginViewModel("user", IpAddress: null, DeviceInfo: null, "30.07.2026 15:00"));
 
-        html.Should().NotContain("Адрес");
-        html.Should().NotContain("Устройство");
+        // The label cell, not the word: a bare substring over the whole document
+        // also matched the footer, which names the addresses of the site and has
+        // nothing to do with the row this test is about.
+        html.Should().NotContain(">Адрес</td>");
+        html.Should().NotContain(">Устройство</td>");
         html.Should().Contain("30.07.2026 15:00");
+    }
+
+    /// <summary>
+    /// The moderator's comment is the only free-form text these letters carry, and
+    /// it reaches the reader escaped exactly once. The sender this replaces built
+    /// the letter as a string and encoded the comment itself; keeping that call in
+    /// front of a template that encodes as well would show the reader
+    /// &amp;lt;b&amp;gt; where the moderator typed a tag.
+    /// </summary>
+    [Fact]
+    public async Task EscapeTheModeratorsCommentExactlyOnce()
+    {
+        var html = await _renderer.RenderAsync(
+            new UsernameChangeRejectionViewModel("user", "<b>имя занято</b>"));
+
+        html.Should().Contain("&lt;b&gt;имя занято&lt;/b&gt;",
+            "a comment is text, and the tag a moderator typed is shown as typed");
+        html.Should().NotContain("&amp;lt;",
+            "encoding it twice puts the entity itself in front of the reader");
+    }
+
+    /// <summary>
+    /// A request may be rejected without a comment, and a line reading "Причина:"
+    /// with nothing after it looks broken, so the missing reason is named instead.
+    /// </summary>
+    [Fact]
+    public async Task NameTheMissingReasonRatherThanPrintAnEmptyOne()
+    {
+        var html = await _renderer.RenderAsync(
+            new UsernameChangeRejectionViewModel("user", Reason: null));
+
+        html.Should().Contain("Причина не указана.");
+        html.Should().NotContain("Причина:");
     }
 
     /// <summary>
@@ -203,6 +307,7 @@ public class EmailTemplatesShould : IAsyncDisposable
         var builder = new ContainerBuilder();
         builder.RegisterInstance(NullLoggerFactory.Instance).As<ILoggerFactory>();
         builder.RegisterGeneric(typeof(NullLogger<>)).As(typeof(ILogger<>)).SingleInstance();
+        builder.RegisterInstance(Options.Create(SiteAddresses)).As<IOptions<SiteAddressConfiguration>>();
         builder.RegisterModule<MailModule>();
         await using var container = builder.Build();
 

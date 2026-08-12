@@ -11,7 +11,8 @@ using Xunit;
 namespace DM.Web.API.Tests.Middleware;
 
 /// <summary>
-/// This origin allows an inline script only where Swagger UI lives.
+/// This origin allows an inline script only where Swagger UI lives, and it names
+/// the origin a page here may reach rather than whole schemes.
 /// </summary>
 /// <remarks>
 /// 'unsafe-inline' in script-src is the directive being paid for, and the API
@@ -38,6 +39,26 @@ public class SecurityHeadersShould : UnitTestBase
         var policy = await Policy(Environments.Development);
 
         policy.Should().Contain("script-src 'self' 'unsafe-inline'");
+    }
+
+    /// <summary>
+    /// connect-src names this origin, not every host that speaks a scheme.
+    /// </summary>
+    /// <remarks>
+    /// A scheme source matches every host there is, so `wss:` here allowed a
+    /// socket to anywhere at all and the directive restricted nothing. The
+    /// single-origin topology is the whole of what is needed: 'self' covers
+    /// ws:// and wss:// on the same host and port, which is where the hub is
+    /// mapped, and the one document this origin ever serves is Swagger.
+    /// </remarks>
+    [Fact]
+    public async Task NameNoHostBeyondThisOriginInConnectSrc()
+    {
+        var policy = await Policy(Environments.Production);
+
+        policy.Should().Contain("connect-src 'self';");
+        policy.Should().NotContain("wss:");
+        policy.Should().NotContain(" ws:");
     }
 
     private async Task<string> Policy(string environmentName)

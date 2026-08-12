@@ -332,7 +332,6 @@ defineExpose({ loadPreferences });
   gap: $medium
 
 .loading-state
-  color: $text-muted
   padding: $medium
 
 .channel-card

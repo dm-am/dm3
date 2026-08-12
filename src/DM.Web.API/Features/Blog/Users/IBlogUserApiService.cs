@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using DM.Domain.Core.Enums;
 
 namespace DM.Web.API.Features.Blog.Users;
 
@@ -16,7 +17,7 @@ public interface IBlogUserApiService
     /// </summary>
     /// <param name="blogId">Blog ID</param>
     /// <param name="role">Optional role filter (owner, assistant, mentor, reader)</param>
-    Task<IEnumerable<BlogUser>> GetUsers(Guid blogId, string? role = null);
+    Task<IEnumerable<BlogUser>> GetUsers(Guid blogId, BlogRole? role = null);
 
     /// <summary>
     /// Remove user from blog by user ID

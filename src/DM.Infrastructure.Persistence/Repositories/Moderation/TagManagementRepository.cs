@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Moderation.Features.Tags;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
 using DbTag = DM.Infrastructure.Persistence.Entities.Shared.Tag;
 using DbTagGroup = DM.Infrastructure.Persistence.Entities.Shared.TagGroup;
@@ -184,13 +185,14 @@ internal class TagManagementRepository : ITagManagementRepository
     /// <inheritdoc />
     public async Task<DtoTag> CreateTag(CreateTag createTag, CancellationToken ct = default)
     {
-        // Get the next ShortId
-        var maxShortId = await _dbContext.Tags.MaxAsync(t => (int?)t.ShortId, ct) ?? 0;
-
         var tag = new DbTag
         {
             TagId = Guid.NewGuid(),
-            ShortId = maxShortId + 1,
+            // Drawn from a sequence rather than computed as MAX + 1 over the table: two
+            // creates in one moment read one maximum, and deletion below is physical, so a
+            // maximum that walks backwards hands the number of the tag just deleted — the
+            // number older links are written in — to the next one. See TagNumbers.
+            ShortId = await TagNumbers.NextAsync(_dbContext, ct),
             TagGroupId = createTag.GroupId,
             Title = createTag.Title,
             Description = createTag.Description,

@@ -26,7 +26,7 @@ internal class PasswordChangeService : IPasswordChangeService
     private readonly ICompromisedPasswordChecker _compromisedPasswordChecker;
     private readonly IEventProducer _eventProducer;
     private readonly IPasswordChangeMailSender _notificationSender;
-    private readonly ISecurityAuditService _auditService;
+    private readonly ISecurityAuditRepository _auditService;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly TokenConfiguration _tokenConfig;
 
@@ -40,7 +40,7 @@ internal class PasswordChangeService : IPasswordChangeService
         IIdentityProvider identityProvider,
         IEventProducer eventProducer,
         IPasswordChangeMailSender notificationSender,
-        ISecurityAuditService auditService,
+        ISecurityAuditRepository auditService,
         IDateTimeProvider dateTimeProvider,
         IOptions<TokenConfiguration> tokenOptions)
     {

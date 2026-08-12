@@ -3,7 +3,7 @@
  * UserSubscribeButton — anchored subscribe control for a user profile.
  *
  * Click on the button opens a popover with three category toggles
- * (Игры / Блоги / Топики) bound to the bits of
+ * ("Игры" / "Блоги" / "Топики") bound to the bits of
  * `SubscriptionSettings.Author{Game,Blog,Topic}Events`. Confirming the
  * popover either creates a new subscription with the chosen settings,
  * or updates an existing one's settings — depending on whether the

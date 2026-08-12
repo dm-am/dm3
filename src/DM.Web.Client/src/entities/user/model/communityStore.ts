@@ -42,8 +42,6 @@ export interface UsersSearchParams {
   size?: number;
 }
 
-const searchCache = createKeyedCache<ListEnvelope<User>>({ ttlMs: 30_000 });
-
 const SORT_MAP: Record<string, string> = {
   username: "Name",
   rating: "Rating",
@@ -123,6 +121,13 @@ export const useCommunityStore = defineStore("community", () => {
   const searchLoading = ref(false);
   const searchError = ref<string | null>(null);
   const lastSearchParams = ref<UsersSearchParams | null>(null);
+
+  // Inside the store and not beside it, the way every other list store here
+  // holds its cache. In the browser the two placements have one lifetime — a
+  // single pinia, created once and never disposed — so no session behaves
+  // differently; what changes is that the cache dies with the store instance,
+  // so a fresh pinia starts empty instead of being cleared by hand.
+  const searchCache = createKeyedCache<ListEnvelope<User>>({ ttlMs: 30_000 });
 
   // Request guard to discard stale out-of-order responses
   const requestGuard = createRequestGuard();
@@ -204,6 +209,11 @@ export const useCommunityStore = defineStore("community", () => {
   const selectedUser = ref<User | null>(null);
   const loadingProfile = ref(false);
 
+  // A guard of its own: the profile page reloads on a change of the route
+  // param, and the answer for the name the reader already left must not land
+  // on the newer one.
+  const profileGuard = createRequestGuard();
+
   /**
    * Loads the profile. Returns the error instead of a boolean: the caller
    * needs the status to tell "no such user" from "server is down", and a
@@ -212,6 +222,7 @@ export const useCommunityStore = defineStore("community", () => {
   async function trySelectProfile(
     username: Username,
   ): Promise<GeneralError | null> {
+    const requestId = profileGuard.next();
     loadingProfile.value = true;
     selectedUser.value = null;
 
@@ -219,6 +230,11 @@ export const useCommunityStore = defineStore("community", () => {
     // birthday, location, contacts, info, mediumUrl picture) — not the
     // truncated User DTO from /v1/users/{username} which is meant for lists.
     const { data, error } = await userApi.getUserProfile(username);
+
+    // A superseded answer reports nothing: the newer request owns the spinner,
+    // the profile and the error the page draws.
+    if (!profileGuard.isCurrent(requestId)) return null;
+
     loadingProfile.value = false;
 
     if (error) return error;

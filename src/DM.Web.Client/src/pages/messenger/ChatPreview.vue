@@ -2,8 +2,9 @@
 import { computed } from "vue";
 import type { Chat } from "@/entities/message";
 import type { User } from "@/shared/api/models/community";
-import { AvatarImg } from "@/entities/user";
+import { AvatarImg } from "@/shared/ui/AvatarImg";
 import dayjs from "dayjs";
+import { DATE_TIME_FORMAT } from "@/shared/lib/utils/datetime";
 
 const props = defineProps<{
   chat: Chat;
@@ -31,7 +32,7 @@ const lastMessagePreview = computed(() => {
 const lastMessageDate = computed(() => {
   const msg = props.chat.lastMessage;
   if (!msg?.createdUtc) return "";
-  return dayjs(msg.createdUtc).format("DD.MM.YYYY [в] HH:mm");
+  return dayjs(msg.createdUtc).format(DATE_TIME_FORMAT);
 });
 
 const hasUnread = computed(() => (props.chat.unreadMessagesCount ?? 0) > 0);

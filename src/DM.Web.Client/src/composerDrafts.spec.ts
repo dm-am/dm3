@@ -20,6 +20,12 @@
  * The check reads the AST rather than the text: `.clear()` is a common enough
  * name, and only a call on an editor handle (`<ref>.value?.clear()`) placed
  * before the first await of its own function is a violation.
+ *
+ * It walks .ts alongside .vue because a composer is not only a page any more:
+ * the two chat views send through one shared composable, and a rule that read
+ * templates alone would have stopped covering both of them the moment their
+ * send moved out of the file. Spec files are skipped — they quote the shape
+ * they are written about.
  */
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "fs";
@@ -36,6 +42,7 @@ const collect = (dir: string, out: string[] = []): string[] => {
     const full = join(dir, name);
     if (statSync(full).isDirectory()) collect(full, out);
     else if (full.endsWith(".vue")) out.push(full);
+    else if (full.endsWith(".ts") && !full.endsWith(".spec.ts")) out.push(full);
   }
   return out;
 };
@@ -56,13 +63,21 @@ function inspectFile(file: string): { clears: number; offenders: string[] } {
   const raw = readFileSync(file, "utf8");
   if (!raw.includes(".clear()")) return { clears: 0, offenders: [] };
 
-  const { descriptor } = parseSfc(raw, { filename: file });
-  const script = descriptor.scriptSetup ?? descriptor.script;
-  if (!script) return { clears: 0, offenders: [] };
+  // A .vue file's script is a block inside it, so reported lines have to be
+  // offset by where that block starts; a .ts file is the script.
+  let content = raw;
+  let scriptStartLine = 0;
+  if (file.endsWith(".vue")) {
+    const { descriptor } = parseSfc(raw, { filename: file });
+    const script = descriptor.scriptSetup ?? descriptor.script;
+    if (!script) return { clears: 0, offenders: [] };
+    content = script.content;
+    scriptStartLine = script.loc.start.line;
+  }
 
   const source = ts.createSourceFile(
     file,
-    script.content,
+    content,
     ts.ScriptTarget.Latest,
     true,
   );
@@ -87,9 +102,7 @@ function inspectFile(file: string): { clears: number; offenders: string[] } {
     const firstAwait = Math.min(...awaits);
     for (const clear of found.filter((pos) => pos < firstAwait)) {
       const line =
-        source.getLineAndCharacterOfPosition(clear).line +
-        script.loc.start.line +
-        1;
+        source.getLineAndCharacterOfPosition(clear).line + scriptStartLine + 1;
       offenders.push(`${where}:${line}`);
     }
   };

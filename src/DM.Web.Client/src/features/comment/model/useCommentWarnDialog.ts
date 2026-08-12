@@ -3,6 +3,7 @@ import { useRoute } from "vue-router";
 import { useModal } from "vue-final-modal";
 import { WarningDialog } from "@/features/moderation-actions/@x/comment";
 import type { Comment } from "@/shared/api/models/common/comment";
+import { permalinkOrigin } from "@/shared/config/site";
 
 /**
  * Moderator warn dialog wiring for a comments page (doc 4.2.4.1) — shared by
@@ -44,10 +45,7 @@ export function useCommentWarnDialog(
     username.value = author;
     entityId.value = id;
     entityLink.value =
-      window.location.origin +
-      window.location.pathname +
-      search +
-      `#comment-${id}`;
+      permalinkOrigin() + window.location.pathname + search + `#comment-${id}`;
     open();
   }
 

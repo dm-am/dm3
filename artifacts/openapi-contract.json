@@ -1,7 +1,4 @@
 {
-  "DM.Domain.Core.Dto.Optional`1[[System.Guid, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]": [
-    "value"
-  ],
   "DM.Web.API.Features.Account.Authentication.LoginRequest": [
     "email",
     "password",
@@ -21,9 +18,15 @@
     "isCurrent",
     "persistent"
   ],
+  "DM.Web.API.Features.Account.Availability.EmailAvailabilityRequest": [
+    "email"
+  ],
   "DM.Web.API.Features.Account.Availability.EmailAvailabilityResponse": [
     "isAvailable",
     "reason"
+  ],
+  "DM.Web.API.Features.Account.Availability.UsernameAvailabilityRequest": [
+    "username"
   ],
   "DM.Web.API.Features.Account.Availability.UsernameAvailabilityResponse": [
     "isAvailable",
@@ -127,23 +130,6 @@
   ],
   "DM.Web.API.Features.Blog.Blogs.BlogPremoderationChangeRequest": [
     "transition"
-  ],
-  "DM.Web.API.Features.Blog.Blogs.BlogRef": [
-    "activatedUtc",
-    "activeSubscribersCount",
-    "assistants",
-    "author",
-    "closedReason",
-    "closedUtc",
-    "createdUtc",
-    "id",
-    "publicId",
-    "status",
-    "subscriberUsernames",
-    "subscribersCount",
-    "title",
-    "unreadCommentsCount",
-    "unreadPublicationsCount"
   ],
   "DM.Web.API.Features.Blog.Blogs.BlogStatusChangeRequest": [
     "transition"
@@ -1092,15 +1078,24 @@
     "role",
     "user"
   ],
-  "DM.Web.API.Features.General.Mirror.MirrorDto": [
+  "DM.Web.API.Features.General.Search.ForumSearchResult": [
+    "boardId",
+    "boardTitle",
+    "createdUtc",
+    "entityType",
     "id",
-    "isCurrent",
-    "name",
-    "webUrl"
+    "snippet",
+    "topicId",
+    "topicNumber",
+    "topicTitle"
   ],
-  "DM.Web.API.Features.General.Mirror.MirrorsResponse": [
-    "currentMirrorId",
-    "mirrors"
+  "DM.Web.API.Features.General.Search.MessageSearchResult": [
+    "createdUtc",
+    "id",
+    "snippet",
+    "sourceId",
+    "sourceTitle",
+    "sourceType"
   ],
   "DM.Web.API.Features.General.Tickets.CreateTicketIntakeRequest": [
     "contact",
@@ -1584,6 +1579,7 @@
     "title"
   ],
   "DM.Web.API.Features.Personal.Notepads.NotepadEntryResponse": [
+    "authorId",
     "containerId",
     "content",
     "createdUtc",
@@ -1740,25 +1736,6 @@
   "DM.Web.API.Features.Personal.Subscriptions.UpdateSubscriptionRequest": [
     "settings"
   ],
-  "DM.Web.API.Features.Search.ForumSearchResult": [
-    "boardId",
-    "boardTitle",
-    "createdUtc",
-    "entityType",
-    "id",
-    "snippet",
-    "topicId",
-    "topicNumber",
-    "topicTitle"
-  ],
-  "DM.Web.API.Features.Search.MessageSearchResult": [
-    "createdUtc",
-    "id",
-    "snippet",
-    "sourceId",
-    "sourceTitle",
-    "sourceType"
-  ],
   "DM.Web.API.Shared.BbRendering.CommonBbText": [
     "context",
     "parseMode",
@@ -1781,10 +1758,8 @@
     "gameId",
     "gameLeadUserIds",
     "postAuthorUserId",
-    "postId",
     "postSharePrivateWithAll",
     "privateAddresseeOwnerUserIdsByAttribute",
-    "roomId",
     "roomViewPrivateText",
     "surface"
   ],
@@ -1802,11 +1777,11 @@
   "DM.Web.API.Shared.Dto.CreateInvitationRequest": [
     "username"
   ],
-  "DM.Web.API.Shared.Dto.CursorEnvelope`1[[DM.Web.API.Features.Messaging.Messages.Message, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+  "DM.Web.API.Shared.Dto.CursorEnvelope`1[[DM.Web.API.Features.General.Search.MessageSearchResult, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "paging",
     "resources"
   ],
-  "DM.Web.API.Shared.Dto.CursorEnvelope`1[[DM.Web.API.Features.Search.MessageSearchResult, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+  "DM.Web.API.Shared.Dto.CursorEnvelope`1[[DM.Web.API.Features.Messaging.Messages.Message, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "paging",
     "resources"
   ],
@@ -1971,7 +1946,7 @@
     "paging",
     "resources"
   ],
-  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Blog.Blogs.BlogRef, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Blog.Blogs.Blog, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "paging",
     "resources"
   ],
@@ -2087,6 +2062,10 @@
     "paging",
     "resources"
   ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.General.Search.ForumSearchResult, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
   "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Messaging.Chats.Chat, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "paging",
     "resources"
@@ -2155,10 +2134,6 @@
     "paging",
     "resources"
   ],
-  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Search.ForumSearchResult, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
-    "paging",
-    "resources"
-  ],
   "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Shared.Dto.Comment, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "paging",
     "resources"
@@ -2169,9 +2144,7 @@
   ],
   "DM.Web.API.Shared.Dto.PagingInfo": [
     "current",
-    "number",
     "pages",
-    "size",
     "skip",
     "take",
     "total"

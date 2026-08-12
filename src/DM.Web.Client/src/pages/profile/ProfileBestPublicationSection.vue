@@ -23,7 +23,7 @@ import { PublicationCard } from "@/features/publication";
 import { GamePostSkeleton } from "@/shared/ui/Skeleton";
 import { SecondaryText } from "@/shared/ui/Layout";
 import { ErrorState } from "@/shared/ui/ErrorState";
-import { useGuardedRequest } from "@/shared/lib/composables";
+import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 
 const props = defineProps<{
   username: string;

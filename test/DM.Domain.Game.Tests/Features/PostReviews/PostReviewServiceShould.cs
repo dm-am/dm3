@@ -114,7 +114,7 @@ public class PostReviewServiceShould : UnitTestBase
     public async Task ThrowNotFoundWhenPostDoesNotExist()
     {
         var postId = Guid.NewGuid();
-        _repository.Setup(r => r.GetPostInfoAsync(postId)).ReturnsAsync((PostInfo?)null);
+        _repository.Setup(r => r.GetPostInfoAsync(postId, _currentUserId)).ReturnsAsync((PostInfo?)null);
         _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
 
         var act = async () => await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
@@ -130,7 +130,7 @@ public class PostReviewServiceShould : UnitTestBase
         var gameId = Guid.NewGuid();
         var postInfo = new PostInfo { AuthorId = _currentUserId, GameId = gameId };
 
-        _repository.Setup(r => r.GetPostInfoAsync(postId)).ReturnsAsync(postInfo);
+        _repository.Setup(r => r.GetPostInfoAsync(postId, _currentUserId)).ReturnsAsync(postInfo);
         _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
 
         var act = async () => await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
@@ -147,7 +147,7 @@ public class PostReviewServiceShould : UnitTestBase
         var gameId = Guid.NewGuid();
         var postInfo = new PostInfo { AuthorId = postAuthorId, GameId = gameId };
 
-        _repository.Setup(r => r.GetPostInfoAsync(postId)).ReturnsAsync(postInfo);
+        _repository.Setup(r => r.GetPostInfoAsync(postId, _currentUserId)).ReturnsAsync(postInfo);
         _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(50); // Newbie
 
         var act = async () => await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
@@ -165,7 +165,7 @@ public class PostReviewServiceShould : UnitTestBase
         var postInfo = new PostInfo { AuthorId = postAuthorId, GameId = gameId };
         var expectedReview = new PostReview { Id = Guid.NewGuid(), PostId = postId };
 
-        _repository.Setup(r => r.GetPostInfoAsync(postId)).ReturnsAsync(postInfo);
+        _repository.Setup(r => r.GetPostInfoAsync(postId, _currentUserId)).ReturnsAsync(postInfo);
         _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(50); // Newbie
         _repository.Setup(r => r.ExistsAsync(_currentUserId, postId)).ReturnsAsync(false);
         _repository.Setup(r => r.HasRecentReviewInGameAsync(_currentUserId, gameId, It.IsAny<DateTimeOffset>())).ReturnsAsync(false);
@@ -184,7 +184,7 @@ public class PostReviewServiceShould : UnitTestBase
         var gameId = Guid.NewGuid();
         var postInfo = new PostInfo { AuthorId = postAuthorId, GameId = gameId };
 
-        _repository.Setup(r => r.GetPostInfoAsync(postId)).ReturnsAsync(postInfo);
+        _repository.Setup(r => r.GetPostInfoAsync(postId, _currentUserId)).ReturnsAsync(postInfo);
         _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
         _repository.Setup(r => r.ExistsAsync(_currentUserId, postId)).ReturnsAsync(true);
 
@@ -202,7 +202,7 @@ public class PostReviewServiceShould : UnitTestBase
         var gameId = Guid.NewGuid();
         var postInfo = new PostInfo { AuthorId = postAuthorId, GameId = gameId };
 
-        _repository.Setup(r => r.GetPostInfoAsync(postId)).ReturnsAsync(postInfo);
+        _repository.Setup(r => r.GetPostInfoAsync(postId, _currentUserId)).ReturnsAsync(postInfo);
         _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
         _repository.Setup(r => r.ExistsAsync(_currentUserId, postId)).ReturnsAsync(false);
         _repository.Setup(r => r.HasRecentReviewInGameAsync(_currentUserId, gameId, It.IsAny<DateTimeOffset>())).ReturnsAsync(true);
@@ -211,6 +211,26 @@ public class PostReviewServiceShould : UnitTestBase
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.TooManyRequests);
+    }
+
+    /// <summary>
+    /// The post is looked up as the rater, not as nobody.
+    /// </summary>
+    /// <remarks>
+    /// Room access is the only thing standing between a rating and a post in a
+    /// private room, and it is applied where the post is read. Reading it without
+    /// saying who is asking let anybody who learned an identifier move its
+    /// author's quality rating from outside the game.
+    /// </remarks>
+    [Fact]
+    public async Task ReadThePostAsTheRaterSoRoomAccessApplies()
+    {
+        var postId = Guid.NewGuid();
+        SetupSuccessfulCreate(postId, Guid.NewGuid(), Guid.NewGuid());
+
+        await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
+
+        _repository.Verify(r => r.GetPostInfoAsync(postId, _currentUserId), Times.Once);
     }
 
     [Fact]
@@ -433,7 +453,7 @@ public class PostReviewServiceShould : UnitTestBase
             PostAuthor = new GeneralUser { UserId = postAuthorId }
         };
 
-        _repository.Setup(r => r.GetPostInfoAsync(postId)).ReturnsAsync(postInfo);
+        _repository.Setup(r => r.GetPostInfoAsync(postId, _currentUserId)).ReturnsAsync(postInfo);
         _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
         _repository.Setup(r => r.ExistsAsync(_currentUserId, postId)).ReturnsAsync(false);
         _repository.Setup(r => r.HasRecentReviewInGameAsync(_currentUserId, gameId, It.IsAny<DateTimeOffset>())).ReturnsAsync(false);

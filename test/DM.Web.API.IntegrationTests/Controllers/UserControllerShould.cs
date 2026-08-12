@@ -58,44 +58,53 @@ public class UserControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Get user by login should return 410 for non-existent user
+    /// Get user by login should return 404 for non-existent user
     /// </summary>
     [Fact]
-    public async Task GetUserByLogin_WithNonExistentUser_ReturnsGone()
+    public async Task GetUserByLogin_WithNonExistentUser_ReturnsNotFound()
     {
         // Act
         var response = await Client.GetAsync("/v1/users/nonexistentuser123");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Gone);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     /// <summary>
-    /// Get user profile by login should return 410 for non-existent user
+    /// Get user profile by login should return 404 for non-existent user
     /// </summary>
     [Fact]
-    public async Task GetUserProfile_WithNonExistentUser_ReturnsGone()
+    public async Task GetUserProfile_WithNonExistentUser_ReturnsNotFound()
     {
         // Act
         var response = await Client.GetAsync("/v1/users/nonexistentuser123/profile");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Gone);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     /// <summary>
-    /// Get users by role should return OK
+    /// Filtering the roster by role is the paged listing, and only that.
     /// </summary>
+    /// <remarks>
+    /// GET /v1/users/by-role/{role} answered the same question anonymously, with
+    /// no page and no upper bound, over a result cached for an hour.
+    /// API_DESIGN.md gives GET /v1/users?role=moderator as the shape for this and
+    /// forbids the specialised address beside it, so the address is gone rather
+    /// than paged: the second one only ever meant one endpoint could drift from
+    /// the other.
+    /// </remarks>
     [Fact]
-    public async Task GetUsersByRole_ReturnsOk()
+    public async Task FilterTheRosterByRoleThroughThePagedListing()
     {
-        // Act
-        var response = await Client.GetAsync("/v1/users/by-role/Admin");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var content = await response.Content.ReadAsStringAsync();
+        var listing = await Client.GetAsync("/v1/users?role=Admin&size=20");
+        listing.StatusCode.Should().Be(HttpStatusCode.OK);
+        var content = await listing.Content.ReadAsStringAsync();
         content.Should().Contain("resources");
+        content.Should().Contain("paging");
+
+        var gone = await Client.GetAsync("/v1/users/by-role/Admin");
+        gone.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     #region Search Tests

@@ -43,14 +43,20 @@
 
 | Переменная | Как получить |
 |------------|--------------|
-| `DM_CryptoConfiguration__KeyBase64` | `openssl rand -base64 32`. Одно значение на все зеркала. `dm.ps1` генерирует локальный ключ сам |
+| `DM_CryptoConfiguration__KeyBase64` | `openssl rand -base64 32`. Одно значение на все экземпляры приложения: им шифруются одноразовые ссылки из писем, а письмо, выданное под одним адресом сайта, открывают по другому, и расшифровать токен обязана принимающая сторона. `dm.ps1` генерирует локальный ключ сам |
 | `MONGO_ROOT_PASSWORD`, `MONGO_PASSWORD` | Задать в `docker/.env`. Меняются только вместе с пересозданием тома Mongo |
+
+**Настройки развертывания, а не кода:**
+
+| Переменная | Что задает |
+|------------|-----------|
+| `DM_SessionCookieConfiguration__Domain` | Область куки сессии. Пусто — кука остается на выдавшем ее хосте, и это дефолт для локальной разработки и стенда. Регистрируемый домен — вход становится общим для всех его хостов, поэтому заполнять его можно только когда все они принадлежат этому приложению ([MIRRORING.md](../guides/MIRRORING.md)) |
 
 ### Frontend
 
 | Файл | Назначение |
 |------|------------|
-| `src/DM.Web.Client/.env.local` | API URL |
+| `src/DM.Web.Client/.env.local` | Адрес API при запуске из исходников. В развернутом виде пуст: сайт и API отвечают с одного origin |
 
 ---
 
@@ -59,7 +65,7 @@
 | Нужно | Документ |
 |-------|----------|
 | Запустить локально | [LOCAL_SETUP.md](../guides/LOCAL_SETUP.md) |
-| Настроить зеркало | [MIRRORING.md](../guides/MIRRORING.md) |
+| Поднять точку присутствия | [MIRRORING.md](../guides/MIRRORING.md) |
 | Деплой на VPS | [DEPLOYMENT.md](../guides/DEPLOYMENT.md) |
 | Параметры аутентификации | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
 
@@ -74,7 +80,6 @@
 | `TokenConfiguration` | Сроки жизни токенов | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
 | `CdnConfiguration` | MinIO/S3 source storage | [UPLOADS.md](../architecture/UPLOADS.md) |
 | `ImageProxyConfiguration` | imgproxy endpoint + URL signing | [UPLOADS.md](../architecture/UPLOADS.md) |
-| `MirrorConfiguration` | Зеркала | [MIRRORING.md](../guides/MIRRORING.md) |
 
 ---
 
@@ -85,6 +90,7 @@
 | `/_health` | Liveness (Docker health check) |
 | `/_ready` | Readiness (PostgreSQL + MongoDB) |
 | `/_health/detail` | Детальная информация |
+| `/metrics` | Метрики в формате Prometheus |
 
 ---
 

@@ -91,6 +91,7 @@ async function submit() {
     >
       <FormField label="Группа" name="tag-group" :errors="error ? [error] : []">
         <Select
+          id="tag-group"
           :model-value="groupId"
           :options="groupOptions"
           @update:model-value="(v) => (groupId = v)"

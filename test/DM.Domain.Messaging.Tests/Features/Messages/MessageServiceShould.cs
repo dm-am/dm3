@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
@@ -9,6 +10,7 @@ using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Messaging.Authorization;
@@ -16,6 +18,7 @@ using DM.Domain.Messaging.Features.Chats;
 using DM.Domain.Messaging.Features.GlobalChatEvents;
 using DM.Domain.Messaging.Features.Messages;
 using DM.Testing;
+using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using DM.Domain.Account.Features.Authentication;
@@ -32,6 +35,7 @@ public class MessageServiceShould : UnitTestBase
     private readonly Mock<IMessageRepository> _repository;
     private readonly Mock<IEventProducer> _eventProducer;
     private readonly Mock<IUnreadCountersRepository> _unreadCountersRepository;
+    private readonly Mock<IUserBlacklistChecker> _userBlacklistChecker;
     private readonly ISetup<IMessageFactory, CreateMessageEntity> _createMessageSetup;
     private readonly MessageService _service;
     private readonly Guid _currentUserId = Guid.NewGuid();
@@ -75,8 +79,8 @@ public class MessageServiceShould : UnitTestBase
             "token");
         identityProvider.Setup(p => p.Current).Returns(identity);
 
-        var userBlacklistChecker = Mock<IUserBlacklistChecker>();
-        userBlacklistChecker.Setup(c => c.GetBlockedUserIdsIfFlagEnabledAsync(It.IsAny<Guid>(), It.IsAny<UserBlacklistSettings>(), It.IsAny<CancellationToken>()))
+        _userBlacklistChecker = Mock<IUserBlacklistChecker>();
+        _userBlacklistChecker.Setup(c => c.GetBlockedUserIdsIfFlagEnabledAsync(It.IsAny<Guid>(), It.IsAny<UserBlacklistSettings>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new HashSet<Guid>());
 
         var globalChatEventRepository = Mock<IGlobalChatEventRepository>();
@@ -93,7 +97,7 @@ public class MessageServiceShould : UnitTestBase
             _unreadCountersRepository.Object,
             _eventProducer.Object,
             identityProvider.Object,
-            userBlacklistChecker.Object);
+            _userBlacklistChecker.Object);
     }
 
     [Fact]
@@ -198,16 +202,136 @@ public class MessageServiceShould : UnitTestBase
         _eventProducer.Verify(p => p.SendAsync(EventType.NewGlobalChatMessage, It.IsAny<Guid>()), Times.Never);
     }
 
+    /// <summary>
+    /// A deleted message stops being counted.
+    /// </summary>
+    /// <remarks>
+    /// Every other kind of comment on the site decrements here — blog,
+    /// publication, topic, game, post and character. Messages did not, so the
+    /// badge went on counting a message that no longer exists until something
+    /// flushed the whole conversation.
+    ///
+    /// Addressed by the chat's counter identifier, not by its own: for a game
+    /// room chat those are different, and using the chat's own is exactly how
+    /// the room's unread went dead before.
+    /// </remarks>
+    [Fact]
+    public async Task TakeTheUnreadCounterDownWithTheDeletedMessage()
+    {
+        var messageId = Guid.NewGuid();
+        var chatId = Guid.NewGuid();
+        var roomId = Guid.NewGuid();
+        var createdUtc = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var message = new Message { Id = messageId, ChatId = chatId, ChatType = ChatType.GameRoom, CreatedUtc = createdUtc };
+        _repository.Setup(r => r.Get(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(message);
+        _repository.Setup(r => r.Delete(messageId, _currentUserId, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        _chatService.Setup(s => s.GetGameRoomAsync(chatId))
+            .ReturnsAsync(new Chat { Id = chatId, RoomId = roomId, Type = ChatType.GameRoom });
+
+        await _service.DeleteAsync(messageId);
+
+        _unreadCountersRepository.Verify(
+            r => r.DecrementAsync(roomId, UnreadEntryType.Message, createdUtc), Times.Once);
+    }
+
     [Fact]
     public async Task AuthorizeDeleteAction()
     {
         var messageId = Guid.NewGuid();
-        var message = new Message { Id = messageId };
+        var chatId = Guid.NewGuid();
+        var message = new Message { Id = messageId, ChatId = chatId };
         _repository.Setup(r => r.Get(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(message);
         _repository.Setup(r => r.Delete(messageId, _currentUserId, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        _chatService.Setup(s => s.GetAsync(chatId)).ReturnsAsync(new Chat { Id = chatId });
 
         await _service.DeleteAsync(messageId);
 
         _intentionManager.Verify(m => m.ThrowIfForbidden(MessageIntention.Delete, message), Times.Once);
+    }
+
+    /// <summary>
+    /// A group chat of two is private correspondence, and the block on private
+    /// messages holds there.
+    /// </summary>
+    /// <remarks>
+    /// The check asked about the direct type alone, so somebody who had been
+    /// blocked created a group with the same person and wrote to them in it. What
+    /// makes a conversation private is the two people in it, not the type it was
+    /// created under.
+    /// </remarks>
+    [Fact]
+    public async Task RefuseAMessageToAGroupOfTwoWhoseOtherMemberBlockedTheSender()
+    {
+        var chatId = Guid.NewGuid();
+        var otherUserId = Guid.NewGuid();
+        var createMessage = new CreateMessage { ChatId = chatId, Text = "Hello" };
+        var chat = new Chat
+        {
+            Id = chatId,
+            Type = ChatType.Group,
+            Participants = new[]
+            {
+                new GeneralUser { UserId = _currentUserId },
+                new GeneralUser { UserId = otherUserId }
+            }
+        };
+        _chatService.Setup(s => s.GetAsync(chatId)).ReturnsAsync(chat);
+        _createMessageSetup.Returns(new CreateMessageEntity { MessageId = Guid.NewGuid() });
+        _userBlacklistChecker
+            .Setup(c => c.GetBlockedUserIdsIfFlagEnabledAsync(
+                otherUserId, UserBlacklistSettings.BlockDirectMessages, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HashSet<Guid> { _currentUserId });
+
+        var act = async () => await _service.CreateAsync(createMessage);
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+        _repository.Verify(
+            r => r.Create(It.IsAny<CreateMessageEntity>(), It.IsAny<UpdateChatLastMessageEntity>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// A group with a third person in it is not private correspondence, and the
+    /// setting says nothing about it.
+    /// </summary>
+    /// <remarks>
+    /// The setting is about writing to one addressee. Reading it as "never in the
+    /// same room" would silence a conversation the other participants are part of,
+    /// which is what the door check in ChatService decides instead, once, when the
+    /// person is put there.
+    /// </remarks>
+    [Fact]
+    public async Task StillDeliverToAGroupOfThreeWhereOneMemberBlockedTheSender()
+    {
+        var chatId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        var blockerId = Guid.NewGuid();
+        var createMessage = new CreateMessage { ChatId = chatId, Text = "Hello" };
+        var chat = new Chat
+        {
+            Id = chatId,
+            Type = ChatType.Group,
+            Participants = new[]
+            {
+                new GeneralUser { UserId = _currentUserId },
+                new GeneralUser { UserId = blockerId },
+                new GeneralUser { UserId = Guid.NewGuid() }
+            }
+        };
+        _chatService.Setup(s => s.GetAsync(chatId)).ReturnsAsync(chat);
+        _createMessageSetup.Returns(new CreateMessageEntity { MessageId = messageId });
+        _userBlacklistChecker
+            .Setup(c => c.GetBlockedUserIdsIfFlagEnabledAsync(
+                blockerId, UserBlacklistSettings.BlockDirectMessages, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HashSet<Guid> { _currentUserId });
+
+        await _service.CreateAsync(createMessage);
+
+        _repository.Verify(
+            r => r.Create(It.IsAny<CreateMessageEntity>(), It.IsAny<UpdateChatLastMessageEntity>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 }

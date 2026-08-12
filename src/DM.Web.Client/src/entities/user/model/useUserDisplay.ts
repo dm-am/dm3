@@ -71,8 +71,11 @@ export function useUserDisplay() {
   }
 
   /**
-   * Build registration date tooltip
-   * Note: API may return registeredUtc (community list) or registrationUtc (profile)
+   * Build registration date tooltip.
+   * Note: registrationUtc is sent by no schema at all — it is recorded as such
+   * in the contract test's UNSERVED list — so the fallback below never fires.
+   * It is kept rather than deleted for the reason that list states: which side
+   * gives way is a product decision, not one this file can make.
    */
   function buildRegistrationTooltip(user: User): string {
     const date = user.registeredUtc ?? user.registrationUtc;

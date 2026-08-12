@@ -1,7 +1,8 @@
 import { computed, type ComputedRef } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { LocationQuery } from "vue-router";
-import { usePaging, createFilterDispatcher } from "@/shared/lib/composables";
+import { usePaging } from "@/shared/lib/composables/usePaging";
+import { createFilterDispatcher } from "@/shared/lib/composables/createFilterDispatcher";
 import { parseSortDirection, validateSortField } from "@/shared/lib/filters";
 import type {
   PollSortBy,

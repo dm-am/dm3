@@ -150,6 +150,11 @@ const editText = ref("");
 const editLoading = ref(false);
 const saving = ref(false);
 
+// The id the title's caption points at. Random suffix, because the card is
+// rendered in a list as well (the home news column) and an id has to be unique
+// on the page. Same shape as FormField generates.
+const titleId = `topic-edit-title-${Math.random().toString(36).slice(2, 9)}`;
+
 async function startEdit() {
   if (editLoading.value || isEditing.value) return;
   // The displayed description is server-rendered HTML; the editor needs the
@@ -186,15 +191,16 @@ function saveEdit() {
 
 <template>
   <div v-if="isEditing" class="topic-edit">
-    <label class="edit-label">Заголовок топика</label>
+    <label class="edit-label" :for="titleId">Заголовок топика</label>
     <input
+      :id="titleId"
       v-model="editTitle"
       type="text"
       class="edit-title"
       :maxlength="TOPIC_TITLE_MAX_LENGTH"
       placeholder="Заголовок топика"
     />
-    <label class="edit-label">Текст</label>
+    <span class="edit-label">Текст</span>
     <BBCodeEditor
       v-model="editText"
       context="common"

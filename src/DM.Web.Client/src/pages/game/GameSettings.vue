@@ -1,14 +1,15 @@
 <script setup lang="ts">
 /**
  * GameSettings — the game management page for master and assistant. Composes:
- *  - Информация игры (title/system/setting, recruitment, privacy)
- *  - Система атрибутов (the shared AttributeSchemaEditor feature — same editor
- *    as before, no duplicated logic; the dedicated /schema page was removed)
- *  - Управление комнатами (room CRUD, access grants, per-room settings)
- *  - Управление ролями (assistant invite / removeAssistant)
- *  - Черный список
- *  - Приглашения
- *  - Опасная зона (master-only game delete)
+ *  - "Информация игры" (title/system/setting, recruitment, privacy)
+ *  - "Система атрибутов" (the shared AttributeSchemaEditor feature — same
+ *    editor as before, no duplicated logic; the dedicated /schema page was
+ *    removed)
+ *  - "Управление комнатами" (room CRUD, access grants, per-room settings)
+ *  - "Управление ролями" (assistant invite / removeAssistant)
+ *  - "Черный список"
+ *  - "Приглашения"
+ *  - "Опасная зона" (master-only game delete)
  */
 import { computed, ref, watch, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";

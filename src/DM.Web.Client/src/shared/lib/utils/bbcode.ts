@@ -234,8 +234,14 @@ const HTML_TO_BB_MARKED = {
   // Plain image (default size) — bare <img class="bb-image" data-bb-tag="img" ...>
   img: /<img[^>]*data-bb-tag="img"[^>]*\/?>/gi,
 
+  // Span with data-bb-character is what the editor emits. The server renders
+  // the same tag as a div carrying data-bb-addressees, and the author's own
+  // view of a post arrives in that form: matching only the span dropped the
+  // block on save and published the private text to the whole room.
   private:
     /<span[^>]*data-bb-tag="private"[^>]*data-bb-character="([^"]*)"[^>]*>([\s\S]*?)<\/span>/gi,
+  privateBlock:
+    /<div[^>]*data-bb-tag="private"[^>]*data-bb-addressees="([^"]*)"[^>]*>([\s\S]*?)<\/div>/gi,
   // Legacy stripper: same reason as BB_TO_HTML.cutLegacy above. Removes any
   // lingering <hr data-bb-tag="cut"> elements from historical content when
   // converting rendered HTML back to BBCode.
@@ -275,6 +281,8 @@ const HTML_TO_BB_UNMARKED = {
   nsfw: /<div class="nsfw-spoiler">([\s\S]*?)<\/div>/gi,
   private:
     /<span[^>]*class="private-text"[^>]*data-(?:users|character)="([^"]*)"[^>]*>([\s\S]*?)<\/span>/gi,
+  privateBlock:
+    /<div[^>]*class="private-message"[^>]*data-bb-addressees="([^"]*)"[^>]*>([\s\S]*?)<\/div>/gi,
 } as const;
 
 /** Patterns for structural elements (Phase 4) */
@@ -1015,13 +1023,13 @@ function phase2_convertMarkedHtml(state: HtmlToBbcodeState): HtmlToBbcodeState {
     return `[img]${safeSrc}[/img]`;
   });
 
-  // Private - unescape character attribute to prevent entity accumulation on round-trip
-  bbcode = bbcode.replace(
-    HTML_TO_BB_MARKED.private,
-    (_, character, content) => {
-      return `[private=${unescapeHtml(character)}]${content}[/private]`;
-    },
-  );
+  // Private - unescape character attribute to prevent entity accumulation on
+  // round-trip. Two shapes, one rule: the span the editor emits and the div the
+  // server renders for the author's own view of a post.
+  const toPrivateTag = (_: string, character: string, content: string) =>
+    `[private=${unescapeHtml(character)}]${content}[/private]`;
+  bbcode = bbcode.replace(HTML_TO_BB_MARKED.private, toPrivateTag);
+  bbcode = bbcode.replace(HTML_TO_BB_MARKED.privateBlock, toPrivateTag);
   // Silently strip any stray legacy cut markers — see HTML_TO_BB_MARKED.cutLegacy note.
   bbcode = bbcode.replace(HTML_TO_BB_MARKED.cutLegacy, "");
 
@@ -1090,13 +1098,12 @@ function phase3_convertUnmarkedHtml(
 
   bbcode = bbcode.replace(HTML_TO_BB_UNMARKED.spoiler, "[spoiler]$1[/spoiler]");
   bbcode = bbcode.replace(HTML_TO_BB_UNMARKED.nsfw, "[nsfw]$1[/nsfw]");
-  // Unmarked private - unescape character name
-  bbcode = bbcode.replace(
-    HTML_TO_BB_UNMARKED.private,
-    (_, character, content) => {
-      return `[private=${unescapeHtml(character)}]${content}[/private]`;
-    },
-  );
+  // Unmarked private - unescape character name. Two shapes for one tag: the
+  // span older content carries and the div the server renders it as today.
+  const toPrivateTag = (_: string, character: string, content: string) =>
+    `[private=${unescapeHtml(character)}]${content}[/private]`;
+  bbcode = bbcode.replace(HTML_TO_BB_UNMARKED.private, toPrivateTag);
+  bbcode = bbcode.replace(HTML_TO_BB_UNMARKED.privateBlock, toPrivateTag);
 
   return { ...state, bbcode };
 }
@@ -1303,60 +1310,6 @@ export function htmlToBbcode(
 // ============================================================================
 
 /**
- * Check if a BBCode tag is available in a given context.
- *
- * @param tag - Tag name to check (case-insensitive)
- * @param context - Context to check against
- * @returns true if tag is available in context
- *
- * @example
- * ```typescript
- * isTagAvailable('private', 'post')    // => true
- * isTagAvailable('private', 'message') // => false
- * isTagAvailable('mod', 'message')     // => true
- * isTagAvailable('mod', 'post')        // => false
- * ```
- */
-export function isTagAvailable(tag: string, context: BBCodeContext): boolean {
-  const normalizedTag = tag.toLowerCase();
-  return CONTEXT_TAGS[context].includes(normalizedTag);
-}
-
-/**
- * Strip BBCode tags that aren't available in the given context.
- *
- * Removes tag pairs and standalone tags that don't exist in the context's
- * allowed tags list. Content inside removed tags is preserved.
- *
- * @param bbcode - BBCode string to filter
- * @param context - Context to filter against
- * @returns BBCode with unavailable tags removed (content preserved)
- *
- * @example
- * ```typescript
- * stripUnavailableTags('[private=char]secret[/private] public', 'message')
- * // => ' public' (private not available in message context)
- *
- * stripUnavailableTags('[mod]note[/mod] text', 'post')
- * // => ' text' (mod not available in post context)
- * ```
- */
-export function stripUnavailableTags(
-  bbcode: string,
-  context: BBCodeContext,
-): string {
-  const availableTags = CONTEXT_TAGS[context];
-  const tagPattern = /\[(\/?)([\w]+)(?:=[^\]]+)?\]/g;
-
-  return bbcode.replace(tagPattern, (match, slash, tag) => {
-    if (availableTags.includes(tag.toLowerCase())) {
-      return match;
-    }
-    return "";
-  });
-}
-
-/**
  * Clean up HTML pasted from Word, Google Docs, and other rich text editors.
  *
  * Removes junk markup (Office XML, styles, scripts) while preserving
@@ -1527,39 +1480,4 @@ export function validateBBCode(bbcode: string): string[] {
   });
 
   return errors;
-}
-
-/**
- * Get plain text content from BBCode (strips all tags).
- *
- * Useful for generating previews or search indexing.
- *
- * @param bbcode - BBCode string
- * @returns Plain text with all tags removed
- *
- * @example
- * ```typescript
- * bbcodeToPlainText('[b]Hello[/b] [i]World[/i]')
- * // => 'Hello World'
- *
- * bbcodeToPlainText('[quote]Some quote[/quote]')
- * // => 'Some quote'
- * ```
- */
-export function bbcodeToPlainText(bbcode: string): string {
-  if (!bbcode) return "";
-
-  let text = bbcode;
-
-  // Replace [tab] with space before removing tags
-  text = text.replace(/\[tab\]/gi, " ");
-
-  // Remove all BBCode tags
-  text = text.replace(/\[[\w]+(?:=[^\]]+)?\]/g, "");
-  text = text.replace(/\[\/[\w]+\]/g, "");
-
-  // Clean up whitespace
-  text = text.replace(/\s+/g, " ").trim();
-
-  return text;
 }

@@ -55,7 +55,7 @@ internal class WarningService : IWarningService
             var user = await _userLookupService.GetAsync(username);
             return await _warningRepository.GetUserWarnings(user.UserId, ct);
         }
-        catch (HttpException e) when (e.StatusCode == HttpStatusCode.Gone)
+        catch (HttpException e) when (e.StatusCode == HttpStatusCode.NotFound)
         {
             // See BanService: an empty list answers "no such user" and nothing
             // else. Every other failure belongs to ErrorHandlingMiddleware.
@@ -69,7 +69,7 @@ internal class WarningService : IWarningService
         var currentUser = _identityProvider.Current.User;
         if (currentUser.Role < UserRole.Moderator)
         {
-            throw new UnauthorizedAccessException("Only moderators can view all warnings");
+            throw new HttpException(HttpStatusCode.Forbidden, "Список предупреждений доступен модераторам");
         }
 
         if (!string.IsNullOrEmpty(username))
@@ -92,7 +92,7 @@ internal class WarningService : IWarningService
         var currentUser = _identityProvider.Current.User;
         if (currentUser.Role < UserRole.Moderator)
         {
-            throw new UnauthorizedAccessException("Only moderators can create warnings");
+            throw new HttpException(HttpStatusCode.Forbidden, "Выносить предупреждения может только модератор");
         }
 
         var targetUser = await _userLookupService.GetAsync(createWarning.Username);
@@ -125,7 +125,7 @@ internal class WarningService : IWarningService
         var currentUser = _identityProvider.Current.User;
         if (currentUser.Role < UserRole.Moderator)
         {
-            throw new UnauthorizedAccessException("Only moderators can remove warnings");
+            throw new HttpException(HttpStatusCode.Forbidden, "Снимать предупреждения может только модератор");
         }
 
         await _warningRepository.Remove(warningId, ct);
@@ -139,7 +139,7 @@ internal class WarningService : IWarningService
             var user = await _userLookupService.GetAsync(username);
             return await _warningRepository.GetUserWarningPoints(user.UserId, ct);
         }
-        catch (HttpException e) when (e.StatusCode == HttpStatusCode.Gone)
+        catch (HttpException e) when (e.StatusCode == HttpStatusCode.NotFound)
         {
             // Zero points is what an unblemished profile looks like, so this
             // catch may only stand for a user who does not exist.
@@ -154,7 +154,7 @@ internal class WarningService : IWarningService
         var currentUser = _identityProvider.Current.User;
         if (currentUser.Role < UserRole.Moderator)
         {
-            throw new UnauthorizedAccessException("Only moderators can view violators");
+            throw new HttpException(HttpStatusCode.Forbidden, "Список нарушителей доступен модераторам");
         }
 
         var pointsSummaries = await _warningRepository.GetActiveWarningSummaries(ct);

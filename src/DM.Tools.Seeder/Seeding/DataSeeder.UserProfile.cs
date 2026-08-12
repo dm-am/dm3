@@ -170,7 +170,7 @@ internal sealed partial class DataSeeder
         // SolohinLex's demo contest history: tells a progression
         // 2022 → 2024 (from mid-table to the Grand Prix). Rules:
         //   - At most one placement per series (1/2/3 are mutually exclusive).
-        //   - Special awards (Народное / Критик / Угадайка) are granted separately
+        //   - Special awards ("Народное" / "Критик" / "Угадайка") are granted separately
         //     by jury/minigame decision and can be combined with a placement.
         //   - The grant date is tied to the series (season, year), not to now,
         //     so the sort order is natural.
@@ -202,7 +202,7 @@ internal sealed partial class DataSeeder
         // rewards REVIEWS (texts), so it only ever attaches to a literary
         // series; guesser (author guessing) and popular_vote (vote for a work)
         // fit any contest type.
-        const string sampleWork = "https://dm.am/forum/topic/sample-work-";
+        const string sampleWork = "/forum/topic/sample-work-";
         var demoAwards = new (Guid SeriesId, Guid AwardTypeId, DateTimeOffset At, string? WorkUrl)[]
         {
             (lit20, contestThird,  new DateTimeOffset(2022, 9,  1, 12, 0, 0, TimeSpan.Zero), sampleWork + "lit20-3"),

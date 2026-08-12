@@ -1,42 +1,29 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using DM.Domain.Core.Identity;
 using DM.Domain.Account.Features.Security;
 using DomainSecurityEventType = DM.Domain.Account.Features.Security.SecurityEventType;
+using DM.Domain.Core.Enums;
 
 namespace DM.Web.API.Features.Account.Security;
 
 /// <inheritdoc />
 internal class SecurityApiService : ISecurityApiService
 {
-    private readonly IIdentityProvider _identityProvider;
-    private readonly ISecurityAuditService _securityAuditService;
+    private readonly ISecurityJournalService _journal;
 
     /// <summary>
     /// Creates a new instance of SecurityApiService
     /// </summary>
-    public SecurityApiService(
-        IIdentityProvider identityProvider,
-        ISecurityAuditService securityAuditService)
+    public SecurityApiService(ISecurityJournalService journal)
     {
-        _identityProvider = identityProvider;
-        _securityAuditService = securityAuditService;
+        _journal = journal;
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<SecurityEvent>> GetSecurityLogs(string? type = null, int limit = 50)
+    public async Task<IEnumerable<SecurityEvent>> GetSecurityLogs(SecurityLogType? type = null, int limit = 50)
     {
-        var currentUserId = _identityProvider.Current.User.UserId;
-
-        IEnumerable<SecurityAuditEntry> events = type?.ToLowerInvariant() switch
-        {
-            "login" => await _securityAuditService.GetLoginHistoryAsync(currentUserId, limit),
-            "password" => await _securityAuditService.GetPasswordEventsAsync(currentUserId, limit),
-            "session" => await _securityAuditService.GetSessionEventsAsync(currentUserId, limit),
-            _ => await _securityAuditService.GetRecentEventsAsync(currentUserId, limit)
-        };
-
+        var events = await _journal.GetOwnAsync(type, limit);
         return events.Select(MapToDto).ToList();
     }
 

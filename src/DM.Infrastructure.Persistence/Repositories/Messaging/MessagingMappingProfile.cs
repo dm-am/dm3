@@ -19,7 +19,13 @@ internal class MessagingMappingProfile : Profile
     {
         CreateMap<DbChat, Chat>()
             .ForMember(d => d.Id, s => s.MapFrom(c => c.ChatId))
+            // Live links only, spelled out. The global soft-delete filter already
+            // drops removed links from this projection, so the predicate changes
+            // no read today; it is written here because the rule that reads a chat
+            // of two as private correspondence counts exactly these people, and
+            // that count must not depend on a filter declared elsewhere.
             .ForMember(d => d.Participants, s => s.MapFrom(c => c.UserLinks
+                .Where(l => !l.IsRemoved)
                 .Select(l => l.User)))
             .ForMember(d => d.UnreadMessagesCount, opt => opt.Ignore())
             .ForMember(d => d.TotalMessagesCount, opt => opt.Ignore());

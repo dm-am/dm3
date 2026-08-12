@@ -50,7 +50,7 @@ const roleBadge = computed((): RoleBadge | null => {
   word-wrap: break-word
   // .search-highlight styled globally in Reset.sass
 
-// Role badges: [А], [С], [М], [Н] - gray brackets, green bold letter
+// Role badges: "[А]", "[С]", "[М]", "[Н]" - gray brackets, green bold letter
 .role-badge
   display: inline
   white-space: nowrap

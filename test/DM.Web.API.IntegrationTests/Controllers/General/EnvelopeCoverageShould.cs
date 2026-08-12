@@ -27,6 +27,12 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// operation, and it is asserted in both directions: a new bare response turns
 /// the first test red, an entry that no longer describes anything turns the
 /// second red. It may only shrink.
+///
+/// Bare means "not an envelope", and a body the document writes out in place
+/// instead of naming - an array, a primitive - is bare as well. Reading that as
+/// "no body" is what used to let such an operation out of the walk altogether:
+/// counted among no violations and exempted by no list. ResponseBodySchema is
+/// where the two are told apart, for this test and for the two beside it.
 /// </remarks>
 public class EnvelopeCoverageShould : IntegrationTestBase
 {
@@ -38,15 +44,14 @@ public class EnvelopeCoverageShould : IntegrationTestBase
     private static readonly HashSet<string> Legacy = new(StringComparer.Ordinal)
     {
         "GET /v1/account/activation",
-        "GET /v1/account/check-email",
-        "GET /v1/account/check-username",
+        "POST /v1/account/check-email",
+        "POST /v1/account/check-username",
         "GET /v1/account/password-reset",
         "GET /v1/account/username-change",
         "GET /v1/account/username-change/approval",
         "GET /v1/chats/can-start/{username}",
         "GET /v1/chats/{id}",
         "GET /v1/endorsements/{id}",
-        "GET /v1/mirrors",
         "GET /v1/moderation/notes/{id}",
         "GET /v1/moderation/tags/groups/{groupId}",
         "GET /v1/moderation/tags/{tagId}",
@@ -136,7 +141,7 @@ public class EnvelopeCoverageShould : IntegrationTestBase
                             continue;
                         }
 
-                        var schema = SchemaNameOf(status.Value);
+                        var schema = ResponseBodySchema.NameOf(status.Value);
                         if (schema == null || schema.Contains("Envelope", StringComparison.Ordinal))
                         {
                             continue;
@@ -149,26 +154,6 @@ public class EnvelopeCoverageShould : IntegrationTestBase
         }
 
         return bare;
-    }
-
-    /// <summary>The schema name a response body refers to, if it has a body.</summary>
-    private static string? SchemaNameOf(JsonElement response)
-    {
-        if (!response.TryGetProperty("content", out var content))
-        {
-            return null;
-        }
-
-        foreach (var mediaType in content.EnumerateObject())
-        {
-            if (mediaType.Value.TryGetProperty("schema", out var schema) &&
-                schema.TryGetProperty("$ref", out var reference))
-            {
-                return reference.GetString();
-            }
-        }
-
-        return null;
     }
 
     [Fact]

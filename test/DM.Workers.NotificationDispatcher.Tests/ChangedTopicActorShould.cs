@@ -9,7 +9,7 @@ using DM.Domain.Personal.Features.Notifications;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Account;
 using DM.Infrastructure.Persistence.Entities.Forum;
-using DM.Workers.NotificationDispatcher.Implementation.Notifiers.Forum;
+using DM.Workers.NotificationDispatcher.Notifiers.Forum;
 using FluentAssertions;
 using Moq;
 using Xunit;

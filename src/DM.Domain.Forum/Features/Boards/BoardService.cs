@@ -126,7 +126,7 @@ internal class BoardService : IBoardService
             string.Equals(b.Title, aliasOrTitle, System.StringComparison.OrdinalIgnoreCase));
         if (board == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.BoardNotFound(aliasOrTitle));
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BoardNotFound(aliasOrTitle));
         }
 
         return board;
@@ -167,19 +167,21 @@ internal class BoardService : IBoardService
     public async Task RemoveModerator(string boardTitle, string username)
     {
         var board = await GetBoard(boardTitle, onlyAvailable: false);
-        var user = await _userRepository.GetUserAsync(username);
-        if (user == null)
+        // Only the identifier leaves this method, and GetUserAsync pays for the whole
+        // achievement profile to hand it over.
+        var userId = await _userRepository.FindUserIdAsync(username);
+        if (userId == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(username));
         }
 
-        var isModerator = await _moderatorRepository.IsModerator(board.Id, user.UserId);
+        var isModerator = await _moderatorRepository.IsModerator(board.Id, userId.Value);
         if (!isModerator)
         {
             throw new HttpException(HttpStatusCode.NotFound, $"Пользователь {username} не модератор этого раздела");
         }
 
-        await _moderatorRepository.Remove(board.Id, user.UserId);
+        await _moderatorRepository.Remove(board.Id, userId.Value);
         await _cache.InvalidateAsync($"board_moderators_{board.Id}");
     }
 
@@ -199,7 +201,7 @@ internal class BoardService : IBoardService
             string.Equals(b.Alias, alias, System.StringComparison.OrdinalIgnoreCase));
         if (board == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.BoardNotFound(alias));
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BoardNotFound(alias));
         }
 
         return board;

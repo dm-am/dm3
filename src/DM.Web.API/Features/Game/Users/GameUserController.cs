@@ -5,6 +5,7 @@ using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Game.Games;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using DM.Domain.Core.Enums;
 
 namespace DM.Web.API.Features.Game.Users;
 
@@ -61,7 +62,7 @@ public class GameUserController : ControllerBase
     [HttpGet(Name = nameof(GetGameUsers))]
     [ProducesResponseType(typeof(ListEnvelope<GameUser>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetGameUsers(string id, [FromQuery] string? role = null)
+    public async Task<IActionResult> GetGameUsers(string id, [FromQuery] GameRole? role = null)
     {
         var gameId = await _gameApiService.ResolveId(id);
         var users = await _userApiService.GetUsers(gameId, role);

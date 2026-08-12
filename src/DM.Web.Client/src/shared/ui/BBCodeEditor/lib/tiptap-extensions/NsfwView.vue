@@ -17,7 +17,7 @@ import {
 import {
   registerExpandable,
   notifyExpandableChanged,
-} from "@/shared/lib/composables";
+} from "@/shared/lib/composables/useExpandableRegistry";
 
 const props = defineProps(nodeViewProps);
 

@@ -8,10 +8,8 @@ import { nextTick } from "vue";
 
 import { LeftSidebar, RightSidebar } from "@/widgets/sidebar";
 import ShellPage from "./ShellPage.vue";
-import {
-  clearRegistry as clearExpandableRegistry,
-  formatDocumentTitle,
-} from "@/shared/lib/composables";
+import { clearRegistry as clearExpandableRegistry } from "@/shared/lib/composables/useExpandableRegistry";
+import { formatDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
 import { scrollContentToTop } from "@/shared/lib/scroll";
 import { loginLocation } from "@/shared/lib/auth";
 import { useAuthStore } from "@/shared/stores";

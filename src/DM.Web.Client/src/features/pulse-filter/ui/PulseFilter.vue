@@ -5,7 +5,8 @@ import { vClickOutside } from "@/shared/directives";
 import { gameApi } from "@/entities/game";
 import { usePulseFilter } from "../model";
 import type { PulseSortBy } from "../model";
-import { useFilterSearch, useFilterDropdown } from "@/shared/lib/composables";
+import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
+import { useFilterDropdown } from "@/shared/lib/composables/useFilterDropdown";
 import {
   FilterSearchInput,
   FilterButton,

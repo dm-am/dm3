@@ -6,23 +6,31 @@ namespace DM.Domain.Account.Configuration;
 public class AuthenticationConfiguration
 {
     /// <summary>
-    /// Session expiration in hours for non-persistent sessions ("Remember Me" unchecked).
-    /// User will be logged out after this period of inactivity.
-    /// Default: 24 hours
+    /// Session lifetime in hours for non-persistent sessions ("Remember Me" unchecked).
     /// </summary>
+    /// <remarks>
+    /// Counted from the moment the session is issued, not from the last request:
+    /// the expiry is stamped once at creation and only moves when the session is
+    /// used inside the refresh window below. A session left untouched longer than
+    /// that window dies on the calendar rather than on inactivity.
+    ///
+    /// The value that ships is in appsettings; the initializer here is the
+    /// fallback for a host that binds no section at all, so a number quoted in
+    /// this file describes nothing that runs.
+    /// </remarks>
     public int SessionExpirationHours { get; set; } = 24;
 
     /// <summary>
-    /// Session expiration for persistent sessions ("Remember Me" checked) in days.
-    /// User will be logged out after this period of inactivity.
-    /// Default: 30 days
+    /// Session lifetime in days for persistent sessions ("Remember Me" checked).
     /// </summary>
+    /// <remarks>
+    /// Counted from issue, see <see cref="SessionExpirationHours"/>.
+    /// </remarks>
     public int PersistentSessionExpirationDays { get; set; } = 365;
 
     /// <summary>
     /// Session refresh window in minutes.
     /// When a session is about to expire within this window, it gets automatically extended.
-    /// Default: 10080 minutes (7 days)
     /// </summary>
     public int SessionRefreshMinutes { get; set; } = 10080;
 

@@ -26,7 +26,7 @@ public class CreatePostPendencyValidatorShould : UnitTestBase
     public async Task PassForValidInput()
     {
         userLookupServiceMock
-            .Setup(s => s.UserExistsAsync("validuser", It.IsAny<CancellationToken>()))
+            .Setup(s => s.UsernameExistsAsync("validuser", It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         var input = new CreatePostPendency
@@ -103,7 +103,7 @@ public class CreatePostPendencyValidatorShould : UnitTestBase
     public async Task FailWhenUserDoesNotExist()
     {
         userLookupServiceMock
-            .Setup(s => s.UserExistsAsync("nonexistent", It.IsAny<CancellationToken>()))
+            .Setup(s => s.UsernameExistsAsync("nonexistent", It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
         var input = new CreatePostPendency

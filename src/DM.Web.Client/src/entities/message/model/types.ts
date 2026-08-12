@@ -8,7 +8,10 @@ import type {
   MessageEdit as BaseMessageEdit,
 } from "@/shared/api/models/common";
 
-// Re-export base types from shared for backwards compatibility
+// Message and MessageEdit are declared in shared because entities/global-chat
+// needs the same shape and an entity may not import another entity — the header
+// of shared/api/models/common/message.ts says so. The ids and the chat type sit
+// in that module next to them; Chat below is this slice's own.
 export type ChatId = BaseChatId;
 export type MessageId = BaseMessageId;
 export type ChatType = BaseChatType;

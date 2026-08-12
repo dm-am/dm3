@@ -27,7 +27,7 @@ public partial class BbParserWrapper
         if (string.IsNullOrEmpty(input)) return string.Empty;
 
         var tree = Parse(input);
-        var plan = PermissionFilteringVisitor.Prepare(input, ctx);
+        var plan = PermissionFilteringVisitor.Prepare(ctx);
 
         var html = tree is WrappedNodeTree wrapped
             ? wrapped.ToHtmlFiltered(plan.Filter, plan.Transform)
@@ -46,7 +46,7 @@ public partial class BbParserWrapper
         if (string.IsNullOrEmpty(input)) return string.Empty;
 
         var tree = Parse(input);
-        var plan = PermissionFilteringVisitor.Prepare(input, ctx);
+        var plan = PermissionFilteringVisitor.Prepare(ctx);
 
         var text = tree is WrappedNodeTree wrapped
             ? wrapped.ToTextFiltered(plan.Filter, plan.Transform)
@@ -54,13 +54,4 @@ public partial class BbParserWrapper
 
         return text;
     }
-
-    /// <summary>
-    /// Inspect the BBCode input and report whether it contains any
-    /// privacy-sensitive tags. Exposed so callers (BbConverter cache
-    /// bucket computation) can decide bucketing without parsing twice.
-    /// </summary>
-    public static bool ContainsPrivacyTags(string input) =>
-        !string.IsNullOrEmpty(input) &&
-        PermissionFilteringVisitor.Prepare(input, RenderContext.ForPlainText()).HasPrivacyTags;
 }

@@ -49,16 +49,18 @@ public class AvailabilityController : ControllerBase
     /// - IsAvailable: false, Reason: Taken - Email is used by active user
     /// - IsAvailable: false, Reason: PendingActivation - Email has pending registration
     /// </remarks>
-    /// <param name="email">Email to check</param>
+    /// <param name="request">Email to check</param>
     /// <response code="200">Availability status</response>
+    /// <response code="400">Email missing</response>
     /// <response code="429">Too many requests</response>
-    [HttpGet("check-email", Name = nameof(CheckEmail))]
+    [HttpPost("check-email", Name = nameof(CheckEmail))]
     [EnableRateLimiting(RateLimitPolicies.EmailCheck)]
     [ProducesResponseType(typeof(EmailAvailabilityResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
-    public async Task<IActionResult> CheckEmail([FromQuery] string email)
+    public async Task<IActionResult> CheckEmail([FromBody] EmailAvailabilityRequest request)
     {
-        var result = await _availabilityApiService.CheckEmailAvailability(email);
+        var result = await _availabilityApiService.CheckEmailAvailability(request.Email);
 
         if (result.Reason is EmailUnavailableReason.Taken or EmailUnavailableReason.PendingActivation)
         {
@@ -79,16 +81,18 @@ public class AvailabilityController : ControllerBase
     /// - Reserved: Username was used by a former user (in username history)
     /// - InvalidFormat: Username doesn't match format requirements
     /// </remarks>
-    /// <param name="username">Username to check</param>
+    /// <param name="request">Username to check</param>
     /// <response code="200">Availability status</response>
+    /// <response code="400">Username missing</response>
     /// <response code="429">Too many requests</response>
-    [HttpGet("check-username", Name = nameof(CheckUsername))]
+    [HttpPost("check-username", Name = nameof(CheckUsername))]
     [EnableRateLimiting(RateLimitPolicies.UsernameCheck)]
     [ProducesResponseType(typeof(UsernameAvailabilityResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
-    public async Task<IActionResult> CheckUsername([FromQuery] string username)
+    public async Task<IActionResult> CheckUsername([FromBody] UsernameAvailabilityRequest request)
     {
-        var result = await _availabilityApiService.CheckUsernameAvailability(username);
+        var result = await _availabilityApiService.CheckUsernameAvailability(request.Username);
 
         if (result.Reason is UsernameUnavailableReason.Taken or UsernameUnavailableReason.Reserved)
         {

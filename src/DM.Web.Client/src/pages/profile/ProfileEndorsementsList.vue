@@ -9,7 +9,7 @@
  *    `getWrittenUserEndorsements` (written);
  *  - the route name for Paging links (the `routeName` prop);
  *  - sorting/search: in "written" the "Автор" column is relabeled to
- *    "Получатель" (label + hint + search placeholder, #68г) — the value
+ *    "Получатель" (label + hint + search placeholder, item "68г") — the value
  *    "author" itself is sent to the backend as is; for this scope the backend already
  *    silently sorts by the counterparty (see UserEndorsementFilter.cs).
  * Everything else is shared, the card footer included: both modes hand
@@ -148,7 +148,7 @@ const emptyText = computed(() =>
 );
 
 /**
- * Written mode (#68г): the "Автор" sort option and default search
+ * Written mode: the "Автор" sort option and default search
  * placeholder both talk about the wrong party — every item's author IS
  * the profile owner, so sorting/searching "by author" is meaningless here.
  * The backend already silently sorts this scope by the counterparty (see

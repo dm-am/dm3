@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
+using DM.Domain.Core.Statuses;
 
 namespace DM.Domain.Blog.Features.Blogs;
 
@@ -77,40 +78,8 @@ public interface IBlogService
     Task Delete(Guid blogId, CancellationToken ct = default);
 
     /// <summary>
-    /// Get publications for a blog
-    /// </summary>
-    Task<(IEnumerable<Publication> publications, PagingResult paging)> GetPublications(
-        Guid blogId, Guid? rubricId, PagingQuery query, CancellationToken ct = default);
-
-    /// <summary>
-    /// Get publication by ID
-    /// </summary>
-    Task<Publication> GetPublication(Guid publicationId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Get a user's best (most-liked, published-only) publication across
-    /// every blog they author. Used by the profile "Blogs" tab. Returns
-    /// null when the user has no published publications.
-    /// </summary>
-    Task<Publication?> GetBestUserPublication(string username, CancellationToken ct = default);
-
-    /// <summary>
-    /// Create a new publication
-    /// </summary>
-    Task<Publication> CreatePublication(CreatePublication createPublication, CancellationToken ct = default);
-
-    /// <summary>
-    /// Update publication
-    /// </summary>
-    Task<Publication> UpdatePublication(UpdatePublication updatePublication, CancellationToken ct = default);
-
-    /// <summary>
-    /// Delete publication
-    /// </summary>
-    Task DeletePublication(Guid publicationId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Create a new rubric
+    /// Create a new rubric. Rubrics stay on this service rather than getting a
+    /// feature of their own; the reason is stated where they are implemented.
     /// </summary>
     Task<Rubric> CreateRubric(CreateRubric createRubric, CancellationToken ct = default);
 
@@ -121,10 +90,16 @@ public interface IBlogService
     Task<Rubric> UpdateRubric(UpdateRubric updateRubric, CancellationToken ct = default);
 
     /// <summary>
-    /// Reorder the rubrics of a blog. The position of each id in
+    /// Replace the order of a blog's rubrics. The position of each id in
     /// <paramref name="orderedRubricIds"/> becomes the rubric's sort order.
     /// Gated to the blog owner, mirroring the other rubric operations.
     /// </summary>
+    /// <remarks>
+    /// The whole order, not a correction to it: <paramref name="orderedRubricIds"/>
+    /// names every rubric of the blog exactly once, and a list that does not is
+    /// refused. A partial list would leave the rubrics it skipped holding the sort
+    /// orders this call has just given to others.
+    /// </remarks>
     /// <returns>The rubrics in their new order</returns>
     Task<IEnumerable<Rubric>> ReorderRubrics(
         Guid blogId, IReadOnlyList<Guid> orderedRubricIds, CancellationToken ct = default);
@@ -164,7 +139,7 @@ public interface IBlogService
     /// <summary>
     /// Get blog readers (subscribers)
     /// </summary>
-    Task<IEnumerable<GeneralUser>> GetReaders(Guid blogId, CancellationToken ct = default);
+    Task<IEnumerable<UserReference>> GetReaders(Guid blogId, CancellationToken ct = default);
 
     /// <summary>
     /// Get blog assistants with role information
@@ -195,7 +170,7 @@ public interface IBlogService
     /// <param name="transition">Requested transition</param>
     /// <param name="ct">Cancellation token</param>
     Task<Blog> ChangePremoderationAsync(
-        string id, BlogPremoderationTransition transition, CancellationToken ct = default);
+        string id, ModulePremoderationTransition transition, CancellationToken ct = default);
 
     /// <summary>
     /// Apply a status transition (start / freeze / finish / close / reopen)
@@ -209,5 +184,5 @@ public interface IBlogService
     /// <param name="transition">Requested transition</param>
     /// <param name="ct">Cancellation token</param>
     Task<Blog> ChangeStatusAsync(
-        string id, BlogStatusTransition transition, CancellationToken ct = default);
+        string id, ModuleStatusTransition transition, CancellationToken ct = default);
 }

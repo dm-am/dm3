@@ -13,11 +13,21 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using DM.Domain.Core.Mail;
+using DM.Workers.Mail.Sending;
 namespace DM.Workers.Mail;
 
 internal class MailConsumer : BackgroundService
 {
+    /// <summary>Queue this worker reads, as both the topology and the metrics name it.</summary>
+    internal const string QueueName = "dm.mail.sending";
+
+    // A literal of its own although it reads the same. The exchange the letters are
+    // published to is written out on the producer side, in MailSender, so binding the
+    // two names together here would rename one end of the route on the day the other
+    // end is left alone - and a letter published to an exchange nothing is bound to is
+    // dropped by the broker without a trace.
     private const string ConsumerExchangeName = "dm.mail.sending";
+
     private const string DeadLetterExchangeName = "dm.mail.unsent";
 
     private readonly ILogger<MailConsumer> _logger;
@@ -50,7 +60,7 @@ internal class MailConsumer : BackgroundService
         // this way all along.
         await Task.Yield();
 
-        var parameters = new RabbitConsumerParameters("dm.mail.sender", "dm.mail.sending", ProcessingOrder.Sequential)
+        var parameters = new RabbitConsumerParameters("dm.mail.sender", QueueName, ProcessingOrder.Sequential)
         {
             ExchangeName = ConsumerExchangeName,
             RoutingKeys = new[] { "#" },

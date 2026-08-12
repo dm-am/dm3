@@ -4,7 +4,6 @@ import type {
   UserProfile,
   Username,
   UserRole,
-  UsernameHistoryEntry,
   UserProfileNote,
   UserEndorsement,
   UserEndorsementId,
@@ -76,12 +75,15 @@ export default new (class UserApi {
   }
 
   /**
-   * Get users by role via the dedicated endpoint.
-   * Unlike GET /users (defaults to active users only), this endpoint
-   * has no activity filter, so inactive staff are included.
+   * Get users holding a role, including the ones who have not been around
+   * lately — a staff roster is a roster, not a list of who is online.
+   *
+   * GET /v1/users?role=&activity=All. The dedicated /users/by-role/{role}
+   * address this used to call is gone: it was anonymous, unpaged and cached for
+   * an hour, and API_DESIGN gives the filtered listing as the shape for this.
    */
   public getUsersByRole(role: UserRole) {
-    return Api.get<ListEnvelope<User>>(`users/by-role/${role}`);
+    return this.getUsers({ role, activity: "All", take: 100 });
   }
 
   public getUser(username: Username) {
@@ -90,12 +92,6 @@ export default new (class UserApi {
 
   public getUserProfile(username: Username) {
     return Api.get<UserProfile>(`users/${username}/profile`);
-  }
-
-  public getUsernameHistory(username: Username) {
-    return Api.get<ListEnvelope<UsernameHistoryEntry>>(
-      `users/${username}/username-history`,
-    );
   }
 
   /** Get personal note about a user (viewer's own note) */

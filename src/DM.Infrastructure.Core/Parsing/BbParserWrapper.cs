@@ -235,6 +235,21 @@ public partial class BbParserWrapper : IBbParser
     [GeneratedRegex(@"\[img\]([\s\S]*?)\[/img\]", RegexOptions.IgnoreCase)]
     private static partial Regex ImgRegex();
 
+    /// <summary>Match [img="URL"] and [img=URL], the standalone attribute form</summary>
+    /// <remarks>
+    /// The URL is the attribute here, not the content, so none of the four
+    /// patterns above saw it and the tag went to the inner parser, which
+    /// substitutes the value into its template as written. That is the whole of
+    /// the URL handling this wrapper does — scheme check, loopback and private
+    /// address refusal, the spoiler gate on public surfaces, referrerpolicy and
+    /// lazy loading — skipped for a spelling a person can type.
+    ///
+    /// Applied after every content form, and the digits-only case is excluded,
+    /// so [img=200]…[/img] stays a size rather than becoming an address.
+    /// </remarks>
+    [GeneratedRegex(@"\[img=(?!\d+(?:x\d+)?[\]\s])""?([^""\]]+)""?\]", RegexOptions.IgnoreCase)]
+    private static partial Regex ImgAttributeRegex();
+
     /// <summary>Match [link=text]URL[/link]</summary>
     [GeneratedRegex(@"\[link=([^\]]+)\]([\s\S]*?)\[/link\]", RegexOptions.IgnoreCase)]
     private static partial Regex LinkWithTextRegex();
@@ -251,7 +266,7 @@ public partial class BbParserWrapper : IBbParser
     [GeneratedRegex(@"\[(code|noparse)\][\s\S]*?\[/\1\]", RegexOptions.IgnoreCase)]
     private static partial Regex VerbatimBlockRegex();
 
-    /// <inheritdoc cref="VerbatimBlockRegex"/>
+    /// <summary>Match the placeholder that stands in for one extracted verbatim block.</summary>
     private static readonly Regex VerbatimPlaceholder = PlaceholderPattern(VerbatimKind);
 
     /// <summary>Match empty spoiler-head anchor (no title text) for post-processing</summary>
@@ -263,6 +278,12 @@ public partial class BbParserWrapper : IBbParser
     /// value never reaches the parser, and it is encoded where the element is
     /// built (see WrappedNodeTree), so it must not be encoded a second time.
     /// </summary>
+    /// <remarks>
+    /// The premise holds only because every spelling of both tags is extracted
+    /// above, and for img that took ImgAttributeRegex: until it existed,
+    /// [img="URL"] went to the parser with its value, and this list excused it
+    /// from encoding on the strength of a sentence that was not true of it.
+    /// </remarks>
     private static readonly string[] SelfRenderedTags = { "img", "link" };
 
     /// <summary>
@@ -308,18 +329,22 @@ public partial class BbParserWrapper : IBbParser
     /// positions the value lands in — element text (the quote author line, the
     /// addressee line) and attribute value (data-bb-addressees) — and it costs
     /// the reader nothing, because the browser decodes the entities back for
-    /// display and for getAttribute. It is deliberately limited to the
-    /// characters that carry meaning in HTML: brackets are left alone so that
-    /// the value stays the same string the private-addressee snapshot is keyed
-    /// by, and an [img] nested inside an attribute is left to render as the
-    /// element it is — harmless once a URL can no longer smuggle whitespace
-    /// (see SanitizeUrl), and visible to everyone who sees the post.
+    /// display and for getAttribute. Brackets are left alone, so an [img] nested
+    /// inside an attribute still renders as the element it is: harmless once a
+    /// URL can no longer smuggle whitespace (see SanitizeUrl), and visible to
+    /// everyone who sees the post.
+    ///
+    /// What it does change is the string the parser then reports as the
+    /// attribute value, while the private-addressee snapshot is keyed by the raw
+    /// text instead. The two ends are held together by
+    /// <see cref="BbAttributeEncoding"/>, whose Decode the visibility filter runs
+    /// before it looks a block up.
     /// </remarks>
     private string EncodeAttributeValues(string input) =>
         _attributeTagPattern is null
             ? input
             : _attributeTagPattern.Replace(input, match =>
-                $"[{match.Groups[1].Value}=\"{System.Web.HttpUtility.HtmlEncode(match.Groups[2].Value)}\"]");
+                $"[{match.Groups[1].Value}=\"{BbAttributeEncoding.Encode(match.Groups[2].Value)}\"]");
 
     /// <summary>
     /// Create wrapper around existing parser
@@ -417,6 +442,16 @@ public partial class BbParserWrapper : IBbParser
             return Placeholder(ImageKind, index);
         });
 
+        // Extract [img="URL"] / [img=URL] — the URL is the attribute, and this is
+        // the form that used to reach the inner parser untouched.
+        processed = ImgAttributeRegex().Replace(processed, match =>
+        {
+            var url = match.Groups[1].Value.Trim();
+            var index = imgList.Count;
+            imgList.Add((url, null, null, null));
+            return Placeholder(ImageKind, index);
+        });
+
         // Extract [link=text]URL[/link] (MUST be before simple link)
         processed = LinkWithTextRegex().Replace(processed, match =>
         {
@@ -464,11 +499,12 @@ public partial class BbParserWrapper : IBbParser
     /// NodeTree wrapper that restores [img] and [link] placeholders in output.
     /// Public so BbConverter can cast to it and call the correct methods.
     ///
-    /// Implementation note: Uses int.Parse() for placeholder indices (not TryParse) because:
-    /// 1. Placeholders are internally generated via List.Count - always valid integers
-    /// 2. Regex pattern (\d+) guarantees only digits are captured
-    /// 3. Parse() provides fail-fast behavior if internal contracts are violated
-    /// 4. TryParse() would mask bugs in placeholder generation logic
+    /// Implementation note: placeholder indices go through int.Parse(), not
+    /// TryParse, and that is safe rather than strict: the pattern captures (\d+)
+    /// and the indices are generated from List.Count, so a non-numeric index
+    /// cannot reach here. It is not a fail-fast guard either — an index past the
+    /// end of its list is not thrown on, the handler returns the placeholder into
+    /// the output as it stands.
     /// </summary>
     public class WrappedNodeTree : NodeTree
     {

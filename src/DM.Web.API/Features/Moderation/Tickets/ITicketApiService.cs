@@ -17,14 +17,15 @@ public interface ITicketApiService
     Task<ListEnvelope<Ticket>> GetTickets(PagingQuery query, TicketStatus? status = null, TicketSubtype? subtype = null);
 
     /// <summary>
-    /// Get tickets assigned to current moderator
+    /// Get a page of tickets assigned to current moderator
     /// </summary>
-    Task<ListEnvelope<Ticket>> GetMyAssignedTickets();
+    Task<ListEnvelope<Ticket>> GetMyAssignedTickets(PagingQuery query);
 
     /// <summary>
-    /// Get tickets filed by current user, optionally filtered by status and subtype
+    /// Get a page of tickets filed by current user, optionally filtered by status and subtype
     /// </summary>
-    Task<ListEnvelope<Ticket>> GetMyFiledTickets(TicketStatus? status = null, TicketSubtype? subtype = null);
+    Task<ListEnvelope<Ticket>> GetMyFiledTickets(PagingQuery query,
+        TicketStatus? status = null, TicketSubtype? subtype = null);
 
     /// <summary>
     /// Get ticket by ID with the conversation thread

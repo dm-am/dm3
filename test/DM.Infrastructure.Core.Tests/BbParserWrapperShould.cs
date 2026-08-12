@@ -212,6 +212,66 @@ public class BbParserWrapperShould
     }
 
     /// <summary>
+    /// The attribute spelling of the tag is the same tag.
+    /// </summary>
+    /// <remarks>
+    /// [img="URL"] carries the address as the attribute, so none of the patterns
+    /// that extract the content forms matched it and the tag went straight to
+    /// the inner parser, which puts the value into its template as written.
+    /// Every guard on this path lives in the wrapper, so the whole of it — the
+    /// scheme check, the addresses below, the spoiler gate, referrerpolicy and
+    /// lazy loading — was skipped by a spelling anybody can type.
+    /// </remarks>
+    [Theory]
+    [InlineData("http://127.0.0.1/x.png")]
+    [InlineData("http://169.254.169.254/x.png")]
+    [InlineData("http://192.168.0.1/x.png")]
+    [InlineData("http://10.0.0.1/x.png")]
+    [InlineData("http://localhost/x.png")]
+    [InlineData("ftp://evil.example/x.png")]
+    public void DropImage_WhenTheAttributeFormPointsIntoReaderNetwork(string url)
+    {
+        var quoted = ((BbParserWrapper.WrappedNodeTree)_parserProvider.CurrentCommon
+            .Parse($"[img=\"{url}\"]")).ToHtml();
+        var bare = ((BbParserWrapper.WrappedNodeTree)_parserProvider.CurrentCommon
+            .Parse($"[img={url}]")).ToHtml();
+
+        quoted.Should().NotContain("<img");
+        bare.Should().NotContain("<img");
+    }
+
+    /// <summary>
+    /// An ordinary address written the attribute way renders like the canonical
+    /// spelling, guards and all.
+    /// </summary>
+    [Fact]
+    public void RenderTheAttributeFormThroughTheSamePathAsTheContentForm()
+    {
+        const string url = "https://example.org/picture.png";
+
+        var attribute = ((BbParserWrapper.WrappedNodeTree)_parserProvider.CurrentCommon
+            .Parse($"[img=\"{url}\"]")).ToHtml();
+        var content = ((BbParserWrapper.WrappedNodeTree)_parserProvider.CurrentCommon
+            .Parse($"[img]{url}[/img]")).ToHtml();
+
+        attribute.Should().Be(content);
+    }
+
+    /// <summary>
+    /// A size is still a size: [img=200]…[/img] names a width, not an address.
+    /// </summary>
+    [Theory]
+    [InlineData("[img=200]https://example.org/p.png[/img]")]
+    [InlineData("[img=200x100]https://example.org/p.png[/img]")]
+    public void KeepTheSizeFormsWorkingBesideTheAttributeForm(string bbCode)
+    {
+        var html = ((BbParserWrapper.WrappedNodeTree)_parserProvider.CurrentCommon.Parse(bbCode)).ToHtml();
+
+        html.Should().Contain("<img");
+        html.Should().Contain("example.org/p.png");
+    }
+
+    /// <summary>
     /// The same guard on the [link] path, where a rejected URL costs the anchor
     /// but keeps its text.
     /// </summary>

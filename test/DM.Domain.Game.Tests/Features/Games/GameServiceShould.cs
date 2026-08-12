@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Caching;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
@@ -25,7 +26,6 @@ using DM.Testing;
 using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
@@ -36,10 +36,12 @@ public class GameServiceShould : UnitTestBase
 {
     private readonly Mock<IIntentionManager> _intentionManager;
     private readonly Mock<IGameRepository> _repository;
+    private Mock<IUnreadCountersRepository> _unreadCountersRepository = null!;
     private readonly Mock<IEventProducer> _producer;
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<IGuidFactory> _guidFactory;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly Mock<ICache> _cache;
     private readonly GameService _service;
     private readonly Guid _currentUserId;
 
@@ -83,7 +85,8 @@ public class GameServiceShould : UnitTestBase
 
         var gameBlacklistRepository = Mock<IGameBlacklistRepository>();
 
-        var unreadCountersRepository = Mock<IUnreadCountersRepository>();
+        _unreadCountersRepository = Mock<IUnreadCountersRepository>();
+        var unreadCountersRepository = _unreadCountersRepository;
         unreadCountersRepository.Setup(r => r.CreateAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>()))
             .Returns(Task.CompletedTask);
         unreadCountersRepository.Setup(r => r.SelectByEntitiesAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>(), It.IsAny<Guid[]>()))
@@ -108,9 +111,7 @@ public class GameServiceShould : UnitTestBase
         _producer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
         _producer.Setup(p => p.SendAsync(It.IsAny<IEnumerable<EventType>>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
 
-        var cache = Mock<IMemoryCache>();
-        var cacheEntry = Mock<ICacheEntry>();
-        cache.Setup(c => c.CreateEntry(It.IsAny<object>())).Returns(cacheEntry.Object);
+        _cache = Mock<ICache>();
 
         var logger = Mock<ILogger<GameService>>();
 
@@ -134,7 +135,7 @@ public class GameServiceShould : UnitTestBase
             _guidFactory.Object,
             intentionConverter.Object,
             _producer.Object,
-            cache.Object,
+            _cache.Object,
             logger.Object);
     }
 
@@ -156,6 +157,79 @@ public class GameServiceShould : UnitTestBase
         _producer.Verify(p => p.SendAsync(EventType.NewGame, gameId), Times.Once);
     }
 
+    /// <summary>
+    /// A game that failed to save leaves no counters behind.
+    /// </summary>
+    /// <remarks>
+    /// There is no transaction across PostgreSQL and MongoDB and no outbox, so
+    /// what a feature living in two stores owes is an explicit order. Written
+    /// after the insert, a failed Mongo call left a committed game whose unread
+    /// counters do not exist and never will — nothing recreates them, and that
+    /// game's badge reads zero for everybody forever. Written first, the same
+    /// failure loses a game nobody has seen yet.
+    /// </remarks>
+    [Fact]
+    public async Task LeaveNoCountersBehindWhenTheGameItselfFailsToSave()
+    {
+        var createGame = new CreateGame { Title = "Test Game", SystemName = "Test System" };
+        var gameId = Guid.NewGuid();
+        var roomId = Guid.NewGuid();
+        _guidFactory.SetupSequence(g => g.Create()).Returns(gameId).Returns(roomId);
+        _repository.Setup(r => r.Create(It.IsAny<CreateGameEntity>(), It.IsAny<CreateRoomEntity>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("storage refused"));
+
+        var act = async () => await _service.CreateAsync(createGame);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        _unreadCountersRepository.Verify(r => r.DeleteAsync(roomId, UnreadEntryType.Message), Times.Once);
+        _unreadCountersRepository.Verify(r => r.DeleteAsync(gameId, UnreadEntryType.Message), Times.Once);
+        _unreadCountersRepository.Verify(r => r.DeleteAsync(gameId, UnreadEntryType.Character), Times.Once);
+    }
+
+    /// <summary>
+    /// The first room of a game is parented by that game, like every room made
+    /// after it.
+    /// </summary>
+    [Fact]
+    public async Task ParentTheFirstRoomsCounterByItsGame()
+    {
+        var createGame = new CreateGame { Title = "Test Game", SystemName = "Test System" };
+        var gameId = Guid.NewGuid();
+        var roomId = Guid.NewGuid();
+        _guidFactory.SetupSequence(g => g.Create()).Returns(gameId).Returns(roomId);
+        _repository.Setup(r => r.Create(It.IsAny<CreateGameEntity>(), It.IsAny<CreateRoomEntity>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GameDetails { Id = gameId, Rooms = new[] { new Room { Id = roomId } } });
+
+        await _service.CreateAsync(createGame);
+
+        _unreadCountersRepository.Verify(
+            r => r.CreateAsync(roomId, gameId, UnreadEntryType.Message), Times.Once);
+    }
+
+    /// <summary>
+    /// A committed game is not turned into a 500 by the announcement of it.
+    /// </summary>
+    /// <remarks>
+    /// The caller would try again and end up with two games. A lost event costs
+    /// the subscribers one notification, and an event is not the carrier of the
+    /// fact.
+    /// </remarks>
+    [Fact]
+    public async Task ReturnTheGameEvenWhenTheAnnouncementFails()
+    {
+        var createGame = new CreateGame { Title = "Test Game", SystemName = "Test System" };
+        var gameId = Guid.NewGuid();
+        _guidFactory.SetupSequence(g => g.Create()).Returns(gameId).Returns(Guid.NewGuid());
+        _repository.Setup(r => r.Create(It.IsAny<CreateGameEntity>(), It.IsAny<CreateRoomEntity>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GameDetails { Id = gameId, Rooms = Array.Empty<Room>() });
+        _producer.Setup(p => p.SendAsync(EventType.NewGame, gameId))
+            .ThrowsAsync(new InvalidOperationException("broker down"));
+
+        var result = await _service.CreateAsync(createGame);
+
+        result.Id.Should().Be(gameId);
+    }
+
     [Fact]
     public async Task ThrowNotFoundWhenGameDoesNotExist()
     {
@@ -165,7 +239,7 @@ public class GameServiceShould : UnitTestBase
         var act = async () => await _service.GetAsync(gameId);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Gone);
+            .Where(e => e.StatusCode == HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -223,5 +297,33 @@ public class GameServiceShould : UnitTestBase
         // row, and the column stays empty unless the service hands the identity over.
         _repository.Verify(r => r.Delete(gameId, _currentUserId, It.IsAny<CancellationToken>()), Times.Once);
         _producer.Verify(p => p.SendAsync(EventType.DeletedGame, gameId), Times.Once);
+    }
+
+    /// <summary>
+    /// The tag list is not the tag catalog alone: every entry carries the number
+    /// of active games with that tag, so a day-long entry shows the filter the
+    /// counts of yesterday.
+    /// </summary>
+    [Fact]
+    public async Task CacheTheTagListOnlyAsLongAsItsGameCountsHold()
+    {
+        var tags = new[]
+        {
+            new GameTag
+            {
+                Id = Guid.NewGuid(), ShortId = 1, Title = "Fantasy", GroupTitle = "Setting", GamesCount = 3
+            }
+        };
+        _repository.Setup(r => r.GetTags(It.IsAny<CancellationToken>())).ReturnsAsync(tags);
+        _cache
+            .Setup(c => c.GetOrCreateAsync(
+                It.IsAny<object>(), It.IsAny<Func<Task<IEnumerable<GameTag>>>>(), It.IsAny<TimeSpan>()))
+            .Returns((object _, Func<Task<IEnumerable<GameTag>>> create, TimeSpan _) => create());
+
+        var result = await _service.GetTagsAsync();
+
+        result.Should().BeEquivalentTo(tags);
+        _cache.Verify(c => c.GetOrCreateAsync(
+            It.IsAny<object>(), It.IsAny<Func<Task<IEnumerable<GameTag>>>>(), CachePolicy.Medium), Times.Once);
     }
 }

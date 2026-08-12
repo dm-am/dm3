@@ -142,6 +142,78 @@ export function groupMessagesWithSeparators(
 }
 
 // =============================================================================
+// Virtual Rows
+// =============================================================================
+
+/**
+ * Geometry a virtualizer reports for one visible row: where to draw it and
+ * which item of the list it stands for. Declared structurally so this module
+ * keeps its "no dependencies" promise — @tanstack's VirtualItem satisfies it.
+ */
+export interface VirtualRowGeometry {
+  index: number;
+  key: string | number | bigint;
+  start: number;
+}
+
+interface ChatVirtualRowBase {
+  /** Stable key for v-for, already stringified. */
+  key: string;
+  /** Offset in px inside the virtualizer's spacer. */
+  start: number;
+  /** Position of the item in the list the row was built from. */
+  index: number;
+}
+
+export interface ChatSeparatorRow extends ChatVirtualRowBase {
+  kind: "separator";
+  separator: DateSeparator;
+}
+
+export interface ChatMessageRow extends ChatVirtualRowBase {
+  kind: "message";
+  message: MessageWithContinuation;
+}
+
+export type ChatVirtualRow = ChatSeparatorRow | ChatMessageRow;
+
+/**
+ * Resolve every visible row to the item it draws, with the two kinds of item
+ * already told apart.
+ *
+ * A virtualized chat list is mixed — messages and date separators — and the
+ * virtualizer returns geometry with an index, nothing more. Re-reading the
+ * array at that index inside a template binding leaves the expression typed as
+ * the union, so each binding needs a cast to reach the member it wants; both
+ * chat pages did that dozens of times per row, with type checking off for all
+ * of them. Applying the guard once here and carrying the narrowed value on the
+ * row is what gives the template something typed to read, and the `kind`
+ * discriminant is what keeps that narrowing alive inside the inline handlers
+ * Vue compiles into closures — a null check on a member would not.
+ *
+ * A row whose item is gone is dropped: the virtualizer's window can outlive a
+ * list that just shrank (a jump to another archive date), and such a row has
+ * nothing to draw.
+ */
+export function toChatVirtualRows(
+  items: MessageOrSeparator[],
+  rows: VirtualRowGeometry[],
+): ChatVirtualRow[] {
+  const result: ChatVirtualRow[] = [];
+  for (const row of rows) {
+    const item = items[row.index];
+    if (!item) continue;
+    const base = { key: String(row.key), start: row.start, index: row.index };
+    result.push(
+      isDateSeparator(item)
+        ? { ...base, kind: "separator", separator: item }
+        : { ...base, kind: "message", message: item },
+    );
+  }
+  return result;
+}
+
+// =============================================================================
 // Likes
 // =============================================================================
 

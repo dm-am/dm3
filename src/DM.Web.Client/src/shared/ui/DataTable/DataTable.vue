@@ -72,8 +72,6 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
   <table
     class="data-table"
     :class="{ 'layout-auto': tableLayout === 'auto' }"
-    cellspacing="1"
-    cellpadding="4"
     :aria-busy="loading ? 'true' : undefined"
     :aria-label="ariaLabel"
   >
@@ -171,11 +169,16 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
 <style scoped lang="sass">
 @import "@/assets/styles/Tables"
 
+// Table metrics are the module's, not this component's: _Tables.sass declares
+// $table-cell-padding-v/-h and $table-gap, and the mixins that size a desktop
+// cell (+table-header, +table-row, +expandable-row, +expandable-details) read
+// them. A copy of the numbers here parts from those mixins the moment the
+// declarations move.
 .data-table
   width: 100%
   table-layout: fixed
   border-collapse: separate
-  border-spacing: 1px
+  border-spacing: $table-gap
   background-color: $border
 
   &.layout-auto
@@ -183,7 +186,7 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
 
 .table-header
   th
-    padding: $small 12px
+    padding: $table-cell-padding-v $table-cell-padding-h
     background-color: $bg-element-accent
     color: $text
     font-weight: bold
@@ -199,7 +202,7 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
 .table-row
   +table-row-hover
   td
-    padding: $small 12px
+    padding: $table-cell-padding-v $table-cell-padding-h
     background-color: $bg-element
     vertical-align: middle
     word-wrap: break-word
@@ -236,7 +239,7 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
 
     // Only show padding/background when footer has content
     &:not(:empty)
-      padding: $small 12px
+      padding: $table-cell-padding-v $table-cell-padding-h
       background-color: $bg-element-accent
 
 // Mobile responsiveness

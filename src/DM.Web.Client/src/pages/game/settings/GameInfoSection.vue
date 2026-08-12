@@ -151,6 +151,7 @@ async function save() {
       </FormField>
       <FormField label="Доступ к комментариям">
         <Select
+          id="game-settings-commentaries-access"
           :model-value="commentariesAccess"
           :options="commentariesOptions"
           @update:model-value="

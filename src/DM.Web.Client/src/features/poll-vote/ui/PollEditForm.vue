@@ -32,6 +32,19 @@ const editIsAnonymous = ref(props.poll.isAnonymous);
 const isSubmitting = ref(false);
 const editError = ref("");
 
+// The ids the captions point at. Random suffix, because the polls page renders
+// a card per poll and every card owns an editor of its own: nothing closes the
+// neighbour when a second one opens, and a constant id would then sit on two
+// fields at once. Both `<label for>` and `aria-labelledby` resolve to the first
+// match in the document, so the caption of the second editor would reach into
+// the first. Same shape as FormField generates.
+const uid = `poll-edit-${Math.random().toString(36).slice(2, 9)}`;
+const titleId = `${uid}-title`;
+const detailsId = `${uid}-details`;
+const startsId = `${uid}-starts`;
+const endsId = `${uid}-ends`;
+const kindId = `${uid}-kind`;
+
 // Track if changing from anonymous to public (will reset votes)
 const willResetVotes = computed(
   () => props.poll.isAnonymous && !editIsAnonymous.value,
@@ -69,28 +82,45 @@ async function saveEdit() {
 <template>
   <div class="poll-edit-form">
     <div class="edit-field">
-      <label class="edit-label"><strong>Название</strong></label>
-      <input v-model="editTitle" type="text" class="edit-input" />
+      <label class="edit-label" :for="titleId"><strong>Название</strong></label>
+      <input :id="titleId" v-model="editTitle" type="text" class="edit-input" />
     </div>
     <div class="edit-field">
-      <label class="edit-label"><strong>Описание</strong></label>
+      <label class="edit-label" :for="detailsId"
+        ><strong>Описание</strong></label
+      >
       <textarea
+        :id="detailsId"
         v-model="editDetails"
         class="edit-input edit-textarea"
         rows="3"
       />
     </div>
     <div class="edit-field">
-      <label class="edit-label"><strong>Начало</strong></label>
-      <input v-model="editStartsUtc" type="datetime-local" class="edit-input" />
+      <label class="edit-label" :for="startsId"><strong>Начало</strong></label>
+      <input
+        :id="startsId"
+        v-model="editStartsUtc"
+        type="datetime-local"
+        class="edit-input"
+      />
     </div>
     <div class="edit-field">
-      <label class="edit-label"><strong>Окончание</strong></label>
-      <input v-model="editEndsUtc" type="datetime-local" class="edit-input" />
+      <label class="edit-label" :for="endsId"><strong>Окончание</strong></label>
+      <input
+        :id="endsId"
+        v-model="editEndsUtc"
+        type="datetime-local"
+        class="edit-input"
+      />
     </div>
     <div class="edit-field">
-      <label class="edit-label"><strong>Тип опроса</strong></label>
-      <div class="poll-type-selector">
+      <span :id="kindId" class="edit-label"><strong>Тип опроса</strong></span>
+      <div
+        class="poll-type-selector"
+        role="radiogroup"
+        :aria-labelledby="kindId"
+      >
         <label class="radio-option">
           <input type="radio" v-model="editIsAnonymous" :value="true" />
           <span>Анонимный</span>
@@ -105,9 +135,7 @@ async function saveEdit() {
       </div>
     </div>
     <div class="edit-actions">
-      <Button :disabled="isSubmitting" @click="saveEdit">
-        {{ isSubmitting ? "Сохранение..." : "Сохранить" }}
-      </Button>
+      <Button :loading="isSubmitting" @click="saveEdit">Сохранить</Button>
       <Button @click="emit('cancel')">Отмена</Button>
       <span v-if="editError" class="edit-error">{{ editError }}</span>
     </div>

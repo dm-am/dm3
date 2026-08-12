@@ -79,6 +79,7 @@ async function save() {
 
       <FormField label="Видимость черновика">
         <Select
+          id="blog-settings-draft-visibility"
           :model-value="draftVisibility"
           :options="visibilityOptions"
           @update:model-value="(v) => (draftVisibility = v as DraftVisibility)"

@@ -30,17 +30,18 @@ internal class TicketApiService : ITicketApiService
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<Ticket>> GetMyAssignedTickets()
+    public async Task<ListEnvelope<Ticket>> GetMyAssignedTickets(PagingQuery query)
     {
-        var tickets = await _ticketService.GetMyAssignedTickets();
-        return new ListEnvelope<Ticket>(tickets.Select(_mapper.Map<Ticket>));
+        var (tickets, paging) = await _ticketService.GetMyAssignedTickets(query);
+        return new ListEnvelope<Ticket>(tickets.Select(_mapper.Map<Ticket>), new PagingInfo(paging));
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<Ticket>> GetMyFiledTickets(TicketStatus? status = null, TicketSubtype? subtype = null)
+    public async Task<ListEnvelope<Ticket>> GetMyFiledTickets(PagingQuery query,
+        TicketStatus? status = null, TicketSubtype? subtype = null)
     {
-        var tickets = await _ticketService.GetMyFiledTickets(status, subtype);
-        return new ListEnvelope<Ticket>(tickets.Select(_mapper.Map<Ticket>));
+        var (tickets, paging) = await _ticketService.GetMyFiledTickets(query, status, subtype);
+        return new ListEnvelope<Ticket>(tickets.Select(_mapper.Map<Ticket>), new PagingInfo(paging));
     }
 
     /// <inheritdoc />

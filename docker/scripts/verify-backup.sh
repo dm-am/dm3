@@ -29,11 +29,19 @@ check_backup_dir() {
         return
     fi
 
-    LATEST_FILE=$(echo "$LATEST" | cut -d' ' -f2)
+    # -f2- and not -f2, the same split check_backup_tree below already uses: the
+    # second field is a path, and cutting it at the first space hands every check
+    # that follows the name of a file that does not exist.
+    LATEST_FILE=$(echo "$LATEST" | cut -d' ' -f2-)
     LATEST_TIME=$(echo "$LATEST" | cut -d' ' -f1 | cut -d. -f1)
     NOW=$(date +%s)
     AGE_HOURS=$(( (NOW - LATEST_TIME) / 3600 ))
-    FILE_SIZE=$(stat -c%s "$LATEST_FILE" 2>/dev/null || stat -f%z "$LATEST_FILE" 2>/dev/null)
+    # GNU stat, and no BSD fallback, because a BSD fallback could never run: the
+    # find above is called with -printf, which only GNU find has, so on a host
+    # without it LATEST is empty and the function has already returned. The error
+    # is left on stderr - set -e ends the run either way, and the reason belongs
+    # in the log.
+    FILE_SIZE=$(stat -c%s "$LATEST_FILE")
 
     echo "--- $LABEL ---"
     echo "  Latest: $(basename "$LATEST_FILE")"
@@ -56,6 +64,20 @@ check_backup_dir() {
             echo "  Integrity: OK"
         else
             echo "  ERROR: Backup file is corrupted!"
+            EXIT_CODE=2
+        fi
+    fi
+
+    # Whole, not merely well formed. A dump cut off halfway is a valid gzip of a
+    # valid prefix: it decompresses, it is far over a kilobyte, and its timestamp
+    # is the newest in the directory — every check above says yes, and the file a
+    # restore would reach for first stops mid-table. The marker below is the last
+    # line pg_dump writes.
+    if echo "$LATEST_FILE" | grep -q '\.sql\.gz$'; then
+        if gunzip -c "$LATEST_FILE" 2>/dev/null | tail -c 4096 | grep -q "PostgreSQL database dump complete"; then
+            echo "  Completeness: OK"
+        else
+            echo "  ERROR: Backup is truncated — pg_dump did not finish!"
             EXIT_CODE=2
         fi
     fi
@@ -123,6 +145,28 @@ elif [ "$EXIT_CODE" -eq 1 ]; then
     echo "Warnings detected (see above)"
 else
     echo "ERRORS detected (see above)"
+fi
+
+# The verdict goes somewhere a human will meet it. Run from cron, this script's
+# exit code went into a log file and into mail for a machine with no MTA, so a
+# missing or corrupted backup announced itself for the first time at the restore.
+# Written for the node-exporter textfile collector the stack already runs, which
+# is what turns it into an alert; the directory is created by install-cron.sh, and
+# a machine without it simply skips this.
+if [ -n "${TEXTFILE_DIR:-/var/lib/node_exporter/textfile}" ] &&
+   [ -d "${TEXTFILE_DIR:-/var/lib/node_exporter/textfile}" ]; then
+    METRICS_DIR="${TEXTFILE_DIR:-/var/lib/node_exporter/textfile}"
+    TMP_METRICS="$(mktemp "$METRICS_DIR/.dm_backup.XXXXXX")"
+    {
+        echo "# HELP dm_backup_verification_status Result of the nightly backup check: 0 ok, 1 warning, 2 error."
+        echo "# TYPE dm_backup_verification_status gauge"
+        echo "dm_backup_verification_status $EXIT_CODE"
+        echo "# HELP dm_backup_verification_timestamp_seconds When the check last finished."
+        echo "# TYPE dm_backup_verification_timestamp_seconds gauge"
+        echo "dm_backup_verification_timestamp_seconds $(date +%s)"
+    } > "$TMP_METRICS"
+    # Moved into place, so the collector never reads a half-written file.
+    mv "$TMP_METRICS" "$METRICS_DIR/dm_backup.prom"
 fi
 
 exit $EXIT_CODE

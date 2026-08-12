@@ -1,78 +1,54 @@
 <template>
-  <SidebarBlock token="PopularGames">
-    <template #title>Популярные игры</template>
-    <SidebarSkeleton
-      v-if="store.popularGames === null && !failed"
-      :lines="10"
-    />
-    <SecondaryText v-else-if="store.popularGames === null">
-      Не удалось загрузить.
-      <button type="button" class="retry-link" @click="fetchPopularGames(true)">
-        Повторить
-      </button>
-    </SecondaryText>
-    <SecondaryText v-else-if="store.popularGames.length === 0">
-      Популярных игр пока нет
-    </SecondaryText>
-    <template v-else>
+  <SidebarEntityList
+    token="PopularGames"
+    title="Популярные игры"
+    :lines="10"
+    :items="store.popularGames"
+    :errored="!!store.popularGamesError"
+    empty="Популярных игр пока нет"
+    :retry="() => store.fetchPopularGames(true)"
+    :forward-to="{
+      name: 'games',
+      query: { sortBy: 'popularity', sortOrder: 'desc' },
+    }"
+    forward-label="Все популярные игры"
+  >
+    <template #item="{ item }">
       <SidebarGameLink
-        v-for="game in store.popularGames"
-        :key="game.id"
-        :game="game"
+        :game="item"
         :counters="true"
-        :alwaysShowCounters="!userStore.user"
+        :always-show-counters="!userStore.user"
       />
     </template>
-    <DashSeparator spacing="tiny" width="75%" />
-    <div>
-      <span class="muted">- </span>
-      <router-link
-        class="forward"
-        :to="{
-          name: 'games',
-          query: { sortBy: 'popularity', sortOrder: 'desc' },
-        }"
-        >Все популярные игры</router-link
-      >
-    </div>
-  </SidebarBlock>
+  </SidebarEntityList>
 </template>
 
 <script setup lang="ts">
-import SidebarBlock from "./SidebarBlock.vue";
-import SidebarSkeleton from "./SidebarSkeleton.vue";
-import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import SidebarEntityList from "./SidebarEntityList.vue";
 import SidebarGameLink from "./SidebarGameLink.vue";
 import { useGamesStore } from "@/entities/game";
 import { useAuthStore } from "@/entities/user";
-import { onMounted, ref } from "vue";
-import { DashSeparator } from "@/shared/ui/DashSeparator";
+import { onMounted, watch } from "vue";
+import { useRoute } from "vue-router";
+import { useViewerChange } from "@/shared/lib/composables/useViewerChange";
 
 const store = useGamesStore();
 const userStore = useAuthStore();
+const route = useRoute();
 
-// The games store does not expose an error ref for this list, so detect
-// failure locally: when the fetch settles and the list is still null,
-// the request failed (prevents an eternal skeleton).
-const failed = ref(false);
+onMounted(() => store.fetchPopularGames());
 
-async function fetchPopularGames(force = false) {
-  await store.fetchPopularGames(force);
-  failed.value = store.popularGames === null;
-}
+// Refetch on any change of viewer to keep unread counters accurate (force=true
+// because a plain fetch() no-ops inside the cache TTL). RightSidebar mounts
+// this block once and never unmounts it, so onMounted alone fired once per
+// page load: a second tab signing another account in left the previous
+// viewer's counters on the rows for the rest of the session.
+useViewerChange(() => store.fetchPopularGames(true));
 
-onMounted(() => fetchPopularGames());
+// Re-trigger on navigation so a failed fetch gets another chance once the
+// TTL cache considers it stale.
+watch(
+  () => route.fullPath,
+  () => store.fetchPopularGames(),
+);
 </script>
-
-<style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-
-.muted
-  color: $text-muted
-
-.forward
-  font-weight: bold
-
-.retry-link
-  +inline-link-button
-</style>

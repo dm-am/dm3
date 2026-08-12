@@ -169,7 +169,7 @@ public class CreateGameValidatorShould : UnitTestBase
     public async Task FailWhenAssistantUsernameDoesNotExist()
     {
         userLookupServiceMock
-            .Setup(s => s.UserExistsAsync("nonexistent", It.IsAny<CancellationToken>()))
+            .Setup(s => s.UsernameExistsAsync("nonexistent", It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
         var input = new CreateGame
@@ -190,7 +190,7 @@ public class CreateGameValidatorShould : UnitTestBase
     public async Task PassWhenAssistantUsernameExists()
     {
         userLookupServiceMock
-            .Setup(s => s.UserExistsAsync("validassistant", It.IsAny<CancellationToken>()))
+            .Setup(s => s.UsernameExistsAsync("validassistant", It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         var input = new CreateGame

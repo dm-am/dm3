@@ -47,10 +47,19 @@ fi
 # default because nginx recomputes the hash on every request with no cache, which
 # makes the work factor the latency of every asset the stand serves as well. The
 # password goes in over stdin (-i) so that it never reaches the process table.
+#
+# The image names a version on purpose. Untagged means latest, and latest is
+# whatever the registry holds on the day an operator resets the password: a
+# different tool, on the one line that mints the credentials of the stand.
+# Moving this tag is a manual job - dependabot parses compose files and
+# Dockerfiles, never shell, so the docker ecosystem entries in
+# .github/dependabot.yml do not reach this script. What does watch the line is
+# PinEveryImageTheDeploymentRuns, which reads the scripts along with the compose
+# files.
 TMP_FILE="$(mktemp)"
 trap 'rm -f "$TMP_FILE"' EXIT
 printf '%s\n' "$DM_PREVIEW_PASSWORD" \
-    | "${DOCKER[@]}" run --rm -i httpd htpasswd -niB "$PREVIEW_USER" > "$TMP_FILE"
+    | "${DOCKER[@]}" run --rm -i httpd:2.4.68 htpasswd -niB "$PREVIEW_USER" > "$TMP_FILE"
 
 # Written aside and moved into place: a redirect straight at the target empties
 # the file that works before the tool that would replace it has run, and an empty

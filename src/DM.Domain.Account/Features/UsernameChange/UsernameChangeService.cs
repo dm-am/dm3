@@ -8,6 +8,7 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using FluentValidation;
+using DM.Domain.Core.Users;
 
 namespace DM.Domain.Account.Features.UsernameChange;
 
@@ -17,13 +18,14 @@ internal partial class UsernameChangeService : IUsernameChangeService
     // Forbidden: control chars, HTML/URL unsafe, quotes, brackets, special chars, zero-width
     // Whitespace: not at start/end, not consecutive
     // See: docs/conventions/USERNAME_POLICY.md
-    [GeneratedRegex(@"^(?!\s)(?!.*\s$)(?!.*\s{2})[^\p{Cc}<>""'`\\/@?#%&\[\](){}=~!$^*+|;:\u200B-\u200F\u2028-\u202F\uFEFF]{2,20}$")]
+    [GeneratedRegex(UsernamePolicy.Pattern)]
     private static partial Regex UsernameValidationRegex();
 
     private readonly IValidator<CreateUsernameChangeRequest> _validator;
     private readonly IUsernameChangeRepository _repository;
     private readonly IUsernameHistoryRepository _historyRepository;
     private readonly IIdentityProvider _identityProvider;
+    private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IUsernameChangeMailSender _notificationSender;
 
@@ -32,6 +34,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         IUsernameChangeRepository repository,
         IUsernameHistoryRepository historyRepository,
         IIdentityProvider identityProvider,
+        IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
         IUsernameChangeMailSender notificationSender)
     {
@@ -39,6 +42,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         _repository = repository;
         _historyRepository = historyRepository;
         _identityProvider = identityProvider;
+        _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
         _notificationSender = notificationSender;
     }
@@ -60,7 +64,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         var now = _dateTimeProvider.Now;
         var dto = new UsernameChangeRequest
         {
-            RequestId = Guid.NewGuid(),
+            RequestId = _guidFactory.Create(),
             UserId = currentUser.UserId,
             // Username is NOT set here - user chooses it after approval
             RequestedUsername = null,
@@ -123,12 +127,27 @@ internal partial class UsernameChangeService : IUsernameChangeService
         if (request.Status != UsernameChangeRequestStatus.Pending)
             throw new HttpException(HttpStatusCode.Conflict, "Заявка уже рассмотрена");
 
+        // Resolving is approving or rejecting and nothing else. The status arrives
+        // in the body and used to be written through unchecked, so a request could
+        // be filed as Completed or Expired: it left the queue looking finished
+        // while no name changed and no approval link went out. Those two statuses
+        // are reached by the flow itself - one by the user finishing the change,
+        // one by the expiry job - and are not a moderator's to assert.
+        if (resolve.Status != UsernameChangeRequestStatus.Approved &&
+            resolve.Status != UsernameChangeRequestStatus.Rejected)
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                [nameof(resolve.Status)] = "Заявку можно только одобрить или отклонить"
+            });
+        }
+
         var now = _dateTimeProvider.Now;
 
         if (resolve.Status == UsernameChangeRequestStatus.Approved)
         {
             // Generate approval token (user will use this to complete the change)
-            request.ApprovalToken = Guid.NewGuid();
+            request.ApprovalToken = _guidFactory.Create();
             request.ApprovalTokenExpiresUtc = now.AddHours(48); // Token valid for 48 hours
         }
 
@@ -144,11 +163,10 @@ internal partial class UsernameChangeService : IUsernameChangeService
         {
             if (resolve.Status == UsernameChangeRequestStatus.Approved && request.ApprovalToken.HasValue)
             {
-                var approvalLink = $"https://dm.am/account/username-change/{request.ApprovalToken.Value}";
                 await _notificationSender.SendApprovalAsync(
                     request.UserEmail,
                     request.UserUsername!,
-                    approvalLink);
+                    request.ApprovalToken.Value);
             }
             else if (resolve.Status == UsernameChangeRequestStatus.Rejected)
             {
@@ -212,7 +230,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         // Record history
         await _historyRepository.Add(new CreateUsernameHistory
         {
-            UsernameHistoryId = Guid.NewGuid(),
+            UsernameHistoryId = _guidFactory.Create(),
             UserId = request.UserId,
             OldUsername = request.UserUsername!,
             NewUsername = newUsername,
@@ -268,7 +286,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         // Record the rollback in history
         await _historyRepository.Add(new CreateUsernameHistory
         {
-            UsernameHistoryId = Guid.NewGuid(),
+            UsernameHistoryId = _guidFactory.Create(),
             UserId = request.UserId,
             OldUsername = currentUsername,
             NewUsername = previousUsername,

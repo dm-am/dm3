@@ -73,7 +73,7 @@ defineProps<{
     li
       margin: $tiny 0
 
-  // Glossary definition list (Термины и определения). Semantically a
+  // Glossary definition list ("Термины и определения"). Semantically a
   // <dl> of term/definition pairs, but rendered to look exactly like the
   // bulleted <ul> above: each grouping div is a list-item (disc marker in
   // the same $big padding well), with the term and definition flowing

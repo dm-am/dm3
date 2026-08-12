@@ -10,6 +10,7 @@ import blogApi from "../api/blogApi";
 import { useApiList } from "@/shared/lib/composables/useApiResource";
 import { Api } from "@/shared/api";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import { describeFailure } from "@/shared/lib/errors";
 import {
   createKeyedCache,
   stableCacheKey,
@@ -35,7 +36,57 @@ export interface BlogsSearchParams {
   size?: number;
 }
 
-const searchCache = createKeyedCache<ListEnvelope<Blog>>({ ttlMs: 30_000 });
+type BlogsApiParams = Record<
+  string,
+  string | number | boolean | string[] | number[] | undefined
+>;
+
+/**
+ * Map frontend search params to backend API query params. Single source of
+ * truth used by both searchBlogs and prefetchPage: the cache key is built from
+ * the whole params object, so a filter added to one of them and not the other
+ * files an unfiltered page under a filtered key.
+ */
+function buildApiParams(params: BlogsSearchParams): BlogsApiParams {
+  const pageSize = params.size || 20;
+  const pageNumber = params.number || 1;
+  const apiParams: BlogsApiParams = { take: pageSize };
+
+  // Convert page number to skip (number is 1-indexed page)
+  if (pageNumber > 1) {
+    apiParams.skip = (pageNumber - 1) * pageSize;
+  }
+
+  if (params.search) apiParams.search = params.search;
+  if (params.status) apiParams.statuses = [params.status];
+
+  // Hosts (author OR assistant)
+  if (params.hostUsernames && params.hostUsernames.length > 0) {
+    apiParams.hostUsernames = params.hostUsernames;
+  }
+
+  if (params.createdFromUtc) apiParams.createdFromUtc = params.createdFromUtc;
+  if (params.createdToUtc) apiParams.createdToUtc = params.createdToUtc;
+  if (params.activatedFromUtc)
+    apiParams.activatedFromUtc = params.activatedFromUtc;
+  if (params.activatedToUtc) apiParams.activatedToUtc = params.activatedToUtc;
+  if (params.closedFromUtc) apiParams.closedFromUtc = params.closedFromUtc;
+  if (params.closedToUtc) apiParams.closedToUtc = params.closedToUtc;
+
+  if (params.sortBy) apiParams.sortBy = params.sortBy;
+  if (params.sortOrder) apiParams.sortOrder = params.sortOrder;
+
+  return apiParams;
+}
+
+/**
+ * One sentence for both failure paths of the blogs list. A refusal the API
+ * named goes through describeFailure, which prefers the server's own title, so
+ * a rate limit stops reading like a broken server; a request that got no
+ * response carries no problem document to read, and neither does a throw, so
+ * both fall back to this.
+ */
+const LOAD_FAILURE = "Не удалось загрузить блоги";
 
 export const useBlogsStore = defineStore("blogs", () => {
   // Sidebar lists with caching (60s TTL by default) - use lightweight BlogRef
@@ -53,6 +104,13 @@ export const useBlogsStore = defineStore("blogs", () => {
   const searchLoading = ref(false);
   const searchError = ref<string | null>(null);
   const lastSearchParams = ref<BlogsSearchParams | null>(null);
+
+  // Inside the store and not beside it, the way every other list store here
+  // holds its cache. In the browser the two placements have one lifetime — a
+  // single pinia, created once and never disposed — so no session behaves
+  // differently; what changes is that the cache dies with the store instance,
+  // so a fresh pinia starts empty instead of being cleared by hand.
+  const searchCache = createKeyedCache<ListEnvelope<Blog>>({ ttlMs: 30_000 });
 
   // Request guard to discard stale out-of-order responses
   const requestGuard = createRequestGuard();
@@ -85,68 +143,10 @@ export const useBlogsStore = defineStore("blogs", () => {
 
     searchLoading.value = true;
 
-    // Map frontend params to backend API params
-    const pageSize = params.size || 20;
-    const pageNumber = params.number || 1;
-    const apiParams: Record<
-      string,
-      string | number | boolean | string[] | number[] | undefined
-    > = {
-      take: pageSize,
-    };
-
-    // Convert page number to skip (number is 1-indexed page)
-    if (pageNumber > 1) {
-      apiParams.skip = (pageNumber - 1) * pageSize;
-    }
-
-    // Search
-    if (params.search) {
-      apiParams.search = params.search;
-    }
-
-    // Status
-    if (params.status) {
-      apiParams.statuses = [params.status];
-    }
-
-    // Hosts (author OR assistant)
-    if (params.hostUsernames && params.hostUsernames.length > 0) {
-      apiParams.hostUsernames = params.hostUsernames;
-    }
-
-    // Date ranges
-    if (params.createdFromUtc) {
-      apiParams.createdFromUtc = params.createdFromUtc;
-    }
-    if (params.createdToUtc) {
-      apiParams.createdToUtc = params.createdToUtc;
-    }
-    if (params.activatedFromUtc) {
-      apiParams.activatedFromUtc = params.activatedFromUtc;
-    }
-    if (params.activatedToUtc) {
-      apiParams.activatedToUtc = params.activatedToUtc;
-    }
-    if (params.closedFromUtc) {
-      apiParams.closedFromUtc = params.closedFromUtc;
-    }
-    if (params.closedToUtc) {
-      apiParams.closedToUtc = params.closedToUtc;
-    }
-
-    // Sort
-    if (params.sortBy) {
-      apiParams.sortBy = params.sortBy;
-    }
-    if (params.sortOrder) {
-      apiParams.sortOrder = params.sortOrder;
-    }
-
     try {
       const { data, error } = await Api.get<ListEnvelope<Blog>>(
         "blogs",
-        apiParams,
+        buildApiParams(params),
       );
 
       // Ignore stale responses
@@ -155,7 +155,7 @@ export const useBlogsStore = defineStore("blogs", () => {
       }
 
       if (error) {
-        searchError.value = "Ошибка загрузки данных";
+        searchError.value = describeFailure(error, LOAD_FAILURE);
         return;
       }
 
@@ -165,7 +165,7 @@ export const useBlogsStore = defineStore("blogs", () => {
       }
     } catch {
       if (requestGuard.isCurrent(requestId)) {
-        searchError.value = "Неожиданная ошибка";
+        searchError.value = LOAD_FAILURE;
       }
     } finally {
       // Only set loading false if this is the current request
@@ -195,35 +195,10 @@ export const useBlogsStore = defineStore("blogs", () => {
     // a prefetch.
     if (searchCache.get(cacheKey)) return;
 
-    // Map params to API params (same as searchBlogs)
-    const pageSize = params.size || 20;
-    const apiParams: Record<
-      string,
-      string | number | boolean | string[] | number[] | undefined
-    > = {
-      take: pageSize,
-    };
-
-    // Convert page number to skip (number is 1-indexed page)
-    if (page > 1) {
-      apiParams.skip = (page - 1) * pageSize;
-    }
-    if (params.search) apiParams.search = params.search;
-    if (params.status) apiParams.statuses = [params.status];
-    if (params.hostUsernames && params.hostUsernames.length > 0) {
-      apiParams.hostUsernames = params.hostUsernames;
-    }
-    if (params.createdFromUtc) apiParams.createdFromUtc = params.createdFromUtc;
-    if (params.createdToUtc) apiParams.createdToUtc = params.createdToUtc;
-    if (params.activatedFromUtc)
-      apiParams.activatedFromUtc = params.activatedFromUtc;
-    if (params.activatedToUtc) apiParams.activatedToUtc = params.activatedToUtc;
-    if (params.closedFromUtc) apiParams.closedFromUtc = params.closedFromUtc;
-    if (params.closedToUtc) apiParams.closedToUtc = params.closedToUtc;
-    if (params.sortBy) apiParams.sortBy = params.sortBy;
-    if (params.sortOrder) apiParams.sortOrder = params.sortOrder;
-
-    const { data } = await Api.get<ListEnvelope<Blog>>("blogs", apiParams);
+    const { data } = await Api.get<ListEnvelope<Blog>>(
+      "blogs",
+      buildApiParams(params),
+    );
     if (data) {
       searchCache.set(cacheKey, data);
     }

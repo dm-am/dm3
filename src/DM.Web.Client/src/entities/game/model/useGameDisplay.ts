@@ -95,7 +95,7 @@ export function useGameDisplay() {
   }
 
   /**
-   * Format status date with time for tooltip (DD.MM.YYYY в HH:mm)
+   * Format status date with time for tooltip ("DD.MM.YYYY в HH:mm")
    * Uses the shared sitewide date-time format.
    */
   function formatStatusDateFull(game: Game): string {
@@ -136,30 +136,30 @@ export function useGameDisplay() {
 
   /**
    * Build game tooltip with labels (multiline):
-   * Мастер: Username
-   * Ассистент: A / Ассистенты: A, B
-   * Персонажи: X/Y
-   * Читатели: Z
+   * "Мастер: Username"
+   * "Ассистент: A" / "Ассистенты: A, B"
+   * "Персонажи: X/Y"
+   * "Читатели: Z"
    */
   function buildTooltip(game: Game | GameRef): string {
     const parts: string[] = [];
 
-    // Мастер: Username
+    // "Мастер: Username"
     if (game.master?.username) {
       parts.push(`Мастер: ${game.master.username}`);
     }
 
-    // Ассистент / Ассистенты: Username, ... (if any)
+    // "Ассистент" / "Ассистенты": Username, ... (if any)
     const assistants = game.assistants?.filter((a) => a?.username) ?? [];
     if (assistants.length > 0) {
       const label = assistants.length === 1 ? "Ассистент" : "Ассистенты";
       parts.push(`${label}: ${assistants.map((a) => a.username).join(", ")}`);
     }
 
-    // Персонажи: X/Y
+    // "Персонажи: X/Y"
     parts.push(`Персонажи: ${formatPcCount(game)}`);
 
-    // Читатели: Z
+    // "Читатели: Z"
     const totalReaders = game.subscribersCount ?? 0;
     parts.push(`Читатели: ${totalReaders}`);
 

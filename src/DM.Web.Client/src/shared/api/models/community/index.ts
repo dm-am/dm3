@@ -1,9 +1,6 @@
 // User types (profiles, notes, warnings, bans)
 export * from "./users";
 
-// User settings
-export * from "./user-settings";
-
 // Polls
 export * from "./polls";
 

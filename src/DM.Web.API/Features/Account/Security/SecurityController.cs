@@ -4,6 +4,7 @@ using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using DM.Domain.Core.Enums;
 
 namespace DM.Web.API.Features.Account.Security;
 
@@ -52,8 +53,13 @@ public class SecurityController : ControllerBase
     [ProducesResponseType(typeof(ListEnvelope<SecurityEvent>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    // The journal of one account: where it was signed in from and when a
+    // password was changed. Stored by nothing, for the same reason the session
+    // list is not - with no validator on any response, a copy in a cache is
+    // served without the origin being consulted at all.
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> GetSecurityLogs(
-        [FromQuery] string? type = null,
+        [FromQuery] SecurityLogType? type = null,
         // The page size is bounded by the same [Range] as every other list, and
         // for the same reason on both ends. Clipping only the top left zero to
         // mean "no limit" in the Mongo driver, so ?take=0 answered with the

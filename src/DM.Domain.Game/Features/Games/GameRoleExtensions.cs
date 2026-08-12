@@ -67,14 +67,6 @@ public static class GameRoleExtensions
     }
 
     /// <summary>
-    /// Gets the highest role a user has in a game
-    /// </summary>
-    public static GameRole GetHighestRole(this IEnumerable<GameRole> roles)
-    {
-        return roles.DefaultIfEmpty(GameRole.None).Max();
-    }
-
-    /// <summary>
     /// Checks if user has any role in the game (not None)
     /// </summary>
     public static bool HasAnyRole(this IEnumerable<GameRole> roles)
@@ -121,14 +113,6 @@ public static class GameRoleExtensions
     public static bool HasPendingPlayerInvitation(this Game game, Guid userId)
     {
         return game.PendingPlayerInvitedUserIds.Contains(userId);
-    }
-
-    /// <summary>
-    /// Checks if user is a pending assistant
-    /// </summary>
-    public static bool IsPendingAssistant(this Game game, Guid userId)
-    {
-        return game.PendingAssistant?.UserId == userId;
     }
 
     /// <summary>

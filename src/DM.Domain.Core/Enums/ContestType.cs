@@ -9,6 +9,6 @@ public enum ContestType
     /// <summary>Literary contest.</summary>
     Literary = 0,
 
-    /// <summary>Art contest (for future visual contests).</summary>
+    /// <summary>Art contest.</summary>
     Art = 1,
 }

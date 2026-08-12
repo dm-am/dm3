@@ -34,12 +34,12 @@ public class CoreConfigurationShould
         ["CdnConfiguration:BucketName"] = "dm-uploads",
         ["CdnConfiguration:AccessKey"] = "key",
         ["CdnConfiguration:SecretKey"] = "secret",
-        ["IntegrationSettings:WebUrl"] = "http://localhost:5173",
+        ["SiteAddressConfiguration:PublicUrl"] = "http://localhost:5173",
     };
 
     [Fact]
     public void AskNoStoreOfAHostThatDeclaresNone() =>
-        Validate(new Dictionary<string, string?> { ["IntegrationSettings:WebUrl"] = "http://localhost:5173" })
+        Validate(new Dictionary<string, string?> { ["SiteAddressConfiguration:PublicUrl"] = "http://localhost:5173" })
             .Should().BeNull(
                 "a worker that opens neither store must be able to start without naming " +
                 "either, or the demand stops meaning anything for the hosts that do");
@@ -47,14 +47,14 @@ public class CoreConfigurationShould
     [Fact]
     public void RefuseAHostThatDeclaresTheRelationalStoreWithoutOne() =>
         Validate(
-                new Dictionary<string, string?> { ["IntegrationSettings:WebUrl"] = "http://localhost:5173" },
+                new Dictionary<string, string?> { ["SiteAddressConfiguration:PublicUrl"] = "http://localhost:5173" },
                 services => services.RequireRelationalStorage())
             .Should().Contain("ConnectionStrings:Rdb");
 
     [Fact]
     public void RefuseAHostThatDeclaresTheDocumentStoreWithoutOne() =>
         Validate(
-                new Dictionary<string, string?> { ["IntegrationSettings:WebUrl"] = "http://localhost:5173" },
+                new Dictionary<string, string?> { ["SiteAddressConfiguration:PublicUrl"] = "http://localhost:5173" },
                 services => services.RequireDocumentStorage())
             .Should().Contain("ConnectionStrings:Mongo");
 
@@ -63,7 +63,7 @@ public class CoreConfigurationShould
         Validate(
                 new Dictionary<string, string?>
                 {
-                    ["IntegrationSettings:WebUrl"] = "http://localhost:5173",
+                    ["SiteAddressConfiguration:PublicUrl"] = "http://localhost:5173",
                     ["CdnConfiguration:Url"] = "http://localhost:9000",
                 },
                 services => services.RequireObjectStorage())

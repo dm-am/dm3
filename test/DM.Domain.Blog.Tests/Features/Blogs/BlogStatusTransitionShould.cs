@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using DM.Domain.Core.Statuses;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Blog.Authorization;
 using DM.Domain.Blog.Features.Blacklists;
@@ -58,8 +59,6 @@ public class BlogStatusTransitionShould : UnitTestBase
         var updateBlogValidator = Mock<IValidator<UpdateBlog>>();
         var createRubricValidator = Mock<IValidator<CreateRubric>>();
         var updateRubricValidator = Mock<IValidator<UpdateRubric>>();
-        var createPublicationValidator = Mock<IValidator<CreatePublication>>();
-        var updatePublicationValidator = Mock<IValidator<UpdatePublication>>();
 
         var guidFactory = Mock<IGuidFactory>();
         guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
@@ -85,8 +84,6 @@ public class BlogStatusTransitionShould : UnitTestBase
             updateBlogValidator.Object,
             createRubricValidator.Object,
             updateRubricValidator.Object,
-            createPublicationValidator.Object,
-            updatePublicationValidator.Object,
             guidFactory.Object,
             dateTimeProvider.Object,
             _eventProducer.Object);
@@ -122,7 +119,7 @@ public class BlogStatusTransitionShould : UnitTestBase
     {
         var blogId = SetupBlog(ModuleStatus.Draft);
 
-        await _service.ChangeStatusAsync(blogId.ToString(), BlogStatusTransition.Start);
+        await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Start);
 
         _capturedUpdate.Should().NotBeNull();
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Active);
@@ -137,7 +134,7 @@ public class BlogStatusTransitionShould : UnitTestBase
         var firstActivation = _now.AddMonths(-1);
         var blogId = SetupBlog(ModuleStatus.Draft, activatedUtc: firstActivation);
 
-        await _service.ChangeStatusAsync(blogId.ToString(), BlogStatusTransition.Start);
+        await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Start);
 
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Active);
         _capturedUpdate.ActivatedUtc.Should().BeNull();
@@ -150,7 +147,7 @@ public class BlogStatusTransitionShould : UnitTestBase
     {
         var blogId = SetupBlog(status);
 
-        var act = async () => await _service.ChangeStatusAsync(blogId.ToString(), BlogStatusTransition.Start);
+        var act = async () => await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Start);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest);
@@ -165,7 +162,7 @@ public class BlogStatusTransitionShould : UnitTestBase
     {
         var blogId = SetupBlog(ModuleStatus.Active);
 
-        await _service.ChangeStatusAsync(blogId.ToString(), BlogStatusTransition.Freeze);
+        await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Freeze);
 
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Closed);
         _capturedUpdate.ClosedReason.Should().Be(ClosedReason.Frozen);
@@ -181,7 +178,7 @@ public class BlogStatusTransitionShould : UnitTestBase
     {
         var blogId = SetupBlog(status);
 
-        var act = async () => await _service.ChangeStatusAsync(blogId.ToString(), BlogStatusTransition.Freeze);
+        var act = async () => await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Freeze);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest);
@@ -196,7 +193,7 @@ public class BlogStatusTransitionShould : UnitTestBase
     {
         var blogId = SetupBlog(ModuleStatus.Active);
 
-        await _service.ChangeStatusAsync(blogId.ToString(), BlogStatusTransition.Finish);
+        await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Finish);
 
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Closed);
         _capturedUpdate.ClosedReason.Should().Be(ClosedReason.Finished);
@@ -212,7 +209,7 @@ public class BlogStatusTransitionShould : UnitTestBase
     {
         var blogId = SetupBlog(status);
 
-        var act = async () => await _service.ChangeStatusAsync(blogId.ToString(), BlogStatusTransition.Finish);
+        var act = async () => await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Finish);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest);
@@ -227,7 +224,7 @@ public class BlogStatusTransitionShould : UnitTestBase
     {
         var blogId = SetupBlog(ModuleStatus.Active);
 
-        await _service.ChangeStatusAsync(blogId.ToString(), BlogStatusTransition.Close);
+        await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Close);
 
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Closed);
         _capturedUpdate.ClosedReason.Should().Be(ClosedReason.None);
@@ -242,7 +239,7 @@ public class BlogStatusTransitionShould : UnitTestBase
         var frozenAt = _now.AddDays(-7);
         var blogId = SetupBlog(ModuleStatus.Closed, ClosedReason.Frozen, closedUtc: frozenAt);
 
-        await _service.ChangeStatusAsync(blogId.ToString(), BlogStatusTransition.Close);
+        await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Close);
 
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Closed);
         _capturedUpdate.ClosedReason.Should().Be(ClosedReason.None);
@@ -254,7 +251,7 @@ public class BlogStatusTransitionShould : UnitTestBase
     {
         var blogId = SetupBlog(ModuleStatus.Closed, ClosedReason.Finished, closedUtc: _now.AddDays(-7));
 
-        var act = async () => await _service.ChangeStatusAsync(blogId.ToString(), BlogStatusTransition.Close);
+        var act = async () => await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Close);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest);
@@ -265,7 +262,7 @@ public class BlogStatusTransitionShould : UnitTestBase
     {
         var blogId = SetupBlog(ModuleStatus.Draft);
 
-        var act = async () => await _service.ChangeStatusAsync(blogId.ToString(), BlogStatusTransition.Close);
+        var act = async () => await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Close);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest);
@@ -284,7 +281,7 @@ public class BlogStatusTransitionShould : UnitTestBase
         var blogId = SetupBlog(ModuleStatus.Closed, closedReason,
             activatedUtc: _now.AddMonths(-2), closedUtc: _now.AddDays(-7));
 
-        await _service.ChangeStatusAsync(blogId.ToString(), BlogStatusTransition.Reopen);
+        await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Reopen);
 
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Active);
         _capturedUpdate.ClosedReason.Should().Be(ClosedReason.None);
@@ -299,7 +296,7 @@ public class BlogStatusTransitionShould : UnitTestBase
     {
         var blogId = SetupBlog(ModuleStatus.Closed, closedUtc: _now.AddDays(-7));
 
-        await _service.ChangeStatusAsync(blogId.ToString(), BlogStatusTransition.Reopen);
+        await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Reopen);
 
         _capturedUpdate!.ActivatedUtc.Should().Be(_now);
     }
@@ -311,7 +308,7 @@ public class BlogStatusTransitionShould : UnitTestBase
     {
         var blogId = SetupBlog(status);
 
-        var act = async () => await _service.ChangeStatusAsync(blogId.ToString(), BlogStatusTransition.Reopen);
+        var act = async () => await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Reopen);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest);
@@ -332,7 +329,7 @@ public class BlogStatusTransitionShould : UnitTestBase
             .Callback<UpdateBlogEntity, CancellationToken>((update, _) => _capturedUpdate = update)
             .ReturnsAsync(blog);
 
-        await _service.ChangeStatusAsync("abcde", BlogStatusTransition.Start);
+        await _service.ChangeStatusAsync("abcde", ModuleStatusTransition.Start);
 
         _capturedUpdate!.BlogId.Should().Be(blogId);
         _capturedUpdate.Status.Should().Be(ModuleStatus.Active);
@@ -345,7 +342,7 @@ public class BlogStatusTransitionShould : UnitTestBase
         _repository.Setup(r => r.Get(blogId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((BlogDto?)null);
 
-        var act = async () => await _service.ChangeStatusAsync(blogId.ToString(), BlogStatusTransition.Start);
+        var act = async () => await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Start);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);

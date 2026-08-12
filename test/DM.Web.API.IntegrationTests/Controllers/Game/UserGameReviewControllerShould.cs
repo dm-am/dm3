@@ -285,10 +285,10 @@ public class UserGameReviewControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task AnswerGoneForAUserThatDoesNotExist()
+    public async Task AnswerNotFoundForAUserThatDoesNotExist()
     {
         var response = await Client.GetAsync("/v1/users/nosuchpersonatall/game-reviews");
 
-        response.StatusCode.Should().Be(HttpStatusCode.Gone);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 }

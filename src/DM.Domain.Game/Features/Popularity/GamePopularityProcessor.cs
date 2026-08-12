@@ -11,7 +11,6 @@ internal class GamePopularityProcessor : IGamePopularityProcessor
 {
     private readonly IGamePopularityRepository _repository;
 
-    /// <inheritdoc cref="GamePopularityProcessor" />
     public GamePopularityProcessor(IGamePopularityRepository repository) => _repository = repository;
 
     /// <inheritdoc />

@@ -51,7 +51,7 @@ internal class BanService : IBanService
             var user = await _userLookupService.GetAsync(username);
             return await _banRepository.GetUserBans(user.UserId, ct);
         }
-        catch (HttpException e) when (e.StatusCode == HttpStatusCode.Gone)
+        catch (HttpException e) when (e.StatusCode == HttpStatusCode.NotFound)
         {
             // The one failure an empty list is the answer to: no such user.
             // A dropped connection, a cancelled request or a mapping error is
@@ -69,7 +69,7 @@ internal class BanService : IBanService
             var user = await _userLookupService.GetAsync(username);
             return await _banRepository.GetActiveBan(user.UserId, ct);
         }
-        catch (HttpException e) when (e.StatusCode == HttpStatusCode.Gone)
+        catch (HttpException e) when (e.StatusCode == HttpStatusCode.NotFound)
         {
             // Reached from the public /v1/users/{username}/bans/active route,
             // so "we could not check" used to leave as "not banned".
@@ -83,7 +83,7 @@ internal class BanService : IBanService
         var currentUser = _identityProvider.Current.User;
         if (currentUser.Role < UserRole.Moderator)
         {
-            throw new UnauthorizedAccessException("Only moderators can view all bans");
+            throw new HttpException(HttpStatusCode.Forbidden, "Список банов доступен модераторам");
         }
 
         return await _banRepository.GetAllActiveBans(ct);
@@ -96,7 +96,7 @@ internal class BanService : IBanService
         var currentUser = _identityProvider.Current.User;
         if (currentUser.Role < UserRole.Moderator)
         {
-            throw new UnauthorizedAccessException("Only moderators can view ban history");
+            throw new HttpException(HttpStatusCode.Forbidden, "История банов доступна модераторам");
         }
 
         return await _banRepository.GetBanHistory(skip, take, ct);
@@ -112,10 +112,22 @@ internal class BanService : IBanService
         // Voluntary bans can be created by the user themselves
         if (!createBan.IsVoluntary && currentUser.Role < UserRole.SeniorModerator)
         {
-            throw new UnauthorizedAccessException("Only senior moderators can create bans");
+            throw new HttpException(HttpStatusCode.Forbidden, "Банить может только старший модератор");
         }
 
         var targetUser = await _userLookupService.GetAsync(createBan.Username);
+
+        // A voluntary ban skips the senior-moderator gate above and both role
+        // checks below, so the target has to be the person asking for it.
+        // Without this the flag alone bans anybody, an administrator included,
+        // and files the ban under the victim's own name; the branch is
+        // unreachable today only because both callers hard-code the flag to
+        // false, which is a property of the callers and not of the rule.
+        if (createBan.IsVoluntary && targetUser.UserId != currentUser.UserId)
+        {
+            throw new HttpException(HttpStatusCode.Forbidden,
+                "Добровольный бан можно наложить только на себя");
+        }
 
         if (!createBan.IsVoluntary)
         {
@@ -209,7 +221,7 @@ internal class BanService : IBanService
         var currentUser = _identityProvider.Current.User;
         if (currentUser.Role < UserRole.SeniorModerator)
         {
-            throw new UnauthorizedAccessException("Only senior moderators can lift bans");
+            throw new HttpException(HttpStatusCode.Forbidden, "Снимать бан может только старший модератор");
         }
 
         var ban = await _banRepository.Get(banId, ct);

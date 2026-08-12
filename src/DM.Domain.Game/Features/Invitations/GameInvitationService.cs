@@ -11,6 +11,7 @@ using DM.Domain.Game.Features.Games;
 using DM.Domain.Core.Blacklists;
 using DM.Domain.Game.Features.Subscriptions;
 using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Exceptions;
@@ -22,8 +23,6 @@ namespace DM.Domain.Game.Features.Invitations;
 /// <inheritdoc />
 internal class GameInvitationService : IGameInvitationService
 {
-    private const int InvitationExpirationDays = 30;
-
     private readonly IIdentityProvider _identityProvider;
     private readonly IIntentionManager _intentionManager;
     private readonly IGameRepository _gameRepository;
@@ -143,7 +142,7 @@ internal class GameInvitationService : IGameInvitationService
         }
 
         // Check if invitation has expired
-        var expiresUtc = token.CreatedUtc.AddDays(InvitationExpirationDays);
+        var expiresUtc = InvitationPolicy.ExpiresAt(token.CreatedUtc);
         if (_dateTimeProvider.Now > expiresUtc)
         {
             throw new HttpException(HttpStatusCode.Gone, RefusalMessage.InvitationExpired);
@@ -242,7 +241,13 @@ internal class GameInvitationService : IGameInvitationService
 
     public async Task<IEnumerable<GameUser>> GetUsers(Guid gameId, CancellationToken ct = default)
     {
-        // No authorization - user list is public for accessible games
+        // The list is public for a game the reader may open, and that half of the
+        // sentence was the half nobody established: the repository filters only
+        // on IsRemoved, so an identifier was enough to enumerate the players of a
+        // game hidden from its holder. Fetching through GetGameOrThrow applies
+        // the reader's scope, the intention confirms the right to read.
+        var game = await GetGameOrThrow(gameId);
+        _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
         return await _repository.GetUsers(gameId, ct);
     }
 
@@ -286,7 +291,7 @@ internal class GameInvitationService : IGameInvitationService
         var game = await _gameRepository.GetGame(gameId, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
         }
         return game;
     }

@@ -51,10 +51,25 @@ public class ApiServiceBoundaryShould
         ["UploadApiService.cs"] = ["IUploadRepository", "IIntentionManager"]
     };
 
-    /// <summary>A dependency an API service is not allowed to be built out of.</summary>
+    /// <summary>
+    /// A dependency an API service is not allowed to be built out of.
+    /// </summary>
+    /// <remarks>
+    /// The namespace qualifier is optional and discarded: written out in full, a
+    /// type does not start the match at the I and the field reads as ordinary.
+    /// </remarks>
     private static readonly Regex ForbiddenDependency = new(
-        @"^[ \t]*private readonly (?<name>I[A-Za-z0-9]*Repository|IIntentionManager)\s",
+        @"^[ \t]*private readonly (?:[A-Za-z0-9_]+\.)*(?<name>I[A-Za-z0-9]*Repository|IIntentionManager)\s",
         RegexOptions.Compiled | RegexOptions.Multiline);
+
+    /// <summary>Any dependency an API service holds, whatever it is called.</summary>
+    private static readonly Regex InjectedDependency = new(
+        @"^[ \t]*private readonly (?:[A-Za-z0-9_]+\.)*(?<name>I[A-Za-z0-9]*)\s",
+        RegexOptions.Compiled | RegexOptions.Multiline);
+
+    /// <summary>An interface a class in the persistence layer implements.</summary>
+    private static readonly Regex ImplementedContract = new(
+        @"\bclass\s+\w+\s*:\s*(?<bases>[^{]+)", RegexOptions.Compiled);
 
     /// <summary>An import of a domain module's feature namespace.</summary>
     private static readonly Regex DomainFeatureImport = new(
@@ -65,27 +80,7 @@ public class ApiServiceBoundaryShould
     private static readonly Regex CitedControllerCount = new(
         @"namespace: (?<count>\d+) compliant", RegexOptions.Compiled);
 
-    /// <summary>
-    /// Walks up from the test binary to the repository root. The sources are not
-    /// copied to the output directory, and copying them would let this assert
-    /// against a stale snapshot.
-    /// </summary>
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null &&
-                   !(Directory.Exists(Path.Combine(directory.FullName, "src")) &&
-                     Directory.Exists(Path.Combine(directory.FullName, "test"))))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     private static IReadOnlyList<string> Sources(string root, string pattern) => Directory
         .GetFiles(Path.Combine(root, "src", "DM.Web.API"), pattern, SearchOption.AllDirectories)
@@ -157,6 +152,73 @@ public class ApiServiceBoundaryShould
             .Be(importing.Count,
                 "a number in a comment is a claim about the tree, and this one was out of " +
                 "date before anybody read it again");
+    }
+
+    /// <summary>
+    /// The same boundary, matched on what a dependency is rather than on what it
+    /// is called.
+    /// </summary>
+    /// <remarks>
+    /// The rule above reads the name because a name is what a source-level match
+    /// has, and a data-access contract that is not called I*Repository walks past
+    /// it. One did: a CRUD contract of one write and five reads, implemented by a
+    /// class named SecurityAuditRepository and registered as that, was declared
+    /// under the *Service suffix, so an API service held the repository directly
+    /// and the suite stayed green. Renaming it closed that instance; this closes
+    /// the class of it, because the next such contract will be named by whoever
+    /// writes it.
+    ///
+    /// Implementation location, not the interface's name, is the evidence: the
+    /// persistence layer is where a repository lives, and a contract it
+    /// implements is one whatever the declaration is called.
+    /// </remarks>
+    [Fact]
+    public void HoldNoContractThePersistenceLayerImplementsWhateverItIsNamed()
+    {
+        var root = RepositoryRoot;
+        var repositories = Path.Combine(root, "src", "DM.Infrastructure.Persistence", "Repositories");
+        var implemented = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var path in Directory
+                     .GetFiles(repositories, "*.cs", SearchOption.AllDirectories)
+                     .Where(IsAuthored))
+        {
+            foreach (Match match in ImplementedContract.Matches(File.ReadAllText(path)))
+            {
+                foreach (var baseType in match.Groups["bases"].Value.Split(','))
+                {
+                    var name = baseType.Trim().Split('<')[0].Trim();
+                    if (name.Length > 1 && name[0] == 'I' && char.IsUpper(name[1]))
+                    {
+                        implemented.Add(name);
+                    }
+                }
+            }
+        }
+
+        implemented.Should().NotBeEmpty("the persistence layer implements the contracts it exists for");
+
+        var offenders = new List<string>();
+        foreach (var path in Sources(root, "*ApiService.cs"))
+        {
+            WithoutADomainOwner.TryGetValue(Path.GetFileName(path), out var allowed);
+
+            foreach (Match match in InjectedDependency.Matches(File.ReadAllText(path)))
+            {
+                var dependency = match.Groups["name"].Value;
+                if (!implemented.Contains(dependency) || allowed?.Contains(dependency) == true)
+                {
+                    continue;
+                }
+
+                offenders.Add(Path.GetRelativePath(root, path) + " -> " + dependency);
+            }
+        }
+
+        offenders.Should().BeEmpty(
+            "a contract the persistence layer implements is a repository however it is " +
+            "named, and an API service holding one has skipped the domain service that " +
+            "owns the rules over it");
     }
 
     private static bool IsAuthored(string path) =>

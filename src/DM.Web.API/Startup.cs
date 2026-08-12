@@ -31,6 +31,7 @@ using DM.Web.API.Middleware;
 using DM.Web.API.Realtime;
 using DM.Web.API.Swagger;
 using DM.Web.API.HostedServices;
+using Jamq.Client.Abstractions.Consuming;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -100,9 +101,9 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
 
         // CORS is an API concern and no other host has an opinion on it, so this
         // one stays with the host rather than moving into the core extension.
-        services.AddOptions<IntegrationSettings>()
-            .Bind(configuration.GetSection(nameof(IntegrationSettings)))
-            .Validate(s => s.CorsUrls?.Length > 0, "IntegrationSettings:CorsUrls is required")
+        services.AddOptions<SiteAddressConfiguration>()
+            .Bind(configuration.GetSection(nameof(SiteAddressConfiguration)))
+            .Validate(s => s.AllowedOrigins?.Length > 0, "SiteAddressConfiguration:AllowedOrigins is required")
             .ValidateOnStart();
 
         // X-Forwarded-* is honoured for the configured proxy networks only.
@@ -110,6 +111,13 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         // is what the login journal, the security audit and the suspicious-login
         // detector record.
         services.AddReverseProxySupport(configuration);
+
+        // A cookie is HTTP, and this host is the only process that writes one.
+        // The setting used to sit beside the session lifetimes in the account
+        // domain, which the seeder and the notification dispatcher bind as well
+        // and neither of them answers a request.
+        services.Configure<SessionCookieConfiguration>(
+            configuration.GetSection(nameof(SessionCookieConfiguration)).Bind);
 
         services
             // No AddAutoMapper here: the mapper is owned by the Autofac
@@ -156,7 +164,11 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             client.Timeout = TimeSpan.FromSeconds(5); // Don't block registration on slow API
         });
 
-        services.AddDmJamqClient();
+        // This host consumes too, and until it passed a pipeline of its own the
+        // realtime push was the one queue nothing counted. Measured, not retried:
+        // RealtimeConsumerMetricsMiddleware says why.
+        services.AddDmJamqClient(
+            consumerBuilderDefaults: builder => builder.WithMiddleware<RealtimeConsumerMetricsMiddleware>());
 
         if (!_migrateOnStart)
         {
@@ -212,7 +224,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .AsSelf()
             .AsImplementedInterfaces();
 
-        builder.RegisterModuleOnce<MessageQueuingModule>();
+        builder.RegisterModuleOnce<MessagingModule>();
 
         builder.RegisterModuleOnce<PersistenceModule>();
         builder.RegisterModuleOnce<MailModule>();
@@ -233,11 +245,11 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
     /// <summary>
     /// Configure application
     /// </summary>
-    /// <param name="appBuilder"></param>
-    /// <param name="integrationOptions"></param>
-    /// <param name="logger"></param>
+    /// <param name="appBuilder">Application pipeline being assembled</param>
+    /// <param name="siteAddresses">Addresses the site answers on, source of the CORS policy</param>
+    /// <param name="logger">Logger of the startup itself</param>
     public void Configure(IApplicationBuilder appBuilder,
-        IOptions<IntegrationSettings> integrationOptions,
+        IOptions<SiteAddressConfiguration> siteAddresses,
         ILogger<Startup> logger)
     {
         if (_migrateOnStart)
@@ -292,7 +304,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             // CORS middleware emits Vary: Origin and the cache keys entries by
             // it - one caller's allowance is not served to another.
             .UseCors(b => b
-                .WithOrigins(integrationOptions.Value.CorsUrls)
+                .WithOrigins(siteAddresses.Value.AllowedOrigins)
                 // Two hand kept lists, both silent when wrong. A request header
                 // absent from the first never reaches the server at all: the
                 // preflight is answered without it and the browser drops the

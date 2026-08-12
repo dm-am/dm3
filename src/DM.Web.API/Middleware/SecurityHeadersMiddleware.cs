@@ -61,7 +61,9 @@ public class SecurityHeadersMiddleware
         // - style-src 'self' 'unsafe-inline': Allow inline styles (needed for component libraries)
         // - img-src 'self' data: https:: Allow images from same origin, data URIs, and HTTPS
         // - font-src 'self': Only allow fonts from same origin
-        // - connect-src 'self' wss:: Allow AJAX/WebSocket connections to same origin and secure WebSockets
+        // - connect-src 'self': Allow AJAX and WebSocket connections to this origin;
+        //   'self' already covers wss:// on the same host, while a bare wss: source
+        //   matches every host there is and bounds nothing
         // - frame-ancestors 'none': Prevent embedding in frames (complements X-Frame-Options)
         // form-action, base-uri, object-src and frame-src are listed explicitly:
         // none of them falls back to default-src, so leaving them out means they
@@ -75,7 +77,7 @@ public class SecurityHeadersMiddleware
             ? "script-src 'self' 'unsafe-inline'"
             : "script-src 'self'";
 
-        headers["Content-Security-Policy"] = $"default-src 'self'; {scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' wss:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'";
+        headers["Content-Security-Policy"] = $"default-src 'self'; {scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'";
 
         // HSTS: Force HTTPS for one year (production only, not on localhost)
         if (_environment.IsProduction() && !IsLocalhost(context.Request.Host))

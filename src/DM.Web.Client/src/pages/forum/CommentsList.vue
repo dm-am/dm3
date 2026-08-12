@@ -61,9 +61,7 @@ watch(
 // Calculate comment number based on paging
 function getCommentNumber(index: number): number {
   if (!comments.value?.paging) return index + 1;
-  const offset =
-    (comments.value.paging.current - 1) * comments.value.paging.size;
-  return offset + index + 1;
+  return comments.value.paging.skip + index + 1;
 }
 
 // The item shows the refusal and keeps its editor open, so these hand the

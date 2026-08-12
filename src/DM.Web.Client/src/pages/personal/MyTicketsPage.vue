@@ -4,7 +4,8 @@
  *
  * The current user's own support/moderation tickets, newest first, with
  * type and status filters applied server-side (GET /v1/moderation/tickets/mine
- * honours status/subtype query params). Each row expands into the ticket
+ * honours status/subtype query params) and the page taken server-side too: the
+ * pile of a long-standing member only grows. Each row expands into the ticket
  * thread: the original message and the moderation answer (single answer per
  * ticket in the current backend model).
  *
@@ -12,6 +13,7 @@
  * holds the subject line, `description` holds the ticket body.
  */
 import { computed, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import {
   ticketApi,
   type Ticket,
@@ -27,12 +29,17 @@ import {
 } from "@/shared/ui/ExpandableList";
 import { ExpandableListSkeleton } from "@/shared/ui/Skeleton";
 import { ErrorState } from "@/shared/ui/ErrorState";
+import { Paging } from "@/shared/ui/Paging";
 import { Select, type SelectOption } from "@/shared/ui/Select";
 import { LeadText, SecondaryText } from "@/shared/ui/Layout";
 import { LoginPrompt } from "@/features/auth";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
+import { usePaging } from "@/shared/lib/composables/usePaging";
 
 const authStore = useAuthStore();
+const route = useRoute();
+const router = useRouter();
+const { entitiesPerPage } = usePaging();
 
 // Labels mirror the backend enum Descriptions (TicketSubtype/TicketStatus)
 const SUBTYPE_LABELS: Record<TicketSubtype, string> = {
@@ -86,11 +93,20 @@ const envelope = ref<ListEnvelope<Ticket> | null>(null);
 const loading = ref(false);
 const loadError = ref<string | null>(null);
 
+// The page lives in the address bar, so a reload and a shared link land on the
+// page that was being read.
+const pageNumber = computed(() => {
+  const n = parseInt(String(route.query.number ?? "1"), 10);
+  return Number.isFinite(n) && n > 0 ? n : 1;
+});
+
 async function fetch() {
   loading.value = true;
   const { data, error } = await ticketApi.getMyTickets({
     status: (statusFilter.value || undefined) as TicketStatus | undefined,
     subtype: (subtypeFilter.value || undefined) as TicketSubtype | undefined,
+    number: pageNumber.value,
+    take: entitiesPerPage.value,
   });
   loading.value = false;
   if (error) {
@@ -105,9 +121,24 @@ onMounted(() => {
   if (authStore.isAuthenticated) fetch();
 });
 
-// Filters are honoured server-side — refetch whenever either changes
-watch([subtypeFilter, statusFilter], () => {
+// Following the pager only changes the address, so the refetch hangs off it
+watch(pageNumber, () => {
   if (authStore.isAuthenticated) fetch();
+});
+
+// Filters are honoured server-side — refetch whenever either changes. A filter
+// change also drops the reader back to the first page: page three of the old
+// filter is meaningless for the new one and would render an empty list. When
+// that drop really changes the number, the watcher above does the refetch.
+watch([subtypeFilter, statusFilter], () => {
+  if (!authStore.isAuthenticated) return;
+  if (pageNumber.value > 1) {
+    const query = { ...route.query };
+    delete query.number;
+    router.replace({ query });
+    return;
+  }
+  fetch();
 });
 
 const hasActiveFilter = computed(
@@ -159,6 +190,10 @@ const isFilteredEmpty = computed(
     allTickets.value.length === 0 &&
     hasActiveFilter.value,
 );
+
+// Paging draws itself only when there is more than one page, so a reader with a
+// handful of tickets sees the screen unchanged.
+const paging = computed(() => envelope.value?.paging ?? null);
 </script>
 
 <template>
@@ -180,10 +215,18 @@ const isFilteredEmpty = computed(
     <template v-else>
       <div class="filters">
         <FormField label="Тип обращения" name="tickets-subtype">
-          <Select v-model="subtypeFilter" :options="subtypeOptions" />
+          <Select
+            id="tickets-subtype"
+            v-model="subtypeFilter"
+            :options="subtypeOptions"
+          />
         </FormField>
         <FormField label="Статус" name="tickets-status">
-          <Select v-model="statusFilter" :options="statusOptions" />
+          <Select
+            id="tickets-status"
+            v-model="statusFilter"
+            :options="statusOptions"
+          />
         </FormField>
       </div>
 
@@ -277,6 +320,14 @@ const isFilteredEmpty = computed(
           </div>
         </template>
       </ExpandableList>
+
+      <Paging
+        v-if="paging"
+        class="pager"
+        :paging="paging"
+        :to="{ name: 'my-tickets' }"
+        use-query
+      />
     </template>
   </div>
 </template>
@@ -302,6 +353,9 @@ const isFilteredEmpty = computed(
 
 .error-banner
   margin-bottom: $medium
+
+.pager
+  margin-top: $medium
 
 .ticket-details
   display: flex

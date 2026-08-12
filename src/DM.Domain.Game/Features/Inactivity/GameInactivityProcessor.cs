@@ -81,6 +81,18 @@ internal class GameInactivityProcessor : IGameInactivityProcessor
         {
             try
             {
+                // The comment first and the stamp second, which is the reverse of what
+                // the pendency reminder beside this does — a deliberate choice, decided
+                // 2026-08-12, not an oversight.
+                //
+                // The two orders fail differently and the selection for the next pass
+                // runs off the stamp. Stamping first means a failed comment leaves the
+                // game marked as warned: it freezes a week later having never said a
+                // word to anybody. Commenting first means a failed stamp repeats the
+                // same warning next pass. A master who sees the warning twice complains
+                // and it gets fixed; a master whose game freezes in silence has nothing
+                // to complain about and loses the game. The louder failure is the safer
+                // one here, and GameInactivityProcessorShould pins this order.
                 await CreateSystemComment(gameId, InactivityWarningMessage, ct);
                 await _inactivityRepository.SetInactivityWarning(gameId, now, ct);
                 await _eventProducer.SendAsync(EventType.GameInactivityWarning, gameId);
@@ -126,6 +138,8 @@ internal class GameInactivityProcessor : IGameInactivityProcessor
         {
             try
             {
+                // Comment before stamp, for the reason spelled out in the inactivity
+                // pass above: a silent closure is worse than a repeated warning.
                 await CreateSystemComment(gameId, ClosureWarningMessage, ct);
                 await _inactivityRepository.SetClosureWarning(gameId, now, ct);
                 await _eventProducer.SendAsync(EventType.GameClosureWarning, gameId);

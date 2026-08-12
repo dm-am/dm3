@@ -60,27 +60,7 @@ public class PrePushGateShould
 
     private static readonly string[] Workflows = ["dotnet.yml", "security.yml"];
 
-    /// <summary>
-    /// Walks up from the test binary to the repository root. Neither the hook nor
-    /// the workflows are copied to the output directory, and copying them would let
-    /// this assert against a stale snapshot.
-    /// </summary>
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null &&
-                   !(Directory.Exists(Path.Combine(directory.FullName, "src")) &&
-                     Directory.Exists(Path.Combine(directory.FullName, "test"))))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     private static string HookPath => Path.Combine(RepositoryRoot, "scripts", "hooks", "pre-push");
 
@@ -312,5 +292,54 @@ public class PrePushGateShould
             "the header marks every job as run (+) or as left to CI (-) with the reason; a job " +
             "missing from the table is the silent gap this hook shipped with, and a row naming a " +
             "job that no longer exists is a promise about nothing");
+    }
+
+    /// <summary>
+    /// Every hook has a test, and every one of those tests is run before a push.
+    /// </summary>
+    /// <remarks>
+    /// The hooks are the last thing standing between a forbidden command and lost
+    /// work, and they are the one part of the tree no workflow covers: CI never
+    /// invokes them, so nothing outside this hook would notice a rule that stopped
+    /// matching. One of the two shipped with a test on thirty-five cases that
+    /// nothing ever ran.
+    ///
+    /// Both halves matter. A hook with no test is unverified; a test nothing calls
+    /// is a file that looks like a gate and is not one.
+    /// </remarks>
+    [Fact]
+    public void RunTheTestOfEveryHook()
+    {
+        var hooks = Directory
+            .GetFiles(Path.Combine(RepositoryRoot, ".claude", "hooks"), "*.js")
+            .Select(Path.GetFileName)
+            .ToList();
+
+        var rules = hooks!.Where(name => !name!.EndsWith(".test.js", StringComparison.Ordinal)).ToList();
+        rules.Should().NotBeEmpty("the hooks directory is what this rule is about");
+
+        var hook = File.ReadAllText(HookPath);
+        var unverified = new List<string>();
+        var unrun = new List<string>();
+
+        foreach (var rule in rules)
+        {
+            var test = Path.GetFileNameWithoutExtension(rule) + ".test.js";
+            if (!hooks.Contains(test, StringComparer.Ordinal))
+            {
+                unverified.Add(rule!);
+                continue;
+            }
+
+            if (!hook.Contains(test, StringComparison.Ordinal))
+            {
+                unrun.Add(test);
+            }
+        }
+
+        unverified.Should().BeEmpty(
+            "a hook nothing exercises is checked only by the work it fails to stop");
+        unrun.Should().BeEmpty(
+            "the test exists and nothing calls it, which is the state the whole rule is against");
     }
 }

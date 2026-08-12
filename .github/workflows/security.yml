@@ -1,10 +1,14 @@
 name: Security Scanning
 
 on:
-  push:
-    branches: [main, dev]
-  pull_request:
-    branches: [main, dev]
+  # Called from the build workflow rather than triggered beside it, so that the
+  # jobs which publish images can name these in `needs`. Triggered separately,
+  # they ran on the same push and finished whenever they finished: an image with
+  # a red CodeQL or a red ZAP reached the registry, took the `latest` tag on
+  # main, and watchtower installed it within five minutes.
+  workflow_call:
+  # The weekly full scan stands on its own: it is about the code as it sits, not
+  # about a change, and there is no build to gate.
   schedule:
     - cron: '0 3 * * 0'
 
@@ -12,7 +16,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # A literal name, not ${{ github.workflow }}. Called through workflow_call, this
+  # runs inside the caller and github.workflow is the CALLER's name, so that
+  # expression asks for the group the caller is already holding — GitHub answers
+  # that by cancelling the run this job lives in. Since publishing waits on this
+  # job, the whole graph would stop before an image ever reached the registry.
+  group: security-scanning-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -23,6 +32,10 @@ jobs:
   # defect classes that matter most here — unescaped output reaching a rendered
   # surface, injection, unsafe deserialisation — are source-level.
   codeql:
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Far above the real time on purpose:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -67,6 +80,10 @@ jobs:
           category: /language:${{ matrix.language }}
 
   zap-scan:
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Far above the real time on purpose:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     env:
       # docker/.env.example ends with Development for local work, and a scan of
@@ -83,17 +100,21 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # The example file ships the encryption key empty, and compose declares
-      # it with ${...:?} — which rejects an empty value, not just a missing
-      # one. Copying the example alone left every step below dead. A throwaway
-      # key is generated here because this stack is torn down with the job.
+      # The example file ships the encryption key and the imgproxy signing pair
+      # empty, and compose declares all three with ${...:?} — which rejects an
+      # empty value, not just a missing one. Copying the example alone left every
+      # step below dead. Throwaway values are generated here because this stack
+      # is torn down with the job.
       #
-      # Through the environment rather than by rewriting the line in .env:
+      # Through the environment rather than by rewriting the lines in .env:
       # compose prefers the environment over the file, so this keeps working if
       # the example ever gains a value, a comment or trailing whitespace — the
       # anchored sed it replaces would have silently matched nothing.
-      - name: Generate a throwaway encryption key
-        run: echo "DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+      - name: Generate the throwaway secrets compose refuses to start without
+        run: |
+          echo "DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+          echo "IMGPROXY_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "IMGPROXY_SALT=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
       - name: Create .env for Docker Compose
         run: |
@@ -123,9 +144,12 @@ jobs:
           touch zap.yaml report_json.json report_md.md report_html.html
           chmod 777 zap.yaml report_json.json report_md.md report_html.html
 
-      # fail_action makes this a gate: any alert whose rule is marked FAIL in
-      # .zap/rules.tsv breaks the build. Triage lives in that file — a rule is
-      # either promoted to FAIL or explicitly IGNORE'd with a stated reason.
+      # fail_action makes this a gate: the scan fails the job on any alert its
+      # rule file does not silence, not only on rules marked FAIL. Triage lives
+      # in .zap/rules.tsv - a rule is either left alone, and then it breaks the
+      # build, or explicitly IGNORE'd with a stated reason. Reading it the other
+      # way round is the trap: the file holds no FAIL line and the gate still
+      # works, because silence is the failing state here, not the passing one.
       - name: OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.14.0
         with:

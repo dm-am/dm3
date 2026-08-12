@@ -15,7 +15,8 @@ public interface IAuthenticationService
     /// </summary>
     /// <param name="email">User email address</param>
     /// <param name="password">User password</param>
-    /// <param name="rememberMe">If true, session is persistent (30 days); otherwise 24 hours</param>
+    /// <param name="rememberMe">If true, the session is persistent and lives for the configured
+    /// persistent lifetime; otherwise for the ordinary one</param>
     /// <param name="context">Session context with device info</param>
     /// <returns>Authentication identity</returns>
     Task<IIdentity> Authenticate(string email, string password, bool rememberMe = true, SessionContext? context = null);
@@ -30,9 +31,15 @@ public interface IAuthenticationService
     /// <summary>
     /// Authenticate unconditionally
     /// </summary>
+    /// <remarks>
+    /// A session without a password, and an ordinary one otherwise: it is written
+    /// into the security journal and the device list like any login, because the
+    /// person whose account it is has to be able to see it.
+    /// </remarks>
     /// <param name="userId">User identifier</param>
+    /// <param name="context">Address and agent the session is opened from</param>
     /// <returns>Authentication identity</returns>
-    Task<IIdentity> Authenticate(Guid userId);
+    Task<IIdentity> Authenticate(Guid userId, SessionContext? context = null);
 
     /// <summary>
     /// Logout as a current user
@@ -43,7 +50,7 @@ public interface IAuthenticationService
     /// <summary>
     /// Logout from all devices except this
     /// </summary>
-    /// <returns>Newly created authentication identity</returns>
+    /// <returns>The identity in hand: the current session is the one kept, not reissued</returns>
     Task<IIdentity> LogoutElsewhere();
 
     /// <summary>

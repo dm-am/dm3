@@ -104,7 +104,6 @@ internal class UploadApiService : IUploadApiService
     /// <inheritdoc />
     public async Task<Shared.Dto.Upload> GetUpload(Guid id)
     {
-        var userId = _identityProvider.Current.User.UserId;
         var upload = await _uploadRepository.GetAsync(id);
 
         if (upload == null)
@@ -113,11 +112,10 @@ internal class UploadApiService : IUploadApiService
         }
 
         // Owner self-view; viewing another user's file is a moderation action
-        // (Moderator+), aligned with the list + delete endpoints.
-        if (upload.UserId != userId && _identityProvider.Current.User.Role < UserRole.Moderator)
-        {
-            throw new HttpException(System.Net.HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
-        }
+        // (Moderator+), aligned with the list + delete endpoints. Asked of the
+        // intention that names the rule: it used to be spelled out here and again
+        // in DeleteUpload, while UploadIntention.View resolved to nothing.
+        _intentionManager.ThrowIfForbidden(UploadIntention.View, upload);
 
         return MapToDto(upload);
     }
@@ -134,10 +132,7 @@ internal class UploadApiService : IUploadApiService
         }
 
         // Owner self-service; deleting others' files is a moderation action (Moderator+).
-        if (upload.UserId != userId && _identityProvider.Current.User.Role < UserRole.Moderator)
-        {
-            throw new HttpException(System.Net.HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
-        }
+        _intentionManager.ThrowIfForbidden(UploadIntention.Delete, upload);
 
         await _uploadRepository.SoftDeleteAsync(id, userId, _dateTimeProvider.Now);
     }
@@ -298,7 +293,14 @@ internal class UploadApiService : IUploadApiService
             Height = processed.Height,
             ObjectKey = objectKey,
             Original = true,
-            Url = _objectStorage.BuildPublicUrl(objectKey),
+            // Only for the types the bucket actually answers anonymously. The
+            // policy grants GetObject per prefix, so handing back a public
+            // address for anything else is a 200 carrying a link that returns
+            // 403 — the object key is stored either way, and a serving path for
+            // the closed types is what they are waiting on.
+            Url = UploadFolder.AnonymouslyReadable.Contains(type)
+                ? _objectStorage.BuildPublicUrl(objectKey)
+                : null,
             CreatedUtc = now,
             ConfirmedUtc = now,
         };
@@ -415,12 +417,14 @@ internal class UploadApiService : IUploadApiService
     /// replaced avatar allocates a fresh one), and that, not the shape of the key,
     /// is what the immutable cache headers on PUT rest on.
     ///
-    /// The suffix is the whole identifier and not eight characters of it. The
-    /// bucket answers anonymously, which is right for avatars and is what post
-    /// attachments live under too, so for an attachment in a closed room the
-    /// address is the access control. Eight hex is 32 bits next to a user id
-    /// anyone can read off the page, and that is a hint rather than a capability.
-    /// The extension is accepted as a validated, normalized string.
+    /// The suffix is the whole identifier and not eight characters of it, because
+    /// a key is never reused and never overwritten and the value has to be unique
+    /// for as long as the bucket lives. What it is NOT is access control: the
+    /// bucket answers anonymously on the declared public prefixes only, and an
+    /// attachment in a closed room is not under one of them. It used to be — the
+    /// grant covered the whole bucket, listing included — and that made this
+    /// paragraph read like a security argument, which the length of a key cannot
+    /// be. The extension is accepted as a validated, normalized string.
     /// </summary>
     private string GenerateObjectKey(UploadType type, Guid userId, string normalizedExtension)
     {

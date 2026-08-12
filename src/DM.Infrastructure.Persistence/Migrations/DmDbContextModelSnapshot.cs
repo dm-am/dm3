@@ -24,6 +24,9 @@ namespace DM.Infrastructure.Persistence.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.HasSequence<int>("TagShortIds")
+                .StartsAt(66L);
+
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.ModeratedProfileNote", b =>
                 {
                     b.Property<Guid>("ModeratedProfileNoteId")
@@ -181,6 +184,10 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Email")
                         .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("PendingEmail")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
@@ -1643,7 +1650,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             ContestType = 0,
                             IsActive = true,
                             Number = 23,
-                            TopicUrl = "https://dm.am/forum/topic/contest-results-lit-23",
+                            TopicUrl = "/forum/topic/contest-results-lit-23",
                             Year = 2024
                         },
                         new
@@ -1652,7 +1659,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             ContestType = 0,
                             IsActive = true,
                             Number = 22,
-                            TopicUrl = "https://dm.am/forum/topic/contest-results-lit-22",
+                            TopicUrl = "/forum/topic/contest-results-lit-22",
                             Year = 2023
                         },
                         new
@@ -1661,7 +1668,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             ContestType = 0,
                             IsActive = true,
                             Number = 21,
-                            TopicUrl = "https://dm.am/forum/topic/contest-results-lit-21",
+                            TopicUrl = "/forum/topic/contest-results-lit-21",
                             Year = 2023
                         },
                         new
@@ -1670,7 +1677,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             ContestType = 0,
                             IsActive = true,
                             Number = 20,
-                            TopicUrl = "https://dm.am/forum/topic/contest-results-lit-20",
+                            TopicUrl = "/forum/topic/contest-results-lit-20",
                             Year = 2022
                         },
                         new
@@ -1679,7 +1686,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             ContestType = 1,
                             IsActive = true,
                             Number = 2,
-                            TopicUrl = "https://dm.am/forum/topic/contest-results-art-2",
+                            TopicUrl = "/forum/topic/contest-results-art-2",
                             Year = 2024
                         },
                         new
@@ -1688,7 +1695,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             ContestType = 1,
                             IsActive = true,
                             Number = 1,
-                            TopicUrl = "https://dm.am/forum/topic/contest-results-art-1",
+                            TopicUrl = "/forum/topic/contest-results-art-1",
                             Year = 2023
                         });
                 });
@@ -2825,7 +2832,7 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("DeletedByUserId");
 
-                    b.HasIndex("RoomId");
+                    b.HasIndex("RoomId", "CreatedUtc", "PostId");
 
                     b.HasIndex("SearchVector")
                         .HasDatabaseName("IX_Posts_SearchVector");
@@ -3452,7 +3459,7 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("DeletedByUserId");
 
-                    b.HasIndex("EntityId");
+                    b.HasIndex("EntityId", "CreatedUtc", "CommentId");
 
                     b.HasIndex("SearchVector")
                         .HasDatabaseName("IX_Comments_SearchVector");
@@ -3546,6 +3553,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("TagId");
+
+                    b.HasIndex("ShortId")
+                        .IsUnique();
 
                     b.HasIndex("TagGroupId");
 

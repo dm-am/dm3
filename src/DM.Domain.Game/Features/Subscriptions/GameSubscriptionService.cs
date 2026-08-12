@@ -23,7 +23,7 @@ internal class GameSubscriptionService : IGameSubscriptionService
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IGameBlacklistRepository _blacklistRepository;
+    private readonly GameSubscriptionGuard _guard;
 
     public GameSubscriptionService(
         ISubscriptionRepository repository,
@@ -31,14 +31,14 @@ internal class GameSubscriptionService : IGameSubscriptionService
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
-        IGameBlacklistRepository blacklistRepository)
+        GameSubscriptionGuard guard)
     {
         _repository = repository;
         _userLookupService = userLookupService;
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
-        _blacklistRepository = blacklistRepository;
+        _guard = guard;
     }
 
     /// <inheritdoc />
@@ -46,15 +46,12 @@ internal class GameSubscriptionService : IGameSubscriptionService
     {
         var userId = _identityProvider.Current.User.UserId;
 
-        // Subscribing is writing: it puts the user on the game's roster and hands
-        // them GameRole.Reader, which opens the private comment thread. Reading the
-        // game is open to a blacklisted user and stays open, joining it is what the
-        // blacklist refuses. GameBlacklistService refuses to blacklist a subscriber
-        // at all and makes the owner remove them first, so without this the same
-        // invariant could be walked back from the other side by one request.
-        if (await _blacklistRepository.IsBlocked(gameId, userId, ct))
+        // The rule itself lives in GameSubscriptionGuard, where the generic
+        // endpoint can reach it too. Here it is asked and answered by refusing.
+        var refusal = await _guard.Refusal(gameId, userId, ct);
+        if (refusal is not null)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
+            throw new HttpException(HttpStatusCode.Forbidden, refusal);
         }
 
         return await SubscribeInternal(gameId, userId, ct);
@@ -63,10 +60,10 @@ internal class GameSubscriptionService : IGameSubscriptionService
     /// <inheritdoc />
     public async Task SubscribeUserAsync(Guid gameId, Guid userId, CancellationToken ct = default)
     {
-        // Same invariant, different answer to a violation: the subscriber is not
-        // the caller, so refusing would fail the caller's own action instead of
-        // the join. A blacklisted user is simply left off the roster.
-        if (await _blacklistRepository.IsBlocked(gameId, userId, ct))
+        // Same rule, different answer to a violation: the subscriber is not the
+        // caller, so refusing would fail the caller's own action instead of the
+        // join. A blacklisted user is simply left off the roster.
+        if (await _guard.Refusal(gameId, userId, ct) is not null)
         {
             return;
         }
@@ -104,27 +101,23 @@ internal class GameSubscriptionService : IGameSubscriptionService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GeneralUser>> GetSubscribersAsync(Guid gameId, CancellationToken ct = default)
+    public async Task<IEnumerable<UserReference>> GetSubscribersAsync(Guid gameId, CancellationToken ct = default)
     {
         var subscriberIds = await _repository.GetTargetSubscriberIdsAsync(SubscriptionTargetType.Game, gameId, ct);
         var subscriberIdList = subscriberIds.ToList();
 
         if (!subscriberIdList.Any())
         {
-            return Enumerable.Empty<GeneralUser>();
+            return Enumerable.Empty<UserReference>();
         }
 
-        var users = new List<GeneralUser>();
-        foreach (var subscriberId in subscriberIdList)
-        {
-            var user = await _userLookupService.GetAsync(subscriberId);
-            if (user != null)
-            {
-                users.Add(user);
-            }
-        }
-
-        return users;
+        // One read for the whole list. Asked one at a time, a hundred subscribers
+        // were a hundred round trips, and GetAsync throws on a user who is no
+        // longer there — a single removed subscriber answered the entire page
+        // with 404. The batch form returns the users that exist and says
+        // nothing about the ones that do not, which is what a list of readers
+        // needs.
+        return await _userLookupService.GetReferencesAsync(subscriberIdList);
     }
 
     /// <inheritdoc />

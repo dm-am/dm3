@@ -21,15 +21,16 @@ public interface ITicketRepository
         IReadOnlyCollection<TicketSubtype>? subtypes = null, CancellationToken ct = default);
 
     /// <summary>
-    /// Get tickets assigned to a specific moderator
+    /// Get a page of tickets assigned to a specific moderator
     /// </summary>
-    Task<IEnumerable<Ticket>> GetModeratorTickets(Guid moderatorId, CancellationToken ct = default);
+    Task<(IEnumerable<Ticket> tickets, PagingResult paging)> GetModeratorTickets(Guid moderatorId,
+        PagingQuery query, CancellationToken ct = default);
 
     /// <summary>
-    /// Get tickets filed by a specific user, with optional status and subtype
-    /// filters (applied server-side)
+    /// Get a page of tickets filed by a specific user, with optional status and
+    /// subtype filters (applied server-side)
     /// </summary>
-    Task<IEnumerable<Ticket>> GetUserTickets(Guid userId,
+    Task<(IEnumerable<Ticket> tickets, PagingResult paging)> GetUserTickets(Guid userId, PagingQuery query,
         TicketStatus? status = null, TicketSubtype? subtype = null, CancellationToken ct = default);
 
     /// <summary>

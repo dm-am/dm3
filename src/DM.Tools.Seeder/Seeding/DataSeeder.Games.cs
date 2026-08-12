@@ -257,17 +257,17 @@ internal sealed partial class DataSeeder
             (readers: 3, pcLimit: 4, activeChars: 0, comments: 5, posts: 25),
             (readers: 0, pcLimit: 5, activeChars: 0, comments: 3, posts: 15),
             // Additional games for remaining tags (11) - varied spread
-            (readers: 12, pcLimit: (int?)null, activeChars: 0, comments: 10, posts: 30), // Сотворение Миров
-            (readers: 6, pcLimit: 4, activeChars: 0, comments: 6, posts: 20), // Апокалипсис: День Ноль
-            (readers: 18, pcLimit: (int?)null, activeChars: 0, comments: 15, posts: 0), // Клуб Анонимных Убийц (Mafia)
-            (readers: 8, pcLimit: 5, activeChars: 0, comments: 8, posts: 35), // Безумные Приключения
-            (readers: 4, pcLimit: 4, activeChars: 0, comments: 5, posts: 25), // Эра Водолея: Пробуждение
-            (readers: 2, pcLimit: 5, activeChars: 0, comments: 4, posts: 20), // FUDGE: Универсум
-            (readers: 15, pcLimit: 5, activeChars: 0, comments: 12, posts: 60), // Паровая Империя
-            (readers: 3, pcLimit: 4, activeChars: 0, comments: 5, posts: 25), // За Гранью Реальности
-            (readers: 5, pcLimit: 4, activeChars: 0, comments: 6, posts: 30), // Black Bird
-            (readers: 1, pcLimit: 4, activeChars: 0, comments: 3, posts: 15), // Темные Страсти
-            (readers: 0, pcLimit: 3, activeChars: 0, comments: 2, posts: 12), // Кровавый Карнавал
+            (readers: 12, pcLimit: (int?)null, activeChars: 0, comments: 10, posts: 30), // "Сотворение Миров"
+            (readers: 6, pcLimit: 4, activeChars: 0, comments: 6, posts: 20), // "Апокалипсис: День Ноль"
+            (readers: 18, pcLimit: (int?)null, activeChars: 0, comments: 15, posts: 0), // "Клуб Анонимных Убийц" (Mafia)
+            (readers: 8, pcLimit: 5, activeChars: 0, comments: 8, posts: 35), // "Безумные Приключения"
+            (readers: 4, pcLimit: 4, activeChars: 0, comments: 5, posts: 25), // "Эра Водолея: Пробуждение"
+            (readers: 2, pcLimit: 5, activeChars: 0, comments: 4, posts: 20), // "FUDGE: Универсум"
+            (readers: 15, pcLimit: 5, activeChars: 0, comments: 12, posts: 60), // "Паровая Империя"
+            (readers: 3, pcLimit: 4, activeChars: 0, comments: 5, posts: 25), // "За Гранью Реальности"
+            (readers: 5, pcLimit: 4, activeChars: 0, comments: 6, posts: 30), // "Black Bird"
+            (readers: 1, pcLimit: 4, activeChars: 0, comments: 3, posts: 15), // "Темные Страсти"
+            (readers: 0, pcLimit: 3, activeChars: 0, comments: 2, posts: 12), // "Кровавый Карнавал"
         };
 
         var createdLargePost = false; // Track if we've used the large Diopside post
@@ -987,14 +987,19 @@ internal sealed partial class DataSeeder
                 // Both chat rooms are filled through one helper: the open and the
                 // closed example differ by who may open them and by what is said
                 // in them, not by how the chat behind them is built.
-                void SeedRoomChat(Room room, IReadOnlyList<Guid> speakerIds, IReadOnlyList<string> texts)
+                async Task SeedRoomChat(Room room, IReadOnlyList<Guid> speakerIds, IReadOnlyList<string> texts)
                 {
+                    // Same as the repository: the serial comes from the sequence before the
+                    // insert, so the room chat is written with the address it is opened by.
+                    var roomChatSerialNumber = await SerialNumberAllocator.NextAsync<Chat>(_dbContext);
                     var roomChat = new Chat
                     {
                         ChatId = _guidFactory.Create(),
                         Type = ChatType.GameRoom,
                         Title = room.Title,
-                        RoomId = room.RoomId
+                        RoomId = room.RoomId,
+                        SerialNumber = roomChatSerialNumber,
+                        PublicId = _publicIdService.Encode(roomChatSerialNumber)
                     };
                     _dbContext.Set<Chat>().Add(roomChat);
                     room.ChatId = roomChat.ChatId;
@@ -1025,7 +1030,7 @@ internal sealed partial class DataSeeder
                 // Open chat room: a short OOC exchange between the master and a
                 // couple of players, so the chat page and its cursor pagination
                 // have something to render.
-                SeedRoomChat(
+                await SeedRoomChat(
                     chatRoom,
                     new[] { master.UserId }.Concat(playersForGame.Take(2).Select(p => p.UserId)).ToList(),
                     new[]
@@ -1042,7 +1047,7 @@ internal sealed partial class DataSeeder
                 // kind of exchange, but only between the master and the players
                 // holding access, so the two chat examples differ in the lock
                 // and not in what is behind it.
-                SeedRoomChat(
+                await SeedRoomChat(
                     privateChatRoom!,
                     new[] { master.UserId }
                         .Concat(restrictedRoomMembers.Take(2).Select(c => c.AuthorId ?? master.UserId))

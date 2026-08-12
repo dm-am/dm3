@@ -26,28 +26,32 @@ internal class GeneralUserMappingProfile : Profile
             .ForMember(d => d.Picture, s => s.MapFrom(u => AvatarProjections.From(u.AvatarUpload)))
             .ForMember(d => d.LastActivityUtc, s => s.MapFrom(u => u.LastActivityUtc))
             .ForMember(d => d.RegisteredUtc, s => s.MapFrom(u => u.CreatedUtc))
-            .ForMember(d => d.UsernameHistory, s => s.Ignore()) // Set separately after mapping (OrderBy not translatable in ProjectTo)
-            .ForMember(d => d.PostReviewsGivenCount, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.PostReviewsReceivedCount, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.EndorsementsGivenCount, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.EndorsementsReceivedCount, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.GameReviewsGivenCount, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.GameReviewsReceivedCount, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.TopicsAuthoredCount, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.CommentsAuthoredCount, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.GlobalChatMessagesCount, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.BansReceivedCount, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.GameDropsCount, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.PublicationsAuthoredCount, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.LikesReceivedCount, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.GamesHosting, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.GamesHostingByStatus, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.GamesPlaying, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.GamesPlayingByStatus, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.BlogsHosting, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.BlogsHostingByStatus, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.SubscribersByCategory, s => s.Ignore()) // Set separately after mapping
-            .ForMember(d => d.Subscribers, s => s.Ignore()); // Set separately after mapping (richer SubscriberInfo list)
+            // Everything below is ignored here and set separately after mapping.
+            // Two of them for a reason of their own: UsernameHistory because its
+            // OrderBy is not translatable in ProjectTo, and Subscribers because the
+            // list set afterwards carries richer SubscriberInfo.
+            .ForMember(d => d.UsernameHistory, s => s.Ignore())
+            .ForMember(d => d.PostReviewsGivenCount, s => s.Ignore())
+            .ForMember(d => d.PostReviewsReceivedCount, s => s.Ignore())
+            .ForMember(d => d.EndorsementsGivenCount, s => s.Ignore())
+            .ForMember(d => d.EndorsementsReceivedCount, s => s.Ignore())
+            .ForMember(d => d.GameReviewsGivenCount, s => s.Ignore())
+            .ForMember(d => d.GameReviewsReceivedCount, s => s.Ignore())
+            .ForMember(d => d.TopicsAuthoredCount, s => s.Ignore())
+            .ForMember(d => d.CommentsAuthoredCount, s => s.Ignore())
+            .ForMember(d => d.GlobalChatMessagesCount, s => s.Ignore())
+            .ForMember(d => d.BansReceivedCount, s => s.Ignore())
+            .ForMember(d => d.GameDropsCount, s => s.Ignore())
+            .ForMember(d => d.PublicationsAuthoredCount, s => s.Ignore())
+            .ForMember(d => d.LikesReceivedCount, s => s.Ignore())
+            .ForMember(d => d.GamesHosting, s => s.Ignore())
+            .ForMember(d => d.GamesHostingByStatus, s => s.Ignore())
+            .ForMember(d => d.GamesPlaying, s => s.Ignore())
+            .ForMember(d => d.GamesPlayingByStatus, s => s.Ignore())
+            .ForMember(d => d.BlogsHosting, s => s.Ignore())
+            .ForMember(d => d.BlogsHostingByStatus, s => s.Ignore())
+            .ForMember(d => d.SubscribersByCategory, s => s.Ignore())
+            .ForMember(d => d.Subscribers, s => s.Ignore());
 
         // UsernameHistory entity -> UsernameHistoryEntry domain
         CreateMap<EntityUsernameHistory, UsernameHistoryEntry>()

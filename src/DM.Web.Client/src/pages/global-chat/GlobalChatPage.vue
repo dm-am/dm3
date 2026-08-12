@@ -32,20 +32,24 @@ import { MessageSearchBar } from "@/features/message-search";
 import { WarningDialog } from "@/features/moderation-actions";
 import { LoginPrompt } from "@/features/auth";
 import { DashSeparator } from "@/shared/ui/DashSeparator";
+import { ErrorState } from "@/shared/ui/ErrorState";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
 import { notifyFailure } from "@/shared/lib/errors";
+import { permalinkOrigin } from "@/shared/config/site";
 import {
   groupMessagesWithSeparators,
   isDateSeparator,
   isUserOnline,
+  toChatVirtualRows,
   type MessageOrSeparator,
 } from "@/shared/lib/utils/chat";
-import { useVirtualScroll } from "@/shared/lib/composables";
+import { useVirtualScroll } from "@/shared/lib/composables/useVirtualScroll";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useGlobalSignalR } from "@/shared/lib/composables/useSignalR";
 import { NotificationType } from "@/shared/api/models/notifications";
 import type { SignalRNotification } from "@/shared/api/models/notifications";
 import { useMessageToolbar } from "@/shared/lib/composables/useMessageToolbar";
+import { useChatComposer } from "@/shared/lib/composables/useChatComposer";
 import {
   useAnchoredInfiniteScroll,
   LANDING_SCROLL_MS,
@@ -83,8 +87,6 @@ const {
   canLike: canLikeMsg,
 } = useMessagePermissions(user);
 
-// isModerator provided by useMessagePermissions above
-
 const canSendMessages = computed(() => Boolean(user.value));
 
 // ─────────────────────────────────────────────────────────────
@@ -118,7 +120,6 @@ const showClosedEventHint = computed(() => {
   );
 });
 
-const newMessage = ref("");
 const globalChatContainer = ref<HTMLElement | null>(null);
 const messagesContainer = ref<HTMLElement | null>(null);
 const editorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
@@ -156,8 +157,6 @@ const {
   },
 });
 
-// autoGrowEdit removed - BBCodeEditor handles its own sizing
-
 // Edit state — editText holds the message's original BBCode, used only to
 // seed ChatMessage's editor on entering edit mode (:edit-text is consumed
 // as an initial value there, not synced back). The actual edited text lives
@@ -187,6 +186,18 @@ const {
   toolbar: toolbarEl,
   isScrolling: () => isScrolling.value,
 });
+
+// Writing and deleting a message: shared with the messenger, which had the
+// same four functions letter for letter.
+const { newMessage, handleSend, requestDelete, cancelDelete, confirmDelete } =
+  useChatComposer({
+    sending,
+    send: (text) => globalChatStore.sendMessage(text),
+    remove: (id) => globalChatStore.deleteMessage(id),
+    editor: editorRef,
+    confirmingDeleteId,
+    scrollToBottom: () => scrollToBottom(),
+  });
 
 const hoveredMessage = computed(() => {
   if (!hoveredMessageId.value) return null;
@@ -318,8 +329,6 @@ const messagesWithSeparators = computed((): MessageOrSeparator[] =>
   groupMessagesWithSeparators(messages.value ?? []),
 );
 
-// isDateSeparator imported from shared/lib/utils/chat
-
 // Virtual scroll for message list
 const itemCount = computed(() => messagesWithSeparators.value.length);
 // Stable per-item key (message id / date-separator date) instead of the
@@ -339,6 +348,13 @@ const { virtualItems, totalSize, measureElement, scrollToIndex } =
     overscan: 15,
     getItemKey: chatItemKey,
   });
+
+// What the template iterates: each visible row already resolved to the item it
+// draws and narrowed to one of the two kinds (shared with the messenger view,
+// see toChatVirtualRows).
+const virtualRows = computed(() =>
+  toChatVirtualRows(messagesWithSeparators.value, virtualItems.value),
+);
 
 // Today (capped maximum for the date picker, YYYY-MM-DD)
 const todayValue = dayjs().format("YYYY-MM-DD");
@@ -760,7 +776,7 @@ async function toggleLike(msg: GlobalChatMessage) {
 
 // Anchor
 async function copyAnchor(msgId: string) {
-  const url = `${window.location.origin}${window.location.pathname}#msg-${msgId}`;
+  const url = `${permalinkOrigin()}${window.location.pathname}#msg-${msgId}`;
   try {
     await navigator.clipboard.writeText(url);
     toast.success("Ссылка скопирована");
@@ -795,14 +811,14 @@ function handleWarn(msg: GlobalChatMessage) {
   if (!username) return;
   warnUsername.value = username;
   warnEntityId.value = msg.id;
-  warnEntityLink.value = `${window.location.origin}${window.location.pathname}#msg-${msg.id}`;
+  warnEntityLink.value = `${permalinkOrigin()}${window.location.pathname}#msg-${msg.id}`;
   openWarnDialog();
 }
 
 function scrollToMessage(msgId: string) {
   // With virtual scroll, element may not be in DOM yet — scroll virtualizer first
   const index = messagesWithSeparators.value.findIndex(
-    (item) => !isDateSeparator(item) && (item as any).id === msgId,
+    (item) => !isDateSeparator(item) && item.id === msgId,
   );
   if (index >= 0) {
     scrollToIndex(index, { align: "center" });
@@ -867,7 +883,7 @@ async function loadArchiveDate(date: string) {
   );
   const targetId = firstOfDay?.id ?? messages.value[0].id;
   const index = messagesWithSeparators.value.findIndex(
-    (item) => !isDateSeparator(item) && (item as any).id === targetId,
+    (item) => !isDateSeparator(item) && item.id === targetId,
   );
   nextTick(() => {
     if (index >= 0) {
@@ -927,42 +943,6 @@ async function retryLoad() {
     scrollToBottom();
   }
 }
-
-async function handleSend() {
-  if (!newMessage.value.trim() || sending.value) return;
-  const text = newMessage.value;
-  newMessage.value = "";
-  const { error } = await globalChatStore.sendMessage(text);
-  // Give the text back on failure. Emptying the field before the request is
-  // what makes sending feel instant; losing what was written when it fails is
-  // not part of that bargain. The editor's own clear() waits for the send to
-  // land — it also drops the saved draft, and that copy is the one that
-  // outlives the tab.
-  if (error) {
-    newMessage.value = text;
-    notifyFailure(error, "Не удалось отправить сообщение");
-    return;
-  }
-  editorRef.value?.clear();
-  scrollToBottom();
-}
-
-function requestDelete(id: string) {
-  confirmingDeleteId.value = id;
-}
-
-function cancelDelete() {
-  confirmingDeleteId.value = null;
-}
-
-async function confirmDelete() {
-  if (!confirmingDeleteId.value) return;
-  const { error } = await globalChatStore.deleteMessage(
-    confirmingDeleteId.value,
-  );
-  confirmingDeleteId.value = null;
-  if (error) notifyFailure(error, "Не удалось удалить сообщение");
-}
 </script>
 
 <template>
@@ -1000,17 +980,18 @@ async function confirmDelete() {
       @wheel.passive="handleWheel"
     >
       <ChatMessageSkeleton v-if="loading" :count="6" />
-      <!-- Error takes precedence over fake-empty; stale content (if any) is preserved -->
-      <div
+      <!-- Error takes precedence over fake-empty; stale content (if any) is
+           preserved. The shared red box, so a failed load reads as a failure:
+           this branch used to sit on the empty state's own class, which
+           carries neither a background nor a colour. What the retry shows is
+           the skeleton, not a disabled button — the store raises loading
+           before it awaits, and the skeleton branch is checked first — so the
+           box's own retrying state never reaches this screen. -->
+      <ErrorState
         v-else-if="error && !messages?.length"
-        class="globalChat-empty globalChat-error"
-        role="alert"
-      >
-        <secondary-text>{{ error }}</secondary-text>
-        <button type="button" class="globalChat-retry" @click="retryLoad">
-          Повторить
-        </button>
-      </div>
+        :message="error"
+        :retry="retryLoad"
+      />
       <secondary-text v-else-if="!messages?.length" class="globalChat-empty">
         <template v-if="canSendMessages"
           >Сообщений пока нет. Начните общение!</template
@@ -1045,112 +1026,65 @@ async function confirmDelete() {
           }"
         >
           <div
-            v-for="vRow in virtualItems"
-            :key="String(vRow.key)"
+            v-for="row in virtualRows"
+            :key="row.key"
             :ref="
               (el) => {
                 if (el) measureElement(el as HTMLElement);
               }
             "
-            :data-index="vRow.index"
+            :data-index="row.index"
             :style="{
               position: 'absolute',
               top: 0,
               left: 0,
               width: '100%',
-              transform: `translateY(${vRow.start}px)`,
+              transform: `translateY(${row.start}px)`,
             }"
           >
             <DashSeparator
-              v-if="isDateSeparator(messagesWithSeparators[vRow.index])"
+              v-if="row.kind === 'separator'"
               spacing="tiny"
-              :label="(messagesWithSeparators[vRow.index] as any).formattedDate"
+              :label="row.separator.formattedDate"
               class="date-separator"
             />
 
             <div
               v-else
-              :id="`msg-${(messagesWithSeparators[vRow.index] as any).id}`"
-              :data-id="(messagesWithSeparators[vRow.index] as any).id"
+              :id="`msg-${row.message.id}`"
+              :data-id="row.message.id"
               class="globalChat-message"
               tabindex="0"
               :class="{
-                removed: (messagesWithSeparators[vRow.index] as any).isRemoved,
-                hovered:
-                  hoveredMessageId ===
-                  (messagesWithSeparators[vRow.index] as any).id,
-                continuation: (messagesWithSeparators[vRow.index] as any)
-                  .isContinuation,
+                removed: row.message.isRemoved,
+                hovered: hoveredMessageId === row.message.id,
+                continuation: row.message.isContinuation,
                 'deleted-collapsed':
-                  (messagesWithSeparators[vRow.index] as any).isRemoved &&
-                  !isDeletedExpanded(
-                    (messagesWithSeparators[vRow.index] as any).id,
-                  ),
+                  row.message.isRemoved && !isDeletedExpanded(row.message.id),
               }"
-              @mouseenter="
-                handleMessageMouseEnter(
-                  $event,
-                  (messagesWithSeparators[vRow.index] as any).id,
-                )
-              "
+              @mouseenter="handleMessageMouseEnter($event, row.message.id)"
               @mouseleave="handleMessageMouseLeave"
-              @focusin="
-                handleMessageFocusIn(
-                  $event,
-                  (messagesWithSeparators[vRow.index] as any).id,
-                )
-              "
+              @focusin="handleMessageFocusIn($event, row.message.id)"
               @focusout="handleMessageFocusOut"
             >
               <ChatMessage
-                :message="messagesWithSeparators[vRow.index] as any"
+                :message="row.message"
                 :compact="isCompactLayout"
-                :hovered="
-                  hoveredMessageId ===
-                  (messagesWithSeparators[vRow.index] as any).id
-                "
-                :is-online="
-                  isOnline((messagesWithSeparators[vRow.index] as any).author)
-                "
-                :is-liked-by-me="
-                  isLikedByMe(messagesWithSeparators[vRow.index] as any)
-                "
-                :can-edit="
-                  canEditMessage(messagesWithSeparators[vRow.index] as any)
-                "
-                :can-delete="
-                  canDeleteMessage(messagesWithSeparators[vRow.index] as any)
-                "
-                :can-like="
-                  canLikeMessage(messagesWithSeparators[vRow.index] as any)
-                "
+                :hovered="hoveredMessageId === row.message.id"
+                :is-online="isOnline(row.message.author)"
+                :is-liked-by-me="isLikedByMe(row.message)"
+                :can-edit="canEditMessage(row.message)"
+                :can-delete="canDeleteMessage(row.message)"
+                :can-like="canLikeMessage(row.message)"
                 :is-moderator="isModerator"
-                :is-editing="
-                  isEditing((messagesWithSeparators[vRow.index] as any).id)
-                "
+                :is-editing="isEditing(row.message.id)"
                 :edit-text="editText"
-                :is-deleted-expanded="
-                  isDeletedExpanded(
-                    (messagesWithSeparators[vRow.index] as any).id,
-                  )
-                "
+                :is-deleted-expanded="isDeletedExpanded(row.message.id)"
                 :max-height="MAX_MESSAGE_HEIGHT"
-                @like="toggleLike(messagesWithSeparators[vRow.index] as any)"
-                @toggle-deleted="
-                  toggleDeletedExpand(
-                    (messagesWithSeparators[vRow.index] as any).id,
-                  )
-                "
-                @start-edit="
-                  startEdit(messagesWithSeparators[vRow.index] as any)
-                "
-                @save-edit="
-                  (text) =>
-                    saveEditWithText(
-                      (messagesWithSeparators[vRow.index] as any).id,
-                      text,
-                    )
-                "
+                @like="toggleLike(row.message)"
+                @toggle-deleted="toggleDeletedExpand(row.message.id)"
+                @start-edit="startEdit(row.message)"
+                @save-edit="(text) => saveEditWithText(row.message.id, text)"
                 @cancel-edit="cancelEdit"
               />
             </div>
@@ -1208,7 +1142,11 @@ async function confirmDelete() {
           </button>
         </Tooltip>
         <Tooltip text="Отмена">
-          <button class="toolbar-btn toolbar-btn-cancel" @click="cancelDelete">
+          <button
+            class="toolbar-btn toolbar-btn-cancel"
+            aria-label="Отмена"
+            @click="cancelDelete"
+          >
             {{ symbols.close }}
           </button>
         </Tooltip>
@@ -1385,10 +1323,6 @@ async function confirmDelete() {
   justify-content: flex-start
   height: 100%
   padding: $big
-
-.globalChat-error
-  flex-direction: column
-  gap: $small
 
 .globalChat-retry
   +button

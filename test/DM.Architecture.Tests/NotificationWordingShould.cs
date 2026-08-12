@@ -23,7 +23,7 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class NotificationWordingShould
 {
-    private const string SharedType = "DM.Workers.NotificationDispatcher.Implementation.NotificationText";
+    private const string SharedType = "DM.Workers.NotificationDispatcher.Dispatching.NotificationText";
     private const string EventTypeName = "DM.Domain.Core.Enums.EventType";
 
     private const BindingFlags DeclaredStatic =

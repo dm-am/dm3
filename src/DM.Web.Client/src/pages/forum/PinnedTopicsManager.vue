@@ -205,13 +205,13 @@ const shell = useDialogShell({
         <button class="cancel-button" :disabled="saving" @click="handleClose">
           Отмена
         </button>
-        <button
-          class="save-button"
-          :disabled="saving || !localTopics.length"
+        <Button
+          :loading="saving"
+          :disabled="!localTopics.length"
           @click="handleSave"
         >
-          {{ saving ? "Сохранение..." : "Сохранить порядок" }}
-        </button>
+          Сохранить порядок
+        </Button>
       </div>
     </div>
   </div>
@@ -233,7 +233,7 @@ const shell = useDialogShell({
   display: flex
   align-items: center
   justify-content: center
-  z-index: $z-modal
+  z-index: $z-dialog
 
 .pinned-manager-modal
   background: $bg-page
@@ -339,8 +339,5 @@ const shell = useDialogShell({
   border-top: 1px solid $border
 
 .cancel-button
-  +button
-
-.save-button
   +button
 </style>

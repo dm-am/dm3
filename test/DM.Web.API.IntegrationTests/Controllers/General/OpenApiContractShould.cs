@@ -72,6 +72,75 @@ public class OpenApiContractShould : IntegrationTestBase
         Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "artifacts", "openapi-contract.json");
 
     /// <summary>
+    /// Repo-relative, and committed. Every address the API answers, so a route
+    /// the client asks for and the server does not serve is one line in review
+    /// instead of a section that renders empty and says nothing.
+    /// </summary>
+    private static readonly string RoutesSnapshotPath =
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "artifacts", "openapi-routes.json");
+
+    /// <summary>
+    /// The published addresses, as method and path.
+    /// </summary>
+    /// <remarks>
+    /// The schema snapshot next to this one holds the shapes; nothing held the
+    /// addresses, and the account security section spent its whole life asking
+    /// GET /v1/account/security, which no controller has ever served. The
+    /// frontend suite reads this file and holds every literal path it builds to
+    /// it.
+    /// </remarks>
+    [Fact]
+    public async Task MatchTheCommittedRoutesSnapshot()
+    {
+        var routes = new SortedSet<string>(StringComparer.Ordinal);
+
+        foreach (var group in SwaggerExtensions.ApiGroups)
+        {
+            var response = await Client.GetAsync($"/swagger/{group}/swagger.json");
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            if (!document.RootElement.TryGetProperty("paths", out var paths))
+            {
+                continue;
+            }
+
+            foreach (var path in paths.EnumerateObject())
+            {
+                foreach (var operation in path.Value.EnumerateObject())
+                {
+                    routes.Add($"{operation.Name.ToUpperInvariant()} {path.Name}");
+                }
+            }
+        }
+
+        routes.Should().NotBeEmpty("the API publishes routes");
+
+        var serialised = JsonSerializer.Serialize(routes, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        }).Replace("\r\n", "\n") + "\n";
+
+        var existing = File.Exists(RoutesSnapshotPath)
+            ? (await File.ReadAllTextAsync(RoutesSnapshotPath)).Replace("\r\n", "\n")
+            : null;
+
+        if (existing == serialised)
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(RoutesSnapshotPath)!);
+        await File.WriteAllTextAsync(RoutesSnapshotPath, serialised);
+
+        existing.Should().NotBeNull(
+            "artifacts/openapi-routes.json is missing; it has just been written, review and commit it");
+        serialised.Should().Be(existing,
+            "the API routes changed; artifacts/openapi-routes.json has just been rewritten, review the diff and commit it");
+    }
+
+    /// <summary>
     /// The published schemas, reduced to what a hand-written client has to
     /// agree with: schema name to its property names.
     /// </summary>

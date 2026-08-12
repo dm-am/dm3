@@ -7,9 +7,15 @@
  * slot plus the block's copy and forward target.
  *
  * `items === null` means "not loaded": a skeleton shows while `errored` is
- * false, and the retry error-row shows once the fetch has failed. The Popular*
- * and Owned* blocks deliberately do NOT use this shell — their markup differs
- * (bare error text, grouped rows) and is kept local.
+ * false, and the retry error-row shows once the fetch has failed. `lines` is
+ * the height of that skeleton in rows, and it is the one thing the blocks
+ * disagree on: the popular lists stand ten rows deep, the recruiting one
+ * fifteen, the rest five.
+ *
+ * The Owned* blocks deliberately do NOT use this shell, and the difference is
+ * not the grouping (OwnedBlogs has none): they read "not loaded" off a loading
+ * flag rather than off a null list, and their failure row is bare text with no
+ * retry button. Their markup is kept local.
  */
 import type { RouteLocationRaw } from "vue-router";
 import SidebarBlock from "./SidebarBlock.vue";

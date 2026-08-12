@@ -29,7 +29,12 @@ const orderedSpecs = computed(() =>
     <div class="preview-header">Превью анкеты персонажа</div>
 
     <form-field label="Имя персонажа *" name="preview-name">
-      <input v-model="name" type="text" placeholder="Имя персонажа" />
+      <input
+        id="preview-name"
+        v-model="name"
+        type="text"
+        placeholder="Имя персонажа"
+      />
     </form-field>
 
     <CharacterSheetFields

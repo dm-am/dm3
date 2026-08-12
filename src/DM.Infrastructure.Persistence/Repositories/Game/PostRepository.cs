@@ -11,6 +11,7 @@ using DM.Domain.Core.Extensions;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Posts;
 using DM.Infrastructure.Persistence.RelationalStorage;
+using DM.Infrastructure.Persistence.Repositories.Search;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 using DbPost = DM.Infrastructure.Persistence.Entities.Game.Posts.Post;
@@ -66,7 +67,15 @@ internal class PostRepository : IPostRepository
             .Where(GameAccessibilityFilters.RoomAvailable(userId))
             .Where(r => r.RoomId == roomId)
             .SelectMany(r => r.Posts)
+            // Ends on the identifier, because CreatedUtc is not unique: a busy second ties
+            // on its own, and the import of DM2 carries whole rooms written under one
+            // timestamp. Paging asks for the same order once per page, and rows the order
+            // cannot tell apart may come back arranged differently between two of those
+            // asks, which shows one post on both pages and another on neither. Comments
+            // (CommentSorting) and messages (the ChatId composite) close their order the
+            // same way; the index behind this one is (RoomId, CreatedUtc, PostId).
             .OrderBy(p => p.CreatedUtc)
+            .ThenBy(p => p.PostId)
             .Page(paging)
             .ProjectTo<Post>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
@@ -75,9 +84,19 @@ internal class PostRepository : IPostRepository
         return posts;
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// Reached through the rooms, the same way the paged read above is, so the
+    /// reader's scope is applied by the one filter that expresses it. Asking
+    /// Posts directly answered with the text of any post whose identifier the
+    /// caller happened to know, private room or not: the userId argument was
+    /// accepted and never used, which the compiler has no reason to mention.
+    /// </remarks>
     public async Task<Post?> Get(Guid postId, Guid userId)
     {
-        var post = await _dbContext.Posts
+        var post = await _dbContext.Rooms
+            .Where(GameAccessibilityFilters.RoomAvailable(userId))
+            .SelectMany(r => r.Posts)
             .Where(p => p.PostId == postId)
             .ProjectTo<Post>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
@@ -114,15 +133,18 @@ internal class PostRepository : IPostRepository
 
         // Search filter (case-insensitive contains on GameText, excluding [private] blocks).
         // Uses PostgreSQL regexp_replace via DbFunction mapping to strip [private=X]...[/private]
-        // before matching, so private text is never included in search results.
+        // before matching, so private text is never included in search results. Pattern and
+        // replacement are the ones Post.SearchVector and the snippet use: cutting the block
+        // out with nothing in its place welds the words on either side of it into one the
+        // post never contained, and that word then matches.
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            var pattern = $"%{query.Search}%";
+            var pattern = LikePatterns.Contains(query.Search);
             baseQuery = baseQuery.Where(p => EF.Functions.ILike(
                 DmDbContext.RegexpReplace(
                     p.GameText,
-                    @"\[private(=[^\]]*)?\][\s\S]*?\[/private\]",
-                    "",
+                    SearchSnippet.PrivateBlockPattern,
+                    " ",
                     "gi"),
                 pattern));
         }
@@ -531,10 +553,6 @@ internal class PostRepository : IPostRepository
         if (updatePost.ShouldChangeCharacter)
             post.CharacterId = updatePost.CharacterId;
 
-        // Handle soft delete if requested
-        if (updatePost.IsRemoved.HasValue)
-            post.IsRemoved = updatePost.IsRemoved.Value;
-
         await _dbContext.SaveChangesAsync();
 
         return await _dbContext.Posts
@@ -543,21 +561,37 @@ internal class PostRepository : IPostRepository
             .FirstOrDefaultAsync();
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// The same transaction as Create, with the opposite sign. The removal and
+    /// the author's QuantityRating were two separate commits, so a failure
+    /// between them left a deleted post still counted or a live post uncounted —
+    /// and QuantityRating feeds the user rating and the stored IsNewbie column,
+    /// neither of which anything recomputes.
+    /// </remarks>
     public async Task Delete(Guid postId, Guid deletedByUserId)
     {
         var post = await _dbContext.Posts.FindAsync(postId);
-        if (post != null)
+        if (post == null)
         {
+            return;
+        }
+
+        var authorId = post.AuthorId;
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
             SoftDelete.Mark(post, deletedByUserId, _dateTimeProvider.Now);
             await _dbContext.SaveChangesAsync();
-        }
-    }
 
-    public async Task DecrementAuthorQuantityRating(Guid authorId)
-    {
-        await _dbContext.Users
-            .Where(u => u.UserId == authorId)
-            .ExecuteUpdateAsync(u => u.SetProperty(x => x.QuantityRating, x => x.QuantityRating - 1));
+            await _dbContext.Users
+                .Where(u => u.UserId == authorId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.QuantityRating, x => x.QuantityRating - 1));
+
+            await transaction.CommitAsync();
+        });
     }
 
     #endregion

@@ -787,7 +787,7 @@ export interface UpdatePostInput {
 
 /**
  * Requested game status transition.
- * @see src/DM.Domain.Game/Features/Games/GameStatusTransition.cs
+ * @see src/DM.Domain.Core/Statuses/ModuleStatusTransition.cs
  */
 export enum GameStatusTransition {
   /** Draft -> Active */
@@ -804,7 +804,7 @@ export enum GameStatusTransition {
 
 /**
  * Requested premoderation transition (mentor action).
- * @see src/DM.Domain.Game/Features/Games/GameStatusTransition.cs
+ * @see src/DM.Domain.Core/Statuses/ModuleStatusTransition.cs
  */
 export enum GamePremoderationTransition {
   /** AwaitingEdits -> AwaitingApproval (take into premoderation) */

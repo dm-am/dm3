@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading;
@@ -506,5 +507,75 @@ public class TopicServiceShould : UnitTestBase
 
         _intentionManager.Verify(
             m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, board), Times.Never);
+    }
+
+    /// <summary>
+    /// The pinned order is replaced whole, and the board of the address is what
+    /// the write is bounded by.
+    /// </summary>
+    [Fact]
+    public async Task WriteThePinnedOrderTheBodyNames()
+    {
+        var board = new Board { Id = Guid.NewGuid(), Title = "General" };
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        _boardService.Setup(s => s.GetBoard("General", true)).ReturnsAsync(board);
+        _repository.Setup(r => r.GetAttachedTopicIds(board.Id, default))
+            .ReturnsAsync(new[] { first, second });
+
+        var order = new[] { second, first };
+        await _service.ReorderPinnedAsync("General", order);
+
+        _intentionManager.Verify(
+            m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, board), Times.Once);
+        _repository.Verify(r => r.ReplaceAttachOrder(board.Id, order, default), Times.Once,
+            "the board travels with the order: keyed by topic id alone, the write would " +
+            "renumber the pinned topics of whatever board the body named");
+    }
+
+    /// <summary>
+    /// A body naming a subset is refused rather than half-applied: the topics it
+    /// skips would keep the positions the same request has just handed to others,
+    /// so two of them would share a place.
+    /// </summary>
+    [Fact]
+    public async Task RefuseAPinnedOrderThatSkipsAPinnedTopic()
+    {
+        var board = new Board { Id = Guid.NewGuid(), Title = "General" };
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        _boardService.Setup(s => s.GetBoard("General", true)).ReturnsAsync(board);
+        _repository.Setup(r => r.GetAttachedTopicIds(board.Id, default))
+            .ReturnsAsync(new[] { first, second });
+
+        var act = () => _service.ReorderPinnedAsync("General", new[] { second });
+
+        var refusal = await act.Should().ThrowAsync<HttpBadRequestException>();
+        refusal.Which.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        _repository.Verify(
+            r => r.ReplaceAttachOrder(It.IsAny<Guid>(), It.IsAny<IReadOnlyList<Guid>>(), default),
+            Times.Never, "a refused order writes nothing");
+    }
+
+    /// <summary>
+    /// The same rule from the other side: a body of the right length that names
+    /// one topic twice leaves another one with no position at all.
+    /// </summary>
+    [Fact]
+    public async Task RefuseAPinnedOrderThatNamesOneTopicTwice()
+    {
+        var board = new Board { Id = Guid.NewGuid(), Title = "General" };
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        _boardService.Setup(s => s.GetBoard("General", true)).ReturnsAsync(board);
+        _repository.Setup(r => r.GetAttachedTopicIds(board.Id, default))
+            .ReturnsAsync(new[] { first, second });
+
+        var act = () => _service.ReorderPinnedAsync("General", new[] { first, first });
+
+        await act.Should().ThrowAsync<HttpBadRequestException>();
+        _repository.Verify(
+            r => r.ReplaceAttachOrder(It.IsAny<Guid>(), It.IsAny<IReadOnlyList<Guid>>(), default),
+            Times.Never);
     }
 }

@@ -11,6 +11,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.PostReviews;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
 using DbPostReview = DM.Infrastructure.Persistence.Entities.Game.PostReview;
 
@@ -195,10 +196,19 @@ internal class PostReviewRepository : IPostReviewRepository
     // ═══ ELIGIBILITY ═══
 
     /// <inheritdoc />
-    public async Task<PostInfo?> GetPostInfoAsync(Guid postId)
+    /// <remarks>
+    /// Reached through the rooms, like every other read of a post, so the rater's
+    /// scope is applied by the one filter that expresses it. Asking Posts directly
+    /// answered for any post whose identifier the caller happened to know: a post
+    /// in a private room could be rated by somebody with no way to read it, and
+    /// the rating went on to move its author's quality rating all the same.
+    /// </remarks>
+    public async Task<PostInfo?> GetPostInfoAsync(Guid postId, Guid userId)
     {
-        return await _dbContext.Posts
+        return await _dbContext.Rooms
             .TagWith("DM.PostReview.GetPostInfo")
+            .Where(GameAccessibilityFilters.RoomAvailable(userId))
+            .SelectMany(r => r.Posts)
             .Where(p => p.PostId == postId)
             .Select(p => new PostInfo
             {

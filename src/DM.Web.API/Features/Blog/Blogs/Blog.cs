@@ -2,11 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Statuses;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
-using BlogPremoderationTransition = DM.Domain.Blog.Features.Blogs.BlogPremoderationTransition;
-using BlogStatusTransition = DM.Domain.Blog.Features.Blogs.BlogStatusTransition;
 
 namespace DM.Web.API.Features.Blog.Blogs;
 
@@ -176,7 +175,7 @@ public class BlogPremoderationChangeRequest
     /// <summary>
     /// Requested premoderation transition (SendToPremoderation / RemoveFromPremoderation)
     /// </summary>
-    public BlogPremoderationTransition Transition { get; set; }
+    public ModulePremoderationTransition Transition { get; set; }
 }
 
 /// <summary>
@@ -187,7 +186,7 @@ public class BlogStatusChangeRequest
     /// <summary>
     /// Requested status transition (Start / Freeze / Finish / Close / Reopen)
     /// </summary>
-    public BlogStatusTransition Transition { get; set; }
+    public ModuleStatusTransition Transition { get; set; }
 }
 
 /// <summary>

@@ -10,7 +10,6 @@ internal class SessionCleanupProcessor : ISessionCleanupProcessor
     private readonly IAuthenticationRepository _repository;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc cref="SessionCleanupProcessor" />
     public SessionCleanupProcessor(
         IAuthenticationRepository repository,
         IDateTimeProvider dateTimeProvider)

@@ -38,27 +38,32 @@ public class UploadController : ControllerBase
     /// By default returns current user's uploads.
     ///
     /// Privileged options (moderator and above):
-    /// - **scope=all**: Get all uploads across all users
+    /// - **allUsers=true**: Get all uploads across all users
     /// - **username={username}**: Get uploads by specific user
     /// </remarks>
     /// <param name="query">Query parameters for filtering and pagination</param>
-    /// <param name="scope">Scope filter (use "all" for moderator+ to see all uploads)</param>
+    /// <param name="allUsers">Everybody's uploads rather than the caller's own (moderator and above)</param>
     /// <param name="username">Filter by username (moderator and above)</param>
     /// <response code="200">List of uploads</response>
+    /// <response code="400">allUsers is not a boolean</response>
     /// <response code="401">User not authenticated</response>
-    /// <response code="403">Moderator+ required for scope=all and the username filter</response>
+    /// <response code="403">Moderator+ required for allUsers and the username filter</response>
     [HttpGet(Name = nameof(GetUploads))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(ListEnvelope<Shared.Dto.Upload>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetUploads(
         [FromQuery] UploadsQuery query,
-        [FromQuery] string? scope = null,
+        [FromQuery] bool allUsers = false,
         [FromQuery] string? username = null)
     {
-        var all = scope?.Equals("all", StringComparison.OrdinalIgnoreCase) == true;
-        var (uploads, paging) = await _uploadApiService.GetUploads(query, username, all);
+        // A boolean, because that is the question. Spelled "scope", it took any
+        // word at all and read everything other than "all" as "no": scope=every
+        // quietly answered with the caller's own uploads under the name of the
+        // whole site.
+        var (uploads, paging) = await _uploadApiService.GetUploads(query, username, allUsers);
         return Ok(new ListEnvelope<Shared.Dto.Upload>(uploads, paging));
     }
 
@@ -121,7 +126,7 @@ public class UploadController : ControllerBase
     /// <param name="file">File (multipart/form-data)</param>
     /// <param name="type">Upload type/purpose</param>
     /// <param name="targetId">Optional target entity ID</param>
-    /// <response code="200">File uploaded, processed, and confirmed</response>
+    /// <response code="201">File uploaded, processed, and confirmed</response>
     /// <response code="400">Invalid file (wrong format, too large, not an image)</response>
     /// <response code="401">User not authenticated</response>
     /// <response code="429">Too many requests</response>
@@ -129,7 +134,7 @@ public class UploadController : ControllerBase
     [AuthenticationRequired]
     [EnableRateLimiting(RateLimitPolicies.Uploads)]
     [RequestSizeLimit(10 * 1024 * 1024)]
-    [ProducesResponseType(typeof(Shared.Dto.Upload), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Shared.Dto.Upload), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
@@ -138,7 +143,10 @@ public class UploadController : ControllerBase
         [FromQuery] UploadType type,
         [FromQuery] Guid? targetId = null)
     {
+        // 201 on an Idempotency-Key replay too: the cached answer is the record
+        // this logical request created, and the service does not report which
+        // call stored it.
         var result = await _uploadApiService.DirectUpload(file, type, targetId);
-        return Ok(result);
+        return CreatedAtRoute(nameof(GetUpload), new { id = result.Id }, result);
     }
 }

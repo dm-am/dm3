@@ -7,8 +7,8 @@ using DM.Domain.Core.Enums;
 using DM.Infrastructure.Core.Extensions;
 using DM.Infrastructure.Messaging;
 using DM.Infrastructure.Messaging.GeneralBus;
-using DM.Workers.NotificationDispatcher.Implementation;
-using DM.Workers.NotificationDispatcher.Implementation.Notifiers;
+using DM.Workers.NotificationDispatcher.Dispatching;
+using DM.Workers.NotificationDispatcher.Notifiers;
 using Jamq.Client.Abstractions.Consuming;
 using Jamq.Client.Rabbit.Consuming;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,6 +22,9 @@ namespace DM.Workers.NotificationDispatcher;
 
 internal class NotificationDispatcherConsumer : BackgroundService
 {
+    /// <summary>Queue this worker reads, as both the topology and the metrics name it.</summary>
+    internal const string QueueName = "dm.notifications";
+
     private const string DeadLetterExchangeName = "dm.notifications.undelivered";
 
     private readonly ILogger<NotificationDispatcherConsumer> _logger;
@@ -56,7 +59,7 @@ internal class NotificationDispatcherConsumer : BackgroundService
         // this way all along.
         await Task.Yield();
 
-        var parameters = new RabbitConsumerParameters("dm.notifications", "dm.notifications", ProcessingOrder.Unmanaged)
+        var parameters = new RabbitConsumerParameters("dm.notifications", QueueName, ProcessingOrder.Unmanaged)
         {
             ExchangeName = InvokedEventsTransport.ExchangeName,
             RoutingKeys = ResolveHandledEventTypes().ToRoutingKeys(),

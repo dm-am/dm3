@@ -89,7 +89,7 @@ internal class UserService : IUserService
         var user = await _repository.GetUserAsync(username);
         if (user == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.UserNotFoundByUsername(username));
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(username));
         }
 
         return user;
@@ -101,7 +101,7 @@ internal class UserService : IUserService
         var user = await _repository.GetUserAsync(userId);
         if (user == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.UserNotFoundById(userId));
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundById(userId));
         }
 
         return user;
@@ -130,7 +130,7 @@ internal class UserService : IUserService
 
         if (user == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.UserNotFoundByUsername(username));
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(username));
         }
 
         return user;
@@ -146,7 +146,7 @@ internal class UserService : IUserService
 
         if (user == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.UserNotFoundById(userId));
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundById(userId));
         }
 
         return user;
@@ -283,10 +283,6 @@ internal class UserService : IUserService
     /// <inheritdoc />
     public async Task<bool> UsernameExistsAsync(string username, CancellationToken ct = default) =>
         await _repository.FindUserIdAsync(username) != null;
-
-    /// <inheritdoc />
-    public Task<bool> UserExistsAsync(string username, CancellationToken ct = default) =>
-        UsernameExistsAsync(username, ct);
 
     /// <inheritdoc />
     public async Task<(bool Found, Guid UserId)> FindUserIdAsync(string username, CancellationToken ct = default)

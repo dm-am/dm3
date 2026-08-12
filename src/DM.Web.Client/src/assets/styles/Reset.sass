@@ -202,6 +202,25 @@ select:focus-visible,
   100%
     background-position: -200% 0
 
+// The travel of the busy bar a control draws while its request is in flight
+// (+button-busy, Inputs.sass). It lives here for the two reasons the shimmer
+// above does: a partial that emits a rule is emitted again into every scoped
+// stylesheet importing it, and Inputs.sass is imported by more than a hundred
+// of them; and the name has to stay global for the mixin's `animation:` to
+// resolve, since Vue rewrites a frame name only when the frames are declared
+// inside the same scoped block.
+//
+// The segment is 40% of the bar and travels between its two ends, so both
+// stops are inside the control and nothing has to be clipped. Reduced motion
+// (the rule at the bottom of this file) collapses the travel and leaves the
+// bar standing at its declared position: the state is the bar being on screen,
+// never the movement of it.
+@keyframes button-busy
+  from
+    background-position: 0 0
+  to
+    background-position: 100% 0
+
 // Search highlight - global marker pen effect
 // Used by highlightMatch() utility - preserves original text color
 .search-highlight

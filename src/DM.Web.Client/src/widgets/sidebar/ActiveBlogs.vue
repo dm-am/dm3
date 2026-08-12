@@ -27,7 +27,7 @@ import { useBlogsStore } from "@/entities/blog";
 import { useAuthStore } from "@/entities/user";
 import { onMounted, watch } from "vue";
 import { useRoute } from "vue-router";
-import { useViewerChange } from "@/shared/lib/composables";
+import { useViewerChange } from "@/shared/lib/composables/useViewerChange";
 
 const store = useBlogsStore();
 const userStore = useAuthStore();

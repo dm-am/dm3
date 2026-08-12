@@ -4,6 +4,7 @@ using DM.Domain.Account.Configuration;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Identity;
 using DM.Web.API.Shared.Authentication.Credentials;
+using DM.Web.API.Shared.Configuration;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 
@@ -33,10 +34,14 @@ internal class ApiCredentialsStorage : ICredentialsStorage
     public const string AuthCookieName = "dm_session";
 
     private readonly AuthenticationConfiguration _config;
+    private readonly SessionCookieConfiguration _cookie;
 
-    public ApiCredentialsStorage(IOptions<AuthenticationConfiguration> authConfig)
+    public ApiCredentialsStorage(
+        IOptions<AuthenticationConfiguration> authConfig,
+        IOptions<SessionCookieConfiguration> cookieConfig)
     {
         _config = authConfig.Value;
+        _cookie = cookieConfig.Value;
     }
 
     /// <inheritdoc />
@@ -57,7 +62,7 @@ internal class ApiCredentialsStorage : ICredentialsStorage
     {
         var isPersistent = identity.Session?.Persistent ?? false;
 
-        var cookieOptions = SessionCookieOptions(httpContext);
+        var cookieOptions = SessionCookieOptions(httpContext, _cookie);
 
         // Persistent sessions ("Remember Me"): cookie survives browser restart
         // Non-persistent sessions: session cookie, deleted when browser closes
@@ -73,7 +78,7 @@ internal class ApiCredentialsStorage : ICredentialsStorage
     /// <inheritdoc />
     public Task Unload(HttpContext httpContext)
     {
-        var cookieOptions = SessionCookieOptions(httpContext);
+        var cookieOptions = SessionCookieOptions(httpContext, _cookie);
         cookieOptions.Expires = DateTimeOffset.UnixEpoch;
 
         httpContext.Response.Cookies.Delete(AuthCookieName, cookieOptions);
@@ -88,19 +93,32 @@ internal class ApiCredentialsStorage : ICredentialsStorage
     /// attributes match the stored ones, so the login and the logout halves
     /// diverging leaves a session that logging out cannot clear.
     /// </remarks>
-    private static CookieOptions SessionCookieOptions(HttpContext httpContext) => new()
-    {
-        HttpOnly = true,
-        // Same-as-request, which is the framework's own cookie policy. The host
-        // name says nothing about the transport: the deployed stand answers plain
-        // http on a domain, and a Secure cookie there is dropped by the browser
-        // without a word, so the login returns 200 and the next request arrives
-        // anonymous. IsHttps reads X-Forwarded-Proto once a trusted proxy is
-        // configured, so a stand that gains TLS starts marking the cookie Secure
-        // with no code change.
-        Secure = httpContext.Request.IsHttps,
-        SameSite = SameSiteMode.Lax, // Sent on top-level navigation so email links keep the session
-        Path = "/",
-        IsEssential = true
-    };
+    private static CookieOptions SessionCookieOptions(
+        HttpContext httpContext,
+        SessionCookieConfiguration config) => new()
+        {
+            HttpOnly = true,
+            // Empty means host-only, which is what an omitted Domain gives and what
+            // every deployment has today. A named domain widens the cookie to every
+            // host under it, so one session covers all the addresses the site
+            // answers on. It travels through the same helper as the logout half on
+            // purpose: a browser replaces a cookie only when the incoming
+            // attributes match the stored ones, and Domain is one of them, so the
+            // two halves disagreeing leaves a session that logging out cannot
+            // clear.
+            Domain = string.IsNullOrWhiteSpace(config.Domain)
+            ? null
+            : config.Domain,
+            // Same-as-request, which is the framework's own cookie policy. The host
+            // name says nothing about the transport: the deployed stand answers plain
+            // http on a domain, and a Secure cookie there is dropped by the browser
+            // without a word, so the login returns 200 and the next request arrives
+            // anonymous. IsHttps reads X-Forwarded-Proto once a trusted proxy is
+            // configured, so a stand that gains TLS starts marking the cookie Secure
+            // with no code change.
+            Secure = httpContext.Request.IsHttps,
+            SameSite = SameSiteMode.Lax, // Sent on top-level navigation so email links keep the session
+            Path = "/",
+            IsEssential = true
+        };
 }

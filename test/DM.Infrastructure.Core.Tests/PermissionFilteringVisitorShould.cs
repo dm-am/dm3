@@ -23,8 +23,6 @@ public class PermissionFilteringVisitorShould
     private static readonly Guid OwnerB = Guid.Parse("33333333-3333-3333-3333-333333333333");
     private static readonly Guid OtherUser = Guid.Parse("44444444-4444-4444-4444-444444444444");
     private static readonly Guid GameId = Guid.Parse("55555555-5555-5555-5555-555555555555");
-    private static readonly Guid RoomId = Guid.Parse("66666666-6666-6666-6666-666666666666");
-    private static readonly Guid PostId = Guid.Parse("77777777-7777-7777-7777-777777777777");
 
     // ════════════════════════════════════════════════════════════════
     // [mod] visibility — public on read: renders for EVERYONE on the
@@ -175,6 +173,60 @@ public class PermissionFilteringVisitorShould
         html.Should().NotContain("private-message");
     }
 
+    /// <summary>
+    /// The snapshot is keyed by the name as the author typed it, and the render
+    /// path encodes that name before the parser sees it.
+    /// </summary>
+    /// <remarks>
+    /// Not an exotic input: HtmlEncode covers the apostrophe alongside the
+    /// ampersand and the brackets, so a plain character name was enough. Both
+    /// directions are asserted, because the fix moves a comparison that decides
+    /// visibility: the owner has to see the block, and a reader who qualifies
+    /// through no rule still must not.
+    /// </remarks>
+    [Theory]
+    [InlineData("D'Artagnan")]
+    [InlineData("Tom & Jerry")]
+    [InlineData("A <B>")]
+    public void RenderPrivate_ForAddresseeOwner_WhenTheNameCarriesHtmlSyntax(string name)
+    {
+        var viewer = Viewer(UserRole.RegularUser, OwnerB);
+        var addressees = new Dictionary<string, IReadOnlySet<Guid>>(StringComparer.Ordinal)
+        {
+            [name] = new HashSet<Guid> { OwnerB }
+        };
+        var ctx = DisplayCtxForGamePost(viewer) with
+        {
+            PrivateAddresseeOwnerUserIdsByAttribute = addressees
+        };
+
+        var html = RenderWithContext($"[private=\"{name}\"]secret[/private]", BbSurface.GamePost, ctx);
+
+        html.Should().Contain("secret");
+    }
+
+    [Theory]
+    [InlineData("D'Artagnan")]
+    [InlineData("Tom & Jerry")]
+    [InlineData("A <B>")]
+    public void StripPrivate_ForNonAddressee_WhenTheNameCarriesHtmlSyntax(string name)
+    {
+        var viewer = Viewer(UserRole.RegularUser, OtherUser);
+        var addressees = new Dictionary<string, IReadOnlySet<Guid>>(StringComparer.Ordinal)
+        {
+            [name] = new HashSet<Guid> { OwnerB }
+        };
+        var ctx = DisplayCtxForGamePost(viewer) with
+        {
+            PrivateAddresseeOwnerUserIdsByAttribute = addressees
+        };
+
+        var html = RenderWithContext($"[private=\"{name}\"]secret[/private]", BbSurface.GamePost, ctx);
+
+        html.Should().NotContain("secret");
+        html.Should().NotContain("private-message");
+    }
+
     [Fact]
     public void RenderPrivate_ForGameLead()
     {
@@ -257,52 +309,6 @@ public class PermissionFilteringVisitorShould
         html.Should().Contain("plain text");
     }
 
-    [Fact]
-    public void ContentWithoutPrivacyTags_IsNotDetectedAsPrivacySensitive()
-    {
-        var ctx = new RenderContext
-        {
-            Audience = RenderAudience.Display,
-            Surface = BbSurface.Comment,
-            Viewer = Viewer(UserRole.RegularUser)
-        };
-        var plan = PermissionFilteringVisitor.Prepare("[b]bold[/b]", ctx);
-        plan.HasPrivacyTags.Should().BeFalse();
-    }
-
-    [Theory]
-    [InlineData("[private=\"A\"]x[/private]")]
-    [InlineData("[private]x[/private]")]
-    [InlineData("before [private]x[/private] after")]
-    public void ContentWithPrivacyTags_IsDetected(string input)
-    {
-        var ctx = new RenderContext
-        {
-            Audience = RenderAudience.Display,
-            Surface = BbSurface.Comment,
-            Viewer = Viewer(UserRole.RegularUser)
-        };
-        var plan = PermissionFilteringVisitor.Prepare(input, ctx);
-        plan.HasPrivacyTags.Should().BeTrue();
-    }
-
-    [Theory]
-    [InlineData("[mod]x[/mod]")]
-    [InlineData("before [mod=foo]x[/mod] after")]
-    public void ContentWithOnlyModTag_IsNotPrivacySensitive(string input)
-    {
-        // [mod] renders identically for every viewer now, so it must NOT force
-        // a per-user cache bucket.
-        var ctx = new RenderContext
-        {
-            Audience = RenderAudience.Display,
-            Surface = BbSurface.Comment,
-            Viewer = Viewer(UserRole.RegularUser)
-        };
-        var plan = PermissionFilteringVisitor.Prepare(input, ctx);
-        plan.HasPrivacyTags.Should().BeFalse();
-    }
-
     // ════════════════════════════════════════════════════════════════
     // Helpers
     // ════════════════════════════════════════════════════════════════
@@ -346,9 +352,7 @@ public class PermissionFilteringVisitorShould
         Surface = BbSurface.GamePost,
         Viewer = viewer,
         PostAuthorUserId = AuthorId,
-        PostId = PostId,
-        GameId = GameId,
-        RoomId = RoomId
+        GameId = GameId
     };
 
     private static IAuthorizationSubject Viewer(UserRole role, Guid? userId = null) =>

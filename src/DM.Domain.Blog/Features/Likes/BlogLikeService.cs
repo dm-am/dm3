@@ -6,6 +6,7 @@ using DM.Domain.Blog.Authorization;
 using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Blog.Features.Comments;
 using DM.Domain.Blog.Features.PublicationComments;
+using DM.Domain.Blog.Features.Publications;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
@@ -21,6 +22,7 @@ namespace DM.Domain.Blog.Features.Likes;
 internal class BlogLikeService : IBlogLikeService
 {
     private readonly IBlogService _blogService;
+    private readonly IPublicationService _publicationService;
     private readonly IBlogCommentService _blogCommentService;
     private readonly IPublicationCommentService _publicationCommentService;
     private readonly IIntentionManager _intentionManager;
@@ -29,6 +31,7 @@ internal class BlogLikeService : IBlogLikeService
 
     public BlogLikeService(
         IBlogService blogService,
+        IPublicationService publicationService,
         IBlogCommentService blogCommentService,
         IPublicationCommentService publicationCommentService,
         IIntentionManager intentionManager,
@@ -36,6 +39,7 @@ internal class BlogLikeService : IBlogLikeService
         ILikeOperations likeOperations)
     {
         _blogService = blogService;
+        _publicationService = publicationService;
         _blogCommentService = blogCommentService;
         _publicationCommentService = publicationCommentService;
         _intentionManager = intentionManager;
@@ -75,7 +79,7 @@ internal class BlogLikeService : IBlogLikeService
         _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
 
         // EntityId is PublicationId for publication comments
-        var publication = await _blogService.GetPublication(comment.EntityId);
+        var publication = await _publicationService.GetPublication(comment.EntityId);
         var blog = await _blogService.GetBlogAsync(publication.BlogId);
         ThrowIfBlacklisted(blog);
 
@@ -88,7 +92,7 @@ internal class BlogLikeService : IBlogLikeService
         var comment = await _publicationCommentService.GetAsync(commentId);
         _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
 
-        var publication = await _blogService.GetPublication(comment.EntityId);
+        var publication = await _publicationService.GetPublication(comment.EntityId);
         var blog = await _blogService.GetBlogAsync(publication.BlogId);
         ThrowIfBlacklisted(blog);
 
@@ -98,7 +102,7 @@ internal class BlogLikeService : IBlogLikeService
     /// <inheritdoc />
     public async Task<GeneralUser> LikePublicationAsync(Guid publicationId)
     {
-        var publication = await _blogService.GetPublication(publicationId);
+        var publication = await _publicationService.GetPublication(publicationId);
         _intentionManager.ThrowIfForbidden(PublicationIntention.Like, publication);
 
         var blog = await _blogService.GetBlogAsync(publication.BlogId);
@@ -110,7 +114,7 @@ internal class BlogLikeService : IBlogLikeService
     /// <inheritdoc />
     public async Task UnlikePublicationAsync(Guid publicationId)
     {
-        var publication = await _blogService.GetPublication(publicationId);
+        var publication = await _publicationService.GetPublication(publicationId);
         _intentionManager.ThrowIfForbidden(PublicationIntention.Like, publication);
 
         var blog = await _blogService.GetBlogAsync(publication.BlogId);

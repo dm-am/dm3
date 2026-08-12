@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Subscriptions;
 using DM.Domain.Core.Users;
@@ -20,25 +22,36 @@ internal class BlogSubscriptionService : IBlogSubscriptionService
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly BlogSubscriptionGuard _guard;
 
     public BlogSubscriptionService(
         ISubscriptionRepository repository,
         IUserLookupService userLookupService,
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        BlogSubscriptionGuard guard)
     {
         _repository = repository;
         _userLookupService = userLookupService;
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
+        _guard = guard;
     }
 
     /// <inheritdoc />
     public async Task<Subscription> SubscribeAsync(Guid blogId, CancellationToken ct = default)
     {
         var userId = _identityProvider.Current.User.UserId;
+
+        // The rule itself lives in BlogSubscriptionGuard, where the generic
+        // endpoint can reach it too. Here it is asked and answered by refusing.
+        var refusal = await _guard.Refusal(blogId, userId, ct);
+        if (refusal is not null)
+        {
+            throw new HttpException(HttpStatusCode.Forbidden, refusal);
+        }
 
         // Check if already subscribed
         var existing = await _repository.FindAsync(userId, SubscriptionTargetType.Blog, blogId, ct);
@@ -68,27 +81,23 @@ internal class BlogSubscriptionService : IBlogSubscriptionService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GeneralUser>> GetReadersAsync(Guid blogId, CancellationToken ct = default)
+    public async Task<IEnumerable<UserReference>> GetReadersAsync(Guid blogId, CancellationToken ct = default)
     {
         var subscriberIds = await _repository.GetTargetSubscriberIdsAsync(SubscriptionTargetType.Blog, blogId, ct);
         var subscriberIdList = subscriberIds.ToList();
 
         if (!subscriberIdList.Any())
         {
-            return Enumerable.Empty<GeneralUser>();
+            return Enumerable.Empty<UserReference>();
         }
 
-        var users = new List<GeneralUser>();
-        foreach (var subscriberId in subscriberIdList)
-        {
-            var user = await _userLookupService.GetAsync(subscriberId);
-            if (user != null)
-            {
-                users.Add(user);
-            }
-        }
-
-        return users;
+        // One read for the whole list. Asked one at a time, a hundred subscribers
+        // were a hundred round trips, and GetAsync throws on a user who is no
+        // longer there — a single removed subscriber answered the entire page
+        // with 404. The batch form returns the users that exist and says
+        // nothing about the ones that do not, which is what a list of readers
+        // needs.
+        return await _userLookupService.GetReferencesAsync(subscriberIdList);
     }
 
     /// <inheritdoc />

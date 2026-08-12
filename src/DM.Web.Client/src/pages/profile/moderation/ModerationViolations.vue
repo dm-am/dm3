@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, toRef, watch } from "vue";
-import { useExpandableSection } from "@/shared/lib/composables";
+import { useExpandableSection } from "@/shared/lib/composables/useExpandableSection";
 import { useModal } from "vue-final-modal";
 import type {
   ViolationSummary,
@@ -102,7 +102,8 @@ watch(showBans, async (open) => {
 // sites. Both actions mount the spec-compliant dialogs from
 // features/moderation-actions instead of a divergent inline form: WarningDialog
 // offers verbal (0) / 1-6 points with a BBCode reason, BanDialog offers the
-// Демократический/Полный access policy x 14 durations with a BBCode reason.
+// "Демократический" / "Полный" access policy x 14 durations with a BBCode
+// reason.
 // A warning from the profile block is a general user warning (no specific
 // content entity), so no entityId/entityType is passed.
 const usernameRef = toRef(props, "targetUsername");

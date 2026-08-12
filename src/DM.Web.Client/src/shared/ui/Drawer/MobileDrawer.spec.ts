@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, config } from "@vue/test-utils";
 import { nextTick } from "vue";
 import MobileDrawer from "./MobileDrawer.vue";
+import { setScrollContainer } from "@/shared/lib/scroll";
 
 // Stub Teleport to render content in place (not to body) — same convention
 // as InputDialog.spec.ts.
@@ -14,8 +15,9 @@ config.global.stubs = {
 };
 
 describe("MobileDrawer", () => {
-  // The component locks scroll on `.main` (the app's real scroll container,
-  // see App.vue) — provide one in the document for every test.
+  // The component locks scroll on the app's real scroll container (App.vue's
+  // `.main`, published through the scroll registry) — register one for every
+  // test.
   let mainEl: HTMLDivElement;
 
   beforeEach(() => {
@@ -23,9 +25,11 @@ describe("MobileDrawer", () => {
     mainEl.className = "main";
     mainEl.style.overflow = "scroll";
     document.body.appendChild(mainEl);
+    setScrollContainer(mainEl);
   });
 
   afterEach(() => {
+    setScrollContainer(null);
     document.body.removeChild(mainEl);
     vi.restoreAllMocks();
   });

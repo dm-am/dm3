@@ -137,7 +137,7 @@ public class UpdateGameValidatorShould : UnitTestBase
     public async Task FailWhenAssistantUsernameDoesNotExist()
     {
         Mock<IUserLookupService>()
-            .Setup(s => s.UserExistsAsync("nonexistent", It.IsAny<CancellationToken>()))
+            .Setup(s => s.UsernameExistsAsync("nonexistent", It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
         var input = new UpdateGame

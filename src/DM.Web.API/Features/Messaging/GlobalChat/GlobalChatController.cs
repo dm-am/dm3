@@ -7,6 +7,7 @@ using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel.DataAnnotations;
 
 namespace DM.Web.API.Features.Messaging.GlobalChat;
 
@@ -51,7 +52,7 @@ public class GlobalChatController : ControllerBase
         [FromQuery] string? cursor = null,
         [FromQuery] Guid? aroundMessageId = null,
         [FromQuery] DateTimeOffset? nearTimestampUtc = null,
-        [FromQuery] int limit = 50) =>
+        [FromQuery][Range(1, 100, ErrorMessage = "Размер страницы должен быть от 1 до 100")] int limit = 50) =>
         Ok(await _apiService.GetGlobalChatMessagesAsync(cursor, aroundMessageId, nearTimestampUtc, limit));
 
     /// <summary>
@@ -75,7 +76,7 @@ public class GlobalChatController : ControllerBase
         // this carrier only ferries the raw text into the create pipeline.
         var message = new Message { Text = new GlobalChatBbText { Value = input.Text } };
         var result = await _apiService.CreateGlobalChatMessageAsync(message);
-        return CreatedAtRoute("GetMessage", new { id = result.Resource.Id }, result);
+        return CreatedAtRoute(nameof(MessageController.GetMessage), new { id = result.Resource.Id }, result);
     }
 
     /// <summary>

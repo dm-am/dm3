@@ -254,7 +254,7 @@ test.describe("Blog Rubrics API", () => {
 
     // Delete rubric
     const deleteResponse = await authContext.delete(
-      `${API_URL}/v1/blogs/rubrics/${rubricId}`,
+      `${API_URL}/v1/blogs/${testBlogId}/rubrics/${rubricId}`,
     );
 
     expect(deleteResponse.status()).toBe(204);

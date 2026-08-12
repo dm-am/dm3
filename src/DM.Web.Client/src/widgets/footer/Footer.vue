@@ -38,15 +38,31 @@
       </div>
     </div>
 
-    <nav class="legal" aria-label="Правовая информация" v-once>
-      <div class="legal-first">
-        <router-link :to="{ name: 'privacy-policy' }"
-          >Политика конфиденциальности</router-link
-        >
+    <nav class="legal" aria-label="Правовая информация">
+      <!-- The other address of the site, first in the column. The two lines
+           under it are read once, if ever; this one is read by somebody whose
+           usual address has stopped answering, and he is scanning. It is a
+           plain link because leaving for another host is navigation, and it
+           carries the current path so the same page opens on the other side.
+           Drawn from the host in the address bar, not from a request: the
+           address is worth naming precisely when nothing is answering. -->
+      <div
+        v-for="address in otherAddresses"
+        :key="address.host"
+        class="address"
+      >
+        <a :href="`https://${address.host}${route.fullPath}`">{{
+          address.name
+        }}</a>
       </div>
       <div>
         <router-link :to="{ name: 'user-agreement' }"
           >Пользовательское соглашение</router-link
+        >
+      </div>
+      <div>
+        <router-link :to="{ name: 'privacy-policy' }"
+          >Политика конфиденциальности</router-link
         >
       </div>
     </nav>
@@ -54,10 +70,17 @@
 </template>
 
 <script setup lang="ts">
-import { SITE_FOUNDED_YEAR } from "@/shared/config/site";
+import { useRoute } from "vue-router";
+import { SITE_FOUNDED_YEAR, otherSiteAddresses } from "@/shared/config/site";
 
 // Static value - year doesn't change during session
 const currentYear = new Date().getFullYear();
+
+// The host does not change while the tab is open, so this is read once. The
+// path does change, and the link has to follow it, which is why the legal
+// column lost its v-once.
+const route = useRoute();
+const otherAddresses = otherSiteAddresses();
 
 // Easter egg: rickroll disguised as profile link
 // Only on plain left-click; Ctrl/Shift/Meta+click opens real profile in new tab
@@ -137,7 +160,10 @@ function rickroll(event: MouseEvent) {
   @extend %footer-column
   padding-right: $big
 
-.legal-first
+// One step between every pair of rows in the column, the address included: the
+// three lines read as one list, and a list reads as one only while its rows are
+// spaced alike.
+.legal > div:not(:last-child)
   margin-bottom: $small
 
 @media (max-width: $bp-shell)

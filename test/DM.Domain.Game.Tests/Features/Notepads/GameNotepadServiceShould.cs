@@ -218,4 +218,82 @@ public class GameNotepadServiceShould : UnitTestBase
 
         _intentionManager.Verify(m => m.ThrowIfForbidden(NotepadIntention.Delete, It.IsAny<NotepadAuthContext>()), Times.Once);
     }
+
+    [Fact]
+    public async Task NameTheEntryAuthorWhenAuthorizingAnUpdate()
+    {
+        var entryId = Guid.NewGuid();
+        var gameId = Guid.NewGuid();
+        var authorId = Guid.NewGuid();
+        var updateEntry = new UpdateNotepadEntry { Title = "Updated Entry" };
+        var entry = new NotepadEntry
+        {
+            Id = entryId,
+            NotepadType = NotepadType.Master,
+            ContainerId = gameId,
+            AuthorId = authorId
+        };
+        var game = CreateGame(gameId);
+        _repository.Setup(r => r.GetEntryAsync(entryId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(entry);
+        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
+        _repository.Setup(r => r.UpdateEntryAsync(It.IsAny<UpdateNotepadEntryInternal>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(entry);
+
+        await _service.UpdateEntry(entryId, updateEntry);
+
+        // Editing belongs to the author alone. Left out of the context, the
+        // resolver has nobody to compare the asker against and the rule cannot
+        // be stated at all.
+        _intentionManager.Verify(m => m.ThrowIfForbidden(
+            NotepadIntention.Edit,
+            It.Is<NotepadAuthContext>(c => c.AuthorId == authorId)), Times.Once);
+    }
+
+    [Fact]
+    public async Task NameTheEntryAuthorWhenAuthorizingADeletion()
+    {
+        var entryId = Guid.NewGuid();
+        var gameId = Guid.NewGuid();
+        var authorId = Guid.NewGuid();
+        var entry = new NotepadEntry
+        {
+            Id = entryId,
+            NotepadType = NotepadType.Master,
+            ContainerId = gameId,
+            AuthorId = authorId
+        };
+        var game = CreateGame(gameId);
+        _repository.Setup(r => r.GetEntryAsync(entryId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(entry);
+        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
+        _repository.Setup(r => r.DeleteEntryAsync(entryId, _currentUserId, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        await _service.DeleteEntry(entryId);
+
+        // Deleting is the author's and the game master's, and the first half of
+        // that needs the author in the context just as much as editing does.
+        _intentionManager.Verify(m => m.ThrowIfForbidden(
+            NotepadIntention.Delete,
+            It.Is<NotepadAuthContext>(c => c.AuthorId == authorId)), Times.Once);
+    }
+
+    [Fact]
+    public async Task LeaveTheAuthorUnsetWhenAuthorizingTheNotepadItself()
+    {
+        var gameId = Guid.NewGuid();
+        var game = CreateGame(gameId);
+        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
+        _repository.Setup(r => r.CreateEntryAsync(It.IsAny<CreateNotepadEntryInternal>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new NotepadEntry { Id = Guid.NewGuid() });
+
+        await _service.CreateMasterEntry(gameId, new CreateNotepadEntry { Title = "Test Entry", Content = "Content" });
+
+        // Creating is not about an entry that exists, so there is no author yet
+        // and the resolver must not be handed one.
+        _intentionManager.Verify(m => m.ThrowIfForbidden(
+            NotepadIntention.Create,
+            It.Is<NotepadAuthContext>(c => c.AuthorId == null)), Times.Once);
+    }
 }

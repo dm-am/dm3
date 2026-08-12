@@ -114,11 +114,13 @@ public class ChatController : ControllerBase
     /// <response code="201">Chat created</response>
     /// <response code="400">Validation error</response>
     /// <response code="401">User must be authenticated</response>
+    /// <response code="403">A participant has blocked the author</response>
     [HttpPost(Name = nameof(CreateChat))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Chat), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> CreateChat([FromBody] CreateChat createChat)
     {
         var result = await _apiService.CreateChatAsync(createChat);
@@ -133,7 +135,7 @@ public class ChatController : ControllerBase
     /// <response code="200">Chat updated</response>
     /// <response code="400">Validation error</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User is not a participant</response>
+    /// <response code="403">User is not a participant, or a participant being added has blocked the author</response>
     /// <response code="404">Chat not found</response>
     [HttpPatch("{id}", Name = nameof(UpdateChat))]
     [AuthenticationRequired]

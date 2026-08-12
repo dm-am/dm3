@@ -17,7 +17,7 @@ namespace DM.Architecture.Tests;
 /// identifier per term, the same in the UI, in the code and in the
 /// documentation. The client enforces it for interface strings
 /// (copy-rules.spec.ts). Nothing enforced it anywhere else, and the gap showed:
-/// the role every screen calls a наставник was still a ментор in five documents
+/// the role every screen calls a "наставник" was still a "ментор" in five documents
 /// -- including the glossary that declares the rule -- and in a seeded profile,
 /// and the documentation is where the next screen takes its words from.
 ///
@@ -65,7 +65,7 @@ public class InterfaceVocabularyShould
     /// The rule used to read "check the files whose path names the forum", which
     /// is a rule about where the word was last caught rather than about the word.
     /// The dispatcher's dictionary of notification headings
-    /// (DM.Workers.NotificationDispatcher/Implementation/NotificationText.cs) is
+    /// (DM.Workers.NotificationDispatcher/Dispatching/NotificationText.cs) is
     /// named after neither a topic nor a forum, so the line a reader sees over
     /// every forum notification was outside it; so were four passages of
     /// AUTHORIZATION.md that call the entity by the retired word.
@@ -84,7 +84,7 @@ public class InterfaceVocabularyShould
     /// The senses the word keeps: the subject of a conversation, of a letter, of
     /// a ticket, and the colour scheme. Listed because they do stand next to the
     /// forum -- the rules speak of "уход от темы в служебных разделах форума",
-    /// which is about staying on subject and not about a топик.
+    /// which is about staying on subject and not about a "топик".
     /// </summary>
     private static readonly Regex[] OtherSenses =
     [
@@ -280,25 +280,5 @@ public class InterfaceVocabularyShould
     private static string Relative(string root, string file) =>
         Path.GetRelativePath(root, file).Replace('\\', '/');
 
-    /// <summary>
-    /// Walks up from the test binary to the repository root: the sources are not
-    /// copied to the output directory, and copying them would assert against a
-    /// stale snapshot.
-    /// </summary>
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null &&
-                   !(Directory.Exists(Path.Combine(directory.FullName, "src")) &&
-                     Directory.Exists(Path.Combine(directory.FullName, "test"))))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

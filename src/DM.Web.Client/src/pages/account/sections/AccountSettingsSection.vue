@@ -5,6 +5,7 @@
     <div class="settings-content">
       <FormField label="Цветовая схема">
         <Select
+          id="account-theme"
           :model-value="settingsForm.theme"
           :options="themeOptions"
           @update:model-value="(v) => (settingsForm.theme = v as Theme)"
@@ -16,6 +17,7 @@
         <div class="pagination-grid">
           <FormField label="Постов на странице">
             <Select
+              id="account-posts-per-page"
               :model-value="String(settingsForm.paging.postsPerPage)"
               :options="pagingSelectOptions"
               @update:model-value="
@@ -26,6 +28,7 @@
 
           <FormField label="Комментариев на странице">
             <Select
+              id="account-comments-per-page"
               :model-value="String(settingsForm.paging.commentsPerPage)"
               :options="pagingSelectOptions"
               @update:model-value="
@@ -36,6 +39,7 @@
 
           <FormField label="Тем на странице">
             <Select
+              id="account-topics-per-page"
               :model-value="String(settingsForm.paging.topicsPerPage)"
               :options="pagingSelectOptions"
               @update:model-value="
@@ -46,6 +50,7 @@
 
           <FormField label="Сообщений на странице">
             <Select
+              id="account-messages-per-page"
               :model-value="String(settingsForm.paging.messagesPerPage)"
               :options="pagingSelectOptions"
               @update:model-value="
@@ -56,6 +61,7 @@
 
           <FormField label="Сущностей на странице">
             <Select
+              id="account-entities-per-page"
               :model-value="String(settingsForm.paging.entitiesPerPage)"
               :options="pagingSelectOptions"
               @update:model-value="
@@ -88,7 +94,12 @@ import { FormField } from "@/shared/ui/Form";
 import { Select, type SelectOption } from "@/shared/ui/Select";
 import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
 import { useToast } from "@/shared/lib/composables/useToast";
-import { Theme, type Preferences } from "@/shared/api/models/personal";
+import { DEFAULT_PAGE_SIZES } from "@/shared/lib/composables/usePaging";
+import {
+  Theme,
+  type Paging,
+  type Preferences,
+} from "@/shared/api/models/personal";
 import type { User } from "@/shared/api/models/community/users";
 import { useUiStore } from "@/shared/stores/ui";
 import { describeFailure } from "@/shared/lib/errors";
@@ -112,16 +123,31 @@ const pagingSelectOptions: SelectOption[] = pagingOptions.map((opt) => ({
   label: String(opt),
 }));
 
-// Settings form
+/**
+ * The page sizes a viewer with no saved preferences is actually served.
+ * usePaging owns the numbers; this form only has to agree with them, or it
+ * offers the reader a size no list on the site would use.
+ */
+function defaultPaging(): Paging {
+  return {
+    postsPerPage: DEFAULT_PAGE_SIZES.postsPerPage,
+    commentsPerPage: DEFAULT_PAGE_SIZES.commentsPerPage,
+    topicsPerPage: DEFAULT_PAGE_SIZES.topicsPerPage,
+    messagesPerPage: DEFAULT_PAGE_SIZES.messagesPerPage,
+    entitiesPerPage: DEFAULT_PAGE_SIZES.entitiesPerPage,
+  };
+}
+
+// Settings form.
+//
+// Its theme is the one this device is in, not the one stored on the account:
+// the theme belongs to the device and the switch in the settings panel writes
+// it there. A select filled from the account would hand the account value back
+// over that choice the next time any field of this form is saved — pagination
+// included, since the form is saved by one button.
 const settingsForm = ref({
-  theme: Theme.Light as Theme,
-  paging: {
-    postsPerPage: 50,
-    commentsPerPage: 50,
-    topicsPerPage: 50,
-    messagesPerPage: 50,
-    entitiesPerPage: 50,
-  },
+  theme: uiStore.theme,
+  paging: defaultPaging(),
 });
 
 // Initialize form from user data
@@ -130,14 +156,8 @@ watch(
   (currentUser) => {
     if (currentUser) {
       settingsForm.value = {
-        theme: currentUser.settings?.theme || Theme.Light,
-        paging: currentUser.settings?.paging || {
-          postsPerPage: 50,
-          commentsPerPage: 50,
-          topicsPerPage: 50,
-          messagesPerPage: 50,
-          entitiesPerPage: 50,
-        },
+        theme: uiStore.theme,
+        paging: currentUser.settings?.paging || defaultPaging(),
       };
     }
   },

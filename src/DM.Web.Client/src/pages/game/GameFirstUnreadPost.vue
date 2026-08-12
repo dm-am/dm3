@@ -2,12 +2,13 @@
 import { onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { gameApi } from "@/entities/game";
-
-// Room pages show 20 posts (gameApi.getPosts default page size)
-const POSTS_PAGE_SIZE = 20;
+import { usePaging } from "@/shared/lib/composables/usePaging";
 
 const route = useRoute();
 const router = useRouter();
+// The room asks the API for the reader's own page size, so the page holding a
+// given post has to be counted in that same size.
+const { postsPerPage } = usePaging();
 
 onMounted(async () => {
   // Must be the game Guid (links pass game.id): the first-unread endpoint
@@ -40,14 +41,16 @@ onMounted(async () => {
       return;
     }
 
-    // Land on the page that contains the post, then scroll to it
-    const page = Math.ceil(result.postNumber / POSTS_PAGE_SIZE);
+    // Land on the page holding the post and let the room scroll to it. The
+    // page is "?number=", the site-wide paging key: this used to spell it
+    // "page", which the room never reads, so every jump landed on page one.
+    const page = Math.ceil(result.postNumber / postsPerPage.value);
 
     router.replace({
       name: "game-room",
       params: { id: gameId, num: room.roomNumber },
       query: {
-        ...(page > 1 ? { page: String(page) } : {}),
+        ...(page > 1 ? { number: String(page) } : {}),
         scrollTo: result.postId,
       },
     });

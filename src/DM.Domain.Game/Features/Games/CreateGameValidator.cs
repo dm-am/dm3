@@ -31,6 +31,6 @@ internal class CreateGameValidator : AbstractValidator<CreateGame>
 
         When(g => !string.IsNullOrEmpty(g.AssistantUsername), () =>
             RuleFor(g => g.AssistantUsername)
-                .MustAsync(userLookupService.UserExistsAsync).WithMessage(ValidationError.Invalid));
+                .MustAsync(userLookupService.UsernameExistsAsync).WithMessage(ValidationError.Invalid));
     }
 }

@@ -18,6 +18,7 @@ import { requestNotSent } from "@/shared/lib/errors";
 import forumApi from "../api/forumApi";
 import { useAuthStore } from "@/shared/stores";
 import { useApiList } from "@/shared/lib/composables/useApiResource";
+import { usePaging } from "@/shared/lib/composables/usePaging";
 import {
   createKeyedCache,
   stableCacheKey,
@@ -25,6 +26,7 @@ import {
 
 export const useBoardsStore = defineStore("boards", () => {
   const { user: currentUser } = storeToRefs(useAuthStore());
+  const { topicsPerPage, commentsPerPage } = usePaging();
 
   // Boards are static - 5 minute cache
   const boardsResource = useApiList<Board>(() => forumApi.getBoards(), {
@@ -135,8 +137,7 @@ export const useBoardsStore = defineStore("boards", () => {
     const requestId = topicsGuard.next();
 
     // Apply user's page size preference
-    const size =
-      query.size ?? currentUser.value?.settings?.paging?.topicsPerPage ?? 20;
+    const size = query.size ?? topicsPerPage.value;
     const fullQuery = { ...query, size };
     const boardAlias = selectedBoard.value.alias as BoardId;
     const cacheKey = stableCacheKey({ board: boardAlias, ...fullQuery });
@@ -345,8 +346,7 @@ export const useBoardsStore = defineStore("boards", () => {
   async function searchComments(query: CommentsQuery) {
     if (!selectedTopic.value) return;
 
-    const size =
-      query.size ?? currentUser.value?.settings?.paging?.commentsPerPage ?? 20;
+    const size = query.size ?? commentsPerPage.value;
     const fullQuery: CommentsQuery = { ...query, size };
     const topicId = selectedTopic.value.id!;
     const cacheKey = stableCacheKey({ topic: topicId, ...fullQuery });

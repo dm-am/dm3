@@ -37,7 +37,7 @@ public class NotificationRecipientsShould
         "src/DM.Domain.Personal/Features/Notifications/NotificationService.cs";
 
     private const string Dispatcher =
-        "src/DM.Workers.NotificationDispatcher/Implementation/NotificationProcessor.cs";
+        "src/DM.Workers.NotificationDispatcher/Dispatching/NotificationProcessor.cs";
 
     [Fact]
     public void BeFilteredByThePersonalBlacklistWhileTheyAreCreated()
@@ -86,20 +86,5 @@ public class NotificationRecipientsShould
     private static string Read(string relative) =>
         File.ReadAllText(Path.Combine(RepositoryRoot, relative.Replace('/', Path.DirectorySeparatorChar)));
 
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null &&
-                   !(Directory.Exists(Path.Combine(directory.FullName, "src")) &&
-                     Directory.Exists(Path.Combine(directory.FullName, "test"))))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

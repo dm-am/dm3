@@ -22,6 +22,18 @@
     <p style="@EmailConstants.FooterStyles">
         Письмо отправлено автоматически, отвечать на него не нужно.
     </p>
+    @*
+        Адреса сайта в подвале письма. Почта — единственный канал, который
+        доходит до человека после того, как привычный адрес перестал у него
+        открываться: страницу с этим перечнем он к тому моменту уже не загрузит.
+        Строка появляется только когда адресов больше одного.
+    *@
+    @if (SiteHosts.Count > 1)
+    {
+        <p style="@EmailConstants.FooterStyles">
+            Сайт открывается по адресам: @string.Join(", ", SiteHosts)
+        </p>
+    }
 </div>
 </body>
 </html>
@@ -35,5 +47,21 @@
     /// <summary>Тело письма</summary>
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
+
+    [Inject]
+    private SiteAddressConfiguration SiteAddresses { get; set; } = null!;
+
+    /// <summary>
+    /// Адреса сайта в том виде, в каком их читают и набирают: без схемы и без
+    /// завершающей косой черты. Ссылками не оформлены намеренно — письмо с этим
+    /// перечнем читают в том числе тогда, когда часть адресов не отвечает, и
+    /// адрес там нужно прочитать, а не нажать.
+    /// </summary>
+    private IReadOnlyList<string> SiteHosts =>
+        SiteAddresses.Addresses.Values
+            .Where(url => !string.IsNullOrWhiteSpace(url))
+            .Select(url => new Uri(url).Host)
+            .Distinct()
+            .ToList();
 
 }

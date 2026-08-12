@@ -167,6 +167,7 @@ function pointsErrors(): string[] {
     >
       <FormField label="Тип предупреждения" name="warning-kind">
         <Select
+          id="warning-kind"
           :model-value="kind"
           :options="kindOptions"
           @update:model-value="(v) => (kind = v)"
@@ -180,6 +181,7 @@ function pointsErrors(): string[] {
         :errors="pointsErrors()"
       >
         <Select
+          id="warning-points"
           :model-value="points"
           :options="pointsOptions"
           @update:model-value="(v) => (points = v)"

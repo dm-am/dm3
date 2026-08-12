@@ -19,7 +19,8 @@ import { Tooltip } from "@/shared/ui/Tooltip";
 import { TruncatedContent } from "@/shared/ui/TruncatedContent";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
-import { UserLink, AvatarImg, userIsModerator } from "@/entities/user";
+import { UserLink, userIsModerator } from "@/entities/user";
+import { AvatarImg } from "@/shared/ui/AvatarImg";
 import { trimHtmlWhitespace } from "@/shared/lib/utils/bbcodeInteractive";
 import { useAuthStore } from "@/shared/stores/auth";
 import {
@@ -31,6 +32,7 @@ import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { scrollBlockIntoView } from "@/shared/lib/scroll";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { notifyFailure } from "@/shared/lib/errors";
+import { permalinkOrigin } from "@/shared/config/site";
 
 const props = withDefaults(
   defineProps<{
@@ -304,8 +306,8 @@ const postRoute = computed(() =>
 
 const postPermalink = computed(() =>
   postRoute.value
-    ? window.location.origin + router.resolve(postRoute.value).href
-    : window.location.origin + window.location.pathname + postAnchor.value,
+    ? permalinkOrigin() + router.resolve(postRoute.value).href
+    : permalinkOrigin() + window.location.pathname + postAnchor.value,
 );
 
 /**
@@ -326,7 +328,7 @@ function reviewPermalink(reviewId: string): string {
         query: { ...route.query, review: reviewId },
         hash: postAnchor.value,
       };
-  return window.location.origin + router.resolve(target).href;
+  return permalinkOrigin() + router.resolve(target).href;
 }
 
 /**
@@ -434,12 +436,26 @@ const editGameText = ref("");
 const editMetaText = ref("");
 const savingPost = ref(false);
 
-function startEditPost() {
-  // Seed from the currently displayed text (mirrors the Comment edit block;
-  // the dual-mode BBCodeEditor round-trips the rendered HTML).
+async function startEditPost() {
+  // Seeded from the display rendering, the editor received a post whose
+  // [private] blocks had already been flattened into ordinary markup: saving
+  // then published the private text to the whole room. The author's own view
+  // of their post is a different rendering, and it has to be asked for.
   editGameText.value = effectiveGameText.value ?? "";
   editMetaText.value = effectiveMetaText.value ?? "";
   isEditingPost.value = true;
+
+  try {
+    const { data } = await gameApi.getPostForEdit(props.post.id);
+    if (data && isEditingPost.value) {
+      editGameText.value = data.gameText ?? editGameText.value;
+      editMetaText.value = data.metagameText ?? editMetaText.value;
+    }
+  } catch {
+    // The editor is already open on the display text. Refusing to open it at
+    // all would be worse than editing a post without private blocks, and the
+    // request failing is what the general interceptor reports.
+  }
 }
 
 function cancelEditPost() {
@@ -675,7 +691,7 @@ async function submitReview() {
           <div class="post-body">
             <!-- Inline edit mode (author ≤15min / moderator+) -->
             <div v-if="isEditingPost" class="post-edit">
-              <label class="edit-label">Игровой текст</label>
+              <span class="edit-label">Игровой текст</span>
               <BBCodeEditor
                 v-model="editGameText"
                 context="post"
@@ -683,7 +699,7 @@ async function submitReview() {
                 :min-height="120"
                 :is-moderator="isModerator"
               />
-              <label class="edit-label">Метаигровой текст</label>
+              <span class="edit-label">Метаигровой текст</span>
               <BBCodeEditor
                 v-model="editMetaText"
                 context="post"
@@ -868,6 +884,7 @@ async function submitReview() {
                 v-model="newReviewText"
                 class="review-input"
                 placeholder="Текст отзыва..."
+                aria-label="Текст отзыва"
                 rows="2"
               ></textarea>
               <SecondaryText v-if="!canPickSignedReview" class="review-hint">

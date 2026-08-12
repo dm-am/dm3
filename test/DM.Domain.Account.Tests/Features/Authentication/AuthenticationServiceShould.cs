@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Account.Configuration;
 using DM.Domain.Account.Features.Authentication;
@@ -7,6 +8,7 @@ using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Testing.Dsl;
 using DM.Testing;
@@ -27,7 +29,7 @@ public class AuthenticationServiceShould : UnitTestBase
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<ILoginAttemptTracker> _loginAttemptTracker;
-    private readonly Mock<ISecurityAuditService> _auditService;
+    private readonly Mock<ISecurityAuditRepository> _auditService;
     private readonly Mock<IEventProducer> _eventProducer;
     private readonly AuthenticationService _service;
 
@@ -40,7 +42,7 @@ public class AuthenticationServiceShould : UnitTestBase
         _dateTimeProvider = Mock<IDateTimeProvider>();
         _identityProvider = Mock<IIdentityProvider>();
         _loginAttemptTracker = Mock<ILoginAttemptTracker>();
-        _auditService = Mock<ISecurityAuditService>();
+        _auditService = Mock<ISecurityAuditRepository>();
         _eventProducer = Mock<IEventProducer>();
         var logger = Mock<ILogger<AuthenticationService>>();
         var config = Options.Create(new AuthenticationConfiguration
@@ -201,7 +203,7 @@ public class AuthenticationServiceShould : UnitTestBase
         _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
         _securityManager.Setup(s => s.ComparePasswords("password", user.Salt, user.PasswordHash))
             .Returns(true);
-        _sessionFactory.Setup(f => f.Create(true, false, null)).Returns(createSession);
+        _sessionFactory.Setup(f => f.Create(true, null)).Returns(createSession);
         _repository.Setup(r => r.FindUserSettings(userId)).ReturnsAsync(settings);
         _repository.Setup(r => r.AddSession(userId, createSession)).ReturnsAsync(session);
         _cryptoService.Setup(c => c.Encrypt(It.IsAny<string>())).ReturnsAsync("encrypted-token");
@@ -326,7 +328,7 @@ public class AuthenticationServiceShould : UnitTestBase
         // the seed writes, and the refusal has to hold without them
         _securityManager.Setup(s => s.ComparePasswords("password", user.Salt, user.PasswordHash))
             .Returns(true);
-        _sessionFactory.Setup(f => f.Create(true, false, null))
+        _sessionFactory.Setup(f => f.Create(true, null))
             .Returns(new CreateSession { Id = Guid.NewGuid() });
         _repository.Setup(r => r.FindUserSettings(user.UserId)).ReturnsAsync(UserSettings.Default);
         _repository.Setup(r => r.AddSession(user.UserId, It.IsAny<CreateSession>()))
@@ -575,7 +577,11 @@ public class AuthenticationServiceShould : UnitTestBase
 
         _identityProvider.Setup(p => p.Current).Returns(identity);
 
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+        // Not the caller's session to end, and a refusal is a refusal: the error
+        // middleware maps HttpException and its kin and nothing else, so anything
+        // outside that family reaches the client as a server fault.
+        var thrown = await Assert.ThrowsAsync<HttpException>(
             () => _service.TerminateSession(otherUserId, sessionId));
+        thrown.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 }

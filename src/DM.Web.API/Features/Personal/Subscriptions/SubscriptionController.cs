@@ -112,12 +112,10 @@ public class SubscriptionController : ControllerBase
     /// Creates a subscription to the specified target. If already subscribed, returns the existing subscription.
     /// </remarks>
     /// <param name="request">Subscription request</param>
-    /// <response code="201">Subscription created</response>
-    /// <response code="200">Already subscribed, returns existing subscription</response>
+    /// <response code="201">Subscription created, or the existing one when already subscribed</response>
     /// <response code="401">User must be authenticated</response>
     [HttpPost(Name = nameof(Subscribe))]
     [ProducesResponseType(typeof(Subscription), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(Subscription), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Subscribe([FromBody] SubscribeRequest request)
     {

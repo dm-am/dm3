@@ -20,6 +20,9 @@ public class NotepadEntry
     /// <summary>Owner ID (character for player notepad)</summary>
     public Guid? OwnerId { get; set; }
 
+    /// <summary>Author of the entry - the one who may edit it</summary>
+    public Guid AuthorId { get; set; }
+
     /// <summary>Entry title</summary>
     public string Title { get; set; } = null!;
 

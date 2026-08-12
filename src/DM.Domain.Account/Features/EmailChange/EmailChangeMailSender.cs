@@ -13,25 +13,25 @@ internal class EmailChangeMailSender : IEmailChangeMailSender
     private readonly ITemplateRenderer _renderer;
     private readonly IMailSender _mailSender;
     private readonly IEmailAssetsProvider _emailAssetsProvider;
-    private readonly IntegrationSettings _integrationSettings;
+    private readonly SiteAddressConfiguration _siteAddresses;
 
     /// <inheritdoc />
     public EmailChangeMailSender(
         ITemplateRenderer renderer,
         IMailSender mailSender,
         IEmailAssetsProvider emailAssetsProvider,
-        IOptions<IntegrationSettings> integrationSettings)
+        IOptions<SiteAddressConfiguration> siteAddresses)
     {
         _renderer = renderer;
         _mailSender = mailSender;
         _emailAssetsProvider = emailAssetsProvider;
-        _integrationSettings = integrationSettings.Value;
+        _siteAddresses = siteAddresses.Value;
     }
 
     /// <inheritdoc />
     public async Task Send(string email, string username, Guid token)
     {
-        var confirmationLinkUrl = new Uri(new Uri(_integrationSettings.WebUrl), $"confirm-email/{token}");
+        var confirmationLinkUrl = new Uri(new Uri(_siteAddresses.PublicUrl), $"confirm-email/{token}");
         var emailBody = await _renderer.RenderAsync(new EmailChangeConfirmationViewModel(
             username,
             confirmationLinkUrl.ToString()));

@@ -141,7 +141,6 @@ function eventClass(type: SecurityEventType): string {
   border-radius: $border-radius
 
 .loading-state
-  color: $text-muted
   padding: $medium
 
 .events-list

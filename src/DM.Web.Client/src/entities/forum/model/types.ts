@@ -9,7 +9,8 @@ import type { Id, Served } from "@/shared/api/models";
 export type BoardId = Id<string>;
 export type TopicId = Id<string>;
 
-// Re-export Comment types from shared for backwards compatibility
+// The comment shape is one contract for the forum, the game and the blog, so it
+// is declared in shared; the slice names it under its own roof.
 export type CommentId = BaseCommentId;
 export type Comment = BaseComment;
 

@@ -251,7 +251,6 @@ async function confirmUnblock() {
   color: $text
 
 .loading-state
-  color: $text-muted
   padding: $small 0
 
 .settings-list

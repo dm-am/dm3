@@ -54,11 +54,20 @@ internal class RoomAccessRepository : IRoomAccessRepository
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Reached through the rooms, like the listing above it. An access record
+    /// names a person who may enter a private room, so answering by identifier
+    /// alone told anyone who asked who has the keys: the reader argument was
+    /// taken and dropped, and the one caller that reads without writing does no
+    /// checking of its own afterwards.
+    /// </remarks>
     public async Task<RoomAccess?> GetAccess(Guid accessId, Guid userId)
     {
-        return await _dbContext.RoomAccesses
+        return await _dbContext.Rooms
             .TagWith("DM.RoomAccess.GetAccess")
-            .Where(l => l.AccessId == accessId)
+            .Where(GameAccessibilityFilters.RoomAvailable(userId))
+            .SelectMany(r => r.RoomAccesses)
+            .Where(a => a.AccessId == accessId)
             .ProjectTo<RoomAccess>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
     }

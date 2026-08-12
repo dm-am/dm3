@@ -132,7 +132,7 @@ describe("TopicsList moderator actions", () => {
             : {
                 data: {
                   resources: [topic("t-plain", "Болталка", false)],
-                  paging: { number: 1, size: 20, total: 1, pages: 1 },
+                  paging: { current: 1, skip: 0, take: 20, total: 1, pages: 1 },
                 },
                 error: null,
               },

@@ -14,6 +14,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Users;
 using DM.Domain.Core.Events;
+using DM.Domain.Core.Subscriptions;
 
 namespace DM.Domain.Blog.Features.Blacklists;
 
@@ -27,6 +28,7 @@ internal class BlogBlacklistService : IBlogBlacklistService
     private readonly IIntentionManager _intentionManager;
     private readonly IEventProducer _producer;
     private readonly IMapper _mapper;
+    private readonly ISubscriptionRepository _subscriptionRepository;
 
     public BlogBlacklistService(
         IBlogBlacklistRepository repository,
@@ -35,7 +37,8 @@ internal class BlogBlacklistService : IBlogBlacklistService
         IIdentityProvider identityProvider,
         IIntentionManager intentionManager,
         IEventProducer producer,
-        IMapper mapper)
+        IMapper mapper,
+        ISubscriptionRepository subscriptionRepository)
     {
         _repository = repository;
         _blogService = blogService;
@@ -44,6 +47,7 @@ internal class BlogBlacklistService : IBlogBlacklistService
         _intentionManager = intentionManager;
         _producer = producer;
         _mapper = mapper;
+        _subscriptionRepository = subscriptionRepository;
     }
 
     private async Task<IEnumerable<GeneralUser>> GetBlacklistAsync(Guid blogId, CancellationToken ct = default)
@@ -94,6 +98,15 @@ internal class BlogBlacklistService : IBlogBlacklistService
 
         // Add to blacklist
         await _repository.Add(blogId, user.UserId, currentUserId, ct);
+
+        // The game keeps the same invariant by refusing to blacklist a member at
+        // all and making the owner remove them first. A blog has no command for
+        // removing a reader, the blacklist is that command, so the entry ends the
+        // subscription itself. Without this the blacklisted user stayed on the
+        // list of readers and kept receiving every publication the blog
+        // announced, while BlogSubscriptionGuard refused them the subscription
+        // they already had.
+        await _subscriptionRepository.DeleteAsync(user.UserId, SubscriptionTargetType.Blog, blogId, ct);
 
         // Cancel pending invitations for this user
         var cancelledInvitations = await _repository.CancelInvitationsForUser(blogId, user.UserId, ct);

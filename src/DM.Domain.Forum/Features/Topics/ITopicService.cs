@@ -91,8 +91,14 @@ public interface ITopicService
     Task DeleteAsync(Guid topicId, CancellationToken ct = default);
 
     /// <summary>
-    /// Reorder pinned topics in a board
+    /// Replace the order of a board's pinned topics
     /// </summary>
+    /// <remarks>
+    /// The whole order, not a correction to it: <paramref name="topicIds"/> names
+    /// every pinned topic of the board exactly once, and a list that does not is
+    /// refused. A partial list would leave the topics it skipped on the positions
+    /// this call has just given to others.
+    /// </remarks>
     /// <param name="boardTitle">Board title or alias</param>
     /// <param name="topicIds">Topic IDs in desired order (first = top)</param>
     /// <param name="ct">Cancellation token</param>

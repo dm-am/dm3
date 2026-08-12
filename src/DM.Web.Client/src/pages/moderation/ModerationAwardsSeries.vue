@@ -180,11 +180,12 @@ onMounted(async () => {
       <section class="block">
         <h3>Параметры серии</h3>
         <div class="form-row">
-          <label>Топик с итогами</label>
+          <label for="series-topic-url">Топик с итогами</label>
           <input
+            id="series-topic-url"
             v-model="edit.topicUrl"
             type="url"
-            placeholder="https://dm.am/..."
+            placeholder="/forum/topic/..."
           />
         </div>
         <div class="form-row inline">
@@ -193,29 +194,25 @@ onMounted(async () => {
             Активна (видна в dropdown при выдаче)
           </label>
         </div>
-        <button
-          type="button"
-          class="primary-button"
-          :disabled="editSaving"
-          @click="saveEdit"
-        >
-          {{ editSaving ? "Сохраняем..." : "Сохранить" }}
-        </button>
+        <Button type="button" :loading="editSaving" @click="saveEdit">
+          Сохранить
+        </Button>
       </section>
 
       <!-- Grant section -->
       <section class="block">
         <h3>Выдать награду</h3>
         <div class="form-row">
-          <label>Пользователь</label>
+          <label for="grant-username">Пользователь</label>
           <UserAutocomplete
+            id="grant-username"
             v-model="grantForm.username"
             placeholder="Введите имя..."
           />
         </div>
         <div class="form-row">
-          <label>Тип награды</label>
-          <select v-model="grantForm.awardTypeId">
+          <label for="grant-award-type">Тип награды</label>
+          <select id="grant-award-type" v-model="grantForm.awardTypeId">
             <option value="" disabled>Не выбрано</option>
             <option v-for="t in awardTypes ?? []" :key="t.id" :value="t.id">
               {{ t.title }} ({{ t.description }})
@@ -223,22 +220,23 @@ onMounted(async () => {
           </select>
         </div>
         <div class="form-row">
-          <label>Топик с работой (опционально)</label>
+          <label for="grant-work-url">Топик с работой (опционально)</label>
           <input
+            id="grant-work-url"
             v-model="grantForm.workUrl"
             type="url"
-            placeholder="https://dm.am/forum/topic/..."
+            placeholder="/forum/topic/..."
           />
         </div>
         <p v-if="grantError" class="form-error">{{ grantError }}</p>
-        <button
+        <Button
           type="button"
-          class="primary-button"
-          :disabled="granting || !grantForm.username || !grantForm.awardTypeId"
+          :loading="granting"
+          :disabled="!grantForm.username || !grantForm.awardTypeId"
           @click="grant"
         >
-          {{ granting ? "Выдаем..." : "Выдать" }}
-        </button>
+          Выдать
+        </Button>
       </section>
 
       <!-- Grants list -->
@@ -280,8 +278,6 @@ onMounted(async () => {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-
 .series-detail
   display: flex
   flex-direction: column
@@ -328,9 +324,6 @@ onMounted(async () => {
     &:focus:not(:focus-visible)
       outline: none
       border-color: $link
-
-.primary-button
-  +button
 
 .text-button
   background: none

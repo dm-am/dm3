@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
-using DM.Workers.NotificationDispatcher.Implementation.Notifiers.Game;
+using DM.Workers.NotificationDispatcher.Notifiers.Game;
 using FluentAssertions;
 using Xunit;
 
@@ -31,7 +31,9 @@ public class PendencyNotificationsShould
     {
         await using var context = _fixture.CreateContext();
         var produced = await EveryNotificationGeneratorShould.DrainAsync(
-            new GamePendencyReminderNotificationGenerator(context), pendencyId);
+            new GamePendencyReminderNotificationGenerator(
+                context, EveryNotificationGeneratorShould.ClockAt(DateTimeOffset.UtcNow)),
+            pendencyId);
         return produced.SingleOrDefault();
     }
 

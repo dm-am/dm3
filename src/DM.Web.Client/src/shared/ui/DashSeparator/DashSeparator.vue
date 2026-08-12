@@ -14,8 +14,10 @@
  */
 withDefaults(
   defineProps<{
-    /** Vertical margin around the separator */
-    spacing?: "small" | "tiny";
+    /** Vertical margin around the separator. "none" is for the callers
+     * that set the rhythm around the line themselves: the paging block and
+     * the sidebar lists space it by their own layout. */
+    spacing?: "small" | "tiny" | "none";
     /** Optional centered label — switches to line-label-line layout */
     label?: string;
     /** Width of the plain dash line, e.g. "75%". Defaults to the full
@@ -75,6 +77,9 @@ const DASH_LINE = "- ".repeat(450);
   &.spacing-tiny
     margin: $tiny 0
 
+  &.spacing-none
+    margin: 0
+
 .dash-separator-labeled
   display: flex
   align-items: center
@@ -85,6 +90,9 @@ const DASH_LINE = "- ".repeat(450);
 
   &.spacing-tiny
     margin: $tiny 0
+
+  &.spacing-none
+    margin: 0
 
 .dash-label-line
   flex: 1

@@ -260,6 +260,7 @@ async function resolve() {
 
             <FormField label="Статус решения" name="ticket-resolution">
               <Select
+                id="ticket-resolution"
                 :model-value="resolutionStatus"
                 :options="statusOptions"
                 @update:model-value="
@@ -283,6 +284,7 @@ async function resolve() {
                   name="ticket-warning-kind"
                 >
                   <Select
+                    id="ticket-warning-kind"
                     :model-value="warningKind"
                     :options="warningKindOptions"
                     @update:model-value="
@@ -296,6 +298,7 @@ async function resolve() {
                   name="ticket-warning-points"
                 >
                   <Select
+                    id="ticket-warning-points"
                     :model-value="warningPoints"
                     :options="warningPointsOptions"
                     @update:model-value="(v) => (warningPoints = v)"
@@ -306,6 +309,7 @@ async function resolve() {
                   name="ticket-warning-text"
                 >
                   <textarea
+                    id="ticket-warning-text"
                     v-model="warningText"
                     rows="3"
                     maxlength="2000"
@@ -325,6 +329,7 @@ async function resolve() {
                 <template v-if="issueBan">
                   <FormField label="Срок бана" name="ticket-ban-duration">
                     <Select
+                      id="ticket-ban-duration"
                       :model-value="banDuration"
                       :options="banDurationOptions"
                       @update:model-value="(v) => (banDuration = v)"
@@ -332,6 +337,7 @@ async function resolve() {
                   </FormField>
                   <FormField label="Причина бана" name="ticket-ban-comment">
                     <textarea
+                      id="ticket-ban-comment"
                       v-model="banComment"
                       rows="3"
                       maxlength="2000"

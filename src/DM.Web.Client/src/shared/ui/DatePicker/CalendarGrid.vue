@@ -204,6 +204,10 @@ const canGoPrev = computed(() => {
   font-size: $tertiary-font-size
   color: $text-muted
 
+// 1px is a hairline between day cells, not a spacing step, and stays as it is:
+// the cells are aspect-ratio squares in a seven-column 1fr grid, so the
+// smallest step of the scale ($tiny) doubles the seam and shrinks every cell of
+// the calendar with it.
 .dp-grid
   display: grid
   grid-template-columns: repeat(7, 1fr)

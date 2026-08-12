@@ -3,8 +3,6 @@
     <PropertyGroup>
         <TargetFramework>net8.0</TargetFramework>
         <AspNetCoreHostingModel>InProcess</AspNetCoreHostingModel>
-        <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <NoWarn>$(NoWarn);1591</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
@@ -12,7 +10,6 @@
         <PackageReference Include="AspNetCore.HealthChecks.Npgsql" />
         <PackageReference Include="AspNetCore.HealthChecks.Rabbitmq" />
         <PackageReference Include="AspNetCore.HealthChecks.UI.Client" />
-        <PackageReference Include="AspNetCore.HealthChecks.Uris" />
         <PackageReference Include="Autofac.Extensions.DependencyInjection" />
         <PackageReference Include="Jamq.Client.Rabbit.DependencyInjection" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
@@ -20,6 +17,7 @@
           <PrivateAssets>all</PrivateAssets>
         </PackageReference>
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+        <PackageReference Include="Polly" />
         <PackageReference Include="Serilog" />
         <PackageReference Include="Swashbuckle.AspNetCore" />
         <PackageReference Include="Swashbuckle.AspNetCore.Swagger" />
@@ -36,7 +34,9 @@
         <ProjectReference Include="..\DM.Domain.Messaging\DM.Domain.Messaging.csproj" />
         <ProjectReference Include="..\DM.Domain.Moderation\DM.Domain.Moderation.csproj" />
         <ProjectReference Include="..\DM.Domain.Personal\DM.Domain.Personal.csproj" />
+        <ProjectReference Include="..\DM.Infrastructure.Core\DM.Infrastructure.Core.csproj" />
         <ProjectReference Include="..\DM.Infrastructure.Mail\DM.Infrastructure.Mail.csproj" />
+        <ProjectReference Include="..\DM.Infrastructure.Messaging\DM.Infrastructure.Messaging.csproj" />
         <ProjectReference Include="..\DM.Infrastructure.Persistence\DM.Infrastructure.Persistence.csproj" />
     </ItemGroup>
 

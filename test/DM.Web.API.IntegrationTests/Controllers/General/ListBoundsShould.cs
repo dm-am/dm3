@@ -74,14 +74,10 @@ public class ListBoundsShould : IntegrationTestBase
         "GET /v1/moderation/tags",
         "GET /v1/moderation/tags/groups",
         "GET /v1/moderation/tags/groups/{groupId}/tags",
-        "GET /v1/moderation/tickets/assigned",
-        "GET /v1/moderation/tickets/mine",
         "GET /v1/moderation/username-changes",
         "GET /v1/moderation/users/{username}/notes",
         "GET /v1/moderation/violators",
-        "GET /v1/moderation/warnings",
         "GET /v1/schemas",
-        "GET /v1/users/by-role/{role}",
         "GET /v1/users/me/invitations",
         "GET /v1/users/me/subscriptions",
         "GET /v1/users/{username}/achievements",
@@ -102,11 +98,17 @@ public class ListBoundsShould : IntegrationTestBase
     /// runs. Writing them down as "bounded by what they are" turned an open debt into
     /// a decision nobody made.
     ///
-    /// What closing them takes, and why it is not done here: paging a roster and a
-    /// notepad is not only a query change. Both screens render the whole collection
-    /// today, so a page size takes rows off the screen — a visible change, and this
-    /// project approves those one by one. The server half without the client half is
-    /// worse than either: the roster would silently lose its tail.
+    /// Sitewide warnings joined them for the same reason and a plainer one: the
+    /// repository reads every warning ever issued, ordered newest first, with no
+    /// Skip and no Take, while the screen above it is titled "latest warnings".
+    /// Nothing about a warning bounds how many there are.
+    ///
+    /// What closing them takes, and why it is not done here: paging a roster, a
+    /// notepad or a moderation log is not only a query change. All of those screens
+    /// render the whole collection today, so a page size takes rows off the screen —
+    /// a visible change, and this project approves those one by one. The server half
+    /// without the client half is worse than either: the roster would silently lose
+    /// its tail.
     /// </remarks>
     private static readonly HashSet<string> GrowingWithoutAPage = new(StringComparer.Ordinal)
     {
@@ -114,6 +116,7 @@ public class ListBoundsShould : IntegrationTestBase
         "GET /v1/characters/{id}/notepad",
         "GET /v1/games/{id}/characters",
         "GET /v1/games/{id}/notepad",
+        "GET /v1/moderation/warnings",
         "GET /v1/users/me/notepad",
     };
 
@@ -143,7 +146,7 @@ public class ListBoundsShould : IntegrationTestBase
 
                     if (!operation.Value.TryGetProperty("responses", out var responses) ||
                         !responses.TryGetProperty("200", out var success) ||
-                        SchemaNameOf(success)?.Contains("ListEnvelope", StringComparison.Ordinal) != true)
+                        !AnswersAList(success))
                     {
                         continue;
                     }
@@ -174,23 +177,25 @@ public class ListBoundsShould : IntegrationTestBase
             .ToArray();
     }
 
-    private static string? SchemaNameOf(JsonElement response)
+    /// <summary>Whether a 200 answers a list of resources.</summary>
+    /// <remarks>
+    /// Two shapes, and only one of them used to count. A declared ListEnvelope is
+    /// a class the document names; an array written out in place names nothing,
+    /// and reading that as "no body" dropped the operation out of the walk before
+    /// its parameters were ever looked at - so a list with no page and no
+    /// envelope was on neither of the two lists above and held by nothing at all.
+    /// </remarks>
+    private static bool AnswersAList(JsonElement success)
     {
-        if (!response.TryGetProperty("content", out var content))
+        var schema = ResponseBodySchema.NameOf(success);
+        if (schema == null)
         {
-            return null;
+            return false;
         }
 
-        foreach (var mediaType in content.EnumerateObject())
-        {
-            if (mediaType.Value.TryGetProperty("schema", out var schema) &&
-                schema.TryGetProperty("$ref", out var reference))
-            {
-                return reference.GetString();
-            }
-        }
-
-        return null;
+        return schema == ResponseBodySchema.WrittenInPlace
+            ? ResponseBodySchema.IsArray(success)
+            : schema.Contains("ListEnvelope", StringComparison.Ordinal);
     }
 
     [Fact]

@@ -25,6 +25,11 @@ const emit = defineEmits<{
 
 const displayValue = computed(() => props.modelValue || props.empty);
 const isEmpty = computed(() => !props.modelValue);
+
+// The id the label points at. Random suffix, because a page renders a column of
+// these at once and an id has to be unique on the page. Same shape as FormField
+// generates.
+const controlId = `editable-field-${Math.random().toString(36).slice(2, 9)}`;
 </script>
 
 <template>
@@ -34,9 +39,12 @@ const isEmpty = computed(() => !props.modelValue);
        API). Edit mode keeps label as a bare <label> for the input. -->
   <div class="editable-field" :class="{ 'is-editing': editing }">
     <template v-if="editing">
-      <label v-if="label" class="field-label">{{ label }}</label>
+      <label v-if="label" class="field-label" :for="controlId">{{
+        label
+      }}</label>
       <textarea
         v-if="type === 'textarea'"
+        :id="controlId"
         :value="modelValue"
         :placeholder="placeholder || label"
         :rows="rows"
@@ -50,6 +58,7 @@ const isEmpty = computed(() => !props.modelValue);
       />
       <input
         v-else
+        :id="controlId"
         type="text"
         :value="modelValue"
         :placeholder="placeholder || label"

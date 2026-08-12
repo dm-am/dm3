@@ -42,40 +42,59 @@ const deny = (reason, detail) => {
   process.exit(2);
 };
 
-let input = "";
-process.stdin.setEncoding("utf8");
-process.stdin.on("data", (chunk) => (input += chunk));
-process.stdin.on("end", () => {
-  let data;
-  try {
-    data = JSON.parse(input);
-  } catch {
-    // Неразобранный ввод не повод блокировать работу, но и молчать нельзя:
-    // именно так предыдущая версия скрывала собственную неработоспособность.
-    console.error("block-new-migrations: не удалось разобрать ввод хука");
-    process.exit(0);
-  }
-
-  const tool = data.tool_name || "";
-  const toolInput = data.tool_input || {};
-
+/**
+ * Решение хука о конкретном вызове инструмента.
+ *
+ * Вынесено из обработчика stdin и экспортировано ровно затем, зачем у соседнего
+ * хука: правило, которое нельзя вызвать из теста, проверяется только на живой
+ * работе, то есть тогда, когда оно уже пропустило то, что должно было
+ * остановить. Возвращает причину отказа или null.
+ */
+function findViolation(tool, toolInput) {
   if (tool === "Write") {
-    const filePath = toolInput.file_path || toolInput.path || "";
+    const filePath = (toolInput && (toolInput.file_path || toolInput.path)) || "";
     if (MIGRATION_FILE.test(filePath) && !ALLOWED_MIGRATION.test(filePath)) {
-      deny("создание новой миграции запрещено.", "Путь: " + filePath);
+      return { reason: "создание новой миграции запрещено.", detail: "Путь: " + filePath };
     }
   }
 
   if (tool === "Bash" || tool === "PowerShell") {
-    const command = toolInput.command || "";
+    const command = (toolInput && toolInput.command) || "";
     const added = MIGRATION_ADD.exec(command);
     if (added && !ALLOWED_MIGRATION.test(added[1])) {
-      deny(
-        "команда создает вторую миграцию.",
-        "Команда: " + command + "\nИмя: " + added[1] + " — разрешено только InitialCreate.",
-      );
+      return {
+        reason: "команда создает вторую миграцию.",
+        detail: "Команда: " + command + "\nИмя: " + added[1] + " — разрешено только InitialCreate.",
+      };
     }
   }
 
-  process.exit(0);
-});
+  return null;
+}
+
+module.exports = { findViolation };
+
+// Как хук: читает JSON на stdin. Как модуль: отдает findViolation тесту.
+if (require.main === module) {
+  let input = "";
+  process.stdin.setEncoding("utf8");
+  process.stdin.on("data", (chunk) => (input += chunk));
+  process.stdin.on("end", () => {
+    let data;
+    try {
+      data = JSON.parse(input);
+    } catch {
+      // Неразобранный ввод не повод блокировать работу, но и молчать нельзя:
+      // именно так предыдущая версия скрывала собственную неработоспособность.
+      console.error("block-new-migrations: не удалось разобрать ввод хука");
+      process.exit(0);
+    }
+
+    const violation = findViolation(data.tool_name || "", data.tool_input || {});
+    if (violation) {
+      deny(violation.reason, violation.detail);
+    }
+
+    process.exit(0);
+  });
+}

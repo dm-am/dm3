@@ -294,7 +294,11 @@ onMounted(fetchEntries);
               <h3>
                 {{ editingEntry ? "Редактирование записи" : "Новая запись" }}
               </h3>
-              <button class="close-btn" @click="closeEditor">
+              <button
+                class="close-btn"
+                aria-label="Закрыть"
+                @click="closeEditor"
+              >
                 {{ symbols.close }}
               </button>
             </div>
@@ -329,9 +333,7 @@ onMounted(fetchEntries);
                 >
                   Отмена
                 </button>
-                <button class="save-btn" :disabled="saving" @click="saveEntry">
-                  {{ saving ? "Сохранение..." : "Сохранить" }}
-                </button>
+                <Button :loading="saving" @click="saveEntry">Сохранить</Button>
               </div>
             </div>
           </div>
@@ -569,9 +571,6 @@ onMounted(fetchEntries);
   margin-top: $medium
 
 .cancel-btn
-  +button
-
-.save-btn
   +button
 
 .content-header

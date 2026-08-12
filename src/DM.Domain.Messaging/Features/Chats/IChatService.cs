@@ -15,6 +15,11 @@ public interface IChatService
     /// <summary>
     /// Create a new group chat
     /// </summary>
+    /// <remarks>
+    /// Refuses the whole chat when one of the invited participants keeps the
+    /// author on a personal blacklist with private messages blocked: a group is
+    /// not a way around that setting.
+    /// </remarks>
     /// <param name="createChat">Chat data</param>
     /// <returns>Created chat</returns>
     Task<Chat> CreateGroupAsync(CreateChat createChat);
@@ -89,6 +94,11 @@ public interface IChatService
     /// <summary>
     /// Update chat (title and/or participants)
     /// </summary>
+    /// <remarks>
+    /// Adding a participant answers to the same rule as creating the chat does:
+    /// somebody who keeps the caller on a personal blacklist with private
+    /// messages blocked is not added.
+    /// </remarks>
     /// <param name="updateChat">Update data</param>
     /// <returns>Updated chat</returns>
     Task<Chat> UpdateAsync(UpdateChat updateChat);

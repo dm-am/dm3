@@ -17,9 +17,3 @@ export { FilterBubble, ExpandableBubble, BubblesRow } from "./bubbles";
 
 // Controls
 export { SortButton, FilterButton, FilterDropdown } from "./controls";
-
-// Composables
-export {
-  useKeyboardNavigation,
-  type KeyboardNavigationOptions,
-} from "./composables";

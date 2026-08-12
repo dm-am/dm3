@@ -41,16 +41,14 @@ public static class CoreConfigurationExtensions
         // Bound, not required, for the same reason as the connection strings above:
         // this is the call every host makes, and the mail worker builds no link at
         // all - the three senders that do live in DM.Domain.Account, an assembly it
-        // does not scan. Demanding WebUrl here made the worker refuse to start over
+        // does not scan. Demanding PublicUrl here made the worker refuse to start over
         // a value it never reads, which is the exact shape of what the Require*
         // split was introduced to end. RequireGeneratedLinks() is next door.
-        services.AddOptions<IntegrationSettings>()
-            .Bind(configuration.GetSection(nameof(IntegrationSettings)));
+        services.AddOptions<SiteAddressConfiguration>()
+            .Bind(configuration.GetSection(nameof(SiteAddressConfiguration)));
 
         services.Configure<CdnConfiguration>(
             configuration.GetSection(nameof(CdnConfiguration)).Bind);
-        services.Configure<MirrorConfiguration>(
-            configuration.GetSection(nameof(MirrorConfiguration)).Bind);
         services.Configure<BotConfiguration>(
             configuration.GetSection(nameof(BotConfiguration)).Bind);
 
@@ -59,6 +57,12 @@ public static class CoreConfigurationExtensions
         // resolves the URL builder, which is a 500 on the first avatar rather than a
         // refusal to start. A key with no salt builds /insecure/ URLs that an imgproxy
         // holding a key answers 403 to, and no log names the reason.
+        //
+        // An empty pair stays valid here because a host started by hand - dotnet run,
+        // the integration tests - has no imgproxy beside it to sign for. Which
+        // deployments may do that is not this layer's call, and it is not left to
+        // chance either: docker-compose.yml declares both through ${...:?}, so no stack
+        // comes up without a pair, and docker/.env.example carries neither.
         services.AddOptions<ImageProxyConfiguration>()
             .Bind(configuration.GetSection(nameof(ImageProxyConfiguration)))
             .Validate(IsUsableSigningPair,
@@ -74,7 +78,7 @@ public static class CoreConfigurationExtensions
     /// Declares that this host builds links back into the site.
     /// </summary>
     /// <remarks>
-    /// WebUrl is what every generated link is built from: activation mails,
+    /// PublicUrl is what every generated link is built from: activation mails,
     /// password resets, notification bodies. Empty, it produces links that point
     /// at nothing, and it does so silently — so a host that builds them says so
     /// and refuses to start without it. A host that builds none says nothing and
@@ -83,10 +87,10 @@ public static class CoreConfigurationExtensions
     /// <param name="services">Service collection.</param>
     public static IServiceCollection RequireGeneratedLinks(this IServiceCollection services)
     {
-        services.AddOptions<IntegrationSettings>()
+        services.AddOptions<SiteAddressConfiguration>()
             .Validate(
-                s => !string.IsNullOrEmpty(s.WebUrl),
-                "IntegrationSettings:WebUrl is required")
+                s => !string.IsNullOrEmpty(s.PublicUrl),
+                "SiteAddressConfiguration:PublicUrl is required")
             .ValidateOnStart();
         return services;
     }

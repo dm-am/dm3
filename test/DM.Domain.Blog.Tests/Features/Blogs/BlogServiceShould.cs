@@ -42,8 +42,6 @@ public class BlogServiceShould : UnitTestBase
     private readonly Mock<IValidator<UpdateBlog>> _updateBlogValidator;
     private readonly Mock<IValidator<CreateRubric>> _createRubricValidator;
     private readonly Mock<IValidator<UpdateRubric>> _updateRubricValidator;
-    private readonly Mock<IValidator<CreatePublication>> _createPublicationValidator;
-    private readonly Mock<IValidator<UpdatePublication>> _updatePublicationValidator;
     private readonly Mock<IGuidFactory> _guidFactory;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
     private readonly Mock<IEventProducer> _eventProducer;
@@ -62,8 +60,6 @@ public class BlogServiceShould : UnitTestBase
         _updateBlogValidator = Mock<IValidator<UpdateBlog>>();
         _createRubricValidator = Mock<IValidator<CreateRubric>>();
         _updateRubricValidator = Mock<IValidator<UpdateRubric>>();
-        _createPublicationValidator = Mock<IValidator<CreatePublication>>();
-        _updatePublicationValidator = Mock<IValidator<UpdatePublication>>();
         _guidFactory = Mock<IGuidFactory>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
         _eventProducer = Mock<IEventProducer>();
@@ -76,9 +72,6 @@ public class BlogServiceShould : UnitTestBase
             .ReturnsAsync(new ValidationResult());
         _updateBlogValidator
             .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<UpdateBlog>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
-        _createPublicationValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<CreatePublication>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ValidationResult());
         _updateRubricValidator
             .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<UpdateRubric>>(), It.IsAny<CancellationToken>()))
@@ -96,8 +89,6 @@ public class BlogServiceShould : UnitTestBase
             _updateBlogValidator.Object,
             _createRubricValidator.Object,
             _updateRubricValidator.Object,
-            _createPublicationValidator.Object,
-            _updatePublicationValidator.Object,
             _guidFactory.Object,
             _dateTimeProvider.Object,
             _eventProducer.Object);
@@ -162,31 +153,6 @@ public class BlogServiceShould : UnitTestBase
     }
 
     [Fact]
-    public async Task PublishEventWhenCreatingPublication()
-    {
-        var blogId = Guid.NewGuid();
-        var publicationId = Guid.NewGuid();
-        var blog = new BlogDto { Id = blogId, DraftVisibility = DraftVisibility.Public };
-        var createPublication = new CreatePublication
-        {
-            BlogId = blogId,
-            Title = "Test Publication",
-            Content = "Content"
-        };
-
-        _guidFactory.Setup(f => f.Create()).Returns(publicationId);
-        _repository.Setup(r => r.Get(blogId, default)).ReturnsAsync(blog);
-        _repository.Setup(r => r.CreatePublication(It.IsAny<CreatePublicationEntity>(), default))
-            .ReturnsAsync(new Publication { Id = publicationId });
-        _eventProducer.Setup(p => p.SendAsync(EventType.NewPublication, publicationId))
-            .Returns(Task.CompletedTask);
-
-        await _service.CreatePublication(createPublication);
-
-        _eventProducer.Verify(p => p.SendAsync(EventType.NewPublication, publicationId), Times.Once);
-    }
-
-    [Fact]
     public async Task ThrowWhenSubscribingToOwnBlog()
     {
         var blogId = Guid.NewGuid();
@@ -248,19 +214,51 @@ public class BlogServiceShould : UnitTestBase
     public async Task AuthorizeReorderRubricsAction()
     {
         var blogId = Guid.NewGuid();
-        var orderedIds = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        var orderedIds = new[] { second, first };
         var blog = new BlogDto { Id = blogId, DraftVisibility = DraftVisibility.Public };
 
         _repository.Setup(r => r.Get(blogId, default)).ReturnsAsync(blog);
         _repository.Setup(r => r.ReorderRubrics(blogId, It.IsAny<IReadOnlyList<Guid>>(), default))
             .Returns(Task.CompletedTask);
+        // The order replaces the blog's whole order, so the body is checked against
+        // the rubrics the blog holds before anything is written.
         _repository.Setup(r => r.GetRubrics(blogId, default))
-            .ReturnsAsync(Array.Empty<Rubric>());
+            .ReturnsAsync(new[] { new Rubric { Id = first }, new Rubric { Id = second } });
+        _repository.Setup(r => r.GetRubricPublicationIds(blogId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<Guid, Guid[]>());
 
         await _service.ReorderRubrics(blogId, orderedIds);
 
         _intentionManager.Verify(m => m.ThrowIfForbidden(BlogIntention.CreateRubric, blog), Times.Once);
         _repository.Verify(r => r.ReorderRubrics(blogId, orderedIds, default), Times.Once);
+    }
+
+    /// <summary>
+    /// A list that skips a rubric is refused rather than half-applied: the rubric
+    /// it left out would keep the sort order the same call has just given to
+    /// another one, and two rubrics would share a position.
+    /// </summary>
+    [Fact]
+    public async Task RefuseARubricOrderThatSkipsARubric()
+    {
+        var blogId = Guid.NewGuid();
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        var blog = new BlogDto { Id = blogId, DraftVisibility = DraftVisibility.Public };
+
+        _repository.Setup(r => r.Get(blogId, default)).ReturnsAsync(blog);
+        _repository.Setup(r => r.GetRubrics(blogId, default))
+            .ReturnsAsync(new[] { new Rubric { Id = first }, new Rubric { Id = second } });
+
+        var act = async () => await _service.ReorderRubrics(blogId, new[] { second });
+
+        var refusal = await act.Should().ThrowAsync<HttpBadRequestException>();
+        refusal.Which.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        _repository.Verify(
+            r => r.ReorderRubrics(blogId, It.IsAny<IReadOnlyList<Guid>>(), default), Times.Never,
+            "a refused order writes nothing");
     }
 
     [Fact]

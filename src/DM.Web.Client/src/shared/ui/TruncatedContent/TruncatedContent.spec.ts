@@ -22,11 +22,11 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { nextTick } from "vue";
 import TruncatedContent from "./TruncatedContent.vue";
-import { registerExpandable } from "@/shared/lib/composables";
+import { registerExpandable } from "@/shared/lib/composables/useExpandableRegistry";
 
-// The expandable registry barrel pulls the whole composables index (SignalR,
-// API clients, ...) — stub the named imports the component uses.
-vi.mock("@/shared/lib/composables", () => ({
+// The registry is a module-scoped singleton every mounted expandable shares.
+// Stub the named imports the component uses.
+vi.mock("@/shared/lib/composables/useExpandableRegistry", () => ({
   registerExpandable: vi.fn(() => vi.fn()),
   notifyExpandableChanged: vi.fn(),
   refreshExpandableStates: vi.fn(),

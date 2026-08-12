@@ -64,11 +64,14 @@ public class AuthenticationController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
-        // Honeypot validation - reject if the Website field is filled
+        // Honeypot validation - reject if the Website field is filled. Filed under
+        // a field the request actually declares, the way the registration and the
+        // ticket honeypots next door are: a key naming nothing is a sentence no
+        // form can put anywhere.
         if (!string.IsNullOrWhiteSpace(request.Website))
         {
             throw new HttpBadRequestException(
-                new Dictionary<string, string> { ["identifier"] = "Не удалось войти" },
+                new Dictionary<string, string> { ["email"] = "Не удалось войти" },
                 RefusalMessage.InvalidData);
         }
 
@@ -110,6 +113,11 @@ public class AuthenticationController : ControllerBase
     [AuthenticationRequired]
     [ProducesResponseType(typeof(ListEnvelope<Session>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    // The caller's own devices, addresses and sign-in times. Nothing may keep a
+    // copy: this API sets no validator anywhere, so a stored response is reused
+    // without the origin ever being asked again, and after a sign-out on a
+    // shared machine the browser's disk cache is where it would be read from.
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> GetSessions()
     {
         var sessions = await _authenticationApiService.GetSessions();
@@ -156,7 +164,7 @@ public class AuthenticationController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> TerminateOtherSessions()
     {
-        await _authenticationApiService.LogoutAll(HttpContext);
+        await _authenticationApiService.LogoutElsewhere(HttpContext);
         return NoContent();
     }
 }

@@ -1,5 +1,5 @@
 using DM.Domain.Core.Authorization;
-using DM.Domain.Blog.Features.Blogs;
+using DM.Domain.Blog.Features.Publications;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Blog.Authorization;

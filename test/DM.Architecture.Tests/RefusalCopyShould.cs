@@ -35,9 +35,21 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class RefusalCopyShould
 {
-    /// <summary>The two exceptions whose message reaches the reader.</summary>
-    private static readonly Regex ThrownRefusal = new(
-        @"new\s+(?:HttpException|HttpBadRequestException)\s*\(",
+    /// <summary>
+    /// Where a refusal takes its wording: the two exceptions whose message the
+    /// middleware turns into a title, and the factory call itself.
+    /// </summary>
+    /// <remarks>
+    /// The factory is read because not every refusal can be thrown. The rate
+    /// limiter answers from OnRejected, outside MVC, with no request left to
+    /// throw into, so it builds the document itself — and its title stayed
+    /// English for as long as this scan looked at throw sites alone. A call that
+    /// passes a constant holds no literal and is invisible here, which is the
+    /// intended outcome.
+    /// </remarks>
+    private static readonly Regex RefusalWording = new(
+        @"new\s+(?:HttpException|HttpBadRequestException)\s*\(" +
+        @"|Create(?:Validation)?ProblemDetails\s*\(",
         RegexOptions.Compiled);
 
     /// <summary>
@@ -148,7 +160,7 @@ public class RefusalCopyShould
             var text = File.ReadAllText(source);
             var relative = Path.GetRelativePath(root.FullName, source).Replace('\\', '/');
 
-            foreach (Match refusal in ThrownRefusal.Matches(text))
+            foreach (Match refusal in RefusalWording.Matches(text))
             {
                 var line = text.Take(refusal.Index).Count(symbol => symbol == '\n') + 1;
                 sites.Add(new ThrowSite(relative, line, Messages(text, refusal.Index + refusal.Length)));
@@ -287,25 +299,7 @@ public class RefusalCopyShould
         }
     }
 
-    /// <summary>
-    /// Walks up from the test binary to the repository root. The sources are not
-    /// copied to the output directory, and copying them would let this assert
-    /// against a stale snapshot.
-    /// </summary>
-    private static DirectoryInfo RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null && !Directory.Exists(Path.Combine(directory.FullName, "docs")))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!;
-        }
-    }
+    private static DirectoryInfo RepositoryRoot => DM.Testing.RepositoryLayout.RootDirectory;
 
     private sealed record ThrowSite(string Source, int Line, IReadOnlyList<string> Messages);
 }

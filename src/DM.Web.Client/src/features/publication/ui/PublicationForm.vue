@@ -54,6 +54,7 @@ defineExpose({ clearDraft: () => editor.value?.clearDraft() });
 
     <FormField label="Рубрика">
       <Select
+        id="publication-rubric"
         :model-value="rubricId"
         :options="rubricOptions"
         @update:model-value="(v) => (rubricId = v as string)"

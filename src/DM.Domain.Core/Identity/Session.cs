@@ -18,11 +18,6 @@ public class Session
     public bool Persistent { get; set; }
 
     /// <summary>
-    /// Session invisibility flag
-    /// </summary>
-    public bool Invisible { get; set; }
-
-    /// <summary>
     /// Expiration date (UTC)
     /// </summary>
     public DateTimeOffset ExpirationUtc { get; set; }

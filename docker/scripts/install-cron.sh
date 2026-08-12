@@ -17,6 +17,11 @@ fi
 # Ensure log file exists and is writable
 touch "$LOG_FILE"
 
+# Where verify-backup.sh leaves its verdict for node-exporter to publish. The
+# exit code alone reached nobody: cron mails it, and the server has no MTA.
+TEXTFILE_DIR="${TEXTFILE_DIR:-/var/lib/node_exporter/textfile}"
+mkdir -p "$TEXTFILE_DIR"
+
 # Install crontab entries
 CRON_MARKER="# DM3 automated backups"
 # verify-backup.sh runs last and exits non-zero when an artefact is missing,

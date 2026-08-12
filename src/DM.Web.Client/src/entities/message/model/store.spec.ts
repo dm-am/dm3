@@ -22,6 +22,7 @@ vi.mock("../api/messagingApi", () => ({
 }));
 
 import { useMessagingStore } from "./store";
+import { useAuthStore } from "@/shared/stores";
 
 const message = (id: number) => ({
   id: `m${id}`,
@@ -168,5 +169,113 @@ describe("useMessagingStore, sending a message", () => {
     expect(error).toBeNull();
     expect(store.messagesList.map((m) => m.id)).toEqual(["m2", "m3", "m4"]);
     expect(store.selectedChat?.lastMessage?.id).toBe("m4");
+  });
+
+  describe("ответы вне порядка", () => {
+    function deferred<T>() {
+      let resolve!: (value: T) => void;
+      const promise = new Promise<T>((settle) => {
+        resolve = settle;
+      });
+      return { promise, resolve };
+    }
+
+    // Two quick switches between chat A and chat B put two requests on the
+    // wire. The answer for A, arriving after the answer for B, used to
+    // overwrite the state: the reader saw a chat they had already left, and the
+    // read receipt for that one had been sent.
+    it("оставляет ту переписку, которую выбрали последней", async () => {
+      const older = deferred<unknown>();
+      const newer = deferred<unknown>();
+      mockGetChat
+        .mockReturnValueOnce(older.promise)
+        .mockReturnValueOnce(newer.promise);
+
+      const store = useMessagingStore();
+      const first = store.selectChat("a" as never);
+      const second = store.selectChat("b" as never);
+
+      newer.resolve({ data: { id: "b" }, error: null });
+      await second;
+      older.resolve({ data: { id: "a" }, error: null });
+      await first;
+
+      expect(store.selectedChat?.id).toBe("b");
+    });
+
+    it("оставляет то окно сообщений, которое запросили последним", async () => {
+      const older = deferred<unknown>();
+      const newer = deferred<unknown>();
+      mockGetMessages
+        .mockReturnValueOnce(older.promise)
+        .mockReturnValueOnce(newer.promise);
+
+      const store = useMessagingStore();
+      const first = store.fetchMessages("a" as never);
+      const second = store.fetchMessages("b" as never);
+
+      newer.resolve({
+        data: { resources: [{ id: "mb" }], paging: null },
+        error: null,
+      });
+      await second;
+      older.resolve({
+        data: { resources: [{ id: "ma" }], paging: null },
+        error: null,
+      });
+      await first;
+
+      expect(store.messagesList.map((m) => m.id)).toEqual(["mb"]);
+      expect(store.loadingMessages).toBe(false);
+    });
+  });
+});
+
+describe("useMessagingStore, the size of the window", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+  });
+
+  /** A reader who set "messages per page" to thirty. */
+  function readerChose(messagesPerPage: number) {
+    useAuthStore().user = {
+      settings: { paging: { messagesPerPage } },
+    } as never;
+  }
+
+  // The preference was saved and never read: the window held a constant of its
+  // own, so the choice moved nothing.
+  it("asks for as many messages as the reader chose", async () => {
+    readerChose(30);
+    mockGetMessages.mockResolvedValue(page([1]));
+
+    const store = useMessagingStore();
+    await store.fetchMessages("c1" as never);
+
+    expect(mockGetMessages).toHaveBeenCalledWith("c1", { limit: 30 });
+  });
+
+  it("keeps that size when it loads older messages", async () => {
+    readerChose(30);
+    const store = await openChatWithHistory();
+    mockGetMessagesBefore.mockResolvedValue(page([0]));
+
+    await store.fetchMoreBefore();
+
+    expect(mockGetMessagesBefore).toHaveBeenCalledWith("c1", "cursor-1", 30);
+  });
+
+  // 200 is a legal preference and an illegal page. Unclamped it comes back 400,
+  // and fetchMessages reads only `data`: the conversation would be drawn empty,
+  // with nothing on screen saying why.
+  it("asks for no more than the API serves", async () => {
+    readerChose(200);
+    mockGetMessages.mockResolvedValue(page([1]));
+
+    const store = useMessagingStore();
+    await store.fetchMessages("c1" as never);
+
+    expect(mockGetMessages).toHaveBeenCalledWith("c1", { limit: 100 });
   });
 });

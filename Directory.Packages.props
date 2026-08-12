@@ -32,6 +32,13 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.8" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.8" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.8" />
+    <!-- Только тестовые проекты: sqlite держит реляционный слой в памяти там,
+         где поднимать контейнер незачем. Версия живет здесь, а не в отдельном
+         файле под test/, потому что dotnet list package не разворачивает Import
+         в Directory.Packages.props и молча перестает читать проекты, которые от
+         него зависят: гейт уязвимостей переставал видеть весь тестовый ярус. -->
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="8.0.8" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="9.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="9.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="9.0.0" />
@@ -42,7 +49,6 @@
     <PackageVersion Include="AspNetCore.HealthChecks.Npgsql" Version="8.0.2" />
     <PackageVersion Include="AspNetCore.HealthChecks.Rabbitmq" Version="8.0.2" />
     <PackageVersion Include="AspNetCore.HealthChecks.UI.Client" Version="8.0.1" />
-    <PackageVersion Include="AspNetCore.HealthChecks.Uris" Version="8.0.1" />
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="9.0.0" />
     <PackageVersion Include="Microsoft.Extensions.FileProviders.Embedded" Version="9.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.0" />
@@ -54,6 +60,17 @@
     <PackageVersion Include="MongoDB.Driver.Core.Extensions.DiagnosticSources" Version="1.5.0" />
     <PackageVersion Include="Moq" Version="4.20.70" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.4" />
+    <!-- Стоит на предрелизной 1.0.0-beta2, тогда как ядро телеметрии рядом на
+         1.17.0: пакет поставляет только netstandard2.0 и объявляет зависимость
+         OpenTelemetry.Api 1.0.1. Сегодня это ничего не ломает — обе вызываемые
+         функции присутствуют в новом ядре с теми же сигнатурами, спаны по базе
+         идут. Преемник существует ровно под это ядро
+         (OpenTelemetry.Instrumentation.EntityFrameworkCore 1.17.0-beta.1, есть
+         сборка под net8.0), но он тоже бета и обещает ломающие изменения между
+         бетами. Решено 2026-08-12 переходить не отдельно, а вместе со следующим
+         поднятием ядра: переход меняет состав трасс боевого контура, обратного
+         выключателя у нового пакета нет, и в паре с поднятием ядра это одна
+         проверка вместо двух. -->
     <PackageVersion Include="OpenTelemetry.Contrib.Instrumentation.EntityFrameworkCore" Version="1.0.0-beta2" />
     <PackageVersion Include="OpenTelemetry.Exporter.Console" Version="1.17.0" />
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.17.0" />
@@ -62,7 +79,6 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.12.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.12.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.12.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.SqlClient" Version="1.9.0-beta.1" />
     <PackageVersion Include="Polly" Version="8.4.1" />
     <PackageVersion Include="Serilog" Version="4.3.1" />
     <PackageVersion Include="Serilog.AspNetCore" Version="8.0.2" />

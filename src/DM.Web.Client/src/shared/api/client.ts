@@ -15,6 +15,7 @@ import {
 } from "./audience";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { describeFailure } from "@/shared/lib/errors";
+import { otherSiteAddresses } from "@/shared/config/site";
 
 type QueryParams = Record<
   string,
@@ -211,10 +212,28 @@ class Api {
           showError("Ошибка сервера. Попробуйте позже.");
         }
 
-        // Handle network errors (no response)
-        if (!error.response && error.code === "ERR_NETWORK") {
+        // Nothing came back at all. Two codes mean that: axios answers a dead
+        // connection with ERR_NETWORK and a request that ran out of time with
+        // ECONNABORTED. The second was falling through silently, and a route
+        // that is blocked times out rather than refusing, so the visitor who
+        // needed this sentence most was the one who never saw it.
+        //
+        // The sentence names the other address of the site: a route that
+        // stopped answering is exactly when the other one is worth typing.
+        // Plain text and no link, because the toast prints its message as a
+        // string (useToast, ToastContainer) and the address has to survive
+        // being read off a screen anyway.
+        if (
+          !error.response &&
+          (error.code === "ERR_NETWORK" || error.code === "ECONNABORTED")
+        ) {
           const { error: showError } = useToast();
-          showError("Нет соединения с сервером");
+          const [other] = otherSiteAddresses();
+          showError(
+            other
+              ? `Нет соединения с сервером. Другой адрес сайта: ${other.host}`
+              : "Нет соединения с сервером",
+          );
         }
 
         return Promise.reject(error);

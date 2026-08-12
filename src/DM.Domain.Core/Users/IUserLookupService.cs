@@ -20,7 +20,7 @@ public interface IUserLookupService
     /// </summary>
     /// <param name="username">Username to find</param>
     /// <returns>User info</returns>
-    /// <exception cref="DM.Domain.Core.Exceptions.HttpException">User not found (410 Gone)</exception>
+    /// <exception cref="DM.Domain.Core.Exceptions.HttpException">User not found (404 Not Found)</exception>
     Task<GeneralUser> GetAsync(string username);
 
     /// <summary>
@@ -28,7 +28,7 @@ public interface IUserLookupService
     /// </summary>
     /// <param name="userId">User identifier</param>
     /// <returns>User info</returns>
-    /// <exception cref="DM.Domain.Core.Exceptions.HttpException">User not found (410 Gone)</exception>
+    /// <exception cref="DM.Domain.Core.Exceptions.HttpException">User not found (404 Not Found)</exception>
     Task<GeneralUser> GetAsync(Guid userId);
 
     /// <summary>
@@ -38,14 +38,6 @@ public interface IUserLookupService
     /// <param name="ct">Cancellation token</param>
     /// <returns>True if user exists</returns>
     Task<bool> UsernameExistsAsync(string username, CancellationToken ct = default);
-
-    /// <summary>
-    /// Check if user exists by username (alias for UsernameExists, for validator compatibility)
-    /// </summary>
-    /// <param name="username">Username to check</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>True if user exists</returns>
-    Task<bool> UserExistsAsync(string username, CancellationToken ct = default);
 
     /// <summary>
     /// Find user ID by username (for game/blog resolvers)

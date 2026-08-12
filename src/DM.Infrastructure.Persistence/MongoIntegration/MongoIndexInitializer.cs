@@ -113,20 +113,22 @@ public class MongoIndexInitializer : IHostedService
                 expireAfter: TimeSpan.FromDays(TombstoneRetentionDays)),
         }, cancellationToken);
 
-        // UserSessions — AuthenticationRepository
-        // Every other query of this collection filters by UserSession.Id, which is the _id
-        // of the document and is therefore already served by the default _id index.
-        await Assert(client.GetCollection<DbUserSession>(), new[]
-        {
-            // FindUserSession — runs on every authenticated request:
-            //   Find(ElemMatch(u => u.Sessions, s => s.Id == sessionId))
-            // and the same predicate in RefreshSession. Without this index the lookup is a
-            // collection scan over every user's session array.
-            // The member path is resolved through the class map, so Session.Id becomes the
-            // "_id" element of the embedded document and the key is "Sessions._id".
-            Index<DbUserSession>("IX_UserSessions_SessionId", keys => keys
-                .Ascending($"{nameof(DbUserSession.Sessions)}.{nameof(DbSession.Id)}")),
-        }, cancellationToken);
+        // UserSessions — AuthenticationRepository. Declared with no index of its own,
+        // and the empty list is the statement rather than an omission.
+        //
+        // Every query of this collection names the user first: FindUserSession filters by
+        // UserSession.Id alone and picks the session out of the loaded array in memory,
+        // and RefreshSession adds an ElemMatch to a filter that already carries the same
+        // Eq. UserSession.Id is the _id of the document, so both are primary-key lookups
+        // of exactly one document, and a secondary index on "Sessions._id" cannot narrow
+        // a set of one.
+        //
+        // It existed here for a while under a comment describing a Find(ElemMatch(...))
+        // over every user's session array — a query the repository does not make, and
+        // deliberately: a token whose user and session belong to different people must
+        // not authenticate, which is the whole reason the lookup is scoped by _id.
+        await Assert(client.GetCollection<DbUserSession>(),
+            Array.Empty<CreateIndexModel<DbUserSession>>(), cancellationToken);
 
         // UserSettings — BotLinkRepository, UserRepository, AuthenticationRepository.FindUserSettings
         await Assert(client.GetCollection<DbUserSettings>(), new[]

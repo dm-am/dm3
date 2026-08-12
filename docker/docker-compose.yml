@@ -19,8 +19,8 @@ volumes:
   rmqdata:
   alertmanagerdata:
 
-# Переменные с дефолтами для локальной разработки
-# Для зеркала: переопределить в .env.mirror
+# Переменные с дефолтами для локальной разработки.
+# Точка присутствия свой набор переопределяет в .env.mirror — секретов там нет.
 x-workload-env: &workload-env
   # === ASP.NET Core ===
   # Production unless explicitly overridden. Development is what maps Swagger UI
@@ -33,15 +33,23 @@ x-workload-env: &workload-env
 
   # === Базы данных ===
   DM_ConnectionStrings__Rdb: Host=${DB_HOST:-dm-pg};Port=5432;User ID=postgres;Password=${POSTGRES_PASSWORD};Database=dm3;Pooling=true;MinPoolSize=0;MaxPoolSize=100;Connection Idle Lifetime=60;${DB_SSL_MODE:-}
-  DM_ConnectionStrings__Mongo: mongodb://${MONGO_USER:-dm}:${MONGO_PASSWORD}@${MONGO_HOST:-dm-mongo}:27017/dm3?authSource=dm3&maxPoolSize=1000${MONGO_TLS:-}
+  # maxPoolSize repeats the MaxPoolSize of the line above on purpose: both cap the
+  # connections one process holds at once, and this driver returns a connection
+  # after each operation where Npgsql holds one for a whole unit of work, so the
+  # document pool covers the same concurrency with no more connections than the
+  # relational one already gets. Spelled out rather than left to the driver so it
+  # moves when that line moves; ConnectionPoolCeilingShould keeps the two equal in
+  # all four files that carry the pair.
+  DM_ConnectionStrings__Mongo: mongodb://${MONGO_USER:-dm}:${MONGO_PASSWORD}@${MONGO_HOST:-dm-mongo}:27017/dm3?authSource=dm3&maxPoolSize=100${MONGO_TLS:-}
   DM_ConnectionStrings__Logs: http://${LOGS_HOST:-dm-loki}:3100
   DM_ConnectionStrings__TracingEndpoint: http://${TRACING_HOST:-dm-jaeger}:4317
 
   # === Криптография ===
   # Дефолта нет: пустое значение валит старт приложения. Так и задумано - ключ,
-  # унаследованный из репозитория, секретом не является. Все зеркала должны
-  # получать одно и то же значение, иначе ссылка из письма, выданная одним
-  # зеркалом, не расшифруется другим.
+  # унаследованный из репозитория, секретом не является. Экземпляр приложения
+  # один, и ключ живет только на нем: точка присутствия кода приложения не
+  # выполняет, шифровать ей нечего, и копия ключа на ней отменяет весь смысл
+  # схемы.
   DM_CryptoConfiguration__KeyBase64: ${DM_CryptoConfiguration__KeyBase64:?DM_CryptoConfiguration__KeyBase64 is required, generate with openssl rand -base64 32}
 
   # === RabbitMQ ===
@@ -68,10 +76,13 @@ x-workload-env: &workload-env
   # === Image transforms (imgproxy) ===
   # Endpoint = публичный URL imgproxy (фронт обращается напрямую).
   # Key/Salt — HMAC-SHA256 signing для anti-abuse (anyone could otherwise
-  # request любой transform и сжечь CPU).
+  # request любой transform и сжечь CPU). Дефолта у пары нет по той же причине,
+  # что и у крипто-ключа выше: подпись, унаследованная из репозитория, не
+  # защищает ни от чего. Пустое значение валит интерполяцию, а не всплывает
+  # первой миниатюрой, подписанной словом insecure.
   DM_ImageProxyConfiguration__Endpoint: ${IMGPROXY_PUBLIC_URL:-http://localhost:8080}
-  DM_ImageProxyConfiguration__Key: ${IMGPROXY_KEY}
-  DM_ImageProxyConfiguration__Salt: ${IMGPROXY_SALT}
+  DM_ImageProxyConfiguration__Key: ${IMGPROXY_KEY:?IMGPROXY_KEY is required, generate with openssl rand -hex 32}
+  DM_ImageProxyConfiguration__Salt: ${IMGPROXY_SALT:?IMGPROXY_SALT is required, generate with openssl rand -hex 32}
   DM_ImageProxyConfiguration__SourceUrlPrefix: s3://dm-uploads/
 
   # === Email ===
@@ -82,15 +93,26 @@ x-workload-env: &workload-env
   DM_EmailConfiguration__FromAddress: info@dm.am
   DM_EmailConfiguration__FromDisplayName: DM.am
   DM_EmailConfiguration__ReplyToAddress: test@dm.am
+  # Оппортунистический STARTTLS по умолчанию: relay на стенде — это MailHog, и
+  # шифрования он не предлагает вовсе. Развертывание с настоящим relay ставит
+  # true, и тогда сессия падает вместо тихой отправки открытым текстом: в
+  # письмах ездят ссылки активации и сброса пароля.
+  DM_EmailConfiguration__RequireTls: ${MAIL_REQUIRE_TLS:-false}
 
-  # === Интеграция ===
-  DM_IntegrationSettings__WebUrl: ${WEB_URL:-http://localhost:5173}
-  DM_IntegrationSettings__ApiUrl: ${API_URL:-http://localhost:5000}
-  DM_IntegrationSettings__CorsUrls__0: ${CORS_URL_0:-http://localhost:5173}
-  DM_IntegrationSettings__CorsUrls__1: ${CORS_URL_1:-http://localhost:8080}
+  # Область сессионной куки. Пусто — кука принадлежит хосту, который ее выдал,
+  # и вход на каждом адресе свой. Регистрируемый домен — один вход на все
+  # адреса; включать только когда каждый хост этого домена принадлежит нам.
+  DM_SessionCookieConfiguration__Domain: ${SESSION_COOKIE_DOMAIN:-}
 
-  # === Зеркало ===
-  DM_MirrorConfiguration__CurrentMirrorId: ${MIRROR_ID:-main}
+  # === Адреса сайта ===
+  # PublicUrl — адрес, которым это развертывание называет само себя: из него
+  # собираются все ссылки в письмах. AllowedOrigins читают и политика CORS, и
+  # проверка Origin вместо CSRF-токена, поэтому список один.
+  # Перечень адресов сайта (Addresses) живет в appsettings.json: он меняется
+  # раз в несколько лет и одинаков для всех развертываний.
+  DM_SiteAddressConfiguration__PublicUrl: ${WEB_URL:-http://localhost:5173}
+  DM_SiteAddressConfiguration__AllowedOrigins__0: ${CORS_URL_0:-http://localhost:5173}
+  DM_SiteAddressConfiguration__AllowedOrigins__1: ${CORS_URL_1:-http://localhost:8080}
 
 # Build context shared by every image this repository produces. CI builds them
 # and pushes them under one tag per run, which is why all four image references
@@ -319,8 +341,8 @@ services:
     ports:
       - '127.0.0.1:8080:8080'
     environment:
-      IMGPROXY_KEY: ${IMGPROXY_KEY}
-      IMGPROXY_SALT: ${IMGPROXY_SALT}
+      IMGPROXY_KEY: ${IMGPROXY_KEY:?IMGPROXY_KEY is required, generate with openssl rand -hex 32}
+      IMGPROXY_SALT: ${IMGPROXY_SALT:?IMGPROXY_SALT is required, generate with openssl rand -hex 32}
       # S3 source — читаем напрямую из MinIO, без HTTP-роундтрипа.
       IMGPROXY_USE_S3: 'true'
       IMGPROXY_S3_ENDPOINT: 'http://dm-minio:9000'
@@ -493,11 +515,16 @@ services:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /:/rootfs:ro
+      - /var/lib/node_exporter/textfile:/var/lib/node_exporter/textfile:ro
     command:
       - '--path.procfs=/host/proc'
       - '--path.rootfs=/rootfs'
       - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($|/)'
+      # Where the nightly backup check leaves its verdict. Without a collector
+      # reading it, that verdict was an exit code going into a log file and into
+      # mail on a machine with no MTA.
+      - '--collector.textfile.directory=/var/lib/node_exporter/textfile'
     restart: unless-stopped
     deploy:
       resources:

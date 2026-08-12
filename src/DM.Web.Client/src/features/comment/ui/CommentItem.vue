@@ -9,8 +9,10 @@ import type {
 } from "@/shared/api/models/common";
 import type { Comment } from "@/shared/api/models/common/comment";
 import { unwrapResource } from "@/shared/api";
-import { useAuthStore, AvatarImg, userIsModerator } from "@/entities/user";
+import { useAuthStore, userIsModerator } from "@/entities/user";
+import { AvatarImg } from "@/shared/ui/AvatarImg";
 import { getRoleBadge } from "@/shared/config/roles";
+import { permalinkOrigin } from "@/shared/config/site";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { TruncatedContent } from "@/shared/ui/TruncatedContent";
 import dayjs from "dayjs";
@@ -256,10 +258,7 @@ async function copyAnchorLink() {
   const numberParam = route.query.number;
   const search = numberParam ? `?number=${String(numberParam)}` : "";
   const url =
-    window.location.origin +
-    window.location.pathname +
-    search +
-    commentAnchor.value;
+    permalinkOrigin() + window.location.pathname + search + commentAnchor.value;
   try {
     await navigator.clipboard.writeText(url);
     toastSuccess("Ссылка скопирована");

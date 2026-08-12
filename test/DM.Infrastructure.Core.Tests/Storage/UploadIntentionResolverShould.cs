@@ -1,6 +1,8 @@
+using System;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
+using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Core.Storage;
 using DM.Testing;
 using DM.Testing.Dsl;
@@ -62,4 +64,63 @@ public class UploadIntentionResolverShould : UnitTestBase
 
         resolver.IsAllowed(admin, (UploadIntention)int.MaxValue).Should().BeFalse();
     }
+
+    #region One file: View and Delete
+
+    private static StoredUpload FileOf(Guid ownerId) => new() { Id = Guid.NewGuid(), UserId = ownerId };
+
+    [Theory]
+    [InlineData(UploadIntention.View)]
+    [InlineData(UploadIntention.Delete)]
+    public void OpenAFileToItsOwner(UploadIntention intention)
+    {
+        var ownerId = Guid.NewGuid();
+        var owner = Create.User(ownerId).WithRole(UserRole.RegularUser).Please();
+
+        resolver.IsAllowed(owner, intention, FileOf(ownerId)).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(UploadIntention.View, UserRole.Moderator)]
+    [InlineData(UploadIntention.View, UserRole.Admin)]
+    [InlineData(UploadIntention.Delete, UserRole.Moderator)]
+    [InlineData(UploadIntention.Delete, UserRole.Admin)]
+    public void OpenSomebodyElsesFileToModeratorAndAbove(UploadIntention intention, UserRole role)
+    {
+        var moderator = Create.User().WithRole(role).Please();
+
+        resolver.IsAllowed(moderator, intention, FileOf(Guid.NewGuid())).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(UploadIntention.View)]
+    [InlineData(UploadIntention.Delete)]
+    public void KeepSomebodyElsesFileShutBelowModerator(UploadIntention intention)
+    {
+        var stranger = Create.User().WithRole(UserRole.Mentor).Please();
+
+        resolver.IsAllowed(stranger, intention, FileOf(Guid.NewGuid())).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(UploadIntention.View)]
+    [InlineData(UploadIntention.Delete)]
+    public void RefuseAFileRuleAskedWithoutTheFile(UploadIntention intention)
+    {
+        // The rule is owner-or-moderator, and without the file there is no owner
+        // to compare against: the target-less arm has to refuse rather than guess.
+        var owner = Create.User().WithRole(UserRole.RegularUser).Please();
+
+        resolver.IsAllowed(owner, intention).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RefuseAListingRuleAskedAboutOneFile()
+    {
+        var admin = Create.User().WithRole(UserRole.Admin).Please();
+
+        resolver.IsAllowed(admin, UploadIntention.ListAll, FileOf(Guid.NewGuid())).Should().BeFalse();
+    }
+
+    #endregion
 }

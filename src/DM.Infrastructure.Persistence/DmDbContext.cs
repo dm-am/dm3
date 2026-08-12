@@ -40,6 +40,12 @@ public class DmDbContext : DbContext
     public static string RegexpReplace(string input, string pattern, string replacement, string flags)
         => throw new System.NotSupportedException("This method is for EF Core LINQ translation only");
 
+    /// <summary>
+    /// The sequence tag numbers are drawn from, named once for the declaration in
+    /// OnModelCreating and for TagNumbers, which reads it.
+    /// </summary>
+    internal const string TagShortIdSequence = "TagShortIds";
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -291,6 +297,36 @@ public class DmDbContext : DbContext
         modelBuilder.Entity<Message>()
             .HasIndex(m => new { m.ChatId, m.CreatedUtc, m.MessageId });
 
+        // A page of a room's posts and a page of a discussion's comments are read in one
+        // shape: filter by the parent, order by CreatedUtc, tie-break by the identifier
+        // (PostRepository.Get; CommentSorting, whose every branch ends on CommentId).
+        // Both tables were reached by an index on the parent alone, so answering for one
+        // page of a long room or a long discussion meant reading and sorting all of it,
+        // and the cost grew with the room rather than with the page. The import of DM2 is
+        // what makes a room of that size the normal case rather than the extreme one.
+        //
+        // For comments this is the creation-ordered ascending branch, the default one. The
+        // descending branch orders CreatedUtc down and CommentId up, so it takes the
+        // parent's range and the timestamps from the index read backwards and re-sorts
+        // inside one timestamp; the "likes" branch orders by a correlated count and takes
+        // nothing from the index beyond that range.
+        //
+        // Each composite also replaces the conventional index on the foreign key alone
+        // (IX_Posts_RoomId, IX_Comments_EntityId): the parent is the leading column, so
+        // every lookup by parent keeps an index — the same trade the message composite
+        // above already makes.
+        //
+        // Unfiltered, like that composite and unlike the partial statistics indexes above.
+        // The soft-delete predicate is in every one of these reads — the global query
+        // filter puts it there — so a partial index would be usable, but it would be usable
+        // only there, and it is replacing an index that answers a lookup by parent
+        // whichever rows the caller asked for.
+        modelBuilder.Entity<Post>()
+            .HasIndex(p => new { p.RoomId, p.CreatedUtc, p.PostId });
+
+        modelBuilder.Entity<Comment>()
+            .HasIndex(c => new { c.EntityId, c.CreatedUtc, c.CommentId });
+
         // Subscribers are always looked up as a pair: "who follows this board /
         // this game / this blog". Only SubscriberId was indexed — the reverse
         // direction, which is the one the profile, game and blog pages issue on
@@ -341,6 +377,34 @@ public class DmDbContext : DbContext
         modelBuilder.Entity<GameTag>()
             .HasIndex(t => new { t.GameId, t.TagId })
             .IsUnique();
+
+        // The same rule one level up: two tags may not carry one number. ShortId is the
+        // tag's public key — a /games link is written in it, and the required, optional and
+        // excluded predicates compare by it — and it used to be handed out as MAX + 1 over
+        // the table, so two creates in one moment read one maximum and both committed it.
+        // The required-tag filter counts matching rows rather than distinct tags, so a game
+        // carrying both halves of a shared number answers a two-tag search while holding
+        // one of the two. The number comes from the sequence below now; this refuses a
+        // duplicate that arrives some other way.
+        modelBuilder.Entity<Tag>()
+            .HasIndex(t => t.ShortId)
+            .IsUnique();
+
+        // The sequence those numbers are drawn from, read by TagNumbers. Declared on the
+        // model rather than written into the migration by hand, for the reason the
+        // bootstrap seed below is: regenerating the migration is the documented way to
+        // change the schema, and a database object the model does not know about does not
+        // survive that. Postgres only, like the partial indexes above — the value is taken
+        // with nextval, which no other provider used here has.
+        //
+        // Starts one past the highest number the seeded catalogue ships with, so nothing it
+        // ships is handed out a second time. A tag appended to that catalogue has to move
+        // this start with it; if that is forgotten, the unique index above turns the
+        // overlap into a refused insert rather than two tags holding one number.
+        if (isPostgres)
+        {
+            modelBuilder.HasSequence<int>(TagShortIdSequence).StartsAt(66);
+        }
 
         // The readable chat id is resolved by equality in GET /chats/{id}. Without
         // uniqueness a collision between an encoded serial and the reserved name of
@@ -493,8 +557,11 @@ public class DmDbContext : DbContext
         // regenerated, which is the documented way to change the schema: the site
         // would come up with no boards, no tags, no system user and no global chat,
         // and nothing would say so. Declared in the model, EF emits it into every
-        // migration it generates, and EnsureCreated and Migrate produce the same
-        // database.
+        // migration it generates, so the seed travels with whichever migration is
+        // current. The two ways to build the schema are not interchangeable:
+        // EnsureCreated materialises the model as it stands, including the
+        // polymorphic foreign keys that are cut out of the migration by hand, so
+        // only Migrate produces the schema the code expects.
         //
         // Fixed identifiers from the zero family, so a repeated seed cannot create
         // duplicates and code outside migrations can reference a record by a
@@ -1983,7 +2050,7 @@ public class DmDbContext : DbContext
                 ContestType = ContestType.Literary,
                 Number = 23,
                 Year = 2024,
-                TopicUrl = "https://dm.am/forum/topic/contest-results-lit-23",
+                TopicUrl = "/forum/topic/contest-results-lit-23",
                 IsActive = true
             },
             new ContestSeries
@@ -1992,7 +2059,7 @@ public class DmDbContext : DbContext
                 ContestType = ContestType.Literary,
                 Number = 22,
                 Year = 2023,
-                TopicUrl = "https://dm.am/forum/topic/contest-results-lit-22",
+                TopicUrl = "/forum/topic/contest-results-lit-22",
                 IsActive = true
             },
             new ContestSeries
@@ -2001,7 +2068,7 @@ public class DmDbContext : DbContext
                 ContestType = ContestType.Literary,
                 Number = 21,
                 Year = 2023,
-                TopicUrl = "https://dm.am/forum/topic/contest-results-lit-21",
+                TopicUrl = "/forum/topic/contest-results-lit-21",
                 IsActive = true
             },
             new ContestSeries
@@ -2010,7 +2077,7 @@ public class DmDbContext : DbContext
                 ContestType = ContestType.Literary,
                 Number = 20,
                 Year = 2022,
-                TopicUrl = "https://dm.am/forum/topic/contest-results-lit-20",
+                TopicUrl = "/forum/topic/contest-results-lit-20",
                 IsActive = true
             },
             new ContestSeries
@@ -2019,7 +2086,7 @@ public class DmDbContext : DbContext
                 ContestType = ContestType.Art,
                 Number = 2,
                 Year = 2024,
-                TopicUrl = "https://dm.am/forum/topic/contest-results-art-2",
+                TopicUrl = "/forum/topic/contest-results-art-2",
                 IsActive = true
             },
             new ContestSeries
@@ -2028,7 +2095,7 @@ public class DmDbContext : DbContext
                 ContestType = ContestType.Art,
                 Number = 1,
                 Year = 2023,
-                TopicUrl = "https://dm.am/forum/topic/contest-results-art-1",
+                TopicUrl = "/forum/topic/contest-results-art-1",
                 IsActive = true
             });
 
@@ -2261,8 +2328,6 @@ public class DmDbContext : DbContext
                 .IsUnique()
                 .HasFilter("\"Type\" = 2 AND \"IsRemoved\" = false");
 
-            // CHECK constraint: exactly one typed target column
-            // is non-null AND matches the Type discriminator.
             // CHECK: exactly one typed target column is non-null AND
             // matches the Type discriminator (UserAvatar=1, CharacterAvatar=2,
             // PostAttachment=3 in the UploadType enum).

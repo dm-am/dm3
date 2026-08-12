@@ -5,16 +5,16 @@
       v-if="store.participatingGamesLoading && !store.participatingGames"
       :lines="5"
     />
-    <SecondaryText v-else-if="store.participatingGamesError" class="error">
-      Не удалось загрузить
-    </SecondaryText>
-    <template
+    <li v-else-if="store.participatingGamesError">
+      <SecondaryText class="error">Не удалось загрузить</SecondaryText>
+    </li>
+    <li
       v-else-if="
         !store.participatingGames || store.participatingGames.length === 0
       "
     >
       <SecondaryText>У вас пока нет игр</SecondaryText>
-    </template>
+    </li>
     <template v-else>
       <!-- Mentored games (mentor role) -->
       <template v-if="mentorGames.length > 0">
@@ -28,18 +28,17 @@
         />
       </template>
       <!-- Separator between mentored and owned -->
-      <div
+      <li
         v-if="
           mentorGames.length > 0 &&
           (ownedGames.length > 0 ||
             playingGames.length > 0 ||
             readingGames.length > 0)
         "
-        class="separator"
         aria-hidden="true"
       >
-        - - - - - - - - - - - - - - - - - - - - - - - - - -
-      </div>
+        <DashSeparator spacing="none" width="75%" />
+      </li>
       <!-- Owned games (Master, Assistant) -->
       <template v-if="ownedGames.length > 0">
         <SidebarGameLink
@@ -51,13 +50,12 @@
         />
       </template>
       <!-- Separator between owned and playing -->
-      <div
+      <li
         v-if="ownedGames.length > 0 && playingGames.length > 0"
-        class="separator"
         aria-hidden="true"
       >
-        - - - - - - - - - - - - - - - - - - - - - - - - - -
-      </div>
+        <DashSeparator spacing="none" width="75%" />
+      </li>
       <!-- Playing games (Player role) -->
       <template v-if="playingGames.length > 0">
         <SidebarGameLink
@@ -69,16 +67,15 @@
         />
       </template>
       <!-- Separator between playing and reading -->
-      <div
+      <li
         v-if="
           (ownedGames.length > 0 || playingGames.length > 0) &&
           readingGames.length > 0
         "
-        class="separator"
         aria-hidden="true"
       >
-        - - - - - - - - - - - - - - - - - - - - - - - - - -
-      </div>
+        <DashSeparator spacing="none" width="75%" />
+      </li>
       <!-- Reading games (Reader role) -->
       <template v-if="readingGames.length > 0">
         <SidebarGameLink
@@ -90,23 +87,23 @@
         />
       </template>
     </template>
-    <div class="separator" aria-hidden="true">
-      - - - - - - - - - - - - - - - - - - - - - - - - - -
-    </div>
-    <div>
+    <li aria-hidden="true">
+      <DashSeparator spacing="none" width="75%" />
+    </li>
+    <li>
       <span class="muted" aria-hidden="true">- </span>
       <router-link
         class="forward"
         :to="{ name: 'games', query: { status: 'Active' } }"
         >Все активные игры</router-link
       >
-    </div>
-    <div>
+    </li>
+    <li>
       <span class="muted" aria-hidden="true">- </span>
       <router-link class="forward" :to="{ name: 'create-game' }"
         >Создать игру</router-link
       >
-    </div>
+    </li>
   </SidebarBlock>
 </template>
 
@@ -115,6 +112,7 @@ import SidebarBlock from "./SidebarBlock.vue";
 import SidebarSkeleton from "./SidebarSkeleton.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import SidebarGameLink from "./SidebarGameLink.vue";
+import { DashSeparator } from "@/shared/ui/DashSeparator";
 import { useAuthStore } from "@/entities/user";
 import {
   useGamesStore,
@@ -122,7 +120,7 @@ import {
   type GameRef,
 } from "@/entities/game";
 import { computed } from "vue";
-import { useViewerChange } from "@/shared/lib/composables";
+import { useViewerChange } from "@/shared/lib/composables/useViewerChange";
 
 import { onMounted } from "vue";
 
@@ -206,9 +204,6 @@ useViewerChange((username) => {
 
 .forward
   font-weight: bold
-
-.separator
-  color: $text-muted
 
 .error
   color: $accent-red

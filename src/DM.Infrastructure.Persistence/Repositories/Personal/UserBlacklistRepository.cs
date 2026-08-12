@@ -147,6 +147,31 @@ internal class UserBlacklistRepository : IUserBlacklistRepository
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The statement above with the switch joined to it, read the way the
+    /// per-owner method reads it: the flag lives on the owner's row, and the
+    /// entries it governs are in the same store.
+    /// </remarks>
+    public async Task<IReadOnlySet<Guid>> GetOwnersBlockingIfFlagEnabledAsync(
+        Guid blockedUserId, IReadOnlyCollection<Guid> ownerIds, UserBlacklistSettings flag,
+        CancellationToken ct = default)
+    {
+        if (ownerIds.Count == 0)
+        {
+            return new HashSet<Guid>();
+        }
+
+        var blocking = await _dbContext.UserBlacklists
+            .Where(b => b.BlockedUserId == blockedUserId && ownerIds.Contains(b.OwnerId) &&
+                        _dbContext.Users.Any(u => u.UserId == b.OwnerId &&
+                                                  (u.BlacklistSettings & flag) == flag))
+            .Select(b => b.OwnerId)
+            .ToListAsync(ct);
+
+        return blocking.ToHashSet();
+    }
+
+    /// <inheritdoc />
     public async Task<UserBlacklistSettings> GetSettings(Guid userId, CancellationToken ct = default)
     {
         var settings = await _dbContext.Users

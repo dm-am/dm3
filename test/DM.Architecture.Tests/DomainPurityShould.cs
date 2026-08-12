@@ -9,7 +9,8 @@ namespace DM.Architecture.Tests;
 
 /// <summary>
 /// A domain assembly names no infrastructure: not the database driver, not the
-/// logging library, not the web framework, not the persistence project.
+/// document store, not the broker client, not the logging library, not the web
+/// framework, not the persistence project.
 /// </summary>
 /// <remarks>
 /// This is the breach that came back the most. Serilog reached DM.Domain.Account
@@ -41,33 +42,16 @@ public class DomainPurityShould
     private static readonly string[] Infrastructure =
     [
         "Npgsql",
+        "MongoDB",
         "Serilog",
         "Microsoft.AspNetCore",
         "Microsoft.EntityFrameworkCore",
+        "RabbitMQ",
+        "Jamq",
         "DM.Infrastructure",
     ];
 
-    /// <summary>
-    /// Walks up from the test binary to the repository root. The project list is
-    /// read from the tree, and copying it to the output directory would let this
-    /// assert against a stale snapshot.
-    /// </summary>
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null &&
-                   !(Directory.Exists(Path.Combine(directory.FullName, "src")) &&
-                     Directory.Exists(Path.Combine(directory.FullName, "test"))))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     /// <summary>
     /// Discovered in the output directory rather than named by a marker type each:

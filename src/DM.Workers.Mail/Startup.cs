@@ -17,7 +17,7 @@ using DM.Infrastructure.Mail;
 namespace DM.Workers.Mail;
 
 /// <summary>
-/// Search consumer API configuration
+/// Mail worker host configuration
 /// </summary>
 public class Startup
 {
@@ -48,8 +48,9 @@ public class Startup
             .AddDmMailConfiguration(_configuration)
             .AddDmLogging("DM.MailSender.Consumer", _configuration, _environment);
 
+        services.AddDmRetryingConsumer(MailConsumer.QueueName);
         services.AddDmJamqClient(
-            consumerBuilderDefaults: builder => builder.WithMiddleware<ConsumerRetryMiddleware>());
+            consumerBuilderDefaults: builder => builder.WithMiddleware<RetryingConsumerMiddleware>());
 
         services.AddHostedService<MailConsumer>();
 
@@ -70,7 +71,7 @@ public class Startup
         builder.RegisterDefaultTypes();
 
         builder.RegisterModuleOnce<CoreModule>();
-        builder.RegisterModuleOnce<MessageQueuingModule>();
+        builder.RegisterModuleOnce<MessagingModule>();
     }
 
     /// <summary>

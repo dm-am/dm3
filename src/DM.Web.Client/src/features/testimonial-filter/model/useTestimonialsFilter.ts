@@ -1,7 +1,7 @@
 import { computed, type ComputedRef } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { LocationQuery } from "vue-router";
-import { createFilterDispatcher } from "@/shared/lib/composables";
+import { createFilterDispatcher } from "@/shared/lib/composables/createFilterDispatcher";
 import { parseSortDirection, validateSortField } from "@/shared/lib/filters";
 import type {
   TestimonialsFilterState,

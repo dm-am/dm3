@@ -1,6 +1,7 @@
+using System.Net;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Enums;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
@@ -28,34 +29,22 @@ internal class RequireRoleAttribute : TypeFilterAttribute
         {
             var identity = identityProvider.Current;
 
-            // Return 401 if user is not authenticated
+            // Both refusals are thrown for the middleware to shape, for the reason
+            // AuthenticationRequiredAttribute states, and both take their wording
+            // from the dictionary: this 401 is the same event as the one that
+            // filter refuses, and this 403 is the same event as an intention
+            // refusal, so a second wording for either would only drift.
             if (identity?.User == null || !identity.User.IsAuthenticated)
             {
-                context.Result = new ObjectResult(new
-                {
-                    type = "https://tools.ietf.org/html/rfc9110#section-15.5.2",
-                    title = "User must be authenticated",
-                    status = StatusCodes.Status401Unauthorized
-                })
-                {
-                    StatusCode = StatusCodes.Status401Unauthorized,
-                    ContentTypes = { "application/problem+json" }
-                };
-                return;
+                throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
             }
 
             if (identity.User.Role < minimumRole)
             {
-                context.Result = new ObjectResult(new
-                {
-                    type = "https://tools.ietf.org/html/rfc9110#section-15.5.4",
-                    title = $"Access requires {minimumRole} role or higher",
-                    status = StatusCodes.Status403Forbidden
-                })
-                {
-                    StatusCode = StatusCodes.Status403Forbidden,
-                    ContentTypes = { "application/problem+json" }
-                };
+                // The role that would have been enough is not named. The reader
+                // cannot grant it to themselves, and the refusal is shown to an
+                // anonymous caller too.
+                throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
             }
         }
     }

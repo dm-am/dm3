@@ -37,7 +37,7 @@ const review = {
  * The address of the room page with the post anchored and this review named,
  * as GamePost hands it down.
  */
-const PERMALINK = "http://dm.am/game/abcde/rooms/2?review=r-1#post-p-1";
+const PERMALINK = "https://example.test/game/abcde/rooms/2?review=r-1#post-p-1";
 
 const mountItem = () =>
   mount(PostReviewItem, {

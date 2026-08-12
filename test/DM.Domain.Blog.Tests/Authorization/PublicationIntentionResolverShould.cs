@@ -1,6 +1,6 @@
 using System;
 using DM.Domain.Blog.Authorization;
-using DM.Domain.Blog.Features.Blogs;
+using DM.Domain.Blog.Features.Publications;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;

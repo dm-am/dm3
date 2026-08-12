@@ -311,8 +311,9 @@ function onCancel() {
 
     <template v-else-if="selected">
       <div v-if="selectOptions.length > 1" class="character-switch">
-        <span class="switch-label">Персонаж:</span>
+        <label class="switch-label" for="character-switch">Персонаж:</label>
         <Select
+          id="character-switch"
           :model-value="selectedId"
           :options="selectOptions"
           @update:model-value="(v) => switchCharacter(v as string)"

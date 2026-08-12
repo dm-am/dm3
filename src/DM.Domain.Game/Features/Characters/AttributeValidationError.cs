@@ -47,15 +47,6 @@ public static class AttributeValidationError
     public static string NotANumber => "Value should be a number";
 
     /// <summary>
-    /// Number should be in range
-    /// </summary>
-    /// <param name="min">Minimum value</param>
-    /// <param name="max">Maximum value</param>
-    /// <returns>Error message with valid range</returns>
-    public static string NumberNotInRange(int? min, int? max) =>
-        $"Value should be in range from {min?.ToString() ?? "-∞"} to {max?.ToString() ?? "+∞"}";
-
-    /// <summary>
     /// Value should be a short enough string
     /// </summary>
     /// <param name="maxLength">Maximum allowed length</param>

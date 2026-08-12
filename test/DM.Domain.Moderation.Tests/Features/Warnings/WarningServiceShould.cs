@@ -68,7 +68,7 @@ public class WarningServiceShould : UnitTestBase
     public async Task ReturnEmptyListWhenGettingWarningsForNonexistentUser()
     {
         _userLookupService.Setup(s => s.GetAsync("Unknown"))
-            .ThrowsAsync(new HttpException(HttpStatusCode.Gone, "Пользователь не найден"));
+            .ThrowsAsync(new HttpException(HttpStatusCode.NotFound, "Пользователь не найден"));
 
         var result = await _service.GetUserWarnings("Unknown");
 
@@ -116,8 +116,9 @@ public class WarningServiceShould : UnitTestBase
 
         var act = () => _service.GetAllWarnings();
 
-        await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Only moderators can view all warnings");
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden)
+            .WithMessage("Список предупреждений доступен модераторам");
     }
 
     [Fact]
@@ -141,8 +142,9 @@ public class WarningServiceShould : UnitTestBase
         var createWarning = new CreateWarning { Username = "Target", Reason = "Bad behavior", Points = 2 };
         var act = () => _service.CreateWarning(createWarning);
 
-        await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Only moderators can create warnings");
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden)
+            .WithMessage("Выносить предупреждения может только модератор");
     }
 
     [Fact]
@@ -276,8 +278,9 @@ public class WarningServiceShould : UnitTestBase
 
         var act = () => _service.RemoveWarning(_warningId);
 
-        await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Only moderators can remove warnings");
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden)
+            .WithMessage("Снимать предупреждения может только модератор");
     }
 
     [Fact]
@@ -313,8 +316,9 @@ public class WarningServiceShould : UnitTestBase
 
         var act = () => _service.GetViolators();
 
-        await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Only moderators can view violators");
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden)
+            .WithMessage("Список нарушителей доступен модераторам");
     }
 
     [Fact]

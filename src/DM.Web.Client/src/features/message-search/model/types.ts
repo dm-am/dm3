@@ -6,7 +6,7 @@
  * but this client only ever asks it for the global chat (see searchStore).
  */
 
-/** Where a hit lives. `chat` covers both direct (ЛС) and group chats. */
+/** Where a hit lives. `chat` covers both direct ("ЛС") and group chats. */
 export type MessageSearchSourceType = "global" | "chat" | "game";
 
 /**

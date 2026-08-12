@@ -3,7 +3,8 @@ import { ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useRoute, useRouter } from "vue-router";
 import { useMessagingStore } from "@/entities/message";
-import { useAuthStore, AvatarImg } from "@/entities/user";
+import { useAuthStore } from "@/entities/user";
+import { AvatarImg } from "@/shared/ui/AvatarImg";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import ChatPreview from "./ChatPreview.vue";
 import Paging from "@/shared/ui/Paging/Paging.vue";
@@ -125,6 +126,7 @@ function clearSearch() {
           type="text"
           class="the-input"
           placeholder="Поиск собеседника"
+          aria-label="Поиск собеседника"
           @input="onSearchInput"
           @focus="onSearchFocus"
           @blur="onSearchBlur"
@@ -133,6 +135,7 @@ function clearSearch() {
           v-if="searchQuery"
           type="button"
           class="clear-input-btn"
+          aria-label="Очистить поиск"
           @click.stop="clearSearch"
         >
           {{ symbols.close }}

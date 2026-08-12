@@ -16,6 +16,8 @@ export interface NotepadEntry {
   notepadType: NotepadType;
   containerId: string;
   ownerId?: string | null;
+  /** Who wrote the entry: the only one the API lets edit it. */
+  authorId: string;
   title: string;
   content: string;
   sortOrder: number;

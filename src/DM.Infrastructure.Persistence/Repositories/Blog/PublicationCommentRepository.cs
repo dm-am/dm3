@@ -10,9 +10,8 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Extensions;
 using DM.Infrastructure.Persistence.RelationalStorage;
-using DM.Infrastructure.Persistence.Shared.Queries;
+using DM.Infrastructure.Persistence.Shared.Comments;
 using Microsoft.EntityFrameworkCore;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 
@@ -36,107 +35,16 @@ internal class PublicationCommentRepository : IPublicationCommentRepository
     }
 
     /// <inheritdoc />
-    public Task<int> Count(Guid publicationId, PublicationCommentsQuery query, IReadOnlyCollection<Guid>? excludeUserIds = null, CancellationToken ct = default)
-    {
-        var dbQuery = _dbContext.Comments
-            .TagWith("DM.PublicationComments.Count")
-            .Where(c => !c.IsRemoved && c.EntityId == publicationId);
-
-        dbQuery = ApplyFilters(dbQuery, query, excludeUserIds);
-
-        return dbQuery.CountAsync(ct);
-    }
+    public Task<int> Count(Guid publicationId, PublicationCommentsQuery query, IReadOnlyCollection<Guid>? excludeUserIds = null, CancellationToken ct = default) =>
+        CommentQueries.Count(_dbContext, publicationId, query, excludeUserIds, "DM.PublicationComments.Count", ct);
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Comment>> Get(Guid publicationId, PublicationCommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null, CancellationToken ct = default)
-    {
-        var dbQuery = _dbContext.Comments
-            .TagWith("DM.PublicationComments.List")
-            .Where(c => !c.IsRemoved && c.EntityId == publicationId);
-
-        dbQuery = ApplyFilters(dbQuery, query, excludeUserIds);
-
-        var orderedQuery = ApplySorting(dbQuery, query, _dbContext);
-
-        return await orderedQuery
-            .Page(paging)
-            .ProjectTo<Comment>(_mapper.ConfigurationProvider)
-            .ToArrayAsync(ct);
-    }
-
-    private static IQueryable<DbComment> ApplyFilters(
-        IQueryable<DbComment> query,
-        PublicationCommentsQuery commentsQuery,
-        IReadOnlyCollection<Guid>? excludeUserIds)
-    {
-        // Exclude blocked users
-        if (excludeUserIds is { Count: > 0 })
-        {
-            query = query.Where(c => !excludeUserIds.Contains(c.AuthorId));
-        }
-
-        // Filter by authors (OR logic)
-        if (commentsQuery.AuthorUsernames is { Count: > 0 })
-        {
-            var authorNames = commentsQuery.AuthorUsernames.Select(a => a.ToLowerInvariant()).ToArray();
-            query = query.Where(c => c.Author != null && authorNames.Contains(c.Author.Username.ToLower()));
-        }
-
-        // Filter by created date range
-        if (commentsQuery.CreatedFromUtc.HasValue)
-        {
-            query = query.Where(c => c.CreatedUtc >= commentsQuery.CreatedFromUtc.Value);
-        }
-
-        if (commentsQuery.CreatedToUtc.HasValue)
-        {
-            query = query.WhereAtOrBefore(c => c.CreatedUtc, commentsQuery.CreatedToUtc.Value);
-        }
-
-        // Search by text content
-        if (!string.IsNullOrWhiteSpace(commentsQuery.Search))
-        {
-            var searchLower = commentsQuery.Search.ToLowerInvariant();
-            query = query.Where(c => c.Text.ToLower().Contains(searchLower));
-        }
-
-        return query;
-    }
-
-    private static IOrderedQueryable<DbComment> ApplySorting(
-        IQueryable<DbComment> query,
-        PublicationCommentsQuery commentsQuery,
-        DmDbContext dbContext)
-    {
-        var sortBy = commentsQuery.SortBy?.ToLowerInvariant() ?? "created";
-        var isDescending = string.Equals(commentsQuery.SortOrder, "desc", StringComparison.OrdinalIgnoreCase);
-
-        return sortBy switch
-        {
-            "likes" => isDescending
-                ? query.OrderByDescending(c => dbContext.Likes.Count(l =>
-                    !l.IsRemoved &&
-                    l.EntityId == c.CommentId &&
-                    l.EntityType == LikeEntityType.Comment))
-                : query.OrderBy(c => dbContext.Likes.Count(l =>
-                    !l.IsRemoved &&
-                    l.EntityId == c.CommentId &&
-                    l.EntityType == LikeEntityType.Comment)),
-            _ => isDescending // "created" or default
-                ? query.OrderByDescending(c => c.CreatedUtc)
-                : query.OrderBy(c => c.CreatedUtc)
-        };
-    }
+    public Task<IEnumerable<Comment>> Get(Guid publicationId, PublicationCommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null, CancellationToken ct = default) =>
+        CommentQueries.Page(_dbContext, _mapper, publicationId, query, paging, excludeUserIds, "DM.PublicationComments.List", ct);
 
     /// <inheritdoc />
-    public Task<Comment?> Get(Guid commentId, CancellationToken ct = default)
-    {
-        return _dbContext.Comments
-            .TagWith("DM.PublicationComments.Get")
-            .Where(c => !c.IsRemoved && c.CommentId == commentId)
-            .ProjectTo<Comment>(_mapper.ConfigurationProvider)
-            .FirstOrDefaultAsync(ct);
-    }
+    public Task<Comment?> Get(Guid commentId, CancellationToken ct = default) =>
+        CommentQueries.Single(_dbContext, _mapper, commentId, "DM.PublicationComments.Get", ct);
 
     /// <inheritdoc />
     public async Task<(Comment comment, Guid commentId)> Create(CreateComment createComment, Guid authorId, Guid publicationId, int newCommentCount, CancellationToken ct = default)
@@ -219,17 +127,10 @@ internal class PublicationCommentRepository : IPublicationCommentRepository
     }
 
     /// <inheritdoc />
-    public async Task<Guid?> GetNewestCommentIdExcept(
-        Guid publicationId, Guid exceptCommentId, CancellationToken ct = default)
-    {
-        return await _dbContext.Comments
-            .TagWith("DM.PublicationComments.NewestCommentIdExcept")
-            .Where(c => !c.IsRemoved && c.EntityId == publicationId && c.CommentId != exceptCommentId)
-            .OrderByDescending(c => c.CreatedUtc)
-            .ThenByDescending(c => c.CommentId)
-            .Select(c => (Guid?)c.CommentId)
-            .FirstOrDefaultAsync(ct);
-    }
+    public Task<Guid?> GetNewestCommentIdExcept(
+        Guid publicationId, Guid exceptCommentId, CancellationToken ct = default) =>
+        CommentQueries.NewestExcept(
+            _dbContext, publicationId, exceptCommentId, "DM.PublicationComments.NewestCommentIdExcept", ct);
 
     /// <inheritdoc />
     public async Task Delete(DeletePublicationCommentEntity entity, CancellationToken ct = default)

@@ -147,8 +147,8 @@ internal static class RateLimitingExtensions
                 var problem = factory.CreateProblemDetails(
                     context.HttpContext,
                     StatusCodes.Status429TooManyRequests,
-                    "Too Many Requests",
-                    detail: "Rate limit exceeded. Please retry after the specified time.");
+                    "Слишком много запросов",
+                    detail: "Лимит запросов превышен. Повторите позже.");
 
                 // The content type goes through WriteAsJsonAsync: assigning
                 // Response.ContentType before it is overwritten, which is why

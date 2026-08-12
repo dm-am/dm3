@@ -133,9 +133,9 @@ function resolveSpecifier(from: string, specifier: string): string | null {
  *
  * `reached` is the whole static graph, barrels included. `pinned` is the part
  * of it some reached module *imports* rather than re-exports, which is the set
- * whose code the entry chunk actually has to carry: a lazily loaded panel is
- * still named by `widgets/sidebar/index.ts`, and that re-export is exactly what
- * the bundler drops.
+ * whose code the entry chunk actually has to carry: a sidebar block imports
+ * `@/entities/game`, so that barrel names `model/detailsStore` to the graph,
+ * and that re-export is exactly what the bundler drops.
  */
 function walkFromEntry(): { reached: string[]; pinned: Set<string> } {
   const reached = new Set<string>();

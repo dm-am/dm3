@@ -25,10 +25,10 @@ public interface IAuthenticationApiService
     Task Logout(HttpContext httpContext);
 
     /// <summary>
-    /// Logout from all devices except current and create one new session
+    /// Logout from all devices except current, which stays as it is
     /// </summary>
     /// <param name="httpContext">HTTP context</param>
-    Task LogoutAll(HttpContext httpContext);
+    Task LogoutElsewhere(HttpContext httpContext);
 
     /// <summary>
     /// Get all active sessions for current user

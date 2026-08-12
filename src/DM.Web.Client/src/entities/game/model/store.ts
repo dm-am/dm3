@@ -166,7 +166,8 @@ export const useGamesStore = defineStore("games", () => {
     searchCache.clear();
   }
 
-  // Computed simple arrays for menu (backwards compatibility)
+  // The menu and the sidebar want a plain list; the pages below want the paged
+  // envelope the same request returns. Both are served off one fetch.
   const activeGames = computed(() => activePage.data.value?.resources ?? null);
   const recruitingGames = computed(
     () => recruitingPage.data.value?.resources ?? null,

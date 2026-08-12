@@ -6,7 +6,7 @@ using DM.Domain.Core.Extensions;
 namespace DM.Web.API.Shared.Binding;
 
 /// <summary>
-/// Converter for readable guid fields 
+/// Converter for readable guid fields
 /// </summary>
 internal class ReadableGuidConverter : JsonConverter<Guid>
 {

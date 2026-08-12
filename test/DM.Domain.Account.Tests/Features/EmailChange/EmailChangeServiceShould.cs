@@ -32,7 +32,7 @@ public class EmailChangeServiceShould : UnitTestBase
     private readonly Mock<IEmailChangeMailSender> _mailSender;
     private readonly Mock<IEmailChangeWarningMailSender> _warningMailSender;
     private readonly Mock<IEventProducer> _eventProducer;
-    private readonly Mock<ISecurityAuditService> _auditService;
+    private readonly Mock<ISecurityAuditRepository> _auditService;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
     private readonly EmailChangeService _service;
 
@@ -45,7 +45,7 @@ public class EmailChangeServiceShould : UnitTestBase
         _mailSender = Mock<IEmailChangeMailSender>();
         _warningMailSender = Mock<IEmailChangeWarningMailSender>();
         _eventProducer = Mock<IEventProducer>();
-        _auditService = Mock<ISecurityAuditService>();
+        _auditService = Mock<ISecurityAuditRepository>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
         var config = Options.Create(new TokenConfiguration
         {
@@ -119,7 +119,8 @@ public class EmailChangeServiceShould : UnitTestBase
         result.UserId.Should().Be(userId);
         result.Username.Should().Be("testuser");
         _repository.Verify(r => r.InvalidateOldEmailChangeTokens(userId), Times.Once);
-        _repository.Verify(r => r.Update(userId, emailChange.Email, token), Times.Once);
+        _repository.Verify(r => r.RequestChange(userId, emailChange.Email, token), Times.Once,
+                        "запрос кладет адрес в ожидание: аккаунт отвечает по старому, пока ссылка не открыта");
         _mailSender.Verify(m => m.Send(emailChange.Email, emailChange.Username, tokenId), Times.Once);
         _eventProducer.Verify(e => e.SendAsync(EventType.EmailChanged, userId), Times.Once);
     }
@@ -155,22 +156,45 @@ public class EmailChangeServiceShould : UnitTestBase
     }
 
     [Fact]
-    public async Task ConfirmEmailChangeWithValidToken()
+    public async Task MoveTheAddressOnlyWhenTheLinkIsFollowed()
     {
         var tokenId = Guid.NewGuid();
-        _confirmationRepository.Setup(r => r.FindEmailChangeToken(tokenId, It.IsAny<DateTimeOffset>()))
-            .ReturnsAsync(tokenId);
+        var ownerId = Guid.NewGuid();
+        _confirmationRepository.Setup(r => r.FindEmailChangeTokenOwner(tokenId, It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(ownerId);
+        _repository.Setup(r => r.ApplyPendingEmail(ownerId)).ReturnsAsync(true);
 
         await _service.Confirm(tokenId);
 
+        _repository.Verify(r => r.ApplyPendingEmail(ownerId), Times.Once,
+            "подтверждение и есть тот момент, когда адрес меняется");
         _confirmationRepository.Verify(r => r.MarkTokenUsed(tokenId), Times.Once);
+    }
+
+    [Fact]
+    public async Task RefuseALiveTokenWithNothingPending()
+    {
+        // A link opened a second time, or a request withdrawn before it was
+        // followed. The answer is the one an expired link gets: there is nothing
+        // to confirm.
+        var tokenId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        _confirmationRepository.Setup(r => r.FindEmailChangeTokenOwner(tokenId, It.IsAny<DateTimeOffset>()))
+            .ReturnsAsync(ownerId);
+        _repository.Setup(r => r.ApplyPendingEmail(ownerId)).ReturnsAsync(false);
+
+        var exception = await Assert.ThrowsAsync<HttpException>(
+            () => _service.Confirm(tokenId));
+
+        exception.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        _confirmationRepository.Verify(r => r.MarkTokenUsed(It.IsAny<Guid>()), Times.Never);
     }
 
     [Fact]
     public async Task ThrowWhenConfirmingInvalidToken()
     {
         var tokenId = Guid.NewGuid();
-        _confirmationRepository.Setup(r => r.FindEmailChangeToken(tokenId, It.IsAny<DateTimeOffset>()))
+        _confirmationRepository.Setup(r => r.FindEmailChangeTokenOwner(tokenId, It.IsAny<DateTimeOffset>()))
             .ReturnsAsync((Guid?)null);
 
         var exception = await Assert.ThrowsAsync<HttpException>(

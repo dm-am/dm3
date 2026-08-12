@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
 
 namespace DM.Domain.Blog.Features.PublicationComments;
@@ -7,7 +8,7 @@ namespace DM.Domain.Blog.Features.PublicationComments;
 /// <summary>
 /// Query parameters for publication comment list filtering
 /// </summary>
-public class PublicationCommentsQuery : PagingQuery
+public class PublicationCommentsQuery : PagingQuery, ICommentsQuery
 {
     /// <summary>
     /// Text search by comment content (case-insensitive contains)

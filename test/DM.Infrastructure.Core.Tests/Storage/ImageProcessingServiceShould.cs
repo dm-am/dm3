@@ -18,10 +18,10 @@ using Image = SixLabors.ImageSharp.Image;
 namespace DM.Infrastructure.Core.Tests.Storage;
 
 /// <summary>
-/// Unit tests для <see cref="ImageProcessingService"/> — magic-byte валидация,
-/// decompression-bomb защита, EXIF-strip, нормализация расширения, single
-/// source-file output. Thumbnails больше не пре-генерируются — imgproxy
-/// делает это on-the-fly при serving.
+/// Unit tests for <see cref="ImageProcessingService"/> — magic-byte validation,
+/// decompression-bomb protection, EXIF strip, extension normalisation, single
+/// source-file output. Thumbnails are no longer pre-generated — imgproxy does
+/// that on the fly when serving.
 /// </summary>
 public class ImageProcessingServiceShould
 {
@@ -100,7 +100,7 @@ public class ImageProcessingServiceShould
     [Fact]
     public async Task ProcessAsync_PreservesAspectRatio_OnDownscale()
     {
-        // 2:1 aspect ratio — нужно сохранить.
+        // 2:1 aspect ratio — it has to survive the downscale.
         var input = CreateJpegStream(width: 2000, height: 1000);
 
         var result = await _sut.ProcessAsync(input, "image/jpeg");
@@ -186,7 +186,7 @@ public class ImageProcessingServiceShould
     [Fact]
     public async Task ProcessAsync_RejectsHtmlMasqueradingAsImage()
     {
-        // Client lies about content-type — magic-byte detection должна это поймать.
+        // Client lies about content-type — magic-byte detection has to catch it.
         var htmlBytes = System.Text.Encoding.UTF8.GetBytes("<!DOCTYPE html><html><body>oops</body></html>");
         var stream = new MemoryStream(htmlBytes);
 
@@ -198,8 +198,8 @@ public class ImageProcessingServiceShould
     [Fact]
     public async Task ProcessAsync_RejectsGif_NotInWhitelist()
     {
-        // Mini-GIF (1×1 transparent). Заголовок GIF89a → ImageSharp его распознает,
-        // но наш whitelist не пускает.
+        // Mini-GIF (1×1 transparent). The GIF89a header → ImageSharp recognises
+        // it, but our whitelist does not let it through.
         var gifBytes = new byte[]
         {
             0x47, 0x49, 0x46, 0x38, 0x39, 0x61, // GIF89a
@@ -219,7 +219,7 @@ public class ImageProcessingServiceShould
     [Fact]
     public async Task ProcessAsync_StripsExifMetadata()
     {
-        // Создаем JPEG с EXIF; после processing EXIF должен исчезнуть.
+        // Build a JPEG carrying EXIF; after processing the EXIF must be gone.
         using var image = new Image<Rgba32>(800, 600);
         image.Metadata.ExifProfile = new SixLabors.ImageSharp.Metadata.Profiles.Exif.ExifProfile();
         image.Metadata.ExifProfile.SetValue(
@@ -239,8 +239,8 @@ public class ImageProcessingServiceShould
     [Fact]
     public async Task ProcessAsync_NormalizesExtensionFromContentType_NotFromFileName()
     {
-        // Файл реально PNG → возвращаем .png независимо от того, что юзер
-        // прислал в filename. Anti-extension-spoofing.
+        // The file really is a PNG → return .png whatever the user sent in the
+        // filename. Anti-extension-spoofing.
         var input = CreatePngStream(width: 400, height: 400);
 
         var result = await _sut.ProcessAsync(input, "image/png");
@@ -248,7 +248,7 @@ public class ImageProcessingServiceShould
         result.Extension.Should().Be(".png");
     }
 
-    // --- Helpers: создание тестовых изображений ---
+    // --- Helpers: building test images ---
 
     private static MemoryStream CreateJpegStream(int width, int height)
     {

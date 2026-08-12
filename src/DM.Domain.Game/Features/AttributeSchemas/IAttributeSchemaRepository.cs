@@ -23,6 +23,21 @@ public interface IAttributeSchemaRepository
     Task<AttributeSchema?> GetSchema(Guid schemaId);
 
     /// <summary>
+    /// Get the schema a game is built on, resolved through the game's own
+    /// reference to it
+    /// </summary>
+    /// <remarks>
+    /// Two things differ from <see cref="GetSchema"/>, and both on purpose. The
+    /// removal flag is not filtered: it hides a schema from the lists a user
+    /// picks one from, and it does not detach the schema from a game already
+    /// built on it. The author is not read either — the character screens this
+    /// feeds never show it, and reading it costs a second query per call.
+    /// Throws when the game is unknown or its document is gone, because a game
+    /// that requires attributes cannot be read without a schema.
+    /// </remarks>
+    Task<AttributeSchema> GetGameSchema(Guid gameId);
+
+    /// <summary>
     /// Whether the user leads or participates in a game that references this schema
     /// </summary>
     Task<bool> IsUsedByUserGame(Guid schemaId, Guid userId);

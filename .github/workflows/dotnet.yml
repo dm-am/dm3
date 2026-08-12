@@ -3,6 +3,11 @@ name: .NET
 on:
   push:
     branches: [ main, dev ]
+    # The installer pins a release by tag and says why: a tag names one tree, so
+    # the same command a month later brings up the same site. Nothing published
+    # an image under that name, so the documented install path pulled a tag the
+    # registry had never heard of.
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main, dev ]
 
@@ -10,10 +15,15 @@ on:
 permissions:
   contents: read
 
-# A newer push to the same branch supersedes the run in flight.
+# A newer push to the same branch supersedes the run in flight — except on the
+# refs that publish. Four images go to the registry as four separate steps, and
+# docker-compose.yml pins them to one tag on the promise that they were built
+# from one commit; a run cancelled between the second and the third leaves
+# `latest` naming a mixture, which nothing afterwards detects. On a pull request
+# there is nothing to publish, so superseding is free.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !(github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v')) }}
 
 env:
   REGISTRY: ghcr.io
@@ -25,6 +35,10 @@ env:
 
 jobs:
   build:
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Deliberately far above the real time:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 40
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -38,9 +52,12 @@ jobs:
     # whole tree, and nothing checked it: 134 C# files had drifted out of the
     # first rule. A file without a final newline adds a line to every diff that
     # touches it, so review reads noise instead of the change, and the count only
-    # grows. The whitespace subcommand is deliberate — it checks exactly the
-    # rules .editorconfig states and skips the analyzer pass, which would make
-    # this a slow gate on rules the project never declared.
+    # grows. The whitespace subcommand is deliberate: it skips the analyzer pass,
+    # which would make this a slow gate on rules the project never declared. It
+    # is narrower than .editorconfig, though, and the comment used to claim they
+    # were equal. It reformats C# only, and inside C# it leaves trailing
+    # whitespace in comment lines alone, so trim_trailing_whitespace outside C#
+    # and inside comments is on review, not on this step.
     - name: Format
       run: dotnet format DM.sln whitespace --verify-no-changes
     # Release is what ships (docker/app.Dockerfile publishes -c Release), so it
@@ -81,6 +98,10 @@ jobs:
         if-no-files-found: error
 
   frontend:
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Deliberately far above the real time:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -114,6 +135,10 @@ jobs:
   # asserts on what a browser renders — so the shape below is the one zap-scan
   # already uses, plus a seed.
   e2e:
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Deliberately far above the real time:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 45
     runs-on: ubuntu-latest
     env:
       # Every compose invocation in this job means the pair, and repeating the
@@ -138,13 +163,17 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    # docker/.env.example ships the encryption key empty and compose declares it
-    # with ${...:?}, which rejects an empty value as hard as a missing one.
-    # The key goes into the job environment rather than into .env: compose
-    # prefers the environment over the file, so no step has to edit a line of a
-    # file it does not own, and the value dies with the runner.
-    - name: Generate a throwaway encryption key
-      run: echo "DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+    # docker/.env.example ships the encryption key and the imgproxy signing pair
+    # empty, and compose declares all three with ${...:?}, which rejects an empty
+    # value as hard as a missing one. They go into the job environment rather
+    # than into .env: compose prefers the environment over the file, so no step
+    # has to edit a line of a file it does not own, and the values die with the
+    # runner.
+    - name: Generate the throwaway secrets compose refuses to start without
+      run: |
+        echo "DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+        echo "IMGPROXY_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+        echo "IMGPROXY_SALT=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
     - name: Create .env for Docker Compose
       run: cp docker/.env.example docker/.env
@@ -264,6 +293,10 @@ jobs:
       run: docker compose logs --tail=300 dmapi migration
 
   dependency-scan:
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Deliberately far above the real time:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -287,10 +320,23 @@ jobs:
     - name: npm audit (production dependencies)
       run: cd src/DM.Web.Client && npm ci && npm audit --omit=dev --audit-level=high
 
+  # CodeQL and the ZAP scan, pulled into this graph so that publishing can wait
+  # for them. They used to live in a workflow of their own, triggered by the same
+  # push and reachable from no `needs` at all.
+  security:
+    uses: ./.github/workflows/security.yml
+    permissions:
+      contents: read
+      security-events: write
+
   publish:
-    needs: [build, frontend, e2e, dependency-scan]
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Deliberately far above the real time:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 30
+    needs: [build, frontend, e2e, dependency-scan, compose-topology, deployment-smoke, security]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v'))
     permissions:
       contents: read
       packages: write
@@ -329,6 +375,7 @@ jobs:
         tags: |
           type=sha,prefix=
           type=ref,event=branch
+          type=ref,event=tag
           type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
     - name: Build and push image
@@ -349,9 +396,13 @@ jobs:
   # SPA image was never built by CI at all: the only thing that referenced it was
   # a compose service pointing at a directory that does not exist.
   publish-frontend:
-    needs: [build, frontend, e2e, dependency-scan]
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Deliberately far above the real time:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 30
+    needs: [build, frontend, e2e, dependency-scan, compose-topology, deployment-smoke, security]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v'))
     permissions:
       contents: read
       packages: write
@@ -376,6 +427,7 @@ jobs:
         tags: |
           type=sha,prefix=
           type=ref,event=branch
+          type=ref,event=tag
           type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
     - name: Build and push image
@@ -393,24 +445,37 @@ jobs:
   # server. This is the check that would have caught the frontend context
   # pointing at a directory removed long ago.
   compose-topology:
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Deliberately far above the real time:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 30
     runs-on: ubuntu-latest
+    # Declared once for the job rather than per step. Compose rejects an empty
+    # ${VAR:?} as firmly as a missing one, so every step that runs `config` needs
+    # the whole set, and the two that do carried identical copies of it: a
+    # variable added to one and not the other fails the second step with a
+    # message about the compose file rather than about the omission. The set is
+    # not secret — these are placeholders whose only job is to be non-empty, and
+    # naming them here says that plainly.
+    env:
+      DM_CryptoConfiguration__KeyBase64: ci-validation-placeholder
+      MONGO_ROOT_PASSWORD: ci-validation-placeholder
+      MONGO_PASSWORD: ci-validation-placeholder
+      POSTGRES_PASSWORD: ci-validation-placeholder
+      RABBITMQ_DEFAULT_PASS: ci-validation-placeholder
+      MINIO_ROOT_PASSWORD: ci-validation-placeholder
+      MINIO_APP_PASSWORD: ci-validation-placeholder
+      MINIO_IMGPROXY_PASSWORD: ci-validation-placeholder
+      GF_SECURITY_ADMIN_PASSWORD: ci-validation-placeholder
+      IMGPROXY_KEY: ci-validation-placeholder
+      IMGPROXY_SALT: ci-validation-placeholder
+      POP_UPSTREAM: https://ci-validation-placeholder
+      POP_UPSTREAM_HOST: ci-validation-placeholder
     steps:
     - uses: actions/checkout@v4
 
     - name: Validate the deployed overlay combination
       working-directory: docker
-      env:
-        DM_CryptoConfiguration__KeyBase64: ci-validation-placeholder
-        MONGO_ROOT_PASSWORD: ci-validation-placeholder
-        MONGO_PASSWORD: ci-validation-placeholder
-        POSTGRES_PASSWORD: ci-validation-placeholder
-        RABBITMQ_DEFAULT_PASS: ci-validation-placeholder
-        MINIO_ROOT_PASSWORD: ci-validation-placeholder
-        MINIO_APP_PASSWORD: ci-validation-placeholder
-        MINIO_IMGPROXY_PASSWORD: ci-validation-placeholder
-        GF_SECURITY_ADMIN_PASSWORD: ci-validation-placeholder
-        IMGPROXY_KEY: ci-validation-placeholder
-        IMGPROXY_SALT: ci-validation-placeholder
       run: |
         docker compose --env-file /dev/null -f docker-compose.yml config --quiet
         docker compose --env-file /dev/null -f docker-compose.yml -f docker-compose.preview.yml config --quiet
@@ -418,18 +483,6 @@ jobs:
 
     - name: Every build context the overlay names must exist
       working-directory: docker
-      env:
-        DM_CryptoConfiguration__KeyBase64: ci-validation-placeholder
-        MONGO_ROOT_PASSWORD: ci-validation-placeholder
-        MONGO_PASSWORD: ci-validation-placeholder
-        POSTGRES_PASSWORD: ci-validation-placeholder
-        RABBITMQ_DEFAULT_PASS: ci-validation-placeholder
-        MINIO_ROOT_PASSWORD: ci-validation-placeholder
-        MINIO_APP_PASSWORD: ci-validation-placeholder
-        MINIO_IMGPROXY_PASSWORD: ci-validation-placeholder
-        GF_SECURITY_ADMIN_PASSWORD: ci-validation-placeholder
-        IMGPROXY_KEY: ci-validation-placeholder
-        IMGPROXY_SALT: ci-validation-placeholder
       run: |
         # Take everything after the key rather than a whitespace-split field:
         # compose resolves contexts to absolute paths, and a path may contain
@@ -477,6 +530,23 @@ jobs:
         docker run --rm \
           -v "$PWD/src/DM.Web.Client/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
           nginx:1.27-alpine nginx -t
+        # The second door is a third edge, serving a whole public address of its
+        # own. It arrives as a template, so the image's own entrypoint renders it
+        # first; the certificate is generated here because the configuration
+        # refuses to start without one, which is the point of it.
+        mkdir -p /tmp/pop-ssl
+        openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+          -keyout /tmp/pop-ssl/privkey.pem -out /tmp/pop-ssl/fullchain.pem \
+          -subj "/CN=pop-syntax-check" 2>/dev/null
+        docker run --rm \
+          --add-host dmfront:127.0.0.1 \
+          -e POP_UPSTREAM=https://127.0.0.1 \
+          -e POP_UPSTREAM_HOST=pop-syntax-check \
+          -e NGINX_ENVSUBST_FILTER='^POP_' \
+          -v "$PWD/docker/nginx/pop.conf.template:/etc/nginx/templates/default.conf.template:ro" \
+          -v "/tmp/pop-ssl:/etc/nginx/ssl:ro" \
+          nginx:1.27-alpine \
+          sh -c '/docker-entrypoint.sh nginx -t'
 
     - name: The Prometheus configuration and its alert rules must parse
       run: |
@@ -558,6 +628,10 @@ jobs:
   # perimeter, the session cookie, the unreachable transform layer - are that one
   # class, and none of them could have failed a gate.
   deployment-smoke:
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Deliberately far above the real time:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -565,8 +639,14 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Generate a throwaway encryption key
-      run: echo "DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+    # The same three the end-to-end tier generates, and for the same reason:
+    # compose declares them with ${...:?} and stops on interpolation before it
+    # starts anything.
+    - name: Generate the throwaway secrets compose refuses to start without
+      run: |
+        echo "DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+        echo "IMGPROXY_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+        echo "IMGPROXY_SALT=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
     - name: Create .env for Docker Compose
       run: cp docker/.env.example docker/.env

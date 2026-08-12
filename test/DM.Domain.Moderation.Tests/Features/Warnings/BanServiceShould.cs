@@ -77,7 +77,7 @@ public class BanServiceShould : UnitTestBase
     public async Task ReturnEmptyListWhenGettingBansForNonexistentUser()
     {
         _userLookupService.Setup(s => s.GetAsync("Unknown"))
-            .ThrowsAsync(new HttpException(HttpStatusCode.Gone, "Пользователь не найден"));
+            .ThrowsAsync(new HttpException(HttpStatusCode.NotFound, "Пользователь не найден"));
 
         var result = await _service.GetUserBans("Unknown");
 
@@ -128,8 +128,9 @@ public class BanServiceShould : UnitTestBase
 
         var act = () => _service.GetAllActiveBans();
 
-        await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Only moderators can view all bans");
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden)
+            .WithMessage("Список банов доступен модераторам");
     }
 
     [Fact]
@@ -152,8 +153,9 @@ public class BanServiceShould : UnitTestBase
 
         var act = () => _service.GetBanHistory(0, 20);
 
-        await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Only moderators can view ban history");
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden)
+            .WithMessage("История банов доступна модераторам");
     }
 
     [Fact]
@@ -178,8 +180,56 @@ public class BanServiceShould : UnitTestBase
         var createBan = new CreateBan { Username = "Target", IsVoluntary = false, DurationHours = 24 };
         var act = () => _service.CreateBan(createBan);
 
-        await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Only senior moderators can create bans");
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden)
+            .WithMessage("Банить может только старший модератор");
+    }
+
+    /// <summary>
+    /// The voluntary branch bans its author and nobody else.
+    /// </summary>
+    /// <remarks>
+    /// It is the one branch that skips the senior-moderator gate, the
+    /// administrator exemption and the strictly-lower-role rule at once, so a
+    /// caller who could set the flag could ban anyone - and the ban would be filed
+    /// under the victim's own name.
+    /// </remarks>
+    [Fact]
+    public async Task RefuseAVoluntaryBanAimedAtSomebodyElse()
+    {
+        SetCurrentUser(UserRole.RegularUser);
+        _userLookupService.Setup(s => s.GetAsync("Target"))
+            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+
+        var act = () => _service.CreateBan(new CreateBan { Username = "Target", IsVoluntary = true });
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden)
+            .WithMessage("Добровольный бан можно наложить только на себя");
+        _banRepository.Verify(
+            r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task LetAUserBanThemselvesVoluntarily()
+    {
+        SetCurrentUser(UserRole.RegularUser);
+        _userLookupService.Setup(s => s.GetAsync("Self"))
+            .ReturnsAsync(new GeneralUser { UserId = _moderatorUserId, Username = "Self" });
+        _banRepository.Setup(r => r.GetActiveBan(_moderatorUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Ban?)null);
+
+        CreateBanEntity? capturedEntity = null;
+        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
+            .Callback<CreateBanEntity, CancellationToken>((e, _) => capturedEntity = e)
+            .ReturnsAsync(new Ban());
+
+        await _service.CreateBan(new CreateBan { Username = "Self", IsVoluntary = true, Comment = "Отдых" });
+
+        capturedEntity.Should().NotBeNull();
+        capturedEntity!.TargetUserId.Should().Be(_moderatorUserId);
+        capturedEntity.AuthorId.Should().Be(_moderatorUserId);
+        capturedEntity.IsVoluntary.Should().BeTrue();
     }
 
     [Fact]
@@ -407,8 +457,9 @@ public class BanServiceShould : UnitTestBase
 
         var act = () => _service.LiftBan(_banId);
 
-        await act.Should().ThrowAsync<UnauthorizedAccessException>()
-            .WithMessage("Only senior moderators can lift bans");
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden)
+            .WithMessage("Снимать бан может только старший модератор");
     }
 
     [Fact]
@@ -470,13 +521,27 @@ public class BanServiceShould : UnitTestBase
 
         _banRepository.Verify(r => r.Lift(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
-    // --- Кто кого может банить (BE-18, BE-19) ---
+    // --- Who may ban whom (BE-18, BE-19) ---
 
     private void ArrangeTarget(UserRole targetRole)
     {
         _userLookupService.Setup(s => s.GetAsync("Target"))
             .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target", Role = targetRole });
         _banRepository.Setup(r => r.GetActiveBan(_targetUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Ban?)null);
+        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Ban());
+    }
+
+    /// <summary>
+    /// The same arrangement, with the caller as the target: a genuine self-ban.
+    /// </summary>
+    private void ArrangeSelf(UserRole role)
+    {
+        SetCurrentUser(role);
+        _userLookupService.Setup(s => s.GetAsync("Target"))
+            .ReturnsAsync(new GeneralUser { UserId = _moderatorUserId, Username = "Target", Role = role });
+        _banRepository.Setup(r => r.GetActiveBan(_moderatorUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Ban?)null);
         _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Ban());
@@ -532,14 +597,34 @@ public class BanServiceShould : UnitTestBase
     [Fact]
     public async Task StillAllowAVoluntarySelfBan()
     {
-        // The role comparison must not catch the one legitimate self-ban.
-        ArrangeTarget(UserRole.SeniorModerator);
+        // The role comparison must not catch the one legitimate self-ban. Named
+        // a self-ban and arranged as one: the target resolves to the caller.
+        // Arranged against somebody else it passed for as long as the voluntary
+        // flag was the whole of the check, which is the defect below.
+        ArrangeSelf(UserRole.SeniorModerator);
         var request = BanRequest();
         request.IsVoluntary = true;
 
         var act = () => _service.CreateBan(request);
 
         await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task RefuseAVoluntaryBanOnSomebodyElse()
+    {
+        // The flag skips the senior-moderator gate and both role comparisons, so
+        // without a target check it is an unauthenticated ban of anybody at all,
+        // an administrator included, filed under the victim's own name.
+        SetCurrentUser(UserRole.RegularUser);
+        ArrangeTarget(UserRole.Admin);
+        var request = BanRequest();
+        request.IsVoluntary = true;
+
+        var act = () => _service.CreateBan(request);
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
     }
 
     [Fact]

@@ -1,23 +1,15 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import Button from "@/shared/ui/Button/Button.vue";
 
-const props = defineProps<{
+defineProps<{
   email: string;
 }>();
 
 const emit = defineEmits<{
   (e: "confirm"): void;
 }>();
-
-// Save email to sessionStorage for pre-filling in ActivationPage if needed
-onMounted(() => {
-  if (props.email) {
-    sessionStorage.setItem("dm_registration_email", props.email);
-  }
-});
 </script>
 
 <template>

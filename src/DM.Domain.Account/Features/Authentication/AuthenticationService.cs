@@ -24,7 +24,7 @@ internal class AuthenticationService : IAuthenticationService
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IIdentityProvider _identityProvider;
     private readonly ILoginAttemptTracker _loginAttemptTracker;
-    private readonly ISecurityAuditService _auditService;
+    private readonly ISecurityAuditRepository _auditService;
     private readonly IEventProducer _eventProducer;
     private readonly ILogger<AuthenticationService> _logger;
     private readonly AuthenticationConfiguration _config;
@@ -56,7 +56,7 @@ internal class AuthenticationService : IAuthenticationService
         IDateTimeProvider dateTimeProvider,
         IIdentityProvider identityProvider,
         ILoginAttemptTracker loginAttemptTracker,
-        ISecurityAuditService auditService,
+        ISecurityAuditRepository auditService,
         IEventProducer eventProducer,
         ILogger<AuthenticationService> logger,
         IOptions<AuthenticationConfiguration> authConfig)
@@ -172,7 +172,7 @@ internal class AuthenticationService : IAuthenticationService
                 await _repository.UpdateActivity(user.UserId, _dateTimeProvider.Now);
 
                 // Session persistence based on "remember me" checkbox
-                var session = _sessionFactory.Create(persistent: rememberMe, invisible: false, context);
+                var session = _sessionFactory.Create(persistent: rememberMe, context: context);
                 var settings = await _repository.FindUserSettings(user.UserId);
 
                 // Audit log: successful login
@@ -247,9 +247,8 @@ internal class AuthenticationService : IAuthenticationService
         }
 
         var activityTrackingInterval = TimeSpan.FromMinutes(_config.ActivityTrackingMinutes);
-        if (!session.Invisible && (
-                !user.LastActivityUtc.HasValue ||
-                _dateTimeProvider.Now - user.LastActivityUtc.Value > activityTrackingInterval))
+        if (!user.LastActivityUtc.HasValue ||
+            _dateTimeProvider.Now - user.LastActivityUtc.Value > activityTrackingInterval)
         {
             await _repository.UpdateActivity(user.UserId, _dateTimeProvider.Now);
         }
@@ -258,7 +257,7 @@ internal class AuthenticationService : IAuthenticationService
     }
 
     /// <inheritdoc />
-    public async Task<IIdentity> Authenticate(Guid userId)
+    public async Task<IIdentity> Authenticate(Guid userId, SessionContext? context = null)
     {
         var user = await _repository.FindUser(userId);
         if (user == null)
@@ -284,8 +283,19 @@ internal class AuthenticationService : IAuthenticationService
             return Identity.Fail(AuthenticationError.Banned);
         }
 
-        var session = _sessionFactory.Create(false, true);
+        // An ordinary session, with the address and agent it was opened from.
+        // Minted invisible and contextless, it was a login the account owner had
+        // no way to see: no entry in the security journal, a device list row with
+        // no address in it, and no activity stamp. It also left the account with
+        // no successful login on record, so the first real login from anywhere
+        // had nothing to be compared against.
+        await _repository.UpdateActivity(userId, _dateTimeProvider.Now);
+        var session = _sessionFactory.Create(persistent: false, context: context);
         var settings = await _repository.FindUserSettings(userId);
+
+        await _auditService.LogAsync(userId, SecurityEventType.LoginSuccess,
+            context?.IpAddress, context?.UserAgent);
+
         return await CreateAuthenticationResult(user, session, settings);
     }
 
@@ -333,7 +343,8 @@ internal class AuthenticationService : IAuthenticationService
         // Security check: can only terminate own sessions
         if (identity.User.UserId != userId)
         {
-            throw new UnauthorizedAccessException("Cannot terminate sessions of other users");
+            throw new HttpException(HttpStatusCode.Forbidden,
+                "Завершить чужую сессию нельзя");
         }
 
         // Cannot terminate current session - use Logout instead

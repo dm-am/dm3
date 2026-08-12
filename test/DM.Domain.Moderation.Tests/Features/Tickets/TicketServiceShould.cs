@@ -697,26 +697,60 @@ public class TicketServiceShould : UnitTestBase
     {
         // "Мои обращения" filters are server-side: the service forwards the
         // status and subtype straight to the repository (the reporter owns the
-        // tickets, so no subtype visibility gating is applied).
+        // tickets, so no subtype visibility gating is applied). The page the
+        // caller asked for travels with them.
         Guid capturedUserId = Guid.Empty;
+        PagingQuery? capturedQuery = null;
         TicketStatus? capturedStatus = null;
         TicketSubtype? capturedSubtype = null;
         _ticketRepository.Setup(r => r.GetUserTickets(
-                It.IsAny<Guid>(), It.IsAny<TicketStatus?>(), It.IsAny<TicketSubtype?>(), It.IsAny<CancellationToken>()))
-            .Callback<Guid, TicketStatus?, TicketSubtype?, CancellationToken>(
-                (userId, status, subtype, _) =>
+                It.IsAny<Guid>(), It.IsAny<PagingQuery>(), It.IsAny<TicketStatus?>(), It.IsAny<TicketSubtype?>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<Guid, PagingQuery, TicketStatus?, TicketSubtype?, CancellationToken>(
+                (userId, query, status, subtype, _) =>
                 {
                     capturedUserId = userId;
+                    capturedQuery = query;
                     capturedStatus = status;
                     capturedSubtype = subtype;
                 })
-            .ReturnsAsync(Array.Empty<Ticket>());
+            .ReturnsAsync((Array.Empty<Ticket>(), PagingResult.Empty(20)));
 
-        await _service.GetMyFiledTickets(TicketStatus.Closed, TicketSubtype.Bug);
+        await _service.GetMyFiledTickets(new PagingQuery { Skip = 40, Take = 20 },
+            TicketStatus.Closed, TicketSubtype.Bug);
 
         capturedUserId.Should().Be(_currentUserId);
+        capturedQuery!.Skip.Should().Be(40);
+        capturedQuery.Take.Should().Be(20);
         capturedStatus.Should().Be(TicketStatus.Closed);
         capturedSubtype.Should().Be(TicketSubtype.Bug);
+    }
+
+    [Fact]
+    public async Task PassThePageToRepositoryForMyAssignedTickets()
+    {
+        // The assigned roster grows with everything a moderator ever took in
+        // hand, so this queue takes a page like the intake list next to it. The
+        // total travels back with it: a truncated answer that does not say how
+        // much it truncated leaves the caller unable to ask for the rest.
+        Guid capturedModeratorId = Guid.Empty;
+        PagingQuery? capturedQuery = null;
+        _ticketRepository.Setup(r => r.GetModeratorTickets(
+                It.IsAny<Guid>(), It.IsAny<PagingQuery>(), It.IsAny<CancellationToken>()))
+            .Callback<Guid, PagingQuery, CancellationToken>(
+                (moderatorId, query, _) =>
+                {
+                    capturedModeratorId = moderatorId;
+                    capturedQuery = query;
+                })
+            .ReturnsAsync((Array.Empty<Ticket>(), PagingResult.Create(42, 21, 10)));
+
+        var (_, paging) = await _service.GetMyAssignedTickets(new PagingQuery { Skip = 20, Take = 10 });
+
+        capturedModeratorId.Should().Be(_currentUserId);
+        capturedQuery!.Skip.Should().Be(20);
+        capturedQuery.Take.Should().Be(10);
+        paging.TotalEntitiesCount.Should().Be(42);
     }
 
     [Fact]

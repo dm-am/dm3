@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Infrastructure.Persistence;
-using DM.Workers.NotificationDispatcher.Implementation.Notifiers;
+using DM.Workers.NotificationDispatcher.Notifiers;
 using FluentAssertions;
 using Moq;
 using Xunit;
@@ -65,6 +66,14 @@ public class EveryNotificationGeneratorShould
         var mock = (Mock)Activator.CreateInstance(typeof(Mock<>).MakeGenericType(type))!;
         mock.DefaultValue = DefaultValue.Empty;
         return mock.Object;
+    }
+
+    /// <summary>A clock that answers with the moment it was given.</summary>
+    internal static IDateTimeProvider ClockAt(DateTimeOffset moment)
+    {
+        var clock = new Mock<IDateTimeProvider>();
+        clock.SetupGet(provider => provider.Now).Returns(moment);
+        return clock.Object;
     }
 
     internal static async Task<List<CreateNotification>> DrainAsync(

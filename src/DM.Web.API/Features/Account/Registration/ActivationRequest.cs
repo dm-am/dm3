@@ -14,14 +14,15 @@ public class ActivationRequest
     /// Chosen username (unique display name, 2-20 characters)
     /// </summary>
     /// <remarks>
-    /// Allowed: letters (Latin/Cyrillic), digits, underscore, hyphen, dot, space.
-    /// Spaces: not at start/end, not consecutive.
+    /// Which characters are allowed is decided by the domain validator, not here.
+    /// This carried an allow-list while the validator behind it carries a
+    /// deny-list, and the two disagreed: check-availability called a name free
+    /// and the form then refused the same name with 400. Length and presence
+    /// stay, so the published schema keeps its bounds.
     /// </remarks>
     /// <example>JohnDoe_123</example>
     [Required(ErrorMessage = "Имя пользователя обязательно")]
     [StringLength(20, MinimumLength = 2, ErrorMessage = "От 2 до 20 символов")]
-    [RegularExpression(@"^(?!.*  )[a-zA-Zа-яА-ЯеЕ0-9]([a-zA-Zа-яА-ЯеЕ0-9_.\- ]*[a-zA-Zа-яА-ЯеЕ0-9])?$",
-        ErrorMessage = "Недопустимые символы или формат")]
     public string Username { get; set; } = "";
 
     /// <summary>

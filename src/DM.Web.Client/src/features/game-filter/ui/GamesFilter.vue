@@ -15,7 +15,8 @@ import type {
 } from "../model";
 import { storeToRefs } from "pinia";
 import { useGamesStore, type Tag } from "@/entities/game";
-import { useFilterSearch, useFilterDropdown } from "@/shared/lib/composables";
+import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
+import { useFilterDropdown } from "@/shared/lib/composables/useFilterDropdown";
 import { formatDateForDisplay } from "@/shared/lib/filters";
 import {
   FilterSearchInput,
@@ -799,6 +800,9 @@ function handleSearchKeydown(event: KeyboardEvent) {
               type="text"
               class="dropdown-search-input"
               :placeholder="
+                navPath?.group ? 'Поиск тега в группе' : 'Поиск тега'
+              "
+              :aria-label="
                 navPath?.group ? 'Поиск тега в группе' : 'Поиск тега'
               "
             />

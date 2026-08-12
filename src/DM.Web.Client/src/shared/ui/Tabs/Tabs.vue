@@ -33,7 +33,7 @@
  *
  * Usage:
  *   <Tabs ref="tabsRef" v-model="active" :tabs="tabs" />
- *   const tabs = [{ value: 'about', label: 'О себе' }, ...]
+ *   const tabs = [{ value: "about", label: "О себе" }, ...]
  */
 import { computed, nextTick, ref } from "vue";
 import { useFlipReorder } from "@/shared/lib/composables/useFlipReorder";

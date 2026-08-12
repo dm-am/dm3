@@ -13,7 +13,7 @@ public class IdentityProvider : IIdentitySetter, IIdentityProvider, IAuthorizati
 {
     private IIdentity _identity = null!;
 
-    /// <inheritdoc cref="IdentityProvider" />
+    /// <inheritdoc cref="IIdentityProvider.Current" />
     public IIdentity Current
     {
         get => _identity;

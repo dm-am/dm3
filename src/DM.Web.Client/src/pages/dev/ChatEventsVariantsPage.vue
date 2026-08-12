@@ -28,7 +28,7 @@ import { computed, ref } from "vue";
 import { SegmentedControl } from "@/shared/ui/SegmentedControl";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { DashSeparator } from "@/shared/ui/DashSeparator";
-import { useExpandable } from "@/shared/lib/composables";
+import { useExpandable } from "@/shared/lib/composables/useExpandable";
 import ChatFrameReplica from "./ChatFrameReplica.vue";
 import ChatEventLine from "./ChatEventLine.vue";
 import ChatEventRun from "./ChatEventRun.vue";

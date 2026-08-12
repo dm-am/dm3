@@ -34,10 +34,12 @@ public class TopicControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Get topics from non-existent board should return Gone
+    /// Get topics from non-existent board should return NotFound. A board is not
+    /// a resource this API tells "deleted" from "never existed", so an id that
+    /// addresses nothing is the plain 404 the controller declares.
     /// </summary>
     [Fact]
-    public async Task GetBoardTopics_WithNonExistentBoard_ReturnsGone()
+    public async Task GetBoardTopics_WithNonExistentBoard_ReturnsNotFound()
     {
         // Arrange
         var nonExistentBoardId = Guid.NewGuid();
@@ -46,7 +48,7 @@ public class TopicControllerShould : IntegrationTestBase
         var response = await Client.GetAsync($"/v1/boards/{nonExistentBoardId}/topics");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Gone);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     /// <summary>
@@ -58,8 +60,8 @@ public class TopicControllerShould : IntegrationTestBase
         // Act
         var response = await Client.GetAsync("/v1/boards/not-a-guid/topics");
 
-        // Assert - invalid GUID should return 410 Gone (topic/board not found)
-        response.StatusCode.Should().Be(HttpStatusCode.Gone);
+        // Assert - an alias nothing answers to is a board that never existed
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     #endregion

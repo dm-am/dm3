@@ -7,6 +7,8 @@ using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Game.Games;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Game.Blacklists;
 
@@ -21,6 +23,7 @@ namespace DM.Web.API.Features.Game.Blacklists;
 [Route("v1/games")]
 [ApiExplorerSettings(GroupName = "Game")]
 [Tags("Game Blacklist")]
+[EnableRateLimiting(RateLimitPolicies.Default)]
 public class GameBlacklistController : ControllerBase
 {
     private readonly IBlacklistApiService _blacklistApiService;

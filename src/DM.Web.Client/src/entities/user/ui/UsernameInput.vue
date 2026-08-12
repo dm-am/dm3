@@ -2,6 +2,7 @@
   <div class="username-input">
     <div class="input-wrapper">
       <input
+        :id="id"
         type="text"
         :value="modelValue"
         @input="onInput"
@@ -47,10 +48,13 @@ const props = withDefaults(
     modelValue: string;
     disabled?: boolean;
     debounceMs?: number;
+    /** Id for the <input>, so a caller's <label for> reaches it. */
+    id?: string;
   }>(),
   {
     disabled: false,
     debounceMs: 300,
+    id: undefined,
   },
 );
 

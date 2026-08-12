@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using FluentAssertions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Xunit;
 
@@ -32,10 +33,6 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class ResponseCachePolicyShould
 {
-    /// <summary>Line and block comments, in the syntax of the client's sources.</summary>
-    private static readonly Regex Comments = new(
-        @"/\*.*?\*/|//[^\n]*", RegexOptions.Compiled | RegexOptions.Singleline);
-
     /// <summary>A request header assignment, whatever quoting style is used.</summary>
     private static readonly Regex CacheControlHeader = new(
         @"[""']?Cache-Control[""']?\s*:", RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -46,7 +43,7 @@ public class ResponseCachePolicyShould
         var client = Path.Combine(RepositoryRoot, "src", "DM.Web.Client", "src", "shared", "api", "client.ts");
         File.Exists(client).Should().BeTrue("the HTTP client is where the default headers live");
 
-        var code = Comments.Replace(File.ReadAllText(client), string.Empty);
+        var code = SourceText.ReadCode(client);
 
         CacheControlHeader.IsMatch(code).Should().BeFalse(
             "a Cache-Control request header set for every call decides caching for endpoints it " +
@@ -93,6 +90,99 @@ public class ResponseCachePolicyShould
             "invalidates: the write goes to v1/moderation/..., a different address. The screen that " +
             "edits it has to re-read it past both caches, and catalogFreshness.spec.ts is where that " +
             "is pinned — listing the path there is what says the reload exists", 300);
+    }
+
+    /// <summary>
+    /// What a scanner rule is silenced with is what the code does.
+    /// </summary>
+    /// <remarks>
+    /// .zap/rules.tsv switches off rule 10049, "Storable and Cacheable Content",
+    /// with a sentence about a measure taken elsewhere: the reads that hand out
+    /// the caller's own account state declare no-store. Nothing did - the only
+    /// NoStore in the whole API sat on two catalogues and was put there for
+    /// unread counts - so a scanner rule was switched off by pointing at
+    /// something that did not exist, which is the way of triaging a finding that
+    /// leaves no trace when it stops being true.
+    ///
+    /// Derived rather than listed: every authenticated read of the account area
+    /// is asked, so the endpoint written next month is covered without anybody
+    /// remembering this file. The area is the one the sentence is about; a rule
+    /// over the whole API would be a decision about its cache policy, and that
+    /// is not one a test may make on its own.
+    /// </remarks>
+    [Fact]
+    public void KeepEveryAuthenticatedAccountReadOutOfEveryCache()
+    {
+        var reads = AuthenticatedAccountReads();
+
+        reads.Should().NotBeEmpty("the account area answers reads that require a session");
+
+        foreach (var (origin, policy) in reads)
+        {
+            policy.Should().NotBeNull(
+                $"{origin} answers with the caller's own account state, and .zap/rules.tsv " +
+                "silences rule 10049 by saying that those reads declare no-store");
+            policy!.NoStore.Should().BeTrue($"{origin} must be stored by no cache");
+            policy.Location.Should().Be(ResponseCacheLocation.None,
+                $"{origin} must be stored by no cache, the browser's own included");
+        }
+
+        File.ReadAllText(Path.Combine(RepositoryRoot, ".zap", "rules.tsv")).Should().Contain("10049",
+            "this check exists because that rule is silenced with the measure above; with the " +
+            "rule back in force the scan reports the same thing on its own");
+    }
+
+    /// <summary>
+    /// Every GET of the account area that requires a session, with whatever cache
+    /// policy it declares.
+    /// </summary>
+    /// <remarks>
+    /// The authentication attribute is internal to the host, so it is matched by
+    /// name rather than by type: opening the host up so that a test project can
+    /// see one attribute is the wrong shape of dependency for one line.
+    /// </remarks>
+    private static IReadOnlyCollection<(string Origin, ResponseCacheAttribute? Policy)> AuthenticatedAccountReads()
+    {
+        var found = new List<(string, ResponseCacheAttribute?)>();
+
+        var controllers = typeof(DM.Web.API.Startup).Assembly.GetTypes()
+            .Where(t => t is { IsAbstract: false, IsPublic: true } &&
+                        typeof(ControllerBase).IsAssignableFrom(t) &&
+                        (t.Namespace ?? string.Empty).StartsWith(
+                            "DM.Web.API.Features.Account", StringComparison.Ordinal));
+
+        foreach (var controller in controllers)
+        {
+            var controllerRequiresSession = controller.GetCustomAttributes(inherit: true)
+                .Any(a => a.GetType().Name == "AuthenticationRequiredAttribute");
+
+            foreach (var action in controller.GetMethods(BindingFlags.Public | BindingFlags.Instance |
+                                                         BindingFlags.DeclaredOnly))
+            {
+                if (!action.GetCustomAttributes().OfType<HttpGetAttribute>().Any())
+                {
+                    continue;
+                }
+
+                var attributes = action.GetCustomAttributes(inherit: true);
+                if (attributes.Any(a => a is IAllowAnonymous))
+                {
+                    continue;
+                }
+
+                var requiresSession = controllerRequiresSession ||
+                                      attributes.Any(a => a.GetType().Name == "AuthenticationRequiredAttribute");
+                if (!requiresSession)
+                {
+                    continue;
+                }
+
+                found.Add(($"{controller.Name}.{action.Name}",
+                    action.GetCustomAttribute<ResponseCacheAttribute>(inherit: true)));
+            }
+        }
+
+        return found;
     }
 
     /// <summary>An action the API lets any cache store, and the path it answers on.</summary>
@@ -142,23 +232,5 @@ public class ResponseCachePolicyShould
         return found.ToArray();
     }
 
-    /// <summary>
-    /// Walks up from the test binary to the repository root: the sources are not
-    /// copied to the output directory, and copying them would assert against a
-    /// stale snapshot.
-    /// </summary>
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null && !Directory.Exists(Path.Combine(directory.FullName, "docs")))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

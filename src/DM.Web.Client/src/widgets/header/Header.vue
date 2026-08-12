@@ -5,6 +5,8 @@ import { useSessionExit } from "@/features/auth";
 import { useMessagingStore } from "@/entities/message";
 import { useNotificationStore } from "@/entities/notification";
 import { useUiStore } from "@/shared/stores/ui";
+import { useMenuKeyboard } from "@/shared/lib/composables/useMenuKeyboard";
+import { visibleMainNavSections } from "@/shared/config/mainNavigation";
 import { storeToRefs } from "pinia";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { SvgIcon } from "@/shared/ui/Icon";
@@ -23,6 +25,9 @@ const { unreadCount: unreadNotificationsCount } =
   storeToRefs(notificationStore);
 
 const isModerator = computed(() => userIsModerator(user.value));
+const mainNavSections = computed(() =>
+  visibleMainNavSections(isModerator.value),
+);
 
 const hasUnread = computed(() => totalUnreadCount.value > 0);
 const hasUnreadNotifications = computed(
@@ -32,12 +37,26 @@ const hasUnreadNotifications = computed(
 // "Выйти" opens a small menu offering both a local sign-out and a
 // sign-out-everywhere action (doc 4.2.1.1).
 const logoutMenuOpen = ref(false);
+const logoutTrigger = ref<HTMLElement | null>(null);
+const logoutMenu = ref<HTMLElement | null>(null);
 function toggleLogoutMenu() {
   logoutMenuOpen.value = !logoutMenuOpen.value;
 }
 function closeLogoutMenu() {
   logoutMenuOpen.value = false;
 }
+
+// The dropdown is announced as a menu, so it answers Escape and the arrow keys
+// like one. It answered neither before: opening it leaves focus on the trigger,
+// so pressing the trigger a second time was the only key that closed it, a
+// click on the backdrop the only other way out, and nothing walked the items.
+const { handleMenuKeydown } = useMenuKeyboard({
+  isOpen: () => logoutMenuOpen.value,
+  close: closeLogoutMenu,
+  trigger: logoutTrigger,
+  menu: logoutMenu,
+});
+
 // Signing out is not a navigation, so the route guard never runs: on /account
 // the viewer stayed on a page whose whole body is `v-if="user"` — a heading
 // over nothing. Leaving the page is part of the action.
@@ -149,8 +168,9 @@ async function handleSignOutAll() {
             >Настройки</router-link
           >
           |
-          <span class="logout-menu">
+          <span class="logout-menu" @keydown="handleMenuKeydown">
             <button
+              ref="logoutTrigger"
               type="button"
               class="action-link"
               :aria-expanded="logoutMenuOpen"
@@ -169,7 +189,7 @@ async function handleSignOutAll() {
                 tabindex="-1"
                 @click="closeLogoutMenu"
               />
-              <ul class="logout-dropdown" role="menu">
+              <ul ref="logoutMenu" class="logout-dropdown" role="menu">
                 <li role="none">
                   <button
                     type="button"
@@ -202,26 +222,12 @@ async function handleSignOutAll() {
       </div>
     </div>
     <nav class="top-menu" aria-label="Основные разделы">
-      <router-link class="link" :to="{ name: 'about' }">О проекте</router-link>
-      <router-link class="link" :to="{ name: 'rules' }">Правила</router-link>
-      <router-link class="link" :to="{ name: 'games' }">Игры</router-link>
-      <router-link class="link" :to="{ name: 'blogs' }">Блоги</router-link>
-      <router-link class="link" :to="{ name: 'community' }"
-        >Сообщество</router-link
-      >
-      <router-link class="link" :to="{ name: 'forum-index' }"
-        >Форум</router-link
-      >
-      <router-link class="link" :to="{ name: 'global-chat' }">Чат</router-link>
-      <!-- Always visible to everyone (owner rule) — the newbies board is the
-           site's front door for prospective players, not a newbie-only tool. -->
       <router-link
+        v-for="section in mainNavSections"
+        :key="section.key"
         class="link"
-        :to="{ name: 'forum', params: { alias: 'newbies' } }"
-        >Для новичков</router-link
-      >
-      <router-link v-if="isModerator" class="link" :to="{ name: 'moderation' }"
-        >Модерация</router-link
+        :to="section.to"
+        >{{ section.title }}</router-link
       >
     </nav>
     <div class="stats-col">

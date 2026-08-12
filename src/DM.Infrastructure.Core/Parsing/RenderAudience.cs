@@ -7,16 +7,18 @@ namespace DM.Infrastructure.Core.Parsing;
 public enum RenderAudience
 {
     /// <summary>
-    /// Standard read surface. Privacy-sensitive tags ([private], [mod])
-    /// are filtered per the viewer's permissions.
+    /// Standard read surface. [private] is filtered per the viewer's
+    /// permissions; [mod] is public on read and is always rendered.
     /// </summary>
     Display = 0,
 
     /// <summary>
     /// Author loading own content into the editor. Both privacy tags
     /// are rendered verbatim with data-bb-* round-trip attributes so
-    /// Tiptap can serialize them back to BBCode. Endpoint-level
-    /// authorization must have confirmed authorship beforehand.
+    /// Tiptap can serialize them back to BBCode. Authorship is verified
+    /// per field at render time: the endpoint only supplies the author id
+    /// in the render envelope, and a missing id means "not the author"
+    /// and yields Display.
     /// </summary>
     AuthorEdit = 1,
 

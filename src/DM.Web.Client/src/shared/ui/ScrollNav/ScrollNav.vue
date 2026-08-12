@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useUiStore } from "@/shared/stores/ui";
-import { useRegion } from "@/shared/lib/composables/useRegion";
 import {
-  hasAnyExpandable,
-  allExpandablesExpanded,
-  expandAllExpandables,
-  collapseAllExpandables,
-} from "@/shared/lib/composables";
+  hasAny as hasAnyExpandable,
+  allExpanded as allExpandablesExpanded,
+  expandAll as expandAllExpandables,
+  collapseAll as collapseAllExpandables,
+} from "@/shared/lib/composables/useExpandableRegistry";
+import { getScrollContainer } from "@/shared/lib/scroll";
 import { Theme } from "@/shared/api/models/personal";
 import { storeToRefs } from "pinia";
 import { SvgIcon } from "@/shared/ui/Icon";
@@ -19,10 +19,6 @@ function toggleAllExpandables() {
   } else {
     expandAllExpandables();
   }
-}
-
-function getScrollContainer(): HTMLElement | null {
-  return document.querySelector(".main");
 }
 
 function scrollToTop() {
@@ -60,13 +56,35 @@ function closeSettings(e: MouseEvent) {
   }
 }
 
+/**
+ * Escape closes the bubble and gives the caret back to the button that opened
+ * it — the same exit the site's menus have. Only the mouse had one here: the
+ * bubble closed on an outside click and on nothing else.
+ *
+ * The listener is on the document, symmetrical with the outside-click one
+ * above, because the bubble holds real controls and the press has to be heard
+ * wherever focus sits inside it.
+ *
+ * The button says `aria-expanded` and deliberately not `aria-haspopup`: this is
+ * a disclosure, a panel of settings, not a menu of commands. Announcing a menu
+ * here would promise a reader arrow-key navigation between items that are a
+ * segmented control and a switch.
+ */
+function closeSettingsOnEscape(e: KeyboardEvent) {
+  if (e.key !== "Escape" || !isSettingsOpen.value) return;
+  isSettingsOpen.value = false;
+  settingsBtn.value?.focus();
+}
+
 onMounted(() => {
   document.addEventListener("click", closeSettings);
+  document.addEventListener("keydown", closeSettingsOnEscape);
   nextTick(updateLayoutIndicator);
 });
 
 onUnmounted(() => {
   document.removeEventListener("click", closeSettings);
+  document.removeEventListener("keydown", closeSettingsOnEscape);
 });
 
 // Theme toggle
@@ -94,10 +112,6 @@ function updateLayoutIndicator() {
 watch(messageLayout, () => {
   nextTick(updateLayoutIndicator);
 });
-
-// Region switcher
-const { canSwitch, switchTooltip, switchRegion, isHydrated, isSwitching } =
-  useRegion();
 </script>
 
 <template>
@@ -145,6 +159,7 @@ const { canSwitch, switchTooltip, switchRegion, isHydrated, isSwitching } =
         class="scroll-nav-btn settings-btn"
         :class="{ active: isSettingsOpen }"
         aria-label="Настройки сайта"
+        :aria-expanded="isSettingsOpen"
         @click="toggleSettings"
       >
         <SvgIcon name="settings" />
@@ -185,6 +200,13 @@ const { canSwitch, switchTooltip, switchRegion, isHydrated, isSwitching } =
           </div>
         </div>
 
+        <!-- The address of the site is not a setting and is not here. A control
+             in this panel is read only by someone whose page has loaded, which
+             is exactly the visitor for whom the other address changes nothing.
+             The one who needs it cannot open the panel at all, so the address
+             lives where it reaches him: in the footer of the site and in the
+             footer of every letter. -->
+
         <!-- Theme toggle -->
         <div class="settings-row">
           <span class="settings-label">Тема</span>
@@ -198,31 +220,6 @@ const { canSwitch, switchTooltip, switchRegion, isHydrated, isSwitching } =
               />
               <span class="slider" />
             </label>
-          </div>
-        </div>
-
-        <!-- Region switcher -->
-        <div v-if="isHydrated && canSwitch" class="settings-row">
-          <span class="settings-label">Зеркало</span>
-          <div class="settings-control">
-            <button
-              type="button"
-              class="mirror-btn"
-              :class="{ 'is-loading': isSwitching }"
-              :aria-label="switchTooltip"
-              :disabled="!canSwitch || isSwitching"
-              @click="switchRegion"
-            >
-              <!-- One icon for both states, from the registry the other 39 come
-                   from. The pair it replaces was two emoji with two different
-                   rendering policies in one button — a flag built from regional
-                   indicators, which Windows does not compose at all and draws as
-                   the letters "RU" in a box, and a globe carrying a
-                   text-presentation selector. Which mirror the reader is on and
-                   where the button leads is said in words, by the accessible
-                   name and the tooltip. -->
-              <SvgIcon name="globe" />
-            </button>
           </div>
         </div>
       </div>
@@ -254,18 +251,23 @@ const { canSwitch, switchTooltip, switchRegion, isHydrated, isSwitching } =
 .settings-btn
   margin-top: $small
 
+// The hit box comes from the mixin rather than from these 24 pixels. At this
+// size the floor and the box coincide, so nothing moves on screen, but the
+// number stops being this file's own opinion about how small a target may get.
+// The mixin resets border and background, so the frame and the fill that make
+// this control look like a button come after it.
 .scroll-nav-btn
-  display: flex
-  align-items: center
-  justify-content: center
-  width: 24px
-  height: 24px
-  padding: 0
-  border: 1px solid $border
-  border-radius: $border-radius
-  background-color: $bg-element
-  cursor: pointer
-  color: $text-muted
+  +icon-button(24px)
+
+  // Wrapped in "&" because the mixin ends with a nested rule, and a plain
+  // declaration after one is what Sass is changing the meaning of. Moving them
+  // above the mixin is not the fix here: it resets border and background, so
+  // the frame and the fill have to come after it and win.
+  &
+    border: 1px solid $border
+    border-radius: $border-radius
+    background-color: $bg-element
+    color: $text-muted
 
   &:hover,
   &.active
@@ -286,21 +288,34 @@ const { canSwitch, switchTooltip, switchRegion, isHydrated, isSwitching } =
   // it — a number picked to win an argument the scale had already settled.
   z-index: $z-popover
 
-// The bubble uses a two-column grid on .bubble-content. Each
-// .settings-row inherits those shared column tracks via CSS subgrid,
-// so the second column is ALWAYS sized by the widest control across
-// ALL rows (the layout toggle, ~64px). The theme switch and mirror
-// button center within that exact same column width via
-// justify-self: center. No magic numbers — the layout toggle is the
-// single source of truth for the controls column width.
+// Width of the column every control sits in, declared once and fixed. The
+// bubble is a two-column grid on .bubble-content, and each .settings-row
+// inherits those tracks through subgrid.
+//
+// It used to be "auto", which meant the widest control decided it. That is a
+// coupling nobody can see: the bubble hangs off the right edge, so a control
+// two pixels wider pushed the whole panel left, moved every label with it and
+// re-centred the controls of the other rows. One segmented switch, added to a
+// row that has since been removed again, shifted every row in the panel.
+//
+// 64 is the intrinsic width of the layout toggle, the widest control the panel
+// has ever had, measured rather than guessed. Anything narrower is centred in
+// it; anything wider is a design decision to take deliberately, by raising
+// this number. e2e/tests/common/settings-panel.spec.ts fails when a control
+// outgrows it, so the coupling cannot come back unnoticed.
+$settings-control-width: 64px
+
 .bubble-content
   display: grid
-  grid-template-columns: auto auto
+  grid-template-columns: auto $settings-control-width
   column-gap: $medium
   background: $bg-element
   border: 1px solid $border
   border-radius: $border-radius
-  padding: $small $medium
+  // No vertical padding of its own: the rows carry theirs, so the space above
+  // the first row, between every pair and below the last is the same one
+  // number and stays equal when a row is added or removed.
+  padding: 0 $medium
   box-shadow: 0 2px 8px $shadow-color
   white-space: nowrap
 
@@ -322,20 +337,21 @@ const { canSwitch, switchTooltip, switchRegion, isHydrated, isSwitching } =
   display: grid
   grid-template-columns: subgrid
   align-items: center
-  padding: $tiny 0
+  // Equal above and below, so a separator sits midway between the two rows it
+  // divides. It used to be 2 above and 8 below with 2 more of margin, which
+  // pinned every row to the line above it and left twice the air under it.
+  padding: $small 0
 
   &:not(:last-child)
     border-bottom: 1px solid $border
-    padding-bottom: $small
-    margin-bottom: $tiny
 
 .settings-label
   color: $text-muted
   font-size: $secondary-font-size
   white-space: nowrap
 
-// Theme switch and mirror button: centered within the shared controls
-// column (whose width is defined by the layout toggle in the first row).
+// Theme switch: centered within the shared controls column (whose
+// width is defined by the layout toggle in the first row).
 // justify-self + align-self center the element itself in the grid cell
 // without stretching it to fill the cell width.
 .settings-control
@@ -345,7 +361,10 @@ const { canSwitch, switchTooltip, switchRegion, isHydrated, isSwitching } =
 // Theme switch
 .theme-switch
   position: relative
-  display: inline-block
+  // block, not inline-block: an inline box sits on the text baseline and
+  // reserves the descender space under itself, which made this row two and a
+  // half pixels taller than the two around it for no visible reason.
+  display: block
   width: 36px
   height: 18px
   cursor: pointer
@@ -407,36 +426,6 @@ const { canSwitch, switchTooltip, switchRegion, isHydrated, isSwitching } =
 
     &:before
       background: $link-nav-hover
-
-// Mirror button
-// The glyph is sized in pixels, not through font-size. 1.3em was written for
-// an emoji, where the drawn glyph is smaller than its em box; an SvgIcon is
-// exactly 1em square, so the same rule made a 20.8px icon inside an 18px-tall
-// button and it spilled over the edges.
-.mirror-btn
-  line-height: 1
-  color: $link-nav
-  +icon-button(36px, 18px)
-
-  .svg-icon
-    width: 14px
-    height: 14px
-
-  &:hover:not(:disabled)
-    color: $link-nav-hover
-
-  &:disabled
-    cursor: default
-    opacity: 0.4
-
-  &.is-loading
-    animation: pulse 1s infinite
-
-@keyframes pulse
-  0%, 100%
-    opacity: 0.7
-  50%
-    opacity: 0.3
 
 // Layout toggle
 .layout-toggle

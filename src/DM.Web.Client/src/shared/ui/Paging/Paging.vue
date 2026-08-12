@@ -159,9 +159,9 @@ watch(
 // Reactive local copy of paging for immediate UI updates
 const localPaging = ref<PagingInfo>({
   current: 1,
-  size: 10,
+  skip: 0,
+  take: 10,
   pages: 1,
-  number: 1,
   total: 0,
 });
 
@@ -277,7 +277,7 @@ function getPageLink(page: number) {
     };
   } else {
     // Legacy: use entity number for path-based pagination
-    const entityNumber = (page - 1) * localPaging.value.size + 1;
+    const entityNumber = (page - 1) * localPaging.value.take + 1;
     return {
       name: props.to.name,
       params: Object.assign({}, props.to.params, {

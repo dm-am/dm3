@@ -17,7 +17,6 @@ internal class BlogPopularityRepository : IBlogPopularityRepository
 
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc cref="BlogPopularityRepository" />
     public BlogPopularityRepository(DmDbContext dbContext) => _dbContext = dbContext;
 
     /// <inheritdoc />

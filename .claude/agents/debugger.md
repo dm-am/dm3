@@ -35,12 +35,21 @@ docker logs dm-rmq --tail 50
 # Service status
 .\scripts\dm.ps1 status
 
-# Restart services
-.\scripts\dm.ps1 reset
-
-# Run tests
-dotnet test test/DM.Domain.*.Tests
+# Run tests — the whole solution, or one project by path
+dotnet test DM.sln
+dotnet test test/DM.Domain.Game.Tests
 ```
+
+A glob over the test projects is not a shortcut for the first line: PowerShell
+passes it through as a literal path that does not exist, and a shell that does
+expand it hands `dotnet test` ten arguments where it takes one.
+
+`.\scripts\dm.ps1 reset` is absent from that list on purpose. It is
+`compose down -v`: it deletes the volumes, so Postgres and Mongo come back
+empty and every account, game and post on the owner's stand is gone. Read from
+the stand, restart, reset and reseed nothing — the same rule the frontend brief
+states for the dev server and the API. If a diagnosis genuinely needs a clean
+database, say so and let the owner run it.
 
 ## Key Paths
 

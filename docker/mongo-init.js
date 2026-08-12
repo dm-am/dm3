@@ -32,7 +32,7 @@ print('Creating indexes for DM3...');
 
 // ============================================================================
 // UnreadCounters Collection - Main performance-critical collection
-// Used by: GameReadingService, ForumReadingService, ConversationReadingService
+// Used by: UnreadCountersRepository
 // ============================================================================
 
 // The key every write addresses a marker by: FlushAsync, FlushAllAsync and the
@@ -85,20 +85,17 @@ print('UnreadCounters indexes created');
 // Used by: AuthenticationRepository
 // ============================================================================
 
-// Index for FindUserSession - runs on EVERY authenticated request
-// Query: ElemMatch(Sessions, s => s.Id = X); same predicate in RefreshSession
-// Session.Id is stored as the "_id" element of the embedded document, hence "Sessions._id"
-// Every other query of this collection filters by the document _id (the user identifier)
-db.UserSessions.createIndex(
-    { "Sessions._id": 1 },
-    { name: "IX_UserSessions_SessionId", background: true }
-);
+// No index of its own, on purpose. Every query names the user first and
+// UserSession._id is the user identifier, so FindUserSession and RefreshSession are
+// both primary-key lookups of one document; an index on "Sessions._id" cannot narrow
+// a set of one. The lookup is scoped that way deliberately: a token whose user and
+// session belong to different people must not authenticate.
 
-print('UserSessions indexes created');
+print('UserSessions needs no index beyond _id');
 
 // ============================================================================
 // UserSettings Collection
-// Used by: UserSettingsRepository, AuthenticationRepository
+// Used by: UserRepository, BotLinkRepository, AuthenticationRepository.FindUserSettings
 // Query: UserId = X (UserId is not the document _id)
 // ============================================================================
 
@@ -230,7 +227,7 @@ print('');
 print('=== MongoDB Indexes Created Successfully ===');
 print('Collections indexed:');
 print('  - UnreadCounters (6 indexes, one unique, one TTL) - CRITICAL for sidebar performance');
-print('  - UserSessions (1 index) - CRITICAL for every authenticated request');
+print('  - UserSessions (no index beyond _id) - every query is a primary-key lookup');
 print('  - UserSettings (1 index)');
 print('  - LoginAttempts (2 indexes, one TTL)');
 print('  - SecurityAuditLog (2 indexes, one TTL)');
@@ -239,5 +236,5 @@ print('  - Polls (2 indexes)');
 print('  - AttributeSchemata (1 index)');
 print('  - Dice (1 index)');
 print('');
-print('Total: 19 indexes');
+print('Total: 18 indexes');
 print('==========================================');

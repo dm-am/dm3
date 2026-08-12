@@ -15,6 +15,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
+using DM.Domain.Core.Subscriptions;
 using DM.Domain.Core.Users;
 using DM.Testing;
 using FluentAssertions;
@@ -32,6 +33,7 @@ public class BlogBlacklistServiceShould : UnitTestBase
     private readonly Mock<IIntentionManager> _intentionManager;
     private readonly Mock<IEventProducer> _producer;
     private readonly Mock<IMapper> _mapper;
+    private readonly Mock<ISubscriptionRepository> _subscriptionRepository;
     private readonly BlogBlacklistService _service;
 
     public BlogBlacklistServiceShould()
@@ -43,6 +45,7 @@ public class BlogBlacklistServiceShould : UnitTestBase
         _intentionManager = Mock<IIntentionManager>();
         _producer = Mock<IEventProducer>();
         _mapper = Mock<IMapper>();
+        _subscriptionRepository = Mock<ISubscriptionRepository>();
 
         _identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
 
@@ -53,7 +56,39 @@ public class BlogBlacklistServiceShould : UnitTestBase
             _identityProvider.Object,
             _intentionManager.Object,
             _producer.Object,
-            _mapper.Object);
+            _mapper.Object,
+            _subscriptionRepository.Object);
+    }
+
+    [Fact]
+    public async Task DropTheBlogSubscriptionOfTheUserItBlacklists()
+    {
+        var blogId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var blog = new BlogDto
+        {
+            Id = blogId,
+            Author = new GeneralUser { UserId = Guid.NewGuid() },
+            Assistants = new List<BlogAssistantInfo>(),
+            BlacklistedUserIds = new HashSet<Guid>()
+        };
+        var user = new GeneralUser { UserId = userId, Username = "testuser" };
+
+        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
+        _userLookupService.Setup(s => s.GetAsync("testuser")).ReturnsAsync(user);
+        _repository.Setup(r => r.IsBlocked(blogId, userId, default)).ReturnsAsync(false);
+        _repository.Setup(r => r.Add(blogId, userId, It.IsAny<Guid>(), default)).Returns(Task.CompletedTask);
+        _repository.Setup(r => r.CancelInvitationsForUser(blogId, userId, default))
+            .ReturnsAsync(new List<Guid>());
+        _mapper.Setup(m => m.Map<GeneralUser>(user)).Returns(user);
+
+        await _service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "testuser" });
+
+        // A blog has no command for removing a reader, so the entry is the one
+        // that ends the subscription: left alone, the blacklisted user stayed in
+        // the list of readers and on the fan-out of every publication.
+        _subscriptionRepository.Verify(
+            r => r.DeleteAsync(userId, SubscriptionTargetType.Blog, blogId, default), Times.Once);
     }
 
     [Fact]

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using FluentAssertions;
 using Xunit;
@@ -16,15 +17,25 @@ namespace DM.Architecture.Tests;
 /// Both rules guard the same failure from opposite sides. A file-level nullable
 /// directive reads as a claim that the rest of the tree is not annotated, which is
 /// the reverse of the truth, and nothing in the file tells the reader it changes
-/// nothing. A per-file CS1591 pragma is worse: it leaves one folder split between
-/// two documentation policies, so the author of the next entity has to guess which
-/// one is in force. Neither is visible to the compiler, which is why they are
+/// nothing. A per-file CS1591 pragma says the same about documentation: the props
+/// suppress that diagnostic for every project, so the pragma silences nothing and
+/// leaves the next reader believing this one file answers to a rule the others do
+/// not. Neither is visible to the compiler, which is why they are
 /// asserted against the sources rather than against the loaded assemblies.
 /// </remarks>
 public class CompilerPolicyShould
 {
-    private const string EntitiesSection = "[src/DM.Infrastructure.Persistence/Entities/**.cs]";
-    private const string DocumentationExemption = "dotnet_diagnostic.CS1591.severity = none";
+    /// <summary>A dotnet-version a workflow asks setup-dotnet to install.</summary>
+    private static readonly Regex DotnetVersion = new(
+        @"dotnet-version:\s*(?<version>[0-9]+\.[0-9]+\.[0-9x]+)", RegexOptions.Compiled);
+
+    /// <summary>A file silencing the documentation diagnostic on its own account.</summary>
+    private static readonly Regex DocumentationPragma = new(
+        @"#pragma\s+warning\s+disable[^\r\n]*\b(?:CS)?1591\b", RegexOptions.Compiled);
+
+    /// <summary>The documentation switch, written in a project that already inherits it.</summary>
+    private const string DocumentationFileSetting =
+        "<GenerateDocumentationFile>true</GenerateDocumentationFile>";
 
     /// <summary>A per-project grant of internals, which the props already give.</summary>
     private static readonly Regex InternalsGrant = new(
@@ -34,52 +45,45 @@ public class CompilerPolicyShould
     private static readonly Regex SolutionWideGrant = new(
         @"<_Parameter1>\$\(AssemblyName\)\.([^<]+)</_Parameter1>", RegexOptions.Compiled);
 
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
+
     /// <summary>
-    /// Walks up from the test binary to the repository root. The sources are not
-    /// copied to the output directory, and copying them would let this assert
-    /// against a stale snapshot.
+    /// The documentation policy is one decision, and no file states it a second time.
     /// </summary>
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null &&
-                   !(Directory.Exists(Path.Combine(directory.FullName, "src")) &&
-                     Directory.Exists(Path.Combine(directory.FullName, "test"))))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
-
+    /// <remarks>
+    /// CS1591 was an error for years, and the exemptions grew wherever the requirement
+    /// hurt most: a pragma at the top of a file, a severity line for a folder, a NoWarn
+    /// inside the one project whose XML is ever read. The props suppress the diagnostic
+    /// for the whole solution now, so each of those silences nothing while still reading
+    /// as a rule that holds there and not elsewhere. A suppression that changes nothing
+    /// is also the hardest kind to remove later: nobody can tell what it was holding up.
+    /// </remarks>
     [Fact]
-    public void DeclareTheEntityDocumentationExemptionInOnePlace()
+    public void DeclareTheDocumentationPolicyInOnePlace()
     {
         var root = RepositoryRoot;
-        var editorConfig = File.ReadAllText(Path.Combine(root, ".editorconfig"));
-
-        editorConfig.Should().Contain(EntitiesSection,
-            "the exemption is declared for the folder, so a new entity file inherits it");
-        editorConfig.Should().Contain(DocumentationExemption,
-            "without the severity line the exemption lives nowhere and the build stops on CS1591");
 
         var withOwnPragma = Directory
-            .EnumerateFiles(
-                Path.Combine(root, "src", "DM.Infrastructure.Persistence", "Entities"),
-                "*.cs",
-                SearchOption.AllDirectories)
-            .Where(path => File
-                .ReadAllText(path)
-                .Contains("#pragma warning disable CS1591", StringComparison.Ordinal))
+            .EnumerateFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(IsAuthored)
+            .Where(path => DocumentationPragma.IsMatch(File.ReadAllText(path)))
             .Select(path => Path.GetRelativePath(root, path))
             .ToList();
 
         withOwnPragma.Should().BeEmpty(
-            "a per-file pragma is a second documentation policy in a folder that already has one");
+            "the props silence CS1591 for every project, so a pragma silences nothing and only " +
+            "tells the next reader that this file answers to a documentation rule of its own");
+
+        var withOwnSwitch = ProjectFiles(root)
+            .Where(path => File
+                .ReadAllText(path)
+                .Contains(DocumentationFileSetting, StringComparison.Ordinal))
+            .Select(path => Path.GetRelativePath(root, path))
+            .ToList();
+
+        withOwnSwitch.Should().BeEmpty(
+            "the props already generate the XML file for every project, and a project that " +
+            "repeats the value moves nothing while looking like the place it is decided");
     }
 
     /// <summary>
@@ -101,8 +105,9 @@ public class CompilerPolicyShould
     {
         var props = File.ReadAllText(Path.Combine(RepositoryRoot, "Directory.Build.props"));
 
-        // Читается список подавленных, а не весь файл: обоснование решения живет
-        // рядом с ним комментарием, и упоминание кода в объяснении это не подавление.
+        // The list of suppressions is read rather than the whole file: the reason
+        // for a decision lives next to it as a comment, and a code named in an
+        // explanation is not a suppression.
         var suppressed = System.Text.RegularExpressions.Regex
             .Matches(props, @"<NoWarn>(?<codes>[^<]*)</NoWarn>")
             .SelectMany(m => m.Groups["codes"].Value.Split(';'))
@@ -140,11 +145,14 @@ public class CompilerPolicyShould
     /// </summary>
     /// <remarks>
     /// The props travel with the solution and were copied from the start;
-    /// .editorconfig was not, and the day the CS1591 exemption moved into it the
+    /// .editorconfig was not, and the day a CS1591 exemption moved into it the
     /// image build began failing on warnings no developer could see. The failure
     /// named a source file and a missing XML comment, which is the one thing that
     /// was not wrong — and it took every image down at once, so a green solution
-    /// still shipped nothing.
+    /// still shipped nothing. That exemption is gone, since the props now suppress
+    /// the diagnostic for every project, and the file still travels: it is where a
+    /// per-folder severity goes when the next one is needed, and its absence fails
+    /// the build with a message that names everything except its own cause.
     /// </remarks>
     [Fact]
     public void GiveTheImageBuildTheSamePolicyFiles()
@@ -221,6 +229,68 @@ public class CompilerPolicyShould
         offenders.Should().BeEmpty(
             "the accepted language is the one the build images have, and a project that " +
             "raises it above the pin compiles locally and fails where nobody can see why");
+    }
+
+    /// <summary>
+    /// The SDK a developer compiles with is the one CI installs.
+    /// </summary>
+    /// <remarks>
+    /// global.json takes no comments, so the reason lives here, and it has two
+    /// halves.
+    ///
+    /// The band: the pin is worth something only while it names what CI
+    /// installs. Raise the workflow to a newer SDK and leave the pin behind, and
+    /// the file that looks like the source of truth stops describing anything.
+    /// Matched against the workflow rather than against a number written here,
+    /// so this rule cannot go stale on its own.
+    ///
+    /// The roll-forward: it was latestMajor, which accepts any SDK from the
+    /// eighth upwards, and the machine carried only a newer one — so the whole
+    /// solution compiled with a compiler CI does not have, while warnings are
+    /// errors here without exception. Every SDK brings diagnostics the last one
+    /// did not, so neither direction of that divergence is safe to assume away.
+    /// Anything below "feature" stays inside one major.minor; the rest of the
+    /// vocabulary crosses it, which is the whole defect.
+    /// </remarks>
+    [Fact]
+    public void PinTheSdkToTheBandContinuousIntegrationInstalls()
+    {
+        var root = RepositoryRoot;
+
+        using var globalJson = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "global.json")));
+        var sdk = globalJson.RootElement.GetProperty("sdk");
+        var pinned = sdk.GetProperty("version").GetString();
+        var rollForward = sdk.TryGetProperty("rollForward", out var declared)
+            ? declared.GetString()
+            : "latestPatch";
+
+        rollForward.Should().BeOneOf(
+            ["latestFeature", "feature", "latestPatch", "patch", "disable"],
+            "a roll-forward that crosses a major or a minor hands the build to an SDK " +
+            "CI does not install, and warnings are errors in this solution");
+
+        var installed = InstalledSdkVersions(root);
+        installed.Should().NotBeEmpty("the workflows install the SDK before building");
+
+        var pinnedBand = Band(pinned!);
+        installed.Should().AllSatisfy(version => Band(version).Should().Be(pinnedBand,
+            "global.json and every setup-dotnet step name one band or the pin describes " +
+            "a compiler nobody uses"));
+    }
+
+    /// <summary>Every dotnet-version the workflows ask setup-dotnet to install.</summary>
+    private static IReadOnlyList<string> InstalledSdkVersions(string root) => Directory
+        .EnumerateFiles(Path.Combine(root, ".github", "workflows"), "*.yml")
+        .SelectMany(path => DotnetVersion.Matches(File.ReadAllText(path)))
+        .Select(match => match.Groups["version"].Value)
+        .ToList();
+
+    /// <summary>major.minor — the part a feature-level roll-forward cannot leave.</summary>
+    private static string Band(string version)
+    {
+        var parts = version.Split('.');
+        parts.Length.Should().BeGreaterOrEqualTo(2, $"'{version}' should name a major and a minor");
+        return parts[0] + "." + parts[1];
     }
 
     /// <summary>

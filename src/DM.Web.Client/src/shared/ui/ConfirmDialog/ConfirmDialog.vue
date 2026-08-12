@@ -24,7 +24,10 @@ const props = withDefaults(
     cancelLabel?: string;
     /** Render the confirm action as destructive (accent-red). */
     danger?: boolean;
-    /** Disable the confirm button and show a spinner-ish disabled state. */
+    /**
+     * The confirm action is in flight: the button stops answering clicks and
+     * carries the busy bar every control on the site draws for that state.
+     */
     loading?: boolean;
   }>(),
   {
@@ -140,6 +143,7 @@ function handleKeydown(e: KeyboardEvent) {
               class="dialog-btn dialog-btn-submit"
               :class="{ danger }"
               :disabled="loading"
+              :aria-busy="loading || undefined"
               @click="handleConfirm"
             >
               {{ confirmLabel }}
@@ -159,7 +163,7 @@ function handleKeydown(e: KeyboardEvent) {
 .dialog-backdrop
   position: fixed
   inset: 0
-  z-index: $z-modal
+  z-index: $z-dialog
   display: flex
   align-items: center
   justify-content: center
@@ -189,7 +193,7 @@ function handleKeydown(e: KeyboardEvent) {
   font-weight: 600
 
 .dialog-close
-  padding: 4px 8px
+  padding: $minor $small
   border: none
   background: none
   font-size: 20px
@@ -218,13 +222,10 @@ function handleKeydown(e: KeyboardEvent) {
 .dialog-btn
   font-size: $secondary-font-size
   +button
+  +button-busy
 
   &.danger
     +button-danger
-
-  &:disabled
-    opacity: 0.6
-    cursor: default
 
 // Transition animations
 .dialog-enter-active,

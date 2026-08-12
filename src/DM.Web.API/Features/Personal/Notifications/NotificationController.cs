@@ -4,6 +4,9 @@ using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using DM.Domain.Core.Dto;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Personal.Notifications;
 
@@ -32,6 +35,7 @@ namespace DM.Web.API.Features.Personal.Notifications;
 [ApiExplorerSettings(GroupName = "Personal")]
 [Tags("Notifications")]
 [AuthenticationRequired]
+[EnableRateLimiting(RateLimitPolicies.Default)]
 public class NotificationController : ControllerBase
 {
     private readonly INotificationApiService _notificationApiService;
@@ -49,20 +53,16 @@ public class NotificationController : ControllerBase
     /// Returns paginated list of notifications for the authenticated user.
     /// Results are ordered by creation date (newest first).
     /// </remarks>
-    /// <param name="skip">Number of notifications to skip (default: 0)</param>
-    /// <param name="take">Number of notifications to take (default: 20, max: 100)</param>
+    /// <param name="query">Standard paging (skip / take)</param>
     /// <response code="200">List of notifications</response>
+    /// <response code="400">Paging outside the allowed range</response>
     /// <response code="401">Authentication required</response>
     [HttpGet(Name = nameof(GetNotifications))]
     [ProducesResponseType(typeof(ListEnvelope<Notification>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetNotifications(
-        [FromQuery] int skip = 0,
-        [FromQuery] int take = 20)
-    {
-        take = Math.Clamp(take, 1, 100);
-        return Ok(new ListEnvelope<Notification>(await _notificationApiService.GetNotifications(skip, take)));
-    }
+    public async Task<IActionResult> GetNotifications([FromQuery] PagingQuery query) =>
+        Ok(await _notificationApiService.GetNotifications(query));
 
     /// <summary>
     /// Get unread notifications count

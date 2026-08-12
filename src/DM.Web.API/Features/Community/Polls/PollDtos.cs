@@ -173,10 +173,10 @@ public class UpdatePollRequest
 public class PollsQuery : PagingQuery
 {
     /// <summary>
-    /// Filter by status: "pending", "active", "closed", or omit for all
+    /// Filter by status, or omit for all
     /// </summary>
     /// <example>active</example>
-    public string? Status { get; set; }
+    public PollStatus? Status { get; set; }
 
     /// <summary>
     /// Search polls by title and details (case-insensitive substring match)

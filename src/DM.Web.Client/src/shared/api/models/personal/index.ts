@@ -5,9 +5,6 @@
 // Re-export blacklist types
 export * from "./blacklist";
 
-// Re-export UserSettings from community (for backwards compatibility)
-export { type UserSettings } from "../community/user-settings";
-
 /**
  * Theme preference
  */
@@ -34,6 +31,16 @@ export type Paging = {
 export type Preferences = {
   theme: Theme;
   paging: Paging;
+};
+
+/**
+ * The settings blob carried on the user DTO: the preferences above plus the
+ * fields only the owner of the account sees.
+ */
+export type UserSettings = {
+  mentorGreetingsMessage: string;
+  theme: Theme;
+  paging: Paging | null;
 };
 
 /**

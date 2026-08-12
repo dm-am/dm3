@@ -31,8 +31,16 @@ public class UnreadCounter : IRemovable
     public Guid EntityId { get; set; }
 
     /// <summary>
-    /// Aggregation entity identifier
+    /// What a parent-scoped read of this marker aggregates under — a container
+    /// for some entities and the reader themselves for others
     /// </summary>
+    /// <remarks>
+    /// "Aggregation entity identifier" named only the first half, and the second
+    /// is what the delicate code depends on. Which of the two a marker carries is
+    /// decided by the overload that created it, and the rule is written once, at
+    /// IUnreadCountersRepository, rather than restated here — see CODE_STYLE.md
+    /// on where the reason for a contract belongs.
+    /// </remarks>
     public Guid ParentId { get; set; }
 
     /// <summary>

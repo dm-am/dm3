@@ -87,6 +87,8 @@ vi.mock("../api/gameApi", () => ({
 
 import { useGamesStore } from "./store";
 import { useGameDetailsStore } from "./detailsStore";
+import { useAuthStore } from "@/shared/stores";
+import { DEFAULT_PAGE_SIZES } from "@/shared/lib/composables/usePaging";
 
 const createMockUserRef = (id: string, username: string): UserRef =>
   ({
@@ -623,7 +625,51 @@ describe("useGameDetailsStore", () => {
       const store = useGameDetailsStore();
       await store.loadPosts("room-1", 2);
 
-      expect(mockGetPosts).toHaveBeenCalledWith("room-1", { number: 2 });
+      expect(mockGetPosts).toHaveBeenCalledWith("room-1", {
+        number: 2,
+        take: DEFAULT_PAGE_SIZES.postsPerPage,
+      });
+    });
+
+    // The "posts per page" preference was saved and never read: the room asked
+    // for the same twenty whatever the reader had chosen.
+    it("asks for the page size the reader chose", async () => {
+      mockGetPosts.mockResolvedValue({
+        data: { resources: [], paging: { current: 1, pages: 1, total: 5 } },
+        error: null,
+      });
+      useAuthStore().user = {
+        settings: { paging: { postsPerPage: 50 } },
+      } as never;
+
+      const store = useGameDetailsStore();
+      await store.loadPosts("room-1");
+
+      expect(mockGetPosts).toHaveBeenCalledWith("room-1", {
+        number: 1,
+        take: 50,
+      });
+    });
+
+    // 200 is a legal preference and an illegal page: unclamped it reaches the
+    // API as take=200 and comes back 400, which the room draws as "Не удалось
+    // загрузить посты".
+    it("asks for no more than the API serves", async () => {
+      mockGetPosts.mockResolvedValue({
+        data: { resources: [], paging: { current: 1, pages: 1, total: 5 } },
+        error: null,
+      });
+      useAuthStore().user = {
+        settings: { paging: { postsPerPage: 200 } },
+      } as never;
+
+      const store = useGameDetailsStore();
+      await store.loadPosts("room-1");
+
+      expect(mockGetPosts).toHaveBeenCalledWith("room-1", {
+        number: 1,
+        take: 100,
+      });
     });
   });
 

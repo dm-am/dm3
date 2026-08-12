@@ -26,7 +26,7 @@ internal class BlogUserApiService : IBlogUserApiService
     #region Users
 
     /// <inheritdoc />
-    public async Task<IEnumerable<BlogUser>> GetUsers(Guid blogId, string? role = null)
+    public async Task<IEnumerable<BlogUser>> GetUsers(Guid blogId, BlogRole? role = null)
     {
         var users = new List<BlogUser>();
 
@@ -70,7 +70,7 @@ internal class BlogUserApiService : IBlogUserApiService
         }).ToList();
 
         // Apply role filter or return all
-        if (string.IsNullOrEmpty(role))
+        if (role == null)
         {
             users.Add(author);
             if (mentor != null) users.Add(mentor);
@@ -79,25 +79,22 @@ internal class BlogUserApiService : IBlogUserApiService
         }
         else
         {
-            switch (role.ToLowerInvariant())
+            // No default arm that answers with everybody: a value outside the
+            // vocabulary is refused by model binding before this runs, and a
+            // filter that silently widens to the whole roster is read as the
+            // filtered answer.
+            switch (role.Value)
             {
-                case "author":
+                case BlogRole.Author:
                     users.Add(author);
                     break;
-                case "mentor":
+                case BlogRole.Mentor:
                     if (mentor != null) users.Add(mentor);
                     break;
-                case "assistant":
+                case BlogRole.Assistant:
                     users.AddRange(assistantDtos);
                     break;
-                case "reader":
-                    users.AddRange(readerDtos);
-                    break;
-                default:
-                    // Unknown role - return all
-                    users.Add(author);
-                    if (mentor != null) users.Add(mentor);
-                    users.AddRange(assistantDtos);
+                case BlogRole.Reader:
                     users.AddRange(readerDtos);
                     break;
             }

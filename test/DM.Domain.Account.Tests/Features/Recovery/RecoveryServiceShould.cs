@@ -26,7 +26,7 @@ public class RecoveryServiceShould : UnitTestBase
     private readonly Mock<IRegistrationMailSender> _activationEmailSender;
     private readonly Mock<ITokenFactory> _tokenFactory;
     private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<ISecurityAuditService> _auditService;
+    private readonly Mock<ISecurityAuditRepository> _auditService;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
     private readonly RecoveryService _service;
 
@@ -39,7 +39,7 @@ public class RecoveryServiceShould : UnitTestBase
         _activationEmailSender = Mock<IRegistrationMailSender>();
         _tokenFactory = Mock<ITokenFactory>();
         _guidFactory = Mock<IGuidFactory>();
-        _auditService = Mock<ISecurityAuditService>();
+        _auditService = Mock<ISecurityAuditRepository>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
         var logger = Mock<ILogger<RecoveryService>>();
 

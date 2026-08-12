@@ -13,7 +13,9 @@ namespace DM.Web.API.Features.Moderation.UsernameChanges;
 /// </summary>
 /// <remarks>
 /// Allows senior moderators to review, approve, or reject username change requests from users.
-/// Approving a request will change the user's username and create a username history entry.
+/// Approving a request renames nobody: it issues a link, good for 48 hours, and mails it
+/// to the user. The rename and the username history entry happen when the user follows
+/// that link and picks a name.
 /// </remarks>
 [ApiController]
 [Route("v1/moderation/username-changes")]
@@ -77,24 +79,30 @@ public class UsernameChangeRequestController : ControllerBase
     /// Resolve (approve/reject) a username change request
     /// </summary>
     /// <remarks>
-    /// Approves or rejects a pending username change request.
-    /// If approved, the user's username will be immediately changed and a history entry created.
+    /// Approves or rejects a pending username change request. The status is Approved
+    /// or Rejected and nothing else: Completed and Expired are reached by the flow
+    /// itself and are refused here.
+    /// Approval issues a link, good for 48 hours, and mails it to the user. The rename
+    /// and the username history entry happen when the user follows that link and picks
+    /// a name, not on this call.
     /// If rejected, the request is closed with the moderator's comment.
     /// Only accessible to senior moderators.
     /// </remarks>
     /// <param name="id">Request ID</param>
     /// <param name="resolve">Resolution details (status and optional comment)</param>
     /// <response code="200">Request resolved successfully</response>
-    /// <response code="400">Invalid request (e.g., already resolved, invalid status)</response>
+    /// <response code="400">Status is neither Approved nor Rejected</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">Senior moderator role required</response>
     /// <response code="404">Request not found</response>
+    /// <response code="409">Request has already been resolved</response>
     [HttpPatch("{id:guid}", Name = nameof(ResolveUsernameChangeRequest))]
     [ProducesResponseType(typeof(Envelope<UsernameChangeRequest>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> ResolveUsernameChangeRequest(Guid id, [FromBody] ResolveUsernameChangeRequest resolve)
     {
         var request = await _usernameChangeApiService.ResolveAsync(id, resolve);

@@ -30,30 +30,15 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class RateLimitPipelineShould
 {
-    /// <summary>
-    /// Walks up from the test binary to the repository root. Neither the sources
-    /// nor the documents are copied to the output directory, and copying them
-    /// would let this assert against a stale snapshot.
-    /// </summary>
-    private static DirectoryInfo RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null && !Directory.Exists(Path.Combine(directory.FullName, "docs")))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!;
-        }
-    }
+    private static DirectoryInfo RepositoryRoot => DM.Testing.RepositoryLayout.RootDirectory;
 
     [Fact]
     public void NameTheAccountBeforeTheLimiterCountsAgainstIt()
     {
-        var startup = File.ReadAllText(
+        // Read as code and not as text: two slashes in front of the pipeline move
+        // none of the three calls below, so a commented-out Startup satisfied
+        // every comparison in this method.
+        var startup = SourceText.ReadCode(
             Path.Combine(RepositoryRoot.FullName, "src", "DM.Web.API", "Startup.cs"));
 
         var account = startup.IndexOf(

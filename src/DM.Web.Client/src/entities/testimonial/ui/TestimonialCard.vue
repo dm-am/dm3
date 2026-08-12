@@ -9,12 +9,13 @@ import {
 } from "vue";
 import type { WebsiteTestimonial } from "@/shared/api/models/community";
 import type { UserRef } from "@/shared/api/models/common";
+import { UserLink } from "@/entities/user/@x/testimonial";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import SvgIcon from "@/shared/ui/Icon/SvgIcon.vue";
 import {
   registerExpandable,
   notifyExpandableChanged,
-} from "@/shared/lib/composables";
+} from "@/shared/lib/composables/useExpandableRegistry";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
 import { formatDate, formatDateFull } from "@/shared/lib/utils/datetime";
 

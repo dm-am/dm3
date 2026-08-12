@@ -59,14 +59,12 @@ internal class BlogCommentService : IBlogCommentService
         await _createValidator.ValidateAndThrowAsync(createComment);
 
         var blog = await _blogService.GetBlogAsync(createComment.EntityId);
+        // The blacklist closes writing: reading this blog is open to the user it
+        // blacklisted, commenting in it is not. The rule is part of the intention
+        // and is asked here, once.
         _intentionManager.ThrowIfForbidden(BlogIntention.CreateComment, blog);
 
-        // Check blacklist
         var currentUser = _identityProvider.Current.User;
-        if (blog.BlacklistedUserIds.Contains(currentUser.UserId))
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromBlog);
-        }
 
         // Strip [mod] authored by a non-moderator (it renders as a green mod
         // block on the Comment surface); Moderator+ may author it.

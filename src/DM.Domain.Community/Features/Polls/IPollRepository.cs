@@ -70,7 +70,8 @@ public interface IPollRepository
     /// <param name="optionId">Option identifier</param>
     /// <param name="userId">User identifier</param>
     /// <returns>Updated poll with vote</returns>
-    Task<Poll> Vote(Guid pollId, Guid optionId, Guid userId);
+    /// <remarks>Null when this user has already voted in the poll: one vote per person is held by the record itself.</remarks>
+    Task<Poll?> Vote(Guid pollId, Guid optionId, Guid userId);
 
     /// <summary>
     /// Remove vote from the poll

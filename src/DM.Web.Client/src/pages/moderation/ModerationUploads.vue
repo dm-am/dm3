@@ -113,6 +113,7 @@ async function confirmDelete() {
       <form class="filters" @submit.prevent="applyFilter">
         <FormField label="Пользователь" name="uploads-username">
           <input
+            id="uploads-username"
             v-model="usernameInput"
             type="text"
             placeholder="Имя пользователя"

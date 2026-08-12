@@ -96,10 +96,29 @@ internal class AttributeSchemaRepository :
         var result = _mapper.Map<AttributeSchema>(schema);
         if (schema.UserId.HasValue)
         {
-            result.Author = (await GetSchemataAuthors(new[] { schema.UserId.Value })).First();
+            result.Author = (await GetSchemataAuthors(new[] { schema.UserId.Value })).FirstOrDefault();
         }
 
         return result;
+    }
+
+    // Read through the game's own reference, and deliberately not through
+    // GetSchema above: the removal flag hides a schema from the lists a user
+    // picks one from, while a game already built on it keeps resolving it - see
+    // the comment on Delete. The author is not read here either, because the
+    // character screens this feeds never show it.
+    public async Task<AttributeSchema> GetGameSchema(Guid gameId)
+    {
+        var schemaId = await _dbContext.Games
+            .Where(g => g.GameId == gameId)
+            .Select(g => g.AttributeSchemaId)
+            .FirstAsync();
+
+        var schema = await Collection
+            .Find(Filter.Eq(s => s.Id, schemaId!.Value))
+            .FirstAsync();
+
+        return _mapper.Map<AttributeSchema>(schema);
     }
 
     // --- WRITE ---
@@ -142,7 +161,7 @@ internal class AttributeSchemaRepository :
         return result;
     }
 
-    public new async Task<AttributeSchema> Update(UpdateAttributeSchema updateSchema)
+    public async Task<AttributeSchema> Update(UpdateAttributeSchema updateSchema)
     {
         var existingSchema = await Collection
             .Find(Filter.Eq(s => s.Id, updateSchema.SchemaId))

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Uploads;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.Repositories.General;
@@ -54,12 +55,13 @@ internal class UploadGarbageCollector : IUploadGarbageCollector
 
         foreach (var obsolete in uploads.Skip(1))
         {
-            obsolete.IsRemoved = true;
-            // Starts the sweeper's grace period, so the value comes from the same
-            // clock the sweeper compares it against. The object itself stays in
-            // the bucket until that period is over: destroying it here would
-            // leave a row that still says it is restorable pointing at nothing.
-            obsolete.DeletedUtc = _dateTimeProvider.Now;
+            // No author: a sweep is not somebody pressing delete, which is the case the
+            // nullable author of Mark exists for. The moment starts the sweeper's grace
+            // period, so the value comes from the same clock the sweeper compares it
+            // against. The object itself stays in the bucket until that period is over:
+            // destroying it here would leave a row that still says it is restorable
+            // pointing at nothing.
+            SoftDelete.Mark(obsolete, null, _dateTimeProvider.Now);
         }
 
         await _db.SaveChangesAsync();

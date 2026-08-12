@@ -34,7 +34,7 @@ import { storeToRefs } from "pinia";
 import type { GeneralError } from "@/shared/api/models/common";
 import { useGlobalChatStore } from "@/entities/global-chat";
 import { useAuthStore } from "@/shared/stores";
-import { useToast } from "@/shared/lib/composables";
+import { useToast } from "@/shared/lib/composables/useToast";
 import { notifyFailure } from "@/shared/lib/errors";
 
 const props = defineProps<{

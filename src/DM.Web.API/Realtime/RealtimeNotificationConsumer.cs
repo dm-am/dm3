@@ -14,9 +14,12 @@ namespace DM.Web.API.Realtime;
 
 internal class RealtimeNotificationConsumer : BackgroundService
 {
+    /// <summary>Queue this host reads, as both the topology and the metrics name it.</summary>
+    internal const string QueueName = "dm.notifications.api";
+
     private readonly ILogger<RealtimeNotificationConsumer> _logger;
     private readonly IConsumerBuilder _consumerBuilder;
-    private readonly RetryPolicy _consumeRetryPolicy;
+    private readonly AsyncRetryPolicy _consumeRetryPolicy;
 
     public RealtimeNotificationConsumer(
         ILogger<RealtimeNotificationConsumer> logger,
@@ -24,7 +27,7 @@ internal class RealtimeNotificationConsumer : BackgroundService
     {
         _logger = logger;
         _consumerBuilder = consumerBuilder;
-        _consumeRetryPolicy = Policy.Handle<Exception>().WaitAndRetry(5,
+        _consumeRetryPolicy = Policy.Handle<Exception>().WaitAndRetryAsync(5,
             attempt => TimeSpan.FromSeconds(1 << attempt),
             (exception, _) => _logger.LogWarning(exception, "Could not subscribe to the queue"));
     }
@@ -37,7 +40,7 @@ internal class RealtimeNotificationConsumer : BackgroundService
         // part of host startup, so a RabbitMQ outage would abort the whole host.
         await Task.Yield();
 
-        var parameters = new RabbitConsumerParameters("dm.api", "dm.notifications.api", ProcessingOrder.Sequential)
+        var parameters = new RabbitConsumerParameters("dm.api", QueueName, ProcessingOrder.Sequential)
         {
             ExchangeName = RealtimeNotificationsTransport.ExchangeName,
             RoutingKeys = new[] { "#" },
@@ -53,16 +56,43 @@ internal class RealtimeNotificationConsumer : BackgroundService
         try
         {
             var consumer = _consumerBuilder.BuildRabbit<RealtimeNotification, RealtimeNotificationProcessor>(parameters);
-            _consumeRetryPolicy.Execute(consumer.Subscribe);
+
+            // Retried under the token the host stops with, the way both workers do
+            // it. The waits double from one second over five attempts, 62 seconds
+            // end to end: the synchronous overload spent them in Thread.Sleep on a
+            // pool thread and was handed no token at all, so a stop arriving inside
+            // a broker outage waited every remaining attempt out with nothing able
+            // to interrupt it.
+            await _consumeRetryPolicy.ExecuteAsync(_ =>
+            {
+                consumer.Subscribe();
+                return Task.CompletedTask;
+            }, stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // The host is stopping between attempts, which is not a failure worth
+            // reporting: the message below would name a broker outage that is not
+            // happening.
+            return;
         }
         catch (Exception exception)
         {
-            // Realtime push is an enhancement: the client falls back to REST
-            // polling. Letting this escape would stop the host
+            // Realtime push is an enhancement, and the site keeps serving without
+            // it. Letting this escape would stop the host
             // (BackgroundServiceExceptionBehavior.StopHost is the default), so a
             // broker outage would take the entire API down with it — and, under
             // a container restart policy, into a crash loop. Push stays dead
-            // until the next restart; the site keeps serving.
+            // until the next restart.
+            //
+            // What the client does without it, exactly: the global chat is the one
+            // surface with a polling fallback of its own. The two badges have
+            // none — they are re-read when the application mounts and on every
+            // transition of the socket into the connected state (App.vue), so
+            // with the consumer dead they freeze for the length of the SPA
+            // session rather than forever. Nothing else falls back to REST at
+            // all; saying "the client falls back to REST polling" described one
+            // page as if it were the whole site.
             _logger.LogError(exception,
                 "[💥] Realtime notifications consumer failed to subscribe to {QueueName}; " +
                 "realtime push is unavailable until the API restarts",

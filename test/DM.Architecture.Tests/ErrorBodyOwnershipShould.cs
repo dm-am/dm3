@@ -27,32 +27,20 @@ public class ErrorBodyOwnershipShould
     /// <summary>
     /// A failure result that carries a body of its own. StatusCode(4xx/5xx, …)
     /// is listed with any argument at all: the overload that takes a value is
-    /// the only reason to reach for it, and there is no body it may supply.
+    /// the only reason to reach for it, and there is no body it may supply. A
+    /// result object over an anonymous type is listed for the same reason and
+    /// was the wider hole: the two authorization filters answered every 401 and
+    /// every 403 of this host with one, so those two refusals — the only ones no
+    /// controller can avoid — went out with no traceId and an English title. A
+    /// typed body is a success payload and stays legal.
     /// </summary>
     private static readonly Regex HandBuiltErrorBody = new(
         @"\b(?:BadRequest|NotFound|Conflict|Unauthorized|UnprocessableEntity|Problem|ValidationProblem)\s*\(\s*new\b" +
-        @"|\bStatusCode\s*\(\s*(?:[45]\d\d|StatusCodes\.Status[45]\d\d\w*)\s*,",
+        @"|\bStatusCode\s*\(\s*(?:[45]\d\d|StatusCodes\.Status[45]\d\d\w*)\s*," +
+        @"|\bnew\s+(?:ObjectResult|JsonResult)\s*\(\s*new\s*(?:\{|$)",
         RegexOptions.Compiled);
 
-    /// <summary>
-    /// Walks up from the test binary to the repository root. The sources are not
-    /// copied to the output directory, and copying them would let this assert
-    /// against a stale snapshot.
-    /// </summary>
-    private static DirectoryInfo RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null && !Directory.Exists(Path.Combine(directory.FullName, "docs")))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!;
-        }
-    }
+    private static DirectoryInfo RepositoryRoot => DM.Testing.RepositoryLayout.RootDirectory;
 
     [Fact]
     public void BeAssembledOnlyByTheMiddleware()

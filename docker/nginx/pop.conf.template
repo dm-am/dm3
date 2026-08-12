@@ -1,0 +1,176 @@
+# Край точки присутствия.
+#
+# Отдельный файл, а не общий nginx.conf, потому что задача у него другая. Общий
+# край стоит рядом с приложением и раздает его соседям по сети docker. Дверь
+# стоит в другой сети, приложения у себя не держит и обязана дотянуться до него
+# по внешнему адресу. Разница не в двух строках, а в том, что здесь есть
+# внешний upstream и кэш, а там их нет и быть не должно.
+#
+# Подставляется envsubst из образа nginx при старте контейнера. Заменяются
+# только переменные с приставкой POP_ (NGINX_ENVSUBST_FILTER), поэтому
+# собственные переменные nginx вида $host и $scheme доживают до конфига целыми.
+#
+# Что должно приехать снаружи:
+#   POP_UPSTREAM      — origin основного сервера, например https://dm.am
+#   POP_UPSTREAM_HOST — имя, которое точка присутствия ставит в Host и SNI, например dm.am
+#
+# TLS обязателен, и это не пожелание. Основной сайт отдает
+# Strict-Transport-Security с includeSubDomains, то есть браузер каждого, кто
+# хоть раз открывал сайт по https, сам перепишет ее http-адрес в https. Точка присутствия
+# без сертификата не откроется ни у одного постоянного посетителя — то есть ни у
+# кого из тех, ради кого она существует. Вторая причина той же силы: сессионная
+# кука помечена Secure, и по http браузер ее не отдаст и не даст перезаписать.
+
+proxy_cache_path /var/cache/nginx/media levels=1:2 keys_zone=pop_media:16m
+                 max_size=2g inactive=30d use_temp_path=off;
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 80;
+    server_name _;
+
+    # Здоровье самой точки присутствия, и только ее. Зеленый ответ тут означает, что край
+    # жив, и ничего не говорит о том, отвечает ли приложение за границей.
+    # Остается на http, потому что его спрашивает docker изнутри контейнера.
+    location = /pop-health {
+        access_log off;
+        # default_type, а не add_header: для return с телом nginx уже выставляет
+        # Content-Type из default_type, а add_header не заменяет его, а
+        # добавляет второй, и проба отвечала сразу с двумя.
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name _;
+
+    ssl_certificate     /etc/nginx/ssl/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:pop_ssl:10m;
+    ssl_session_timeout 1d;
+
+    # Тот же предел, что на основном крае. Расхождение означает, что точка присутствия
+    # пропускает файл, который основной сервер отдаст обратно с 413 в виде
+    # html-страницы вместо ошибки API.
+    client_max_body_size 10m;
+
+    # Дверь — второй публичный край сайта, и заголовки политики на нем свои.
+    # Общий nginx.conf сюда не смонтирован, а конфиг SPA рассчитывает, что их
+    # ставит край: без этих строк второй адрес отдает документ без единой
+    # политики, тогда как первый отдает все.
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+
+    # Эти же четыре приходят сверху: их ставит приложение, а на пути к нему еще
+    # и край основного сервера. Директива add_header не заменяет пришедший
+    # заголовок, а добавляет второй, и ответ уезжает с двумя значениями одной
+    # политики. Пока значения совпадают, браузер приходит к тому же решению, но
+    # как только их разведут в одном из слоев, исход будет решать разбор
+    # конкретного заголовка, а не автор правки. Снимается ровно то, что тут же и
+    # ставится: X-XSS-Protection точка присутствия не выставляет, и пришедшая
+    # сверху копия остается единственной. Content-Security-Policy тут не ставит
+    # никто, и он проходит насквозь по той же причине.
+    proxy_hide_header X-Content-Type-Options;
+    proxy_hide_header X-Frame-Options;
+    proxy_hide_header Referrer-Policy;
+    proxy_hide_header Permissions-Policy;
+
+    # Фронтенд с локального диска. Контейнер SPA поднят рядом, на этой же
+    # машине, и это половина смысла всей схемы.
+    location / {
+        proxy_pass http://dmfront:80;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Запросы к приложению уходят за границу. Host и SNI ставятся в имя
+    # основного сервера: сертификат выписан на него, и приложение узнает себя
+    # по этому имени.
+    #
+    # X-Forwarded-Proto несет схему, с которой пришел ПОСЕТИТЕЛЬ, а не схему
+    # похода точки присутствия наверх. По ней приложение решает, помечать ли сессионную
+    # куку как Secure, и подстановка своей схемы здесь выдает куку, которую
+    # браузер молча выбрасывает.
+    location /v1/ {
+        proxy_pass ${POP_UPSTREAM};
+        proxy_http_version 1.1;
+        proxy_ssl_server_name on;
+        proxy_ssl_name ${POP_UPSTREAM_HOST};
+        proxy_set_header Host ${POP_UPSTREAM_HOST};
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_read_timeout 60s;
+    }
+
+    # Живые обновления. Те же заголовки плюс апгрейд соединения, иначе
+    # вебсокет не поднимется и клиент уйдет на длинные опросы.
+    location /whatsup {
+        proxy_pass ${POP_UPSTREAM};
+        proxy_http_version 1.1;
+        proxy_ssl_server_name on;
+        proxy_ssl_name ${POP_UPSTREAM_HOST};
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host ${POP_UPSTREAM_HOST};
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    # Загрузки и картинки: то же проксирование плюс кэш. Содержимое публичное и
+    # неизменяемое по адресу, поэтому лежит долго.
+    #
+    # Кука наверх не идет: ключ кэша ее не учитывает, и пока запрос анонимен,
+    # свойство "ответ одинаков для всех" принадлежит этому конфигу, а не
+    # апстриму. Заголовки политики повторены, потому что add_header в location
+    # отменяет наследование от сервера целиком. proxy_hide_header наследуется
+    # отдельно и по тому же правилу: своего у этой локации нет, значит действуют
+    # серверные, и пришедшие сверху копии снимаются до того, как добавятся эти
+    # четыре.
+    location ~ ^/(dm-uploads|img)/ {
+        proxy_pass ${POP_UPSTREAM};
+        proxy_http_version 1.1;
+        proxy_ssl_server_name on;
+        proxy_ssl_name ${POP_UPSTREAM_HOST};
+        proxy_set_header Host ${POP_UPSTREAM_HOST};
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Cookie "";
+
+        proxy_cache pop_media;
+        proxy_cache_valid 200 206 30d;
+        proxy_cache_valid 404 1m;
+        proxy_cache_revalidate on;
+        proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+        proxy_cache_background_update on;
+        proxy_cache_lock on;
+
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+        add_header X-Cache-Status $upstream_cache_status always;
+    }
+}

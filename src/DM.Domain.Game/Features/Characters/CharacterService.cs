@@ -154,6 +154,11 @@ internal class CharacterService : ICharacterService
     {
         await _updateValidator.ValidateAndThrowAsync(updateCharacter);
         var characterToUpdate = await _repository.GetForUpdate(updateCharacter.CharacterId);
+        if (characterToUpdate == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CharacterNotFound);
+        }
+
         _intentionManager.ThrowIfForbidden(CharacterIntention.Edit, characterToUpdate);
 
         // A field the caller may not set is refused, not dropped. Asking IsAllowed
@@ -180,11 +185,12 @@ internal class CharacterService : ICharacterService
 
         var attributeInputs = await BuildAttributeInputs(characterToUpdate, updateCharacter.Attributes);
 
-        // Никакого статуса: место персонажа в игре меняет ChangeStatusAsync.
-        // Здесь оно менялось по паре "целевой статус плюс три флага", из которой
-        // намерение приходилось угадывать, а при неугаданном сочетании запрос
-        // отвечал 500. И право проверялось через IsAllowed: запрещенное изменение
-        // молча выпадало, а ответ был 200 со старым статусом.
+        // No status here: a character's place in the game is moved by
+        // ChangeStatusAsync. This method used to move it through a target status plus
+        // three flags, a pair the intent had to be guessed from, and a combination
+        // that guessed wrong answered 500. The right was checked through IsAllowed as
+        // well: a forbidden change fell through silently and the answer was 200 with
+        // the old status.
         var entity = new UpdateCharacterEntity
         {
             CharacterId = updateCharacter.CharacterId,
@@ -205,15 +211,12 @@ internal class CharacterService : ICharacterService
     public async Task<Character> ChangeStatusAsync(
         Guid characterId, CharacterStatusTransition transition)
     {
-        // Существование проверяется отдельно: GetForUpdate материализуется через
-        // FirstAsync и на незнакомом идентификаторе отвечает 500, а эндпоинт
-        // объявляет 404.
-        if (await _repository.FindCharacter(characterId) == null)
+        var character = await _repository.GetForUpdate(characterId);
+        if (character == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CharacterNotFound);
         }
 
-        var character = await _repository.GetForUpdate(characterId);
         var entity = new UpdateCharacterEntity { CharacterId = characterId };
         EventType statusEvent;
 
@@ -276,8 +279,8 @@ internal class CharacterService : ICharacterService
                 throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.UnknownStatusTransition);
         }
 
-        // Возврат в игру снимает все три причины ухода: иначе воскрешенный
-        // персонаж остается помеченным мертвым и второе воскрешение невозможно.
+        // Coming back to the game clears all three reasons for leaving: otherwise a
+        // revived character stays marked dead and a second revival is impossible.
         if (entity.Status == CharacterStatus.Active && character.Status == CharacterStatus.Retired)
         {
             entity.IsDead = false;
@@ -289,8 +292,8 @@ internal class CharacterService : ICharacterService
         await _producer.SendAsync(
             new List<EventType> { EventType.ChangedCharacter, statusEvent }, characterId);
 
-        // Игрок, потерявший последнего активного персонажа, остается у игры
-        // читателем, а не выпадает из нее совсем.
+        // A player who has lost their last active character stays with the game as a
+        // reader rather than dropping out of it entirely.
         if (entity.Status != CharacterStatus.Active &&
             character.Status == CharacterStatus.Active &&
             !character.IsNpc)
@@ -317,7 +320,7 @@ internal class CharacterService : ICharacterService
         if (!allowed.Contains(character.Status))
         {
             throw new HttpException(HttpStatusCode.BadRequest,
-                $"Переход \"{transition}\" недоступен из статуса \"{character.Status}\"");
+                RefusalMessage.IllegalStatusTransition(transition, character.Status));
         }
     }
 
@@ -391,6 +394,11 @@ internal class CharacterService : ICharacterService
     public async Task DeleteAsync(Guid characterId)
     {
         var character = await _repository.GetForUpdate(characterId);
+        if (character == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CharacterNotFound);
+        }
+
         _intentionManager.ThrowIfForbidden(CharacterIntention.Delete, character);
 
         await _repository.Delete(characterId, _identityProvider.Current.User.UserId);

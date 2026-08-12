@@ -54,17 +54,7 @@ public class PagingInfo
     public int Current => Take > 0 ? (Skip / Take) + 1 : 1;
 
     /// <summary>
-    /// Page size (alias for Take)
-    /// </summary>
-    public int Size => Take;
-
-    /// <summary>
     /// Total number of pages
     /// </summary>
     public int Pages => Take > 0 ? (int)Math.Ceiling((double)Total / Take) : 1;
-
-    /// <summary>
-    /// Current page number (alias for Current, for compatibility)
-    /// </summary>
-    public int Number => Current;
 }

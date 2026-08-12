@@ -21,13 +21,6 @@ export { X_DM_ACCOUNT_TOKEN, X_DM_TICKET_TOKEN } from "./tokenHeaders";
 // Envelope unwrap helper (single-resource responses)
 export { unwrapResource } from "./envelope";
 
-// Mirror list — deployment topology, not a domain concept
-export {
-  default as mirrorApi,
-  type Mirror,
-  type MirrorList,
-} from "./mirrorApi";
-
 // Uploading a binary with progress and an idempotency key is transport, and the
 // two consumers belong to different domains — so this one client stays here
 // while every domain client lives in its entity slice

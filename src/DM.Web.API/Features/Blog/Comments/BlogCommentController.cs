@@ -27,7 +27,7 @@ namespace DM.Web.API.Features.Blog.Comments;
 /// - Mark all blog comments as read
 ///
 /// ## Access Control
-/// - Viewing: Depends on blog ViewPolicy
+/// - Viewing: Whoever may see the blog — its draft visibility, its status and premoderation decide
 /// - Creating: Authenticated users (if blog has CommentsEnabled)
 /// - Editing: Author or moderators
 /// - Deleting: Author or moderators
@@ -61,13 +61,13 @@ public class BlogCommentController : ControllerBase
     /// </summary>
     /// <remarks>
     /// Returns paginated list of comments on the blog itself (Blog discussion).
-    /// Supports filtering by authors, text search, date range and sorting.
+    /// Supports filtering by author usernames, text search, date range and sorting.
     ///
     /// ## Query Parameters
     /// - **skip**: Number of items to skip (pagination)
     /// - **take**: Number of items to return (max 100, default 20)
     /// - **search**: Text search in comment content (case-insensitive)
-    /// - **authors**: Filter by author usernames, repeated per author (`authors=alice&amp;authors=bob`), OR logic
+    /// - **authorUsernames**: Filter by author usernames, repeated per author (`authorUsernames=alice&amp;authorUsernames=bob`), OR logic
     /// - **createdFromUtc**: Filter by creation date start (ISO 8601)
     /// - **createdToUtc**: Filter by creation date end (ISO 8601)
     /// - **sortBy**: Sort field - "created" (default) or "likes"

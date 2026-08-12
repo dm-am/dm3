@@ -25,14 +25,13 @@ internal class SessionFactory : ISessionFactory
     }
 
     /// <inheritdoc />
-    public CreateSession Create(bool persistent, bool invisible, SessionContext? context = null)
+    public CreateSession Create(bool persistent, SessionContext? context = null)
     {
         var rightNow = _dateTimeProvider.Now.UtcDateTime;
         return new CreateSession
         {
             Id = _guidFactory.Create(),
             Persistent = persistent,
-            Invisible = invisible,
             ExpirationUtc = persistent
                 ? rightNow.AddDays(_config.PersistentSessionExpirationDays)
                 : rightNow.AddHours(_config.SessionExpirationHours),

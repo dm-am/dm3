@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 
 namespace DM.Domain.Account.Features.UsernameChange;
@@ -10,7 +11,13 @@ public interface IUsernameChangeMailSender
     /// <summary>
     /// Send notification about request approval
     /// </summary>
-    Task SendApprovalAsync(string email, string username, string approvalLink);
+    /// <remarks>
+    /// Takes the token rather than a finished link: the address of the site is
+    /// deployment configuration, and a caller that builds the link itself has
+    /// to know it. Every other sender in this module builds its own link the
+    /// same way, from SiteAddressConfiguration.
+    /// </remarks>
+    Task SendApprovalAsync(string email, string username, Guid approvalToken);
 
     /// <summary>
     /// Send notification about request rejection

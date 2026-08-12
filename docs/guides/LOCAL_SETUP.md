@@ -36,7 +36,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 - **Frontend:** http://localhost:5173
 - **API/Swagger:** http://localhost:5000
 - **Health:** http://localhost:5000/_health (liveness), http://localhost:5000/_ready (readiness)
-- **MinIO:** http://localhost:9001 (credentials из `docker/.env`) — bucket `dm-uploads` создается автоматически при первом старте API
+- **MinIO:** http://localhost:9001 (credentials из `docker/.env`) — bucket `dm-uploads` создает контейнер minio-init при подъеме стека, он же выставляет анонимный доступ на публичные префиксы
 - **imgproxy:** http://localhost:8080 (on-the-fly resize + AVIF/WebP negotiation)
 
 ---
@@ -204,7 +204,7 @@ dotnet ef migrations add InitialCreate -p src/DM.Infrastructure.Persistence -s s
 |------|------------|
 | [`docker/.env`](../../docker/.env.example) | Секреты Docker (пароли БД, MinIO, RabbitMQ) |
 | [`src/DM.Web.API/appsettings.json`](../../src/DM.Web.API/appsettings.json) | Главный конфиг API (сессии, пароли, токены, CDN) |
-| [`src/DM.Web.Client/.env.local`](../../src/DM.Web.Client/) | Frontend (API URL) |
+| [`src/DM.Web.Client/.env.local`](../../src/DM.Web.Client/) | Адрес API для запуска из исходников: dev-сервер и API отвечают на разных портах. В развернутом виде значение пусто, сайт и API живут на одном origin |
 
 ### Workers (наследуют от API через docker-compose)
 
@@ -222,7 +222,6 @@ dotnet ef migrations add InitialCreate -p src/DM.Infrastructure.Persistence -s s
 | `TokenConfiguration` | Срок жизни токенов (активация, сброс пароля) | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
 | `CdnConfiguration` | MinIO/S3 для source-файлов | [UPLOADS.md](../architecture/UPLOADS.md) |
 | `ImageProxyConfiguration` | imgproxy endpoint + HMAC key/salt для signed transform URL's | [UPLOADS.md](../architecture/UPLOADS.md) |
-| `MirrorConfiguration` | Зеркала (dm.am, ru.l.dm.am) | [MIRRORING.md](./MIRRORING.md) |
 
 ### Frontend
 
@@ -250,10 +249,10 @@ IMGPROXY_SALT=...  # 64 hex chars (32 bytes), HMAC-SHA256 salt
 |----------|---------|
 | Порт занят | `taskkill //F //IM node.exe` (Windows) |
 | Frontend не видит API | Проверить `.env.local`: `VITE_API_HOST=http://localhost:5000` |
-| Изображения не загружаются | API создает bucket автоматически на старте. Проверь `docker logs dm-api 2>&1 \| grep -i bucket` |
+| Изображения не загружаются | Bucket и его политики создает контейнер `minio-init` до старта API. Проверь `docker logs dm-minio-init` |
 | Thumbnails не отдаются (404 на imgproxy) | `docker ps \| grep imgproxy`. Проверить `IMGPROXY_KEY`/`IMGPROXY_SALT` в `docker/.env` (64 hex chars each) |
 | Seed: "API not available" | Запусти API: `dotnet run --project src/DM.Web.API --environment Development` |
-| Seed: "PostgreSQL not available" | Запусти: `docker compose up -d dm-pg` |
+| Seed: "PostgreSQL not available" | Запусти: `docker compose up -d postgres` |
 | Пользователи не в "Активных" | Seed обновляет `LastActivityUtc`, перезапусти seed |
 
 ---

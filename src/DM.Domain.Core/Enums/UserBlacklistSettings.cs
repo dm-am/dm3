@@ -34,7 +34,8 @@ public enum UserBlacklistSettings
     HideBlogs = 1 << 3,
 
     /// <summary>
-    /// Block direct messages from blocked users
+    /// Block private correspondence from blocked users: a direct chat, a group
+    /// chat of two, and being added to a group chat by them at all
     /// </summary>
     BlockDirectMessages = 1 << 4,
 

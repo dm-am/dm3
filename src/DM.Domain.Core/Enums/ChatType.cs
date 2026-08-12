@@ -16,7 +16,7 @@ public enum ChatType
     Group = 1,
 
     /// <summary>
-    /// Global chat (accessible to all authenticated users)
+    /// Global chat (public: reading is open to guests, posting requires authentication)
     /// </summary>
     Global = 2,
 

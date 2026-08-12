@@ -18,15 +18,15 @@ internal class EmailChangeConfirmationRepository : IEmailChangeConfirmationRepos
     }
 
     /// <inheritdoc />
-    public async Task<Guid?> FindEmailChangeToken(Guid tokenId, DateTimeOffset createdSince)
+    public async Task<Guid?> FindEmailChangeTokenOwner(Guid tokenId, DateTimeOffset createdSince)
     {
         return (await _dbContext.Tokens
             .Where(t => t.TokenId == tokenId &&
                         t.Type == TokenType.EmailChange &&
                         !t.IsRemoved &&
                         t.CreatedUtc > createdSince)
-            .Select(t => new { t.TokenId })
-            .FirstOrDefaultAsync())?.TokenId;
+            .Select(t => new { t.UserId })
+            .FirstOrDefaultAsync())?.UserId;
     }
 
     /// <inheritdoc />

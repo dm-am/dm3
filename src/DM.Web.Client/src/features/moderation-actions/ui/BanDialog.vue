@@ -150,6 +150,7 @@ function commentErrors(): string[] {
     >
       <FormField label="Тип бана" name="ban-policy">
         <Select
+          id="ban-policy"
           :model-value="policy"
           :options="policyOptions"
           @update:model-value="(v) => (policy = v as BanAccessPolicy)"
@@ -158,6 +159,7 @@ function commentErrors(): string[] {
 
       <FormField label="Срок" name="ban-duration">
         <Select
+          id="ban-duration"
           :model-value="duration"
           :options="durationOptions"
           @update:model-value="(v) => (duration = v)"

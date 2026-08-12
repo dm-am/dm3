@@ -86,6 +86,15 @@ set_if_empty() {
 
 set_if_empty DM_CryptoConfiguration__KeyBase64 "$(openssl rand -base64 32)"
 
+# The imgproxy signing pair, on the same footing as the key above and for the
+# same reason: the template carries neither, and a stand running without one
+# lets anybody mint a transform of any object the renderer can reach. Kept when
+# already present - every URL is signed at render time, so a pair already in the
+# file is worth exactly as much as a new one. imgproxy wants hex of exactly 32
+# bytes for both.
+set_if_empty IMGPROXY_KEY "$(openssl rand -hex 32)"
+set_if_empty IMGPROXY_SALT "$(openssl rand -hex 32)"
+
 if [ "$MODE" = "server" ] && [ "$EXISTING" = 0 ]; then
     # The only moment these can be chosen: the Mongo application user is created
     # by the initdb hook and the MinIO accounts by minio-init, and both run once
@@ -100,13 +109,29 @@ if [ "$MODE" = "server" ] && [ "$EXISTING" = 0 ]; then
                   MINIO_APP_PASSWORD MINIO_IMGPROXY_PASSWORD; do
         set_value "$secret" "$(openssl rand -hex 24)"
     done
-    # imgproxy wants hex of exactly 32 bytes for both.
+fi
+
+# Outside the block above on purpose: this is not a credential. Rotating a
+# password on a running stand locks the API out of stores whose users hold the
+# old one, which is why that block only fires on a file this run created — but
+# the environment is read at startup and bound to nothing, so setting it is
+# always safe and Development on a server is never right. Left as the template
+# had it, a hand-copied .env mounts Swagger, relaxes the CSP to
+# script-src 'self' 'unsafe-inline' and drops Strict-Transport-Security, and the
+# script said so in a note on stderr and exited 0.
+if [ "$MODE" = "server" ]; then
+    set_value ASPNETCORE_ENVIRONMENT Production
+fi
+
+# Replaced rather than kept, and only on a server. Nothing is bound to this
+# pair: imgproxy verifies a signature the API recomputes on every render, so the
+# whole cost of changing it is the thumbnail URLs already sitting in a browser,
+# and an install restarts the stack anyway. What it buys is that a server never
+# keeps a pair inherited from an .env written before this file generated one -
+# which is the only way the value once published here could still be signing.
+if [ "$MODE" = "server" ]; then
     set_value IMGPROXY_KEY "$(openssl rand -hex 32)"
     set_value IMGPROXY_SALT "$(openssl rand -hex 32)"
-
-    # The template sets Development for local work, and a copied file must not
-    # be the thing that opens the dev-only seed and role endpoints on a server.
-    set_value ASPNETCORE_ENVIRONMENT Production
 fi
 
 if [ "$MODE" = "server" ] && [ -n "$IMAGE_TAG" ]; then
@@ -115,9 +140,33 @@ fi
 
 if [ "$EXISTING" = 1 ]; then
     echo "Completed $ENV_FILE (mode: $MODE); values already present were kept"
-    if [ "$MODE" = "server" ]; then
-        echo "Note: credentials and ASPNETCORE_ENVIRONMENT were left as the file had them" >&2
-    fi
 else
     echo "Created $ENV_FILE from .env.example (mode: $MODE)"
+fi
+
+# A server still holding the template's credentials holds the credentials of
+# every reader of the repository. The script cannot rotate them here — see the
+# block above — so it refuses instead of reporting success: a note on stderr and
+# exit 0 is indistinguishable from a clean run to the installer that calls this,
+# and the stand came up on published passwords.
+if [ "$MODE" = "server" ]; then
+    # Every value the template ships with a real one in it. The imgproxy pair is
+    # not on the list because the template no longer carries one: it is empty
+    # there, generated above, and replaced outright on a server.
+    SHARED=""
+    for secret in POSTGRES_PASSWORD RABBITMQ_DEFAULT_PASS MINIO_ROOT_PASSWORD \
+                  GF_SECURITY_ADMIN_PASSWORD MONGO_ROOT_PASSWORD MONGO_PASSWORD \
+                  MINIO_APP_PASSWORD MINIO_IMGPROXY_PASSWORD; do
+        example_value="$(sed -n "s|^${secret}=||p" "$EXAMPLE_FILE" | head -1)"
+        actual_value="$(sed -n "s|^${secret}=||p" "$ENV_FILE" | head -1)"
+        if [ -n "$example_value" ] && [ "$example_value" = "$actual_value" ]; then
+            SHARED="$SHARED $secret"
+        fi
+    done
+
+    if [ -n "$SHARED" ]; then
+        echo "Error: $ENV_FILE still holds the example values for:$SHARED" >&2
+        echo "These are published in the repository. Choose them, or delete $ENV_FILE and rerun." >&2
+        exit 1
+    fi
 fi

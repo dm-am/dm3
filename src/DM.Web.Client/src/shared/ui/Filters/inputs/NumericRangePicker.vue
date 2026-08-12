@@ -27,6 +27,13 @@ const emit = defineEmits<{
   clear: [];
 }>();
 
+// The ids the two captions point at. Random suffix, because nothing stops a
+// page from holding two range pickers and an id has to be unique on it. Same
+// shape as FormField generates.
+const uid = `numeric-range-${Math.random().toString(36).slice(2, 9)}`;
+const minId = `${uid}-min`;
+const maxId = `${uid}-max`;
+
 // Local state for inputs (strings to preserve empty/intermediate states)
 const minInput = ref(props.minValue?.toString() ?? "");
 const maxInput = ref(props.maxValue?.toString() ?? "");
@@ -140,7 +147,7 @@ function canDecrement(target: "min" | "max"): boolean {
 <template>
   <div class="numeric-range-picker">
     <div class="range-row">
-      <label class="range-label">{{ minLabel }}</label>
+      <label class="range-label" :for="minId">{{ minLabel }}</label>
       <div class="stepper">
         <button
           type="button"
@@ -152,6 +159,7 @@ function canDecrement(target: "min" | "max"): boolean {
           −
         </button>
         <input
+          :id="minId"
           v-model="minInput"
           type="text"
           inputmode="numeric"
@@ -170,7 +178,7 @@ function canDecrement(target: "min" | "max"): boolean {
           +
         </button>
       </div>
-      <label class="range-label">{{ maxLabel }}</label>
+      <label class="range-label" :for="maxId">{{ maxLabel }}</label>
       <div class="stepper">
         <button
           type="button"
@@ -182,6 +190,7 @@ function canDecrement(target: "min" | "max"): boolean {
           −
         </button>
         <input
+          :id="maxId"
           v-model="maxInput"
           type="text"
           inputmode="numeric"

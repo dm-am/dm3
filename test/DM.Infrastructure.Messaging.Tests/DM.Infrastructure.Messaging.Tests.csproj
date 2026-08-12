@@ -20,10 +20,12 @@
         <ProjectReference Include="..\..\src\DM.Infrastructure.Core\DM.Infrastructure.Core.csproj" />
         <ProjectReference Include="..\DM.Testing\DM.Testing.csproj" />
       <ProjectReference Include="..\..\src\DM.Infrastructure.Messaging\DM.Infrastructure.Messaging.csproj" />
-      <!-- The notification dispatcher has no dedicated test project: its queue binding,
-           derived from the generator types, and the failure containment of its processor
-           are what these tests hold in place. The dispatcher grants this assembly access
-           to its internals in return. -->
+      <!-- The dispatcher's routing and processor tests live here, next to the broker
+           they exercise: its queue binding, derived from the generator types, and the
+           failure containment of its processor are what these tests hold in place. Its
+           own test project is the other tier, the one that runs the generators against
+           a database. The dispatcher grants this assembly access to its internals in
+           return. -->
       <ProjectReference Include="..\..\src\DM.Workers.NotificationDispatcher\DM.Workers.NotificationDispatcher.csproj" />
     </ItemGroup>
 

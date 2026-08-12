@@ -13,6 +13,7 @@ using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Core.Identity;
+using DM.Domain.Core.Statuses;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.AttributeSchemas;
@@ -21,7 +22,6 @@ using DM.Domain.Game.Features.Invitations;
 using DM.Domain.Game.Features.Rooms;
 using DM.Domain.Game.Features.Subscriptions;
 using FluentValidation;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Game = DM.Domain.Game.Features.Games.Game;
 
@@ -51,7 +51,7 @@ internal class GameService : IGameService
     private readonly IGuidFactory _guidFactory;
     private readonly IGameIntentionConverter _intentionConverter;
     private readonly IEventProducer _producer;
-    private readonly IMemoryCache _cache;
+    private readonly ICache _cache;
     private readonly ILogger<GameService> _logger;
 
     private const string TagListCacheKey = nameof(TagListCacheKey);
@@ -77,7 +77,7 @@ internal class GameService : IGameService
         IGuidFactory guidFactory,
         IGameIntentionConverter intentionConverter,
         IEventProducer producer,
-        IMemoryCache cache,
+        ICache cache,
         ILogger<GameService> logger)
     {
         _gamesQueryValidator = gamesQueryValidator;
@@ -163,7 +163,35 @@ internal class GameService : IGameService
             OrderNumber = 1
         };
 
-        var createdGame = await _repository.Create(createGameEntity, createRoomEntity);
+        // The counters go in first, and are undone if the game does not.
+        //
+        // There is no transaction across PostgreSQL and MongoDB and no outbox —
+        // DATA_STORAGE.md says both in as many words — so what a feature living
+        // in two stores owes is an explicit order: what is written first, and who
+        // clears the remainder. Written after the insert, a failed Mongo call
+        // left a committed game whose unread counters do not exist and never
+        // will: nothing recreates them, and the badge of that game reads zero for
+        // everybody forever. Written first, the same failure loses a game nobody
+        // has seen yet, and the caller may simply try again.
+        //
+        // The identifiers are ours already, generated above, so this needs no
+        // round trip to learn them.
+        await InitializeCountersAsync(gameId, roomId);
+
+        GameDetails createdGame;
+        try
+        {
+            createdGame = await _repository.Create(createGameEntity, createRoomEntity);
+        }
+        catch
+        {
+            // Compensation, by the mechanism the collection already has: the
+            // markers are stamped removed and the expiry index collects them.
+            await _unreadCountersRepository.DeleteAsync(roomId, UnreadEntryType.Message);
+            await _unreadCountersRepository.DeleteAsync(gameId, UnreadEntryType.Message);
+            await _unreadCountersRepository.DeleteAsync(gameId, UnreadEntryType.Character);
+            throw;
+        }
 
         if (!string.IsNullOrEmpty(createGame.AssistantUsername))
         {
@@ -178,20 +206,26 @@ internal class GameService : IGameService
             }
         }
 
+        // One statement instead of a round trip per blocked user, the way the
+        // blog side already copies the same list.
         if (createGame.CopyBlacklist)
         {
-            var personalBlacklist = await _userBlacklistChecker.GetBlockedUserIdsAsync(userId);
-            foreach (var blockedUserId in personalBlacklist)
-            {
-                await _gameBlacklistRepository.Add(createdGame.Id, blockedUserId, userId);
-            }
-            _logger.LogDebug("Copied personal blacklist to game blacklist with {Count} users",
-                personalBlacklist.Count());
+            var copied = await _gameBlacklistRepository.CopyFromPersonalBlacklist(createdGame.Id, userId);
+            _logger.LogDebug("Copied personal blacklist to game blacklist with {Count} users", copied);
         }
 
-        var firstRoomId = createdGame.Rooms.FirstOrDefault()?.Id ?? Guid.Empty;
-        await InitializeCountersAsync(createdGame.Id, firstRoomId);
-        await PublishGameCreatedAsync(createdGame.Id);
+        // The game is committed by now, so nothing below it may turn a created
+        // game into a 500: the caller would try again and end up with two. A lost
+        // event costs the subscribers one notification, which SYSTEM.md allows —
+        // an event is not the carrier of the fact.
+        try
+        {
+            await PublishGameCreatedAsync(createdGame.Id);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Failed to announce the new game {GameId}", createdGame.Id);
+        }
 
         _logger.LogInformation("Game created successfully. GameId={GameId}, Title={Title}, MasterId={MasterId}",
             createdGame.Id, createGame.Title, userId);
@@ -203,14 +237,13 @@ internal class GameService : IGameService
 
     #region Read
 
-    public async Task<IEnumerable<GameTag>> GetTagsAsync()
-    {
-        return (await _cache.GetOrCreateAsync(TagListCacheKey, async e =>
-        {
-            e.AbsoluteExpirationRelativeToNow = CachePolicy.Permanent;
-            return await _repository.GetTags();
-        }))!;
-    }
+    // Not CachePolicy.Permanent: the entry is not the tag catalog alone, it carries
+    // the number of active games per tag, and that number moves with every game
+    // created, retagged, activated or closed. The manual invalidation Permanent
+    // asks for could not hold it either - this cache lives in the process, so a
+    // game created on one instance would leave the counters of the rest stale.
+    public Task<IEnumerable<GameTag>> GetTagsAsync() =>
+        _cache.GetOrCreateAsync(TagListCacheKey, () => _repository.GetTags(), CachePolicy.Medium);
 
     public async Task<(IEnumerable<Game> games, PagingResult paging)> GetGamesAsync(GamesQuery query)
     {
@@ -253,9 +286,8 @@ internal class GameService : IGameService
             var sortPart = !string.IsNullOrEmpty(query.SortBy) ? $"_sort_{query.SortBy}_{query.SortOrder ?? "desc"}" : "";
             var takePart = $"_take_{query.Take}";
             var cacheKey = $"{GamesByStatusCacheKeyPrefix}{statusPart}{recruitingPart}{closedReasonPart}{sortPart}{takePart}";
-            var cached = await _cache.GetOrCreateAsync(cacheKey, async e =>
+            var cached = await _cache.GetOrCreateAsync(cacheKey, async () =>
             {
-                e.AbsoluteExpirationRelativeToNow = CachePolicy.Medium;
                 var totalCount = await _repository.Count(query, Guid.Empty);
                 var pagingData = new PagingData(query, pageSize, totalCount);
                 var gamesList = (await _repository.GetGames(pagingData, query, Guid.Empty)).ToArray();
@@ -271,21 +303,20 @@ internal class GameService : IGameService
                     }
                 }
                 return (games: gamesList, paging: pagingData.Result);
-            });
+            }, CachePolicy.Medium);
             return cached;
         }
 
         // Cache base data for authenticated users (short TTL, unread counters always fresh)
-        var queryHash = GetQueryHash(query);
-        var authCacheKey = $"AuthGames_{currentUserId}_{queryHash}_{pageSize}";
-        var (games, pagingDataAuth) = await _cache.GetOrCreateAsync(authCacheKey, async e =>
+        var queryKey = GetQueryKey(query);
+        var authCacheKey = $"AuthGames_{currentUserId}_{queryKey}_{pageSize}";
+        var (games, pagingDataAuth) = await _cache.GetOrCreateAsync(authCacheKey, async () =>
         {
-            e.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(15);
             var totalCountAuth = await _repository.Count(query, currentUserId);
             var paging = new PagingData(query, pageSize, totalCountAuth);
             var gamesList = (await _repository.GetGames(paging, query, currentUserId)).ToArray();
             return (games: gamesList, paging);
-        });
+        }, CachePolicy.VeryShort);
 
         if (games.Length == 0)
         {
@@ -319,7 +350,10 @@ internal class GameService : IGameService
                 g => g.Id, g => g.UnreadCommentsCount);
         }
 
-        var (gameRooms, _) = await _repository.GetRoomsAndPostPendencies(gameIds, currentUserId);
+        // Identifiers, which is all the sum below reads. The method this replaces
+        // returned whole room rows with their pendencies and two whole users per
+        // pendency, and the caller discarded every one of them.
+        var gameRooms = await _repository.GetAvailableRoomIds(gameIds, currentUserId);
         var allRoomIds = gameRooms.SelectMany(r => r.Value).ToArray();
 
         if (allRoomIds.Length > 0)
@@ -344,7 +378,7 @@ internal class GameService : IGameService
         var game = await _repository.GetGame(gameId, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
@@ -364,7 +398,7 @@ internal class GameService : IGameService
 
         // Same answer as the aggregate read gives for an id that addresses
         // nothing visible, so a caller cannot tell which path it took.
-        return gameId ?? throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
+        return gameId ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
     }
 
     public async Task<Game> GetByPublicIdAsync(string publicId)
@@ -373,7 +407,7 @@ internal class GameService : IGameService
         var game = await _repository.GetGameByPublicId(publicId, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
@@ -392,7 +426,7 @@ internal class GameService : IGameService
         var game = await _repository.GetGameDetails(gameId, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
@@ -417,7 +451,7 @@ internal class GameService : IGameService
         var game = await _repository.GetGameDetailsByPublicId(publicId, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
@@ -478,9 +512,17 @@ internal class GameService : IGameService
                 {
                     await _invitationService.InviteAssistant(game.Id, updateGame.AssistantUsername);
                 }
-                catch
+                catch (Exception exception)
                 {
-                    // Ignore invitation errors - user might not exist or be blacklisted
+                    // The two expected reasons — no such user, or one the game has
+                    // blacklisted — are why the invitation does not fail the update.
+                    // The exception is logged whole because this catches every kind,
+                    // including a store that is down, and the same swallow with no
+                    // record left nothing to look at afterwards. Same shape as
+                    // CreateAsync, which invites the assistant the same way.
+                    _logger.LogWarning(exception,
+                        "Failed to invite assistant {Username} for game {GameId}",
+                        updateGame.AssistantUsername, game.Id);
                 }
             }
         }
@@ -533,78 +575,60 @@ internal class GameService : IGameService
         return result;
     }
 
-    public async Task<GameDetails> ChangeStatusAsync(Guid gameId, GameStatusTransition transition)
+    public async Task<GameDetails> ChangeStatusAsync(Guid gameId, ModuleStatusTransition transition)
     {
         var game = await GetDetailsAsync(gameId);
         var now = _dateTimeProvider.Now;
-        var update = new UpdateGameEntity { GameId = gameId, UpdatedUtc = now };
-        EventType statusEvent;
 
-        switch (transition)
+        // What only a game answers for: the intention that guards the move and
+        // the event it publishes. Which state the move is legal from and what
+        // state it produces is the machine a blog runs on too, and that lives
+        // in ModuleStatusPolicy.
+        var (intention, statusEvent) = transition switch
         {
-            case GameStatusTransition.Start:
-                RequireStatus(game, ModuleStatus.Draft, transition);
-                _intentionManager.ThrowIfForbidden(GameIntention.SetStatusActive, game);
-                update.Status = ModuleStatus.Active;
-                if (!game.ActivatedUtc.HasValue) update.ActivatedUtc = now;
-                statusEvent = EventType.StatusGameActive;
-                break;
+            ModuleStatusTransition.Start =>
+                (GameIntention.SetStatusActive, EventType.StatusGameActive),
+            ModuleStatusTransition.Freeze =>
+                (GameIntention.SetStatusClosed, EventType.StatusGameFrozen),
+            ModuleStatusTransition.Finish =>
+                (GameIntention.SetStatusClosed, EventType.StatusGameFinished),
+            ModuleStatusTransition.Close =>
+                (GameIntention.SetStatusClosed, EventType.StatusGameClosed),
+            ModuleStatusTransition.Reopen =>
+                (GameIntention.SetStatusActive, EventType.StatusGameActive),
+            _ => throw new HttpException(
+                HttpStatusCode.BadRequest, RefusalMessage.UnknownStatusTransition)
+        };
 
-            case GameStatusTransition.Freeze:
-                RequireStatus(game, ModuleStatus.Active, transition);
-                _intentionManager.ThrowIfForbidden(GameIntention.SetStatusClosed, game);
-                update.Status = ModuleStatus.Closed;
-                update.ClosedReason = ClosedReason.Frozen;
-                update.ClosedUtc = now;
-                update.IsRecruitmentOpen = false;
-                statusEvent = EventType.StatusGameFrozen;
-                break;
+        // Legality first and authorization second, as before: an illegal move
+        // is answered 400 whether or not the caller could have made a legal one.
+        var change = ModuleStatusPolicy.Resolve(
+            transition,
+            new ModuleLifecycle(game.Status, game.ClosedReason, game.ActivatedUtc, game.ClosedUtc),
+            now);
+        _intentionManager.ThrowIfForbidden(intention, game);
 
-            case GameStatusTransition.Finish:
-                RequireStatus(game, ModuleStatus.Active, transition);
-                _intentionManager.ThrowIfForbidden(GameIntention.SetStatusClosed, game);
-                update.Status = ModuleStatus.Closed;
-                update.ClosedReason = ClosedReason.Finished;
-                update.ClosedUtc = now;
-                update.IsRecruitmentOpen = false;
-                statusEvent = EventType.StatusGameFinished;
-                break;
-
-            case GameStatusTransition.Close:
-                // Active -> Closed+None, or Closed+Frozen -> Closed+None
-                if (game.Status != ModuleStatus.Active &&
-                    !(game.Status == ModuleStatus.Closed && game.ClosedReason == ClosedReason.Frozen))
-                {
-                    throw IllegalTransition(transition, game);
-                }
-                _intentionManager.ThrowIfForbidden(GameIntention.SetStatusClosed, game);
-                update.Status = ModuleStatus.Closed;
-                update.ClosedReason = ClosedReason.None;
-                update.IsRecruitmentOpen = false;
-                if (!game.ClosedUtc.HasValue) update.ClosedUtc = now;
-                statusEvent = EventType.StatusGameClosed;
-                break;
-
-            case GameStatusTransition.Reopen:
-                RequireStatus(game, ModuleStatus.Closed, transition);
-                _intentionManager.ThrowIfForbidden(GameIntention.SetStatusActive, game);
-                update.Status = ModuleStatus.Active;
-                update.ClosedReason = ClosedReason.None;
-                update.ClearClosedUtc = true;
-                if (!game.ActivatedUtc.HasValue) update.ActivatedUtc = now;
-                statusEvent = EventType.StatusGameActive;
-                break;
-
-            default:
-                throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.UnknownStatusTransition);
-        }
+        var update = new UpdateGameEntity
+        {
+            GameId = gameId,
+            UpdatedUtc = now,
+            Status = change.Status,
+            ClosedReason = change.ClosedReason,
+            ClosedUtc = change.ClosedUtc,
+            ClearClosedUtc = change.ClearClosedUtc,
+            ActivatedUtc = change.ActivatedUtc,
+            // A game that closes stops looking for players. This is the field a
+            // blog has no counterpart for, and the moves that end at Closed are
+            // exactly Freeze, Finish and Close.
+            IsRecruitmentOpen = change.Status == ModuleStatus.Closed ? false : (bool?)null
+        };
 
         var result = await _repository.Update(update);
         await _producer.SendAsync(new List<EventType> { EventType.ChangedGame, statusEvent }, gameId);
         return result;
     }
 
-    public async Task<GameDetails> ChangePremoderationAsync(string id, GamePremoderationTransition transition)
+    public async Task<GameDetails> ChangePremoderationAsync(string id, ModulePremoderationTransition transition)
     {
         // Site-wide Mentor+ gate (parameterless intention): the role decides who
         // may move a game through premoderation, not the per-game read gate. The
@@ -621,39 +645,21 @@ internal class GameService : IGameService
             : await _repository.GetGameDetailsByPublicId(id, currentUserId);
         if (game == null)
         {
-            throw new HttpException(HttpStatusCode.Gone, RefusalMessage.GameNotFound);
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
         }
 
         var gameId = game.Id;
-        var update = new UpdateGameEntity { GameId = gameId, UpdatedUtc = _dateTimeProvider.Now };
+        var change = ModulePremoderationPolicy.Resolve(
+            transition, game.PremoderationStatus, currentUserId);
 
-        switch (transition)
+        var update = new UpdateGameEntity
         {
-            case GamePremoderationTransition.SendToPremoderation:
-                if (game.PremoderationStatus != PremoderationStatus.AwaitingEdits)
-                {
-                    throw new HttpException(HttpStatusCode.BadRequest,
-                        RefusalMessage.CannotSubmitForPremoderation(game.PremoderationStatus));
-                }
-                update.PremoderationStatus = PremoderationStatus.AwaitingApproval;
-                update.MentorId = currentUserId;
-                update.SetMentorId = true;
-                break;
-
-            case GamePremoderationTransition.RemoveFromPremoderation:
-                if (game.PremoderationStatus != PremoderationStatus.AwaitingApproval)
-                {
-                    throw new HttpException(HttpStatusCode.BadRequest,
-                        RefusalMessage.CannotWithdrawFromPremoderation(game.PremoderationStatus));
-                }
-                update.PremoderationStatus = PremoderationStatus.Approved;
-                update.MentorId = null;
-                update.SetMentorId = true;
-                break;
-
-            default:
-                throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.UnknownPremoderationTransition);
-        }
+            GameId = gameId,
+            UpdatedUtc = _dateTimeProvider.Now,
+            PremoderationStatus = change.Status,
+            MentorId = change.MentorId,
+            SetMentorId = true
+        };
 
         var result = await _repository.Update(update);
         await _producer.SendAsync(new List<EventType> { EventType.ChangedGame, EventType.StatusGameModeration }, gameId);
@@ -676,19 +682,6 @@ internal class GameService : IGameService
         await _producer.SendAsync(EventType.ChangedGame, gameId);
         return result;
     }
-
-    private static void RequireStatus(Game game, ModuleStatus expected, GameStatusTransition transition)
-    {
-        if (game.Status != expected)
-        {
-            throw IllegalTransition(transition, game);
-        }
-    }
-
-    private static HttpException IllegalTransition(GameStatusTransition transition, Game game) =>
-        new(HttpStatusCode.BadRequest,
-            $"Переход \"{transition}\" недоступен из статуса \"{game.Status}\"" +
-            (game.Status == ModuleStatus.Closed ? $" ({game.ClosedReason})" : ""));
 
     #endregion
 
@@ -732,10 +725,19 @@ internal class GameService : IGameService
         return await _userRepository.GetAssistants(gameId);
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// RemoveUser, not Edit. Removing an assistant has two handles — this one and
+    /// GameInvitationService.RemoveUser — and they asked different questions:
+    /// Edit resolves to master or assistant, so an assistant could remove a peer,
+    /// while the intention written for this very action resolves to master alone
+    /// and says so in its own comment. AUTHORIZATION.md describes the second
+    /// answer.
+    /// </remarks>
     public async Task RemoveAssistantAsync(Guid gameId, string username)
     {
         var game = await GetAsync(gameId);
-        _intentionManager.ThrowIfForbidden(GameIntention.Edit, game);
+        _intentionManager.ThrowIfForbidden(GameIntention.RemoveUser, game);
 
         if (!await _userRepository.IsAssistantByUsername(gameId, username))
         {
@@ -743,46 +745,6 @@ internal class GameService : IGameService
         }
 
         await _userRepository.RemoveAssistantByUsername(gameId, username);
-        await _producer.SendAsync(EventType.ChangedGame, gameId);
-    }
-
-    /// <inheritdoc />
-    public async Task LeaveAsync(Guid gameId)
-    {
-        _intentionManager.ThrowIfForbidden(GameIntention.Subscribe);
-        var game = await GetAsync(gameId);
-
-        var userId = _identityProvider.Current.User.UserId;
-
-        // Cannot leave own game
-        if (game.Master.UserId == userId)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя покинуть свою игру");
-        }
-
-        var isReader = await _userRepository.IsReader(userId, gameId);
-        var isAssistant = await _userRepository.IsAssistantByUserId(userId, gameId);
-        var charactersLeft = await _userRepository.MarkCharactersAsLeft(userId, gameId);
-
-        // Check if user is a member of the game
-        if (!isReader && !isAssistant && charactersLeft == 0)
-        {
-            throw new HttpException(HttpStatusCode.Conflict, "Вы не участвуете в этой игре");
-        }
-
-        // Remove reader subscription
-        if (isReader)
-        {
-            await _userRepository.RemoveReader(userId, gameId);
-        }
-
-        // Remove assistant role
-        if (isAssistant)
-        {
-            await _userRepository.RemoveAssistantByUserId(userId, gameId);
-        }
-
-        // Send event
         await _producer.SendAsync(EventType.ChangedGame, gameId);
     }
 
@@ -795,7 +757,11 @@ internal class GameService : IGameService
     /// </summary>
     private async Task InitializeCountersAsync(Guid gameId, Guid roomId)
     {
-        await _unreadCountersRepository.CreateAsync(roomId, UnreadEntryType.Message);
+        // The room is parented by its game, the way RoomService parents every
+        // room created afterwards. Left to the one-argument overload, the first
+        // room of a game was its own parent, so it alone was missing from every
+        // read that sums a game's rooms.
+        await _unreadCountersRepository.CreateAsync(roomId, gameId, UnreadEntryType.Message);
         await _unreadCountersRepository.CreateAsync(gameId, UnreadEntryType.Message);
         await _unreadCountersRepository.CreateAsync(gameId, UnreadEntryType.Character);
     }
@@ -809,9 +775,9 @@ internal class GameService : IGameService
     }
 
     /// <summary>
-    /// Generate hash for query parameters (for cache key)
+    /// Build the query part of a cache key
     /// </summary>
-    private static string GetQueryHash(GamesQuery query)
+    private static string GetQueryKey(GamesQuery query)
     {
         var parts = new List<string>
         {
@@ -840,7 +806,11 @@ internal class GameService : IGameService
             query.RecruitmentStartedToUtc?.ToString("O") ?? "",
             query.PremoderationStatuses != null ? string.Join(",", query.PremoderationStatuses) : ""
         };
-        return string.Join("|", parts).GetHashCode().ToString();
+        // The key carries the values themselves: a 32-bit hash of them lets two
+        // different queries of one user share a cached page. Parts are
+        // length-prefixed because free text (search, usernames) may contain the
+        // separator, and a plain join would leave the same collision open.
+        return string.Join("|", parts.Select(p => $"{p.Length}:{p}"));
     }
 
     #endregion

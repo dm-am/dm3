@@ -33,10 +33,39 @@ done
 
 mc mb --ignore-existing "dm/$BUCKET"
 
-# Anonymous GET is how public content is served (no presigned link per avatar).
+# Anonymous GET is how public content is served (no presigned link per avatar),
+# and it is granted per prefix: a type nobody declared public must not become
+# readable just by being added. Mirrors UploadFolder.AnonymouslyReadable, and
+# DeploymentConfigurationShould fails the build when the two drift apart.
+#
 # Set here rather than by the application: a bucket policy is an administrative
-# call, and the scoped account is deliberately not allowed to make one.
-mc anonymous set download "dm/$BUCKET" > /dev/null
+# call, and the scoped account below is deliberately not allowed to make one.
+#
+# set-json and not `mc anonymous set download`, for two reasons. A prefixed
+# `set` adds a statement without removing one already in place, so on a stand
+# that has run before, the bucket-wide grant would survive the correction. And
+# the grant this replaces was `download` on the whole bucket, which is mc's
+# readonly policy — GetObject on every key AND anonymous ListBucket, reachable
+# from outside through the proxy, so the keys were enumerable and the random
+# suffix in them protected nothing.
+cat > /tmp/dm-anonymous-policy.json <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {"AWS": ["*"]},
+      "Action": ["s3:GetObject"],
+      "Resource": [
+        "arn:aws:s3:::$BUCKET/avatars/*",
+        "arn:aws:s3:::$BUCKET/characters/*"
+      ]
+    }
+  ]
+}
+EOF
+mc anonymous set-json /tmp/dm-anonymous-policy.json "dm/$BUCKET" > /dev/null
+rm -f /tmp/dm-anonymous-policy.json
 
 # Exactly what the upload path performs: PutObject on upload, DeleteObject on
 # rollback and by the orphan sweeper, ListBucket for that sweep, GetObject to

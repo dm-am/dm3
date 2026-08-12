@@ -248,7 +248,7 @@ public class CharacterStatusTransitionsShould : UnitTestBase
     public async Task SubscribeThePlayerAndNotTheCaller(CharacterStatusTransition transition)
     {
         var characterId = Given(CharacterStatus.Active);
-        var character = await _repository.Object.GetForUpdate(characterId);
+        var character = (await _repository.Object.GetForUpdate(characterId))!;
         _repository.Setup(r => r.Update(It.IsAny<UpdateCharacterEntity>()))
             .ReturnsAsync(new Character { Id = characterId });
         _repository

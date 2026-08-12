@@ -25,9 +25,6 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class StorageClockShould
 {
-    private static readonly Regex Comments = new(
-        @"/\*.*?\*/|//[^\n]*", RegexOptions.Compiled | RegexOptions.Singleline);
-
     /// <summary>
     /// A read of the machine clock, under either spelling.
     /// </summary>
@@ -86,27 +83,12 @@ public class StorageClockShould
         .ToList();
 
     private static string Code(string path) =>
-        Comments.Replace(File.ReadAllText(path), string.Empty);
+        SourceText.ReadCode(path);
 
     private static string StorageDirectory =>
         Path.Combine(RepositoryRoot, "src", "DM.Infrastructure.Persistence");
 
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null &&
-                   !(Directory.Exists(Path.Combine(directory.FullName, "src")) &&
-                     Directory.Exists(Path.Combine(directory.FullName, "test"))))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     private static bool IsAuthored(string path) =>
         !path

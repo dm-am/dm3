@@ -1,18 +1,54 @@
-# A mirror: its own edge and its own API, the stores of the main server.
+# Точка присутствия: свой край и свой фронтенд, приложение остается на основном
+# сервере.
 #
-# An overlay on top of the pair docker-compose.yml + docker-compose.preview.yml.
-# A profile widens the default set instead of narrowing it, so
-# "--profile mirror up -d" on the base file alone brought up seventeen services
-# on a mirror: a local Postgres, Mongo and MinIO beside a working connection to
-# main, a migration container that would have run Migrate() against the main
-# database, and no nginx at all, because the edge lives only in the overlay.
+# Оверлей поверх пары docker-compose.yml + docker-compose.preview.yml.
 #
-# So the command names the services it wants, and this file takes the
-# dependencies off the API: compose starts whatever a named service depends on,
-# and every one of those dependencies is a store the mirror is there to borrow.
+# Профиль набор сервисов не сужает, а расширяет, поэтому "--profile mirror up -d"
+# на одном базовом файле поднимал на точке присутствия семнадцать сервисов: локальные
+# Postgres, Mongo и MinIO, контейнер миграции, который выполнил бы Migrate()
+# против основной базы, и ни одного nginx, потому что край живет только в
+# оверлее. Отсюда два правила ниже.
 #
-# The full command is in docs/guides/MIRRORING.md.
+# Первое: команда называет сервисы поименно.
+# Второе: этот файл снимает зависимости у тех, кого она называет. Compose
+# поднимает все, от чего зависит названный сервис, а nginx и dmfront в
+# docker-compose.preview.yml зависят от dmapi — то есть от второго экземпляра
+# приложения, ради отказа от которого схема и выбрана.
+#
+# Полная команда — в docs/guides/MIRRORING.md.
 
 services:
-  dmapi:
+  nginx:
+    # Из двух зависимостей остается одна: фронтенд, который стоит рядом.
+    # Приложения на точке присутствия нет.
+    depends_on: !override
+      dmfront:
+        condition: service_started
+    # Свой конфиг вместо общего: у точки присутствия другой upstream и есть кэш.
+    # Монтируется как шаблон, потому что адрес основного сервера приходит
+    # переменной, а nginx подстановкой переменных сам не занимается — это
+    # делает envsubst из образа при старте.
+    # Точка присутствия публикует и 443: TLS на ней обязателен, потому что основной сайт
+    # отдает HSTS с includeSubDomains, и браузер постоянного посетителя сам
+    # перепишет http-адрес точки присутствия в https.
+    ports: !override
+      - '80:80'
+      - '443:443'
+    volumes: !override
+      - ./nginx/pop.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ${POP_SSL_DIR:-./nginx/ssl}:/etc/nginx/ssl:ro
+      - pop-media-cache:/var/cache/nginx/media
+    environment:
+      POP_UPSTREAM: ${POP_UPSTREAM:?адрес основного сервера, например https://dm.am}
+      POP_UPSTREAM_HOST: ${POP_UPSTREAM_HOST:?имя основного сервера, например dm.am}
+      # Подставляются только переменные точки присутствия. Без фильтра envsubst съел бы
+      # $host и $scheme, которые принадлежат nginx, а не окружению.
+      NGINX_ENVSUBST_FILTER: '^POP_'
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:80/pop-health || exit 1']
+
+  dmfront:
     depends_on: !reset null
+
+volumes:
+  pop-media-cache:

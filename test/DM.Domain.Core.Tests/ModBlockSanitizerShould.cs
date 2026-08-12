@@ -14,7 +14,7 @@ namespace DM.Domain.Core.Tests;
 /// and no data loss. Twenty-six call sites in twelve services lean on that, and
 /// none of them covered it — the sanitizer appeared in the suite only
 /// incidentally, through the rendering visitor. A regex that stopped matching
-/// [mod=Имя], or a comparison that let Mentor through, would have surfaced as a
+/// "[mod=Имя]", or a comparison that let Mentor through, would have surfaced as a
 /// moderator's block on an ordinary user's comment and nowhere else.
 ///
 /// The other half of the same rule — filtering on read rather than unwrapping on

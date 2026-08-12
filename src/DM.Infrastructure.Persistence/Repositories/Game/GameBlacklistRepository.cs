@@ -39,6 +39,43 @@ internal class GameBlacklistRepository : IGameBlacklistRepository
         .ToArrayAsync();
 
     /// <inheritdoc />
+    /// <inheritdoc />
+    public async Task<int> CopyFromPersonalBlacklist(Guid gameId, Guid ownerId, CancellationToken ct = default)
+    {
+        var now = _dateTimeProvider.Now;
+
+        var personal = await _dbContext.UserBlacklists
+            .Where(ub => ub.OwnerId == ownerId)
+            .Select(ub => ub.BlockedUserId)
+            .ToListAsync(ct);
+
+        var already = await _dbContext.GameBlacklists
+            .Where(gb => gb.GameId == gameId)
+            .Select(gb => gb.BlockedUserId)
+            .ToListAsync(ct);
+
+        var toAdd = personal.Except(already).ToList();
+
+        foreach (var blockedUserId in toAdd)
+        {
+            _dbContext.GameBlacklists.Add(new GameBlacklist
+            {
+                EntryId = Guid.NewGuid(),
+                GameId = gameId,
+                BlockedUserId = blockedUserId,
+                BlockedByUserId = ownerId,
+                CreatedUtc = now
+            });
+        }
+
+        if (toAdd.Count > 0)
+        {
+            await _dbContext.SaveChangesAsync(ct);
+        }
+
+        return toAdd.Count;
+    }
+
     public async Task<GeneralUser> Add(Guid gameId, Guid blockedUserId, Guid blockedByUserId)
     {
         var blacklistEntry = new GameBlacklist

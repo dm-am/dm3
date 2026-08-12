@@ -71,7 +71,9 @@ public class ResponseEnvelopeShould : IntegrationTestBase
                         continue;
                     }
 
-                    var schema = SchemaNameOf(success);
+                    // A body the document writes out in place names neither envelope,
+                    // so it declares nothing for the wire to be held to.
+                    var schema = ResponseBodySchema.NameOf(success);
                     if (schema == null)
                     {
                         continue;
@@ -128,26 +130,6 @@ public class ResponseEnvelopeShould : IntegrationTestBase
         return parameters.EnumerateArray().Count(parameter =>
             parameter.TryGetProperty("required", out var required) &&
             required.ValueKind == JsonValueKind.True);
-    }
-
-    /// <summary>Schema id a response body points at, if it declares one.</summary>
-    private static string? SchemaNameOf(JsonElement response)
-    {
-        if (!response.TryGetProperty("content", out var content))
-        {
-            return null;
-        }
-
-        foreach (var mediaType in content.EnumerateObject())
-        {
-            if (mediaType.Value.TryGetProperty("schema", out var schema) &&
-                schema.TryGetProperty("$ref", out var reference))
-            {
-                return reference.GetString()?.Split('/').Last();
-            }
-        }
-
-        return null;
     }
 
     [Fact]

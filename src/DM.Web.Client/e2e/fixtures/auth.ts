@@ -61,7 +61,7 @@ export const secondaryUser = {
 /** Kept for call sites that read the primary account's name. */
 export const seededUser = primaryUser;
 
-// ESM: __dirname отсутствует, путь берется из import.meta.url.
+// ESM: there is no __dirname, so the path comes from import.meta.url.
 const AUTH_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", ".auth");
 export const PRIMARY_STORAGE_STATE = join(AUTH_DIR, "primary.json");
 export const SECONDARY_STORAGE_STATE = join(AUTH_DIR, "secondary.json");
@@ -91,7 +91,7 @@ export const test = base.extend<{
     await context.close();
   },
 
-  // eslint-disable-next-line no-empty-pattern -- фикстура не зависит ни от одной другой
+  // eslint-disable-next-line no-empty-pattern -- the fixture depends on no other
   authContext: async ({}, use) => {
     const context = await authenticatedContext();
     await use(context);

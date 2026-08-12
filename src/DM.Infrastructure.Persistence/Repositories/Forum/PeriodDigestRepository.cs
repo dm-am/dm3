@@ -14,7 +14,6 @@ internal class PeriodDigestRepository : IPeriodDigestRepository
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc cref="PeriodDigestRepository" />
     public PeriodDigestRepository(DmDbContext dbContext) => _dbContext = dbContext;
 
     /// <inheritdoc />

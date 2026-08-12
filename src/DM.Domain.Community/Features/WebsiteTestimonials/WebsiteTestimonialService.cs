@@ -55,11 +55,14 @@ internal class WebsiteTestimonialService : IWebsiteTestimonialService
 
         var currentUserId = _identityProvider.Current.User.UserId;
 
-        // Check if user already has a testimonial (one per user)
+        // Check if user already has a testimonial (one per user). A second one
+        // is a conflict of state, which is what the controller declares and what
+        // the form on the other side branches on: Gone said neither "not found"
+        // nor "deleted" here and matched nothing the caller was written for.
         var existing = await _repository.GetByAuthor(currentUserId);
         if (existing != null)
         {
-            throw new HttpException(HttpStatusCode.Gone, "У вас уже есть отзыв");
+            throw new HttpException(HttpStatusCode.Conflict, "У вас уже есть отзыв");
         }
 
         var entity = new CreateWebsiteTestimonialEntity

@@ -92,6 +92,13 @@ public class ResolveUsernameChangeRequest
     /// <summary>
     /// Optional comment from moderator
     /// </summary>
+    /// <remarks>
+    /// Bounded by the same five hundred as the column behind it. Without the
+    /// attribute the check happened at the insert, where over-length is a
+    /// database error and the moderator gets a 500 for a typed-too-much
+    /// comment instead of the ordinary validation answer.
+    /// </remarks>
+    [MaxLength(500, ErrorMessage = "Комментарий должен быть не более 500 символов")]
     public string? Comment { get; set; }
 }
 

@@ -17,7 +17,7 @@
 //   .skeleton-cell
 //     +skeleton-shimmer
 //
-// Duration: 1.5s (per UI_STANDARDS.md)
+// Duration: $loading-tempo (1.5s, per UI_STANDARDS.md)
 // Easing: ease-in-out / infinite
 
 // Skeleton shimmer: call +skeleton-shimmer AFTER all other declarations
@@ -26,7 +26,7 @@
   border-radius: $minor  // 4px
   background: linear-gradient(90deg, $bg-element-hover 25%, $bg-element 50%, $bg-element-hover 75%)
   background-size: 200% 100%
-  animation: skeleton-shimmer 1.5s ease-in-out infinite
+  animation: skeleton-shimmer $loading-tempo ease-in-out infinite
 
 // Reduced-motion: handled by the global rule in Reset.sass
 // (animation-duration: 0.01ms !important on *, *::before, *::after).

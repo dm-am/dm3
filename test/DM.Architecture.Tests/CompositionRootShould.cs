@@ -82,10 +82,9 @@ public class CompositionRootShould
         var program = File.ReadAllText(Path.Combine(
             RepositoryRoot, "src", "DM.Tools.Seeder", "Program.cs"));
 
-        if (!program.Contains("typeof(ISecurityManager).Assembly", StringComparison.Ordinal))
-        {
-            return;
-        }
+        program.Should().Contain("typeof(ISecurityManager).Assembly",
+            "the assertion below is about the assembly this marker names, so a seeder that " +
+            "scans another one has to be seen rather than silently excused");
 
         program.Should().Contain("AddDmAccountConfiguration",
             "the tool scans the whole account assembly, whose types read four option " +
@@ -136,11 +135,11 @@ public class CompositionRootShould
     /// no others.
     /// </summary>
     /// <remarks>
-    /// The shared configuration call demanded IntegrationSettings:WebUrl from
+    /// The shared configuration call demanded SiteAddressConfiguration:PublicUrl from
     /// everyone, so the mail worker — which speaks SMTP, touches no store and
     /// builds no link, the three senders that do being in an assembly it does not
     /// scan — refused to start over a value it never reads: "OptionsValidation
-    /// Exception: IntegrationSettings:WebUrl is required. Hosting failed to
+    /// Exception: SiteAddressConfiguration:PublicUrl is required. Hosting failed to
     /// start." That is the same defect the Require* split was made to end, left
     /// behind in the one demand that was not moved, and its cost is the next host
     /// writing in a fake value to get past it.
@@ -154,23 +153,23 @@ public class CompositionRootShould
     [Fact]
     public void DemandOnlyTheConfigurationItsOwnComponentsRead()
     {
-        var mail = Refusals("DM.Workers.Mail", nameof(IntegrationSettings), (configuration, environment) =>
+        var mail = Refusals("DM.Workers.Mail", nameof(SiteAddressConfiguration), (configuration, environment) =>
         {
             var startup = new DM.Workers.Mail.Startup(configuration, environment);
             return startup.ConfigureServices;
         });
 
-        mail.Should().NotContain(failure => failure.Contains("IntegrationSettings", StringComparison.Ordinal),
+        mail.Should().NotContain(failure => failure.Contains("SiteAddressConfiguration", StringComparison.Ordinal),
             "the mail worker renders what the message carries and builds no link of its own");
 
-        var api = Refusals("DM.Web.API", nameof(IntegrationSettings), (configuration, environment) =>
+        var api = Refusals("DM.Web.API", nameof(SiteAddressConfiguration), (configuration, environment) =>
         {
             var startup = new DM.Web.API.Startup(configuration, environment);
             return startup.ConfigureServices;
         });
 
-        api.Should().Contain(failure => failure.Contains("IntegrationSettings", StringComparison.Ordinal),
-            "the API builds the activation, reset and email-change links, and an empty WebUrl " +
+        api.Should().Contain(failure => failure.Contains("SiteAddressConfiguration", StringComparison.Ordinal),
+            "the API builds the activation, reset and email-change links, and an empty PublicUrl " +
             "sends a reader a link that points at nothing without a word in any log");
     }
 
@@ -241,7 +240,7 @@ public class CompositionRootShould
         {
             ["DM.Workers.NotificationDispatcher"] =
                 typeof(DM.Workers.NotificationDispatcher.Startup).Assembly
-                    .GetType("DM.Workers.NotificationDispatcher.Implementation.NotificationProcessor")!,
+                    .GetType("DM.Workers.NotificationDispatcher.Dispatching.NotificationProcessor")!,
         };
 
         foreach (var (host, type) in entryPoints)
@@ -579,20 +578,5 @@ public class CompositionRootShould
         public IFileProvider WebRootFileProvider { get; set; } = new NullFileProvider();
     }
 
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null &&
-                   !(Directory.Exists(Path.Combine(directory.FullName, "src")) &&
-                     Directory.Exists(Path.Combine(directory.FullName, "test"))))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

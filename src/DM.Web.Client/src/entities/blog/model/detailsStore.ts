@@ -422,9 +422,10 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
 
   async function deleteRubric(rubricId: string): Promise<GeneralError | null> {
     if (!blog.value) return requestNotSent;
-    const { error } = await blogApi.deleteRubric(rubricId);
+    const id = blog.value.id;
+    const { error } = await blogApi.deleteRubric(id, rubricId);
     if (error) return error;
-    await loadBlog(blog.value.id);
+    await loadBlog(id);
     return null;
   }
 

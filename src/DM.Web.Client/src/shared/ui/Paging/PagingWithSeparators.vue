@@ -5,6 +5,7 @@
  */
 import type { RouteLocationRaw } from "vue-router";
 import Paging from "./Paging.vue";
+import { DashSeparator } from "@/shared/ui/DashSeparator";
 import type { PagingInfo } from "@/shared/api/models/common";
 
 defineProps<{
@@ -20,13 +21,7 @@ defineProps<{
 
 <template>
   <div v-if="paging && paging.pages > 1" class="paging-block">
-    <div class="separator" aria-hidden="true">
-      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      - - - - - - - - - -
-    </div>
+    <DashSeparator spacing="none" />
     <Paging
       :paging="paging"
       :to="to"
@@ -35,13 +30,7 @@ defineProps<{
       :on-prefetch="onPrefetch"
       :scroll-anchor="scrollAnchor"
     />
-    <div class="separator" aria-hidden="true">
-      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      - - - - - - - - - -
-    </div>
+    <DashSeparator spacing="none" />
   </div>
 </template>
 
@@ -56,12 +45,4 @@ $optical-shift: 1.5px
   // Collapse Paging's default margin — compact look with separators
   :deep(.paging)
     margin: ($tiny + $optical-shift) 0 ($tiny - $optical-shift)
-
-.separator
-  color: $text-muted
-  white-space: nowrap
-  overflow: hidden
-  max-width: 100%
-  width: 0
-  min-width: 100%
 </style>

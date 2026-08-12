@@ -17,6 +17,7 @@ import type {
   UpdateNotificationPreferences,
   BotLinkResult,
   SecurityEvent,
+  SecurityLogType,
 } from "@/shared/api/models/account";
 import { Api, X_DM_ACCOUNT_TOKEN } from "@/shared/api";
 
@@ -24,9 +25,6 @@ import { Api, X_DM_ACCOUNT_TOKEN } from "@/shared/api";
  * The viewer's own account: how they get in (registration, activation,
  * recovery, password, email), which devices hold a session, and how the site
  * reaches them (notification channels and bots).
- *
- * The mirror list used to sit here too; it is deployment topology rather than
- * account data and now lives next to the transport (shared/api/mirrorApi).
  */
 export default new (class AccountApi {
   /**
@@ -71,9 +69,11 @@ export default new (class AccountApi {
    * Rate limited: 20 requests per minute
    */
   public checkUsername(username: string) {
-    return Api.get<UsernameAvailability>(
-      `account/check-username?username=${encodeURIComponent(username)}`,
-    );
+    // In the body, not the query: the value is exactly what must not end up in
+    // an access log, and the request line is logged with its query string.
+    return Api.post<UsernameAvailability>("account/check-username", {
+      username,
+    });
   }
 
   /**
@@ -90,13 +90,12 @@ export default new (class AccountApi {
    * Rate limited: 20 requests per minute
    */
   public checkEmail(email: string) {
-    return Api.get<EmailAvailability>(
-      `account/check-email?email=${encodeURIComponent(email)}`,
-    );
+    // Body, for the same reason as checkUsername above.
+    return Api.post<EmailAvailability>("account/check-email", { email });
   }
 
   /**
-   * Sign in with email/username and password (cookie-based)
+   * Sign in with email and password (cookie-based)
    *
    * The refusal here is the answer to the sign-in form: a 403 names the state
    * of the account — banned, removed, locked out after too many attempts — and
@@ -249,20 +248,19 @@ export default new (class AccountApi {
 
   /**
    * Get security event history (logins, logouts, password changes, etc.)
-   * @param limit Maximum number of events (default 50)
-   * @param type Optional filter: "logins", "password", "sessions"
+   *
+   * GET v1/account/logs. The address used to be `account/security`, which no
+   * controller serves, and the cap used to be `limit`, which this endpoint does
+   * not take — the section rendered empty and said nothing, because its loader
+   * leaves the list alone on error.
+   *
+   * @param take Maximum number of events, 1..100 (default 50)
+   * @param type Optional filter
    */
-  public getSecurityHistory(limit = 50, type?: string) {
-    const params = new URLSearchParams({ limit: String(limit) });
-    if (type) params.append("type", type);
-    return Api.get<ListEnvelope<SecurityEvent>>(`account/security?${params}`);
-  }
-
-  /**
-   * Get login history only (successful and failed logins)
-   * @param limit Maximum number of events (default 20)
-   */
-  public getLoginHistory(limit = 20) {
-    return this.getSecurityHistory(limit, "logins");
+  public getSecurityHistory(take = 50, type?: SecurityLogType) {
+    return Api.get<ListEnvelope<SecurityEvent>>("account/logs", {
+      take,
+      ...(type ? { type } : {}),
+    });
   }
 })();

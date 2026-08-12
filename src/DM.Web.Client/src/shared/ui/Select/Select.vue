@@ -31,10 +31,24 @@ withDefaults(
     options: (SelectOption | SelectOptionGroup)[];
     placeholder?: string;
     disabled?: boolean;
+    /**
+     * Id for the native <select> underneath. An `id` attribute on this
+     * component would land on the wrapper <div>, and a caller's <label for>
+     * would then point at something no browser focuses.
+     */
+    id?: string;
+    /**
+     * Accessible name, for the places with no visible caption to point a
+     * <label> at. Declared for the same reason as `id`: left to attribute
+     * fallthrough it would name the wrapper <div> instead of the control.
+     */
+    ariaLabel?: string;
   }>(),
   {
     placeholder: undefined,
     disabled: false,
+    id: undefined,
+    ariaLabel: undefined,
   },
 );
 
@@ -50,9 +64,11 @@ defineEmits<{
 <template>
   <div class="select-control" :class="{ disabled }">
     <select
+      :id="id"
       class="select-input"
       :value="modelValue"
       :disabled="disabled"
+      :aria-label="ariaLabel"
       @change="
         $emit('update:modelValue', ($event.target as HTMLSelectElement).value)
       "

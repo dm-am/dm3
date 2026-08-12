@@ -1,6 +1,8 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 using Xunit;
 
@@ -90,6 +92,34 @@ public class MongoRetentionShould
                 "start, so a term declared in one and not the other makes the retention of " +
                 "a database depend on which of the two created it");
 
+    /// <summary>
+    /// The count the bootstrap script prints is the count it creates.
+    /// </summary>
+    /// <remarks>
+    /// The script ends by summarising itself, and that summary is the only part
+    /// of it a person reads after a deploy. It is also prose next to code, so it
+    /// drifts the moment an index is added or dropped and says nothing while it
+    /// does — a line reading "Total: 19 indexes" over eighteen createIndex calls
+    /// is indistinguishable from one that is right, and the reader takes the
+    /// failure of an index to appear as their own miscount.
+    /// </remarks>
+    [Fact]
+    public void PrintTheNumberOfIndexesItActuallyCreates()
+    {
+        var script = Read(InitScript);
+        var claimed = TotalClaimed.Match(script);
+
+        claimed.Success.Should().BeTrue("the script states its own total, and that is the claim");
+        int.Parse(claimed.Groups["total"].Value, CultureInfo.InvariantCulture).Should()
+            .Be(Occurrences(script, "createIndex("),
+                "the summary is what a person reads after a deploy instead of counting the " +
+                "calls above it");
+    }
+
+    /// <summary>The self-summary at the end of the bootstrap script.</summary>
+    private static readonly Regex TotalClaimed =
+        new(@"Total:\s*(?<total>\d+)\s+indexes", RegexOptions.Compiled);
+
     private static (string Entity, string Text)[] Blocks() => Read(Initializer)
         .Split(CollectionBlock, StringSplitOptions.None)
         .Skip(1)
@@ -108,25 +138,5 @@ public class MongoRetentionShould
         return File.ReadAllText(path);
     }
 
-    /// <summary>
-    /// Walks up from the test binary to the repository root. The sources are not
-    /// copied to the output directory, and copying them would let this assert
-    /// against a stale snapshot.
-    /// </summary>
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null &&
-                   !(Directory.Exists(Path.Combine(directory.FullName, "src")) &&
-                     Directory.Exists(Path.Combine(directory.FullName, "test"))))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

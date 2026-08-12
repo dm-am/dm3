@@ -16,7 +16,7 @@ export interface StatusTransitionOption {
  * any illegal move; this list only avoids showing obviously-inapplicable ones.
  * Single source of truth shared by the sidebar panel and the settings page.
  *
- * Mirrors the domain state machine (GameStatusTransition.cs):
+ * Mirrors the domain state machine (ModuleStatusTransition.cs):
  *   Start:  Draft -> Active
  *   Finish: Active -> Closed (Finished)
  *   Freeze: Active -> Closed (Frozen)

@@ -218,3 +218,142 @@ describe("the shared UI kit", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * A globally registered component is usable in any template without an import,
+ * and that is an edge neither gate can see: `boundaries/dependencies` has no
+ * import to refuse, and `vue/no-undef-components` skips the name outright,
+ * because its whitelist is read out of the registration itself.
+ * `entities/testimonial` rendered `<user-link>` from `entities/user` through
+ * exactly that gap — a same-layer dependency with no `@x` door, both gates
+ * green.
+ *
+ * Only `shared` may be registered globally: it sits below every layer, so a
+ * hidden edge to it is one the rules would have allowed had it been written as
+ * an import, while a component of a sliced layer turns global registration into
+ * a way around the door. Asserted at the registration and not over every
+ * template, because that file is the only place a global can be created.
+ */
+describe("global component registration", () => {
+  /** Local binding -> module it came from, `import type` aside. */
+  function importOrigins(code: string): Map<string, string> {
+    const origins = new Map<string, string>();
+    for (const [, clause, from] of code.matchAll(
+      /^import\s+(?!type\s)([^;]+?)\s+from\s+"([^"]+)";/gm,
+    )) {
+      for (const part of clause.replace(/[{}]/g, " ").split(",")) {
+        const local = part
+          .trim()
+          .split(/\s+as\s+/)
+          .pop();
+        if (local) origins.set(local, from);
+      }
+    }
+    return origins;
+  }
+
+  it("registers primitives of shared and nothing else", () => {
+    const source = readFileSync(
+      join(CLIENT_ROOT, "src/app/providers/components.ts"),
+      "utf8",
+    );
+    const origins = importOrigins(source);
+    const registered = [
+      ...source.matchAll(/\.component\(\s*"([^"]+)"\s*,\s*([\w$]+)\s*\)/g),
+    ].map(([, name, local]) => [name, origins.get(local) ?? "?"] as const);
+
+    expect(
+      registered.length,
+      "no registration call was found: this check and the whitelist .eslintrc.cjs derives from the same file would both be reading nothing",
+    ).toBeGreaterThan(0);
+
+    expect(
+      registered
+        .filter(([, from]) => !from.startsWith("@/shared/"))
+        .map(([name, from]) => `${name} <- ${from}`),
+      "a global component of a sliced layer is a same-layer import no linter can refuse: open an @x door for the consumer and import it there",
+    ).toEqual([]);
+  });
+});
+
+/**
+ * The rule above is written for the root of the kit; a barrel of a slice breaks
+ * it just as well by re-exporting a component of the kit under its own name.
+ * `entities/user` did exactly that with `AvatarImg`, and the cost was the one
+ * the kit rule names: seven consumers said `@/entities/user`, four said
+ * `@/shared/ui/AvatarImg`, and neither search found the other half. The slice
+ * had written the principle down in its own `@x/game.ts` and the barrel next to
+ * it broke the same principle.
+ *
+ * Only `shared/ui` is checked, and only the alias form. Types and stores of
+ * `shared` are re-exported by slices on purpose (`UserRef`, `useAuthStore`) and
+ * carry a comment saying why; a component of the kit has no such reason, since
+ * every layer may address it directly.
+ */
+describe("slice barrels", () => {
+  it("re-export no component of the shared UI kit", () => {
+    const offenders: string[] = [];
+    for (const layer of ["entities", "features", "widgets"]) {
+      const root = join(CLIENT_ROOT, "src", layer);
+      if (!existsSync(root)) continue;
+      for (const file of sources(root)) {
+        const path = relative(CLIENT_ROOT, file).split("\\").join("/");
+        if (!path.endsWith("/index.ts")) continue;
+        for (const [, from] of readFileSync(file, "utf8").matchAll(
+          /^export\s[^;]*?\sfrom\s+"(@\/shared\/ui\/[^"]+)";/gm,
+        )) {
+          offenders.push(`${path} -> ${from}`);
+        }
+      }
+    }
+
+    expect(
+      offenders,
+      "a second address for a component of the kit: import it from @/shared/ui/<Name> where it is used and drop the re-export",
+    ).toEqual([]);
+  });
+});
+
+/**
+ * The same rule one folder over, and for the same reasons.
+ *
+ * `shared/lib/composables` carried a barrel of its own, and both spellings were
+ * live: forty-eight files entered through the index while a hundred and twelve
+ * addressed the composable they wanted by its own path. The split was never a
+ * decision anybody made. In four of the five files that used both, the two
+ * imports sat on neighbouring lines, and single modules were reached both ways:
+ * `useToast` had fifty-seven consumers on the path and two on the barrel, so
+ * neither search for its consumers found the other half.
+ *
+ * The index was not complete either. Six of the twenty-nine modules in the
+ * folder (`useAnchoredInfiniteScroll`, `useChatComposer`, `useDialogShell`,
+ * `useMenuKeyboard`, `useMessageToolbar`, `useZoneSection`) were never in it,
+ * so "import it from the barrel" was advice that failed at random.
+ *
+ * This is not a bundle-size rule and must not be sold as one: the production
+ * build drops the re-exports nobody asked for, which is the property
+ * `buildChunks.spec.ts` measures. The dev server does pay, because it serves
+ * modules unbundled, so a screen that wanted a filter helper fetched every
+ * module the index re-exported, `useVirtualScroll` and its
+ * `@tanstack/vue-virtual` among them. That is a side effect. The reason is the
+ * two addresses.
+ */
+describe("the shared composables", () => {
+  it("have one address each and no folder barrel", () => {
+    expect(
+      existsSync(join(CLIENT_ROOT, "src/shared/lib/composables/index.ts")),
+      "a barrel over the composables folder gives every composable a second address and competes with the per-composable path the rest of the tree uses: import each composable from its own module",
+    ).toBe(false);
+
+    const offenders: string[] = [];
+    for (const file of sources(join(CLIENT_ROOT, "src"))) {
+      const code = readFileSync(file, "utf8");
+      if (!/"@\/shared\/lib\/composables"/.test(code)) continue;
+      offenders.push(relative(CLIENT_ROOT, file).split("\\").join("/"));
+    }
+    expect(
+      offenders,
+      "the folder barrel is gone: address the composable by its own module path",
+    ).toEqual([]);
+  });
+});

@@ -7,6 +7,7 @@ using DM.Domain.Account.Features.Security;
 using DM.Testing;
 using DM.Web.API.Middleware;
 using DM.Web.API.Shared.Authentication;
+using DM.Web.API.Shared.Configuration;
 using DM.Web.API.Shared.RateLimiting;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
@@ -32,7 +33,8 @@ public class RateLimitPartitioningShould : UnitTestBase
     private const string OtherAddress = "198.51.100.4";
 
     private static readonly ApiCredentialsStorage CredentialsStorage =
-        new(Options.Create(new AuthenticationConfiguration()));
+        new(Options.Create(new AuthenticationConfiguration()),
+            Options.Create(new SessionCookieConfiguration()));
 
     private readonly Mock<ISymmetricCryptoService> cryptoService;
 
@@ -111,7 +113,7 @@ public class RateLimitPartitioningShould : UnitTestBase
 
     /// <summary>
     /// A token the cipher accepts, carrying the given account. The session half
-    /// is deliberately different every time: the budget belongs to the account, 
+    /// is deliberately different every time: the budget belongs to the account,
     /// not to the browser it was last opened in.
     /// </summary>
     private string TokenOf(Guid userId)

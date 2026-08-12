@@ -1,6 +1,4 @@
-using System.Linq.Expressions;
 using DM.Domain.Core.Dto;
-using DM.Infrastructure.Persistence.Entities.Account;
 using DbUpload = DM.Infrastructure.Persistence.Entities.Shared.Upload;
 
 namespace DM.Infrastructure.Persistence.Shared.Users;
@@ -33,20 +31,5 @@ public static class AvatarProjections
                 SourceUrl = upload.FilePath,
                 SourceWidth = upload.Width,
                 SourceHeight = upload.Height,
-            };
-
-    /// <summary>
-    /// EF-translatable Expression variant — for cases that need
-    /// an actual Expression&lt;Func&gt; (e.g. in a reusable selector pattern).
-    /// </summary>
-    public static readonly Expression<System.Func<User, AvatarPicture>> FromUser = user =>
-        user.AvatarUpload == null
-            ? new AvatarPicture()
-            : new AvatarPicture
-            {
-                SourceObjectKey = user.AvatarUpload.ObjectKey,
-                SourceUrl = user.AvatarUpload.FilePath,
-                SourceWidth = user.AvatarUpload.Width,
-                SourceHeight = user.AvatarUpload.Height,
             };
 }

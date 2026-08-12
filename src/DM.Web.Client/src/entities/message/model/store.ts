@@ -5,12 +5,17 @@ import type { Chat, ChatId, Message, MessageId } from "./types";
 import type { Username } from "@/shared/api/models/common";
 import messagingApi from "../api/messagingApi";
 import { useAuthStore } from "@/shared/stores";
+import { usePaging } from "@/shared/lib/composables/usePaging";
+import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 
-const PAGE_SIZE = 50;
 const MAX_MESSAGES = 500;
 
 export const useMessagingStore = defineStore("messaging", () => {
   const { user: currentUser } = storeToRefs(useAuthStore());
+  // Both sizes are the reader's own. The message window used to hold a constant
+  // of its own, so the "messages per page" preference was saved and moved
+  // nothing.
+  const { entitiesPerPage, messagesPerPage } = usePaging();
 
   // Error state for messaging operations
   const error = ref<string | null>(null);
@@ -22,7 +27,7 @@ export const useMessagingStore = defineStore("messaging", () => {
   async function fetchChats(number: number = 1) {
     loadingChats.value = true;
     try {
-      const take = currentUser.value?.settings?.paging?.entitiesPerPage ?? 20;
+      const take = entitiesPerPage.value;
       const { data, error: err } = await messagingApi.getChats({
         number,
         take,
@@ -43,10 +48,23 @@ export const useMessagingStore = defineStore("messaging", () => {
   const selectedChat = ref<Chat | null>(null);
   const loadingChat = ref(false);
 
+  // One token per slice, as in the game details store: the conversation header
+  // and the message window are fetched by separate calls and land separately,
+  // so a single counter would let each cancel the other.
+  //
+  // Two quick moves between conversations put two of each on the wire, and the
+  // first answer arriving last used to overwrite the state — the reader saw a
+  // conversation they had navigated away from, while mark-as-read had already
+  // been sent for it.
+  const chatGuard = createRequestGuard();
+  const messagesGuard = createRequestGuard();
+
   async function selectChat(id: ChatId) {
+    const requestId = chatGuard.next();
     loadingChat.value = true;
     try {
       const { data, error: err } = await messagingApi.getChat(id);
+      if (!chatGuard.isCurrent(requestId)) return;
       if (err) {
         error.value = "Не удалось загрузить переписку";
         selectedChat.value = null;
@@ -55,15 +73,19 @@ export const useMessagingStore = defineStore("messaging", () => {
       error.value = null;
       selectedChat.value = data ?? null;
     } finally {
-      loadingChat.value = false;
+      if (chatGuard.isCurrent(requestId)) loadingChat.value = false;
     }
   }
 
   async function selectDirectChat(username: Username) {
+    const requestId = chatGuard.next();
     loadingChat.value = true;
     try {
       const { data, error: err } =
         await messagingApi.getOrCreateDirectChat(username);
+      // The caller navigates by the id it gets back, so a stale answer still
+      // returns its own chat — it just does not touch the store on the way.
+      if (!chatGuard.isCurrent(requestId)) return data ?? null;
       if (err) {
         error.value = "Не удалось загрузить прямую переписку";
         selectedChat.value = null;
@@ -73,7 +95,7 @@ export const useMessagingStore = defineStore("messaging", () => {
       selectedChat.value = data ?? null;
       return data ?? null;
     } finally {
-      loadingChat.value = false;
+      if (chatGuard.isCurrent(requestId)) loadingChat.value = false;
     }
   }
 
@@ -91,32 +113,25 @@ export const useMessagingStore = defineStore("messaging", () => {
   const currentCursor = ref<CursorPaging | null>(null);
   const highlightedMessageId = ref<string | null>(null);
 
-  // Backwards compatibility: ListEnvelope wrapper
-  const messages = computed(() => {
-    if (messagesList.value.length === 0 && !currentCursor.value) return null;
-    return {
-      resources: messagesList.value,
-      paging: null, // Cursor-based pagination doesn't use traditional paging
-    } as ListEnvelope<Message>;
-  });
-
   // Fetch initial messages (latest messages)
   async function fetchMessages(chatId: ChatId) {
+    const requestId = messagesGuard.next();
     loadingMessages.value = true;
     // A fresh window carries no failed page with it: the error belongs to the
     // window it happened in, and keeping it would park the new one's sentinel.
     errorBefore.value = null;
     try {
       const { data } = await messagingApi.getMessages(chatId, {
-        limit: PAGE_SIZE,
+        limit: messagesPerPage.value,
       });
 
+      if (!messagesGuard.isCurrent(requestId)) return;
       messagesList.value = data?.resources ?? [];
       currentCursor.value = data?.paging ?? null;
       hasMoreBefore.value = data?.paging?.hasPrev ?? false;
       hasMoreAfter.value = data?.paging?.hasNext ?? false;
     } finally {
-      loadingMessages.value = false;
+      if (messagesGuard.isCurrent(requestId)) loadingMessages.value = false;
     }
   }
 
@@ -136,7 +151,7 @@ export const useMessagingStore = defineStore("messaging", () => {
       const { data, error: apiError } = await messagingApi.getMessagesBefore(
         selectedChat.value.id,
         currentCursor.value.prevCursor,
-        PAGE_SIZE,
+        messagesPerPage.value,
       );
 
       if (apiError) {
@@ -183,13 +198,15 @@ export const useMessagingStore = defineStore("messaging", () => {
   // aroundMessageId, replaces the list, and flags the message for the view to
   // scroll/highlight.
   async function navigateToMessage(chatId: ChatId, messageId: MessageId) {
+    const requestId = messagesGuard.next();
     loadingMessages.value = true;
     errorBefore.value = null;
     try {
       const { data } = await messagingApi.getMessages(chatId, {
         aroundMessageId: messageId,
-        limit: PAGE_SIZE,
+        limit: messagesPerPage.value,
       });
+      if (!messagesGuard.isCurrent(requestId)) return;
       if (data && data.resources.length > 0) {
         messagesList.value = data.resources;
         currentCursor.value = data.paging ?? null;
@@ -198,7 +215,7 @@ export const useMessagingStore = defineStore("messaging", () => {
         highlightedMessageId.value = messageId as unknown as string;
       }
     } finally {
-      loadingMessages.value = false;
+      if (messagesGuard.isCurrent(requestId)) loadingMessages.value = false;
     }
   }
 
@@ -419,7 +436,6 @@ export const useMessagingStore = defineStore("messaging", () => {
     clearSelection,
 
     // Messages
-    messages,
     messagesList,
     loadingMessages,
     loadingBefore,

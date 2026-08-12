@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Blog.Features.Blogs;
+using DM.Domain.Blog.Features.Publications;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Personal.Features.Subscriptions;
@@ -18,16 +19,19 @@ namespace DM.Web.API.Features.Blog.Blogs;
 internal class BlogApiService : IBlogApiService
 {
     private readonly IBlogService _blogService;
+    private readonly IPublicationService _publicationService;
     private readonly ISubscriptionService _subscriptionService;
     private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public BlogApiService(
         IBlogService blogService,
+        IPublicationService publicationService,
         ISubscriptionService subscriptionService,
         IMapper mapper)
     {
         _blogService = blogService;
+        _publicationService = publicationService;
         _subscriptionService = subscriptionService;
         _mapper = mapper;
     }
@@ -172,21 +176,21 @@ internal class BlogApiService : IBlogApiService
     /// <inheritdoc />
     public async Task<ListEnvelope<ApiPublication>> GetPublications(Guid blogId, Guid? rubricId, PagingQuery query)
     {
-        var (publications, paging) = await _blogService.GetPublications(blogId, rubricId, query);
+        var (publications, paging) = await _publicationService.GetPublications(blogId, rubricId, query);
         return new ListEnvelope<ApiPublication>(publications.Select(_mapper.Map<ApiPublication>), new PagingInfo(paging));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<ApiPublication>> GetPublication(Guid publicationId)
     {
-        var publication = await _blogService.GetPublication(publicationId);
+        var publication = await _publicationService.GetPublication(publicationId);
         return new Envelope<ApiPublication>(_mapper.Map<ApiPublication>(publication));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<ApiPublication?>> GetUserBestPublication(string username)
     {
-        var publication = await _blogService.GetBestUserPublication(username);
+        var publication = await _publicationService.GetBestUserPublication(username);
         return new Envelope<ApiPublication?>(
             publication == null ? null : _mapper.Map<ApiPublication>(publication));
     }
@@ -196,7 +200,7 @@ internal class BlogApiService : IBlogApiService
     {
         var createPublication = _mapper.Map<CreatePublication>(request);
         createPublication.BlogId = blogId;
-        var publication = await _blogService.CreatePublication(createPublication);
+        var publication = await _publicationService.CreatePublication(createPublication);
         return new Envelope<ApiPublication>(_mapper.Map<ApiPublication>(publication));
     }
 
@@ -205,10 +209,10 @@ internal class BlogApiService : IBlogApiService
     {
         var updatePublication = _mapper.Map<UpdatePublication>(request);
         updatePublication.PublicationId = publicationId;
-        var publication = await _blogService.UpdatePublication(updatePublication);
+        var publication = await _publicationService.UpdatePublication(updatePublication);
         return new Envelope<ApiPublication>(_mapper.Map<ApiPublication>(publication));
     }
 
     /// <inheritdoc />
-    public Task DeletePublication(Guid publicationId) => _blogService.DeletePublication(publicationId);
+    public Task DeletePublication(Guid publicationId) => _publicationService.DeletePublication(publicationId);
 }

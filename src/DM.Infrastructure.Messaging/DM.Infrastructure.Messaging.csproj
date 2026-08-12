@@ -14,12 +14,14 @@
       <PackageReference Include="Microsoft.Extensions.Configuration" />
       <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
       <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+      <!-- The consumer retry policy moved here, into the pipeline the middlewares
+           of the hosts share. Each host keeps its own reference for the
+           subscription policy of its own consumer. -->
       <PackageReference Include="Polly" />
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\DM.Infrastructure.Core\DM.Infrastructure.Core.csproj" />
-      <ProjectReference Include="..\DM.Infrastructure.Persistence\DM.Infrastructure.Persistence.csproj" />
     </ItemGroup>
 
 

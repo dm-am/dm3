@@ -82,6 +82,38 @@ public class UpdateCharacterValidatorShould : UnitTestBase
     }
 
     /// <summary>
+    /// A game with no attribute schema is answered the same way on update as on
+    /// create: the schema rules are skipped rather than run against a schema that
+    /// does not exist. The repository is set up to throw exactly as it does for
+    /// such a game, so a rule that asks it anyway fails this test instead of
+    /// answering a request with 500.
+    /// </summary>
+    [Fact]
+    public async Task SkipTheSchemaRulesWhenTheGameHasNoSchema()
+    {
+        characterRepository
+            .Setup(r => r.CharacterRequiresAttributes(
+                It.IsAny<Guid>(), It.IsAny<System.Threading.CancellationToken>()))
+            .ReturnsAsync(false);
+        characterRepository
+            .Setup(r => r.GetCharacterSchema(It.IsAny<Guid>()))
+            .ThrowsAsync(new InvalidOperationException("Nullable object must have a value."));
+
+        var input = new UpdateCharacter
+        {
+            CharacterId = Guid.NewGuid(),
+            Name = "Updated Character Name",
+            Attributes =
+            [
+                new CharacterAttribute { Id = Guid.NewGuid(), Value = "Elf" }
+            ]
+        };
+
+        var result = await validator.TestValidateAsync(input);
+        result.ShouldNotHaveAnyValidationErrors();
+    }
+
+    /// <summary>
     /// The same invariant as on create: the character holds one value per
     /// specification, so a repeated identifier is a caller's mistake and not a
     /// failed save.
@@ -90,6 +122,10 @@ public class UpdateCharacterValidatorShould : UnitTestBase
     public async Task FailWhenOneSpecificationIsSubmittedTwice()
     {
         var specificationId = Guid.NewGuid();
+        characterRepository
+            .Setup(r => r.CharacterRequiresAttributes(
+                It.IsAny<Guid>(), It.IsAny<System.Threading.CancellationToken>()))
+            .ReturnsAsync(true);
         characterRepository
             .Setup(r => r.GetCharacterSchema(It.IsAny<Guid>()))
             .ReturnsAsync(new AttributeSchema

@@ -22,7 +22,16 @@ public abstract class MongoCollectionRepository<TEntity> : MongoRepository
     /// <summary>
     /// Typed update definition builder
     /// </summary>
-    protected static UpdateDefinitionBuilder<TEntity> Update => Update<TEntity>();
+    /// <remarks>
+    /// Named for the builder rather than for the operation, unlike its three
+    /// neighbours, because a repository whose own contract has an Update method
+    /// otherwise collides with it: the method hides the property, and the two
+    /// repositories that hit this wrote `public new` to say so. `new` silences
+    /// the compiler without answering the question it asks — inside such a
+    /// repository the bare name then means the method, and the builder is
+    /// unreachable by name at all.
+    /// </remarks>
+    protected static UpdateDefinitionBuilder<TEntity> UpdateBuilder => Update<TEntity>();
 
     /// <summary>
     /// Typed sort definition builder

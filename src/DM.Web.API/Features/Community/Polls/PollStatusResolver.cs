@@ -6,8 +6,14 @@ using DomainPoll = DM.Domain.Community.Features.Polls.Poll;
 namespace DM.Web.API.Features.Community.Polls;
 
 /// <summary>
-/// Resolves poll status based on StartsUtc and EndsUtc
+/// Reports the poll status the domain derives from the poll's two dates.
 /// </summary>
+/// <remarks>
+/// The window itself is not spelled out here, and it used to be. The same window
+/// decides whether a vote is accepted, so a boundary changed in one copy and not
+/// the other would have this call a poll open while the vote it invites is
+/// refused.
+/// </remarks>
 internal class PollStatusResolver : IValueResolver<DomainPoll, Poll, PollStatus>
 {
     private readonly IDateTimeProvider _dateTimeProvider;
@@ -19,16 +25,6 @@ internal class PollStatusResolver : IValueResolver<DomainPoll, Poll, PollStatus>
     }
 
     /// <inheritdoc />
-    public PollStatus Resolve(DomainPoll source, Poll destination, PollStatus destMember, ResolutionContext context)
-    {
-        var now = _dateTimeProvider.Now;
-
-        if (now < source.StartsUtc)
-            return PollStatus.Pending;
-
-        if (now >= source.EndsUtc)
-            return PollStatus.Closed;
-
-        return PollStatus.Active;
-    }
+    public PollStatus Resolve(DomainPoll source, Poll destination, PollStatus destMember, ResolutionContext context) =>
+        source.StatusAt(_dateTimeProvider.Now);
 }

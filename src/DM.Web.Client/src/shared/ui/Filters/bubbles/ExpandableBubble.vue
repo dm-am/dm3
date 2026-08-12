@@ -7,6 +7,7 @@
 import { ref, computed } from "vue";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { symbols } from "@/shared/lib/utils/icons";
+import { useMenuKeyboard } from "@/shared/lib/composables/useMenuKeyboard";
 import type { ExpandableBubbleProps } from "../types";
 
 defineOptions({ name: "ExpandableBubble" });
@@ -22,6 +23,7 @@ const emit = defineEmits<{
 // Dropdown state
 const showDropdown = ref(false);
 const expandBtnRef = ref<HTMLButtonElement | null>(null);
+const dropdownRef = ref<HTMLElement | null>(null);
 
 // Computed values
 const sortedValues = computed(() =>
@@ -53,10 +55,16 @@ function closeDropdown() {
   showDropdown.value = false;
 }
 
-function closeDropdownAndReturnFocus() {
-  closeDropdown();
-  expandBtnRef.value?.focus();
-}
+// The role="menu" keyboard contract, shared with the other two menus on the
+// site. Escape sat on the trigger button alone, and the dropdown is its
+// sibling rather than its child, so a press from inside the open list never
+// reached the handler; the wrapper below hears both.
+const { handleMenuKeydown } = useMenuKeyboard({
+  isOpen: () => showDropdown.value,
+  close: closeDropdown,
+  trigger: expandBtnRef,
+  menu: dropdownRef,
+});
 
 function removeValue(id: string) {
   emit("remove", id);
@@ -115,6 +123,7 @@ onUnmounted(() => {
     v-else
     class="bubble bubble-expandable"
     :class="{ 'bubble-owners': isExpandable }"
+    @keydown="handleMenuKeydown"
   >
     <span class="bubble-prefix">{{ prefix }}{{ " " }}</span>
     <!-- Visible values -->
@@ -150,13 +159,17 @@ onUnmounted(() => {
       aria-haspopup="menu"
       :aria-expanded="showDropdown"
       @click.stop="toggleDropdown"
-      @keydown.esc="closeDropdownAndReturnFocus"
     >
       <SvgIcon name="chevronDown" />
     </button>
 
     <!-- Dropdown for hidden values -->
-    <div v-if="showDropdown" class="owners-dropdown" role="menu">
+    <div
+      v-if="showDropdown"
+      ref="dropdownRef"
+      class="owners-dropdown"
+      role="menu"
+    >
       <button
         v-for="item in hiddenValues"
         :key="item.id"

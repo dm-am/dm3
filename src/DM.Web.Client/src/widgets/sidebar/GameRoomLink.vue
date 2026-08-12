@@ -68,10 +68,10 @@ const STAR = "★";
   <li class="link">
     <span v-if="prefix" class="muted" aria-hidden="true">{{ prefix }}</span>
     <SvgIcon
-      v-if="isPrivate"
-      name="locked"
+      name="roomLocked"
       class="lock"
-      :class="{ granted: canView }"
+      :class="{ granted: canView, public: !isPrivate }"
+      :aria-hidden="!isPrivate"
     />
     <router-link v-if="canView" class="title" :to="to">{{
       room.title
@@ -89,13 +89,22 @@ const STAR = "★";
 .muted
   color: $text-muted
 
+// The glyph is rendered for every room and hidden on the public ones, the way
+// the old site does it, so the titles of a list start at one x whatever the
+// access of each room. Dropping the element instead (v-if) pulled the public
+// rooms left and left the column ragged.
+// The gap is a space: the original writes one between the glyph and the link,
+// and a space at the sidebar's size measures 4.28 pixels, which $grid-step is.
 .lock
   color: $text-muted
   vertical-align: -0.1em
-  margin-right: 2px
+  margin-right: $grid-step
 
   &.granted
     color: $accent-green
+
+  &.public
+    visibility: hidden
 
 // A room the viewer may not open is not a link and must not look like one.
 .no-access

@@ -78,6 +78,7 @@ const rows = computed(() =>
       <div class="filters">
         <FormField label="Фильтр" name="violators-filter">
           <Select
+            id="violators-filter"
             :model-value="filter"
             :options="filterOptions"
             @update:model-value="onFilterChange"

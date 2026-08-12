@@ -79,8 +79,6 @@ describe("useBlogsStore", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.clearAllMocks();
-    // Clear module-level cache
-    useBlogsStore().clearSearchCache();
   });
 
   afterEach(() => {
@@ -298,6 +296,39 @@ describe("useBlogsStore", () => {
       await store.searchBlogs({ search: "test" });
 
       expect(store.searchError).toBeTruthy();
+    });
+
+    // Every failure of this list used to arrive as one sentence, "Ошибка
+    // загрузки данных" — a rate limit, a broken server and a dead connection
+    // call for three different things to do. The API names what it can in the
+    // problem document's title (the global limiter answers 429 with "Слишком
+    // много запросов", the error middleware answers an unhandled exception
+    // with "Ошибка сервера") and names nothing when the request never got a
+    // response. Both halves are asserted because both are the point: the
+    // server's own sentence when it sent one, the page's own when it did not.
+    it("shows the title the API sent with a refusal", async () => {
+      mockApiGet.mockResolvedValue({
+        data: null,
+        error: { status: 429, title: "Слишком много запросов" },
+      });
+
+      const store = useBlogsStore();
+      await store.searchBlogs({ search: "test" });
+
+      expect(store.searchError).toBe("Слишком много запросов");
+    });
+
+    it("falls back to its own sentence when nothing was named", async () => {
+      // The shape the client produces for a request that got no response.
+      mockApiGet.mockResolvedValue({
+        data: null,
+        error: { type: "Unknown", title: "", status: 0, traceId: "" },
+      });
+
+      const store = useBlogsStore();
+      await store.searchBlogs({ search: "test" });
+
+      expect(store.searchError).toBe("Не удалось загрузить блоги");
     });
 
     it("includes host usernames in search", async () => {

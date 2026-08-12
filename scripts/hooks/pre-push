@@ -21,6 +21,8 @@
 #   deployment-smoke  -  поднимает деплойную пару целиком: docker и минуты
 #   publish           -  пишет образы в реестр по секретам GitHub
 #   publish-frontend  -  то же
+#   security          -  вызов security.yml из графа сборки; сам ничего не
+#                        считает, ждет двух джоб ниже
 #   codeql            -  анализ выполняется на стороне GitHub
 #   zap-scan          -  сканирует поднятый стенд: docker и минуты
 #
@@ -39,6 +41,20 @@ ROOT=$(git rev-parse --show-toplevel)
 CLIENT="$ROOT/src/DM.Web.Client"
 
 say() { printf '\n\033[36m==> %s\033[0m\n' "$1"; }
+
+# Первым и не из воркфлоу: этот хук — единственное, что стоит между запрещенной
+# командой и потерянной работой, а его собственный тест до сих пор не гонял
+# никто, ни локально, ни в CI. Проверка идет в обе стороны — каждая опасная
+# форма блокируется, каждая безопасная проходит, — и стоит доли секунды, так
+# что дешевле ее в списке нет.
+say "Хуки: защита от разрушительных команд git"
+node "$ROOT/.claude/hooks/block-dangerous-git.test.js"
+
+say "Хуки: запрет второй миграции"
+node "$ROOT/.claude/hooks/block-new-migrations.test.js"
+
+say "Хуки: разбор пути для линта правки"
+node "$ROOT/.claude/hooks/lint-edited-file.test.js"
 
 say "Фронтенд: линт"
 (cd "$CLIENT" && npm run lint:ci)

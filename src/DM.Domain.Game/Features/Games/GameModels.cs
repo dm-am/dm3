@@ -115,7 +115,7 @@ public class GameAssistantInfo
     public DateTimeOffset? LastActivityUtc { get; set; }
 
     /// <summary>
-    /// User role (for displaying role badges [А], [С], [М], [Н], [Р])
+    /// User role (for displaying role badges "[А]", "[С]", "[М]", "[Н]", "[Р]")
     /// </summary>
     public UserRole Role { get; set; }
 
@@ -1126,7 +1126,7 @@ public class GameDetails : Game
     /// <summary>
     /// Game subscribers
     /// </summary>
-    public IEnumerable<GeneralUser> Subscribers { get; set; } = [];
+    public IEnumerable<UserReference> Subscribers { get; set; } = [];
 
     /// <summary>
     /// Full assistant information for detail page

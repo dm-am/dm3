@@ -24,6 +24,13 @@ public class NotepadEntryResponse
     /// <summary>Owner ID (character for player notepad)</summary>
     public Guid? OwnerId { get; set; }
 
+    /// <summary>
+    /// Author of the entry. Editing belongs to the author alone and deleting to
+    /// the author and the lead of the game or blog, so a reader that offers an
+    /// edit control has to know whose words these are before it sends anything.
+    /// </summary>
+    public Guid AuthorId { get; set; }
+
     /// <summary>Entry title</summary>
     public string Title { get; set; } = null!;
 

@@ -130,7 +130,7 @@ internal class AuthenticationApiService : IAuthenticationApiService
     public Task Logout(HttpContext httpContext) => _authenticationService.Logout(httpContext);
 
     /// <inheritdoc />
-    public Task LogoutAll(HttpContext httpContext) => _authenticationService.LogoutElsewhere(httpContext);
+    public Task LogoutElsewhere(HttpContext httpContext) => _authenticationService.LogoutElsewhere(httpContext);
 
     /// <inheritdoc />
     public async Task<IEnumerable<Session>> GetSessions()
