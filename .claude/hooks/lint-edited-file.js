@@ -23,8 +23,38 @@
 const { execFileSync } = require("child_process");
 const path = require("path");
 
-const CLIENT_ROOT = path.join("src", "DM.Web.Client");
+const CLIENT_ROOT = "src/DM.Web.Client";
 const LINTABLE = /\.(vue|ts|tsx|js|cjs|mjs)$/i;
+
+/**
+ * Каталог линтера и путь файла относительно него, или null, если файл линтеру
+ * не принадлежит.
+ *
+ * Вынесено и экспортировано затем же, зачем у соседних хуков: единственная
+ * нетривиальная часть тут — разбор пути, и проверить ее иначе как на живой
+ * правке было нельзя.
+ *
+ * Маркер ищется как каталог, а не как подстрока. Подстрокой он совпадал и с
+ * "src/DM.Web.Client.ts", и относительный путь выходил равным "ts": линтер
+ * получал аргумент, которому не соответствует ни один файл, отвечал кодом 2 и
+ * строкой "No files matching the pattern", а хук печатал это как жалобу на
+ * файл. Громко и мимо.
+ */
+function resolveTarget(filePath) {
+  if (!filePath || !LINTABLE.test(filePath)) return null;
+
+  const normalized = filePath.split(path.sep).join("/");
+  const at = normalized.indexOf(CLIENT_ROOT + "/");
+  if (at < 0) return null;
+
+  const clientDir = normalized.slice(0, at + CLIENT_ROOT.length);
+  const relative = normalized.slice(clientDir.length + 1);
+  return relative ? { clientDir, relative } : null;
+}
+
+module.exports = { resolveTarget };
+
+if (require.main !== module) return;
 
 let payload = "";
 try {
@@ -40,16 +70,10 @@ try {
   process.exit(0);
 }
 
-const filePath = input?.tool_input?.file_path;
-if (!filePath || !LINTABLE.test(filePath)) process.exit(0);
+const target = resolveTarget(input?.tool_input?.file_path);
+if (!target) process.exit(0);
 
-// Линтер живет в src/DM.Web.Client и знает только про свое поддерево.
-const normalized = filePath.split(path.sep).join("/");
-const marker = CLIENT_ROOT.split(path.sep).join("/");
-if (!normalized.includes(marker)) process.exit(0);
-
-const clientDir = normalized.slice(0, normalized.indexOf(marker) + marker.length);
-const relative = normalized.slice(clientDir.length + 1);
+const { clientDir, relative } = target;
 
 // Бинарь зовется напрямую через node, а не через npx: на Windows npx.cmd из
 // child_process не запускался вовсе (status=null, пустой вывод), то есть хук

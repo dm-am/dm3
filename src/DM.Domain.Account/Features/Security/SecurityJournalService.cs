@@ -39,9 +39,9 @@ internal class SecurityJournalService : ISecurityJournalService
         // to land here and answer with the whole journal.
         return type switch
         {
-            SecurityLogType.Login => await _repository.GetLoginHistoryAsync(userId, take),
-            SecurityLogType.Password => await _repository.GetPasswordEventsAsync(userId, take),
-            SecurityLogType.Session => await _repository.GetSessionEventsAsync(userId, take),
+            SecurityLogType.Login => await _repository.GetByTypesAsync(userId, SecurityEventCategories.Login, take),
+            SecurityLogType.Password => await _repository.GetByTypesAsync(userId, SecurityEventCategories.Password, take),
+            SecurityLogType.Session => await _repository.GetByTypesAsync(userId, SecurityEventCategories.Session, take),
             _ => await _repository.GetRecentEventsAsync(userId, take)
         };
     }

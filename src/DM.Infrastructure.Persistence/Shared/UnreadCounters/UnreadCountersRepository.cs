@@ -82,7 +82,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
         return Collection.UpdateManyAsync(
             Filter.Eq(c => c.EntityId, entityId) &
             Filter.Eq(c => c.EntryType, entryType),
-            Update.Inc(c => c.Counter, 1));
+            UpdateBuilder.Inc(c => c.Counter, 1));
     }
 
     /// <inheritdoc />
@@ -92,7 +92,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
             Filter.Eq(c => c.EntityId, entityId) &
             Filter.Eq(c => c.EntryType, entryType) &
             Filter.Ne(c => c.UserId, excludeUserId),
-            Update.Inc(c => c.Counter, 1));
+            UpdateBuilder.Inc(c => c.Counter, 1));
     }
 
     /// <inheritdoc />
@@ -101,7 +101,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
         return Collection.UpdateManyAsync(Filter.Eq(c => c.EntityId, entityId) &
                                           Filter.Eq(c => c.EntryType, entryType) &
                                           Filter.Lt(c => c.LastReadUtc, createDate.UtcDateTime),
-            Update.Inc(c => c.Counter, -1));
+            UpdateBuilder.Inc(c => c.Counter, -1));
     }
 
     /// <inheritdoc />
@@ -144,7 +144,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     /// index reads, so a second copy of this that forgot it would leave the
     /// document behind forever.
     /// </remarks>
-    private UpdateDefinition<UnreadCounter> Tombstone() => Update
+    private UpdateDefinition<UnreadCounter> Tombstone() => UpdateBuilder
         .Set(c => c.IsRemoved, true)
         .Set(c => c.RemovedUtc, _dateTimeProvider.Now.UtcDateTime);
 
@@ -253,7 +253,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
         {
             await Collection.UpdateOneAsync(
                 Key(userId, entityId, entryType) & Filter.Eq(c => c.IsRemoved, false),
-                Update
+                UpdateBuilder
                     .Set(c => c.Counter, 0)
                     .Set(c => c.LastReadUtc, _dateTimeProvider.Now.UtcDateTime));
             return;
@@ -332,7 +332,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
         await Collection.UpdateManyAsync(
             Filter.Eq(c => c.ParentId, parentId) &
             Filter.Eq(c => c.EntryType, entryType),
-            Update.Set(c => c.ParentId, newParentId));
+            UpdateBuilder.Set(c => c.ParentId, newParentId));
     }
 
     /// <inheritdoc />

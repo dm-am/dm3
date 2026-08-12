@@ -161,7 +161,7 @@ internal class AttributeSchemaRepository :
         return result;
     }
 
-    public new async Task<AttributeSchema> Update(UpdateAttributeSchema updateSchema)
+    public async Task<AttributeSchema> Update(UpdateAttributeSchema updateSchema)
     {
         var existingSchema = await Collection
             .Find(Filter.Eq(s => s.Id, updateSchema.SchemaId))

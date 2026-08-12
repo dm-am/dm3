@@ -67,80 +67,15 @@ internal class SecurityAuditRepository : MongoCollectionRepository<DbEntry>, ISe
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<SecurityAuditEntry>> GetLoginHistoryAsync(Guid userId, int limit = 20)
+    public async Task<IReadOnlyList<SecurityAuditEntry>> GetByTypesAsync(
+        Guid userId, IReadOnlyList<SecurityEventType> eventTypes, int limit = 20)
     {
-        var loginEventTypes = new[]
-        {
-            (int)SecurityEventType.LoginSuccess,
-            (int)SecurityEventType.LoginFailure,
-            (int)SecurityEventType.SuspiciousLogin
-        };
-
+        // The set arrives from the domain rather than being built here: which
+        // types make up a category is a statement about the product, and four
+        // copies of this query differing only in that array is what it used to be.
         var filter = Filter.And(
             Filter.Eq(e => e.UserId, userId),
-            Filter.In(e => e.EventType, loginEventTypes));
-
-        var entries = await Collection
-            .Find(filter)
-            .SortByDescending(e => e.TimestampUtc)
-            .Limit(limit)
-            .ToListAsync();
-
-        return entries.Select(ToDto).ToList();
-    }
-
-    /// <inheritdoc />
-    public async Task<IReadOnlyList<SecurityAuditEntry>> GetSuccessfulLoginsAsync(Guid userId, int limit = 20)
-    {
-        var filter = Filter.And(
-            Filter.Eq(e => e.UserId, userId),
-            Filter.Eq(e => e.EventType, (int)SecurityEventType.LoginSuccess));
-
-        var entries = await Collection
-            .Find(filter)
-            .SortByDescending(e => e.TimestampUtc)
-            .Limit(limit)
-            .ToListAsync();
-
-        return entries.Select(ToDto).ToList();
-    }
-
-    /// <inheritdoc />
-    public async Task<IReadOnlyList<SecurityAuditEntry>> GetPasswordEventsAsync(Guid userId, int limit = 20)
-    {
-        var passwordEventTypes = new[]
-        {
-            (int)SecurityEventType.PasswordChange,
-            (int)SecurityEventType.PasswordResetRequest,
-            (int)SecurityEventType.PasswordResetComplete
-        };
-
-        var filter = Filter.And(
-            Filter.Eq(e => e.UserId, userId),
-            Filter.In(e => e.EventType, passwordEventTypes));
-
-        var entries = await Collection
-            .Find(filter)
-            .SortByDescending(e => e.TimestampUtc)
-            .Limit(limit)
-            .ToListAsync();
-
-        return entries.Select(ToDto).ToList();
-    }
-
-    /// <inheritdoc />
-    public async Task<IReadOnlyList<SecurityAuditEntry>> GetSessionEventsAsync(Guid userId, int limit = 20)
-    {
-        var sessionEventTypes = new[]
-        {
-            (int)SecurityEventType.Logout,
-            (int)SecurityEventType.SessionTerminated,
-            (int)SecurityEventType.LogoutElsewhere
-        };
-
-        var filter = Filter.And(
-            Filter.Eq(e => e.UserId, userId),
-            Filter.In(e => e.EventType, sessionEventTypes));
+            Filter.In(e => e.EventType, eventTypes.Select(type => (int)type)));
 
         var entries = await Collection
             .Find(filter)

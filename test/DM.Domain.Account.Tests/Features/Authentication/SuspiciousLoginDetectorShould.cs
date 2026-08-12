@@ -105,7 +105,9 @@ public class SuspiciousLoginDetectorShould : UnitTestBase
         var suspicious = await _detector.IsSuspiciousAsync(_userId, NewAddress, "agent");
 
         suspicious.Should().BeTrue("the guessing did not make the new address the owner's");
-        _auditService.Verify(s => s.GetLoginHistoryAsync(It.IsAny<Guid>(), It.IsAny<int>()), Times.Never,
+        _auditService.Verify(
+            s => s.GetByTypesAsync(It.IsAny<Guid>(), SecurityEventCategories.Login, It.IsAny<int>()),
+            Times.Never,
             "the mixed trail spends the window on entries this cannot use");
     }
 
@@ -121,7 +123,8 @@ public class SuspiciousLoginDetectorShould : UnitTestBase
 
     /// <param name="newestFirst">The trail as the repository returns it</param>
     private void Trail(params SecurityAuditEntry[] newestFirst) =>
-        _auditService.Setup(s => s.GetSuccessfulLoginsAsync(_userId, It.IsAny<int>()))
+        _auditService.Setup(s => s.GetByTypesAsync(
+                _userId, SecurityEventCategories.SuccessfulLogins, It.IsAny<int>()))
             .ReturnsAsync(newestFirst);
 
     private static SecurityAuditEntry Entry(SecurityEventType type, string address) =>

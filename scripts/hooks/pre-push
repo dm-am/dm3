@@ -50,6 +50,12 @@ say() { printf '\n\033[36m==> %s\033[0m\n' "$1"; }
 say "Хуки: защита от разрушительных команд git"
 node "$ROOT/.claude/hooks/block-dangerous-git.test.js"
 
+say "Хуки: запрет второй миграции"
+node "$ROOT/.claude/hooks/block-new-migrations.test.js"
+
+say "Хуки: разбор пути для линта правки"
+node "$ROOT/.claude/hooks/lint-edited-file.test.js"
+
 say "Фронтенд: линт"
 (cd "$CLIENT" && npm run lint:ci)
 

@@ -146,8 +146,8 @@ internal class BotLinkRepository : MongoCollectionRepository<UserSettings>, IBot
         var filter = Filter.Eq(u => u.UserId, userId);
         var update = channelType.ToLowerInvariant() switch
         {
-            "discord" => Update.Set(s => s.DiscordPreferences, null),
-            "telegram" => Update.Set(s => s.TelegramPreferences, null),
+            "discord" => UpdateBuilder.Set(s => s.DiscordPreferences, null),
+            "telegram" => UpdateBuilder.Set(s => s.TelegramPreferences, null),
             _ => throw new ArgumentException($"Invalid channel type: {channelType}")
         };
 
@@ -205,18 +205,18 @@ internal class BotLinkRepository : MongoCollectionRepository<UserSettings>, IBot
     {
         var update = channelType.ToLowerInvariant() switch
         {
-            "discord" => Update.Set(s => s.DiscordPreferences, preference),
-            "telegram" => Update.Set(s => s.TelegramPreferences, preference),
+            "discord" => UpdateBuilder.Set(s => s.DiscordPreferences, preference),
+            "telegram" => UpdateBuilder.Set(s => s.TelegramPreferences, preference),
             _ => throw new ArgumentException($"Invalid channel type: {channelType}")
         };
 
         var defaults = UserSettings.CreateDefault(userId);
         return Collection.UpdateOneAsync(
             Filter.Eq(u => u.UserId, userId),
-            Update.Combine(
+            UpdateBuilder.Combine(
                 update,
-                Update.SetOnInsert(s => s.Theme, defaults.Theme),
-                Update.SetOnInsert(s => s.Paging, defaults.Paging)),
+                UpdateBuilder.SetOnInsert(s => s.Theme, defaults.Theme),
+                UpdateBuilder.SetOnInsert(s => s.Paging, defaults.Paging)),
             new UpdateOptions { IsUpsert = true },
             ct);
     }

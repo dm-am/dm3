@@ -46,7 +46,7 @@ internal class LoginAttemptRepository : MongoCollectionRepository<LoginAttempt>,
 
         var result = await Collection.FindOneAndUpdateAsync(
             Filter.Eq(x => x.Id, origin.Key),
-            Update
+            UpdateBuilder
                 .Inc(x => x.FailedAttempts, 1)
                 .Set(x => x.LastAttemptUtc, now)
                 // Denormalized out of the composite id so a successful login can
@@ -67,7 +67,7 @@ internal class LoginAttemptRepository : MongoCollectionRepository<LoginAttempt>,
     {
         return Collection.UpdateOneAsync(
             Filter.Eq(x => x.Id, origin.Key),
-            Update
+            UpdateBuilder
                 .Set(x => x.LockoutStartUtc, lockoutStart)
                 .SetOnInsert(x => x.Email, origin.NormalizedEmail)
                 .SetOnInsert(x => x.IpAddress, origin.IpAddress),

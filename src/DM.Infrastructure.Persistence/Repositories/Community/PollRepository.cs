@@ -230,7 +230,7 @@ internal class PollRepository : MongoCollectionRepository<DbPoll>, IPollReposito
     }
 
     /// <inheritdoc />
-    public new async Task<Poll> Update(Guid pollId, string? title, string? details,
+    public async Task<Poll> Update(Guid pollId, string? title, string? details,
         DateTimeOffset? startDate, DateTimeOffset? endDate, bool? isAnonymous)
     {
         var currentPoll = await Collection.Find(Filter.Eq(p => p.Id, pollId)).FirstAsync();

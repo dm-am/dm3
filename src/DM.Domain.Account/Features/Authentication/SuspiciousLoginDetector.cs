@@ -36,7 +36,7 @@ internal class SuspiciousLoginDetector : ISuspiciousLoginDetector
         // the caller gets here, so left in it makes its own address known to
         // itself and the answer is false for every login there has ever been. It
         // is the newest entry, because the trail comes back newest first.
-        var previousLogins = (await _auditService.GetSuccessfulLoginsAsync(userId, 20))
+        var previousLogins = (await _auditService.GetByTypesAsync(userId, SecurityEventCategories.SuccessfulLogins, 20))
             .Skip(1)
             .ToList();
 

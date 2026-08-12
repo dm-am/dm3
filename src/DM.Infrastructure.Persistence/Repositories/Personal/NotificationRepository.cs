@@ -74,13 +74,13 @@ internal class NotificationRepository : MongoCollectionRepository<Notification>,
         Collection.UpdateOneAsync(
             Filter.Eq(n => n.NotificationId, notificationId) &
             UserToBeNotified(userId),
-            Update.AddToSet(n => n.UsersNotified, userId));
+            UpdateBuilder.AddToSet(n => n.UsersNotified, userId));
 
     /// <inheritdoc />
     public Task MarkAsRead(Guid userId) =>
         Collection.UpdateManyAsync(
             UserToBeNotified(userId),
-            Update.AddToSet(n => n.UsersNotified, userId));
+            UpdateBuilder.AddToSet(n => n.UsersNotified, userId));
 
     // ═══ PRIVATE ═══
 
