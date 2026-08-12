@@ -79,7 +79,10 @@ internal class PollRepository : MongoCollectionRepository<DbPoll>, IPollReposito
         var now = _dateTimeProvider.Now.UtcDateTime;
         var isDesc = string.Equals(query.SortOrder, "desc", StringComparison.OrdinalIgnoreCase);
 
-        // Build aggregation pipeline with computed statusOrder field
+        // Build aggregation pipeline with computed statusOrder field. The window
+        // is Poll.StatusAt in the community domain, restated here for the same
+        // reason as in BuildFilter: the server sorts, so the ladder has to travel
+        // as a document.
         // Pending: StartsUtc > now → order 0
         // Active: StartsUtc <= now AND EndsUtc > now → order 1
         // Closed: EndsUtc <= now → order 2
@@ -117,10 +120,12 @@ internal class PollRepository : MongoCollectionRepository<DbPoll>, IPollReposito
             return filter;
 
         // Status is a position relative to now, so it is a comparison on the two
-        // dates rather than a stored field. Every member is spelled out and there
-        // is no arm for anything else: the binder refuses a word outside the
-        // vocabulary, where the string form used to fall past all three
-        // comparisons and answer with every poll.
+        // dates rather than a stored field. The window is Poll.StatusAt in the
+        // community domain; a Mongo filter is built and shipped rather than
+        // called, so these three arms restate it and have to move with it.
+        // Every member is spelled out and there is no arm for anything else: the
+        // binder refuses a word outside the vocabulary, where the string form
+        // used to fall past all three comparisons and answer with every poll.
         var now = _dateTimeProvider.Now.UtcDateTime;
         filter &= query.Status switch
         {

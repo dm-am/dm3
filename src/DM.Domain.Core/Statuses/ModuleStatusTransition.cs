@@ -1,11 +1,17 @@
-namespace DM.Domain.Game.Features.Games;
+namespace DM.Domain.Core.Statuses;
 
 /// <summary>
-/// A requested game status transition. Each value maps to exactly one legal
-/// move on the status state machine; the service rejects a transition applied
-/// from an incompatible current state with BadRequest.
+/// A requested move on the module status state machine. Each value is exactly
+/// one move; a move applied from a state it is not legal in is refused with
+/// BadRequest.
 /// </summary>
-public enum GameStatusTransition
+/// <remarks>
+/// One vocabulary for a game and a blog, because it is one machine. Each module
+/// used to declare a member-for-member copy of this enum beside a copy of the
+/// rules that read it. The numbering and the member names are kept from those
+/// copies: the name is what travels on the wire.
+/// </remarks>
+public enum ModuleStatusTransition
 {
     /// <summary>
     /// Start: Draft -> Active (sets ActivatedUtc on first activation)
@@ -34,11 +40,11 @@ public enum GameStatusTransition
 }
 
 /// <summary>
-/// A requested premoderation transition for a game curated by a mentor.
-/// The endpoint is gated Mentor+; the service rejects a transition applied
-/// from an incompatible current premoderation state with BadRequest.
+/// A requested move on the module premoderation state machine. The endpoints
+/// that accept it are gated Mentor+; a move applied from an incompatible
+/// premoderation status is refused with BadRequest.
 /// </summary>
-public enum GamePremoderationTransition
+public enum ModulePremoderationTransition
 {
     /// <summary>
     /// Submit for premoderation: AwaitingEdits -> AwaitingApproval
@@ -48,7 +54,7 @@ public enum GamePremoderationTransition
 
     /// <summary>
     /// Release from premoderation: AwaitingApproval -> Approved
-    /// (clears the curator, game becomes publicly visible)
+    /// (clears the curator, the module becomes publicly visible)
     /// </summary>
     RemoveFromPremoderation = 1
 }

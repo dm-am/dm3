@@ -13,6 +13,7 @@ using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Core.Identity;
+using DM.Domain.Core.Statuses;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.AttributeSchemas;
@@ -574,78 +575,60 @@ internal class GameService : IGameService
         return result;
     }
 
-    public async Task<GameDetails> ChangeStatusAsync(Guid gameId, GameStatusTransition transition)
+    public async Task<GameDetails> ChangeStatusAsync(Guid gameId, ModuleStatusTransition transition)
     {
         var game = await GetDetailsAsync(gameId);
         var now = _dateTimeProvider.Now;
-        var update = new UpdateGameEntity { GameId = gameId, UpdatedUtc = now };
-        EventType statusEvent;
 
-        switch (transition)
+        // What only a game answers for: the intention that guards the move and
+        // the event it publishes. Which state the move is legal from and what
+        // state it produces is the machine a blog runs on too, and that lives
+        // in ModuleStatusPolicy.
+        var (intention, statusEvent) = transition switch
         {
-            case GameStatusTransition.Start:
-                RequireStatus(game, ModuleStatus.Draft, transition);
-                _intentionManager.ThrowIfForbidden(GameIntention.SetStatusActive, game);
-                update.Status = ModuleStatus.Active;
-                if (!game.ActivatedUtc.HasValue) update.ActivatedUtc = now;
-                statusEvent = EventType.StatusGameActive;
-                break;
+            ModuleStatusTransition.Start =>
+                (GameIntention.SetStatusActive, EventType.StatusGameActive),
+            ModuleStatusTransition.Freeze =>
+                (GameIntention.SetStatusClosed, EventType.StatusGameFrozen),
+            ModuleStatusTransition.Finish =>
+                (GameIntention.SetStatusClosed, EventType.StatusGameFinished),
+            ModuleStatusTransition.Close =>
+                (GameIntention.SetStatusClosed, EventType.StatusGameClosed),
+            ModuleStatusTransition.Reopen =>
+                (GameIntention.SetStatusActive, EventType.StatusGameActive),
+            _ => throw new HttpException(
+                HttpStatusCode.BadRequest, RefusalMessage.UnknownStatusTransition)
+        };
 
-            case GameStatusTransition.Freeze:
-                RequireStatus(game, ModuleStatus.Active, transition);
-                _intentionManager.ThrowIfForbidden(GameIntention.SetStatusClosed, game);
-                update.Status = ModuleStatus.Closed;
-                update.ClosedReason = ClosedReason.Frozen;
-                update.ClosedUtc = now;
-                update.IsRecruitmentOpen = false;
-                statusEvent = EventType.StatusGameFrozen;
-                break;
+        // Legality first and authorization second, as before: an illegal move
+        // is answered 400 whether or not the caller could have made a legal one.
+        var change = ModuleStatusPolicy.Resolve(
+            transition,
+            new ModuleLifecycle(game.Status, game.ClosedReason, game.ActivatedUtc, game.ClosedUtc),
+            now);
+        _intentionManager.ThrowIfForbidden(intention, game);
 
-            case GameStatusTransition.Finish:
-                RequireStatus(game, ModuleStatus.Active, transition);
-                _intentionManager.ThrowIfForbidden(GameIntention.SetStatusClosed, game);
-                update.Status = ModuleStatus.Closed;
-                update.ClosedReason = ClosedReason.Finished;
-                update.ClosedUtc = now;
-                update.IsRecruitmentOpen = false;
-                statusEvent = EventType.StatusGameFinished;
-                break;
-
-            case GameStatusTransition.Close:
-                // Active -> Closed+None, or Closed+Frozen -> Closed+None
-                if (game.Status != ModuleStatus.Active &&
-                    !(game.Status == ModuleStatus.Closed && game.ClosedReason == ClosedReason.Frozen))
-                {
-                    throw IllegalTransition(transition, game);
-                }
-                _intentionManager.ThrowIfForbidden(GameIntention.SetStatusClosed, game);
-                update.Status = ModuleStatus.Closed;
-                update.ClosedReason = ClosedReason.None;
-                update.IsRecruitmentOpen = false;
-                if (!game.ClosedUtc.HasValue) update.ClosedUtc = now;
-                statusEvent = EventType.StatusGameClosed;
-                break;
-
-            case GameStatusTransition.Reopen:
-                RequireStatus(game, ModuleStatus.Closed, transition);
-                _intentionManager.ThrowIfForbidden(GameIntention.SetStatusActive, game);
-                update.Status = ModuleStatus.Active;
-                update.ClosedReason = ClosedReason.None;
-                update.ClearClosedUtc = true;
-                if (!game.ActivatedUtc.HasValue) update.ActivatedUtc = now;
-                statusEvent = EventType.StatusGameActive;
-                break;
-
-            default:
-                throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.UnknownStatusTransition);
-        }
+        var update = new UpdateGameEntity
+        {
+            GameId = gameId,
+            UpdatedUtc = now,
+            Status = change.Status,
+            ClosedReason = change.ClosedReason,
+            ClosedUtc = change.ClosedUtc,
+            ClearClosedUtc = change.ClearClosedUtc,
+            ActivatedUtc = change.ActivatedUtc,
+            // A game that closes stops looking for players. This is the field a
+            // blog has no counterpart for, and the moves that end at Closed are
+            // exactly Freeze, Finish and Close.
+            IsRecruitmentOpen = change.Status == ModuleStatus.Closed ? false : (bool?)null
+        };
 
         var result = await _repository.Update(update);
         await _producer.SendAsync(new List<EventType> { EventType.ChangedGame, statusEvent }, gameId);
         return result;
     }
 
-    public async Task<GameDetails> ChangePremoderationAsync(string id, GamePremoderationTransition transition)
+    public async Task<GameDetails> ChangePremoderationAsync(string id, ModulePremoderationTransition transition)
     {
         // Site-wide Mentor+ gate (parameterless intention): the role decides who
         // may move a game through premoderation, not the per-game read gate. The
@@ -666,35 +649,17 @@ internal class GameService : IGameService
         }
 
         var gameId = game.Id;
-        var update = new UpdateGameEntity { GameId = gameId, UpdatedUtc = _dateTimeProvider.Now };
+        var change = ModulePremoderationPolicy.Resolve(
+            transition, game.PremoderationStatus, currentUserId);
 
-        switch (transition)
+        var update = new UpdateGameEntity
         {
-            case GamePremoderationTransition.SendToPremoderation:
-                if (game.PremoderationStatus != PremoderationStatus.AwaitingEdits)
-                {
-                    throw new HttpException(HttpStatusCode.BadRequest,
-                        RefusalMessage.CannotSubmitForPremoderation(game.PremoderationStatus));
-                }
-                update.PremoderationStatus = PremoderationStatus.AwaitingApproval;
-                update.MentorId = currentUserId;
-                update.SetMentorId = true;
-                break;
-
-            case GamePremoderationTransition.RemoveFromPremoderation:
-                if (game.PremoderationStatus != PremoderationStatus.AwaitingApproval)
-                {
-                    throw new HttpException(HttpStatusCode.BadRequest,
-                        RefusalMessage.CannotWithdrawFromPremoderation(game.PremoderationStatus));
-                }
-                update.PremoderationStatus = PremoderationStatus.Approved;
-                update.MentorId = null;
-                update.SetMentorId = true;
-                break;
-
-            default:
-                throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.UnknownPremoderationTransition);
-        }
+            GameId = gameId,
+            UpdatedUtc = _dateTimeProvider.Now,
+            PremoderationStatus = change.Status,
+            MentorId = change.MentorId,
+            SetMentorId = true
+        };
 
         var result = await _repository.Update(update);
         await _producer.SendAsync(new List<EventType> { EventType.ChangedGame, EventType.StatusGameModeration }, gameId);
@@ -717,19 +682,6 @@ internal class GameService : IGameService
         await _producer.SendAsync(EventType.ChangedGame, gameId);
         return result;
     }
-
-    private static void RequireStatus(Game game, ModuleStatus expected, GameStatusTransition transition)
-    {
-        if (game.Status != expected)
-        {
-            throw IllegalTransition(transition, game);
-        }
-    }
-
-    private static HttpException IllegalTransition(GameStatusTransition transition, Game game) =>
-        new(HttpStatusCode.BadRequest,
-            $"Переход \"{transition}\" недоступен из статуса \"{game.Status}\"" +
-            (game.Status == ModuleStatus.Closed ? $" ({game.ClosedReason})" : ""));
 
     #endregion
 

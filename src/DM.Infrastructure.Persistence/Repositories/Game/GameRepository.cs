@@ -421,7 +421,7 @@ internal class GameRepository : IGameRepository
         // Text search with fuzzy matching (OR between title/system/setting)
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            var searchPattern = "%" + query.Search.Replace("%", "\\%").Replace("_", "\\_") + "%";
+            var searchPattern = LikePatterns.Contains(query.Search);
             var searchLower = query.Search.ToLower();
             games = games.Where(g =>
                 // Contains match (case-insensitive)
@@ -560,20 +560,7 @@ internal class GameRepository : IGameRepository
         // Participating filter - current user is master, mentor, assistant, player, or reader
         if (query.Participating == true)
         {
-            games = games.Where(g =>
-                // Master
-                g.MasterId == userId ||
-                // Mentor
-                g.MentorId == userId ||
-                // Assistant
-                g.Assistants.Any(a => a.UserId == userId) ||
-                // Player (has active character)
-                g.Characters.Any(c => !c.IsRemoved && c.Status == CharacterStatus.Active && c.AuthorId == userId) ||
-                // Reader (subscriber)
-                _dbContext.Subscriptions.Any(s =>
-                    s.TargetType == SubscriptionTargetType.Game &&
-                    s.TargetId == g.GameId &&
-                    s.SubscriberId == userId));
+            games = games.Where(GameParticipationFilters.Participating(_dbContext, userId));
         }
 
         return games;
@@ -588,9 +575,10 @@ internal class GameRepository : IGameRepository
         if (!string.IsNullOrWhiteSpace(query.Search) && string.IsNullOrEmpty(query.SortBy))
         {
             var searchLower = query.Search.ToLower();
+            var prefixPattern = LikePatterns.StartsWith(query.Search);
             return games
                 .OrderByDescending(g => g.Title.ToLower() == searchLower) // Exact match first
-                .ThenByDescending(g => EF.Functions.ILike(g.Title, query.Search + "%")) // Prefix match
+                .ThenByDescending(g => EF.Functions.ILike(g.Title, prefixPattern)) // Prefix match
                 .ThenByDescending(g => EF.Functions.TrigramsSimilarity(g.Title, searchLower)) // Fuzzy match score
                 .ThenBy(g => g.Title);
         }

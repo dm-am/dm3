@@ -11,6 +11,7 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Extensions;
 using DM.Infrastructure.Persistence.RelationalStorage;
+using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 using DbUserEndorsement = DM.Infrastructure.Persistence.Entities.Community.UserEndorsement;
 
@@ -100,7 +101,7 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            var pattern = $"%{filter.Search.Trim()}%";
+            var pattern = LikePatterns.Contains(filter.Search.Trim());
             query = query.Where(e =>
                 EF.Functions.ILike(e.Text, pattern) ||
                 EF.Functions.ILike(e.Author.Username, pattern) ||

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
+using DM.Domain.Core.Statuses;
 
 namespace DM.Domain.Blog.Features.Blogs;
 
@@ -195,7 +196,7 @@ public interface IBlogService
     /// <param name="transition">Requested transition</param>
     /// <param name="ct">Cancellation token</param>
     Task<Blog> ChangePremoderationAsync(
-        string id, BlogPremoderationTransition transition, CancellationToken ct = default);
+        string id, ModulePremoderationTransition transition, CancellationToken ct = default);
 
     /// <summary>
     /// Apply a status transition (start / freeze / finish / close / reopen)
@@ -209,5 +210,5 @@ public interface IBlogService
     /// <param name="transition">Requested transition</param>
     /// <param name="ct">Cancellation token</param>
     Task<Blog> ChangeStatusAsync(
-        string id, BlogStatusTransition transition, CancellationToken ct = default);
+        string id, ModuleStatusTransition transition, CancellationToken ct = default);
 }

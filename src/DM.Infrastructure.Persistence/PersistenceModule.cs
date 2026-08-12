@@ -301,10 +301,6 @@ public class PersistenceModule : Module
             .As<IActivationRepository>()
             .InstancePerLifetimeScope();
 
-        builder.RegisterType<TokenVerificationRepository>()
-            .As<ITokenVerificationRepository>()
-            .InstancePerLifetimeScope();
-
         builder.RegisterType<UsernameChangeRepository>()
             .As<IUsernameChangeRepository>()
             .InstancePerLifetimeScope();

@@ -1,11 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
+using DM.Domain.Blog.Features.Blacklists;
 using DM.Domain.Blog.Features.Subscriptions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Subscriptions;
 using DM.Domain.Core.Users;
@@ -24,6 +28,7 @@ public class BlogSubscriptionServiceShould : UnitTestBase
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<IGuidFactory> _guidFactory;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly Mock<IBlogBlacklistRepository> _blacklistRepository;
     private readonly BlogSubscriptionService _service;
 
     public BlogSubscriptionServiceShould()
@@ -33,6 +38,7 @@ public class BlogSubscriptionServiceShould : UnitTestBase
         _identityProvider = Mock<IIdentityProvider>();
         _guidFactory = Mock<IGuidFactory>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
+        _blacklistRepository = Mock<IBlogBlacklistRepository>();
 
         _identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
         _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
@@ -42,7 +48,33 @@ public class BlogSubscriptionServiceShould : UnitTestBase
             _userLookupService.Object,
             _identityProvider.Object,
             _guidFactory.Object,
-            _dateTimeProvider.Object);
+            _dateTimeProvider.Object,
+            // The real guard over the mocked store: the rule under test is the
+            // guard's, and the generic subscription endpoint asks the same
+            // object, so a stub here would test a copy of it that no caller uses.
+            new BlogSubscriptionGuard(_blacklistRepository.Object));
+    }
+
+    [Fact]
+    public async Task RefuseToSubscribeAUserTheBlogBlacklisted()
+    {
+        var blogId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        _identityProvider.Setup(p => p.Current).Returns(CreateAuthenticatedIdentity(userId));
+        _blacklistRepository
+            .Setup(r => r.IsBlocked(blogId, userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var act = async () => await _service.SubscribeAsync(blogId);
+
+        // Reading the blog is open to them and stays open. Joining its list of
+        // readers is the write the blacklist refuses, and the entry that put them
+        // on the list dropped the subscription they had.
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+        _repository.Verify(
+            r => r.CreateAsync(It.IsAny<CreateSubscription>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Fact]

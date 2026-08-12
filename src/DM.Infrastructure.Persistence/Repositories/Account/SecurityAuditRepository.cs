@@ -12,21 +12,19 @@ using DbEntry = DM.Infrastructure.Persistence.Entities.Account.SecurityAuditEntr
 namespace DM.Infrastructure.Persistence.Repositories.Account;
 
 /// <inheritdoc />
-internal class SecurityAuditRepository : ISecurityAuditRepository
+internal class SecurityAuditRepository : MongoCollectionRepository<DbEntry>, ISecurityAuditRepository
 {
-    private readonly DmMongoClient _mongoClient;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <summary>
-    /// Creates a new security audit service
+    /// Creates a new security audit repository
     /// </summary>
     public SecurityAuditRepository(
         DmMongoClient mongoClient,
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider) : base(mongoClient)
     {
-        _mongoClient = mongoClient;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
     }
@@ -53,16 +51,13 @@ internal class SecurityAuditRepository : ISecurityAuditRepository
             Details = details
         };
 
-        var collection = _mongoClient.GetCollection<DbEntry>();
-        await collection.InsertOneAsync(entry);
+        await Collection.InsertOneAsync(entry);
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<SecurityAuditEntry>> GetRecentEventsAsync(Guid userId, int limit = 50)
     {
-        var collection = _mongoClient.GetCollection<DbEntry>();
-
-        var entries = await collection
+        var entries = await Collection
             .Find(e => e.UserId == userId)
             .SortByDescending(e => e.TimestampUtc)
             .Limit(limit)
@@ -74,8 +69,6 @@ internal class SecurityAuditRepository : ISecurityAuditRepository
     /// <inheritdoc />
     public async Task<IReadOnlyList<SecurityAuditEntry>> GetLoginHistoryAsync(Guid userId, int limit = 20)
     {
-        var collection = _mongoClient.GetCollection<DbEntry>();
-
         var loginEventTypes = new[]
         {
             (int)SecurityEventType.LoginSuccess,
@@ -83,11 +76,11 @@ internal class SecurityAuditRepository : ISecurityAuditRepository
             (int)SecurityEventType.SuspiciousLogin
         };
 
-        var filter = Builders<DbEntry>.Filter.And(
-            Builders<DbEntry>.Filter.Eq(e => e.UserId, userId),
-            Builders<DbEntry>.Filter.In(e => e.EventType, loginEventTypes));
+        var filter = Filter.And(
+            Filter.Eq(e => e.UserId, userId),
+            Filter.In(e => e.EventType, loginEventTypes));
 
-        var entries = await collection
+        var entries = await Collection
             .Find(filter)
             .SortByDescending(e => e.TimestampUtc)
             .Limit(limit)
@@ -99,13 +92,11 @@ internal class SecurityAuditRepository : ISecurityAuditRepository
     /// <inheritdoc />
     public async Task<IReadOnlyList<SecurityAuditEntry>> GetSuccessfulLoginsAsync(Guid userId, int limit = 20)
     {
-        var collection = _mongoClient.GetCollection<DbEntry>();
+        var filter = Filter.And(
+            Filter.Eq(e => e.UserId, userId),
+            Filter.Eq(e => e.EventType, (int)SecurityEventType.LoginSuccess));
 
-        var filter = Builders<DbEntry>.Filter.And(
-            Builders<DbEntry>.Filter.Eq(e => e.UserId, userId),
-            Builders<DbEntry>.Filter.Eq(e => e.EventType, (int)SecurityEventType.LoginSuccess));
-
-        var entries = await collection
+        var entries = await Collection
             .Find(filter)
             .SortByDescending(e => e.TimestampUtc)
             .Limit(limit)
@@ -117,8 +108,6 @@ internal class SecurityAuditRepository : ISecurityAuditRepository
     /// <inheritdoc />
     public async Task<IReadOnlyList<SecurityAuditEntry>> GetPasswordEventsAsync(Guid userId, int limit = 20)
     {
-        var collection = _mongoClient.GetCollection<DbEntry>();
-
         var passwordEventTypes = new[]
         {
             (int)SecurityEventType.PasswordChange,
@@ -126,11 +115,11 @@ internal class SecurityAuditRepository : ISecurityAuditRepository
             (int)SecurityEventType.PasswordResetComplete
         };
 
-        var filter = Builders<DbEntry>.Filter.And(
-            Builders<DbEntry>.Filter.Eq(e => e.UserId, userId),
-            Builders<DbEntry>.Filter.In(e => e.EventType, passwordEventTypes));
+        var filter = Filter.And(
+            Filter.Eq(e => e.UserId, userId),
+            Filter.In(e => e.EventType, passwordEventTypes));
 
-        var entries = await collection
+        var entries = await Collection
             .Find(filter)
             .SortByDescending(e => e.TimestampUtc)
             .Limit(limit)
@@ -142,8 +131,6 @@ internal class SecurityAuditRepository : ISecurityAuditRepository
     /// <inheritdoc />
     public async Task<IReadOnlyList<SecurityAuditEntry>> GetSessionEventsAsync(Guid userId, int limit = 20)
     {
-        var collection = _mongoClient.GetCollection<DbEntry>();
-
         var sessionEventTypes = new[]
         {
             (int)SecurityEventType.Logout,
@@ -151,11 +138,11 @@ internal class SecurityAuditRepository : ISecurityAuditRepository
             (int)SecurityEventType.LogoutElsewhere
         };
 
-        var filter = Builders<DbEntry>.Filter.And(
-            Builders<DbEntry>.Filter.Eq(e => e.UserId, userId),
-            Builders<DbEntry>.Filter.In(e => e.EventType, sessionEventTypes));
+        var filter = Filter.And(
+            Filter.Eq(e => e.UserId, userId),
+            Filter.In(e => e.EventType, sessionEventTypes));
 
-        var entries = await collection
+        var entries = await Collection
             .Find(filter)
             .SortByDescending(e => e.TimestampUtc)
             .Limit(limit)

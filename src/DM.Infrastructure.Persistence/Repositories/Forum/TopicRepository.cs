@@ -190,8 +190,8 @@ internal class TopicRepository : ITopicRepository
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            var searchTerm = query.Search.Trim();
-            dbQuery = dbQuery.Where(t => EF.Functions.ILike(t.Title, $"%{searchTerm}%"));
+            var searchPattern = LikePatterns.Contains(query.Search.Trim());
+            dbQuery = dbQuery.Where(t => EF.Functions.ILike(t.Title, searchPattern));
         }
 
         if (query.AuthorUsernames is { Count: > 0 })

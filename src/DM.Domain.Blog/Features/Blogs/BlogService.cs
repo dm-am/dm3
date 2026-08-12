@@ -13,6 +13,7 @@ using DM.Domain.Blog.Features.Blacklists;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
+using DM.Domain.Core.Statuses;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Core.Users;
 using DM.Domain.Blog.Features.Subscriptions;
@@ -644,7 +645,7 @@ internal class BlogService : IBlogService
 
     /// <inheritdoc />
     public async Task<Blog> ChangePremoderationAsync(
-        string id, BlogPremoderationTransition transition, CancellationToken ct = default)
+        string id, ModulePremoderationTransition transition, CancellationToken ct = default)
     {
         // Site-wide Mentor+ gate (parameterless intention). The per-blog read
         // path hides premoderation-pending blogs from non-curators, so resolve
@@ -663,35 +664,17 @@ internal class BlogService : IBlogService
 
         var blogId = blog.Id;
         var currentUserId = _identityProvider.Current.User.UserId;
-        var update = new UpdateBlogEntity { BlogId = blogId, UpdatedUtc = _dateTimeProvider.Now };
+        var change = ModulePremoderationPolicy.Resolve(
+            transition, blog.PremoderationStatus, currentUserId);
 
-        switch (transition)
+        var update = new UpdateBlogEntity
         {
-            case BlogPremoderationTransition.SendToPremoderation:
-                if (blog.PremoderationStatus != PremoderationStatus.AwaitingEdits)
-                {
-                    throw new HttpException(HttpStatusCode.BadRequest,
-                        RefusalMessage.CannotSubmitForPremoderation(blog.PremoderationStatus));
-                }
-                update.PremoderationStatus = PremoderationStatus.AwaitingApproval;
-                update.MentorId = currentUserId;
-                update.SetMentorId = true;
-                break;
-
-            case BlogPremoderationTransition.RemoveFromPremoderation:
-                if (blog.PremoderationStatus != PremoderationStatus.AwaitingApproval)
-                {
-                    throw new HttpException(HttpStatusCode.BadRequest,
-                        RefusalMessage.CannotWithdrawFromPremoderation(blog.PremoderationStatus));
-                }
-                update.PremoderationStatus = PremoderationStatus.Approved;
-                update.MentorId = null;
-                update.SetMentorId = true;
-                break;
-
-            default:
-                throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.UnknownPremoderationTransition);
-        }
+            BlogId = blogId,
+            UpdatedUtc = _dateTimeProvider.Now,
+            PremoderationStatus = change.Status,
+            MentorId = change.MentorId,
+            SetMentorId = true
+        };
 
         var result = await _repository.UpdateBlog(update, ct);
         await _eventProducer.SendAsync(
@@ -701,7 +684,7 @@ internal class BlogService : IBlogService
 
     /// <inheritdoc />
     public async Task<Blog> ChangeStatusAsync(
-        string id, BlogStatusTransition transition, CancellationToken ct = default)
+        string id, ModuleStatusTransition transition, CancellationToken ct = default)
     {
         // The endpoint is authentication-gated; resolve the id via the ungated
         // repository lookup (mirroring ChangePremoderationAsync) so the owner
@@ -719,82 +702,48 @@ internal class BlogService : IBlogService
 
         var blogId = blog.Id;
         var now = _dateTimeProvider.Now;
-        var update = new UpdateBlogEntity { BlogId = blogId, UpdatedUtc = now };
-        EventType statusEvent;
 
-        switch (transition)
+        // What only a blog answers for: the intention that guards the move and
+        // the event it publishes. Which state the move is legal from and what
+        // state it produces is the machine a game runs on too, and that lives
+        // in ModuleStatusPolicy.
+        var (intention, statusEvent) = transition switch
         {
-            case BlogStatusTransition.Start:
-                RequireStatus(blog, ModuleStatus.Draft, transition);
-                _intentionManager.ThrowIfForbidden(BlogIntention.SetStatusActive, blog);
-                update.Status = ModuleStatus.Active;
-                if (!blog.ActivatedUtc.HasValue) update.ActivatedUtc = now;
-                statusEvent = EventType.StatusBlogActive;
-                break;
+            ModuleStatusTransition.Start =>
+                (BlogIntention.SetStatusActive, EventType.StatusBlogActive),
+            ModuleStatusTransition.Freeze =>
+                (BlogIntention.SetStatusClosed, EventType.StatusBlogFrozen),
+            ModuleStatusTransition.Finish =>
+                (BlogIntention.SetStatusClosed, EventType.StatusBlogFinished),
+            ModuleStatusTransition.Close =>
+                (BlogIntention.SetStatusClosed, EventType.StatusBlogClosed),
+            ModuleStatusTransition.Reopen =>
+                (BlogIntention.SetStatusActive, EventType.StatusBlogActive),
+            _ => throw new HttpException(
+                HttpStatusCode.BadRequest, RefusalMessage.UnknownStatusTransition)
+        };
 
-            case BlogStatusTransition.Freeze:
-                RequireStatus(blog, ModuleStatus.Active, transition);
-                _intentionManager.ThrowIfForbidden(BlogIntention.SetStatusClosed, blog);
-                update.Status = ModuleStatus.Closed;
-                update.ClosedReason = ClosedReason.Frozen;
-                update.ClosedUtc = now;
-                statusEvent = EventType.StatusBlogFrozen;
-                break;
+        var change = ModuleStatusPolicy.Resolve(
+            transition,
+            new ModuleLifecycle(blog.Status, blog.ClosedReason, blog.ActivatedUtc, blog.ClosedUtc),
+            now);
+        _intentionManager.ThrowIfForbidden(intention, blog);
 
-            case BlogStatusTransition.Finish:
-                RequireStatus(blog, ModuleStatus.Active, transition);
-                _intentionManager.ThrowIfForbidden(BlogIntention.SetStatusClosed, blog);
-                update.Status = ModuleStatus.Closed;
-                update.ClosedReason = ClosedReason.Finished;
-                update.ClosedUtc = now;
-                statusEvent = EventType.StatusBlogFinished;
-                break;
-
-            case BlogStatusTransition.Close:
-                // Active -> Closed+None, or Closed+Frozen -> Closed+None
-                if (blog.Status != ModuleStatus.Active &&
-                    !(blog.Status == ModuleStatus.Closed && blog.ClosedReason == ClosedReason.Frozen))
-                {
-                    throw IllegalTransition(transition, blog);
-                }
-                _intentionManager.ThrowIfForbidden(BlogIntention.SetStatusClosed, blog);
-                update.Status = ModuleStatus.Closed;
-                update.ClosedReason = ClosedReason.None;
-                if (!blog.ClosedUtc.HasValue) update.ClosedUtc = now;
-                statusEvent = EventType.StatusBlogClosed;
-                break;
-
-            case BlogStatusTransition.Reopen:
-                RequireStatus(blog, ModuleStatus.Closed, transition);
-                _intentionManager.ThrowIfForbidden(BlogIntention.SetStatusActive, blog);
-                update.Status = ModuleStatus.Active;
-                update.ClosedReason = ClosedReason.None;
-                update.ClearClosedUtc = true;
-                if (!blog.ActivatedUtc.HasValue) update.ActivatedUtc = now;
-                statusEvent = EventType.StatusBlogActive;
-                break;
-
-            default:
-                throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.UnknownStatusTransition);
-        }
+        var update = new UpdateBlogEntity
+        {
+            BlogId = blogId,
+            UpdatedUtc = now,
+            Status = change.Status,
+            ClosedReason = change.ClosedReason,
+            ClosedUtc = change.ClosedUtc,
+            ClearClosedUtc = change.ClearClosedUtc,
+            ActivatedUtc = change.ActivatedUtc
+        };
 
         var result = await _repository.UpdateBlog(update, ct);
         await _eventProducer.SendAsync(new List<EventType> { EventType.ChangedBlog, statusEvent }, blogId);
         return result;
     }
-
-    private static void RequireStatus(Blog blog, ModuleStatus expected, BlogStatusTransition transition)
-    {
-        if (blog.Status != expected)
-        {
-            throw IllegalTransition(transition, blog);
-        }
-    }
-
-    private static HttpException IllegalTransition(BlogStatusTransition transition, Blog blog) =>
-        new(HttpStatusCode.BadRequest,
-            $"Переход \"{transition}\" недоступен из статуса \"{blog.Status}\"" +
-            (blog.Status == ModuleStatus.Closed ? $" ({blog.ClosedReason})" : ""));
 
     // ═══ PRIVATE HELPERS ═══
 

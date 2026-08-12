@@ -27,6 +27,9 @@ namespace DM.Infrastructure.Persistence.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.HasSequence<int>("TagShortIds")
+                .StartsAt(66L);
+
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.ModeratedProfileNote", b =>
                 {
                     b.Property<Guid>("ModeratedProfileNoteId")
@@ -2832,7 +2835,7 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("DeletedByUserId");
 
-                    b.HasIndex("RoomId");
+                    b.HasIndex("RoomId", "CreatedUtc", "PostId");
 
                     b.HasIndex("SearchVector")
                         .HasDatabaseName("IX_Posts_SearchVector");
@@ -3459,7 +3462,7 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("DeletedByUserId");
 
-                    b.HasIndex("EntityId");
+                    b.HasIndex("EntityId", "CreatedUtc", "CommentId");
 
                     b.HasIndex("SearchVector")
                         .HasDatabaseName("IX_Comments_SearchVector");
@@ -3553,6 +3556,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("TagId");
+
+                    b.HasIndex("ShortId")
+                        .IsUnique();
 
                     b.HasIndex("TagGroupId");
 

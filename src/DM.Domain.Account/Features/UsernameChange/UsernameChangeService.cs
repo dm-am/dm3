@@ -127,6 +127,21 @@ internal partial class UsernameChangeService : IUsernameChangeService
         if (request.Status != UsernameChangeRequestStatus.Pending)
             throw new HttpException(HttpStatusCode.Conflict, "Заявка уже рассмотрена");
 
+        // Resolving is approving or rejecting and nothing else. The status arrives
+        // in the body and used to be written through unchecked, so a request could
+        // be filed as Completed or Expired: it left the queue looking finished
+        // while no name changed and no approval link went out. Those two statuses
+        // are reached by the flow itself - one by the user finishing the change,
+        // one by the expiry job - and are not a moderator's to assert.
+        if (resolve.Status != UsernameChangeRequestStatus.Approved &&
+            resolve.Status != UsernameChangeRequestStatus.Rejected)
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                [nameof(resolve.Status)] = "Заявку можно только одобрить или отклонить"
+            });
+        }
+
         var now = _dateTimeProvider.Now;
 
         if (resolve.Status == UsernameChangeRequestStatus.Approved)

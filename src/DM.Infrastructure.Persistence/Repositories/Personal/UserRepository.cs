@@ -117,9 +117,10 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             // among equally relevant names is theirs to order, and the branch used
             // to drop sortOrder on the floor — the list accepted the parameter,
             // answered 200 and came back in the same order either way.
+            var prefixPattern = LikePatterns.StartsWith(search);
             var relevance = baseQuery
                 .OrderByDescending(u => u.Username.ToLower() == searchLower)
-                .ThenByDescending(u => EF.Functions.ILike(u.Username, search + "%"))
+                .ThenByDescending(u => EF.Functions.ILike(u.Username, prefixPattern))
                 .ThenByDescending(u => EF.Functions.TrigramsSimilarity(u.Username, searchLower));
 
             pageQuery = (sortAscending
@@ -365,59 +366,55 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
 
         // Update user settings in MongoDB
         var filter = Builders<UserSettings>.Filter.Eq(s => s.UserId, settingsUpdate.UserId);
-        var existingSettings = await Collection.Find(filter).FirstOrDefaultAsync();
+        var defaults = UserSettings.CreateDefault(settingsUpdate.UserId);
 
         // A document written before Paging was mandatory, or by a caller that
         // left it out, has Paging: null — and Mongo cannot create a field
         // inside a null element, so the per-field $set below fails the whole
         // update with a 500. Such a document is repaired to defaults first and
-        // then updated normally.
-        if (existingSettings is { Paging: null })
-        {
-            await Collection.UpdateOneAsync(filter,
-                Builders<UserSettings>.Update.Set(s => s.Paging,
-                    UserSettings.CreateDefault(settingsUpdate.UserId).Paging));
-        }
+        // then updated normally. The condition is part of the filter rather than
+        // a value read into this process, so the repair is decided by the server
+        // on the document it is about to write.
+        await Collection.UpdateOneAsync(
+            Builders<UserSettings>.Filter.And(filter,
+                Builders<UserSettings>.Filter.Eq(s => s.Paging, null!)),
+            Builders<UserSettings>.Update.Set(s => s.Paging, defaults.Paging));
 
-        if (existingSettings == null)
+        // One write, whether or not the user has a document yet. Reading first
+        // and inserting on null is not atomic, and IX_UserSettings_UserId is
+        // unique: the loser of that race got a duplicate key error instead of the
+        // update it asked for, and this collection has more than one writer. What
+        // the caller sent goes through $set and the rest of a fresh document
+        // through $setOnInsert, which the server applies only on the insert that
+        // creates it. The paging fields are named one by one rather than as the
+        // whole sub-document, because one path cannot appear in both operators of
+        // the same update.
+        var updateDefinitions = new List<UpdateDefinition<UserSettings>>
         {
-            var newSettings = UserSettings.CreateDefault(settingsUpdate.UserId);
-            newSettings.Theme = settingsUpdate.Theme?.Value ?? newSettings.Theme;
-            newSettings.Paging.CommentsPerPage =
-                settingsUpdate.CommentsPerPage?.Value ?? newSettings.Paging.CommentsPerPage;
-            newSettings.Paging.TopicsPerPage =
-                settingsUpdate.TopicsPerPage?.Value ?? newSettings.Paging.TopicsPerPage;
-            newSettings.Paging.MessagesPerPage =
-                settingsUpdate.MessagesPerPage?.Value ?? newSettings.Paging.MessagesPerPage;
-            newSettings.Paging.PostsPerPage =
-                settingsUpdate.PostsPerPage?.Value ?? newSettings.Paging.PostsPerPage;
-            newSettings.Paging.EntitiesPerPage =
-                settingsUpdate.EntitiesPerPage?.Value ?? newSettings.Paging.EntitiesPerPage;
-            await Collection.InsertOneAsync(newSettings);
-        }
-        else
-        {
-            // Update existing settings
-            var updateDefinitions = new List<UpdateDefinition<UserSettings>>();
-            if (settingsUpdate.Theme?.Value.HasValue == true)
-                updateDefinitions.Add(Builders<UserSettings>.Update.Set(s => s.Theme, settingsUpdate.Theme.Value.Value));
-            if (settingsUpdate.CommentsPerPage?.Value.HasValue == true)
-                updateDefinitions.Add(Builders<UserSettings>.Update.Set(s => s.Paging.CommentsPerPage, settingsUpdate.CommentsPerPage.Value.Value));
-            if (settingsUpdate.TopicsPerPage?.Value.HasValue == true)
-                updateDefinitions.Add(Builders<UserSettings>.Update.Set(s => s.Paging.TopicsPerPage, settingsUpdate.TopicsPerPage.Value.Value));
-            if (settingsUpdate.MessagesPerPage?.Value.HasValue == true)
-                updateDefinitions.Add(Builders<UserSettings>.Update.Set(s => s.Paging.MessagesPerPage, settingsUpdate.MessagesPerPage.Value.Value));
-            if (settingsUpdate.PostsPerPage?.Value.HasValue == true)
-                updateDefinitions.Add(Builders<UserSettings>.Update.Set(s => s.Paging.PostsPerPage, settingsUpdate.PostsPerPage.Value.Value));
-            if (settingsUpdate.EntitiesPerPage?.Value.HasValue == true)
-                updateDefinitions.Add(Builders<UserSettings>.Update.Set(s => s.Paging.EntitiesPerPage, settingsUpdate.EntitiesPerPage.Value.Value));
+            settingsUpdate.Theme?.Value.HasValue == true
+                ? Builders<UserSettings>.Update.Set(s => s.Theme, settingsUpdate.Theme.Value.Value)
+                : Builders<UserSettings>.Update.SetOnInsert(s => s.Theme, defaults.Theme),
+            settingsUpdate.CommentsPerPage?.Value.HasValue == true
+                ? Builders<UserSettings>.Update.Set(s => s.Paging.CommentsPerPage, settingsUpdate.CommentsPerPage.Value.Value)
+                : Builders<UserSettings>.Update.SetOnInsert(s => s.Paging.CommentsPerPage, defaults.Paging.CommentsPerPage),
+            settingsUpdate.TopicsPerPage?.Value.HasValue == true
+                ? Builders<UserSettings>.Update.Set(s => s.Paging.TopicsPerPage, settingsUpdate.TopicsPerPage.Value.Value)
+                : Builders<UserSettings>.Update.SetOnInsert(s => s.Paging.TopicsPerPage, defaults.Paging.TopicsPerPage),
+            settingsUpdate.MessagesPerPage?.Value.HasValue == true
+                ? Builders<UserSettings>.Update.Set(s => s.Paging.MessagesPerPage, settingsUpdate.MessagesPerPage.Value.Value)
+                : Builders<UserSettings>.Update.SetOnInsert(s => s.Paging.MessagesPerPage, defaults.Paging.MessagesPerPage),
+            settingsUpdate.PostsPerPage?.Value.HasValue == true
+                ? Builders<UserSettings>.Update.Set(s => s.Paging.PostsPerPage, settingsUpdate.PostsPerPage.Value.Value)
+                : Builders<UserSettings>.Update.SetOnInsert(s => s.Paging.PostsPerPage, defaults.Paging.PostsPerPage),
+            settingsUpdate.EntitiesPerPage?.Value.HasValue == true
+                ? Builders<UserSettings>.Update.Set(s => s.Paging.EntitiesPerPage, settingsUpdate.EntitiesPerPage.Value.Value)
+                : Builders<UserSettings>.Update.SetOnInsert(s => s.Paging.EntitiesPerPage, defaults.Paging.EntitiesPerPage),
+        };
 
-            if (updateDefinitions.Any())
-            {
-                var combinedUpdate = Builders<UserSettings>.Update.Combine(updateDefinitions);
-                await Collection.UpdateOneAsync(filter, combinedUpdate);
-            }
-        }
+        await Collection.UpdateOneAsync(
+            filter,
+            Builders<UserSettings>.Update.Combine(updateDefinitions),
+            new UpdateOptions { IsUpsert = true });
     }
 
     /// <inheritdoc />
@@ -599,7 +596,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var searchPattern = "%" + search.Replace("%", "\\%").Replace("_", "\\_") + "%";
+            var searchPattern = LikePatterns.Contains(search);
             var searchLower = search.ToLower();
 
             // Fuzzy search: contains match OR trigram similarity > threshold

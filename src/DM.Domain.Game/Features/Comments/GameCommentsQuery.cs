@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
 
 namespace DM.Domain.Game.Features.Comments;
@@ -7,7 +8,7 @@ namespace DM.Domain.Game.Features.Comments;
 /// <summary>
 /// Query parameters for game comment list filtering
 /// </summary>
-public class GameCommentsQuery : PagingQuery
+public class GameCommentsQuery : PagingQuery, ICommentsQuery
 {
     /// <summary>
     /// Text search by comment content (case-insensitive contains)

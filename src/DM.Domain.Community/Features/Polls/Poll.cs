@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Community.Features.Polls;
 
@@ -42,6 +43,33 @@ public class Poll
     /// Answers list
     /// </summary>
     public IEnumerable<PollOption> Options { get; set; } = [];
+
+    /// <summary>
+    /// Where the poll stands at the given moment. The window is half-open: the
+    /// poll opens at <see cref="StartsUtc" /> and closes at <see cref="EndsUtc" />.
+    /// </summary>
+    /// <remarks>
+    /// The one place the voting window is written down. A vote and an unvote are
+    /// accepted exactly while this answers <see cref="PollStatus.Active" />, and
+    /// the response reports the same value to the reader, so the poll a page
+    /// calls open is the poll that takes the vote. The two halves used to be
+    /// separate comparisons in separate projects, and a boundary moved in one of
+    /// them would have offered a vote the authorization then refused.
+    ///
+    /// The listing in the storage still restates the same window twice - once as
+    /// a Mongo filter, once as a BSON ladder for the status sort - because those
+    /// are built and sent to the server rather than called.
+    /// </remarks>
+    /// <param name="now">Moment to judge the poll at</param>
+    public PollStatus StatusAt(DateTimeOffset now)
+    {
+        if (now < StartsUtc)
+        {
+            return PollStatus.Pending;
+        }
+
+        return now >= EndsUtc ? PollStatus.Closed : PollStatus.Active;
+    }
 }
 
 /// <summary>

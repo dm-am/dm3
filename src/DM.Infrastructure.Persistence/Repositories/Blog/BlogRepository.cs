@@ -131,7 +131,7 @@ internal class BlogRepository : IBlogRepository
         var search = filter.Search;
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var searchPattern = "%" + search.Replace("%", "\\%").Replace("_", "\\_") + "%";
+            var searchPattern = LikePatterns.Contains(search);
             var searchLower = search.ToLower();
             query = query.Where(b =>
                 EF.Functions.ILike(b.Title, searchPattern) ||
@@ -190,9 +190,10 @@ internal class BlogRepository : IBlogRepository
         if (!string.IsNullOrWhiteSpace(search) && string.IsNullOrEmpty(sortBy))
         {
             var searchLower = search.ToLower();
+            var prefixPattern = LikePatterns.StartsWith(search);
             return query
                 .OrderByDescending(b => b.Title.ToLower() == searchLower) // Exact match first
-                .ThenByDescending(b => EF.Functions.ILike(b.Title, search + "%")) // Prefix match
+                .ThenByDescending(b => EF.Functions.ILike(b.Title, prefixPattern)) // Prefix match
                 .ThenByDescending(b => EF.Functions.TrigramsSimilarity(b.Title, searchLower)) // Fuzzy score
                 .ThenBy(b => b.Title);
         }

@@ -7,23 +7,29 @@ using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Domain.Game.Features.AttributeSchemas;
 using DM.Domain.Game.Features.Characters;
 using DM.Domain.Game.Features.Games;
-using DM.Infrastructure.Persistence.MongoIntegration;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
-using MongoDB.Driver;
 using DbCharacterAttribute = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.CharacterAttribute;
 using DbCharacter = DM.Infrastructure.Persistence.Entities.Game.Characters.Character;
-using DbSchema = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
 /// <inheritdoc />
-internal class CharacterRepository : MongoCollectionRepository<DbSchema>, ICharacterRepository
+/// <remarks>
+/// Relational only. The attribute schema of a game is a Mongo document, and it
+/// is read through the repository that owns that collection rather than through
+/// a second view of it opened here: the class used to derive the Mongo
+/// collection base for one read, which also took the name Update - the one this
+/// repository publishes - away from the driver's builder.
+/// </remarks>
+internal class CharacterRepository : ICharacterRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
+    private readonly IAttributeSchemaRepository _attributeSchemas;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
 
@@ -31,12 +37,13 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
     public CharacterRepository(
         DmDbContext dbContext,
         IMapper mapper,
-        DmMongoClient client,
+        IAttributeSchemaRepository attributeSchemas,
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider) : base(client)
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _mapper = mapper;
+        _attributeSchemas = attributeSchemas;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
     }
@@ -49,19 +56,23 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
             .Select(g => g.AttributeSchemaId.HasValue)
             .FirstAsync(cancellationToken);
 
-    public async Task<AttributeSchema> GetGameSchema(Guid gameId)
-    {
-        var schemaId = await _dbContext.Games
-            .Where(g => g.GameId == gameId)
-            .Select(g => g.AttributeSchemaId)
-            .FirstAsync();
+    // FirstOrDefault rather than First: a character nobody can find requires no
+    // attributes, and answering "no such character" belongs to the service that
+    // is asked for it, not to a validator rule that would throw out of the
+    // pipeline as a 500 before the service ever ran.
+    public Task<bool> CharacterRequiresAttributes(Guid characterId, CancellationToken cancellationToken) =>
+        _dbContext.Characters
+            .Where(c => c.CharacterId == characterId)
+            .Select(c => c.Game.AttributeSchemaId.HasValue)
+            .FirstOrDefaultAsync(cancellationToken);
 
-        var schema = await Collection
-            .Find(Filter.Eq(s => s.Id, schemaId!.Value))
-            .FirstAsync();
-
-        return _mapper.Map<AttributeSchema>(schema);
-    }
+    // Reached only after GameRequiresAttributes or CharacterRequiresAttributes
+    // answered yes, which is what makes the identifier below present: both the
+    // create and the update rules ask first, and the one other caller
+    // (CharacterService, hiding specifications from a reader) checks the game's
+    // AttributeSchemaId itself.
+    public Task<AttributeSchema> GetGameSchema(Guid gameId) =>
+        _attributeSchemas.GetGameSchema(gameId);
 
     public async Task<AttributeSchema> GetCharacterSchema(Guid characterId)
     {
@@ -70,7 +81,7 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
             .Select(c => c.GameId)
             .FirstAsync();
 
-        return await GetGameSchema(gameId);
+        return await _attributeSchemas.GetGameSchema(gameId);
     }
 
     #endregion
@@ -185,7 +196,7 @@ internal class CharacterRepository : MongoCollectionRepository<DbSchema>, IChara
         }
     }
 
-    public new async Task<Character> Update(UpdateCharacterEntity updateCharacter)
+    public async Task<Character> Update(UpdateCharacterEntity updateCharacter)
     {
         var character = await _dbContext.Characters.FindAsync(updateCharacter.CharacterId);
         if (character == null)

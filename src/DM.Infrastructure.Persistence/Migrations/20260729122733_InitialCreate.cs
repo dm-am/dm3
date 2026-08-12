@@ -18,6 +18,10 @@ namespace DM.Infrastructure.Persistence.Migrations
             migrationBuilder.AlterDatabase()
                 .Annotation("Npgsql:PostgresExtension:pg_trgm", ",,");
 
+            migrationBuilder.CreateSequence<int>(
+                name: "TagShortIds",
+                startValue: 66L);
+
             migrationBuilder.CreateTable(
                 name: "AchievementCategories",
                 columns: table => new
@@ -1909,9 +1913,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "DeletedByUserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Comments_EntityId",
+                name: "IX_Comments_EntityId_CreatedUtc_CommentId",
                 table: "Comments",
-                column: "EntityId");
+                columns: new[] { "EntityId", "CreatedUtc", "CommentId" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Comments_SearchVector",
@@ -2227,9 +2231,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "DeletedByUserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Posts_RoomId",
+                name: "IX_Posts_RoomId_CreatedUtc_PostId",
                 table: "Posts",
-                column: "RoomId");
+                columns: new[] { "RoomId", "CreatedUtc", "PostId" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Posts_SearchVector",
@@ -2348,6 +2352,12 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "IX_Subscriptions_TargetType_TargetId",
                 table: "Subscriptions",
                 columns: new[] { "TargetType", "TargetId" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Tags_ShortId",
+                table: "Tags",
+                column: "ShortId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Tags_TagGroupId",
@@ -3657,6 +3667,9 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "GlobalChatEvents");
+
+            migrationBuilder.DropSequence(
+                name: "TagShortIds");
         }
     }
 }

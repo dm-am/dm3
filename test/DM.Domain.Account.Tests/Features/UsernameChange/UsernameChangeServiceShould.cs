@@ -175,6 +175,55 @@ public class UsernameChangeServiceShould : UnitTestBase
         ), Times.Once);
     }
 
+    /// <summary>
+    /// Resolving is approving or rejecting; the two statuses the flow reaches on its
+    /// own are not a moderator's to assert.
+    /// </summary>
+    /// <remarks>
+    /// The status arrives in the body and used to be written through unchecked. A
+    /// request filed as Completed left the moderation queue looking finished while
+    /// the name stayed as it was and no approval link had been issued - and the user
+    /// could only find out by submitting another request.
+    /// </remarks>
+    [Theory]
+    [InlineData(UsernameChangeRequestStatus.Pending)]
+    [InlineData(UsernameChangeRequestStatus.Completed)]
+    [InlineData(UsernameChangeRequestStatus.Expired)]
+    public async Task RefuseAStatusThatIsNeitherApprovalNorRejection(UsernameChangeRequestStatus status)
+    {
+        var requestId = Guid.NewGuid();
+        var request = new UsernameChangeRequest
+        {
+            RequestId = requestId,
+            UserId = Guid.NewGuid(),
+            Status = UsernameChangeRequestStatus.Pending,
+            UserEmail = "user@example.com",
+            UserUsername = "testuser"
+        };
+        var moderator = Identity.Success(
+            new AuthenticatedUser { UserId = Guid.NewGuid(), Username = "moderator", Role = UserRole.Admin },
+            new Session(),
+            UserSettings.Default,
+            "token");
+
+        _identityProvider.Setup(p => p.Current).Returns(moderator);
+        _repository.Setup(r => r.GetById(requestId, It.IsAny<CancellationToken>())).ReturnsAsync(request);
+
+        var exception = await Assert.ThrowsAsync<HttpBadRequestException>(
+            () => _service.ResolveAsync(new ResolveUsernameChangeRequest
+            {
+                RequestId = requestId,
+                Status = status
+            }));
+
+        exception.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        request.Status.Should().Be(UsernameChangeRequestStatus.Pending,
+            "a refused resolution leaves the request where the moderator found it");
+        _repository.Verify(r => r.Update(It.IsAny<UsernameChangeRequest>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        _notificationSender.VerifyNoOtherCalls();
+    }
+
     [Fact]
     public async Task CompleteUsernameChangeWithValidToken()
     {

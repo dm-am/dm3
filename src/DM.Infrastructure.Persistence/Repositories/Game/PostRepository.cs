@@ -67,7 +67,15 @@ internal class PostRepository : IPostRepository
             .Where(GameAccessibilityFilters.RoomAvailable(userId))
             .Where(r => r.RoomId == roomId)
             .SelectMany(r => r.Posts)
+            // Ends on the identifier, because CreatedUtc is not unique: a busy second ties
+            // on its own, and the import of DM2 carries whole rooms written under one
+            // timestamp. Paging asks for the same order once per page, and rows the order
+            // cannot tell apart may come back arranged differently between two of those
+            // asks, which shows one post on both pages and another on neither. Comments
+            // (CommentSorting) and messages (the ChatId composite) close their order the
+            // same way; the index behind this one is (RoomId, CreatedUtc, PostId).
             .OrderBy(p => p.CreatedUtc)
+            .ThenBy(p => p.PostId)
             .Page(paging)
             .ProjectTo<Post>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
@@ -131,7 +139,7 @@ internal class PostRepository : IPostRepository
         // post never contained, and that word then matches.
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            var pattern = $"%{query.Search}%";
+            var pattern = LikePatterns.Contains(query.Search);
             baseQuery = baseQuery.Where(p => EF.Functions.ILike(
                 DmDbContext.RegexpReplace(
                     p.GameText,

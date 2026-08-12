@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using DM.Domain.Core.Statuses;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Caching;
@@ -169,7 +170,7 @@ public class GameStatusTransitionShould : UnitTestBase
     {
         var gameId = SetupGame(ModuleStatus.Draft);
 
-        await _service.ChangeStatusAsync(gameId, GameStatusTransition.Start);
+        await _service.ChangeStatusAsync(gameId, ModuleStatusTransition.Start);
 
         _capturedUpdate.Should().NotBeNull();
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Active);
@@ -184,7 +185,7 @@ public class GameStatusTransitionShould : UnitTestBase
         var firstActivation = _now.AddMonths(-1);
         var gameId = SetupGame(ModuleStatus.Draft, activatedUtc: firstActivation);
 
-        await _service.ChangeStatusAsync(gameId, GameStatusTransition.Start);
+        await _service.ChangeStatusAsync(gameId, ModuleStatusTransition.Start);
 
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Active);
         _capturedUpdate.ActivatedUtc.Should().BeNull();
@@ -197,7 +198,7 @@ public class GameStatusTransitionShould : UnitTestBase
     {
         var gameId = SetupGame(status);
 
-        var act = async () => await _service.ChangeStatusAsync(gameId, GameStatusTransition.Start);
+        var act = async () => await _service.ChangeStatusAsync(gameId, ModuleStatusTransition.Start);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest);
@@ -212,7 +213,7 @@ public class GameStatusTransitionShould : UnitTestBase
     {
         var gameId = SetupGame(ModuleStatus.Active);
 
-        await _service.ChangeStatusAsync(gameId, GameStatusTransition.Freeze);
+        await _service.ChangeStatusAsync(gameId, ModuleStatusTransition.Freeze);
 
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Closed);
         _capturedUpdate.ClosedReason.Should().Be(ClosedReason.Frozen);
@@ -229,7 +230,7 @@ public class GameStatusTransitionShould : UnitTestBase
     {
         var gameId = SetupGame(status);
 
-        var act = async () => await _service.ChangeStatusAsync(gameId, GameStatusTransition.Freeze);
+        var act = async () => await _service.ChangeStatusAsync(gameId, ModuleStatusTransition.Freeze);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest);
@@ -244,7 +245,7 @@ public class GameStatusTransitionShould : UnitTestBase
     {
         var gameId = SetupGame(ModuleStatus.Active);
 
-        await _service.ChangeStatusAsync(gameId, GameStatusTransition.Finish);
+        await _service.ChangeStatusAsync(gameId, ModuleStatusTransition.Finish);
 
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Closed);
         _capturedUpdate.ClosedReason.Should().Be(ClosedReason.Finished);
@@ -261,7 +262,7 @@ public class GameStatusTransitionShould : UnitTestBase
     {
         var gameId = SetupGame(status);
 
-        var act = async () => await _service.ChangeStatusAsync(gameId, GameStatusTransition.Finish);
+        var act = async () => await _service.ChangeStatusAsync(gameId, ModuleStatusTransition.Finish);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest);
@@ -276,7 +277,7 @@ public class GameStatusTransitionShould : UnitTestBase
     {
         var gameId = SetupGame(ModuleStatus.Active);
 
-        await _service.ChangeStatusAsync(gameId, GameStatusTransition.Close);
+        await _service.ChangeStatusAsync(gameId, ModuleStatusTransition.Close);
 
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Closed);
         _capturedUpdate.ClosedReason.Should().Be(ClosedReason.None);
@@ -292,7 +293,7 @@ public class GameStatusTransitionShould : UnitTestBase
         var frozenAt = _now.AddDays(-7);
         var gameId = SetupGame(ModuleStatus.Closed, ClosedReason.Frozen, closedUtc: frozenAt);
 
-        await _service.ChangeStatusAsync(gameId, GameStatusTransition.Close);
+        await _service.ChangeStatusAsync(gameId, ModuleStatusTransition.Close);
 
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Closed);
         _capturedUpdate.ClosedReason.Should().Be(ClosedReason.None);
@@ -304,7 +305,7 @@ public class GameStatusTransitionShould : UnitTestBase
     {
         var gameId = SetupGame(ModuleStatus.Closed, ClosedReason.Finished, closedUtc: _now.AddDays(-7));
 
-        var act = async () => await _service.ChangeStatusAsync(gameId, GameStatusTransition.Close);
+        var act = async () => await _service.ChangeStatusAsync(gameId, ModuleStatusTransition.Close);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest);
@@ -315,7 +316,7 @@ public class GameStatusTransitionShould : UnitTestBase
     {
         var gameId = SetupGame(ModuleStatus.Draft);
 
-        var act = async () => await _service.ChangeStatusAsync(gameId, GameStatusTransition.Close);
+        var act = async () => await _service.ChangeStatusAsync(gameId, ModuleStatusTransition.Close);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest);
@@ -334,7 +335,7 @@ public class GameStatusTransitionShould : UnitTestBase
         var gameId = SetupGame(ModuleStatus.Closed, closedReason,
             activatedUtc: _now.AddMonths(-2), closedUtc: _now.AddDays(-7));
 
-        await _service.ChangeStatusAsync(gameId, GameStatusTransition.Reopen);
+        await _service.ChangeStatusAsync(gameId, ModuleStatusTransition.Reopen);
 
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Active);
         _capturedUpdate.ClosedReason.Should().Be(ClosedReason.None);
@@ -349,7 +350,7 @@ public class GameStatusTransitionShould : UnitTestBase
     {
         var gameId = SetupGame(ModuleStatus.Closed, closedUtc: _now.AddDays(-7));
 
-        await _service.ChangeStatusAsync(gameId, GameStatusTransition.Reopen);
+        await _service.ChangeStatusAsync(gameId, ModuleStatusTransition.Reopen);
 
         _capturedUpdate!.ActivatedUtc.Should().Be(_now);
     }
@@ -361,7 +362,7 @@ public class GameStatusTransitionShould : UnitTestBase
     {
         var gameId = SetupGame(status);
 
-        var act = async () => await _service.ChangeStatusAsync(gameId, GameStatusTransition.Reopen);
+        var act = async () => await _service.ChangeStatusAsync(gameId, ModuleStatusTransition.Reopen);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest);
@@ -376,7 +377,7 @@ public class GameStatusTransitionShould : UnitTestBase
     {
         var gameId = SetupGame(ModuleStatus.Draft, premoderationStatus: PremoderationStatus.AwaitingEdits);
 
-        await _service.ChangePremoderationAsync(gameId.ToString(), GamePremoderationTransition.SendToPremoderation);
+        await _service.ChangePremoderationAsync(gameId.ToString(), ModulePremoderationTransition.SendToPremoderation);
 
         _capturedUpdate!.PremoderationStatus.Should().Be(PremoderationStatus.AwaitingApproval);
         _capturedUpdate.MentorId.Should().Be(_currentUserId);
@@ -393,7 +394,7 @@ public class GameStatusTransitionShould : UnitTestBase
         var gameId = SetupGame(ModuleStatus.Draft, premoderationStatus: premoderationStatus);
 
         var act = async () => await _service.ChangePremoderationAsync(
-            gameId.ToString(), GamePremoderationTransition.SendToPremoderation);
+            gameId.ToString(), ModulePremoderationTransition.SendToPremoderation);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest);
@@ -404,7 +405,7 @@ public class GameStatusTransitionShould : UnitTestBase
     {
         var gameId = SetupGame(ModuleStatus.Draft, premoderationStatus: PremoderationStatus.AwaitingApproval);
 
-        await _service.ChangePremoderationAsync(gameId.ToString(), GamePremoderationTransition.RemoveFromPremoderation);
+        await _service.ChangePremoderationAsync(gameId.ToString(), ModulePremoderationTransition.RemoveFromPremoderation);
 
         _capturedUpdate!.PremoderationStatus.Should().Be(PremoderationStatus.Approved);
         _capturedUpdate.MentorId.Should().BeNull();
@@ -421,7 +422,7 @@ public class GameStatusTransitionShould : UnitTestBase
         var gameId = SetupGame(ModuleStatus.Draft, premoderationStatus: premoderationStatus);
 
         var act = async () => await _service.ChangePremoderationAsync(
-            gameId.ToString(), GamePremoderationTransition.RemoveFromPremoderation);
+            gameId.ToString(), ModulePremoderationTransition.RemoveFromPremoderation);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest);

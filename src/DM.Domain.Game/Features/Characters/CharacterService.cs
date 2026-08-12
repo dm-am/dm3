@@ -320,7 +320,7 @@ internal class CharacterService : ICharacterService
         if (!allowed.Contains(character.Status))
         {
             throw new HttpException(HttpStatusCode.BadRequest,
-                $"Переход \"{transition}\" недоступен из статуса \"{character.Status}\"");
+                RefusalMessage.IllegalStatusTransition(transition, character.Status));
         }
     }
 

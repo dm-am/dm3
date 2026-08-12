@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.Exceptions;
 
@@ -273,6 +274,23 @@ public static class RefusalMessage
     /// The requested status is not reachable from the current one
     /// </summary>
     public const string UnknownStatusTransition = "Недопустимая смена статуса";
+
+    /// <summary>
+    /// The move is one of the defined ones, but not from the state the subject
+    /// is in now. Said by the module status machine and by the character one,
+    /// which are two machines over two vocabularies and one sentence.
+    /// </summary>
+    public static string IllegalStatusTransition(object transition, object currentStatus) =>
+        $"Переход \"{transition}\" недоступен из статуса \"{currentStatus}\"";
+
+    /// <summary>
+    /// The same refusal for a module, which also names the reason it is closed
+    /// for: Closed is the only status that stores one.
+    /// </summary>
+    public static string IllegalStatusTransition(
+        object transition, ModuleStatus currentStatus, ClosedReason closedReason) =>
+        IllegalStatusTransition(transition, currentStatus) +
+        (currentStatus == ModuleStatus.Closed ? $" ({closedReason})" : "");
 
     /// <summary>
     /// The requested premoderation status is not reachable from the current one
