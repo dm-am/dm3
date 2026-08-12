@@ -80,6 +80,16 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
         // so a lost push only delays it until the next page load. Everything above
         // this line has no side effects and still throws, which is what lets a
         // message that produced nothing yet be replayed safely.
+        //
+        // What that leaves open is redelivery from the broker — a worker killed
+        // between the write and the acknowledgement, a nack, a restart — which
+        // hands the same message back and produces a second set of notifications.
+        // Weighed and accepted 2026-08-12 rather than overlooked. Closing it needs
+        // an idempotency key on InvokedEvent, filled by the single publishing point
+        // and honoured by an idempotent write here; that is a change to the bus
+        // contract every producer of events shares, on the path where a mistake
+        // means notifications stop arriving at all. It earns its own pass, not a
+        // rider on somebody else's.
 
         // In-app notifications, pushed over SignalR by the API
         foreach (var notification in notifications)
