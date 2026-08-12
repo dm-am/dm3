@@ -4,6 +4,7 @@ using DM.Domain.Account.Configuration;
 using DM.Domain.Core.Identity;
 using DM.Testing;
 using DM.Web.API.Shared.Authentication;
+using DM.Web.API.Shared.Configuration;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
@@ -25,7 +26,8 @@ namespace DM.Web.API.Tests.Shared;
 public class SessionCookieShould : UnitTestBase
 {
     private static readonly ApiCredentialsStorage Storage =
-        new(Options.Create(new AuthenticationConfiguration()));
+        new(Options.Create(new AuthenticationConfiguration()),
+            Options.Create(new SessionCookieConfiguration()));
 
     /// <summary>
     /// Host and transport, deliberately crossed: a domain over http and localhost

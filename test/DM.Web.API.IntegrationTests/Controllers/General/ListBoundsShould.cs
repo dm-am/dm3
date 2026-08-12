@@ -148,7 +148,7 @@ public class ListBoundsShould : IntegrationTestBase
 
                     if (!operation.Value.TryGetProperty("responses", out var responses) ||
                         !responses.TryGetProperty("200", out var success) ||
-                        SchemaNameOf(success)?.Contains("ListEnvelope", StringComparison.Ordinal) != true)
+                        !AnswersAList(success))
                     {
                         continue;
                     }
@@ -179,23 +179,25 @@ public class ListBoundsShould : IntegrationTestBase
             .ToArray();
     }
 
-    private static string? SchemaNameOf(JsonElement response)
+    /// <summary>Whether a 200 answers a list of resources.</summary>
+    /// <remarks>
+    /// Two shapes, and only one of them used to count. A declared ListEnvelope is
+    /// a class the document names; an array written out in place names nothing,
+    /// and reading that as "no body" dropped the operation out of the walk before
+    /// its parameters were ever looked at - so a list with no page and no
+    /// envelope was on neither of the two lists above and held by nothing at all.
+    /// </remarks>
+    private static bool AnswersAList(JsonElement success)
     {
-        if (!response.TryGetProperty("content", out var content))
+        var schema = ResponseBodySchema.NameOf(success);
+        if (schema == null)
         {
-            return null;
+            return false;
         }
 
-        foreach (var mediaType in content.EnumerateObject())
-        {
-            if (mediaType.Value.TryGetProperty("schema", out var schema) &&
-                schema.TryGetProperty("$ref", out var reference))
-            {
-                return reference.GetString();
-            }
-        }
-
-        return null;
+        return schema == ResponseBodySchema.WrittenInPlace
+            ? ResponseBodySchema.IsArray(success)
+            : schema.Contains("ListEnvelope", StringComparison.Ordinal);
     }
 
     [Fact]

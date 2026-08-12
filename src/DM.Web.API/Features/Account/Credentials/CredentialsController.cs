@@ -150,6 +150,10 @@ public class CredentialsController : ControllerBase
     [ProducesResponseType(typeof(UsernameChangeResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    // The state of one account's own request, moderator verdict included. Same
+    // rule as the session list and the security journal: an authenticated read
+    // of the account area is stored by nothing.
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> GetUsernameChangeStatus()
     {
         var result = await _credentialsService.GetUsernameChangeStatusAsync();

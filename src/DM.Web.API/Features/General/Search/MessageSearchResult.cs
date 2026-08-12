@@ -1,6 +1,6 @@
 using System;
 
-namespace DM.Web.API.Features.Search;
+namespace DM.Web.API.Features.General.Search;
 
 /// <summary>
 /// A single unified message/post search result row.

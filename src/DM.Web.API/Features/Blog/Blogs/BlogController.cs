@@ -302,19 +302,24 @@ public class BlogController : ControllerBase
     /// <summary>
     /// Delete rubric
     /// </summary>
+    /// <param name="id">Blog public ID (5 letters) or GUID</param>
     /// <param name="rubricId">Rubric identifier</param>
     /// <response code="204">Rubric deleted successfully</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized</response>
     /// <response code="404">Rubric not found</response>
-    [HttpDelete("rubrics/{rubricId:guid}", Name = nameof(DeleteRubric))]
+    [HttpDelete("{id}/rubrics/{rubricId:guid}", Name = nameof(DeleteRubric))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> DeleteRubric(Guid rubricId)
+    public async Task<IActionResult> DeleteRubric(string id, Guid rubricId)
     {
+        // Same shape as PatchRubric: the rubric id alone identifies the rubric,
+        // and the blog {id} stays in the route so that all four rubric
+        // addresses are nested under their blog. The domain resolves and
+        // authorizes via the rubric's own blog.
         await _apiService.DeleteRubric(rubricId);
         return NoContent();
     }

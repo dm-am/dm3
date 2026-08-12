@@ -1078,6 +1078,25 @@
     "role",
     "user"
   ],
+  "DM.Web.API.Features.General.Search.ForumSearchResult": [
+    "boardId",
+    "boardTitle",
+    "createdUtc",
+    "entityType",
+    "id",
+    "snippet",
+    "topicId",
+    "topicNumber",
+    "topicTitle"
+  ],
+  "DM.Web.API.Features.General.Search.MessageSearchResult": [
+    "createdUtc",
+    "id",
+    "snippet",
+    "sourceId",
+    "sourceTitle",
+    "sourceType"
+  ],
   "DM.Web.API.Features.General.Tickets.CreateTicketIntakeRequest": [
     "contact",
     "subject",
@@ -1716,25 +1735,6 @@
   "DM.Web.API.Features.Personal.Subscriptions.UpdateSubscriptionRequest": [
     "settings"
   ],
-  "DM.Web.API.Features.Search.ForumSearchResult": [
-    "boardId",
-    "boardTitle",
-    "createdUtc",
-    "entityType",
-    "id",
-    "snippet",
-    "topicId",
-    "topicNumber",
-    "topicTitle"
-  ],
-  "DM.Web.API.Features.Search.MessageSearchResult": [
-    "createdUtc",
-    "id",
-    "snippet",
-    "sourceId",
-    "sourceTitle",
-    "sourceType"
-  ],
   "DM.Web.API.Shared.BbRendering.CommonBbText": [
     "context",
     "parseMode",
@@ -1776,11 +1776,11 @@
   "DM.Web.API.Shared.Dto.CreateInvitationRequest": [
     "username"
   ],
-  "DM.Web.API.Shared.Dto.CursorEnvelope`1[[DM.Web.API.Features.Messaging.Messages.Message, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+  "DM.Web.API.Shared.Dto.CursorEnvelope`1[[DM.Web.API.Features.General.Search.MessageSearchResult, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "paging",
     "resources"
   ],
-  "DM.Web.API.Shared.Dto.CursorEnvelope`1[[DM.Web.API.Features.Search.MessageSearchResult, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+  "DM.Web.API.Shared.Dto.CursorEnvelope`1[[DM.Web.API.Features.Messaging.Messages.Message, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "paging",
     "resources"
   ],
@@ -2061,6 +2061,10 @@
     "paging",
     "resources"
   ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.General.Search.ForumSearchResult, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
   "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Messaging.Chats.Chat, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "paging",
     "resources"
@@ -2126,10 +2130,6 @@
     "resources"
   ],
   "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Personal.Subscriptions.Subscription, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
-    "paging",
-    "resources"
-  ],
-  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Search.ForumSearchResult, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "paging",
     "resources"
   ],

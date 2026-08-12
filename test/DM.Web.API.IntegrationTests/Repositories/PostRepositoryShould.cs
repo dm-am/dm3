@@ -347,6 +347,55 @@ public class PostRepositoryShould : IntegrationTestBase
     }
 
     /// <summary>
+    /// Posts written in one instant are spread across the pages, not repeated on them.
+    /// </summary>
+    /// <remarks>
+    /// The order was CreatedUtc and nothing else, and a timestamp is not unique: a busy
+    /// second ties on its own, and the import of DM2 carries whole rooms written under one.
+    /// Paging asks for the same order once per page, and rows the order cannot tell apart
+    /// may come back arranged differently between two of those asks, which shows one post
+    /// on both pages and another on neither. Comments (CommentSorting) and messages (the
+    /// ChatId composite) already end their order on the identifier; a room does now, and
+    /// the index behind it is (RoomId, CreatedUtc, PostId).
+    /// </remarks>
+    [Fact]
+    public async Task PageARoomWhosePostsShareOneTimestamp()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var context = await AddGameWithRoomAsync(dbContext);
+        var oneInstant = DateTimeOffset.UtcNow;
+        var first = await AddRatedPostAsync(
+            dbContext, context, positiveReviews: 0, postCreatedUtc: oneInstant);
+        var second = await AddRatedPostAsync(
+            dbContext, context, positiveReviews: 0, postCreatedUtc: oneInstant);
+        var third = await AddRatedPostAsync(
+            dbContext, context, positiveReviews: 0, postCreatedUtc: oneInstant);
+        var fourth = await AddRatedPostAsync(
+            dbContext, context, positiveReviews: 0, postCreatedUtc: oneInstant);
+
+        // PostgreSQL compares uuid by its bytes, which for the canonical form is the order
+        // of its hex digits.
+        var expected = new[] { first, second, third, fourth }
+            .OrderBy(id => id.ToString("N"), StringComparer.Ordinal)
+            .ToArray();
+
+        var firstPage = (await repository.Get(
+            context.RoomId,
+            new PagingData(new PagingQuery { Skip = 0, Take = 2 }, 2, 4),
+            context.UserId)).Select(p => p.Id).ToArray();
+        var secondPage = (await repository.Get(
+            context.RoomId,
+            new PagingData(new PagingQuery { Skip = 2, Take = 2 }, 2, 4),
+            context.UserId)).Select(p => p.Id).ToArray();
+
+        firstPage.Concat(secondPage).Should().Equal(expected,
+            "one order runs across both pages, and the identifier is what settles it");
+    }
+
+    /// <summary>
     /// The addressee snapshot has to reach its column and come back from it.
     /// </summary>
     /// <remarks>

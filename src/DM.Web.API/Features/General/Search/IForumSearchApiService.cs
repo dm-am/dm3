@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Web.API.Shared.Dto;
 
-namespace DM.Web.API.Features.Search;
+namespace DM.Web.API.Features.General.Search;
 
 /// <summary>
 /// Forum full-text search API service

@@ -31,6 +31,7 @@ using DM.Web.API.Middleware;
 using DM.Web.API.Realtime;
 using DM.Web.API.Swagger;
 using DM.Web.API.HostedServices;
+using Jamq.Client.Abstractions.Consuming;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -111,6 +112,13 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         // detector record.
         services.AddReverseProxySupport(configuration);
 
+        // A cookie is HTTP, and this host is the only process that writes one.
+        // The setting used to sit beside the session lifetimes in the account
+        // domain, which the seeder and the notification dispatcher bind as well
+        // and neither of them answers a request.
+        services.Configure<SessionCookieConfiguration>(
+            configuration.GetSection(nameof(SessionCookieConfiguration)).Bind);
+
         services
             // No AddAutoMapper here: the mapper is owned by the Autofac
             // registration in RegisterMapper, which is applied after Populate and
@@ -156,7 +164,11 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             client.Timeout = TimeSpan.FromSeconds(5); // Don't block registration on slow API
         });
 
-        services.AddDmJamqClient();
+        // This host consumes too, and until it passed a pipeline of its own the
+        // realtime push was the one queue nothing counted. Measured, not retried:
+        // RealtimeConsumerMetricsMiddleware says why.
+        services.AddDmJamqClient(
+            consumerBuilderDefaults: builder => builder.WithMiddleware<RealtimeConsumerMetricsMiddleware>());
 
         if (!_migrateOnStart)
         {

@@ -245,19 +245,6 @@ public class CreatedLocationShould : IntegrationTestBase
     }
 
     /// <summary>The API project, found from the test binary rather than copied.</summary>
-    private static string ApiSourceRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null &&
-                   !Directory.Exists(Path.Combine(directory.FullName, "src", "DM.Web.API")))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return Path.Combine(directory!.FullName, "src", "DM.Web.API");
-        }
-    }
+    private static string ApiSourceRoot =>
+        Path.Combine(DM.Testing.RepositoryLayout.Root, "src", "DM.Web.API");
 }

@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using DM.Web.API.Shared.RateLimiting;
 
-namespace DM.Web.API.Features.Search;
+namespace DM.Web.API.Features.General.Search;
 
 /// <summary>
 /// Unified full-text search across chat messages and game posts.

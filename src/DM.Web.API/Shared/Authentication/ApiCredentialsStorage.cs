@@ -4,6 +4,7 @@ using DM.Domain.Account.Configuration;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Identity;
 using DM.Web.API.Shared.Authentication.Credentials;
+using DM.Web.API.Shared.Configuration;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 
@@ -33,10 +34,14 @@ internal class ApiCredentialsStorage : ICredentialsStorage
     public const string AuthCookieName = "dm_session";
 
     private readonly AuthenticationConfiguration _config;
+    private readonly SessionCookieConfiguration _cookie;
 
-    public ApiCredentialsStorage(IOptions<AuthenticationConfiguration> authConfig)
+    public ApiCredentialsStorage(
+        IOptions<AuthenticationConfiguration> authConfig,
+        IOptions<SessionCookieConfiguration> cookieConfig)
     {
         _config = authConfig.Value;
+        _cookie = cookieConfig.Value;
     }
 
     /// <inheritdoc />
@@ -57,7 +62,7 @@ internal class ApiCredentialsStorage : ICredentialsStorage
     {
         var isPersistent = identity.Session?.Persistent ?? false;
 
-        var cookieOptions = SessionCookieOptions(httpContext, _config);
+        var cookieOptions = SessionCookieOptions(httpContext, _cookie);
 
         // Persistent sessions ("Remember Me"): cookie survives browser restart
         // Non-persistent sessions: session cookie, deleted when browser closes
@@ -73,7 +78,7 @@ internal class ApiCredentialsStorage : ICredentialsStorage
     /// <inheritdoc />
     public Task Unload(HttpContext httpContext)
     {
-        var cookieOptions = SessionCookieOptions(httpContext, _config);
+        var cookieOptions = SessionCookieOptions(httpContext, _cookie);
         cookieOptions.Expires = DateTimeOffset.UnixEpoch;
 
         httpContext.Response.Cookies.Delete(AuthCookieName, cookieOptions);
@@ -90,7 +95,7 @@ internal class ApiCredentialsStorage : ICredentialsStorage
     /// </remarks>
     private static CookieOptions SessionCookieOptions(
         HttpContext httpContext,
-        AuthenticationConfiguration config) => new()
+        SessionCookieConfiguration config) => new()
     {
         HttpOnly = true,
         // Empty means host-only, which is what an omitted Domain gives and what
@@ -101,9 +106,9 @@ internal class ApiCredentialsStorage : ICredentialsStorage
         // attributes match the stored ones, and Domain is one of them, so the
         // two halves disagreeing leaves a session that logging out cannot
         // clear.
-        Domain = string.IsNullOrWhiteSpace(config.SessionCookieDomain)
+        Domain = string.IsNullOrWhiteSpace(config.Domain)
             ? null
-            : config.SessionCookieDomain,
+            : config.Domain,
         // Same-as-request, which is the framework's own cookie policy. The host
         // name says nothing about the transport: the deployed stand answers plain
         // http on a domain, and a Secure cookie there is dropped by the browser

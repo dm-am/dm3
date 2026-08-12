@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using DM.Web.API.Shared.Dto;
 
-namespace DM.Web.API.Features.Search;
+namespace DM.Web.API.Features.General.Search;
 
 /// <summary>
 /// API-facing service for the unified message/post full-text search.

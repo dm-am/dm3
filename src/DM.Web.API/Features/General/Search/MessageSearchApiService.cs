@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using DM.Domain.Messaging.Features.Search;
 using DM.Web.API.Shared.Dto;
 
-namespace DM.Web.API.Features.Search;
+namespace DM.Web.API.Features.General.Search;
 
 /// <inheritdoc />
 internal class MessageSearchApiService : IMessageSearchApiService

@@ -5,7 +5,7 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Forum.Features.Search;
 using DM.Web.API.Shared.Dto;
 
-namespace DM.Web.API.Features.Search;
+namespace DM.Web.API.Features.General.Search;
 
 /// <inheritdoc />
 internal class ForumSearchApiService : IForumSearchApiService

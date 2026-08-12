@@ -85,18 +85,15 @@ internal class WarmupService : IHostedService
         // Warmup tags
         await db.Tags.CountAsync(ct);
 
-        // Warmup the complex GetOwn query with ProjectTo<Game>
-        // This pre-compiles the EF Core query and AutoMapper projection
+        // Warmup the participating games list with ProjectTo<Game>
+        // This pre-compiles the EF Core query and AutoMapper projection. Both
+        // predicates are the storage filters the repository itself applies, so
+        // the product rules in this query cannot drift from the rules the list
+        // is served with.
         var dummyUserId = Guid.Empty;
         await db.Games
             .Where(GameAccessibilityFilters.GameAvailable(dummyUserId))
-            .Where(g => g.Characters.Any(c =>
-                            !c.IsRemoved && c.Status == CharacterStatus.Active && c.AuthorId == dummyUserId) ||
-                        db.Subscriptions.Any(s =>
-                            s.TargetType == SubscriptionTargetType.Game &&
-                            s.TargetId == g.GameId &&
-                            s.SubscriberId == dummyUserId) ||
-                        g.MasterId == dummyUserId || g.Assistants.Any(a => a.UserId == dummyUserId) || g.MentorId == dummyUserId)
+            .Where(GameParticipationFilters.Participating(db, dummyUserId))
             .ProjectTo<DomainGame>(mapper.ConfigurationProvider)
             .Take(1)
             .ToListAsync(ct);

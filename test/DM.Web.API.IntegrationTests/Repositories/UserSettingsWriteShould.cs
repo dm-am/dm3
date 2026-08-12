@@ -99,6 +99,44 @@ public class UserSettingsWriteShould : IntegrationTestBase
         stored.Paging.Should().NotBeNull("a document without paging answers 500 on the next read");
     }
 
+    /// <summary>
+    /// The first link of a channel is the other write that used to create the
+    /// document, and it created it by reading first and inserting on null.
+    /// </summary>
+    [Fact]
+    public async Task CreateTheDocumentOnTheFirstLinkOfAChannel()
+    {
+        var userId = Guid.NewGuid();
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+
+        await scope.ServiceProvider.GetRequiredService<IBotLinkRepository>()
+            .InitializeChannelPreferences(userId, "telegram");
+
+        var stored = await Collection(scope).Find(Key(userId)).SingleAsync();
+        stored.TelegramPreferences!.Enabled.Should().BeTrue();
+        stored.Paging.Should().NotBeNull("a document without paging answers 500 on the next read");
+        stored.Theme.Should().Be(Theme.Light, "the rest of a fresh document is the default one");
+    }
+
+    /// <summary>
+    /// The two branches used to disagree about an unknown channel: creating the
+    /// document swallowed it and wrote a document with no preference at all,
+    /// updating one refused. One write, one answer.
+    /// </summary>
+    [Fact]
+    public async Task RefuseAChannelItDoesNotKnow()
+    {
+        var userId = Guid.NewGuid();
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IBotLinkRepository>();
+
+        var link = () => repository.InitializeChannelPreferences(userId, "carrier pigeon");
+
+        await link.Should().ThrowAsync<ArgumentException>();
+        (await Collection(scope).Find(Key(userId)).AnyAsync())
+            .Should().BeFalse("a refused write leaves no document behind");
+    }
+
     private static IMongoCollection<UserSettings> Collection(IServiceScope scope) =>
         scope.ServiceProvider.GetRequiredService<DmMongoClient>().GetCollection<UserSettings>();
 
