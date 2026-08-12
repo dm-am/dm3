@@ -71,7 +71,7 @@ internal class ChangedPublicationNotificationGenerator : BaseNotificationGenerat
         }
 
         // The actor is whoever made the edit, and the update path records it
-        // (BlogService.UpdatePublication). The author is deliberately not
+        // (PublicationService.UpdatePublication). The author is deliberately not
         // substituted for a missing value: an assistant and an admin may edit a
         // publication too (PublicationIntention.Edit), and filling the field from
         // AuthorId would hold the notification against the wrong person's

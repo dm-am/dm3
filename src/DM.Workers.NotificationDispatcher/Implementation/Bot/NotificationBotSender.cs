@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Infrastructure.Core.Configuration;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Account.Settings;
@@ -25,6 +26,7 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
     private readonly DmDbContext _dbContext;
     private readonly BotConfiguration _botConfig;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly SiteAddressConfiguration _siteAddresses;
     private readonly ILogger<NotificationBotSender> _logger;
 
     public NotificationBotSender(
@@ -32,11 +34,13 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
         DmMongoClient mongoClient,
         IOptions<BotConfiguration> botConfig,
         IHttpClientFactory httpClientFactory,
+        IOptions<SiteAddressConfiguration> siteAddresses,
         ILogger<NotificationBotSender> logger) : base(mongoClient)
     {
         _dbContext = dbContext;
         _botConfig = botConfig.Value;
         _httpClientFactory = httpClientFactory;
+        _siteAddresses = siteAddresses.Value;
         _logger = logger;
     }
 
@@ -71,8 +75,8 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
         // Two channels, two markup languages: Telegram parses the message as HTML and
         // Discord prints it as text. One message for both meant one of them was always
         // wrong.
-        var discordMessage = BuildDiscordMessage(eventType, notification.Metadata);
-        var telegramMessage = BuildTelegramMessage(eventType, notification.Metadata);
+        var discordMessage = BuildDiscordMessage(eventType, notification.Metadata, _siteAddresses);
+        var telegramMessage = BuildTelegramMessage(eventType, notification.Metadata, _siteAddresses);
 
         foreach (var userId in userIds)
         {
@@ -205,7 +209,9 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
     /// </remarks>
     /// <param name="eventType">Event the message is about</param>
     /// <param name="metadata">Metadata bag of the notification</param>
-    internal static string BuildTelegramMessage(EventType eventType, object metadata)
+    /// <param name="addresses">Addresses of the site, for the root of the link</param>
+    internal static string BuildTelegramMessage(
+        EventType eventType, object metadata, SiteAddressConfiguration addresses)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"<b>Dungeon Master: {NotificationText.EscapeHtml(NotificationText.GetTitle(eventType))}</b>");
@@ -214,6 +220,15 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
         foreach (var (name, value) in NotificationText.ReadMetadata(metadata))
         {
             sb.AppendLine($"<b>{NotificationText.EscapeHtml(name)}:</b> {NotificationText.EscapeHtml(value)}");
+        }
+
+        // The destination the letter and the list lead to, in the markup this channel
+        // reads. An anchor is the only way a Telegram message carries one.
+        var target = NotificationLink.GetUrl(eventType, metadata, addresses);
+        if (target != null)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"<a href=\"{NotificationText.EscapeHtml(target)}\">Перейти</a>");
         }
 
         return sb.ToString();
@@ -232,7 +247,9 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
     /// </remarks>
     /// <param name="eventType">Event the message is about</param>
     /// <param name="metadata">Metadata bag of the notification</param>
-    internal static string BuildDiscordMessage(EventType eventType, object metadata)
+    /// <param name="addresses">Addresses of the site, for the root of the link</param>
+    internal static string BuildDiscordMessage(
+        EventType eventType, object metadata, SiteAddressConfiguration addresses)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"Dungeon Master: {NotificationText.GetTitle(eventType)}");
@@ -241,6 +258,16 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
         foreach (var (name, value) in NotificationText.ReadMetadata(metadata))
         {
             sb.AppendLine($"{name}: {value}");
+        }
+
+        // The same destination the other two channels lead to, written as the bare
+        // address: Discord links a URL of its own accord, and an anchor around it
+        // would arrive with the tag showing.
+        var target = NotificationLink.GetUrl(eventType, metadata, addresses);
+        if (target != null)
+        {
+            sb.AppendLine();
+            sb.AppendLine(target);
         }
 
         return sb.ToString();

@@ -60,11 +60,17 @@ public class Startup
             .AddDmMailConfiguration(_configuration)
             .AddDmAccountConfiguration(_configuration)
             .AddDmLogging("DM.Notifications.Consumer", _configuration, _environment)
+            // Every letter and both bot messages this host builds carry the way back
+            // to what they are about, and the root of that link is the address this
+            // deployment answers on. Empty, it builds no link and says so nowhere,
+            // which is the failure the declaration exists to refuse.
+            .RequireGeneratedLinks()
             .RequireRelationalStorage()
             .RequireDocumentStorage();
 
+        services.AddDmRetryingConsumer(NotificationDispatcherConsumer.QueueName);
         services.AddDmJamqClient(
-            consumerBuilderDefaults: builder => builder.WithMiddleware<NotificationConsumerRetryMiddleware>());
+            consumerBuilderDefaults: builder => builder.WithMiddleware<RetryingConsumerMiddleware>());
         services.AddHostedService<NotificationDispatcherConsumer>();
 
         services.AddDmBrokerHealthCheck(_configuration);

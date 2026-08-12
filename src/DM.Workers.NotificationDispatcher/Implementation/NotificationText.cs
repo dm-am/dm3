@@ -192,10 +192,12 @@ internal static class NotificationText
     /// Metadata every channel carries and none of them writes out.
     /// </summary>
     /// <remarks>
-    /// Three kinds, none of them addressed to a person. An identifier is what the
-    /// notification in the app is turned into a link with — the client reads
-    /// GameId, TopicId, BlogId out of this same payload — and each one is a slug
-    /// or a raw guid standing next to the human name of the very same thing:
+    /// Three kinds, none of them addressed to a person. An identifier is what a
+    /// notification is turned into a link with — the list in the application reads
+    /// GameId, TopicId, BlogId out of this same payload, and NotificationLink beside
+    /// this file reads the same fields for the letter and the two bot messages — and
+    /// each one is a slug or a raw guid standing next to the human name of the very
+    /// same thing:
     /// "Игра: poterjannye-hroniki~aBc" above "Название игры: Потерянные хроники".
     /// A discriminator repeats in English what the title has already said in
     /// Russian: NewStatus arrives as "Frozen" under "Игра заморожена",
@@ -248,18 +250,44 @@ internal static class NotificationText
     /// the reader has no use for.
     /// </summary>
     /// <remarks>
+    /// The bag serves two readers at once — the sentence, which has no use for a slug
+    /// or a raw guid, and the link, which is made of nothing else. Dropping the
+    /// machine-facing fields here rather than in the generators is what keeps the link
+    /// buildable: NotificationLink reads the same bag through ReadFields below.
+    /// </remarks>
+    /// <param name="metadata">Metadata bag of a notification</param>
+    public static IReadOnlyList<KeyValuePair<string, string>> ReadMetadata(object? metadata)
+    {
+        var shown = new List<KeyValuePair<string, string>>();
+        foreach (var (name, value) in ReadFields(metadata))
+        {
+            if (IsHiddenFromText(name) || string.IsNullOrEmpty(value))
+            {
+                continue;
+            }
+
+            shown.Add(new KeyValuePair<string, string>(FormatPropertyName(name), value));
+        }
+
+        return shown;
+    }
+
+    /// <summary>
+    /// Metadata of a notification as it arrived: every field, under the name the
+    /// generator declared it by, in the order it declared them.
+    /// </summary>
+    /// <remarks>
     /// Reading the bag was written out once per channel and the copies differed down
     /// to their serializer options. Metadata that is not an object yields nothing: the
     /// email sender used to fall back to dumping the serialized bag into the letter,
     /// which is both the JSON body EmailTemplatesShould exists to prevent and one more
     /// place the values reached the reader unescaped.
     ///
-    /// The bag serves two readers at once — the client, which turns identifiers into a
-    /// link, and the person, who has no use for a slug or a raw guid. Dropping the
-    /// machine-facing fields here rather than in the generators keeps the link working.
+    /// Nothing is dropped here, because the two readers of the bag drop different
+    /// things: the sentence leaves out the identifiers, and the link is one of them.
     /// </remarks>
     /// <param name="metadata">Metadata bag of a notification</param>
-    public static IReadOnlyList<KeyValuePair<string, string>> ReadMetadata(object? metadata)
+    public static IReadOnlyList<KeyValuePair<string, string>> ReadFields(object? metadata)
     {
         if (metadata == null)
         {
@@ -277,16 +305,8 @@ internal static class NotificationText
             var fields = new List<KeyValuePair<string, string>>();
             foreach (var property in document.RootElement.EnumerateObject())
             {
-                if (IsHiddenFromText(property.Name))
-                {
-                    continue;
-                }
-
-                var value = FormatPropertyValue(property.Value);
-                if (!string.IsNullOrEmpty(value))
-                {
-                    fields.Add(new KeyValuePair<string, string>(FormatPropertyName(property.Name), value));
-                }
+                fields.Add(new KeyValuePair<string, string>(
+                    property.Name, FormatPropertyValue(property.Value)));
             }
 
             return fields;

@@ -5,6 +5,7 @@ using Jamq.Client.DependencyInjection;
 using Jamq.Client.Rabbit.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace DM.Infrastructure.Messaging;
 
@@ -51,12 +52,13 @@ public static class MessageQueuingConfigurationExtensions
     /// the client on its own, and a producer default written in one of them would
     /// have been absent from the other two — persistence has to hold for every
     /// publisher in the system or the queue it protects is emptied by whichever
-    /// process forgot it. The consumer pipeline stays per host, because the
-    /// middleware of a host is what names its queue to the metrics. All three
-    /// hosts consume: the two workers off the queues they were written for, the
-    /// API off the realtime push, and each passes a middleware of its own built
-    /// on <see cref="MeasuredConsumerPipeline"/>. Only the API's leaves the retry
-    /// out, for the reason its own middleware states.
+    /// process forgot it. The consumer pipeline is named by the host, because a
+    /// host is what decides whether what it takes off its queue is worth another
+    /// attempt. All three hosts consume: the two workers off the queues they were
+    /// written for, and the API off the realtime push. The workers install the
+    /// same <see cref="RetryingConsumerMiddleware"/> and differ in the queue they
+    /// register it for; the API passes one of its own, which leaves the retry out
+    /// for the reason that file states.
     /// </remarks>
     /// <param name="services">Service collection.</param>
     /// <param name="consumerBuilderDefaults">Consumer pipeline of this host, if it consumes at all.</param>
@@ -69,6 +71,27 @@ public static class MessageQueuingConfigurationExtensions
                 config => config.UseRabbit(),
                 producerBuilderDefaults: builder => builder.WithMiddleware<PersistentDeliveryMiddleware>(),
                 consumerBuilderDefaults: consumerBuilderDefaults);
+
+    /// <summary>
+    /// Registers the retrying consumer middleware of a host, for the queue it reads.
+    /// </summary>
+    /// <remarks>
+    /// The client resolves an interface middleware out of the container by its type
+    /// and hands it nothing of its own, so the queue cannot travel with the pipeline
+    /// declaration - it has to be in the graph. Which is also what lets one middleware
+    /// serve both workers: the queue was the only thing their two copies did not
+    /// share.
+    ///
+    /// Per resolution, the way the assembly scan used to hand out those copies. A
+    /// message is handled in a scope of its own, and what the middleware builds
+    /// outlives none of them.
+    /// </remarks>
+    /// <param name="services">Service collection.</param>
+    /// <param name="queue">Queue this host consumes, as the metrics label it.</param>
+    public static IServiceCollection AddDmRetryingConsumer(
+        this IServiceCollection services, string queue) =>
+        services.AddTransient(provider => new RetryingConsumerMiddleware(
+            queue, provider.GetRequiredService<ILogger<RetryingConsumerMiddleware>>()));
 
     /// <summary>
     /// Adds a health check that actually opens a connection to the broker.

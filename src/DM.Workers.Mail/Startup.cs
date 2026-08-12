@@ -48,8 +48,9 @@ public class Startup
             .AddDmMailConfiguration(_configuration)
             .AddDmLogging("DM.MailSender.Consumer", _configuration, _environment);
 
+        services.AddDmRetryingConsumer(MailConsumer.QueueName);
         services.AddDmJamqClient(
-            consumerBuilderDefaults: builder => builder.WithMiddleware<ConsumerRetryMiddleware>());
+            consumerBuilderDefaults: builder => builder.WithMiddleware<RetryingConsumerMiddleware>());
 
         services.AddHostedService<MailConsumer>();
 

@@ -21,12 +21,14 @@ namespace DM.Infrastructure.Messaging;
 /// handed looked exactly like an idle one, and the only trace of the failures was
 /// a warning line nothing watched.
 ///
-/// The middleware itself stays a type per host, because it is what names the queue
-/// and holds the logger. What it no longer holds is any of this. The two workers
-/// carried a copy each of the same file, policy and instruments included, so the
-/// number of attempts and the shape of the backoff had to be changed in as many
-/// places as there are consumers; and the third consumer, the realtime push of the
-/// API, had neither.
+/// The two workers carried a copy each of the same file, policy and instruments
+/// included, so the number of attempts and the shape of the backoff had to be
+/// changed in as many places as there are consumers; and the third consumer, the
+/// realtime push of the API, had neither. Both halves of that are gone: the policy
+/// and the instruments live here, and the workers consume through one
+/// <see cref="RetryingConsumerMiddleware"/>, which differs between them by the queue
+/// it is given and by nothing else. The API keeps a middleware of its own because it
+/// measures without retrying, which is another pipeline rather than another copy.
 ///
 /// A helper the middleware calls rather than a base class it derives from. The
 /// client picks the InvokeAsync of a middleware out by reflection, so leaving that

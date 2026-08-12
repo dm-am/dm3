@@ -171,6 +171,17 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
             sb.AppendLine("</dl>");
         }
 
+        // The reader of a letter is the one reader with no notification list in front
+        // of him, so the letter carries the way back to what it is about. Absolute,
+        // because a path in a letter resolves against nothing; built from the table
+        // the two bot channels read as well, so all three lead where the list leads.
+        var target = NotificationLink.GetUrl(eventType, metadata, addresses);
+        if (target != null)
+        {
+            sb.AppendLine("<p style=\"margin-top: 20px;\">" +
+                          $"<a href=\"{NotificationText.EscapeHtml(target)}\">Перейти</a></p>");
+        }
+
         sb.AppendLine("</div>");
 
         // Footer

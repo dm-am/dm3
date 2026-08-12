@@ -71,7 +71,7 @@ public class NotificationMarkupShould
     [Fact]
     public void KeepMetadataOutOfTheTelegramMessageAsMarkup()
     {
-        var message = NotificationBotSender.BuildTelegramMessage(Event, Metadata);
+        var message = NotificationBotSender.BuildTelegramMessage(Event, Metadata, Addresses);
 
         message.Should().NotContain(HostileTitle,
             "the message is sent with parse_mode HTML, and one angle bracket in it costs the whole message");
@@ -83,7 +83,7 @@ public class NotificationMarkupShould
     [Fact]
     public void SendDiscordTextRatherThanMarkup()
     {
-        var message = NotificationBotSender.BuildDiscordMessage(Event, Metadata);
+        var message = NotificationBotSender.BuildDiscordMessage(Event, Metadata, Addresses);
 
         message.Should().NotContain("<b>", "Discord prints the content as text, so the tags would show");
         message.Should().NotContain("&amp;", "and so would the entities");
