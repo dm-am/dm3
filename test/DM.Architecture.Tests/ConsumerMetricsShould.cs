@@ -85,21 +85,50 @@ public class ConsumerMetricsShould
     public void MeasureEveryMessageThatPassesThroughAConsumer()
     {
         var middlewares = Directory
-            .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*RetryMiddleware.cs", SearchOption.AllDirectories)
+            .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*Middleware.cs", SearchOption.AllDirectories)
             .Where(IsAuthored)
+            .Where(path => File.ReadAllText(path).Contains(ConsumerSide, StringComparison.Ordinal))
             .ToArray();
 
-        middlewares.Should().HaveCountGreaterOrEqualTo(2,
-            "both workers wrap their pipeline in one, and a walk that finds fewer checks nothing");
+        middlewares.Should().HaveCountGreaterOrEqualTo(3,
+            "all three hosts consume - the two workers off the queues they were written for " +
+            "and the API off the realtime push - and a walk that finds fewer checks nothing");
 
         middlewares
-            .Where(path => !File.ReadAllText(path).Contains("MessagingMetrics", StringComparison.Ordinal))
+            .Where(path => !Measures(File.ReadAllText(path)))
             .Select(Relative)
             .Should().BeEmpty(
-                "every message of a worker passes through its retry middleware, so this is " +
+                "every message of a consumer passes through its middleware, so this is " +
                 "the one place that can count them; without it a consumer failing everything " +
                 "is indistinguishable from an idle one");
     }
+
+    /// <summary>The interface a consumer middleware implements, which is what selects one.</summary>
+    /// <remarks>
+    /// The walk went by a file name ending in RetryMiddleware, which is the name the
+    /// two workers happened to give theirs. The third consumer has no retry to
+    /// name a file after - the realtime push of the API is a copy of a stored
+    /// notification and is dropped rather than redelivered - so the one queue
+    /// nobody counted was also the one queue this rule could not see.
+    /// </remarks>
+    private const string ConsumerSide = "IConsumerMiddleware";
+
+    /// <summary>The helper that holds the policy and the instruments they share.</summary>
+    private const string SharedPipeline = "MeasuredConsumerPipeline";
+
+    /// <summary>
+    /// A middleware that counts what passes through it: either it writes the
+    /// instruments itself, or it hands the pipeline to the helper that does.
+    /// </summary>
+    /// <remarks>
+    /// Reading every middleware for the name of the metrics class was the whole
+    /// check while each of them carried its own copy of the counters. They share
+    /// one now, and a check that still demanded the name in every file would have
+    /// demanded the duplication back with it.
+    /// </remarks>
+    private static bool Measures(string source) =>
+        source.Contains("MessagingMetrics", StringComparison.Ordinal) ||
+        source.Contains(SharedPipeline, StringComparison.Ordinal);
 
     [Fact]
     public void RegisterTheMeterWithTheExporter() =>
@@ -285,25 +314,5 @@ public class ConsumerMetricsShould
 
     private static string Relative(string path) => Path.GetRelativePath(RepositoryRoot, path);
 
-    /// <summary>
-    /// Walks up from the test binary to the repository root. Neither the sources
-    /// nor the monitoring configuration is copied to the output directory, and
-    /// copying them would let this assert against a stale snapshot.
-    /// </summary>
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null &&
-                   !(Directory.Exists(Path.Combine(directory.FullName, "src")) &&
-                     Directory.Exists(Path.Combine(directory.FullName, "test"))))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

@@ -37,28 +37,9 @@ public class DeploymentConfigurationShould
     private const string AlertDeliveryEntrypoint = "alertmanager-init.sh";
     private const string EnvironmentTemplate = ".env.example";
 
-    /// <summary>
-    /// Walks up from the test binary to the repository root. The compose files are
-    /// not copied to the output directory, and copying them would let this assert
-    /// against a stale snapshot.
-    /// </summary>
-    private static string DockerDirectory
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null && !Directory.Exists(Path.Combine(directory.FullName, "docker")))
-            {
-                directory = directory.Parent;
-            }
+    private static string DockerDirectory => Path.Combine(DM.Testing.RepositoryLayout.Root, "docker");
 
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return Path.Combine(directory!.FullName, "docker");
-        }
-    }
-
-    /// <summary>The checkout the docker directory belongs to.</summary>
-    private static string RepositoryRoot => Directory.GetParent(DockerDirectory)!.FullName;
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     private static string Read(string fileName)
     {
@@ -286,6 +267,33 @@ public class DeploymentConfigurationShould
     }
 
     /// <summary>
+    /// The backup watchman takes the path a find listing gives it whole, and asks
+    /// for a file size the way the only host it runs on can answer.
+    /// </summary>
+    /// <remarks>
+    /// The two halves of the script disagreed. The directory check split the
+    /// listing with -f2- and the file check with -f2, so a backup directory whose
+    /// name holds a space became a path that does not exist, and everything
+    /// downstream - age, size, gzip integrity, the pg_dump completion marker -
+    /// ran against it. The size line also carried a BSD fallback no host could
+    /// reach, because the find above it is GNU-only and leaves the function on
+    /// its "no backups found" branch long before that line.
+    /// </remarks>
+    [Fact]
+    public void ReadTheWholeBackupPathAndAskTheHostForItsSize()
+    {
+        var verify = File.ReadAllText(
+            Path.Combine(DockerDirectory, "scripts", "verify-backup.sh"));
+
+        verify.Should().NotContain("cut -d' ' -f2)",
+            "the field is a path, and cutting it at the first space renames the file " +
+            "every check below then reads");
+        verify.Should().NotContain("stat -f%z",
+            "the BSD form is unreachable: without GNU find and its -printf the listing " +
+            "is empty and the function returns long before this line");
+    }
+
+    /// <summary>
     /// Object storage is the one store whose contents nothing can rebuild:
     /// Postgres and Mongo hold references to uploaded files, the files are the
     /// data. So the account a workload holds decides what a leaked configuration
@@ -387,11 +395,13 @@ public class DeploymentConfigurationShould
     /// anyway, demanding the session encryption key, which is the one thing the
     /// whole scheme exists to keep off that machine.
     ///
-    /// The five placeholders the template does carry are required by the base
-    /// compose file, whose environment anchor is resolved when the file is read
-    /// rather than when a service starts. Nothing the point of presence brings up
-    /// reads them, and they are spelled so that a real value could never be
-    /// mistaken for one of them.
+    /// The placeholders the template does carry are required by the base compose
+    /// file, whose environment anchor is resolved when the file is read rather
+    /// than when a service starts. Nothing the point of presence brings up reads
+    /// them, and they are spelled so that a real value could never be mistaken
+    /// for one of them. The imgproxy pair joined them the day the template
+    /// stopped shipping a working signature: it is a secret of the main server,
+    /// and compose now refuses to interpolate an empty one.
     /// </remarks>
     [Fact]
     public void GiveThePointOfPresenceATemplateWithNoRealSecretInIt()
@@ -406,7 +416,7 @@ public class DeploymentConfigurationShould
         foreach (var secret in new[]
                  {
                      "POSTGRES_PASSWORD", "RABBITMQ_DEFAULT_PASS", "MINIO_ROOT_PASSWORD",
-                     "GF_SECURITY_ADMIN_PASSWORD", "IMGPROXY_KEY", "IMGPROXY_SALT",
+                     "GF_SECURITY_ADMIN_PASSWORD",
                  })
         {
             content.Should().NotContain($"{secret}=",
@@ -416,7 +426,7 @@ public class DeploymentConfigurationShould
         foreach (var required in new[]
                  {
                      "DM_CryptoConfiguration__KeyBase64", "MONGO_ROOT_PASSWORD", "MONGO_PASSWORD",
-                     "MINIO_APP_PASSWORD", "MINIO_IMGPROXY_PASSWORD",
+                     "MINIO_APP_PASSWORD", "MINIO_IMGPROXY_PASSWORD", "IMGPROXY_KEY", "IMGPROXY_SALT",
                  })
         {
             var line = content.Split('\n').FirstOrDefault(l => l.StartsWith($"{required}=", StringComparison.Ordinal));
@@ -435,6 +445,49 @@ public class DeploymentConfigurationShould
             var text = File.ReadAllText(Path.Combine(RepositoryRoot, "docs", "guides", guide));
             text.Should().NotContain("cp .env.example .env.mirror",
                 $"{guide} would put every password of the installation on the point of presence");
+        }
+    }
+
+    /// <summary>
+    /// The signature guarding the transform layer is not published in this
+    /// repository, and no stack comes up without one.
+    /// </summary>
+    /// <remarks>
+    /// The template shipped a working 64-hex pair and the deployment guide's own
+    /// manual path is to copy that file, so every reader of the tree held the key
+    /// deciding which transforms imgproxy performs - which UPLOADS.md names as
+    /// the only thing standing between it and arbitrary ones. The other half was
+    /// that an empty pair is a valid configuration: the builder signs with the
+    /// literal "insecure" and nothing refuses to start.
+    ///
+    /// Both halves are held here because either alone is worthless. An empty
+    /// template with no ${...:?} behind it is a stand running unsigned, and a
+    /// ${...:?} over a published value is a stand running on everybody's key.
+    /// </remarks>
+    [Fact]
+    public void KeepTheImageSignatureOutOfTheRepositoryAndDemandItAtStart()
+    {
+        var template = Read(EnvironmentTemplate);
+        var compose = Read(BaseCompose);
+        var generator = File.ReadAllText(Path.Combine(DockerDirectory, "scripts", "init-env.sh"));
+
+        foreach (var name in new[] { "IMGPROXY_KEY", "IMGPROXY_SALT" })
+        {
+            var line = template.Split('\n')
+                .FirstOrDefault(l => l.StartsWith($"{name}=", StringComparison.Ordinal));
+
+            line.Should().NotBeNull($"{name} is still a variable of the deployment");
+            line!.Trim().Should().Be($"{name}=",
+                $"a working {name} in the template is a signing key every reader of this " +
+                "repository holds, and the manual path in the deployment guide is to copy " +
+                "this very file onto a server");
+
+            compose.Should().Contain($"${{{name}:?",
+                $"{name} decides which transforms imgproxy performs, so an empty one has to " +
+                "stop interpolation rather than sign every URL with the word insecure");
+            generator.Should().Contain($"{name} \"$(openssl rand -hex 32)\"",
+                $"the one place that creates docker/.env is the one that has to produce {name}, " +
+                "or the demand above turns into a stack nobody can start");
         }
     }
 
@@ -1055,6 +1108,99 @@ public class DeploymentConfigurationShould
     }
 
     /// <summary>
+    /// Wherever an edge sets a security header, the copy the upstream sent is
+    /// dropped, so the response leaves with one.
+    /// </summary>
+    /// <remarks>
+    /// add_header appends rather than replaces what an upstream sent, and the API
+    /// sets the same five on every response of its own, so /v1/ and /whatsup left
+    /// with two copies of each. Two identical copies are not an outage: every one
+    /// of these five parses to the same decision while the values agree, which is
+    /// why nothing on the stand was ever seen to break. What the rule forbids is
+    /// the state and not a symptom - the day the value is edited in one of the two
+    /// layers, which copy wins is decided by the parsing rules of that particular
+    /// header rather than by whoever made the edit.
+    ///
+    /// Read per block, because both directives inherit the same way: a level keeps
+    /// what the level above it declared only while it declares none of its own. A
+    /// file that pairs an add_header in one location with a proxy_hide_header in
+    /// another satisfies a text search and still sends two copies, and the point
+    /// of presence already has a location that repeats the four headers of its
+    /// server.
+    ///
+    /// Content-Type is the same mistake with the opposite symptom: nginx already
+    /// sets one from default_type on a return with a body, so a health path
+    /// answered with two of them - and, being an add_header at location level, it
+    /// cancelled the inheritance of the policy headers above, which left the one
+    /// path of the stand carrying none at all.
+    ///
+    /// Asked of the server that runs, of the commented template certificates
+    /// switch on, and of the point of presence: the mistake belongs to the
+    /// mechanism rather than to one file, and the template is the copy nobody
+    /// re-reads until the day it becomes the site.
+    /// </remarks>
+    [Fact]
+    public void SendOneCopyOfEverySecurityHeaderTheEdgeSets()
+    {
+        var edge = Read(NginxConfiguration);
+        var configurations = new Dictionary<string, string>
+        {
+            ["nginx.conf, the server that runs"] = ActiveDirectives(edge),
+            ["nginx.conf, the template certificates switch on"] = CommentedDirectives(edge),
+            ["pop.conf.template"] = ActiveDirectives(File.ReadAllText(
+                Path.Combine(DockerDirectory, "nginx", "pop.conf.template"))),
+        };
+
+        // Only the headers more than one layer knows how to set. X-Cache-Status is
+        // an add_header too and belongs to one layer alone, so the rule is stated
+        // over the set that can collide rather than over every directive these
+        // files happen to carry.
+        var policyHeaders = new[]
+        {
+            "X-Frame-Options", "X-Content-Type-Options", "X-XSS-Protection",
+            "Referrer-Policy", "Permissions-Policy",
+        };
+
+        foreach (var (name, configuration) in configurations)
+        {
+            var blocks = HeaderBlocks(configuration);
+
+            foreach (var block in blocks)
+            {
+                block.Added.Contains("Content-Type").Should().BeFalse(
+                    $"{name} sets Content-Type with add_header in \"{block.Name}\": nginx emits " +
+                    "one from default_type on a return with a body and the directive appends a " +
+                    "second, and at location level it cancels the inheritance of every policy " +
+                    "header above it as well");
+
+                foreach (var hidden in block.Hidden)
+                {
+                    block.Emitted.Contains(hidden).Should().BeTrue(
+                        $"{name} drops the incoming {hidden} in \"{block.Name}\" and sets none of " +
+                        "its own, which leaves the response with no such policy at all");
+                }
+            }
+
+            var emitting = blocks
+                .SelectMany(block => block.Emitted
+                    .Where(header => policyHeaders.Contains(header))
+                    .Select(header => (Block: block, Header: header)))
+                .ToList();
+
+            emitting.Should().NotBeEmpty(
+                $"{name} sets the policy headers of the origin it fronts");
+
+            foreach (var (block, header) in emitting)
+            {
+                block.Hides(header).Should().BeTrue(
+                    $"{name} emits {header} in \"{block.Name}\" and proxies to a layer that sets " +
+                    "it too, so with no proxy_hide_header in scope the response leaves with two " +
+                    "copies of one policy");
+            }
+        }
+    }
+
+    /// <summary>
     /// The backups live on the host, out of reach of "docker compose down -v".
     /// </summary>
     /// <remarks>
@@ -1096,7 +1242,16 @@ public class DeploymentConfigurationShould
     /// test green. The tag is now read out and refused by name, and the images
     /// this repository publishes itself are checked separately: their tag comes
     /// from IMAGE_TAG, chosen per branch by the deployment, so what is required
-    /// of them is that the choice stays a variable and is never written in.
+    /// of them is that the choice stays a variable and is never written in. A
+    /// digest passes the same rule and is stricter than a tag: what follows the
+    /// colon is a hash rather than the word this refuses.
+    ///
+    /// The shell scripts are read for the same reason the compose files are. This
+    /// summary said "every image the deployment runs" while the parser looked at
+    /// compose files and Dockerfiles only, so the one line that mints the
+    /// credentials of the stand ran an untagged httpd with this test green - and
+    /// nothing else was watching it either, because dependabot parses compose
+    /// files and Dockerfiles and never a script.
     /// </remarks>
     [Fact]
     public void PinEveryImageTheDeploymentRuns()
@@ -1116,8 +1271,15 @@ public class DeploymentConfigurationShould
             .Where(line => line.StartsWith("FROM ", StringComparison.Ordinal))
             .Select(line => line[5..].Split(' ')[0]);
 
+        var shellImages = ImagesRunByShellScripts();
+
+        shellImages.Should().HaveCountGreaterThan(1,
+            "the parser must find the images the scripts run, in both spellings: the bare " +
+            "command and the installer's array that carries sudo");
+
         var references = composeImages
             .Concat(dockerfileImages)
+            .Concat(shellImages)
             .Where(reference => reference != "minio/mc")
             .ToList();
 
@@ -1148,6 +1310,80 @@ public class DeploymentConfigurationShould
                 "commit gives a different runtime a month later - and watchtower, the one that " +
                 "would decide it, mounts /var/run/docker.sock");
         }
+    }
+
+    /// <summary>docker run options whose value is the argument after them.</summary>
+    private static readonly HashSet<string> OptionsTakingAValue = new(StringComparer.Ordinal)
+    {
+        "--add-host", "--entrypoint", "--env", "--env-file", "--label", "--name",
+        "--network", "--platform", "--publish", "--pull", "--user", "--volume",
+        "--workdir", "-e", "-l", "-p", "-u", "-v", "-w",
+    };
+
+    /// <summary>
+    /// The images the deployment scripts start with <c>docker run</c>.
+    /// </summary>
+    /// <remarks>
+    /// Shell is the third place an image reference lives, next to the compose
+    /// files and the Dockerfiles, and it was the one nothing read at all.
+    /// </remarks>
+    private static List<string> ImagesRunByShellScripts()
+    {
+        var found = new List<string>();
+
+        foreach (var script in Directory
+            .EnumerateFiles(DockerDirectory, "*.sh", SearchOption.AllDirectories)
+            .OrderBy(path => path, StringComparer.Ordinal))
+        {
+            // An invocation is wrapped over several lines with backslashes and the
+            // image sits on the last of them, so the continuations are folded away
+            // before anything is read out. The second alternative of the pattern is
+            // the installer's "${DOCKER[@]}" array, which holds sudo for as long as
+            // the docker group membership of the session has not taken effect.
+            var folded = Regex.Replace(File.ReadAllText(script), @"\\\r?\n\s*", " ");
+
+            foreach (Match invocation in Regex.Matches(
+                folded, @"(?:docker|DOCKER\[@\]\}""?)\s+run\s+(?<arguments>[^\r\n]*)"))
+            {
+                var image = ImageOperandOf(invocation.Groups["arguments"].Value);
+                if (image != null)
+                {
+                    found.Add(image);
+                }
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// The image of a <c>docker run</c>: the first argument that is neither an
+    /// option nor the value of one.
+    /// </summary>
+    private static string? ImageOperandOf(string arguments)
+    {
+        var tokens = arguments
+            .Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(token => token.Trim('\'', '"'))
+            .Where(token => token.Length > 0)
+            .ToList();
+
+        for (var index = 0; index < tokens.Count; index++)
+        {
+            if (tokens[index][0] != '-')
+            {
+                return tokens[index];
+            }
+
+            // Without the skip an "--entrypoint sh" hands back sh as the image. The
+            // --option=value spelling is one token and needs none.
+            if (OptionsTakingAValue.Contains(tokens[index]))
+            {
+                index++;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -1659,4 +1895,88 @@ public class DeploymentConfigurationShould
         .Select(line => line.Trim())
         .Where(line => line.StartsWith('#') == commented)
         .Select(line => line.TrimStart('#').Trim()));
+
+    /// <summary>
+    /// One block of an nginx configuration and the header directives declared
+    /// directly in it.
+    /// </summary>
+    /// <remarks>
+    /// add_header and proxy_hide_header inherit the same way: a level keeps what
+    /// the level above it declared only while it declares none of its own. So a
+    /// location repeating one add_header keeps none of the server's, and a
+    /// location naming one proxy_hide_header stops hiding everything else the
+    /// server hid. Both questions are therefore asked of a block and its
+    /// ancestors, never of the file as a whole.
+    /// </remarks>
+    private sealed class NginxBlock
+    {
+        /// <summary>The block this one is nested in, or null at the top level.</summary>
+        public NginxBlock? Parent { get; init; }
+
+        /// <summary>The line that opened the block, without its brace.</summary>
+        public string Name { get; init; } = string.Empty;
+
+        /// <summary>Headers this block sets with an add_header of its own.</summary>
+        public List<string> Added { get; } = new();
+
+        /// <summary>Headers this block drops with a proxy_hide_header of its own.</summary>
+        public List<string> Hidden { get; } = new();
+
+        /// <summary>What a response leaving this block carries: its own headers, or the inherited set.</summary>
+        public IReadOnlyList<string> Emitted =>
+            Added.Count > 0 ? Added : Parent?.Emitted ?? Array.Empty<string>();
+
+        /// <summary>Whether the copy an upstream sent is dropped before the response leaves this block.</summary>
+        public bool Hides(string header) => Hidden.Count > 0
+            ? Hidden.Contains(header)
+            : Parent?.Hides(header) ?? false;
+    }
+
+    /// <summary>
+    /// Splits a configuration into blocks by braces, keeping the two header
+    /// directives of each. Lines that are still comments are skipped: the
+    /// commented template arrives with one marker already taken off, and what is
+    /// commented inside it is commented out on purpose.
+    /// </summary>
+    private static IReadOnlyList<NginxBlock> HeaderBlocks(string configuration)
+    {
+        var blocks = new List<NginxBlock>();
+        var open = new Stack<NginxBlock>();
+
+        foreach (var raw in configuration.Split('\n'))
+        {
+            var line = raw.Trim();
+            if (line.Length == 0 || line.StartsWith('#'))
+            {
+                continue;
+            }
+
+            var current = open.Count > 0 ? open.Peek() : null;
+
+            var added = Regex.Match(line, @"^add_header\s+([^\s;]+)");
+            if (added.Success)
+            {
+                current?.Added.Add(added.Groups[1].Value);
+            }
+
+            var hidden = Regex.Match(line, @"^proxy_hide_header\s+([^\s;]+)");
+            if (hidden.Success)
+            {
+                current?.Hidden.Add(hidden.Groups[1].Value);
+            }
+
+            if (line.EndsWith('{'))
+            {
+                var block = new NginxBlock { Parent = current, Name = line[..^1].Trim() };
+                blocks.Add(block);
+                open.Push(block);
+            }
+            else if (line == "}" && open.Count > 0)
+            {
+                open.Pop();
+            }
+        }
+
+        return blocks;
+    }
 }

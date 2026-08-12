@@ -45,25 +45,7 @@ public class DocumentedTablesShould
     /// <summary>The number a statistics cell opens with, thousands and all.</summary>
     private static readonly Regex Amount = new(@"^([\d,]+)", RegexOptions.Compiled);
 
-    /// <summary>
-    /// Walks up from the test binary to the repository root. The documents are
-    /// not copied to the output directory, and copying them would let this
-    /// assert against a stale snapshot.
-    /// </summary>
-    private static DirectoryInfo RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null && !Directory.Exists(Path.Combine(directory.FullName, "docs")))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!;
-        }
-    }
+    private static DirectoryInfo RepositoryRoot => DM.Testing.RepositoryLayout.RootDirectory;
 
     private static bool IsRow(string line) =>
         line.StartsWith('|') && line.EndsWith('|') && !Separator.IsMatch(line);

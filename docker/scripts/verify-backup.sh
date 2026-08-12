@@ -29,11 +29,19 @@ check_backup_dir() {
         return
     fi
 
-    LATEST_FILE=$(echo "$LATEST" | cut -d' ' -f2)
+    # -f2- and not -f2, the same split check_backup_tree below already uses: the
+    # second field is a path, and cutting it at the first space hands every check
+    # that follows the name of a file that does not exist.
+    LATEST_FILE=$(echo "$LATEST" | cut -d' ' -f2-)
     LATEST_TIME=$(echo "$LATEST" | cut -d' ' -f1 | cut -d. -f1)
     NOW=$(date +%s)
     AGE_HOURS=$(( (NOW - LATEST_TIME) / 3600 ))
-    FILE_SIZE=$(stat -c%s "$LATEST_FILE" 2>/dev/null || stat -f%z "$LATEST_FILE" 2>/dev/null)
+    # GNU stat, and no BSD fallback, because a BSD fallback could never run: the
+    # find above is called with -printf, which only GNU find has, so on a host
+    # without it LATEST is empty and the function has already returned. The error
+    # is left on stderr - set -e ends the run either way, and the reason belongs
+    # in the log.
+    FILE_SIZE=$(stat -c%s "$LATEST_FILE")
 
     echo "--- $LABEL ---"
     echo "  Latest: $(basename "$LATEST_FILE")"

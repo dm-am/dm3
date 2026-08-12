@@ -51,27 +51,7 @@ public class DomainPurityShould
         "DM.Infrastructure",
     ];
 
-    /// <summary>
-    /// Walks up from the test binary to the repository root. The project list is
-    /// read from the tree, and copying it to the output directory would let this
-    /// assert against a stale snapshot.
-    /// </summary>
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null &&
-                   !(Directory.Exists(Path.Combine(directory.FullName, "src")) &&
-                     Directory.Exists(Path.Combine(directory.FullName, "test"))))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     /// <summary>
     /// Discovered in the output directory rather than named by a marker type each:

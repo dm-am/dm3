@@ -36,20 +36,7 @@ public class AgentPermissionsShould
         "winget", "npm publish", "docker system prune",
     ];
 
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null && !Directory.Exists(Path.Combine(directory.FullName, ".claude")))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     private static IReadOnlyList<string> Entries(string settingsFile, string section)
     {

@@ -123,7 +123,7 @@ Audience — это **намерение**, а не формат. Клиент �
 
 - **Surface** — семантическая поверхность.
 - **PostAuthorUserId** — автор (для author-forever).
-- **PostId / GameId / RoomId** — идентификаторы для бакетирования кэша.
+- **GameId** — игра, к которой относится контент.
 - **GameLeadUserIds** — master + assistants (для lead-override).
 - **PrivateAddresseeOwnerUserIdsByAttribute** — per-block снимок владельцев адресатов.
 - **PostSharePrivateWithAll** — per-post override.

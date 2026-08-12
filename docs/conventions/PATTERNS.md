@@ -426,8 +426,15 @@ DM.Domain.{Module}/
 │       ├── Create{Feature}Validator.cs     # FluentValidation
 │       └── Update{Feature}Validator.cs     # FluentValidation
 ├── Authorization/
-└── Configuration/
+├── Configuration/
+├── {Module}Module.cs                       # регистрации сверх умолчания скана
+└── {Module}ConfigurationExtensions.cs      # привязка опций модуля
 ```
+
+Два корневых файла заводятся по потребности. `{Module}Module.cs` появляется,
+когда типам модуля нужно время жизни, которого скан сборок по умолчанию не дает,
+а `{Module}ConfigurationExtensions.cs` — когда привязку своих опций модуль берет
+на себя, а не оставляет хосту.
 
 ### DM.Infrastructure.{Name}
 
@@ -446,13 +453,20 @@ DM.Infrastructure.{Name}/
 DM.Web.API/
 ├── Features/
 │   └── {Module}/
-│       └── {Feature}/    # состав папки — см. "Web.API — Feature Folders"
+│       ├── {Feature}/    # состав папки — см. "Web.API — Feature Folders"
+│       └── {Class}.cs    # общее для фич одного модуля
 ├── Shared/
-│   └── {Concern}/        # cross-feature код API-слоя
+│   └── {Concern}/        # код API-слоя вне одного модуля
 ├── {Concern}/            # техническая обвязка хоста
 ├── Program.cs
 └── Startup.cs
 ```
+
+Уровень модуля держит то, что делят между собой фичи одного модуля: сервис
+модуля с его интерфейсом, профиль маппинга, хелпер журналирования. Имя такое же,
+как у любого класса, отдельной формы для этого уровня нет. В `Shared/` уходит
+только то, что одному модулю не принадлежит: его зовут либо фичи нескольких
+модулей, либо обвязка хоста.
 
 ### DM.Web.Client
 

@@ -1428,7 +1428,7 @@ PATTERNS.md называет текущие имена и пути: `ErrorHandli
   `User.AccessPolicy` (единственные записи — `UserFactory.cs:32` и сид, оба `NotSpecified`).
 - **`AccessRestrictions.MaySpeak` — единственное место, где бан превращается в решение**
   (`src/DM.Domain.Core/Authorization/AccessRestrictions.cs:30`), и `AccessRestrictionsShould`
-  (`test/DM.Infrastructure.Core.Tests/Authorization/AccessRestrictionsShould.cs`) закрепляет пять
+  (`test/DM.Domain.Core.Tests/Authorization/AccessRestrictionsShould.cs`) закрепляет пять
   клаузул, включая "оба флага → берем строгий".
 - **`GameIntentionResolverShould` реально пинит семантику "своей игры", а не только счастливый путь**:
   23 факта/теории, среди них `NotTreatASubscriptionAsOwningTheGameUnderTheOrdinaryBan` (строка 224),

@@ -6,6 +6,17 @@
         <GenerateDocumentationFile>false</GenerateDocumentationFile>
     </PropertyGroup>
 
+    <!-- The walk from the test binary up to the checkout is shared with the other
+         test projects as source, not through a reference to DM.Testing. That project
+         is built on Moq, its assembly matches the DM.*.dll filter this tier's
+         ArchUnit loader scans the output directory with, and the predicate that
+         keeps test assemblies out of the production set excludes names ending in
+         ".Tests", which "DM.Testing" does not. Compiling the one file keeps a single
+         spelling of the walk and none of that. -->
+    <ItemGroup>
+        <Compile Include="..\DM.Testing\RepositoryLayout.cs" Link="RepositoryLayout.cs" />
+    </ItemGroup>
+
     <ItemGroup>
         <PackageReference Include="FluentAssertions" />
         <!-- The transport type the disposability rule matches on. It also arrives

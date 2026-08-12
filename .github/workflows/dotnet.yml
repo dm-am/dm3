@@ -163,13 +163,17 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    # docker/.env.example ships the encryption key empty and compose declares it
-    # with ${...:?}, which rejects an empty value as hard as a missing one.
-    # The key goes into the job environment rather than into .env: compose
-    # prefers the environment over the file, so no step has to edit a line of a
-    # file it does not own, and the value dies with the runner.
-    - name: Generate a throwaway encryption key
-      run: echo "DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+    # docker/.env.example ships the encryption key and the imgproxy signing pair
+    # empty, and compose declares all three with ${...:?}, which rejects an empty
+    # value as hard as a missing one. They go into the job environment rather
+    # than into .env: compose prefers the environment over the file, so no step
+    # has to edit a line of a file it does not own, and the values die with the
+    # runner.
+    - name: Generate the throwaway secrets compose refuses to start without
+      run: |
+        echo "DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+        echo "IMGPROXY_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+        echo "IMGPROXY_SALT=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
     - name: Create .env for Docker Compose
       run: cp docker/.env.example docker/.env
@@ -635,8 +639,14 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Generate a throwaway encryption key
-      run: echo "DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+    # The same three the end-to-end tier generates, and for the same reason:
+    # compose declares them with ${...:?} and stops on interpolation before it
+    # starts anything.
+    - name: Generate the throwaway secrets compose refuses to start without
+      run: |
+        echo "DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+        echo "IMGPROXY_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+        echo "IMGPROXY_SALT=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
     - name: Create .env for Docker Compose
       run: cp docker/.env.example docker/.env

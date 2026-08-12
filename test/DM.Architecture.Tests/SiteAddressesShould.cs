@@ -53,20 +53,7 @@ public class SiteAddressesShould
     private static readonly Regex SiteAddress =
         new(@"https?://[A-Za-z0-9.-]*\bdm\.am\b", RegexOptions.Compiled);
 
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null && !Directory.Exists(Path.Combine(directory.FullName, "scripts")))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     private static IEnumerable<string> SourceFiles()
     {
@@ -149,7 +136,7 @@ public class SiteAddressesShould
         Regex.Matches(storage, @"SessionCookieOptions\(").Count.Should().BeGreaterOrEqualTo(3,
             "the helper is declared once and used by both the handing out and the clearing");
 
-        storage.Should().Contain("SessionCookieDomain",
+        storage.Should().Contain("SessionCookieConfiguration",
             "the scope of the cookie is deployment configuration, not a constant in the source");
     }
 }

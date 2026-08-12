@@ -38,20 +38,7 @@ public class StatedNumbersShould
     /// </summary>
     private static readonly string[] StatedByTheOwner = { "RecruitmentPcLimit" };
 
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null && !Directory.Exists(Path.Combine(directory.FullName, "scripts")))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     private static IEnumerable<string> SourceFiles() => Directory
         .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)

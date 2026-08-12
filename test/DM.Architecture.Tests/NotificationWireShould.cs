@@ -131,23 +131,5 @@ public class NotificationWireShould
             .Value
             .PayloadSerializerOptions;
 
-    /// <summary>
-    /// Walks up from the test binary to the source directory. Entry points are not
-    /// copied to the output directory, and copying them would let this assert
-    /// against a stale snapshot.
-    /// </summary>
-    private static string SourceDirectory
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null && !Directory.Exists(Path.Combine(directory.FullName, "src")))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return Path.Combine(directory!.FullName, "src");
-        }
-    }
+    private static string SourceDirectory => Path.Combine(DM.Testing.RepositoryLayout.Root, "src");
 }

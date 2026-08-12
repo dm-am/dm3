@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 using Xunit;
 
@@ -29,6 +30,7 @@ public class BrokerObservabilityShould
     private const string Scrapes = "docker/prometheus.yml";
     private const string Alerts = "docker/prometheus/alerts.yml";
     private const string Dashboard = "docker/grafana/dashboards/dm-consumers.json";
+    private const string PushConsumer = "src/DM.Web.API/Realtime/RealtimeNotificationConsumer.cs";
 
     /// <summary>Port the metrics plugin answers on.</summary>
     private const string MetricsPort = "15692";
@@ -67,6 +69,59 @@ public class BrokerObservabilityShould
             "one from every metric the worker publishes about itself");
     }
 
+    /// <summary>
+    /// The queue realtime push is delivered over is a queue too.
+    /// </summary>
+    /// <remarks>
+    /// The rule about queues without a consumer named the two work queues and
+    /// stopped there, so the one the API subscribes to sat outside every rule in
+    /// the file: both workers answered, both named queues had their consumers, and
+    /// pushes were dropped at the broker with nothing anywhere saying so.
+    ///
+    /// The name is read out of the consumer instead of being repeated here, and it
+    /// is required as a prefix, because the broker does not report this queue under
+    /// the name the code configures - it appends a suffix that is new on every
+    /// subscription. Which is why an exact matcher is not coverage but its
+    /// opposite: it selects no series at any time, so `== 0` never fires and
+    /// absent() always holds, and a rule built on it is either mute or permanently
+    /// firing.
+    ///
+    /// Backslashes are dropped before the search, so escaping the dots of the
+    /// regex - which changes nothing about what it matches here - does not turn
+    /// this red.
+    /// </remarks>
+    [Fact]
+    public void AlertOnTheQueueRealtimePushIsDeliveredOver()
+    {
+        var queue = PushQueueName();
+        var alerts = Read(Alerts).Replace("\\", string.Empty, StringComparison.Ordinal);
+
+        alerts.Should().Contain($"{queue}.*",
+            "the broker reports this queue under the configured name plus a suffix that is " +
+            "new on every subscription, so only a prefix selects it");
+        alerts.Should().NotContain($"queue=\"{queue}\"",
+            "an equality matcher on the configured name selects no series at any time, " +
+            "healthy or broken, which reads as coverage and is silence");
+    }
+
+    /// <summary>The queue the API subscribes to, as its consumer declares it.</summary>
+    /// <remarks>
+    /// Read from the constant rather than from the argument of the parameters:
+    /// the consumer passes the name by that constant, so a rule matching a
+    /// literal in the call finds nothing and fails on its own reading rather
+    /// than on the thing it is about.
+    /// </remarks>
+    private static string PushQueueName()
+    {
+        var declaration = Regex.Match(Read(PushConsumer),
+            @"const\s+string\s+QueueName\s*=\s*""([^""]+)""");
+
+        declaration.Success.Should().BeTrue(
+            $"{PushConsumer} declares the queue it subscribes to, and a walk that cannot " +
+            "find it checks nothing");
+        return declaration.Groups[1].Value;
+    }
+
     [Fact]
     public void MeasureMessagesOnTheConsumerDashboard()
     {
@@ -89,25 +144,5 @@ public class BrokerObservabilityShould
         return File.ReadAllText(path);
     }
 
-    /// <summary>
-    /// Walks up from the test binary to the repository root. The configuration is
-    /// not copied to the output directory, and copying it would let this assert
-    /// against a stale snapshot.
-    /// </summary>
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null &&
-                   !(Directory.Exists(Path.Combine(directory.FullName, "src")) &&
-                     Directory.Exists(Path.Combine(directory.FullName, "test"))))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

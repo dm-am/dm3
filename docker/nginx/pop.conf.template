@@ -38,7 +38,10 @@ server {
     # Остается на http, потому что его спрашивает docker изнутри контейнера.
     location = /pop-health {
         access_log off;
-        add_header Content-Type text/plain;
+        # default_type, а не add_header: для return с телом nginx уже выставляет
+        # Content-Type из default_type, а add_header не заменяет его, а
+        # добавляет второй, и проба отвечала сразу с двумя.
+        default_type text/plain;
         return 200 "ok\n";
     }
 
@@ -72,6 +75,20 @@ server {
     add_header X-Frame-Options "DENY" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+
+    # Эти же четыре приходят сверху: их ставит приложение, а на пути к нему еще
+    # и край основного сервера. Директива add_header не заменяет пришедший
+    # заголовок, а добавляет второй, и ответ уезжает с двумя значениями одной
+    # политики. Пока значения совпадают, браузер приходит к тому же решению, но
+    # как только их разведут в одном из слоев, исход будет решать разбор
+    # конкретного заголовка, а не автор правки. Снимается ровно то, что тут же и
+    # ставится: X-XSS-Protection точка присутствия не выставляет, и пришедшая
+    # сверху копия остается единственной. Content-Security-Policy тут не ставит
+    # никто, и он проходит насквозь по той же причине.
+    proxy_hide_header X-Content-Type-Options;
+    proxy_hide_header X-Frame-Options;
+    proxy_hide_header Referrer-Policy;
+    proxy_hide_header Permissions-Policy;
 
     # Фронтенд с локального диска. Контейнер SPA поднят рядом, на этой же
     # машине, и это половина смысла всей схемы.
@@ -129,7 +146,10 @@ server {
     # Кука наверх не идет: ключ кэша ее не учитывает, и пока запрос анонимен,
     # свойство "ответ одинаков для всех" принадлежит этому конфигу, а не
     # апстриму. Заголовки политики повторены, потому что add_header в location
-    # отменяет наследование от сервера целиком.
+    # отменяет наследование от сервера целиком. proxy_hide_header наследуется
+    # отдельно и по тому же правилу: своего у этой локации нет, значит действуют
+    # серверные, и пришедшие сверху копии снимаются до того, как добавятся эти
+    # четыре.
     location ~ ^/(dm-uploads|img)/ {
         proxy_pass ${POP_UPSTREAM};
         proxy_http_version 1.1;

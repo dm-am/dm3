@@ -57,6 +57,12 @@ public static class CoreConfigurationExtensions
         // resolves the URL builder, which is a 500 on the first avatar rather than a
         // refusal to start. A key with no salt builds /insecure/ URLs that an imgproxy
         // holding a key answers 403 to, and no log names the reason.
+        //
+        // An empty pair stays valid here because a host started by hand - dotnet run,
+        // the integration tests - has no imgproxy beside it to sign for. Which
+        // deployments may do that is not this layer's call, and it is not left to
+        // chance either: docker-compose.yml declares both through ${...:?}, so no stack
+        // comes up without a pair, and docker/.env.example carries neither.
         services.AddOptions<ImageProxyConfiguration>()
             .Bind(configuration.GetSection(nameof(ImageProxyConfiguration)))
             .Validate(IsUsableSigningPair,

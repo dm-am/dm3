@@ -53,22 +53,7 @@ public class PublishGraphShould
     /// <summary>The needs list of the job it follows, in the inline form the file uses.</summary>
     private static readonly Regex NeedsList = new(@"^    needs:\s*\[([^\]]*)\]", RegexOptions.Compiled);
 
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null &&
-                   !(Directory.Exists(Path.Combine(directory.FullName, "src")) &&
-                     Directory.Exists(Path.Combine(directory.FullName, "test"))))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     /// <summary>Every job in the workflow, with the jobs each one waits for.</summary>
     private static IReadOnlyDictionary<string, string[]> Jobs()

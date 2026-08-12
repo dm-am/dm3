@@ -36,22 +36,7 @@ public class FlakyBrowserTestsShould
     /// <summary>A job: below jobs: it is the only key written at two spaces.</summary>
     private static readonly Regex JobName = new(@"^  ([a-z][a-z0-9-]*):\s*$", RegexOptions.Compiled);
 
-    private static string RepositoryRoot
-    {
-        get
-        {
-            var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory != null &&
-                   !(Directory.Exists(Path.Combine(directory.FullName, "src")) &&
-                     Directory.Exists(Path.Combine(directory.FullName, "test"))))
-            {
-                directory = directory.Parent;
-            }
-
-            directory.Should().NotBeNull("the repository root must be above the test binary");
-            return directory!.FullName;
-        }
-    }
+    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     private static string Read(string relative) => File.ReadAllText(
         Path.Combine(RepositoryRoot, relative.Replace('/', Path.DirectorySeparatorChar)));
