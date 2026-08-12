@@ -42,8 +42,6 @@ export interface UsersSearchParams {
   size?: number;
 }
 
-const searchCache = createKeyedCache<ListEnvelope<User>>({ ttlMs: 30_000 });
-
 const SORT_MAP: Record<string, string> = {
   username: "Name",
   rating: "Rating",
@@ -123,6 +121,13 @@ export const useCommunityStore = defineStore("community", () => {
   const searchLoading = ref(false);
   const searchError = ref<string | null>(null);
   const lastSearchParams = ref<UsersSearchParams | null>(null);
+
+  // Inside the store and not beside it, the way every other list store here
+  // holds its cache. In the browser the two placements have one lifetime — a
+  // single pinia, created once and never disposed — so no session behaves
+  // differently; what changes is that the cache dies with the store instance,
+  // so a fresh pinia starts empty instead of being cleared by hand.
+  const searchCache = createKeyedCache<ListEnvelope<User>>({ ttlMs: 30_000 });
 
   // Request guard to discard stale out-of-order responses
   const requestGuard = createRequestGuard();

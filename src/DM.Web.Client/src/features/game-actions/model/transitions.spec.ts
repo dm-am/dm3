@@ -8,7 +8,7 @@ import { availableStatusTransitions } from "./transitions";
 
 /**
  * Per-status option matrix must mirror the domain state machine
- * (src/DM.Domain.Game/Features/Games/GameStatusTransition.cs):
+ * (src/DM.Domain.Core/Statuses/ModuleStatusTransition.cs):
  *   Start:  Draft -> Active
  *   Finish: Active -> Closed (Finished)
  *   Freeze: Active -> Closed (Frozen)

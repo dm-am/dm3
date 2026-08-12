@@ -13,7 +13,7 @@
 import { defineStore } from "pinia";
 import type { User } from "@/shared/api/models/common/user";
 import { Theme } from "@/shared/api/models/personal";
-import { ref, computed } from "vue";
+import { ref, computed, onScopeDispose } from "vue";
 import { useUiStore } from "./ui";
 
 export const useAuthStore = defineStore("auth", () => {
@@ -55,7 +55,7 @@ export const useAuthStore = defineStore("auth", () => {
 
   // Sync logout across browser tabs via localStorage events
   if (typeof window !== "undefined") {
-    window.addEventListener("storage", (e) => {
+    const onStorage = (e: StorageEvent) => {
       if (e.key === userKey && !e.newValue) {
         user.value = null;
         const { updateTheme } = useUiStore();
@@ -69,7 +69,15 @@ export const useAuthStore = defineStore("auth", () => {
           // Ignore malformed JSON
         }
       }
-    });
+    };
+
+    window.addEventListener("storage", onStorage);
+
+    // The subscription belongs to this store instance and not to the window: a
+    // setup store runs inside an effect scope that `$dispose` and app teardown
+    // stop, so the listener goes away with the instance that registered it
+    // instead of piling up on a window every later instance shares.
+    onScopeDispose(() => window.removeEventListener("storage", onStorage));
   }
 
   return {

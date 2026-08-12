@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
-import { Theme } from "@/shared/api/models/community";
+import { Theme } from "@/shared/api/models/personal";
 
 /**
  * Layout of messages, posts, comments and topics.

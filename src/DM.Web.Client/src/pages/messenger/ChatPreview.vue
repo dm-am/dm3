@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import type { Chat } from "@/entities/message";
 import type { User } from "@/shared/api/models/community";
-import { AvatarImg } from "@/entities/user";
+import { AvatarImg } from "@/shared/ui/AvatarImg";
 import dayjs from "dayjs";
 
 const props = defineProps<{

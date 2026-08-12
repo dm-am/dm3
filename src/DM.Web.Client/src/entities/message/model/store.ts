@@ -111,15 +111,6 @@ export const useMessagingStore = defineStore("messaging", () => {
   const currentCursor = ref<CursorPaging | null>(null);
   const highlightedMessageId = ref<string | null>(null);
 
-  // Backwards compatibility: ListEnvelope wrapper
-  const messages = computed(() => {
-    if (messagesList.value.length === 0 && !currentCursor.value) return null;
-    return {
-      resources: messagesList.value,
-      paging: null, // Cursor-based pagination doesn't use traditional paging
-    } as ListEnvelope<Message>;
-  });
-
   // Fetch initial messages (latest messages)
   async function fetchMessages(chatId: ChatId) {
     const requestId = messagesGuard.next();
@@ -443,7 +434,6 @@ export const useMessagingStore = defineStore("messaging", () => {
     clearSelection,
 
     // Messages
-    messages,
     messagesList,
     loadingMessages,
     loadingBefore,

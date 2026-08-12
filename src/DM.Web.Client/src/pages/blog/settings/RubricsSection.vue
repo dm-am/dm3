@@ -1,11 +1,12 @@
 <script setup lang="ts">
 /**
  * RubricsSection — manage the blog's rubrics (categories of publications;
- * the blog-zone counterpart of game rooms). The API supports create and
- * delete (POST blogs/{id}/rubrics, DELETE blogs/rubrics/{rubricId}); there
- * is no rename/reorder endpoint yet, so rows are not editable in place.
- * Backed by the shared blog-details store (createRubric / deleteRubric
- * re-sync the blog, so the sidebar panel updates too).
+ * the blog-zone counterpart of game rooms). This section wires create and
+ * delete (POST blogs/{id}/rubrics, DELETE blogs/{id}/rubrics/{rubricId});
+ * the rename and reorder endpoints exist on the server but nothing here
+ * calls them, so rows are not editable in place. Backed by the shared
+ * blog-details store (createRubric / deleteRubric re-sync the blog, so the
+ * sidebar panel updates too).
  */
 import { ref } from "vue";
 import { storeToRefs } from "pinia";

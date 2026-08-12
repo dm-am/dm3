@@ -19,7 +19,7 @@ import {
   getLikesTooltip as getLikesTooltipUtil,
 } from "@/shared/lib/utils/chat";
 import type { MessageWithContinuation } from "@/shared/lib/utils/chat";
-import { AvatarImg } from "@/entities/user";
+import { AvatarImg } from "@/shared/ui/AvatarImg";
 import { SvgIcon } from "@/shared/ui/Icon";
 import dayjs from "dayjs";
 

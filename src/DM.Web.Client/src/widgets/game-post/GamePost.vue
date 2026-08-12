@@ -19,7 +19,8 @@ import { Tooltip } from "@/shared/ui/Tooltip";
 import { TruncatedContent } from "@/shared/ui/TruncatedContent";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
-import { UserLink, AvatarImg, userIsModerator } from "@/entities/user";
+import { UserLink, userIsModerator } from "@/entities/user";
+import { AvatarImg } from "@/shared/ui/AvatarImg";
 import { trimHtmlWhitespace } from "@/shared/lib/utils/bbcodeInteractive";
 import { useAuthStore } from "@/shared/stores/auth";
 import {

@@ -11,7 +11,6 @@ import {
   useCommunityStore,
   useAuthStore,
   UserRole,
-  AvatarImg,
   useProfileEdit,
   userApi,
   blacklistApi,
@@ -19,6 +18,7 @@ import {
   type Username,
   type UsernameHistoryEntry,
 } from "@/entities/user";
+import { AvatarImg } from "@/shared/ui/AvatarImg";
 import { useModeratedProfile } from "@/entities/moderation";
 import { Gender } from "@/shared/api/models/community";
 import type { BlacklistEntry } from "@/shared/api/models/personal";

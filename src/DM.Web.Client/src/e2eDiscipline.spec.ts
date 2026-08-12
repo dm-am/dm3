@@ -18,7 +18,12 @@
  * An assertion is the second half of the same rule. A body that ends on a
  * visibility guard, or on a comment describing what would be true, passes
  * whatever the page renders: eleven tests could not tell a working screen from
- * a white one, and the report counted them.
+ * a white one, and the report counted them. The assertion also has to be one
+ * that runs. An `expect` reached only through an `if`, only from inside a
+ * `try` that swallows it, or only once per element of a list that can be empty
+ * (a `for` over that list, or a callback handed to `forEach`, `map` and their
+ * kin) is a word this rule can find and a promise the run does not make. No
+ * test in the corpus leans on one today, and this is what keeps it that way.
  *
  * Credentials are the third. The corpus once signed in as
  * alice@example.com, an account the seeder does not create, and then asserted
@@ -110,6 +115,78 @@ const isPlainString = (
 const isDeclaration = (call: ts.CallExpression): boolean =>
   call.arguments.length >= 2 && isPlainString(call.arguments[0]);
 
+/**
+ * Array methods that call their argument once per element, so a callback handed
+ * to one of them does not run at all over an empty list - the same promise a
+ * `for` over that list makes, and the same non-promise.
+ */
+const PER_ELEMENT = new Set([
+  "forEach",
+  "map",
+  "flatMap",
+  "filter",
+  "find",
+  "findIndex",
+  "findLast",
+  "findLastIndex",
+  "some",
+  "every",
+  "reduce",
+  "reduceRight",
+]);
+
+/**
+ * Whether the parent decides that the child runs at all: a branch, a switch, the
+ * right side of a short circuit, a loop, the callback of a list method, and a
+ * try, which catches the failure instead of reporting it.
+ */
+const gates = (parent: ts.Node, child: ts.Node): boolean => {
+  if (ts.isIfStatement(parent)) return child !== parent.expression;
+  if (ts.isConditionalExpression(parent)) return child !== parent.condition;
+  if (ts.isBinaryExpression(parent)) {
+    const operator = parent.operatorToken.kind;
+    return (
+      child === parent.right &&
+      (operator === ts.SyntaxKind.AmpersandAmpersandToken ||
+        operator === ts.SyntaxKind.BarBarToken ||
+        operator === ts.SyntaxKind.QuestionQuestionToken)
+    );
+  }
+  if (
+    ts.isCallExpression(parent) &&
+    ts.isPropertyAccessExpression(parent.expression) &&
+    PER_ELEMENT.has(parent.expression.name.text)
+  ) {
+    // The arguments only: `items.forEach` is reached whatever `items` holds, and
+    // `expect(items.map(...))` asserts before the callback is anybody's problem.
+    return parent.arguments.some((argument) => argument === child);
+  }
+  return (
+    ts.isForStatement(parent) ||
+    ts.isForOfStatement(parent) ||
+    ts.isForInStatement(parent) ||
+    ts.isWhileStatement(parent) ||
+    ts.isDoStatement(parent) ||
+    ts.isSwitchStatement(parent) ||
+    ts.isTryStatement(parent) ||
+    ts.isCatchClause(parent)
+  );
+};
+
+/** Whether the body asserts on the path it takes every time. */
+const assertsUnconditionally = (body: ts.Node): boolean => {
+  let asserts = false;
+  const visit = (node: ts.Node, guarded: boolean): void => {
+    if (!guarded && ts.isCallExpression(node)) {
+      const called = calleeName(node.expression);
+      if (called === "expect" || called?.startsWith("expect.")) asserts = true;
+    }
+    node.forEachChild((child) => visit(child, guarded || gates(node, child)));
+  };
+  visit(body, false);
+  return asserts;
+};
+
 /** Defaults of `process.env.X || "value"` in one exported account object. */
 const fixtureAccount = (
   source: ts.SourceFile,
@@ -164,7 +241,7 @@ describe("no e2e test can hide a failure behind a skip", () => {
     expect(violations).toEqual([]);
   });
 
-  it("puts an assertion in every test it declares", () => {
+  it("puts an assertion that runs in every test it declares", () => {
     const violations: string[] = [];
     for (const file of collect(join(E2E_ROOT, "tests"))) {
       walk(parse(file), (node) => {
@@ -174,22 +251,17 @@ describe("no e2e test can hide a failure behind a skip", () => {
         // nothing: the report says it did not run.
         if (name !== "test" && name !== "it") return;
         if (!isDeclaration(node)) return;
-
-        let asserts = false;
-        walk(node.arguments[1], (inner) => {
-          if (!ts.isCallExpression(inner)) return;
-          const called = calleeName(inner.expression);
-          if (called === "expect" || called?.startsWith("expect.")) {
-            asserts = true;
-          }
-        });
-        if (asserts) return;
+        if (assertsUnconditionally(node.arguments[1])) return;
 
         const title = node.arguments[0] as ts.StringLiteral;
         violations.push(`${at(node)}: ${title.text}`);
       });
     }
-    expect(violations).toEqual([]);
+    expect(
+      violations,
+      "assert first, then branch: an expect the run may step over reports the " +
+        "same green as one that held",
+    ).toEqual([]);
   });
 
   it("takes account addresses from the fixture", () => {
@@ -232,5 +304,81 @@ describe("the e2e accounts are accounts the seeder writes", () => {
       expect(addresses, name).toContain(account.email.toLowerCase());
       expect(account.password, name).toBe(password);
     }
+  });
+});
+
+/**
+ * The rule above reads a corpus that satisfies it, so nothing in the run tells
+ * the two readings of "has an assertion" apart. These do.
+ */
+describe("the assertion rule counts only assertions that run", () => {
+  const bodyOfTheTest = (source: string): ts.Node => {
+    const bodies: ts.Node[] = [];
+    walk(
+      ts.createSourceFile("snippet.ts", source, ts.ScriptTarget.Latest, true),
+      (node) => {
+        if (!ts.isCallExpression(node)) return;
+        if (calleeName(node.expression) !== "test") return;
+        if (isDeclaration(node)) bodies.push(node.arguments[1]);
+      },
+    );
+    expect(bodies).toHaveLength(1);
+    return bodies[0];
+  };
+
+  it("counts one the body reaches on its own path", () => {
+    expect(
+      assertsUnconditionally(
+        bodyOfTheTest('test("t", async () => { expect(one).toBe(two); });'),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not count one reached only through a condition", () => {
+    expect(
+      assertsUnconditionally(
+        bodyOfTheTest('test("t", async () => { if (a) expect(a).toBe(b); });'),
+      ),
+    ).toBe(false);
+  });
+
+  it("does not count one made only inside a loop", () => {
+    expect(
+      assertsUnconditionally(
+        bodyOfTheTest(
+          'test("t", async () => { for (const a of all) expect(a).toBe(b); });',
+        ),
+      ),
+    ).toBe(false);
+  });
+
+  it("does not count one made only in a callback over a list", () => {
+    expect(
+      assertsUnconditionally(
+        bodyOfTheTest(
+          'test("t", async () => { all.forEach((a) => expect(a).toBe(b)); });',
+        ),
+      ),
+    ).toBe(false);
+  });
+
+  it("does not count one a catch would swallow", () => {
+    expect(
+      assertsUnconditionally(
+        bodyOfTheTest(
+          'test("t", async () => { try { expect(a).toBe(b); } catch {} });',
+        ),
+      ),
+    ).toBe(false);
+  });
+
+  it("counts one made on a list the body built, not walked", () => {
+    expect(
+      assertsUnconditionally(
+        bodyOfTheTest(
+          'test("t", async () => { expect(all.map((a) => a.id)).toEqual(ids); });',
+        ),
+      ),
+    ).toBe(true);
   });
 });

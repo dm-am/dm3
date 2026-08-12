@@ -56,13 +56,35 @@ function closeSettings(e: MouseEvent) {
   }
 }
 
+/**
+ * Escape closes the bubble and gives the caret back to the button that opened
+ * it — the same exit the site's menus have. Only the mouse had one here: the
+ * bubble closed on an outside click and on nothing else.
+ *
+ * The listener is on the document, symmetrical with the outside-click one
+ * above, because the bubble holds real controls and the press has to be heard
+ * wherever focus sits inside it.
+ *
+ * The button says `aria-expanded` and deliberately not `aria-haspopup`: this is
+ * a disclosure, a panel of settings, not a menu of commands. Announcing a menu
+ * here would promise a reader arrow-key navigation between items that are a
+ * segmented control and a switch.
+ */
+function closeSettingsOnEscape(e: KeyboardEvent) {
+  if (e.key !== "Escape" || !isSettingsOpen.value) return;
+  isSettingsOpen.value = false;
+  settingsBtn.value?.focus();
+}
+
 onMounted(() => {
   document.addEventListener("click", closeSettings);
+  document.addEventListener("keydown", closeSettingsOnEscape);
   nextTick(updateLayoutIndicator);
 });
 
 onUnmounted(() => {
   document.removeEventListener("click", closeSettings);
+  document.removeEventListener("keydown", closeSettingsOnEscape);
 });
 
 // Theme toggle
@@ -137,6 +159,7 @@ watch(messageLayout, () => {
         class="scroll-nav-btn settings-btn"
         :class="{ active: isSettingsOpen }"
         aria-label="Настройки сайта"
+        :aria-expanded="isSettingsOpen"
         @click="toggleSettings"
       >
         <SvgIcon name="settings" />

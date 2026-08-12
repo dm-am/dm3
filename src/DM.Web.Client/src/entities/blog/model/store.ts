@@ -35,8 +35,6 @@ export interface BlogsSearchParams {
   size?: number;
 }
 
-const searchCache = createKeyedCache<ListEnvelope<Blog>>({ ttlMs: 30_000 });
-
 type BlogsApiParams = Record<
   string,
   string | number | boolean | string[] | number[] | undefined
@@ -96,6 +94,13 @@ export const useBlogsStore = defineStore("blogs", () => {
   const searchLoading = ref(false);
   const searchError = ref<string | null>(null);
   const lastSearchParams = ref<BlogsSearchParams | null>(null);
+
+  // Inside the store and not beside it, the way every other list store here
+  // holds its cache. In the browser the two placements have one lifetime — a
+  // single pinia, created once and never disposed — so no session behaves
+  // differently; what changes is that the cache dies with the store instance,
+  // so a fresh pinia starts empty instead of being cleared by hand.
+  const searchCache = createKeyedCache<ListEnvelope<Blog>>({ ttlMs: 30_000 });
 
   // Request guard to discard stale out-of-order responses
   const requestGuard = createRequestGuard();

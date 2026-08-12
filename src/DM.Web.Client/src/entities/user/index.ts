@@ -23,7 +23,6 @@ export {
 export {
   UserLink,
   UserRating,
-  AvatarImg,
   UserAutocomplete,
   UserMultiSelect,
   UsernameInput,

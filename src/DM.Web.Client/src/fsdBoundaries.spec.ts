@@ -275,3 +275,41 @@ describe("global component registration", () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * The rule above is written for the root of the kit; a barrel of a slice breaks
+ * it just as well by re-exporting a component of the kit under its own name.
+ * `entities/user` did exactly that with `AvatarImg`, and the cost was the one
+ * the kit rule names: seven consumers said `@/entities/user`, four said
+ * `@/shared/ui/AvatarImg`, and neither search found the other half. The slice
+ * had written the principle down in its own `@x/game.ts` and the barrel next to
+ * it broke the same principle.
+ *
+ * Only `shared/ui` is checked, and only the alias form. Types and stores of
+ * `shared` are re-exported by slices on purpose (`UserRef`, `useAuthStore`) and
+ * carry a comment saying why; a component of the kit has no such reason, since
+ * every layer may address it directly.
+ */
+describe("slice barrels", () => {
+  it("re-export no component of the shared UI kit", () => {
+    const offenders: string[] = [];
+    for (const layer of ["entities", "features", "widgets"]) {
+      const root = join(CLIENT_ROOT, "src", layer);
+      if (!existsSync(root)) continue;
+      for (const file of sources(root)) {
+        const path = relative(CLIENT_ROOT, file).split("\\").join("/");
+        if (!path.endsWith("/index.ts")) continue;
+        for (const [, from] of readFileSync(file, "utf8").matchAll(
+          /^export\s[^;]*?\sfrom\s+"(@\/shared\/ui\/[^"]+)";/gm,
+        )) {
+          offenders.push(`${path} -> ${from}`);
+        }
+      }
+    }
+
+    expect(
+      offenders,
+      "a second address for a component of the kit: import it from @/shared/ui/<Name> where it is used and drop the re-export",
+    ).toEqual([]);
+  });
+});

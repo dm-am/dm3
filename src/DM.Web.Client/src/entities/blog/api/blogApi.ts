@@ -190,8 +190,8 @@ export default new (class {
     return Api.post<Envelope<Rubric>>(`blogs/${blogId}/rubrics`, input);
   }
 
-  public deleteRubric(rubricId: string) {
-    return Api.delete(`blogs/rubrics/${rubricId}`);
+  public deleteRubric(blogId: string, rubricId: string) {
+    return Api.delete(`blogs/${blogId}/rubrics/${rubricId}`);
   }
 
   // === Publications (PublicationController) ===

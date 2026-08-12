@@ -8,8 +8,14 @@
 import { computed } from "vue";
 import { useAuthStore } from "@/shared/stores/auth";
 
-/** Default page sizes when user is not authenticated or has no preferences */
-const DEFAULT_PAGE_SIZES = {
+/**
+ * Default page sizes when user is not authenticated or has no preferences.
+ *
+ * Exported because the account settings form has to draw the same numbers it
+ * serves: a second set of literals there shows the reader a page size no list
+ * on the site uses.
+ */
+export const DEFAULT_PAGE_SIZES = {
   postsPerPage: 20,
   commentsPerPage: 20,
   topicsPerPage: 20,

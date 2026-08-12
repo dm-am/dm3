@@ -30,7 +30,7 @@ import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { formatContestSeriesTitle } from "@/entities/achievement";
-import { toInternalPath } from "@/shared/lib/utils/internalUrl";
+import { toExternalHref, toInternalPath } from "@/shared/lib/utils/internalUrl";
 import { useGuardedRequest } from "@/shared/lib/composables";
 
 const props = defineProps<{ username: string }>();
@@ -206,6 +206,11 @@ const hasAwards = computed(() => awards.value.length > 0);
 
             <p class="award-popover__desc">{{ a.type.description }}</p>
 
+            <!-- Three branches, not two. workUrl and topicUrl are free text a
+                 moderator typed and nothing checks them on the way in, so a
+                 value that is neither a path of this site nor an http(s)
+                 address (javascript:, data:) has no href it can be rendered
+                 with and stays a plain label. See lib/utils/internalUrl. -->
             <div
               v-if="a.workUrl || a.contestSeries?.topicUrl"
               class="award-popover__links"
@@ -218,11 +223,12 @@ const hasAwards = computed(() => awards.value.length > 0);
                   class="award-popover__link"
                   >Топик с работой</router-link
                 ><a
-                  v-else
-                  :href="a.workUrl"
+                  v-else-if="toExternalHref(a.workUrl)"
+                  :href="toExternalHref(a.workUrl)!"
                   class="award-popover__link"
                   rel="noopener"
                   >Топик с работой</a
+                ><span v-else>Топик с работой</span
                 ><span class="award-popover__bracket">]</span></span
               >
               <span
@@ -235,11 +241,12 @@ const hasAwards = computed(() => awards.value.length > 0);
                   class="award-popover__link"
                   >Топик с итогами</router-link
                 ><a
-                  v-else
-                  :href="a.contestSeries.topicUrl"
+                  v-else-if="toExternalHref(a.contestSeries.topicUrl)"
+                  :href="toExternalHref(a.contestSeries.topicUrl)!"
                   class="award-popover__link"
                   rel="noopener"
                   >Топик с итогами</a
+                ><span v-else>Топик с итогами</span
                 ><span class="award-popover__bracket">]</span></span
               >
             </div>

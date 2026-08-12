@@ -6,6 +6,7 @@
  */
 import { ref, computed } from "vue";
 import { SvgIcon } from "@/shared/ui/Icon";
+import { useMenuKeyboard } from "@/shared/lib/composables/useMenuKeyboard";
 import type { SortButtonProps } from "../types";
 
 defineOptions({ name: "SortButton" });
@@ -27,6 +28,7 @@ const emit = defineEmits<{
 // Dropdown state
 const showDropdown = ref(false);
 const triggerRef = ref<HTMLButtonElement | null>(null);
+const dropdownRef = ref<HTMLElement | null>(null);
 
 // Current sort label
 const currentSortLabel = computed(() => {
@@ -47,10 +49,15 @@ function closeDropdown() {
   showDropdown.value = false;
 }
 
-function closeDropdownAndReturnFocus() {
-  closeDropdown();
-  triggerRef.value?.focus();
-}
+// The role="menu" keyboard contract, shared with the other two menus on the
+// site: Escape closes and hands focus back to the trigger, the arrows and
+// Home/End walk the options.
+const { handleMenuKeydown } = useMenuKeyboard({
+  isOpen: () => showDropdown.value,
+  close: closeDropdown,
+  trigger: triggerRef,
+  menu: dropdownRef,
+});
 
 function selectSort(value: string) {
   const option = props.options.find((o) => o.value === value);
@@ -85,7 +92,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="sort-section" @keydown.esc="closeDropdownAndReturnFocus">
+  <div class="sort-section" @keydown="handleMenuKeydown">
     <button
       ref="triggerRef"
       type="button"
@@ -99,7 +106,12 @@ onUnmounted(() => {
       <span>{{ currentSortLabel }}</span>
     </button>
 
-    <div v-if="showDropdown" class="sort-dropdown" role="menu">
+    <div
+      v-if="showDropdown"
+      ref="dropdownRef"
+      class="sort-dropdown"
+      role="menu"
+    >
       <!-- Sort options -->
       <button
         v-for="option in options"

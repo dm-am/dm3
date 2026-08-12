@@ -32,23 +32,28 @@ const CLIENT_ROOT = join(HERE, "..");
 const indexHtml = readFileSync(join(CLIENT_ROOT, "index.html"), "utf8");
 const nginxConf = readFileSync(join(CLIENT_ROOT, "nginx.conf"), "utf8");
 
-/** The script-src directive of the document policy, name included. */
-function scriptSrc(): string {
+/** One directive of the document policy, its name included. */
+function policyDirective(name: string): string {
   const policy = nginxConf.match(/Content-Security-Policy\s+"([^"]+)"/);
   if (!policy) {
     throw new Error("nginx.conf declares no Content-Security-Policy");
   }
 
-  const directive = policy[1]
+  const found = policy[1]
     .split(";")
     .map((part) => part.trim())
-    .find((part) => part.startsWith("script-src"));
+    .find((part) => part.startsWith(name));
 
-  if (!directive) {
-    throw new Error("the document policy declares no script-src");
+  if (!found) {
+    throw new Error(`the document policy declares no ${name}`);
   }
 
-  return directive;
+  return found;
+}
+
+/** The script-src directive of the document policy, name included. */
+function scriptSrc(): string {
+  return policyDirective("script-src");
 }
 
 /** Bodies of every inline script tag of the document, tags excluded. */
@@ -76,5 +81,18 @@ describe("Content-Security-Policy of the document", () => {
         `script-src must carry 'sha256-${hash}' for the inline script in index.html`,
       ).toContain(`'sha256-${hash}'`);
     }
+  });
+
+  it("opens a socket to this origin and to no other", () => {
+    // ws: and wss: are scheme sources: they match every host there is, so the
+    // one directive that bounds where a page may send data bounded nothing.
+    // The hub is on the origin the document came from, and 'self' covers
+    // ws:// and wss:// on that host and port: an http document reaches ws://
+    // under it, and any document reaches wss://.
+    const connectSrc = policyDirective("connect-src");
+
+    expect(connectSrc).toContain("'self'");
+    expect(connectSrc).not.toMatch(/\sws:/);
+    expect(connectSrc).not.toMatch(/\swss:/);
   });
 });

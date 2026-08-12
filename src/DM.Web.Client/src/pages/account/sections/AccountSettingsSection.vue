@@ -88,7 +88,12 @@ import { FormField } from "@/shared/ui/Form";
 import { Select, type SelectOption } from "@/shared/ui/Select";
 import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
 import { useToast } from "@/shared/lib/composables/useToast";
-import { Theme, type Preferences } from "@/shared/api/models/personal";
+import { DEFAULT_PAGE_SIZES } from "@/shared/lib/composables/usePaging";
+import {
+  Theme,
+  type Paging,
+  type Preferences,
+} from "@/shared/api/models/personal";
 import type { User } from "@/shared/api/models/community/users";
 import { useUiStore } from "@/shared/stores/ui";
 import { describeFailure } from "@/shared/lib/errors";
@@ -112,16 +117,25 @@ const pagingSelectOptions: SelectOption[] = pagingOptions.map((opt) => ({
   label: String(opt),
 }));
 
+/**
+ * The page sizes a viewer with no saved preferences is actually served.
+ * usePaging owns the numbers; this form only has to agree with them, or it
+ * offers the reader a size no list on the site would use.
+ */
+function defaultPaging(): Paging {
+  return {
+    postsPerPage: DEFAULT_PAGE_SIZES.postsPerPage,
+    commentsPerPage: DEFAULT_PAGE_SIZES.commentsPerPage,
+    topicsPerPage: DEFAULT_PAGE_SIZES.topicsPerPage,
+    messagesPerPage: DEFAULT_PAGE_SIZES.messagesPerPage,
+    entitiesPerPage: DEFAULT_PAGE_SIZES.entitiesPerPage,
+  };
+}
+
 // Settings form
 const settingsForm = ref({
   theme: Theme.Light as Theme,
-  paging: {
-    postsPerPage: 50,
-    commentsPerPage: 50,
-    topicsPerPage: 50,
-    messagesPerPage: 50,
-    entitiesPerPage: 50,
-  },
+  paging: defaultPaging(),
 });
 
 // Initialize form from user data
@@ -131,13 +145,7 @@ watch(
     if (currentUser) {
       settingsForm.value = {
         theme: currentUser.settings?.theme || Theme.Light,
-        paging: currentUser.settings?.paging || {
-          postsPerPage: 50,
-          commentsPerPage: 50,
-          topicsPerPage: 50,
-          messagesPerPage: 50,
-          entitiesPerPage: 50,
-        },
+        paging: currentUser.settings?.paging || defaultPaging(),
       };
     }
   },

@@ -79,8 +79,6 @@ describe("useBlogsStore", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.clearAllMocks();
-    // Clear module-level cache
-    useBlogsStore().clearSearchCache();
   });
 
   afterEach(() => {

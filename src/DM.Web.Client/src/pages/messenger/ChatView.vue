@@ -3,16 +3,14 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useMessagingStore } from "@/entities/message";
-import {
-  useAuthStore,
-  useMessagePermissions,
-  AvatarImg,
-} from "@/entities/user";
+import { useAuthStore, useMessagePermissions } from "@/entities/user";
+import { AvatarImg } from "@/shared/ui/AvatarImg";
 import { useUiStore } from "@/shared/stores/ui";
 import {
   groupMessagesWithSeparators,
   isDateSeparator,
   isUserOnline,
+  toChatVirtualRows,
   type MessageOrSeparator,
 } from "@/shared/lib/utils/chat";
 import {
@@ -32,6 +30,7 @@ import { messagingApi } from "@/entities/message";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
 import { notifyFailure } from "@/shared/lib/errors";
 import { useMessageToolbar } from "@/shared/lib/composables/useMessageToolbar";
+import { useChatComposer } from "@/shared/lib/composables/useChatComposer";
 import {
   useAnchoredInfiniteScroll,
   LANDING_SCROLL_MS,
@@ -73,7 +72,6 @@ const {
 // ChatIntentionResolver applies to the global chat branch alone.
 const canSendMessages = computed(() => !!currentUser.value);
 
-const newMessage = ref("");
 const messagesContainer = ref<HTMLElement | null>(null);
 const editorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 const topSentinel = ref<HTMLElement | null>(null);
@@ -116,6 +114,13 @@ const { virtualItems, totalSize, measureElement, scrollToIndex } =
     overscan: 15,
   });
 
+// What the template iterates: each visible row already resolved to the item it
+// draws and narrowed to one of the two kinds (shared with the global chat, see
+// toChatVirtualRows).
+const virtualRows = computed(() =>
+  toChatVirtualRows(messagesWithSeparators.value, virtualItems.value),
+);
+
 // Edit state
 const editingId = ref<string | null>(null);
 const editText = ref("");
@@ -146,6 +151,19 @@ const {
   isScrolling: () => isScrolling,
 });
 
+// Writing and deleting a message: shared with the global chat, which had the
+// same four functions letter for letter.
+const { newMessage, handleSend, requestDelete, cancelDelete, confirmDelete } =
+  useChatComposer({
+    sending,
+    send: (text) => messagingStore.sendMessage(selectedChat.value!.id, text),
+    remove: (id) => messagingStore.deleteMessage(id),
+    editor: editorRef,
+    confirmingDeleteId,
+    scrollToBottom: () => scrollToBottom(),
+    canSend: () => Boolean(selectedChat.value),
+  });
+
 const hoveredMessage = computed(() => {
   if (!hoveredMessageId.value) return null;
   return (
@@ -159,7 +177,7 @@ const expandedDeletedMessages = ref<Set<string>>(new Set());
 // Scroll the virtualized list to a message and flash it (jump-to-context).
 function scrollToMessage(msgId: string) {
   const index = messagesWithSeparators.value.findIndex(
-    (item) => !isDateSeparator(item) && (item as Message).id === msgId,
+    (item) => !isDateSeparator(item) && item.id === msgId,
   );
   if (index >= 0) {
     scrollToIndex(index, { align: "center" });
@@ -358,45 +376,6 @@ async function jumpToLatest() {
   scrollToBottom();
 }
 
-async function handleSend() {
-  if (!newMessage.value.trim() || sending.value || !selectedChat.value) return;
-  const text = newMessage.value;
-  newMessage.value = "";
-  const { error } = await messagingStore.sendMessage(
-    selectedChat.value.id,
-    text,
-  );
-  // Give the text back on failure. Emptying the field before the request is
-  // what makes sending feel instant; losing what was written when it fails is
-  // not part of that bargain. The editor's own clear() waits for the send to
-  // land — it also drops the saved draft, and that copy is the one that
-  // outlives the tab.
-  if (error) {
-    newMessage.value = text;
-    notifyFailure(error, "Не удалось отправить сообщение");
-    return;
-  }
-  editorRef.value?.clear();
-  scrollToBottom();
-}
-
-function requestDelete(id: string) {
-  confirmingDeleteId.value = id;
-}
-
-function cancelDelete() {
-  confirmingDeleteId.value = null;
-}
-
-async function confirmDelete() {
-  if (!confirmingDeleteId.value) return;
-  const { error } = await messagingStore.deleteMessage(
-    confirmingDeleteId.value,
-  );
-  confirmingDeleteId.value = null;
-  if (error) notifyFailure(error, "Не удалось удалить сообщение");
-}
-
 function goBack() {
   router.push({ name: "messenger" });
 }
@@ -506,139 +485,67 @@ onUnmounted(() => {
               }"
             >
               <div
-                v-for="virtualRow in virtualItems"
-                :key="String(virtualRow.key)"
+                v-for="row in virtualRows"
+                :key="row.key"
                 :ref="
                   (el) => {
                     if (el) measureElement(el as HTMLElement);
                   }
                 "
-                :data-index="virtualRow.index"
+                :data-index="row.index"
                 :style="{
                   position: 'absolute',
                   top: 0,
                   left: 0,
                   width: '100%',
-                  transform: `translateY(${virtualRow.start}px)`,
+                  transform: `translateY(${row.start}px)`,
                 }"
               >
-                <template
-                  v-if="
-                    isDateSeparator(messagesWithSeparators[virtualRow.index])
-                  "
+                <div v-if="row.kind === 'separator'" class="date-separator">
+                  <div class="separator-line"></div>
+                  <span class="separator-text">{{
+                    row.separator.formattedDate
+                  }}</span>
+                  <div class="separator-line"></div>
+                </div>
+                <div
+                  v-else
+                  :id="`msg-${row.message.id}`"
+                  class="pm-message"
+                  tabindex="0"
+                  :class="{
+                    removed: row.message.isRemoved,
+                    hovered: hoveredMessageId === row.message.id,
+                    continuation: row.message.isContinuation,
+                  }"
+                  @mouseenter="handleMessageMouseEnter($event, row.message.id)"
+                  @mouseleave="handleMessageMouseLeave"
+                  @focusin="handleMessageFocusIn($event, row.message.id)"
+                  @focusout="handleMessageFocusOut"
                 >
-                  <div class="date-separator">
-                    <div class="separator-line"></div>
-                    <span class="separator-text">{{
-                      (messagesWithSeparators[virtualRow.index] as any)
-                        .formattedDate
-                    }}</span>
-                    <div class="separator-line"></div>
-                  </div>
-                </template>
-                <template v-else>
-                  <div
-                    :id="`msg-${(messagesWithSeparators[virtualRow.index] as any).id}`"
-                    class="pm-message"
-                    tabindex="0"
-                    :class="{
-                      removed: (messagesWithSeparators[virtualRow.index] as any)
-                        .isRemoved,
-                      hovered:
-                        hoveredMessageId ===
-                        (messagesWithSeparators[virtualRow.index] as any).id,
-                      continuation: (
-                        messagesWithSeparators[virtualRow.index] as any
-                      ).isContinuation,
-                    }"
-                    @mouseenter="
-                      handleMessageMouseEnter(
-                        $event,
-                        (messagesWithSeparators[virtualRow.index] as any).id,
-                      )
+                  <ChatMessage
+                    :message="row.message"
+                    :compact="isCompactLayout"
+                    :hovered="hoveredMessageId === row.message.id"
+                    :is-online="isOnline(row.message.author)"
+                    :is-liked-by-me="isLikedByMe(row.message)"
+                    :can-edit="canEditMessage(row.message)"
+                    :can-delete="canDeleteMessage(row.message)"
+                    :can-like="canLikeMessage(row.message)"
+                    :is-moderator="isModerator"
+                    :is-editing="isEditing(row.message.id)"
+                    :edit-text="editText"
+                    :is-deleted-expanded="isDeletedExpanded(row.message.id)"
+                    :max-height="MAX_MESSAGE_HEIGHT"
+                    @like="toggleLike(row.message)"
+                    @toggle-deleted="toggleDeletedExpand(row.message.id)"
+                    @start-edit="startEdit(row.message)"
+                    @save-edit="
+                      (text) => saveEditWithText(row.message.id, text)
                     "
-                    @mouseleave="handleMessageMouseLeave"
-                    @focusin="
-                      handleMessageFocusIn(
-                        $event,
-                        (messagesWithSeparators[virtualRow.index] as any).id,
-                      )
-                    "
-                    @focusout="handleMessageFocusOut"
-                  >
-                    <ChatMessage
-                      :message="messagesWithSeparators[virtualRow.index] as any"
-                      :compact="isCompactLayout"
-                      :hovered="
-                        hoveredMessageId ===
-                        (messagesWithSeparators[virtualRow.index] as any).id
-                      "
-                      :is-online="
-                        isOnline(
-                          (messagesWithSeparators[virtualRow.index] as any)
-                            .author,
-                        )
-                      "
-                      :is-liked-by-me="
-                        isLikedByMe(
-                          messagesWithSeparators[virtualRow.index] as any,
-                        )
-                      "
-                      :can-edit="
-                        canEditMessage(
-                          messagesWithSeparators[virtualRow.index] as any,
-                        )
-                      "
-                      :can-delete="
-                        canDeleteMessage(
-                          messagesWithSeparators[virtualRow.index] as any,
-                        )
-                      "
-                      :can-like="
-                        canLikeMessage(
-                          messagesWithSeparators[virtualRow.index] as any,
-                        )
-                      "
-                      :is-moderator="isModerator"
-                      :is-editing="
-                        isEditing(
-                          (messagesWithSeparators[virtualRow.index] as any).id,
-                        )
-                      "
-                      :edit-text="editText"
-                      :is-deleted-expanded="
-                        isDeletedExpanded(
-                          (messagesWithSeparators[virtualRow.index] as any).id,
-                        )
-                      "
-                      :max-height="MAX_MESSAGE_HEIGHT"
-                      @like="
-                        toggleLike(
-                          messagesWithSeparators[virtualRow.index] as any,
-                        )
-                      "
-                      @toggle-deleted="
-                        toggleDeletedExpand(
-                          (messagesWithSeparators[virtualRow.index] as any).id,
-                        )
-                      "
-                      @start-edit="
-                        startEdit(
-                          messagesWithSeparators[virtualRow.index] as any,
-                        )
-                      "
-                      @save-edit="
-                        (text) =>
-                          saveEditWithText(
-                            (messagesWithSeparators[virtualRow.index] as any)
-                              .id,
-                            text,
-                          )
-                      "
-                      @cancel-edit="cancelEdit"
-                    />
-                  </div>
-                </template>
+                    @cancel-edit="cancelEdit"
+                  />
+                </div>
               </div>
             </div>
           </template>

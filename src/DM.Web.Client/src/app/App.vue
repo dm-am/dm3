@@ -227,15 +227,21 @@ watch(isSignalRConnected, (connected) => {
   notificationStore.fetchUnreadCount();
 });
 
+// Subscribed once, for the life of the application, and never behind the result
+// of a connect attempt. Handlers live in a Set keyed by function identity, so
+// registering is idempotent; the socket, on the other hand, can come up on an
+// attempt later than the first, and the automatic reconnect of the client only
+// revives a connection that already started. Tying the handler to the outcome of
+// the first connect left the two badges frozen for the whole SPA session whenever
+// that attempt failed. The global chat page subscribes the same way.
+onNotification(handleNotification);
+
 // Connect/disconnect SignalR based on authentication state
 watch(
   () => userStore.isAuthenticated,
   async (isAuthenticated) => {
     if (isAuthenticated) {
-      const connected = await connectSignalR();
-      if (connected) {
-        onNotification(handleNotification);
-      }
+      await connectSignalR();
     } else {
       await disconnectSignalR();
     }
@@ -254,10 +260,7 @@ onMounted(async () => {
 
   // Connect to SignalR if already authenticated
   if (userStore.isAuthenticated) {
-    const connected = await connectSignalR();
-    if (connected) {
-      onNotification(handleNotification);
-    }
+    await connectSignalR();
   }
 });
 </script>
