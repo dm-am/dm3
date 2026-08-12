@@ -35,13 +35,6 @@ public class GameIntentionResolverShould : UnitTestBase
     }
 
     [Fact]
-    public void AllowSubscribeForAuthenticatedUser()
-    {
-        var user = Create.User().WithRole(UserRole.RegularUser).Please();
-        resolver.IsAllowed(user, GameIntention.Subscribe).Should().BeTrue();
-    }
-
-    [Fact]
     public void AllowSetStatusModerationForMentor()
     {
         var user = Create.User().WithRole(UserRole.Mentor).Please();
@@ -499,12 +492,12 @@ public class GameIntentionResolverShould : UnitTestBase
     /// Every intention the enum declares is granted to somebody.
     /// </summary>
     /// <remarks>
-    /// Nine of the nineteen members were named in no test at all. This is the
-    /// gate that keeps the count from sliding back: an arm that stops granting
-    /// anything - the shape a careless simplification takes - and a member added
-    /// with no rule behind it both land here. The seats and states below are the
-    /// ones the arms are written for; add a member and this is red until its case
-    /// joins them.
+    /// When this gate was written, nearly half the members were named in no test
+    /// at all. This is the gate that keeps the count from sliding back: an arm
+    /// that stops granting anything - the shape a careless simplification takes -
+    /// and a member added with no rule behind it both land here. The seats and
+    /// states below are the ones the arms are written for; add a member and this
+    /// is red until its case joins them.
     /// </remarks>
     [Fact]
     public void GrantEveryIntentionTheEnumDeclaresToSomebody()

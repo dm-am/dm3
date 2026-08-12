@@ -127,7 +127,7 @@ internal class GameNotepadService : IGameNotepadService
             throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
         }
 
-        await ThrowIfNotAuthorizedAsync(NotepadIntention.Read, entry.NotepadType, entry.ContainerId, entry.OwnerId, ct);
+        await ThrowIfNotAuthorizedForEntryAsync(NotepadIntention.Read, entry, ct);
         return entry;
     }
 
@@ -145,7 +145,7 @@ internal class GameNotepadService : IGameNotepadService
             throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
         }
 
-        await ThrowIfNotAuthorizedAsync(NotepadIntention.Edit, entry.NotepadType, entry.ContainerId, entry.OwnerId, ct);
+        await ThrowIfNotAuthorizedForEntryAsync(NotepadIntention.Edit, entry, ct);
 
         var internalDto = new UpdateNotepadEntryInternal
         {
@@ -173,7 +173,7 @@ internal class GameNotepadService : IGameNotepadService
             throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
         }
 
-        await ThrowIfNotAuthorizedAsync(NotepadIntention.Delete, entry.NotepadType, entry.ContainerId, entry.OwnerId, ct);
+        await ThrowIfNotAuthorizedForEntryAsync(NotepadIntention.Delete, entry, ct);
         await _repository.DeleteEntryAsync(entryId, UserId, ct);
     }
 
@@ -185,6 +185,7 @@ internal class GameNotepadService : IGameNotepadService
         NotepadType notepadType,
         Guid containerId,
         Guid? ownerId,
+        Guid? authorId,
         CancellationToken ct)
     {
         var context = new NotepadAuthContext
@@ -192,7 +193,7 @@ internal class GameNotepadService : IGameNotepadService
             NotepadType = notepadType,
             ContainerId = containerId,
             OwnerId = ownerId,
-            AuthorId = null,
+            AuthorId = authorId,
             GameRoles = Array.Empty<GameRole>()
         };
 
@@ -216,14 +217,40 @@ internal class GameNotepadService : IGameNotepadService
         return context;
     }
 
+    /// <summary>
+    /// Authorization for a question about the notepad as a whole - listing its
+    /// entries or adding one. No entry exists yet, so there is no author to
+    /// name, and the resolver settles both on access alone.
+    /// </summary>
+    private Task ThrowIfNotAuthorizedAsync(
+        NotepadIntention intention,
+        NotepadType notepadType,
+        Guid containerId,
+        Guid? ownerId,
+        CancellationToken ct) =>
+        ThrowIfNotAuthorizedAsync(intention, notepadType, containerId, ownerId, null, ct);
+
+    /// <summary>
+    /// Authorization for a question about one entry. Editing belongs to its
+    /// author alone and deleting to the author and the game master, so the
+    /// author has to reach the resolver: a context without one refuses both.
+    /// </summary>
+    private Task ThrowIfNotAuthorizedForEntryAsync(
+        NotepadIntention intention,
+        NotepadEntry entry,
+        CancellationToken ct) =>
+        ThrowIfNotAuthorizedAsync(
+            intention, entry.NotepadType, entry.ContainerId, entry.OwnerId, entry.AuthorId, ct);
+
     private async Task ThrowIfNotAuthorizedAsync(
         NotepadIntention intention,
         NotepadType notepadType,
         Guid containerId,
         Guid? ownerId,
+        Guid? authorId,
         CancellationToken ct)
     {
-        var context = await BuildAuthContextAsync(notepadType, containerId, ownerId, ct);
+        var context = await BuildAuthContextAsync(notepadType, containerId, ownerId, authorId, ct);
         _intentionManager.ThrowIfForbidden(intention, context);
     }
 

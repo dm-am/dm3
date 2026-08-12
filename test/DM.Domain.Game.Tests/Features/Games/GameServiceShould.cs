@@ -239,7 +239,7 @@ public class GameServiceShould : UnitTestBase
         var act = async () => await _service.GetAsync(gameId);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Gone);
+            .Where(e => e.StatusCode == HttpStatusCode.NotFound);
     }
 
     [Fact]

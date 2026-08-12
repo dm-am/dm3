@@ -92,15 +92,24 @@ internal class MessageService : IMessageService
     {
         var userId = _identityProvider.Current.User.UserId;
 
-        // For direct chats, check if recipient has blocked sender with BlockDirectMessages enabled
-        if (chat.Type == ChatType.Direct)
+        // Private correspondence is a conversation of exactly two people, and its
+        // one addressee answers for it with BlockDirectMessages. A direct chat is
+        // always that; a group left with two participants is the same conversation
+        // wearing another type, and asking about the type alone left the setting
+        // one "create a group" away from being worked around.
+        //
+        // The other half of the rule stands at the door in ChatService, which
+        // refuses to put somebody into a group with a person who blocked them.
+        // Both are needed: the door cannot see a group that shrinks to a pair
+        // afterwards, and this cannot see a group of three.
+        if (chat.Type is ChatType.Direct or ChatType.Group)
         {
-            var otherUser = chat.Participants.FirstOrDefault(p => p.UserId != userId);
-            if (otherUser != null)
+            var addressees = chat.Participants.Where(p => p.UserId != userId).ToArray();
+            if (addressees.Length == 1)
             {
-                // Check if recipient has BlockDirectMessages enabled AND has blocked sender
+                // Check if the addressee has BlockDirectMessages enabled AND has blocked the sender
                 var blockedIds = await _userBlacklistChecker.GetBlockedUserIdsIfFlagEnabledAsync(
-                    otherUser.UserId, UserBlacklistSettings.BlockDirectMessages, ct);
+                    addressees[0].UserId, UserBlacklistSettings.BlockDirectMessages, ct);
                 if (blockedIds.Contains(userId))
                 {
                     throw new HttpException(HttpStatusCode.Forbidden, "Нельзя отправить сообщение этому пользователю");

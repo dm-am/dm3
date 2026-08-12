@@ -60,4 +60,24 @@ public interface IUserBlacklistChecker
     /// <returns>The subset of <paramref name="ownerIds"/> that blocks the user</returns>
     Task<IReadOnlySet<Guid>> GetOwnersBlockingAsync(
         Guid blockedUserId, IReadOnlyCollection<Guid> ownerIds, CancellationToken ct = default);
+
+    /// <summary>
+    /// Of the given users, which ones have this user on their blacklist with the
+    /// given flag enabled
+    /// </summary>
+    /// <remarks>
+    /// The flag-aware twin of <see cref="GetOwnersBlockingAsync"/>, and the shape a
+    /// door check needs: a group chat is created with all of its participants at
+    /// once, so asking about them one at a time costs a statement per participant.
+    /// </remarks>
+    /// <param name="blockedUserId">The user who might be blocked</param>
+    /// <param name="ownerIds">Blacklist owners to look at</param>
+    /// <param name="flag">The blacklist setting flag to check</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>
+    /// The subset of <paramref name="ownerIds"/> that blocks the user with the flag on
+    /// </returns>
+    Task<IReadOnlySet<Guid>> GetOwnersBlockingIfFlagEnabledAsync(
+        Guid blockedUserId, IReadOnlyCollection<Guid> ownerIds, UserBlacklistSettings flag,
+        CancellationToken ct = default);
 }

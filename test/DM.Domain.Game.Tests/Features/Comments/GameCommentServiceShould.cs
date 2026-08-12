@@ -160,6 +160,28 @@ public class GameCommentServiceShould : UnitTestBase
         _intentionManager.Verify(m => m.ThrowIfForbidden(CommentIntention.Edit, comment), Times.Once);
     }
 
+    /// <summary>
+    /// Reading and deleting a comment that is not there answer with the same
+    /// code. They used to disagree inside this one service: Gone on the read and
+    /// NotFound on the delete, which made the status a property of the verb
+    /// instead of a property of the resource.
+    /// </summary>
+    [Fact]
+    public async Task AnswerNotFoundForAMissingCommentOnBothReadAndDelete()
+    {
+        var commentId = Guid.NewGuid();
+        _repository.Setup(r => r.Get(commentId)).ReturnsAsync((Comment?)null);
+        _repository.Setup(r => r.GetForDelete(commentId)).ReturnsAsync((GameCommentToDelete?)null);
+
+        var read = async () => await _service.GetAsync(commentId);
+        var delete = async () => await _service.DeleteAsync(commentId);
+
+        await read.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.NotFound);
+        await delete.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.NotFound);
+    }
+
     [Fact]
     public async Task AuthorizeDeleteCommentAction()
     {

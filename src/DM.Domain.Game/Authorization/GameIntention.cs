@@ -56,16 +56,6 @@ public enum GameIntention
     CreateComment = 12,
 
     /// <summary>
-    /// Subscribe to a game
-    /// </summary>
-    Subscribe = 13,
-
-    /// <summary>
-    /// Unsubscribe from a game
-    /// </summary>
-    Unsubscribe = 14,
-
-    /// <summary>
     /// Create game character
     /// </summary>
     CreateCharacter = 15,

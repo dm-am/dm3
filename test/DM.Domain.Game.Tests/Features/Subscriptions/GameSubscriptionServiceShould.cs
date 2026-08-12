@@ -142,7 +142,7 @@ public class GameSubscriptionServiceShould : UnitTestBase
         // Asked for all of them at once. One call per subscriber made the page
         // cost as much as it had readers, and the single-user form throws on a
         // user who is no longer there, so one removed reader answered the whole
-        // game page with 410 Gone.
+        // game page with 404.
         _userLookupService
             .Setup(s => s.GetReferencesAsync(It.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(subscriberIds))))
             .ReturnsAsync(users);

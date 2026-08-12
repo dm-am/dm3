@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
 
@@ -28,7 +29,9 @@ public class NotepadAuthContext
     public Guid? OwnerId { get; set; }
 
     /// <summary>
-    /// Author of the entry (for edit/delete checks)
+    /// Author of the entry, for the two intentions that are about one entry.
+    /// Null for the notepad-wide questions - listing the entries, adding one -
+    /// and a null here refuses Edit and Delete instead of matching whoever asks.
     /// </summary>
     public Guid? AuthorId { get; set; }
 
@@ -47,13 +50,43 @@ public class NotepadAuthContext
 internal class NotepadIntentionResolver : IIntentionResolver<NotepadIntention, NotepadAuthContext>
 {
     /// <inheritdoc />
+    /// <remarks>
+    /// Two questions, in this order. Access to the notepad decides who may be
+    /// here at all and answers the same for every intention; the intention then
+    /// narrows the two that are about an entry somebody already wrote. Reading
+    /// and creating stay on access alone - a shared notepad whose entries only
+    /// their authors could read would not be shared.
+    ///
+    /// Access first also means authorship opens nothing by itself: whoever left
+    /// the game keeps no right over the notes they left behind.
+    /// </remarks>
     public bool IsAllowed(IAuthorizationSubject user, NotepadIntention intention, NotepadAuthContext target)
     {
-        return target.NotepadType switch
+        var hasAccess = target.NotepadType switch
         {
             NotepadType.Master => IsAllowedForMasterNotepad(target),
             NotepadType.Player => IsAllowedForPlayerNotepad(user, target),
             _ => false
+        };
+
+        if (!hasAccess)
+        {
+            return false;
+        }
+
+        return intention switch
+        {
+            NotepadIntention.Read => true,
+            NotepadIntention.Create => true,
+            // An entry is its author's own words, so nobody rewrites it for
+            // them: a lead who objects to one deletes it rather than edits it.
+            NotepadIntention.Edit => IsEntryAuthor(user, target),
+            // Delete adds the game master, who answers for what the notepads of
+            // the game hold. The arm names the master and not every lead on
+            // purpose: an assistant reaches the whole master notepad, and what
+            // an assistant removes from it is what they wrote themselves.
+            NotepadIntention.Delete => IsEntryAuthor(user, target) ||
+                                       target.GameRoles.Contains(GameRole.Master)
         };
     }
 
@@ -74,4 +107,12 @@ internal class NotepadIntentionResolver : IIntentionResolver<NotepadIntention, N
         // Character owner can access their own notepad
         return target.CharacterOwnerId.HasValue && target.CharacterOwnerId.Value == user.UserId;
     }
+
+    /// <summary>
+    /// Whether the asker wrote the entry the intention is about. An absent
+    /// author is not a match: the context carries none for the notepad-wide
+    /// questions, and neither of those two ever reaches here.
+    /// </summary>
+    private static bool IsEntryAuthor(IAuthorizationSubject user, NotepadAuthContext target) =>
+        target.AuthorId.HasValue && target.AuthorId.Value == user.UserId;
 }

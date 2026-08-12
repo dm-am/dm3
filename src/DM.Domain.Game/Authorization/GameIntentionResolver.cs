@@ -15,7 +15,6 @@ internal class GameIntentionResolver :
     public bool IsAllowed(IAuthorizationSubject user, GameIntention intention) => intention switch
     {
         GameIntention.Create when user.IsAuthenticated => true,
-        GameIntention.Subscribe when user.IsAuthenticated => true,
         GameIntention.SetStatusModeration when user.IsAuthenticated => user.Role >= UserRole.Mentor,
         _ => false
     };
@@ -56,8 +55,6 @@ internal class GameIntentionResolver :
                                   target.HasPendingInvitation(user.UserId) ||
                                   ModuleVisibility.IsPubliclyVisible(
                                       target.Status, target.PremoderationStatus, target.DraftVisibility),
-            GameIntention.Subscribe when user.IsAuthenticated => !roles.HasAnyRole(),
-            GameIntention.Unsubscribe when user.IsAuthenticated => roles.Contains(GameRole.Reader),
 
             GameIntention.Edit when user.IsAuthenticated => userIsSeniorModerator ||
                                                             roles.HasEditAccess(),
