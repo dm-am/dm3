@@ -52,6 +52,9 @@ $input-padding: ($minor + 1px) $small
 // Colour modifiers sit on top of a variant, they never replace it:
 //   +button-danger   — destructive fill, applied to the modifier class
 //
+// A state sits on top of any variant and carries no colour of its own:
+//   +button-busy     — the visible half of a loading prop
+//
 // IMPORTANT: call +button / +button-link AFTER all other declarations in the
 // selector to avoid Sass mixed-decls deprecation warning.
 // =============================================================================
@@ -143,6 +146,48 @@ $input-padding: ($minor + 1px) $small
   background-color: $accent-red
   border-color: $accent-red
   color: $text-on-fill
+
+/// Busy — the visible half of a `loading` prop, on top of any variant.
+///
+/// Until this mixin the prop drew nothing a plain `disabled` attribute does not
+/// draw already, so fifteen pages wrote the state into the caption instead:
+/// "Сохранить" became "Сохранение..." in eleven of them and "Сохраняем..." in
+/// one, and the rest read "Создание...", "Отмечаю...", "Отправка...",
+/// "Выдаем...", "Загрузка...". A caption says what a control does, not what it
+/// is doing; swapped mid-request it re-measures the control, and the "Отмена"
+/// standing beside it moves while the reader is aiming at it.
+///
+/// The state is a bar along the bottom edge in the control's own ink: a shape
+/// that is either on screen or not, so a reader who cannot tell two shades
+/// apart still sees it. It is keyed off aria-busy and not off a class of its
+/// own, because two switches drift and the screen would then disagree with the
+/// screen reader.
+///
+/// The segment travels inside the bar's own box (background-position, not a
+/// transform), so nothing ever leaves the control and no overflow clip is
+/// needed; the ends are inset by the corner radius, so the square ends never
+/// cross the rounded border. Neither state takes width, so the control and
+/// everything standing beside it hold their places when the state turns on.
+///
+/// The travel frames live in Reset.sass, which is emitted once, and the note
+/// there says why. Nothing here is declared outside a nested rule, so a caller
+/// may include this in any order.
+@mixin button-busy()
+  &
+    position: relative
+
+  &[aria-busy="true"]::after
+    content: ""
+    position: absolute
+    left: $button-border-radius
+    right: $button-border-radius
+    bottom: 0
+    height: $minor
+    background-image: linear-gradient(currentColor, currentColor)
+    background-repeat: no-repeat
+    background-size: 40% 100%
+    background-position: 0 0
+    animation: button-busy $loading-tempo ease-in-out infinite alternate
 
 /// Outlined pill — the fifth variant of the system, and the one that lived as
 /// four copies outside it (mark-all, unsubscribe, notepad edit/delete). Layout

@@ -521,7 +521,7 @@ public class BanServiceShould : UnitTestBase
 
         _banRepository.Verify(r => r.Lift(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
-    // --- Кто кого может банить (BE-18, BE-19) ---
+    // --- Who may ban whom (BE-18, BE-19) ---
 
     private void ArrangeTarget(UserRole targetRole)
     {

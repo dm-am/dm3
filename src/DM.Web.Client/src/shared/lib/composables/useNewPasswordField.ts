@@ -34,12 +34,22 @@ export function useNewPasswordField(options: UseNewPasswordFieldOptions = {}) {
     return "safe";
   });
 
+  /**
+   * Whether the form may be sent.
+   *
+   * The wait for the breach lookup is not part of it. An answer still on the
+   * wire used to disable the submit button while nothing on screen said why,
+   * which reads as a control that stopped working; the wait belongs under the
+   * field, and the strength indicator names it there.
+   *
+   * The verdict is part of it, and stays. The server refuses a breached
+   * password too (RefusalMessage.PasswordBreached), but both lookups are
+   * fail-open: HibpPasswordChecker allows the password whenever its own call to
+   * HIBP does not answer, so a verdict the client already holds is the only one
+   * guaranteed to be there.
+   */
   const isValid = computed(
-    () =>
-      meetsMinimum.value &&
-      !isChecking.value &&
-      !isCompromised.value &&
-      !isSameAsOld.value,
+    () => meetsMinimum.value && !isCompromised.value && !isSameAsOld.value,
   );
 
   const onInput = () => {

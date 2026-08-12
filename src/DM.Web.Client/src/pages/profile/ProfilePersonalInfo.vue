@@ -203,6 +203,7 @@ function onContactChange(
       <template v-if="isEditMode">
         <FormField label="Пол" name="gender">
           <Select
+            id="profile-gender"
             :model-value="user.gender ?? ''"
             :options="genderOptions"
             placeholder="не указан"
@@ -261,6 +262,7 @@ function onContactChange(
               type="text"
               class="input contact-type"
               placeholder="Telegram, Discord, ..."
+              :aria-label="`Тип контакта ${idx + 1}`"
               :value="contact.contactType"
               @input="
                 onContactChange(
@@ -274,6 +276,7 @@ function onContactChange(
               type="text"
               class="input contact-value"
               placeholder="значение"
+              :aria-label="`Значение контакта ${idx + 1}`"
               :value="contact.value"
               @input="
                 onContactChange(

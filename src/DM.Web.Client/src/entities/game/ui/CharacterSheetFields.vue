@@ -143,6 +143,7 @@ function onNumberInput(specId: string, event: Event) {
     <!-- Lists (TextList / NumberList / TextNumberList) -->
     <Select
       v-else
+      :id="`spec-${spec.id}`"
       :model-value="values[spec.id]"
       :options="selectOptions(spec)"
       placeholder="Не выбрано"

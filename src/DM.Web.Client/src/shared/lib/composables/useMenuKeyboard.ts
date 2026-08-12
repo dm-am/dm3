@@ -10,9 +10,8 @@ import { type Ref } from "vue";
  * opens, so pressing it again was the only key that closed anything, and
  * nothing at all moved between the items.
  *
- * Focus is what moves here, not a highlight. Filters already own
- * `useKeyboardNavigation`, which tracks a highlighted index instead — that is
- * an affordance the template has to paint, and none of these menus has one.
+ * Focus is what moves here, not a highlight: a highlighted index is an
+ * affordance the template has to paint, and none of these menus has one.
  * Items are found by their `role="menuitem"`, so the markup that makes the
  * promise to the reader is the same markup this reads.
  *

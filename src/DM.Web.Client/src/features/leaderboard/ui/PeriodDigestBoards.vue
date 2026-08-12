@@ -18,7 +18,7 @@ import { ref, computed, onMounted } from "vue";
 import { statisticsApi } from "@/entities/statistics";
 import { unwrapResource } from "@/shared/api";
 import type { Leaderboards } from "@/shared/api/models/community";
-import { useExpandableSection } from "@/shared/lib/composables";
+import { useExpandableSection } from "@/shared/lib/composables/useExpandableSection";
 import StatBoard from "./StatBoard.vue";
 import { LEADERBOARD_BOARDS, TEASER_BOARDS } from "../model/boards";
 

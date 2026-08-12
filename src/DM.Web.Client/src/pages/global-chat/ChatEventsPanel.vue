@@ -61,7 +61,7 @@ import {
   notifyExpandableChanged,
   refreshExpandableStates,
   registerExpandable,
-} from "@/shared/lib/composables";
+} from "@/shared/lib/composables/useExpandableRegistry";
 import { ContentText } from "@/shared/ui/Content";
 
 const store = useGlobalChatStore();

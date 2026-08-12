@@ -16,8 +16,8 @@ import {
 import {
   joinTitleSegments,
   useDocumentTitle,
-  useVirtualScroll,
-} from "@/shared/lib/composables";
+} from "@/shared/lib/composables/useDocumentTitle";
+import { useVirtualScroll } from "@/shared/lib/composables/useVirtualScroll";
 import { ChatMessage } from "@/widgets/chat-message";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import type { ChatId, Message, MessageId } from "@/entities/message";

@@ -15,7 +15,7 @@ import {
   type PublicBan,
 } from "@/entities/moderation";
 import { StatLine } from "@/shared/ui/StatLine";
-import { useGuardedRequest } from "@/shared/lib/composables";
+import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 
 // The scale the points are drawn against, matching Violator.WarningPointsScale
 // on the server. It triggers nothing: there is no automatic ban in DM3, a ban is

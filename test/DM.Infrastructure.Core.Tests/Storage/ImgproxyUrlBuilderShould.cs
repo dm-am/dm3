@@ -7,13 +7,14 @@ using Xunit;
 namespace DM.Infrastructure.Core.Tests.Storage;
 
 /// <summary>
-/// Unit tests для <see cref="ImgproxyUrlBuilder"/> — HMAC-SHA256 подпись,
-/// base64url encoding, options-payload (resize+gravity+quality).
+/// Unit tests for <see cref="ImgproxyUrlBuilder"/> — HMAC-SHA256 signature,
+/// base64url encoding, options payload (resize+gravity+quality).
 ///
-/// Известный hex-key/salt из imgproxy docs:
+/// The known hex key/salt from the imgproxy docs:
 ///   key  = 943b421c0089cdf87d15bd24210d8df80abf7e8aa3a4f96f5c4f7d5e0c8b6a93
 ///   salt = 520f986bbb1d7c4f9e1a6c83b5d0f47891234567890abcdef0123456789abcdef
-/// Эти же значения в .env / docker-compose для dev — тесты с ними детерминистичны.
+/// The same pair sits in .env / docker-compose for dev, so the tests are
+/// deterministic with it.
 /// </summary>
 public class ImgproxyUrlBuilderShould
 {
@@ -46,27 +47,27 @@ public class ImgproxyUrlBuilderShould
 
         var url = sut.BuildSquareThumbnail("avatars/abc.jpg", 400);
 
-        // Структура: {endpoint}/{signature}/{options}/{base64url_source}
+        // Structure: {endpoint}/{signature}/{options}/{base64url_source}
         url.Should().StartWith(TestEndpoint + "/");
         var rest = url[(TestEndpoint.Length + 1)..];
         var parts = rest.Split('/');
         parts.Should().HaveCountGreaterThanOrEqualTo(4);
-        // signature — base64url, не "insecure"
+        // signature — base64url, not "insecure"
         parts[0].Should().NotBe("insecure");
         parts[0].Should().NotBeEmpty();
-        // options — содержит resize:fill:400:400, gravity, quality
+        // options — holds resize:fill:400:400, gravity, quality
         var options = string.Join('/', parts[1..^1]);
         options.Should().Contain("rs:fill:400:400");
         options.Should().Contain("g:sm");
         options.Should().Contain("q:");
-        // последняя часть — base64url source URL
+        // the last part — the base64url source URL
         parts[^1].Should().NotBeEmpty();
     }
 
     [Fact]
     public void BuildSquareThumbnail_WithoutKey_UsesInsecurePrefix()
     {
-        // Dev-режим: ключ не задан, imgproxy с IMGPROXY_ALLOW_INSECURE_URLS=true.
+        // Dev mode: no key configured, imgproxy runs with IMGPROXY_ALLOW_INSECURE_URLS=true.
         var sut = CreateBuilder(key: string.Empty, salt: string.Empty);
 
         var url = sut.BuildSquareThumbnail("avatars/abc.jpg", 100);
@@ -95,7 +96,7 @@ public class ImgproxyUrlBuilderShould
         var a = sut.BuildSquareThumbnail("avatars/abc.jpg", 100);
         var b = sut.BuildSquareThumbnail("avatars/abc.jpg", 100);
 
-        // immutable signature для одинаковых входов — нужно для кеширования.
+        // Immutable signature for identical inputs — caching depends on it.
         a.Should().Be(b);
     }
 
@@ -107,7 +108,8 @@ public class ImgproxyUrlBuilderShould
         var a = sut.BuildSquareThumbnail("avatars/abc.jpg", 100);
         var b = sut.BuildSquareThumbnail("avatars/xyz.png", 100);
 
-        // Signature должен зависеть от source URL — иначе можно подменить source.
+        // The signature has to depend on the source URL — otherwise the source
+        // can be swapped underneath it.
         a.Should().NotBe(b);
     }
 }

@@ -438,6 +438,7 @@ async function dismissPendency(pendencyId: string) {
           v-model="newPendencyCharacterId"
           :options="pendencyOptions"
           class="pending-select"
+          aria-label="Персонаж, от которого ждут хода"
         />
         <button
           type="button"
@@ -455,15 +456,16 @@ async function dismissPendency(pendencyId: string) {
       <div class="composer-title">Новый пост</div>
 
       <div v-if="postAsOptions.length > 1" class="composer-as">
-        <label class="composer-label">От лица:</label>
+        <label class="composer-label" for="composer-post-as">От лица:</label>
         <Select
+          id="composer-post-as"
           v-model="selectedPostAs"
           :options="postAsOptions"
           class="composer-as-select"
         />
       </div>
 
-      <label class="composer-label">Игровой текст</label>
+      <span class="composer-label">Игровой текст</span>
       <BBCodeEditor
         ref="gameEditorRef"
         v-model="gameText"
@@ -475,7 +477,7 @@ async function dismissPendency(pendencyId: string) {
         :is-moderator="canManageTurns"
       />
 
-      <label class="composer-label">Метаигровой текст</label>
+      <span class="composer-label">Метаигровой текст</span>
       <BBCodeEditor
         ref="metaEditorRef"
         v-model="metagameText"

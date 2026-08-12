@@ -13,6 +13,11 @@ $animation-time: .4s
 $transition-fast: 0.1s ease
 $transition-normal: 0.15s ease
 
+/// The tempo of a wait. The skeleton shimmer and the busy bar of a control
+/// travel at it, so two waits on one screen keep the same time instead of
+/// beating against each other. It was one number written twice, in two files.
+$loading-tempo: 1.5s
+
 /// Typography
 $font-size: 16px
 $title-font-size: 20px

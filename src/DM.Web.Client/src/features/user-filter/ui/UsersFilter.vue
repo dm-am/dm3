@@ -11,7 +11,8 @@ import {
 } from "../model";
 import type { ActivityFilter, RoleFilter, ExperienceFilter } from "../model";
 import { formatDateForDisplay } from "@/shared/lib/filters";
-import { useFilterSearch, useFilterDropdown } from "@/shared/lib/composables";
+import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
+import { useFilterDropdown } from "@/shared/lib/composables/useFilterDropdown";
 import {
   FilterSearchInput,
   FilterButton,

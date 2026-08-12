@@ -215,10 +215,18 @@ const paging = computed(() => envelope.value?.paging ?? null);
     <template v-else>
       <div class="filters">
         <FormField label="Тип обращения" name="tickets-subtype">
-          <Select v-model="subtypeFilter" :options="subtypeOptions" />
+          <Select
+            id="tickets-subtype"
+            v-model="subtypeFilter"
+            :options="subtypeOptions"
+          />
         </FormField>
         <FormField label="Статус" name="tickets-status">
-          <Select v-model="statusFilter" :options="statusOptions" />
+          <Select
+            id="tickets-status"
+            v-model="statusFilter"
+            :options="statusOptions"
+          />
         </FormField>
       </div>
 

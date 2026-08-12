@@ -91,6 +91,7 @@ async function submit() {
     >
       <FormField label="Тип" name="series-type" :errors="error ? [error] : []">
         <Select
+          id="series-type"
           :model-value="contestType"
           :options="typeOptions"
           @update:model-value="(v) => (contestType = v as ContestType)"

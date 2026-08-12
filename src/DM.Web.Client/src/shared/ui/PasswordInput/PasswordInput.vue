@@ -1,6 +1,7 @@
 <template>
   <div class="password-input">
     <input
+      :id="id"
       ref="inputRef"
       :type="visible ? 'text' : 'password'"
       :value="modelValue"
@@ -35,6 +36,12 @@ import { SvgIcon } from "@/shared/ui/Icon";
 
 defineProps<{
   modelValue: string;
+  /**
+   * Id for the <input>. `$attrs` already carried a caller's id onto it, but
+   * only a binding written in the template can be read by lint, and the
+   * association is a rule of the build now.
+   */
+  id?: string;
 }>();
 
 defineEmits<{

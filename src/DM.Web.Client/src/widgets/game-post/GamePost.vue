@@ -691,7 +691,7 @@ async function submitReview() {
           <div class="post-body">
             <!-- Inline edit mode (author ≤15min / moderator+) -->
             <div v-if="isEditingPost" class="post-edit">
-              <label class="edit-label">Игровой текст</label>
+              <span class="edit-label">Игровой текст</span>
               <BBCodeEditor
                 v-model="editGameText"
                 context="post"
@@ -699,7 +699,7 @@ async function submitReview() {
                 :min-height="120"
                 :is-moderator="isModerator"
               />
-              <label class="edit-label">Метаигровой текст</label>
+              <span class="edit-label">Метаигровой текст</span>
               <BBCodeEditor
                 v-model="editMetaText"
                 context="post"
@@ -884,6 +884,7 @@ async function submitReview() {
                 v-model="newReviewText"
                 class="review-input"
                 placeholder="Текст отзыва..."
+                aria-label="Текст отзыва"
                 rows="2"
               ></textarea>
               <SecondaryText v-if="!canPickSignedReview" class="review-hint">

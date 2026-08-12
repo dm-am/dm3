@@ -10,6 +10,7 @@ import blogApi from "../api/blogApi";
 import { useApiList } from "@/shared/lib/composables/useApiResource";
 import { Api } from "@/shared/api";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import { describeFailure } from "@/shared/lib/errors";
 import {
   createKeyedCache,
   stableCacheKey,
@@ -78,6 +79,15 @@ function buildApiParams(params: BlogsSearchParams): BlogsApiParams {
   return apiParams;
 }
 
+/**
+ * One sentence for both failure paths of the blogs list. A refusal the API
+ * named goes through describeFailure, which prefers the server's own title, so
+ * a rate limit stops reading like a broken server; a request that got no
+ * response carries no problem document to read, and neither does a throw, so
+ * both fall back to this.
+ */
+const LOAD_FAILURE = "Не удалось загрузить блоги";
+
 export const useBlogsStore = defineStore("blogs", () => {
   // Sidebar lists with caching (60s TTL by default) - use lightweight BlogRef
   const active = useApiList<BlogRef>(() => blogApi.getActiveBlogs());
@@ -145,7 +155,7 @@ export const useBlogsStore = defineStore("blogs", () => {
       }
 
       if (error) {
-        searchError.value = "Ошибка загрузки данных";
+        searchError.value = describeFailure(error, LOAD_FAILURE);
         return;
       }
 
@@ -155,7 +165,7 @@ export const useBlogsStore = defineStore("blogs", () => {
       }
     } catch {
       if (requestGuard.isCurrent(requestId)) {
-        searchError.value = "Неожиданная ошибка";
+        searchError.value = LOAD_FAILURE;
       }
     } finally {
       // Only set loading false if this is the current request

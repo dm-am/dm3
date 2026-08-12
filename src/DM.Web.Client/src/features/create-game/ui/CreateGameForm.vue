@@ -278,6 +278,7 @@ async function handleSubmit() {
 
       <form-field label="Доступ к комментариям">
         <Select
+          id="game-commentaries-access"
           :model-value="commentariesAccessMode"
           :options="commentariesAccessOptions"
           @update:model-value="

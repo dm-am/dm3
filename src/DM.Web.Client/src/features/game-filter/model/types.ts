@@ -186,11 +186,11 @@ export const STATUS_OPTIONS = [
 /**
  * Recruitment filter options (sub-filter for Active)
  * Nested structure:
- * - any (Любой)
- * - open (Набор игроков) - parent for initial/subsequent
- *   - initial (Первый набор)
- *   - subsequent (Донабор игроков)
- * - closed (Набор закрыт)
+ * - any ("Любой")
+ * - open ("Набор игроков") - parent for initial/subsequent
+ *   - initial ("Первый набор")
+ *   - subsequent ("Донабор игроков")
+ * - closed ("Набор закрыт")
  */
 export const RECRUITMENT_FILTER_OPTIONS = [
   { value: "any" as const, label: "Любой" },

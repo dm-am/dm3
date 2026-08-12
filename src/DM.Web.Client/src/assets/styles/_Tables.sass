@@ -118,5 +118,10 @@ $details-offset: 20px
 =expandable-row-mobile
   padding: $small $table-cell-padding-h
 
+// The indent past the cell padding is 12px here against the $details-offset
+// (20px) of the desktop rule. The number stays a literal: it is on no step of
+// the scale, and the one token it equals, $table-cell-padding-h, measures the
+// horizontal padding of a cell and not the indent of a details block, so
+// naming it here would tie the two together over a coincidence.
 =expandable-details-mobile
   padding: $small $table-cell-padding-h $small ($table-cell-padding-h + 12px)

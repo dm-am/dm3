@@ -32,6 +32,7 @@ import { MessageSearchBar } from "@/features/message-search";
 import { WarningDialog } from "@/features/moderation-actions";
 import { LoginPrompt } from "@/features/auth";
 import { DashSeparator } from "@/shared/ui/DashSeparator";
+import { ErrorState } from "@/shared/ui/ErrorState";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
 import { notifyFailure } from "@/shared/lib/errors";
 import { permalinkOrigin } from "@/shared/config/site";
@@ -42,7 +43,7 @@ import {
   toChatVirtualRows,
   type MessageOrSeparator,
 } from "@/shared/lib/utils/chat";
-import { useVirtualScroll } from "@/shared/lib/composables";
+import { useVirtualScroll } from "@/shared/lib/composables/useVirtualScroll";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useGlobalSignalR } from "@/shared/lib/composables/useSignalR";
 import { NotificationType } from "@/shared/api/models/notifications";
@@ -979,17 +980,18 @@ async function retryLoad() {
       @wheel.passive="handleWheel"
     >
       <ChatMessageSkeleton v-if="loading" :count="6" />
-      <!-- Error takes precedence over fake-empty; stale content (if any) is preserved -->
-      <div
+      <!-- Error takes precedence over fake-empty; stale content (if any) is
+           preserved. The shared red box, so a failed load reads as a failure:
+           this branch used to sit on the empty state's own class, which
+           carries neither a background nor a colour. What the retry shows is
+           the skeleton, not a disabled button — the store raises loading
+           before it awaits, and the skeleton branch is checked first — so the
+           box's own retrying state never reaches this screen. -->
+      <ErrorState
         v-else-if="error && !messages?.length"
-        class="globalChat-empty globalChat-error"
-        role="alert"
-      >
-        <secondary-text>{{ error }}</secondary-text>
-        <button type="button" class="globalChat-retry" @click="retryLoad">
-          Повторить
-        </button>
-      </div>
+        :message="error"
+        :retry="retryLoad"
+      />
       <secondary-text v-else-if="!messages?.length" class="globalChat-empty">
         <template v-if="canSendMessages"
           >Сообщений пока нет. Начните общение!</template
@@ -1321,10 +1323,6 @@ async function retryLoad() {
   justify-content: flex-start
   height: 100%
   padding: $big
-
-.globalChat-error
-  flex-direction: column
-  gap: $small
 
 .globalChat-retry
   +button

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { useExpandableSection } from "@/shared/lib/composables";
+import { useExpandableSection } from "@/shared/lib/composables/useExpandableSection";
 import { symbols } from "@/shared/lib/utils/icons";
 import type { UserIpInfo, LoginRecord } from "@/shared/api/models/moderation";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";

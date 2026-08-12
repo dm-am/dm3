@@ -41,7 +41,7 @@ import {
   formatThreshold,
   metricDisplayNumber,
 } from "@/entities/achievement";
-import { useGuardedRequest } from "@/shared/lib/composables";
+import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 
 const props = defineProps<{
   username: string;

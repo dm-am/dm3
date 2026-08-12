@@ -15,9 +15,10 @@
  * One gate for the pair: they are the same defect twice.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
+import { nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
-import { accountApi } from "@/entities/user";
+import { accountApi, UsernameInput } from "@/entities/user";
 import AccountActivationPage from "./AccountActivationPage.vue";
 import PasswordResetPage from "./PasswordResetPage.vue";
 
@@ -91,5 +92,55 @@ describe("pages reached from a letter", () => {
     expect(card.replace(wrapper.find(".help-section").text(), "").trim()).toBe(
       "Проверяем ссылку...",
     );
+  });
+
+  /**
+   * The control next to the chosen name on the confirmation step. It goes back
+   * a step and nowhere else, so it is a button; as an anchor pointing at "#"
+   * with a class that dimmed it, it was still a link to the keyboard, and
+   * Enter on it dropped the reader back to step one while the activation
+   * request was already on the wire.
+   */
+  describe("the step-back control on the confirmation step", () => {
+    const atConfirmStep = async () => {
+      vi.spyOn(accountApi, "getActivationInfo").mockResolvedValue({
+        data: { status: "ready", email: "reader@example.com" },
+        error: null,
+      });
+
+      const wrapper = mount(AccountActivationPage, options());
+      await flushPromises();
+
+      const name = wrapper.findComponent(UsernameInput);
+      name.vm.$emit("update:modelValue", "reader");
+      name.vm.$emit("availability", true);
+      await nextTick();
+      await wrapper.get(".submit-button").trigger("click");
+
+      expect(wrapper.text()).toContain("Подтвердите выбор имени");
+      return wrapper;
+    };
+
+    it("is a button, and takes the reader back to the name", async () => {
+      const wrapper = await atConfirmStep();
+      const back = wrapper.get(".change-username");
+
+      expect(back.element.tagName).toBe("BUTTON");
+      expect(back.attributes("disabled")).toBeUndefined();
+
+      await back.trigger("click");
+
+      expect(wrapper.text()).toContain("Выберите имя");
+    });
+
+    it("is disabled, and not merely dimmed, while the request is in flight", async () => {
+      const wrapper = await atConfirmStep();
+      vi.spyOn(accountApi, "activate").mockImplementation(pending);
+
+      await wrapper.get(".submit-button").trigger("click");
+
+      expect(wrapper.get(".change-username").attributes("disabled")).toBe("");
+      expect(wrapper.text()).toContain("Подтвердите выбор имени");
+    });
   });
 });

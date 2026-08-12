@@ -68,6 +68,7 @@ async function submit() {
         :errors="error ? [error] : []"
       >
         <input
+          id="block-user-username"
           v-model="username"
           type="text"
           autocomplete="off"

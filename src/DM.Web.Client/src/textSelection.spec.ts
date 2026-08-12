@@ -40,6 +40,13 @@ const STYLE_FILES = [".vue", ".sass", ".scss", ".css"];
 /** A declaration of the property, not a mention of it inside a comment. */
 const DECLARATION = /^\s*user-select\s*:\s*none\s*;?\s*$/;
 
+/**
+ * A hand-typed run of dashes — the shape the rule takes when it is drawn
+ * past the component instead of through it. Four repetitions are already a
+ * rule and not prose.
+ */
+const HAND_DRAWN_RULE = /(?:- ){4}/;
+
 function collect(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
     const full = join(dir, name);
@@ -75,6 +82,26 @@ describe("text selection", () => {
         .split("\n")
         .forEach((line, index) => {
           if (DECLARATION.test(line)) offenders.push(`${path}:${index + 1}`);
+        });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("draws the dash rule through the component and never by hand", () => {
+    // The allowance above is what makes this check necessary: a copy typed
+    // into a template renders the same line without the opt-out, and the
+    // check for stray declarations cannot see a separator that never made
+    // one. The component's own file is exempt for the same reason it holds
+    // the allowance — there the line is the thing being drawn.
+    const offenders: string[] = [];
+    for (const file of files) {
+      const path = asPath(file);
+      if (path in ALLOWED) continue;
+      readFileSync(file, "utf8")
+        .split("\n")
+        .forEach((line, index) => {
+          if (HAND_DRAWN_RULE.test(line))
+            offenders.push(`${path}:${index + 1}`);
         });
     }
     expect(offenders).toEqual([]);

@@ -6,7 +6,7 @@ import { PollCard } from "@/widgets/sidebar";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { usePollsStore } from "@/entities/poll";
 import { usePollsFilter } from "@/features/poll-filter";
-import { usePaging } from "@/shared/lib/composables";
+import { usePaging } from "@/shared/lib/composables/usePaging";
 
 const pollsStore = usePollsStore();
 const { polls, pollsLoading, pollsError } = storeToRefs(pollsStore);

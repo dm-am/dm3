@@ -132,13 +132,13 @@ onMounted(() => store.fetchBoards());
        to the table — no board strip (it would duplicate the table, and the
        shell hides it on the index) and no lead text. -->
   <div v-if="user && boards" class="forum-actions">
-    <button
-      class="mark-all-read-btn"
-      :disabled="markingAllAsRead || !boards.some((b) => b.unreadCommentsCount)"
+    <Button
+      :loading="markingAllAsRead"
+      :disabled="!boards.some((b) => b.unreadCommentsCount)"
       @click="markAllAsRead"
     >
-      {{ markingAllAsRead ? "Отмечаю..." : "Отметить все как прочитанное" }}
-    </button>
+      Отметить все как прочитанное
+    </Button>
   </div>
   <SecondaryText v-if="markAllError" class="mark-all-error" role="alert">
     Не удалось отметить топики прочитанными
@@ -224,15 +224,10 @@ onMounted(() => store.fetchBoards());
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-
 .forum-actions
   margin-bottom: $medium
   display: flex
   justify-content: flex-end
-
-.mark-all-read-btn
-  +button
 
 .mark-all-error
   display: block

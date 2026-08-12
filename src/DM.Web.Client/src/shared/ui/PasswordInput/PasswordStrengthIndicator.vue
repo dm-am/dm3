@@ -7,7 +7,14 @@
         :class="barClass"
       />
     </div>
+    <!-- One line under the bar, in this order: a rule the field itself broke,
+         then the breach lookup while it is out, then the strength. The wait no
+         longer disables the submit button, so this line is the whole of what
+         the lookup shows while it waits. -->
     <div v-if="warningText" class="warning-text">{{ warningText }}</div>
+    <div v-else-if="hibpStatus === 'checking'" class="checking-text">
+      Проверяем по базе утечек...
+    </div>
     <div
       v-else-if="strengthText"
       class="strength-text"
@@ -105,6 +112,11 @@ const barClass = computed(() => {
   margin-top: $tiny
   font-size: $secondary-font-size
   color: $accent-red
+
+.checking-text
+  margin-top: $tiny
+  font-size: $secondary-font-size
+  color: $text-muted
 
 .strength-text
   margin-top: $tiny

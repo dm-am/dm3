@@ -53,7 +53,7 @@ import {
   registerExpandable,
   notifyExpandableChanged,
   refreshExpandableStates,
-} from "@/shared/lib/composables";
+} from "@/shared/lib/composables/useExpandableRegistry";
 
 const props = withDefaults(
   defineProps<{

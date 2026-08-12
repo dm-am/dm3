@@ -313,3 +313,47 @@ describe("slice barrels", () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * The same rule one folder over, and for the same reasons.
+ *
+ * `shared/lib/composables` carried a barrel of its own, and both spellings were
+ * live: forty-eight files entered through the index while a hundred and twelve
+ * addressed the composable they wanted by its own path. The split was never a
+ * decision anybody made. In four of the five files that used both, the two
+ * imports sat on neighbouring lines, and single modules were reached both ways:
+ * `useToast` had fifty-seven consumers on the path and two on the barrel, so
+ * neither search for its consumers found the other half.
+ *
+ * The index was not complete either. Six of the twenty-nine modules in the
+ * folder (`useAnchoredInfiniteScroll`, `useChatComposer`, `useDialogShell`,
+ * `useMenuKeyboard`, `useMessageToolbar`, `useZoneSection`) were never in it,
+ * so "import it from the barrel" was advice that failed at random.
+ *
+ * This is not a bundle-size rule and must not be sold as one: the production
+ * build drops the re-exports nobody asked for, which is the property
+ * `buildChunks.spec.ts` measures. The dev server does pay, because it serves
+ * modules unbundled, so a screen that wanted a filter helper fetched every
+ * module the index re-exported, `useVirtualScroll` and its
+ * `@tanstack/vue-virtual` among them. That is a side effect. The reason is the
+ * two addresses.
+ */
+describe("the shared composables", () => {
+  it("have one address each and no folder barrel", () => {
+    expect(
+      existsSync(join(CLIENT_ROOT, "src/shared/lib/composables/index.ts")),
+      "a barrel over the composables folder gives every composable a second address and competes with the per-composable path the rest of the tree uses: import each composable from its own module",
+    ).toBe(false);
+
+    const offenders: string[] = [];
+    for (const file of sources(join(CLIENT_ROOT, "src"))) {
+      const code = readFileSync(file, "utf8");
+      if (!/"@\/shared\/lib\/composables"/.test(code)) continue;
+      offenders.push(relative(CLIENT_ROOT, file).split("\\").join("/"));
+    }
+    expect(
+      offenders,
+      "the folder barrel is gone: address the composable by its own module path",
+    ).toEqual([]);
+  });
+});

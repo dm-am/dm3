@@ -174,8 +174,9 @@ public class EmailChangeServiceShould : UnitTestBase
     [Fact]
     public async Task RefuseALiveTokenWithNothingPending()
     {
-        // Ссылка, открытая второй раз, или запрос, отозванный до перехода.
-        // Ответ тот же, что у истекшей ссылки: подтверждать нечего.
+        // A link opened a second time, or a request withdrawn before it was
+        // followed. The answer is the one an expired link gets: there is nothing
+        // to confirm.
         var tokenId = Guid.NewGuid();
         var ownerId = Guid.NewGuid();
         _confirmationRepository.Setup(r => r.FindEmailChangeTokenOwner(tokenId, It.IsAny<DateTimeOffset>()))

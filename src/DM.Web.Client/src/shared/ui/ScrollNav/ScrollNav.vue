@@ -2,11 +2,11 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useUiStore } from "@/shared/stores/ui";
 import {
-  hasAnyExpandable,
-  allExpandablesExpanded,
-  expandAllExpandables,
-  collapseAllExpandables,
-} from "@/shared/lib/composables";
+  hasAny as hasAnyExpandable,
+  allExpanded as allExpandablesExpanded,
+  expandAll as expandAllExpandables,
+  collapseAll as collapseAllExpandables,
+} from "@/shared/lib/composables/useExpandableRegistry";
 import { getScrollContainer } from "@/shared/lib/scroll";
 import { Theme } from "@/shared/api/models/personal";
 import { storeToRefs } from "pinia";

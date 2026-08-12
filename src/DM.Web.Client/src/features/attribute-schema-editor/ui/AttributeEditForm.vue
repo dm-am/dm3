@@ -35,6 +35,7 @@ function onTypeChange(value: string) {
 
     <form-field label="Название" name="attr-title">
       <input
+        id="attr-title"
         v-model="spec.title"
         type="text"
         placeholder="Например, Сила"
@@ -44,6 +45,7 @@ function onTypeChange(value: string) {
 
     <form-field label="Тип">
       <Select
+        id="attr-type"
         :model-value="spec.type"
         :options="SPEC_TYPE_OPTIONS"
         @update:model-value="onTypeChange"
@@ -57,6 +59,7 @@ function onTypeChange(value: string) {
       optional
     >
       <input
+        id="attr-maxlength"
         v-model.number="spec.maxLength"
         type="number"
         min="1"

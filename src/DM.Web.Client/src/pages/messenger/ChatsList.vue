@@ -126,6 +126,7 @@ function clearSearch() {
           type="text"
           class="the-input"
           placeholder="Поиск собеседника"
+          aria-label="Поиск собеседника"
           @input="onSearchInput"
           @focus="onSearchFocus"
           @blur="onSearchBlur"

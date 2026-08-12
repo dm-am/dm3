@@ -17,7 +17,7 @@ namespace DM.Architecture.Tests;
 /// identifier per term, the same in the UI, in the code and in the
 /// documentation. The client enforces it for interface strings
 /// (copy-rules.spec.ts). Nothing enforced it anywhere else, and the gap showed:
-/// the role every screen calls a наставник was still a ментор in five documents
+/// the role every screen calls a "наставник" was still a "ментор" in five documents
 /// -- including the glossary that declares the rule -- and in a seeded profile,
 /// and the documentation is where the next screen takes its words from.
 ///
@@ -84,7 +84,7 @@ public class InterfaceVocabularyShould
     /// The senses the word keeps: the subject of a conversation, of a letter, of
     /// a ticket, and the colour scheme. Listed because they do stand next to the
     /// forum -- the rules speak of "уход от темы в служебных разделах форума",
-    /// which is about staying on subject and not about a топик.
+    /// which is about staying on subject and not about a "топик".
     /// </summary>
     private static readonly Regex[] OtherSenses =
     [

@@ -171,8 +171,8 @@ function pagingAnchor(): HTMLElement | null {
 @import "@/assets/styles/Inputs"
 
 // Paging blocks sit at the same tight $tiny rhythm the rows keep between
-// themselves and their dash separators (COMM-1: пагинация→строки =
-// межстрочному, matching the polls page where both distances are equal).
+// themselves and their dash separators (COMM-1: paging to rows equals the
+// line gap, matching the polls page where both distances are equal).
 .testimonials-list
   display: flex
   flex-direction: column

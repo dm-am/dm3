@@ -1619,7 +1619,10 @@ defineExpose({
   margin: 0 2px
 
 .tag-btn
-  padding: 2px 6px
+  // The vertical half is $tiny. The horizontal one stays a literal: 6px sits
+  // between $minor and $small, the toolbar is one row of these buttons, and a
+  // step on the scale moves that row by 4px per button.
+  padding: $tiny 6px
   border: 1px solid
   border-color: $border
   border-radius: 2px
@@ -1641,6 +1644,10 @@ defineExpose({
     font-weight: 600
 
   &.tag-btn-code
+    // The same 4px of vertical padding as .tag-btn (2px + 2px), shifted one
+    // pixel down so the Courier New face is centred in a button that keeps the
+    // height of its neighbours in the row. Neither half is a step of the scale,
+    // and rounding them to one would change that height.
     font-family: $code-font
     padding-top: 3px
     padding-bottom: 1px
@@ -1754,8 +1761,8 @@ defineExpose({
     color: $accent-red
     font-weight: 600
 
-// -muted-варианты акцентов не проходят AA как цвет текста (2.82 и 3.00
-// на карточке в светлой теме). Статус черновика — обычный мелкий текст.
+// The -muted accent variants do not clear AA as a text colour (2.82 and 3.00
+// on the card in the light theme). The draft status is ordinary small text.
 .draft-available
   color: $accent-red
 
@@ -1799,7 +1806,7 @@ defineExpose({
   flex-direction: column
   background-color: $bg-element
   border: 1px solid $border
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3)
+  box-shadow: 0 8px 32px $shadow-color
 
 :global(.help-dialog-header)
   display: flex
@@ -1860,6 +1867,11 @@ defineExpose({
     color: $link
 
   kbd
+    // A key cap, not a control: it is floated into the 22.4px line box of
+    // .help-item (14px x 1.6), and its own box is 17.6px of text (11px x 1.6)
+    // plus this padding and 1px of border, i.e. 21.6px. One step up the scale
+    // ($tiny) makes it 23.6px and spills it onto the item below. The horizontal
+    // half is the cap's inset around a one- or two-character key.
     float: right
     padding: 1px 5px
     font-size: 11px
@@ -1898,7 +1910,8 @@ defineExpose({
   color: $text-muted
 
   kbd
-    padding: 2px 6px
+    // The same pair as .tag-btn: $tiny vertically, the fitted 6px horizontally.
+    padding: $tiny 6px
     font-family: inherit
     background-color: $bg-element-accent
     border: 1px solid $border
@@ -1959,7 +1972,11 @@ defineExpose({
     justify-content: center
 
   .tag-btn
+    // Inside a 40x40 tap target the padding is an inset, not spacing: the
+    // vertical half is $small, and the horizontal one stays 10px because at
+    // this value the 40px floor still sets the width of a short label, while
+    // the next step up ($medium) would set it instead and widen the row.
     min-width: 40px
     min-height: 40px
-    padding: 8px 10px
+    padding: $small 10px
 </style>

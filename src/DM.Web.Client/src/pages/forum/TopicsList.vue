@@ -18,7 +18,7 @@ import PinnedTopicsManager from "./PinnedTopicsManager.vue";
 import { useAuthStore } from "@/shared/stores";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
-import { useAnimatedHeightToggle } from "@/shared/lib/composables";
+import { useAnimatedHeightToggle } from "@/shared/lib/composables/useAnimatedHeightToggle";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
 import { describeFailure, notifyFailure } from "@/shared/lib/errors";
@@ -554,6 +554,7 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
           :errors="titleError ? [titleError] : []"
         >
           <input
+            id="create-topic-title"
             v-model="newTitle"
             type="text"
             class="create-topic-title-input"
@@ -582,13 +583,12 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
         </div>
 
         <div class="create-topic-actions">
-          <button
-            type="submit"
-            class="create-topic-submit"
-            :disabled="creating || !newTitle.trim() || !newText.trim()"
+          <Button
+            :loading="creating"
+            :disabled="!newTitle.trim() || !newText.trim()"
           >
-            {{ creating ? "Создание..." : "Создать" }}
-          </button>
+            Создать
+          </Button>
         </div>
       </form>
     </div>
@@ -754,7 +754,4 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
 .create-topic-actions
   display: flex
   justify-content: flex-end
-
-.create-topic-submit
-  +button
 </style>

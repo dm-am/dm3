@@ -7,7 +7,8 @@ import {
   STATUS_OPTIONS,
   POLL_TYPE_OPTIONS,
 } from "../model";
-import { useFilterSearch, useFilterDropdown } from "@/shared/lib/composables";
+import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
+import { useFilterDropdown } from "@/shared/lib/composables/useFilterDropdown";
 import { formatDateRangeForDisplay } from "@/shared/lib/filters";
 import {
   FilterSearchInput,

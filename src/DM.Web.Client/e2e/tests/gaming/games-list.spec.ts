@@ -16,7 +16,7 @@ import { API_BASE_URL, primaryUser } from "../../fixtures/auth";
  *   assertions inside `if (await x.isVisible())`, so they reported green on a
  *   page that rendered nothing at all.
  *
- * Written against a desktop viewport. Two columns (Теги, Рецензии) are hidden
+ * Written against a desktop viewport. Two columns ("Теги", "Рецензии") are hidden
  * below 768px by design (Column.hideOnMobile), which the column test reads
  * from the same media query the CSS uses.
  */
@@ -238,7 +238,7 @@ test.describe("Games List Page", () => {
       await searchField(page).fill("тест");
 
       // Read the decoded parameter — the browser reports the Cyrillic value
-      // percent-encoded, so /search=тест/ against the raw URL never matches.
+      // percent-encoded, so a raw-URL match on "search=тест" never fires.
       await expect(page).toHaveURL(
         (url) => url.searchParams.get("search") === "тест",
       );
@@ -338,10 +338,11 @@ test.describe("Games List Page", () => {
       );
 
       // SORT_OPTIONS gives "title" defaultDirection: "asc", so picking
-      // "Название" must sort А→Я. This once read desc: SortButton reported the
-      // field and the direction as two events, and the filter handled the
-      // second one while its own state still held the pre-click direction, so
-      // it flipped the asc it had just been given. One event now carries both.
+      // "Название" must sort from "А" to "Я". This once read desc: SortButton
+      // reported the field and the direction as two events, and the filter
+      // handled the second one while its own state still held the pre-click
+      // direction, so it flipped the asc it had just been given. One event now
+      // carries both.
       await expect(page).toHaveURL(
         (url) => url.searchParams.get("sortOrder") === "asc",
       );

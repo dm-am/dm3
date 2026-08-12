@@ -3,7 +3,7 @@
 // Used in the sidebar, in featured post breadcrumbs, and anywhere else
 // a game title needs to become a navigable link with participant info.
 //
-// The tooltip content (Мастер, Ассистенты, Персонажи X/Y, Читатели) is
+// The tooltip content ("Мастер", "Ассистенты", "Персонажи X/Y", "Читатели") is
 // sourced from useGameDisplay().buildTooltip — single source of truth.
 //
 // Defense-in-depth: if the incoming game object has neither publicId nor

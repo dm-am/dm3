@@ -98,6 +98,7 @@ onMounted(fetch);
       <div class="filters">
         <FormField label="Статус премодерации" name="premoderation-status">
           <Select
+            id="premoderation-status"
             :model-value="statusFilter"
             :options="statusOptions"
             @update:model-value="onFilterChange"

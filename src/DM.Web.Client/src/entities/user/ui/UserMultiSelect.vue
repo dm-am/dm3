@@ -136,6 +136,7 @@ function handleKeydown(event: KeyboardEvent) {
         type="text"
         class="dropdown-search-input"
         :placeholder="placeholder"
+        :aria-label="placeholder"
         @input="handleInputChange"
         @keydown="handleKeydown"
       />

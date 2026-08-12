@@ -102,6 +102,7 @@ const isEmpty = computed(() => !loading.value && tickets.value.length === 0);
     <div class="filters">
       <FormField label="Тип обращения" name="ticket-subtype">
         <Select
+          id="ticket-subtype"
           :model-value="subtypeFilter"
           :options="subtypeOptions"
           @update:model-value="onSubtypeChange"
@@ -109,6 +110,7 @@ const isEmpty = computed(() => !loading.value && tickets.value.length === 0);
       </FormField>
       <FormField label="Статус" name="ticket-status">
         <Select
+          id="ticket-status"
           :model-value="statusFilter"
           :options="statusOptions"
           @update:model-value="onStatusChange"

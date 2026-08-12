@@ -71,7 +71,7 @@ internal sealed partial class DataSeeder
     private static readonly Guid SpecInventoryId = new("b1a5c0de-0000-4000-8000-000000000108");
 
     /// <summary>
-    /// The nine D&amp;D alignments, used both as the Мировоззрение list options
+    /// The nine D&amp;D alignments, used both as the "Мировоззрение" list options
     /// and as the stored value of a character's alignment attribute. Order is
     /// the classic law/chaos by good/evil grid, and callers index into it.
     /// </summary>
@@ -140,7 +140,7 @@ internal sealed partial class DataSeeder
     /// <summary>
     /// Writes <see cref="DbCharacterAttribute"/> rows for the legacy per-field
     /// character values against the pinned system schema. Empty/null values are
-    /// skipped (e.g. a Cyberpunk character with no alignment gets no Мировоззрение
+    /// skipped (e.g. a Cyberpunk character with no alignment gets no "Мировоззрение"
     /// row, mirroring the legacy games that had no alignment at all).
     /// </summary>
     private void AddLegacyCharacterAttributes(

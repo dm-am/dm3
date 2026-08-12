@@ -101,3 +101,24 @@ describe("the chat's search stands above the chat", () => {
     expect(stripControls).toEqual([]);
   });
 });
+
+/**
+ * The failed-load state, checked in the same place and for the same kind of
+ * reason: what makes an error look like an error here is which element the
+ * page reaches for. It used to reach for the empty state's own class, which
+ * carries neither a background nor a colour, so a dead feed and a refused one
+ * were the same picture.
+ */
+describe("a failed load reads as a failure, not as emptiness", () => {
+  it("hands the failure to the shared error box", () => {
+    const box = find("ErrorState");
+    expect(box, "the page renders ErrorState").toBeDefined();
+    expect(bindingsOf(box!.node)).toEqual(["else-if", "message", "retry"]);
+  });
+
+  it("leaves the empty-state class to the empty state alone", () => {
+    const empties = page.filter((e) => hasClass(e.node, "globalChat-empty"));
+    expect(empties).toHaveLength(1);
+    expect(empties[0].node.tag).toBe("secondary-text");
+  });
+});

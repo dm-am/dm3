@@ -142,7 +142,7 @@ export type UserRef = {
   username: Username;
   /** Last activity moment (UTC) - for online indicators */
   lastActivityUtc: string | null;
-  /** User role (for displaying role badges [А], [С], [М], [Н]) */
+  /** User role (for displaying role badges "[А]", "[С]", "[М]", "[Н]") */
   role: UserRole;
   /** Whether user is a newbie (less than 100 posts) - affects name color */
   isNewbie: boolean;

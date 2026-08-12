@@ -52,8 +52,8 @@ const {
             />
           </form-field>
           <div class="form-actions">
-            <Button :disabled="isSubmitting" @click="submitTestimonial">
-              {{ isSubmitting ? "Сохранение..." : "Добавить отзыв" }}
+            <Button :loading="isSubmitting" @click="submitTestimonial">
+              Добавить отзыв
             </Button>
           </div>
         </div>

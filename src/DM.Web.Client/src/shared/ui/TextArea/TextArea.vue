@@ -1,6 +1,7 @@
 <template>
   <div>
     <textarea
+      :id="id"
       ref="textareaRef"
       :value="modelValue"
       :disabled="disabled"
@@ -28,6 +29,8 @@ const props = defineProps<{
   placeholder?: string;
   /** Native maxlength; when set, shows a remaining-chars counter below the field */
   maxLength?: number;
+  /** Id for the <textarea>, so a caller's <label for> reaches it. */
+  id?: string;
 }>();
 const emit = defineEmits<{
   (e: "update:modelValue", value: string): void;

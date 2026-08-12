@@ -285,6 +285,7 @@ function accessLabel(access: RoomAccess): string {
                 </FormField>
                 <FormField label="Тип доступа">
                   <Select
+                    :id="`room-access-${room.id}`"
                     :model-value="draft.accessType"
                     :options="accessOptions"
                     @update:model-value="
@@ -371,6 +372,7 @@ function accessLabel(access: RoomAccess): string {
                       :model-value="grantCharacterId"
                       :options="characterOptions"
                       placeholder="Персонаж"
+                      aria-label="Персонаж"
                       @update:model-value="
                         (v) => (grantCharacterId = v as string)
                       "
@@ -378,6 +380,7 @@ function accessLabel(access: RoomAccess): string {
                     <Select
                       :model-value="grantPolicy"
                       :options="policyOptions"
+                      aria-label="Уровень доступа"
                       @update:model-value="
                         (v) => (grantPolicy = v as RoomAccessPolicy)
                       "
@@ -445,6 +448,7 @@ function accessLabel(access: RoomAccess): string {
         </FormField>
         <FormField label="Тип">
           <Select
+            id="new-room-type"
             :model-value="create.type"
             :options="typeOptions"
             @update:model-value="(v) => (create.type = v as RoomType)"
@@ -452,6 +456,7 @@ function accessLabel(access: RoomAccess): string {
         </FormField>
         <FormField label="Тип доступа">
           <Select
+            id="new-room-access"
             :model-value="create.accessType"
             :options="accessOptions"
             @update:model-value="

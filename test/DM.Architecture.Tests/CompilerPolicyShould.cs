@@ -105,8 +105,9 @@ public class CompilerPolicyShould
     {
         var props = File.ReadAllText(Path.Combine(RepositoryRoot, "Directory.Build.props"));
 
-        // Читается список подавленных, а не весь файл: обоснование решения живет
-        // рядом с ним комментарием, и упоминание кода в объяснении это не подавление.
+        // The list of suppressions is read rather than the whole file: the reason
+        // for a decision lives next to it as a comment, and a code named in an
+        // explanation is not a suppression.
         var suppressed = System.Text.RegularExpressions.Regex
             .Matches(props, @"<NoWarn>(?<codes>[^<]*)</NoWarn>")
             .SelectMany(m => m.Groups["codes"].Value.Split(';'))

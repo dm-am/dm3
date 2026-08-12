@@ -31,7 +31,7 @@ import { ErrorState } from "@/shared/ui/ErrorState";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { formatContestSeriesTitle } from "@/entities/achievement";
 import { toExternalHref, toInternalPath } from "@/shared/lib/utils/internalUrl";
-import { useGuardedRequest } from "@/shared/lib/composables";
+import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 
 const props = defineProps<{ username: string }>();
 
@@ -431,7 +431,7 @@ const hasAwards = computed(() => awards.value.length > 0);
     font-size: $secondary-font-size
     color: $tooltip-text
 
-  // Bracket motif ([Топик с работой]): muted brackets frame the link text,
+  // Bracket motif ("[Топик с работой]"): muted brackets frame the link text,
   // link itself in $tooltip-link (readable on the dark tooltip surface,
   // unlike $link) with no underline at rest, underline on hover only —
   // matches the site-wide bracket-counter identity (C1).

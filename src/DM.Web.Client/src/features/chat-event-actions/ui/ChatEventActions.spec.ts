@@ -38,7 +38,7 @@ vi.mock("@/entities/global-chat/api/globalChatApi", () => ({ default: api }));
 
 import { useGlobalChatStore } from "@/entities/global-chat";
 import { useAuthStore } from "@/shared/stores";
-import { useToast } from "@/shared/lib/composables";
+import { useToast } from "@/shared/lib/composables/useToast";
 import ChatEventActions from "./ChatEventActions.vue";
 
 const EVENT_ID = "e1";

@@ -78,6 +78,7 @@ function removeRow(key: number) {
         type="text"
         class="value-input"
         :placeholder="`Значение ${index + 1}`"
+        :aria-label="`Значение ${index + 1}`"
         @input="emitChange"
       />
       <input

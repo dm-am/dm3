@@ -26,7 +26,7 @@ import type { UserProfileNote } from "@/shared/api/models/community";
 import { useSubscriptionsStore } from "@/entities/subscription";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useToast } from "@/shared/lib/composables/useToast";
-import { useExpandableSection } from "@/shared/lib/composables";
+import { useExpandableSection } from "@/shared/lib/composables/useExpandableSection";
 import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
 import { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
@@ -633,6 +633,7 @@ watch(usernameParam, async () => {
           v-model="changeFormReason"
           class="change-form-input"
           placeholder="Причина смены (минимум 10 символов)"
+          aria-label="Причина смены имени"
           rows="3"
           :disabled="isChangeFormSubmitting"
         />
@@ -644,10 +645,11 @@ watch(usernameParam, async () => {
             Отмена
           </Button>
           <Button
+            :loading="isChangeFormSubmitting"
             :disabled="!canSubmitChangeForm"
             @click="submitUsernameChangeRequest"
           >
-            {{ isChangeFormSubmitting ? "Отправка..." : "Отправить" }}
+            Отправить
           </Button>
         </div>
       </div>
@@ -685,6 +687,7 @@ watch(usernameParam, async () => {
             class="status-input"
             :value="user.status ?? ''"
             placeholder="Введите статус"
+            aria-label="Статус"
             @input="
               onFieldUpdate('status', ($event.target as HTMLInputElement).value)
             "
@@ -782,10 +785,10 @@ watch(usernameParam, async () => {
             <template v-if="isEditMode">
               <Button
                 v-if="hasChanges"
-                :disabled="isSaving"
+                :loading="isSaving"
                 @click="saveChanges"
               >
-                {{ isSaving ? "Сохранение..." : "Сохранить" }}
+                Сохранить
               </Button>
               <Button :disabled="isSaving" @click="cancelEdit">Отмена</Button>
             </template>
@@ -932,8 +935,8 @@ watch(usernameParam, async () => {
               :max-height="300"
             />
             <div class="note-actions">
-              <Button :disabled="isNoteSaving" @click="saveNote">
-                {{ isNoteSaving ? "Сохранение..." : "Сохранить" }}
+              <Button :loading="isNoteSaving" @click="saveNote">
+                Сохранить
               </Button>
               <Button :disabled="isNoteSaving" @click="cancelEditNote">
                 Отмена
@@ -998,8 +1001,8 @@ watch(usernameParam, async () => {
         <span class="save-bar-status">
           {{ hasChanges ? "Несохраненные изменения" : "Режим редактирования" }}
         </span>
-        <Button v-if="hasChanges" :disabled="isSaving" @click="saveChanges">
-          {{ isSaving ? "Сохранение..." : "Сохранить" }}
+        <Button v-if="hasChanges" :loading="isSaving" @click="saveChanges">
+          Сохранить
         </Button>
         <Button :disabled="isSaving" @click="cancelEdit">
           {{ hasChanges ? "Отмена" : "Завершить" }}

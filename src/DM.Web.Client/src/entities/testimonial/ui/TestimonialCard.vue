@@ -15,7 +15,7 @@ import SvgIcon from "@/shared/ui/Icon/SvgIcon.vue";
 import {
   registerExpandable,
   notifyExpandableChanged,
-} from "@/shared/lib/composables";
+} from "@/shared/lib/composables/useExpandableRegistry";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
 import { formatDate, formatDateFull } from "@/shared/lib/utils/datetime";
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useTestimonialsFilter, SORT_OPTIONS } from "../model";
-import { useFilterSearch } from "@/shared/lib/composables";
+import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
 import { FilterSearchInput, SortButton } from "@/shared/ui/Filters";
 import type { SortOption } from "@/shared/ui/Filters";
 

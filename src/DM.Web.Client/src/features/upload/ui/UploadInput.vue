@@ -1,5 +1,11 @@
 <template>
-  <input type="file" class="upload-input" :accept="accept" @change="upload" />
+  <input
+    type="file"
+    class="upload-input"
+    :accept="accept"
+    aria-label="Выбрать файл"
+    @change="upload"
+  />
 </template>
 
 <script setup lang="ts">

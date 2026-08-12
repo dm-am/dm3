@@ -180,10 +180,10 @@ describe("useMessagingStore, sending a message", () => {
       return { promise, resolve };
     }
 
-    // Два быстрых перехода между перепиской A и B кладут на провод по два
-    // запроса. Ответ A, пришедший позже ответа B, перезаписывал состояние:
-    // читатель видел переписку, из которой уже ушел, а отметка о прочтении для
-    // нее была отправлена.
+    // Two quick switches between chat A and chat B put two requests on the
+    // wire. The answer for A, arriving after the answer for B, used to
+    // overwrite the state: the reader saw a chat they had already left, and the
+    // read receipt for that one had been sent.
     it("оставляет ту переписку, которую выбрали последней", async () => {
       const older = deferred<unknown>();
       const newer = deferred<unknown>();

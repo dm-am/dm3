@@ -143,16 +143,16 @@ export const icons = {
 
   /** Lock (closed topic) */
   /**
-   * Замок закрытой комнаты, силуэт.
+   * The lock of a closed room, a silhouette.
    *
-   * Контур снят из глифа U+E02E шрифта Kontur-Iconic eco, который старый
-   * сайт подключает под именем DM Iconic. Шрифт не подключается: форма
-   * лежит здесь путем и живет по правилам остальных иконок.
+   * The outline is taken from glyph U+E02E of the Kontur-Iconic eco font, which
+   * the old site loads under the name DM Iconic. The font itself is not loaded:
+   * the shape lives here as a path and follows the rules of the other icons.
    *
-   * Отдельно от locked, потому что смысл другой: locked это "закрыто"
-   * у топика и приватное поле анкеты, а это комната с ограниченным
-   * доступом на чтение, и она остается закрытой даже для того, у кого
-   * доступ есть. Разницу несет цвет, не форма.
+   * Kept apart from locked because it means something else: locked is "закрыто"
+   * on a topic and on a private field of a character sheet, while this one is a
+   * room with restricted read access, and it stays closed even for someone who
+   * has that access. The difference is carried by colour, not by shape.
    */
   roomLocked: {
     viewBox: "120 360 1080 1320",

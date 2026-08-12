@@ -99,7 +99,7 @@ const blockOldest = computed(() =>
   Math.max(minY.value, blockNewest.value - (YEARS_PER_BLOCK - 1)),
 );
 // Ascending within the block (2015, 2016, … 2026) — the same reading
-// order as the month grid (Янв → Дек) and as the block label.
+// order as the month grid ("Янв" → "Дек") and as the block label.
 const years = computed(() => {
   const arr: number[] = [];
   for (let y = blockOldest.value; y <= blockNewest.value; y++) arr.push(y);

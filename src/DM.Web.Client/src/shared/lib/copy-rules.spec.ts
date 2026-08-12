@@ -21,10 +21,11 @@
  * 4. CODE_STYLE spells the letter at U+0451 without its dots and reserves the
  *    typographic quotes for the motto. Both rules were manual, and the
  *    convention said so in as many words.
- * 5. The forum entity is a "топик". A viewer created a топик, opened its edit
- *    form and edited a тема, then deleted a тема. The word "тема" means other
- *    things on the site (the colour theme, the subject of a ticket), so this
- *    one is checked where the forum lives rather than everywhere.
+ * 5. The forum entity is a "топик". A viewer created a "топик", opened its
+ *    edit form and edited a "тема", then deleted a "тема". The word "тема"
+ *    means other things on the site (the colour theme, the subject of a
+ *    ticket), so this one is checked where the forum lives rather than
+ *    everywhere.
  * 6. The em dash is not forbidden — Russian writes an omitted copula with one,
  *    and a range needs a sign between its ends — but it is spent against a
  *    budget: a file, a count, and the argument for that count. A dash in a
@@ -134,7 +135,7 @@ const NEIGHBOURHOOD = 60;
  * conversation, a letter, a ticket -- or the colour scheme, and none of them is
  * the entity. They are listed because they do stand next to the forum: the
  * rules page writes "уход от темы в служебных разделах форума", which is about
- * staying on subject and not about a топик.
+ * staying on subject and not about a "топик".
  */
 const OTHER_SENSES: RegExp[] = [
   // The subject at hand: "уход от темы", "не по теме", "на эту тему".

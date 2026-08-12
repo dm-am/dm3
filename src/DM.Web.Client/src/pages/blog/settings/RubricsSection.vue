@@ -76,6 +76,7 @@ async function confirmDelete() {
         v-model="newTitle"
         type="text"
         placeholder="Название рубрики"
+        aria-label="Название рубрики"
         maxlength="100"
         @keydown.enter.prevent="create"
       />

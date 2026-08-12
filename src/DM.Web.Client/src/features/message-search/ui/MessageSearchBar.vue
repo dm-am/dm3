@@ -24,7 +24,7 @@ import { ref } from "vue";
 import { storeToRefs } from "pinia";
 import { vClickOutside } from "@/shared/directives";
 import { FilterSearchInput } from "@/shared/ui/Filters";
-import { useFilterSearch } from "@/shared/lib/composables";
+import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { useAuthStore } from "@/shared/stores";
 import { useMessageSearchStore } from "../model/searchStore";
@@ -176,14 +176,13 @@ defineExpose({ focus });
           <secondary-text v-if="error" class="load-more-error">
             {{ error }}
           </secondary-text>
-          <button
+          <Button
             type="button"
-            class="load-more-button"
-            :disabled="loadingMore"
+            :loading="loadingMore"
             @click="store.loadMore()"
           >
-            {{ loadingMore ? "Загрузка..." : "Показать еще" }}
-          </button>
+            Показать еще
+          </Button>
         </div>
       </template>
     </div>
@@ -273,7 +272,4 @@ defineExpose({ focus });
 
 .load-more-error
   color: $accent-red
-
-.load-more-button
-  +button
 </style>

@@ -4,16 +4,16 @@
  * Embedded inline in game creation and in dedicated schema/settings pages.
  *
  * Composition (doc 4.2.2.10 / 4.2.3.5.12):
- *  - copy-existing-schema picker (Select of public + own schemas) + Скопировать
+ *  - copy-existing-schema picker (Select of public + own schemas) + "Скопировать"
  *    (client-side copy of specs into the draft; persisted only on Save; copied
  *    specs receive fresh ids so a save never re-uses the source schema's ids)
  *  - the attribute table (row hover, empty-state) with per-row pencil/trash,
- *    Приватность / Обязательность checkboxes and a single-select Дескриптор
+ *    "Приватность" / "Обязательность" checkboxes and a single-select "Дескриптор"
  *    radio (hidden for BbCode rows)
  *  - a full-width "+ Новый атрибут" row-styled add button
  *  - a region that shows either the inline attribute edit form OR the
  *    character-creation preview (the edit form replaces the preview)
- *  - Сохранить / Отмена / Превью actions, with a data-loss confirm modal
+ *  - "Сохранить" / "Отмена" / "Превью" actions, with a data-loss confirm modal
  *    when the game already has characters
  */
 import { ref, computed, watch, nextTick, onMounted } from "vue";
@@ -46,10 +46,10 @@ const props = withDefaults(
      * data-loss confirmation because schema edits can invalidate sheets.
      */
     hasCharacters?: boolean;
-    /** Show the Сохранить/Отмена/Превью action bar (hidden when the host
-     * page drives persistence, e.g. inline in game creation). */
+    /** Show the "Сохранить" / "Отмена" / "Превью" action bar (hidden when the
+     * host page drives persistence, e.g. inline in game creation). */
     showActions?: boolean;
-    /** External save-in-flight indicator for the Сохранить button. */
+    /** External save-in-flight indicator for the "Сохранить" button. */
     saving?: boolean;
   }>(),
   {
@@ -222,6 +222,7 @@ defineExpose({ validate, requestSave });
           v-model="selectedCopyId"
           :options="copyOptions"
           placeholder="Скопировать существующую схему"
+          aria-label="Скопировать существующую схему"
         />
       </div>
       <Button type="button" :disabled="!selectedCopyId" @click="copySchema">
@@ -236,6 +237,7 @@ defineExpose({ validate, requestSave });
       :errors="titleError ? [titleError] : []"
     >
       <input
+        id="schema-title"
         v-model="draft.title"
         type="text"
         placeholder="Например, D&D 5e"
@@ -246,6 +248,7 @@ defineExpose({ validate, requestSave });
 
     <form-field label="Доступность">
       <Select
+        id="schema-type"
         :model-value="draft.type"
         :options="schemaTypeOptions"
         @update:model-value="draft.type = $event as AttributeSchemaType"

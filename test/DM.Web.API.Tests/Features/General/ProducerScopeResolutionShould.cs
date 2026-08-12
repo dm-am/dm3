@@ -56,9 +56,10 @@ public class ProducerScopeResolutionShould : UnitTestBase, IDisposable
     [InlineData(typeof(IMailSender))]
     public void RegisterProducersAsDisposableAndScopedToTheLifetimeScope(Type service)
     {
-        // Спрашиваем ту регистрацию, которую реестр отдаст на разрешение, а не
-        // последнюю в перечислении: blanket-скан регистрирует эти же типы, и
-        // порядок в Registrations не совпадает с порядком регистрации.
+        // Ask for the registration the registry hands out on resolution rather
+        // than the last one in the enumeration: the blanket scan registers these
+        // same types, and the order in Registrations is not the order they were
+        // registered in.
         _container.ComponentRegistry
             .TryGetRegistration(new TypedService(service), out var registration)
             .Should().BeTrue($"{service.Name} must be registered");

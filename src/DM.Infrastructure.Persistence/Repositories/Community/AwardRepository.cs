@@ -143,8 +143,8 @@ internal class AwardRepository : IAwardRepository
     public async Task<IReadOnlyCollection<UserAward>> GetUserAwardsAsync(Guid userId, CancellationToken ct = default) =>
         // Sort oldest first — the older the award, the earlier it appears. Ties
         // on the same date (a placement + a special award from the same contest)
-        // break by award type (SortOrder ASC: 1st → 2nd → 3rd → Народное →
-        // Критик → Угадайка). Non-contest honours dated to the user's early
+        // break by award type (SortOrder ASC: 1st → 2nd → 3rd → "Народное" →
+        // "Критик" → "Угадайка"). Non-contest honours dated to the user's early
         // years (the honorary goblin) therefore lead the list.
         await _db.UserAwards
             .AsNoTracking()

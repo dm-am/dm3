@@ -128,8 +128,28 @@ module.exports = {
     "vuejs-accessibility/aria-role": "error",
     "vuejs-accessibility/aria-unsupported-elements": "error",
     "vuejs-accessibility/click-events-have-key-events": "error",
+    // A field the template ties to no name at all. An `id` satisfies it,
+    // because the `for` at the other end is what label-has-for checks; an
+    // `aria-label` satisfies it where the field has no caption of its own to
+    // point at — a search box, or one row of a group that a single caption
+    // names as a whole.
+    //
+    // The `Select` component is read by this rule as the native `select`: the
+    // plugin kebab-cases a tag before matching it, and both spellings come out
+    // the same word. So every use of it names its control at the call site,
+    // which is also the only way a caller's `<label for>` reaches the native
+    // element under that component's wrapper div.
+    "vuejs-accessibility/form-control-has-label": "error",
     "vuejs-accessibility/heading-has-content": "error",
     "vuejs-accessibility/iframe-has-title": "error",
+    // `some`, not the plugin's default `every`. `every` demands that a label
+    // both wrap its field and carry a `for`, which is a shape this tree never
+    // writes and FormField cannot produce: its label sits outside the row it
+    // names, and the wiring is done after mount.
+    "vuejs-accessibility/label-has-for": [
+      "error",
+      { required: { some: ["nesting", "id"] } },
+    ],
     "vuejs-accessibility/media-has-caption": "error",
     "vuejs-accessibility/no-access-key": "error",
     "vuejs-accessibility/no-aria-hidden-on-focusable": "error",
@@ -142,29 +162,6 @@ module.exports = {
 
     // Held back, and why. Each of these was run over the whole tree before
     // being left out, and the count is what it produced.
-    //
-    // label-has-for (76 in 31 files) and form-control-has-label (83 in 47) read
-    // the association between a label and its control out of the TEMPLATE.
-    // Where a form is built out of FormField (shared/ui/Form) it is not written
-    // there: the component generates the id, finds the single labelable control
-    // of its row after mount and wires `for`, `aria-describedby` and
-    // `aria-invalid` onto it, which is what lets a caller drop any control into
-    // the slot without repeating the plumbing. That part is covered by
-    // FormField.spec.ts and the rules cannot see it.
-    //
-    // That is not most of what they report, and saying it was is how these two
-    // came to be written off as false alarms. Measured over the tree: 56 of the
-    // 76 and 31 of the 83 are in files that do not use FormField at all — a
-    // <label> with no `for` beside an <input> with no id, in the award series
-    // screen, the poll editor, the game room, the game post, both range pickers
-    // and the topic view. Those are the defect the rules exist for, they are
-    // invisible to CI today, and a screen reader reaching one of them announces
-    // an unnamed field.
-    //
-    // Held back for the same reason as the two below, then: a red build nobody
-    // can make green is how a11y linting gets switched off. The way in is the
-    // primitives first (PasswordInput, TextArea, Select), then the seven screens
-    // above, then the rule.
     //
     // interactive-supports-focus (2) wants every role="option" focusable. Both
     // sites are correct as they stand: the autocomplete keeps focus on the

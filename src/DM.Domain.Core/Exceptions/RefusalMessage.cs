@@ -358,6 +358,6 @@ public static class RefusalMessage
     public const string PasswordBreached =
         "Этот пароль скомпрометирован утечкой, выберите другой";
 
-    /// <summary>Голос в этом опросе уже отдан</summary>
+    /// <summary>The vote in this poll has already been cast</summary>
     public const string AlreadyVoted = "Вы уже голосовали в этом опросе";
 }

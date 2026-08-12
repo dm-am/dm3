@@ -90,7 +90,7 @@ internal sealed partial class DataSeeder
             // === Edge cases: cyrillic ===
             new { Login = "Игрок", Email = "igrok@test.local", Role = UserRole.RegularUser }, // cyrillic only
             new { Login = "Игрок_Один", Email = "igrok1@test.local", Role = UserRole.RegularUser }, // cyrillic + underscore
-            new { Login = "Тест Елки", Email = "yolka@test.local", Role = UserRole.RegularUser }, // cyrillic + space + Е
+            new { Login = "Тест Елки", Email = "yolka@test.local", Role = UserRole.RegularUser }, // cyrillic + space + "Е"
 
             // === Special states ===
             new { Login = "TestHonorary", Email = "honorary@test.local", Role = UserRole.RegularUser }, // holds the "Почетный гоблин" award

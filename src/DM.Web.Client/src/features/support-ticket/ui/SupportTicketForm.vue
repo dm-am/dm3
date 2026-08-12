@@ -258,7 +258,12 @@ const reset = () => {
     @submit="submit"
   >
     <form-field :label="copy.subtypeLabel" name="subtype">
-      <Select v-model="subtype" :options="subtypeOptions" :disabled="loading" />
+      <Select
+        id="subtype"
+        v-model="subtype"
+        :options="subtypeOptions"
+        :disabled="loading"
+      />
     </form-field>
 
     <form-field

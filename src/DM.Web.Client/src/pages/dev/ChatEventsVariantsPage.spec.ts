@@ -23,7 +23,7 @@
  */
 import { describe, it, expect, afterEach } from "vitest";
 import { mount, enableAutoUnmount, type VueWrapper } from "@vue/test-utils";
-import { expandAllExpandables } from "@/shared/lib/composables";
+import { expandAll as expandAllExpandables } from "@/shared/lib/composables/useExpandableRegistry";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import ChatEventsVariantsPage from "./ChatEventsVariantsPage.vue";

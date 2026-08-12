@@ -333,9 +333,7 @@ onMounted(fetchEntries);
                 >
                   Отмена
                 </button>
-                <button class="save-btn" :disabled="saving" @click="saveEntry">
-                  {{ saving ? "Сохранение..." : "Сохранить" }}
-                </button>
+                <Button :loading="saving" @click="saveEntry">Сохранить</Button>
               </div>
             </div>
           </div>
@@ -573,9 +571,6 @@ onMounted(fetchEntries);
   margin-top: $medium
 
 .cancel-btn
-  +button
-
-.save-btn
   +button
 
 .content-header

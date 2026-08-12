@@ -79,7 +79,7 @@ function handleClear() {
 <template>
   <div class="dropdown-date-range">
     <div class="date-range-row">
-      <label class="date-label">{{ fromLabel }}</label>
+      <span class="date-label">{{ fromLabel }}</span>
       <DateInput
         class="date-input"
         :model-value="fromInput || null"
@@ -89,7 +89,7 @@ function handleClear() {
       />
     </div>
     <div class="date-range-row">
-      <label class="date-label">{{ toLabel }}</label>
+      <span class="date-label">{{ toLabel }}</span>
       <DateInput
         class="date-input"
         :model-value="toInput || null"

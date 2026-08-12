@@ -257,17 +257,17 @@ internal sealed partial class DataSeeder
             (readers: 3, pcLimit: 4, activeChars: 0, comments: 5, posts: 25),
             (readers: 0, pcLimit: 5, activeChars: 0, comments: 3, posts: 15),
             // Additional games for remaining tags (11) - varied spread
-            (readers: 12, pcLimit: (int?)null, activeChars: 0, comments: 10, posts: 30), // Сотворение Миров
-            (readers: 6, pcLimit: 4, activeChars: 0, comments: 6, posts: 20), // Апокалипсис: День Ноль
-            (readers: 18, pcLimit: (int?)null, activeChars: 0, comments: 15, posts: 0), // Клуб Анонимных Убийц (Mafia)
-            (readers: 8, pcLimit: 5, activeChars: 0, comments: 8, posts: 35), // Безумные Приключения
-            (readers: 4, pcLimit: 4, activeChars: 0, comments: 5, posts: 25), // Эра Водолея: Пробуждение
-            (readers: 2, pcLimit: 5, activeChars: 0, comments: 4, posts: 20), // FUDGE: Универсум
-            (readers: 15, pcLimit: 5, activeChars: 0, comments: 12, posts: 60), // Паровая Империя
-            (readers: 3, pcLimit: 4, activeChars: 0, comments: 5, posts: 25), // За Гранью Реальности
-            (readers: 5, pcLimit: 4, activeChars: 0, comments: 6, posts: 30), // Black Bird
-            (readers: 1, pcLimit: 4, activeChars: 0, comments: 3, posts: 15), // Темные Страсти
-            (readers: 0, pcLimit: 3, activeChars: 0, comments: 2, posts: 12), // Кровавый Карнавал
+            (readers: 12, pcLimit: (int?)null, activeChars: 0, comments: 10, posts: 30), // "Сотворение Миров"
+            (readers: 6, pcLimit: 4, activeChars: 0, comments: 6, posts: 20), // "Апокалипсис: День Ноль"
+            (readers: 18, pcLimit: (int?)null, activeChars: 0, comments: 15, posts: 0), // "Клуб Анонимных Убийц" (Mafia)
+            (readers: 8, pcLimit: 5, activeChars: 0, comments: 8, posts: 35), // "Безумные Приключения"
+            (readers: 4, pcLimit: 4, activeChars: 0, comments: 5, posts: 25), // "Эра Водолея: Пробуждение"
+            (readers: 2, pcLimit: 5, activeChars: 0, comments: 4, posts: 20), // "FUDGE: Универсум"
+            (readers: 15, pcLimit: 5, activeChars: 0, comments: 12, posts: 60), // "Паровая Империя"
+            (readers: 3, pcLimit: 4, activeChars: 0, comments: 5, posts: 25), // "За Гранью Реальности"
+            (readers: 5, pcLimit: 4, activeChars: 0, comments: 6, posts: 30), // "Black Bird"
+            (readers: 1, pcLimit: 4, activeChars: 0, comments: 3, posts: 15), // "Темные Страсти"
+            (readers: 0, pcLimit: 3, activeChars: 0, comments: 2, posts: 12), // "Кровавый Карнавал"
         };
 
         var createdLargePost = false; // Track if we've used the large Diopside post

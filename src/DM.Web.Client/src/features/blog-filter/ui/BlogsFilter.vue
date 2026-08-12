@@ -3,7 +3,8 @@ import { computed } from "vue";
 import { vClickOutside } from "@/shared/directives";
 import { useBlogsFilter, STATUS_OPTIONS, SORT_OPTIONS } from "../model";
 import type { StatusFilter } from "../model";
-import { useFilterSearch, useFilterDropdown } from "@/shared/lib/composables";
+import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
+import { useFilterDropdown } from "@/shared/lib/composables/useFilterDropdown";
 import { formatDateForDisplay } from "@/shared/lib/filters";
 import {
   FilterSearchInput,

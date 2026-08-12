@@ -102,6 +102,7 @@ async function cancel(invitation: Invitation) {
       <Select
         :model-value="kind"
         :options="kindOptions"
+        aria-label="Тип приглашения"
         @update:model-value="(v) => (kind = v as 'player' | 'reader')"
       />
       <Button
