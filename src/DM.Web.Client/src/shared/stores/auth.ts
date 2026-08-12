@@ -12,7 +12,6 @@
  */
 import { defineStore } from "pinia";
 import type { User } from "@/shared/api/models/common/user";
-import { Theme } from "@/shared/api/models/personal";
 import { ref, computed, onScopeDispose } from "vue";
 import { useUiStore } from "./ui";
 
@@ -37,18 +36,25 @@ export const useAuthStore = defineStore("auth", () => {
   const user = ref<User | null>(readStoredUser());
 
   function updateUser(newUser: User | null) {
-    const { updateTheme } = useUiStore();
-
     user.value = newUser;
     if (newUser === null) localStorage.removeItem(userKey);
     else localStorage.setItem(userKey, JSON.stringify(newUser));
-    updateTheme(newUser?.settings?.theme ?? Theme.Light);
+    // The account offers a theme, it does not dictate one: the theme belongs to
+    // the device, so the account value is taken only where the device has never
+    // chosen. Every appearance of a viewer used to arrive here with the account
+    // theme, and the ui store persists what it is handed, so a switch made in
+    // the settings panel survived neither a reload nor a saved profile.
+    //
+    // Signing out says nothing about the theme and no longer touches it. It
+    // used to force Light through here, and since the ui store persists what it
+    // is handed, one sign-out overwrote the choice of the device and left the
+    // system preference out of the answer for good.
+    if (newUser) useUiStore().adoptAccountTheme(newUser.settings?.theme);
   }
 
-  // Initialize theme immediately based on stored user
+  // A first sign-in on this device starts from the theme saved on the account.
   if (user.value) {
-    const { updateTheme } = useUiStore();
-    updateTheme(user.value.settings?.theme ?? Theme.Light);
+    useUiStore().adoptAccountTheme(user.value.settings?.theme);
   }
 
   const isAuthenticated = computed(() => user.value !== null);
@@ -58,13 +64,10 @@ export const useAuthStore = defineStore("auth", () => {
     const onStorage = (e: StorageEvent) => {
       if (e.key === userKey && !e.newValue) {
         user.value = null;
-        const { updateTheme } = useUiStore();
-        updateTheme(Theme.Light);
       } else if (e.key === userKey && e.newValue) {
         try {
           user.value = JSON.parse(e.newValue);
-          const { updateTheme } = useUiStore();
-          updateTheme(user.value?.settings?.theme ?? Theme.Light);
+          useUiStore().adoptAccountTheme(user.value?.settings?.theme);
         } catch {
           // Ignore malformed JSON
         }

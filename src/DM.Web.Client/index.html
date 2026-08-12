@@ -56,7 +56,8 @@
       // getInitialTheme() logic in shared/stores/ui.ts (localStorage key
       // "dm_theme" with values "Light"/"Dark", then prefers-color-scheme, then
       // Light). App.vue swaps these classes (and the theme-color meta below)
-      // reactively afterwards.
+      // reactively afterwards. Kept in step with the store by
+      // src/shared/stores/themeBoot.spec.ts.
       // Hex values mirror --bg-page in assets/styles/ThemeVariables.css
       // (Light: #fff, Dark: #222222).
       (function () {

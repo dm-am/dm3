@@ -5,6 +5,7 @@
     <div class="settings-content">
       <FormField label="Цветовая схема">
         <Select
+          id="account-theme"
           :model-value="settingsForm.theme"
           :options="themeOptions"
           @update:model-value="(v) => (settingsForm.theme = v as Theme)"
@@ -16,6 +17,7 @@
         <div class="pagination-grid">
           <FormField label="Постов на странице">
             <Select
+              id="account-posts-per-page"
               :model-value="String(settingsForm.paging.postsPerPage)"
               :options="pagingSelectOptions"
               @update:model-value="
@@ -26,6 +28,7 @@
 
           <FormField label="Комментариев на странице">
             <Select
+              id="account-comments-per-page"
               :model-value="String(settingsForm.paging.commentsPerPage)"
               :options="pagingSelectOptions"
               @update:model-value="
@@ -36,6 +39,7 @@
 
           <FormField label="Тем на странице">
             <Select
+              id="account-topics-per-page"
               :model-value="String(settingsForm.paging.topicsPerPage)"
               :options="pagingSelectOptions"
               @update:model-value="
@@ -46,6 +50,7 @@
 
           <FormField label="Сообщений на странице">
             <Select
+              id="account-messages-per-page"
               :model-value="String(settingsForm.paging.messagesPerPage)"
               :options="pagingSelectOptions"
               @update:model-value="
@@ -56,6 +61,7 @@
 
           <FormField label="Сущностей на странице">
             <Select
+              id="account-entities-per-page"
               :model-value="String(settingsForm.paging.entitiesPerPage)"
               :options="pagingSelectOptions"
               @update:model-value="
@@ -132,9 +138,15 @@ function defaultPaging(): Paging {
   };
 }
 
-// Settings form
+// Settings form.
+//
+// Its theme is the one this device is in, not the one stored on the account:
+// the theme belongs to the device and the switch in the settings panel writes
+// it there. A select filled from the account would hand the account value back
+// over that choice the next time any field of this form is saved — pagination
+// included, since the form is saved by one button.
 const settingsForm = ref({
-  theme: Theme.Light as Theme,
+  theme: uiStore.theme,
   paging: defaultPaging(),
 });
 
@@ -144,7 +156,7 @@ watch(
   (currentUser) => {
     if (currentUser) {
       settingsForm.value = {
-        theme: currentUser.settings?.theme || Theme.Light,
+        theme: uiStore.theme,
         paging: currentUser.settings?.paging || defaultPaging(),
       };
     }

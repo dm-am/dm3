@@ -24,14 +24,30 @@ function isMessageLayout(value: unknown): value is MessageLayout {
 }
 
 /**
+ * The theme this device has chosen, or null while it has none.
+ *
+ * The theme belongs to the device and not to the account, so this key holds the
+ * whole record of the choice. The anti-FOUC script of index.html reads the same
+ * key before the bundle loads; themeBoot.spec.ts is what holds the two in step.
+ */
+function readStoredTheme(): Theme | null {
+  const stored = localStorage.getItem(THEME_STORAGE_KEY);
+  return stored === Theme.Dark || stored === Theme.Light ? stored : null;
+}
+
+function storeTheme(theme: Theme): void {
+  localStorage.setItem(THEME_STORAGE_KEY, theme);
+}
+
+/**
  * Determines the initial theme:
  * 1. From localStorage (if the user has chosen before)
  * 2. From prefers-color-scheme (OS system settings)
  * 3. Fallback to Light
  */
 function getInitialTheme(): Theme {
-  const stored = localStorage.getItem(THEME_STORAGE_KEY);
-  if (stored === Theme.Dark || stored === Theme.Light) {
+  const stored = readStoredTheme();
+  if (stored) {
     return stored;
   }
 
@@ -76,7 +92,7 @@ export const useUiStore = defineStore("ui", () => {
 
   // Persist to localStorage on change
   watch(theme, (newTheme) => {
-    localStorage.setItem(THEME_STORAGE_KEY, newTheme);
+    storeTheme(newTheme);
   });
 
   watch(messageLayout, (newValue) => {
@@ -86,6 +102,24 @@ export const useUiStore = defineStore("ui", () => {
   const updateTheme = (newTheme: Theme) => (theme.value = newTheme);
   const toggleTheme = () => {
     updateTheme(theme.value === Theme.Dark ? Theme.Light : Theme.Dark);
+  };
+
+  /**
+   * The theme saved on the account, offered as a starting value and nothing
+   * more.
+   *
+   * The theme belongs to the device: one that has already chosen keeps its
+   * choice, so the account fills in only a device that has none — the first
+   * sign-in here and never again. The value is recorded on the spot instead of
+   * being left to the watcher above, which fires on a change and would write
+   * nothing when the account offers the theme already on screen: unrecorded,
+   * the device stays unchosen and takes the account theme again at every later
+   * sign-in.
+   */
+  const adoptAccountTheme = (accountTheme: Theme | undefined) => {
+    if (!accountTheme || readStoredTheme()) return;
+    updateTheme(accountTheme);
+    storeTheme(accountTheme);
   };
 
   const isCompactLayout = computed(() => messageLayout.value === "compact");
@@ -98,6 +132,7 @@ export const useUiStore = defineStore("ui", () => {
     theme,
     updateTheme,
     toggleTheme,
+    adoptAccountTheme,
     messageLayout,
     isCompactLayout,
     setMessageLayout,
