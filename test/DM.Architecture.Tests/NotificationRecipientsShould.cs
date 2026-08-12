@@ -37,7 +37,7 @@ public class NotificationRecipientsShould
         "src/DM.Domain.Personal/Features/Notifications/NotificationService.cs";
 
     private const string Dispatcher =
-        "src/DM.Workers.NotificationDispatcher/Implementation/NotificationProcessor.cs";
+        "src/DM.Workers.NotificationDispatcher/Dispatching/NotificationProcessor.cs";
 
     [Fact]
     public void BeFilteredByThePersonalBlacklistWhileTheyAreCreated()

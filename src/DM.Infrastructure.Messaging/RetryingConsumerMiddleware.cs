@@ -26,7 +26,7 @@ namespace DM.Infrastructure.Messaging;
 /// graph answers for one - and it would sit there under
 /// <see cref="IConsumerMiddleware"/> until something enumerated the interface. So the
 /// one way to an instance is
-/// <see cref="MessageQueuingConfigurationExtensions.AddDmRetryingConsumer"/>, which is
+/// <see cref="MessagingConfigurationExtensions.AddDmRetryingConsumer"/>, which is
 /// where a host names its queue.
 /// </remarks>
 public sealed class RetryingConsumerMiddleware : IConsumerMiddleware

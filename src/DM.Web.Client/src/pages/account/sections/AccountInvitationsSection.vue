@@ -158,7 +158,6 @@ async function reject(invitationId: string) {
   border-radius: $border-radius
 
 .loading-state
-  color: $text-muted
   padding: $medium
 
 .invitations-list

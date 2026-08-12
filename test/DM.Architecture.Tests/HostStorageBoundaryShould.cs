@@ -68,8 +68,8 @@ public class HostStorageBoundaryShould
     /// </remarks>
     private static readonly string[] MongoBaseOutsidePersistence =
     [
-        "DM.Workers.NotificationDispatcher.Implementation.Bot.NotificationBotSender",
-        "DM.Workers.NotificationDispatcher.Implementation.Email.NotificationEmailSender",
+        "DM.Workers.NotificationDispatcher.Bot.NotificationBotSender",
+        "DM.Workers.NotificationDispatcher.Email.NotificationEmailSender",
     ];
 
     private static bool IsHost(IType type) =>

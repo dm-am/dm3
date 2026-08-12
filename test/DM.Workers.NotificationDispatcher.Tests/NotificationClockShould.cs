@@ -1,9 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
-using DM.Workers.NotificationDispatcher.Implementation.Notifiers;
-using DM.Workers.NotificationDispatcher.Implementation.Notifiers.Game;
-using DM.Workers.NotificationDispatcher.Implementation.Notifiers.Security;
+using DM.Workers.NotificationDispatcher.Notifiers;
+using DM.Workers.NotificationDispatcher.Notifiers.Game;
+using DM.Workers.NotificationDispatcher.Notifiers.Security;
 using FluentAssertions;
 using Xunit;
 

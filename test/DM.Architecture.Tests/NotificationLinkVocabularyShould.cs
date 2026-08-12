@@ -35,7 +35,7 @@ namespace DM.Architecture.Tests;
 public class NotificationLinkVocabularyShould
 {
     private const string LinkType =
-        "DM.Workers.NotificationDispatcher.Implementation.NotificationLink";
+        "DM.Workers.NotificationDispatcher.Dispatching.NotificationLink";
 
     /// <summary>The client half of the table.</summary>
     private static readonly string ClientLinkTable = Path.Combine(

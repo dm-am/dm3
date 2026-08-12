@@ -46,7 +46,7 @@ public class ProducerScopeResolutionShould : UnitTestBase, IDisposable
     public ProducerScopeResolutionShould()
     {
         var builder = new ContainerBuilder();
-        builder.RegisterModule<MessageQueuingModule>();
+        builder.RegisterModule<MessagingModule>();
         builder.RegisterModule<MailModule>();
         _container = builder.Build();
     }

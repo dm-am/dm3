@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Xunit;
+using DM.Workers.Mail.Sending;
 
 namespace DM.Workers.Mail.Tests;
 

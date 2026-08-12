@@ -224,7 +224,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .AsSelf()
             .AsImplementedInterfaces();
 
-        builder.RegisterModuleOnce<MessageQueuingModule>();
+        builder.RegisterModuleOnce<MessagingModule>();
 
         builder.RegisterModuleOnce<PersistenceModule>();
         builder.RegisterModuleOnce<MailModule>();

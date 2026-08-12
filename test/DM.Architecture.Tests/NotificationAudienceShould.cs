@@ -30,7 +30,7 @@ namespace DM.Architecture.Tests;
 public class NotificationAudienceShould
 {
     private const string NotifiersDirectory =
-        "src/DM.Workers.NotificationDispatcher/Implementation/Notifiers";
+        "src/DM.Workers.NotificationDispatcher/Notifiers";
 
     /// <summary>Assignment of an outgoing event type inside a CreateNotification.</summary>
     private const string RenamesTheEvent = "EventType = EventType.";

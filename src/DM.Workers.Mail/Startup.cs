@@ -71,7 +71,7 @@ public class Startup
         builder.RegisterDefaultTypes();
 
         builder.RegisterModuleOnce<CoreModule>();
-        builder.RegisterModuleOnce<MessageQueuingModule>();
+        builder.RegisterModuleOnce<MessagingModule>();
     }
 
     /// <summary>

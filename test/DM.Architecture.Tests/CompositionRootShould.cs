@@ -240,7 +240,7 @@ public class CompositionRootShould
         {
             ["DM.Workers.NotificationDispatcher"] =
                 typeof(DM.Workers.NotificationDispatcher.Startup).Assembly
-                    .GetType("DM.Workers.NotificationDispatcher.Implementation.NotificationProcessor")!,
+                    .GetType("DM.Workers.NotificationDispatcher.Dispatching.NotificationProcessor")!,
         };
 
         foreach (var (host, type) in entryPoints)

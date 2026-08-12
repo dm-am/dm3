@@ -65,7 +65,7 @@ public class InterfaceVocabularyShould
     /// The rule used to read "check the files whose path names the forum", which
     /// is a rule about where the word was last caught rather than about the word.
     /// The dispatcher's dictionary of notification headings
-    /// (DM.Workers.NotificationDispatcher/Implementation/NotificationText.cs) is
+    /// (DM.Workers.NotificationDispatcher/Dispatching/NotificationText.cs) is
     /// named after neither a topic nor a forum, so the line a reader sees over
     /// every forum notification was outside it; so were four passages of
     /// AUTHORIZATION.md that call the entity by the retired word.

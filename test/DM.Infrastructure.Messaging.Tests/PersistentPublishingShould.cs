@@ -93,7 +93,7 @@ public class PersistentPublishingShould
             "a host that registers the client itself gets none of the producer " +
             "defaults, and everything it publishes goes back to being lost when the " +
             "broker restarts");
-        callers[0].Should().Be("MessageQueuingConfigurationExtensions.cs");
+        callers[0].Should().Be("MessagingConfigurationExtensions.cs");
     }
 
     /// <summary>

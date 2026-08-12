@@ -1,10 +1,11 @@
 using System.Collections.Generic;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
-using DM.Workers.NotificationDispatcher.Implementation.Bot;
-using DM.Workers.NotificationDispatcher.Implementation.Email;
+using DM.Workers.NotificationDispatcher.Bot;
+using DM.Workers.NotificationDispatcher.Email;
 using FluentAssertions;
 using Xunit;
+using DM.Workers.NotificationDispatcher.Dispatching;
 
 namespace DM.Infrastructure.Messaging.Tests;
 

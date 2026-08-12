@@ -35,7 +35,7 @@ namespace DM.Architecture.Tests;
 public class NotificationVocabularyShould
 {
     private const string SharedType =
-        "DM.Workers.NotificationDispatcher.Implementation.NotificationText";
+        "DM.Workers.NotificationDispatcher.Dispatching.NotificationText";
 
     /// <summary>
     /// EventType.Unknown: an event with no title of its own. Spelled by value

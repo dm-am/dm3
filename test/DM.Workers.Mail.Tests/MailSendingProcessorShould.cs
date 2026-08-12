@@ -8,6 +8,7 @@ using DM.Testing;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
 using Xunit;
+using DM.Workers.Mail.Sending;
 
 namespace DM.Workers.Mail.Tests;
 

@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
-using DM.Workers.NotificationDispatcher.Implementation.Notifiers.Game;
+using DM.Workers.NotificationDispatcher.Notifiers.Game;
 using FluentAssertions;
 using Xunit;
 

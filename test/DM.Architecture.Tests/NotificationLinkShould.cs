@@ -53,7 +53,7 @@ public class NotificationLinkShould
 
     /// <summary>The generators, one file each, named after the type in it.</summary>
     private const string NotifiersDirectory =
-        "src/DM.Workers.NotificationDispatcher/Implementation/Notifiers";
+        "src/DM.Workers.NotificationDispatcher/Notifiers";
 
     /// <summary>The one place the client turns a notification into a link.</summary>
     private const string LinkSource =

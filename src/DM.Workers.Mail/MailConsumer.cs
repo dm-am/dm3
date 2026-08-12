@@ -13,6 +13,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using DM.Domain.Core.Mail;
+using DM.Workers.Mail.Sending;
 namespace DM.Workers.Mail;
 
 internal class MailConsumer : BackgroundService

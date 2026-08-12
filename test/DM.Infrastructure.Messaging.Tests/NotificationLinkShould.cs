@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
-using DM.Workers.NotificationDispatcher.Implementation;
-using DM.Workers.NotificationDispatcher.Implementation.Bot;
-using DM.Workers.NotificationDispatcher.Implementation.Email;
+using DM.Workers.NotificationDispatcher.Dispatching;
+using DM.Workers.NotificationDispatcher.Bot;
+using DM.Workers.NotificationDispatcher.Email;
 using FluentAssertions;
 using Xunit;
 

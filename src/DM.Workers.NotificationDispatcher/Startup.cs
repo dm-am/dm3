@@ -10,9 +10,9 @@ using DM.Infrastructure.Core.Logging;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Mail;
 using DM.Infrastructure.Messaging;
-using DM.Workers.NotificationDispatcher.Implementation;
-using DM.Workers.NotificationDispatcher.Implementation.Bot;
-using DM.Workers.NotificationDispatcher.Implementation.Email;
+using DM.Workers.NotificationDispatcher.Dispatching;
+using DM.Workers.NotificationDispatcher.Bot;
+using DM.Workers.NotificationDispatcher.Email;
 using Jamq.Client.Abstractions.Consuming;
 using DM.Domain.Moderation;
 using Microsoft.AspNetCore.Builder;
@@ -92,7 +92,7 @@ public class Startup
 
         builder.RegisterModuleOnce<CoreModule>();
         builder.RegisterModuleOnce<PersistenceModule>();
-        builder.RegisterModuleOnce<MessageQueuingModule>();
+        builder.RegisterModuleOnce<MessagingModule>();
         // Register Domain.Personal types (PersonalModule was removed)
         var personalAssembly = typeof(UserIntention).Assembly;
         builder.RegisterDefaultTypes(personalAssembly);

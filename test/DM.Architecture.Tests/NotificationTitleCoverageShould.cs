@@ -39,14 +39,14 @@ namespace DM.Architecture.Tests;
 public class NotificationTitleCoverageShould
 {
     private const string SharedType =
-        "DM.Workers.NotificationDispatcher.Implementation.NotificationText";
+        "DM.Workers.NotificationDispatcher.Dispatching.NotificationText";
 
     private const string GeneratorInterface = "INotificationGenerator";
     private const string ResolveMethod = "CanResolve";
 
     /// <summary>The generators, whose sources carry the renames.</summary>
     private const string NotifiersDirectory =
-        "src/DM.Workers.NotificationDispatcher/Implementation/Notifiers";
+        "src/DM.Workers.NotificationDispatcher/Notifiers";
 
     /// <summary>An outgoing event type assigned inside a CreateNotification.</summary>
     private static readonly Regex RenamesTheEvent = new(

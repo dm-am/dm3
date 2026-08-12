@@ -29,7 +29,7 @@ namespace DM.Architecture.Tests;
 public class NotificationMetadataShould
 {
     private const string SharedType =
-        "DM.Workers.NotificationDispatcher.Implementation.NotificationText";
+        "DM.Workers.NotificationDispatcher.Dispatching.NotificationText";
 
     /// <summary>The project that owns both the generators and the words.</summary>
     private static readonly string DispatcherSource =

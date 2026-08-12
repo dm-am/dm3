@@ -7,7 +7,7 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Infrastructure.Persistence;
-using DM.Workers.NotificationDispatcher.Implementation.Notifiers;
+using DM.Workers.NotificationDispatcher.Notifiers;
 using FluentAssertions;
 using Moq;
 using Xunit;
