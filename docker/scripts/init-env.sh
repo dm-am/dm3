@@ -84,6 +84,50 @@ set_if_empty() {
     fi
 }
 
+# Keys the template has and this file does not. A variable added to
+# .env.example after somebody's .env was written reaches nobody: the file is
+# machine-local and never regenerated, so the next release simply refuses to
+# start on a stand that was working yesterday - which is exactly what
+# DM_APP_PASSWORD and DM_EXPORTER_PASSWORD did after the Postgres roles were
+# split. scripts/dm.ps1 compares the two files and names what is missing, so the
+# gap was visible; it was still left to be closed by hand, once per developer,
+# every time the stack grows a variable.
+#
+# Taken from the template verbatim, which is what the template is for locally:
+# it ships working localhost values and is the documented source of them. Only
+# keys that are absent entirely, and only where the template carries a value -
+# an empty one is either generated above or defaulted by compose, and writing it
+# out empty would shadow neither.
+#
+# Not on a server: there the same values are the credentials published in this
+# repository, and the guard at the end of this script refuses a file that still
+# holds them.
+if [ "$MODE" = "local" ]; then
+    ADDED=""
+    while IFS= read -r line; do
+        case "$line" in
+            ''|'#'*) continue ;;
+            *=*) ;;
+            *) continue ;;
+        esac
+
+        key="${line%%=*}"
+        value="${line#*=}"
+
+        [ -n "$value" ] || continue
+        if grep -q "^${key}=" "$ENV_FILE"; then
+            continue
+        fi
+
+        printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+        ADDED="$ADDED $key"
+    done < "$EXAMPLE_FILE"
+
+    if [ -n "$ADDED" ]; then
+        echo "Added from .env.example:$ADDED"
+    fi
+fi
+
 set_if_empty DM_CryptoConfiguration__KeyBase64 "$(openssl rand -base64 32)"
 
 # The imgproxy signing pair, on the same footing as the key above and for the

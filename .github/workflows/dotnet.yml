@@ -666,6 +666,31 @@ jobs:
         test "$guard" -lt "$clone" || { echo "::error::the guard runs after the clone it exists to precede"; exit 1; }
         test "$guard" -lt "$apt" || { echo "::error::the guard runs after the packages are installed"; exit 1; }
 
+    # A variable added to .env.example reaches nobody by itself: docker/.env is
+    # machine-local and never regenerated, so the next release refuses to start
+    # on a stand that worked yesterday. That is how splitting the Postgres roles
+    # stopped every local reset - the two passwords it needs were in the template
+    # and in nobody's file. init-env.sh carries them over in local mode, and this
+    # is the only thing that says so.
+    - name: The installer of the environment file must carry a new variable over
+      run: |
+        work="$(mktemp -d)"
+        mkdir -p "$work/scripts"
+        cp docker/scripts/init-env.sh "$work/scripts/"
+        cp docker/.env.example "$work/"
+
+        # A file written before the newest variable existed, which is the case.
+        grep -v "^DM_APP_PASSWORD=" docker/.env.example > "$work/.env"
+        bash "$work/scripts/init-env.sh" local > /dev/null
+
+        grep -q "^DM_APP_PASSWORD=" "$work/.env" ||
+          { echo "::error::init-env.sh left a variable of .env.example out of an existing .env; every local stand breaks on the next one added"; exit 1; }
+
+        # And it must not touch a value somebody already chose.
+        printf "MONGO_PASSWORD=chosen-by-hand\n" >> "$work/.env"
+        bash "$work/scripts/init-env.sh" local > /dev/null
+        grep -q "^MONGO_PASSWORD=chosen-by-hand" "$work/.env" ||
+          { echo "::error::init-env.sh overwrote a value that was already in .env"; exit 1; }
     - name: The Prometheus configuration and its alert rules must parse
       run: |
         docker run --rm \
