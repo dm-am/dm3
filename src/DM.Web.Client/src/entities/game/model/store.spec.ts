@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { MAX_API_PAGE_SIZE } from "@/shared/lib/composables/usePaging";
 import { setActivePinia, createPinia } from "pinia";
 import type {
   Game,
@@ -659,8 +660,10 @@ describe("useGameDetailsStore", () => {
         data: { resources: [], paging: { current: 1, pages: 1, total: 5 } },
         error: null,
       });
+      // Above every size the settings offer: the cap is what the API serves, and
+      // a preference it refuses would be a setting that quietly does nothing.
       useAuthStore().user = {
-        settings: { paging: { postsPerPage: 200 } },
+        settings: { paging: { postsPerPage: 500 } },
       } as never;
 
       const store = useGameDetailsStore();
@@ -668,7 +671,7 @@ describe("useGameDetailsStore", () => {
 
       expect(mockGetPosts).toHaveBeenCalledWith("room-1", {
         number: 1,
-        take: 100,
+        take: MAX_API_PAGE_SIZE,
       });
     });
   });

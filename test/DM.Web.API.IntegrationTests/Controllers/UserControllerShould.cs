@@ -228,12 +228,11 @@ public class UserControllerShould : IntegrationTestBase
         ascending.Should().NotBeEmpty();
 
         // Not compared against a .NET comparer. ORDER BY runs under the server's
-        // collation, and this suite's container is postgres:16-alpine, which has
-        // no locales and falls back to C — byte order, where every capital sorts
-        // before every lower-case letter and Cyrillic after all of Latin. The
-        // stand runs en_US.utf8 and orders the same names differently, so an
-        // absolute expectation here would assert the locale of the test image.
-        // The divergence itself is a finding of its own (username-order-depends-on-locale).
+        // collation, and the fixture pins the container to the image and the
+        // locale the stand runs (postgres:16, --locale=en_US.utf8), so the order
+        // here is the order the stand produces. The assertion stays relative all
+        // the same: a literal list of names rewrites itself on every fixture user
+        // added and says nothing more about what the endpoint promises.
         //
         // What the endpoint does promise is asserted instead: the order is
         // stable, and desc is exactly asc reversed.

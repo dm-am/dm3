@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Comments;
 using System.Threading.Tasks;
 using DM.Domain.Blog.Features.PublicationComments;
 using DM.Web.API.Shared.Dto;
@@ -19,7 +20,7 @@ public interface IPublicationCommentApiService
     /// <param name="publicationId">Publication identifier</param>
     /// <param name="query">Query with filtering, sorting and paging</param>
     /// <returns>Envelope of commentaries list</returns>
-    Task<ListEnvelope<Comment>> Get(Guid publicationId, PublicationCommentsQuery query);
+    Task<ListEnvelope<Comment>> Get(Guid publicationId, CommentsQuery query);
 
     /// <summary>
     /// Create new comment

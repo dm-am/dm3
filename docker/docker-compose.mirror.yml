@@ -21,6 +21,14 @@ services:
   nginx:
     # Из двух зависимостей остается одна: фронтенд, который стоит рядом.
     # Приложения на точке присутствия нет.
+    #
+    # То же и в списке для updater-а, поэтому !override, а не надежда на слияние:
+    # правило слияния списков labels между тремя файлами зависит от реализации
+    # compose, а ссылка на контейнер, которого на точке присутствия нет, в лучшем
+    # случае игнорируется молча.
+    labels: !override
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "com.centurylinklabs.watchtower.depends-on=dm-front"
     depends_on: !override
       dmfront:
         condition: service_started
@@ -36,7 +44,8 @@ services:
       - '443:443'
     volumes: !override
       - ./nginx/pop.conf.template:/etc/nginx/templates/default.conf.template:ro
-      - ${POP_SSL_DIR:-./nginx/ssl}:/etc/nginx/ssl:ro
+      - ${SSL_ROOT:-/etc/letsencrypt}:/etc/nginx/ssl:ro
+      - ./nginx/acme:/var/www/certbot:ro
       - pop-media-cache:/var/cache/nginx/media
     environment:
       POP_UPSTREAM: ${POP_UPSTREAM:?адрес основного сервера, например https://dm.am}

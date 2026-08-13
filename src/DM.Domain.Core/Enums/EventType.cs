@@ -13,6 +13,7 @@ namespace DM.Domain.Core.Enums;
 /// 81-89   Moderation events
 /// 91-99   Security events
 /// 101-119 Forum events (Topic, TopicComment)
+/// 201-249 Blog lifecycle events (Blog entity)
 /// 301-499 Game events
 /// </summary>
 public enum EventType

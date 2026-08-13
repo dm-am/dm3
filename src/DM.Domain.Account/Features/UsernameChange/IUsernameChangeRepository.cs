@@ -46,19 +46,21 @@ public interface IUsernameChangeRepository
     Task Update(UsernameChangeRequest request, CancellationToken ct = default);
 
     /// <summary>
-    /// Update user's username
+    /// Writes the history row, the new username and the resolved request in one commit
     /// </summary>
-    Task UpdateUserUsername(Guid userId, string newUsername, CancellationToken ct = default);
+    /// <remarks>
+    /// Three writes rather than one left states between them that the model has no
+    /// name for: a history row against a user still carrying the old name and, worst
+    /// of the three, a renamed user whose request is still pending - which is one
+    /// approval spent on two renames.
+    /// </remarks>
+    Task ApplyRename(UsernameChangeRequest request, CreateUsernameHistory history, CancellationToken ct = default);
 
     /// <summary>
     /// Check if username is available (not taken by another user)
     /// </summary>
     Task<bool> IsUsernameAvailable(string username, Guid? excludeUserId = null, CancellationToken ct = default);
 
-    /// <summary>
-    /// Save changes
-    /// </summary>
-    Task SaveChanges(CancellationToken ct = default);
 
     /// <summary>
     /// Expire requests still waiting for a moderator since before

@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using DbRubric = DM.Infrastructure.Persistence.Entities.Blog.Rubric;
+using DbSubscription = DM.Infrastructure.Persistence.Entities.Subscriptions.Subscription;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
@@ -98,6 +99,58 @@ public class BlogRepositoryShould : IntegrationTestBase
             .ToListAsync();
 
         order.Should().Equal(third, second, first);
+    }
+
+    /// <summary>
+    /// A single-blog read knows whether the caller is subscribed to it.
+    /// </summary>
+    /// <remarks>
+    /// IsViewerSubscriber is the reader role, and the ViewDraft rule is decided on
+    /// exactly this read. Filled by the list-shaped reads alone it was false for
+    /// everybody here, so a reader of a private-draft blog was indistinguishable
+    /// from a stranger and could not open the blog they had been invited to. The
+    /// game side fills the same field on its own single-game read.
+    /// </remarks>
+    [Fact]
+    public async Task KnowTheViewerIsSubscribedOnASingleBlogRead()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IBlogRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var authorId = await AddAuthorAsync(dbContext);
+        var readerId = await AddAuthorAsync(dbContext);
+        var blogId = Guid.NewGuid();
+
+        await repository.CreateBlog(new CreateBlogEntity
+        {
+            BlogId = blogId,
+            OwnerId = authorId,
+            Title = "Blog with an invited reader",
+            DraftVisibility = DraftVisibility.Private,
+            CommentsEnabled = true,
+            CreatedUtc = DateTimeOffset.UtcNow,
+        });
+
+        dbContext.Subscriptions.Add(new DbSubscription
+        {
+            SubscriptionId = Guid.NewGuid(),
+            SubscriberId = readerId,
+            TargetType = SubscriptionTargetType.Blog,
+            TargetId = blogId,
+            CreatedUtc = DateTimeOffset.UtcNow,
+        });
+        await dbContext.SaveChangesAsync();
+
+        var forTheReader = await repository.Get(blogId, readerId);
+        var forAStranger = await repository.Get(blogId, Guid.NewGuid());
+        var byAddress = await repository.GetByPublicId(forTheReader!.PublicId, readerId);
+
+        forTheReader.IsViewerSubscriber.Should().BeTrue();
+        forAStranger!.IsViewerSubscriber.Should().BeFalse();
+        // Both addresses of the same blog answer the authorization question the
+        // same way: the alias URL is the one a shared invitation link carries.
+        byAddress!.IsViewerSubscriber.Should().BeTrue();
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Tokens;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -128,7 +129,7 @@ public class IdentityLookupShould : IntegrationTestBase
         await registration.ReplacePending(new PendingRegistration
         {
             PendingRegistrationId = Guid.NewGuid(),
-            TokenId = Guid.NewGuid(),
+            SecretHash = ConfirmationSecret.Hash(Guid.NewGuid()),
             Email = callerAddress,
             PasswordHash = "caller-hash",
             Salt = "caller-salt",
@@ -143,8 +144,9 @@ public class IdentityLookupShould : IntegrationTestBase
 
         rows.Should().HaveCount(2,
             "the caller's address had no registration of its own, so it gets one");
-        rows.Single(p => p.Email == ownerAddress).TokenId.Should().Be(ownerToken,
-            "the other registration keeps the activation token it was issued");
+        rows.Single(p => p.Email == ownerAddress).SecretHash.Should()
+            .Equal(ConfirmationSecret.Hash(ownerToken),
+                "the other registration keeps the activation secret it was issued");
     }
 
     /// <summary>
@@ -241,7 +243,7 @@ public class IdentityLookupShould : IntegrationTestBase
         dbContext.PendingRegistrations.Add(new DbPendingRegistration
         {
             PendingRegistrationId = Guid.NewGuid(),
-            TokenId = tokenId,
+            SecretHash = ConfirmationSecret.Hash(tokenId),
             Email = email,
             PasswordHash = "fakehash",
             Salt = "fakesalt",

@@ -63,7 +63,7 @@ public class ChatServiceShould : UnitTestBase
             .ReturnsAsync(new Chat { Id = Guid.NewGuid() });
 
         _unreadCountersRepository = Mock<IUnreadCountersRepository>();
-        _unreadCountersRepository.Setup(r => r.CreateAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>(), It.IsAny<IEnumerable<Guid>>()))
+        _unreadCountersRepository.Setup(r => r.CreateMarkerAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>(), It.IsAny<IEnumerable<Guid>>()))
             .Returns(Task.CompletedTask);
         _unreadCountersRepository.Setup(r => r.SelectByEntitiesAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>(), It.IsAny<Guid[]>()))
             .ReturnsAsync((Guid userId, UnreadEntryType type, Guid[] ids) =>
@@ -124,7 +124,9 @@ public class ChatServiceShould : UnitTestBase
             ParticipantIds = new[] { Guid.NewGuid(), Guid.NewGuid() }
         };
         var chatId = Guid.NewGuid();
-        var chatEntity = new CreateChatEntity();
+        // The identifier comes off the entity the factory built, not off the row:
+        // the markers are written before the row exists to return one.
+        var chatEntity = new CreateChatEntity { ChatId = chatId };
         var linkEntities = new List<CreateChatLinkEntity>();
         _createGroupSetup.Returns((chatEntity, linkEntities));
         _repository.Setup(r => r.Create(It.IsAny<CreateChatEntity>(), It.IsAny<IEnumerable<CreateChatLinkEntity>>()))
@@ -133,8 +135,11 @@ public class ChatServiceShould : UnitTestBase
         await _service.CreateGroupAsync(createChat);
 
         _unreadCountersRepository.Verify(
-            r => r.CreateAsync(chatId, UnreadEntryType.Message, It.IsAny<IEnumerable<Guid>>()),
+            r => r.CreateMarkerAsync(chatId, UnreadEntryType.Message, It.IsAny<IEnumerable<Guid>>()),
             Times.Once);
+        _unreadCountersRepository.Verify(
+            r => r.DeleteAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>(), It.IsAny<IEnumerable<Guid>>()),
+            Times.Never, "the row landed, so the reservation was committed");
     }
 
     /// <summary>

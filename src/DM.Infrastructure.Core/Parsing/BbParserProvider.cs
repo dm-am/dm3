@@ -79,10 +79,16 @@ public class BbParserProvider : IBbParserProvider
     // AuthorEdit variant of [private] — opens with data-bb-tag and
     // data-bb-addressees carrying the raw attribute value so Tiptap's
     // Private extension can round-trip the tag on save.
+    //
+    // It closes on the div and stops there, unlike the reading variant above. The
+    // recipients line is for a reader: it carries no data-bb-* marker, so the
+    // reverse conversion has nothing to match and would leave the literal markup
+    // sitting in the author's editor — and the same names are already in
+    // data-bb-addressees, which is what the tag is rebuilt from.
     private static readonly Tag PrivateAuthorEdit = new(
         "private",
         $"<div class=\"{PrivateClassName}\" data-bb-tag=\"private\" data-bb-addressees=\"{{value}}\">",
-        $"</div><div class=\"{PrivateHeaderClassName}\">Получатели: {{value}}</div>",
+        "</div>",
         true, false);
 
     private static readonly Dictionary<string, string> CommonSubstitutions = new()

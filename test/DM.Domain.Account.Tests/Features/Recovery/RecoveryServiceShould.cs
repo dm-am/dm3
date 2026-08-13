@@ -70,9 +70,14 @@ public class RecoveryServiceShould : UnitTestBase
             Username = "testuser",
             Email = email
         };
+        // TokenId names the row, Secret goes into the letter, and the two are
+        // deliberately different values — that is the whole point of the change.
+        var secret = Guid.NewGuid();
         var token = new CreateToken
         {
             TokenId = tokenId,
+            Secret = secret,
+            SecretHash = ConfirmationSecret.Hash(secret),
             Type = TokenType.PasswordChange
         };
 
@@ -83,7 +88,8 @@ public class RecoveryServiceShould : UnitTestBase
 
         result.Should().Be(RecoveryResult.PasswordReset);
         _passwordResetRepository.Verify(r => r.ReplacePasswordResetToken(userId, token), Times.Once);
-        _passwordResetEmailSender.Verify(s => s.Send(email, user.Username, tokenId), Times.Once);
+        _passwordResetEmailSender.Verify(s => s.Send(email, user.Username, secret), Times.Once);
+        _passwordResetEmailSender.Verify(s => s.Send(email, user.Username, tokenId), Times.Never);
     }
 
     [Fact]
@@ -95,7 +101,7 @@ public class RecoveryServiceShould : UnitTestBase
         {
             PendingRegistrationId = Guid.NewGuid(),
             Email = email,
-            TokenId = Guid.NewGuid()
+            SecretHash = ConfirmationSecret.Hash(Guid.NewGuid())
         };
 
         _emailLookupRepository.Setup(r => r.GetUserByEmail(email, It.IsAny<CancellationToken>())).ReturnsAsync((EmailLookupInfo?)null);
@@ -106,7 +112,10 @@ public class RecoveryServiceShould : UnitTestBase
         var result = await _service.Recover(email);
 
         result.Should().Be(RecoveryResult.ActivationResent);
-        pending.TokenId.Should().Be(newTokenId);
+        // A resend issues a new secret and stores its hash: the old value is not
+        // recoverable from the row, so mailing it again is not an option.
+        pending.Secret.Should().Be(newTokenId);
+        pending.SecretHash.Should().Equal(ConfirmationSecret.Hash(newTokenId));
         _registrationRepository.Verify(r => r.UpdatePending(pending), Times.Once);
         _activationEmailSender.Verify(s => s.Send(email, newTokenId), Times.Once);
     }

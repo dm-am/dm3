@@ -199,7 +199,7 @@ public class BoardTopicSummaryShould : IntegrationTestBase
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<ITopicRepository>();
         return await repository.Create(
-            new CreateTopicEntity { Title = $"Summary topic {index}", Text = "text" },
+            new CreateTopicEntity { TopicId = Guid.NewGuid(), Title = $"Summary topic {index}", Text = "text" },
             TestConstants.TestUserId, boardId);
     }
 

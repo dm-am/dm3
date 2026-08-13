@@ -1,4 +1,42 @@
 groups:
+  # Every rule below says something when the site is unwell, and none of them says
+  # anything when the contour itself is broken: a relay that refuses mail, an
+  # alertmanager that stopped, a Prometheus that lost its rules. Silence then reads
+  # exactly like health, and the first symptom is a user asking why nobody noticed.
+  #
+  # This one fires always and on purpose. Its arrival is the proof that rules are
+  # evaluated, routed and delivered; its absence is the incident. What watches for
+  # that absence is outside the machine by definition — a mailbox filter, a phone
+  # reminder, an external heartbeat service — because a watchman living on the
+  # observed machine cannot report its own death.
+  - name: dm-contour
+    rules:
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: watchdog
+        annotations:
+          summary: "The alerting contour is alive"
+          description: "Sent on a schedule while rules are evaluated and delivery works. Stop receiving it and the contour is broken, whatever the dashboards say."
+
+      # The receiver every other rule in this file is posted to. Firing this one
+      # cannot deliver a letter either - it travels the same broken road - so what
+      # it buys is a rule visible as firing on the page, and, the moment the
+      # receiver is back, a letter naming how long the contour had no mouth. The
+      # absent() branch is the other way this goes quiet: a job renamed out of
+      # prometheus.yml produces no `up` series for `== 0` to compare.
+      #
+      # There is deliberately no rule on the count of failed notifications: it
+      # would be posted through the very thing that is failing.
+      - alert: AlertReceiverDown
+        expr: up{job="alertmanager"} == 0 or absent(up{job="alertmanager"})
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nothing is delivering alerts"
+          description: "Rules keep being evaluated and none of them can reach anybody. Whoever watches for the Watchdog going missing is the only one who finds out before the receiver comes back."
+
   - name: dm-api
     rules:
       - alert: ApiDown
@@ -33,6 +71,20 @@ groups:
         annotations:
           summary: "High request latency"
           description: "p95 latency is above 2 seconds for 5 minutes."
+
+  # Authorization refusing because it could not answer, which is the same answer it
+  # gives when the rules mean it. Nothing else tells the two apart, and the reader is
+  # told they may not do something they in fact may.
+  - name: dm-authorization
+    rules:
+      - alert: AuthorizationResolverMissing
+        expr: increase(dm_authorization_resolver_missing_total[15m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "An authorization question reached no resolver"
+          description: "{{ $labels.intention }} on {{ $labels.target }} is being refused because nothing answers it, not because the rules say no. Whoever hits this path is told they may not do something they may."
 
   - name: dm-consumers
     rules:
@@ -69,6 +121,19 @@ groups:
           summary: "PostgreSQL is down"
           description: "PostgreSQL exporter reports database is unreachable."
 
+      # The second store, on the same footing as the first. Its only signal used to
+      # be the readiness probe, which nothing polls: it stopping produced no alert
+      # at all, while the unread counters, the security journal and the session
+      # store all live there.
+      - alert: MongoDown
+        expr: mongodb_up == 0 or absent(mongodb_up)
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MongoDB is down"
+          description: "The document store is unreachable. Unread badges, the security journal and sessions are all in it."
+
       - alert: HighMemoryUsage
         expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.9
         for: 5m
@@ -77,6 +142,23 @@ groups:
         annotations:
           summary: "High memory usage"
           description: "Host memory usage is above 90% for 5 minutes."
+
+      # Severity below the two above on purpose: the console sink writes every
+      # event unconditionally, so a dead store loses the searchable copy and not
+      # the logs. What makes it worth a rule at all is that the loss is silent by
+      # construction - the sink swallows its own failures, buffers 50000 events
+      # and retries for ten minutes before dropping them, and Grafana showing
+      # nothing looks exactly like a site with nothing to say. The absent()
+      # branch covers the other way this goes quiet: a job renamed out of
+      # prometheus.yml produces no `up` series for `== 0` to compare.
+      - alert: LogStorageDown
+        expr: up{job="loki"} == 0 or absent(up{job="loki"})
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The log store is unreachable"
+          description: "Nothing is being indexed. Applications keep writing to the console - `docker logs` still has everything, Grafana has nothing, and the sink reports the rejection only through SelfLog on stderr."
 
       - alert: DiskSpaceLow
         expr: (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) > 0.85
@@ -113,6 +195,14 @@ groups:
           summary: "The broker scrape target is not configured"
           description: "Prometheus has no target for the broker - check that rabbitmq_prometheus is enabled and that per-object metrics are on."
 
+      # Nothing here watches rabbitmq_global_messages_unroutable_returned_total,
+      # and a nonzero value of it is not an incident: the bindings are derived
+      # from the notification generators, so an event type no generator handles is
+      # published into the exchange and returned as unroutable on every stand from
+      # the first minute. A large share of the event types is unbound by
+      # construction, and no threshold on that counter would mean anything. What
+      # it cannot tell apart is a queue that was never declared at all, and that
+      # is the state the rule below names.
       - alert: QueueWithoutConsumer
         expr: rabbitmq_queue_consumers{queue=~"dm.notifications|dm.mail.sending"} == 0
         for: 5m
@@ -159,14 +249,19 @@ groups:
           summary: "The realtime push queue has no consumer"
           description: "The API and the broker are both up and the notification consumer of the API is not subscribed, so every push is dropped at the broker. The global chat page catches up on its own; the two badges are re-read only when the application mounts or the socket reconnects, and it stays that way until the API restarts."
 
+      # Ready plus unacknowledged, not ready alone. A message handed to a consumer
+      # stops being ready the moment it is delivered, so a worker that has taken a
+      # thousand messages and is working through them slowly reads as an empty
+      # queue on the ready series - which is the shape of the backlog worth
+      # knowing about, and the one the rule used to be blind to.
       - alert: QueueBacklog
-        expr: rabbitmq_queue_messages_ready{queue=~"dm.*"} > 1000
+        expr: sum by (queue) ({__name__=~"rabbitmq_queue_messages_(ready|unacked)", queue=~"dm.*"}) > 1000
         for: 10m
         labels:
           severity: warning
         annotations:
           summary: "Queue {{ $labels.queue }} is backing up"
-          description: "More than 1000 messages have been waiting for 10 minutes."
+          description: "More than 1000 messages have been waiting or in flight for 10 minutes. Both halves count: work a consumer has taken and not finished is a backlog the queue depth alone does not show."
 
       - alert: DeadLetteredMessages
         expr: rabbitmq_queue_messages_ready{queue=~".*-dlq"} > 0
@@ -200,6 +295,85 @@ groups:
           summary: "Consumer of {{ $labels.queue }} is retrying"
           description: "Processing keeps failing and succeeding on a later attempt. The dependency behind it is unwell."
 
+      # The publishing side of the same trade. SYSTEM.md says an event is not the
+      # carrier of the fact, so the producer swallows a refusal rather than turning
+      # a committed write into a 500. That only holds while the swallowing is
+      # visible: without this rule a broker refusing every publish looks exactly
+      # like a quiet site, and the first symptom is a user asking why notifications
+      # stopped.
+      - alert: EventsNotPublished
+        expr: sum by (event) (rate(dm_messaging_publish_failed_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Events of type {{ $labels.event }} are not reaching the broker"
+          description: "The producer is failing to publish and the callers do not see it by design. Nothing will retry these: no notification and no letter for the writes they belong to."
+
+      # The far end of the same road. The message left the broker, reached a
+      # sender, and the channel refused it - a bot token revoked, a relay
+      # rejecting every letter, a push nobody is subscribed to. The sender
+      # swallows that so one dead channel cannot cost the recipient duplicates
+      # over the channels that are up, which means every rule above stays green
+      # while nothing is being delivered at all.
+      - alert: DeliveriesFailing
+        expr: sum by (channel) (rate(dm_messaging_delivery_failed_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Notifications over {{ $labels.channel }} are not being delivered"
+          description: "The channel is refusing what it is handed. Nothing retries these: the message was acknowledged when the sender swallowed the refusal."
+
+  # A unit of work spans two stores with no transaction over them: the row is
+  # committed to PostgreSQL first because it is the fact, and the document that
+  # counts it follows. When the second write fails there is nothing left to
+  # unwind, so the count is dropped and the fact kept — and the request that
+  # caused it answers success either way. Without a rule the only symptom is one
+  # reader's badge being wrong from then on, which reads to them as the site
+  # being wrong about them rather than as an incident.
+  - name: dm-storage
+    rules:
+      - alert: WritesLostAfterCommit
+        expr: sum by (store, operation) (rate(dm_storage_write_lost_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Writes to {{ $labels.store }} are being dropped by {{ $labels.operation }}"
+          description: "The work these belong to is committed and answered. Nothing retries them, and what they were counting is wrong until the reader resets it by hand."
+
+  # The front door. Nothing here is about a component being unwell: the site is
+  # perfectly healthy while somebody walks a list of addresses through the login
+  # form, and that is the point - the request series answers 4xx for a typo and
+  # for a credential-stuffing run alike, so the shape of what is happening lives
+  # entirely in the reason a refusal carries.
+  - name: dm-auth
+    rules:
+      # An absolute rate rather than a share of attempts: at four in the morning
+      # one person mistyping their password twice is a hundred percent of the
+      # traffic, and a share would page on it while saying nothing about the run
+      # of ten thousand that arrives at noon among real logins.
+      - alert: AuthFailureSpike
+        expr: sum by (reason) (rate(dm_auth_login_failed_total[5m])) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Logins are being refused as {{ $labels.reason }}"
+          description: "Sustained refusals of one kind. WrongLogin at this rate is somebody walking a list of addresses; WrongPassword against few addresses is somebody walking a list of passwords; AccountLocked is either of those having gone on long enough to lock real people out."
+
+      # Throttling is counted by status and not by reason: the limiter answers
+      # before anything reads a credential, so no code that could count it runs.
+      - alert: AuthThrottling
+        expr: sum(rate(http_server_request_duration_seconds_count{job="dm-api",http_route=~"v1/account/(login|register)",http_response_status_code="429"}[5m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The login and registration limiter is refusing traffic"
+          description: "Requests are being turned away before a credential is read. Either an automated run is hitting the front door, or the limits are set below what the site's own clients need."
+
   - name: dm-backups
     rules:
       # Проверка бэкапов идет ночью по cron и до этого правила сообщала о себе
@@ -213,7 +387,7 @@ groups:
           severity: critical
         annotations:
           summary: 'Ночная проверка бэкапов не прошла'
-          description: 'dm_backup_verification_status = {{ $value }} (1 - предупреждение, 2 - ошибка). Смотреть /var/log/dm3-backups.log.'
+          description: 'dm_backup_verification_status = {{ $value }} (1 - предупреждение, 2 - ошибка). Смотреть /var/log/dm3-backup.log.'
 
       # Отсутствие результата - тоже результат: скрипт не запустился, упал до
       # записи метрики или его вовсе нет в crontab.

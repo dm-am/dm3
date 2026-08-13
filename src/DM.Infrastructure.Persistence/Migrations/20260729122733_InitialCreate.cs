@@ -79,7 +79,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     PendingRegistrationId = table.Column<Guid>(type: "uuid", nullable: false),
-                    TokenId = table.Column<Guid>(type: "uuid", nullable: false),
+                    SecretHash = table.Column<byte[]>(type: "bytea", nullable: false),
                     Email = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     PasswordHash = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false),
                     Salt = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: false),
@@ -383,7 +383,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
                     DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    SearchVector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "to_tsvector('russian', coalesce(\"Text\", ''))", stored: true)
+                    SearchText = table.Column<string>(type: "text", nullable: true, defaultValue: ""),
+                    SearchVector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[private(=[^\\]]*)??\\][\\s\\S]*?\\[/private\\]', ' ', 'gi'))", stored: true)
                 },
                 constraints: table =>
                 {
@@ -605,7 +606,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     GlobalChatEventId = table.Column<Guid>(type: "uuid", nullable: true),
-                    SearchVector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "to_tsvector('russian', coalesce(\"Text\", ''))", stored: true)
+                    SearchText = table.Column<string>(type: "text", nullable: true, defaultValue: ""),
+                    SearchVector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[private(=[^\\]]*)??\\][\\s\\S]*?\\[/private\\]', ' ', 'gi'))", stored: true)
                 },
                 constraints: table =>
                 {
@@ -746,7 +748,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
                     DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    SearchVector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "to_tsvector('russian', regexp_replace(coalesce(\"GameText\", ''), '\\[private(=[^\\]]*)?\\][\\s\\S]*?\\[/private\\]', ' ', 'gi'))", stored: true)
+                    SearchText = table.Column<string>(type: "text", nullable: true, defaultValue: ""),
+                    SearchVector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[private(=[^\\]]*)??\\][\\s\\S]*?\\[/private\\]', ' ', 'gi'))", stored: true)
                 },
                 constraints: table =>
                 {
@@ -977,7 +980,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
                     DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true)
+                    CreatorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    SecretHash = table.Column<byte[]>(type: "bytea", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1028,7 +1032,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
                     DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    SearchVector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "setweight(to_tsvector('russian', coalesce(\"Title\", '')), 'A') || setweight(to_tsvector('russian', coalesce(\"Text\", '')), 'B')", stored: true)
+                    SearchText = table.Column<string>(type: "text", nullable: true, defaultValue: ""),
+                    SearchVector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "setweight(to_tsvector('russian', coalesce(\"Title\", '')), 'A') || setweight(to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[private(=[^\\]]*)??\\][\\s\\S]*?\\[/private\\]', ' ', 'gi')), 'B')", stored: true)
                 },
                 constraints: table =>
                 {
@@ -1785,9 +1790,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "TargetUserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_BlogAssistants_BlogId",
+                name: "IX_BlogAssistants_BlogId_UserId",
                 table: "BlogAssistants",
-                column: "BlogId");
+                columns: new[] { "BlogId", "UserId" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_BlogAssistants_UserId",
@@ -1935,9 +1941,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "UpdatedByUserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_GameAssistants_GameId",
+                name: "IX_GameAssistants_GameId_UserId",
                 table: "GameAssistants",
-                column: "GameId");
+                columns: new[] { "GameId", "UserId" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_GameAssistants_UserId",
@@ -2119,10 +2126,17 @@ namespace DM.Infrastructure.Persistence.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_PendingRegistrations_TokenId",
+                name: "IX_PendingRegistrations_SecretHash",
                 table: "PendingRegistrations",
-                column: "TokenId",
+                column: "SecretHash",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Tokens_SecretHash",
+                table: "Tokens",
+                column: "SecretHash",
+                unique: true,
+                filter: "\"SecretHash\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_PeriodDigestTopics_Year",

@@ -39,7 +39,7 @@ internal class CreateBanValidator : AbstractValidator<CreateBan>
 
         RuleFor(b => b)
             .Must(b => b.DurationHours.HasValue || b.ExpiresUtc.HasValue || b.IsVoluntary)
-            .WithMessage("Either DurationHours or ExpiresUtc must be specified for non-voluntary bans")
+            .WithMessage("Для бана укажите срок или дату окончания")
             .WithName("Duration");
     }
 }

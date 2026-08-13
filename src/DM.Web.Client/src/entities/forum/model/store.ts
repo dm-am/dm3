@@ -358,8 +358,15 @@ export const useBoardsStore = defineStore("boards", () => {
       return;
     }
 
-    // Show stale while revalidating
-    comments.value = commentsCache.getStale(cacheKey) ?? null;
+    // Show stale while revalidating. The stale entry is keyed by the query, so a
+    // change of page, filter or sort has none — and assigning null in that case
+    // cleared the list the reader was looking at, which is the very thing this
+    // block exists to avoid. What is on screen stays until the answer arrives, the
+    // way the topic list above does it.
+    const stale = commentsCache.getStale(cacheKey);
+    if (stale) {
+      comments.value = stale;
+    }
 
     commentsLoading.value = true;
     commentsError.value = false;

@@ -42,17 +42,13 @@ public class NewbieThresholdShould
             .Should().Contain($".HasComputedColumnSql(\"{Expression}\", stored: true)",
                 "the model is where the column is declared");
 
-        Read("src", "DM.Infrastructure.Persistence", "Migrations", "20260729122733_InitialCreate.cs")
+        SchemaSources.Migration
             .Should().Contain($"computedColumnSql: \"{Expression}\"",
                 "the migration is what the database is actually built from");
 
-        foreach (var snapshot in new[]
-                 {
-                     "DmDbContextModelSnapshot.cs",
-                     "20260729122733_InitialCreate.Designer.cs"
-                 })
+        foreach (var (snapshot, text) in SchemaSources.Snapshots)
         {
-            Read("src", "DM.Infrastructure.Persistence", "Migrations", snapshot)
+            text
                 .Should().Contain($".HasComputedColumnSql(\"{Expression}\", true)",
                     $"{snapshot} describes the same column, and a snapshot disagreeing with the " +
                     "migration is a schema nobody can rebuild");

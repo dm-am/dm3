@@ -8,12 +8,14 @@ using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Personal.Features.Profiles;
+using DM.Infrastructure.Core.Tracing;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Personal.Preferences;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Authentication.Credentials;
 using DM.Web.API.Shared.Http;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using User = DM.Web.API.Features.Community.Users.User;
 
 namespace DM.Web.API.Features.Account.Authentication;
@@ -27,6 +29,7 @@ internal class AuthenticationApiService : IAuthenticationApiService
     private readonly IUserService _userService;
     private readonly ILoginRecordService _loginRecordService;
     private readonly IMapper _mapper;
+    private readonly ILogger<AuthenticationApiService> _logger;
 
     /// <summary>
     /// Creates a new instance of AuthenticationApiService
@@ -37,7 +40,8 @@ internal class AuthenticationApiService : IAuthenticationApiService
         IIdentityProvider identityProvider,
         IUserService userService,
         ILoginRecordService loginRecordService,
-        IMapper mapper)
+        IMapper mapper,
+        ILogger<AuthenticationApiService> logger)
     {
         _authenticationService = authenticationService;
         _coreAuthenticationService = coreAuthenticationService;
@@ -45,6 +49,7 @@ internal class AuthenticationApiService : IAuthenticationApiService
         _userService = userService;
         _loginRecordService = loginRecordService;
         _mapper = mapper;
+        _logger = logger;
     }
 
     /// <inheritdoc />
@@ -63,6 +68,16 @@ internal class AuthenticationApiService : IAuthenticationApiService
         // Record login attempt for moderation (fire-and-forget, non-blocking)
         await RecordLoginAttempt(request.Email, httpContext,
             isSuccessful: identity.Error == AuthenticationError.NoError);
+
+        // Once, above the switch, rather than in each refusing branch: what makes
+        // this readable is that every refusal is counted under its own reason, and
+        // a branch added below without a line of its own would silently drop out
+        // of the count while every rule over it stayed green.
+        if (identity.Error != AuthenticationError.NoError)
+        {
+            AuthenticationMetrics.LoginFailed.Add(1,
+                AuthenticationMetrics.Reason(identity.Error.ToString()));
+        }
 
         switch (identity.Error)
         {
@@ -93,6 +108,12 @@ internal class AuthenticationApiService : IAuthenticationApiService
                 throw new HttpException(HttpStatusCode.Forbidden,
                     "Аккаунт забанен");
             case AuthenticationError.PendingRegistration:
+                // This answer names an address that exists, which is the whole
+                // difference between it and the unified refusal above it: a caller
+                // walking a list learns which addresses are registered, and the
+                // login records hold nothing about the attempt because an account
+                // that never activated has no user row to file it under.
+                _logger.IdentifierDisclosed(httpContext, "login", "PendingActivation");
                 throw new HttpBadRequestException(new Dictionary<string, string>
                 {
                     ["email"] = "Регистрация не завершена",

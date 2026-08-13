@@ -48,11 +48,31 @@ route:
   # the last few messages by morning.
   repeat_interval: 4h
 
+  routes:
+    # The heartbeat is not an incident and must not be grouped with one: it is
+    # repeated on its own schedule so that its absence is noticeable within a day,
+    # and it carries no resolved message because it never resolves.
+    - matchers:
+        - severity = "watchdog"
+      receiver: heartbeat
+      group_wait: 0s
+      group_interval: 12h
+      repeat_interval: 12h
+
 receivers:
   # A receiver declared with a name and nothing else is accepted by alertmanager
   # and silently drops everything routed to it - the same outcome as having no
   # alertmanager at all, reached through a configuration file that looks
   # complete. Which is why the gates check for a delivery block, not a name.
+  # The heartbeat, delivered the same way as everything else and deliberately so:
+  # a channel of its own would prove the health of a channel nothing else uses.
+  - name: 'heartbeat'
+    email_configs:
+      - to: '${ALERT_EMAIL_TO}'
+        send_resolved: false
+        headers:
+          Subject: '[WATCHDOG] alerting contour is alive'
+
   - name: 'operators'
     email_configs:
       - to: '${ALERT_EMAIL_TO}'

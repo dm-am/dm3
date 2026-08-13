@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Comments;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
@@ -184,7 +185,7 @@ internal class GameInactivityProcessor : IGameInactivityProcessor
         var now = _dateTimeProvider.Now;
 
         // Get current comment count - we need to increment it
-        var currentCount = await _commentRepository.Count(gameId, new GameCommentsQuery());
+        var currentCount = await _commentRepository.Count(gameId, new CommentsQuery());
 
         var entity = new CreateGameCommentEntity
         {

@@ -190,7 +190,7 @@ Commands:
   stop      Stop all Docker services
   reset     Stop, clear databases, and restart
   seed      Run seed scripts (requires running API)
-  status    Show status of all services
+  status    Show status of all services, docker and host processes alike
   logs      Show logs (optionally for specific service)
   help      Show this help
 
@@ -661,6 +661,97 @@ function Invoke-Seed {
     Write-Host ""
 }
 
+# Everything the stack runs outside docker. The status screen knew only about
+# containers, so a second dev server on the next port up, or a pile of build
+# nodes holding a gigabyte, were invisible on the one screen that exists to say
+# what is running — and the answer to "what is up" had to be given from memory.
+#
+# Two dev servers at once is the interesting case rather than a tidiness one:
+# the page then comes from whichever port the tab is pointed at, and an edit that
+# went into one of them reads as a fix that did not work.
+function Show-HostProcesses {
+    $rows = @()
+
+    $listeners = @{}
+    foreach ($line in (netstat -ano | Select-String 'LISTENING')) {
+        if ($line -match ':(\d+)\s.*LISTENING\s+(\d+)') {
+            $port = $matches[1]
+            $processId = [int]$matches[2]
+            if (-not $listeners.ContainsKey($processId)) { $listeners[$processId] = @() }
+            if ($listeners[$processId] -notcontains $port) { $listeners[$processId] += $port }
+        }
+    }
+
+    $processes = Get-CimInstance Win32_Process -Filter "name='node.exe' or name='dotnet.exe'" -ErrorAction SilentlyContinue
+    foreach ($process in $processes) {
+        $command = $process.CommandLine
+        if (-not $command) { continue }
+
+        $kind = $null
+        if ($command -match 'vite') { $kind = 'vite dev server' }
+        elseif ($command -match 'MSBuild\.dll') { $kind = 'msbuild node' }
+        elseif ($command -match 'VBCSCompiler|Roslyn') { $kind = 'roslyn server' }
+        elseif ($command -match 'testhost') { $kind = 'test host' }
+        if (-not $kind) { continue }
+
+        # Someone else's node is not this project's business: the walk is over the
+        # whole machine, so the repository path is what tells them apart.
+        if ($kind -eq 'vite dev server' -and $command -notmatch 'dm3') { continue }
+
+        $ports = if ($listeners.ContainsKey([int]$process.ProcessId)) {
+            ($listeners[[int]$process.ProcessId] | Sort-Object) -join ', '
+        } else { '' }
+
+        # Get-CimInstance hands CreationDate over as a DateTime already, unlike the
+        # Get-WmiObject it replaced, where it was a CIM_DATETIME string needing a
+        # converter. Running that converter over a DateTime throws, and the column
+        # came out empty for every row.
+        $started = ''
+        if ($process.CreationDate -is [DateTime]) {
+            $started = $process.CreationDate.ToString('HH:mm')
+        }
+
+        $rows += [pscustomobject]@{ Kind = $kind; Pid = $process.ProcessId; Port = $ports; Started = $started }
+    }
+
+    Write-Host "  Host processes" -ForegroundColor DarkGray
+    if ($rows.Count -eq 0) {
+        Write-Host "    (none)" -ForegroundColor DarkGray
+        Write-Host ""
+        return
+    }
+
+    # Build nodes are reused by design and go away on their own, so they are
+    # summarised rather than listed: nine identical lines would bury the two that
+    # matter.
+    $servers = @($rows | Where-Object { $_.Kind -eq 'vite dev server' -or $_.Kind -eq 'test host' })
+    foreach ($row in ($servers | Sort-Object Started)) {
+        $colour = 'Green'
+        Write-Host "    [+] " -ForegroundColor $colour -NoNewline
+        Write-Host ("{0,-20}" -f $row.Kind) -NoNewline
+        Write-Host ("pid {0,-7}" -f $row.Pid) -ForegroundColor DarkGray -NoNewline
+        if ($row.Port) { Write-Host (":{0,-12}" -f $row.Port) -ForegroundColor DarkGray -NoNewline } else { Write-Host ("{0,-13}" -f '') -NoNewline }
+        Write-Host ("since {0}" -f $row.Started) -ForegroundColor DarkGray
+    }
+
+    $viteCount = @($rows | Where-Object { $_.Kind -eq 'vite dev server' }).Count
+    if ($viteCount -gt 1) {
+        Write-Host "    [!] two dev servers are up: the tab shows whichever port it points at" -ForegroundColor Yellow
+    }
+
+    $builders = @($rows | Where-Object { $_.Kind -eq 'msbuild node' -or $_.Kind -eq 'roslyn server' })
+    if ($builders.Count -gt 0) {
+        $megabytes = 0
+        foreach ($builder in $builders) {
+            $process = Get-Process -Id $builder.Pid -ErrorAction SilentlyContinue
+            if ($process) { $megabytes += [int]($process.WorkingSet64 / 1MB) }
+        }
+        Write-Host ("    [~] {0} build server(s), {1} MB - dotnet build-server shutdown" -f $builders.Count, $megabytes) -ForegroundColor DarkGray
+    }
+
+    Write-Host ""
+}
+
 function Show-Status {
     Write-Host ""
     Write-Host "DM3 Status" -ForegroundColor Cyan
@@ -672,6 +763,7 @@ function Show-Status {
         Write-Host "  No containers running." -ForegroundColor Yellow
         Write-Host "  Run: .\scripts\dm.ps1 start" -ForegroundColor DarkGray
         Write-Host ""
+        Show-HostProcesses
         return
     }
 
@@ -733,6 +825,8 @@ function Show-Status {
         Write-ServiceGroup "Other:" $rest
     }
     Write-Host ""
+
+    Show-HostProcesses
 }
 
 function Show-Logs {

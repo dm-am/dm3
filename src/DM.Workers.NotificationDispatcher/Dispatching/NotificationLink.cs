@@ -90,6 +90,7 @@ internal static class NotificationLink
         EventType.NewPublication or EventType.ChangedPublication or
         EventType.LikedPublication or EventType.LikedPublicationComment or
         EventType.NewBlogComment or EventType.LikedBlogComment or
+        EventType.NewPublicationComment or
         EventType.BlogInvitationCreated or
         EventType.StatusBlogActive or EventType.StatusBlogClosed or
         EventType.StatusBlogFrozen or EventType.StatusBlogFinished or

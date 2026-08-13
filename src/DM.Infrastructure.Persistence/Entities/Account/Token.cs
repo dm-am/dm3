@@ -55,6 +55,18 @@ public class Token : ISoftDeletable
     public Guid? CreatorId { get; set; }
 
     /// <summary>
+    /// Hash of the value the confirmation letter carries.
+    /// </summary>
+    /// <remarks>
+    /// Set for the types that are redeemed by knowing the value — password reset
+    /// and email change — and null for an invitation, which the addressee redeems
+    /// while signed in and which is therefore an identifier rather than a
+    /// credential. The distinction is asserted by ConfirmationTokenStorageShould;
+    /// see ConfirmationSecret for why the value itself is not stored.
+    /// </remarks>
+    public byte[]? SecretHash { get; set; }
+
+    /// <summary>
     /// Authorised user
     /// </summary>
     [ForeignKey(nameof(UserId))]

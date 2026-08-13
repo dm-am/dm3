@@ -25,9 +25,11 @@ internal static class IdentifierProbeLog
     /// <param name="outcome">What the caller learned</param>
     public static void IdentifierDisclosed(this ILogger logger,
         HttpContext httpContext, string surface, string outcome) =>
-        // The probed identifier is deliberately absent: log entries have no
-        // retention, and writing it would turn every scan into a stored list of
-        // the addresses it went looking for.
+        // The probed identifier is deliberately absent: entries live for a month
+        // and are read through a dashboard, so writing it would leave a month of
+        // the addresses every scan went looking for. The scale and the source are
+        // recoverable from the event and the caller's address; a count by value,
+        // if one is ever needed, is taken over an HMAC of the identifier.
         logger.LogInformation(
             "Identifier existence disclosed by {Surface} as {Outcome} to {ClientAddress}",
             surface, outcome, httpContext.GetClientAddress());

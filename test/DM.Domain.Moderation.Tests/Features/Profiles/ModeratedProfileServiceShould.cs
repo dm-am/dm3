@@ -112,6 +112,8 @@ public class ModeratedProfileServiceShould : UnitTestBase
     [Fact]
     public async Task AuthorizeSetUserRoleWhenSettingRole()
     {
+        _userRepository.Setup(r => r.GetUserAsync("TestUser"))
+            .ReturnsAsync(new GeneralUser { UserId = _userId, Username = "TestUser", Role = UserRole.RegularUser });
         _moderatedProfileRepository.Setup(r => r.SetUserRole(It.IsAny<string>(), It.IsAny<UserRole>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         _cache.Setup(c => c.InvalidateAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
@@ -130,14 +132,46 @@ public class ModeratedProfileServiceShould : UnitTestBase
             .Where(e => e.ValidationErrors.ContainsKey("role"));
     }
 
+    /// <summary>
+    /// A role change moves the person between two listings, and both are cached.
+    /// </summary>
+    /// <remarks>
+    /// The listing by role lives an hour and was invalidated by nothing: for that
+    /// hour the staff page showed the person under the role they no longer hold, and
+    /// the role they now hold one name short. The user document is read back by two
+    /// keys, by name on the profile page and by identifier wherever a link to that
+    /// person is built, so both go.
+    /// </remarks>
     [Fact]
-    public async Task InvalidateCacheAfterSettingUserRole()
+    public async Task InvalidateEveryListingASetRoleMovesTheUserBetween()
     {
+        _userRepository.Setup(r => r.GetUserAsync("TestUser"))
+            .ReturnsAsync(new GeneralUser { UserId = _userId, Username = "TestUser", Role = UserRole.RegularUser });
         _moderatedProfileRepository.Setup(r => r.SetUserRole(It.IsAny<string>(), It.IsAny<UserRole>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
         await _service.SetUserRole("TestUser", UserRole.Moderator);
 
         _cache.Verify(c => c.InvalidateAsync("user_details_testuser"), Times.Once);
+        _cache.Verify(c => c.InvalidateAsync($"user_details_{_userId}"), Times.Once);
+        _cache.Verify(c => c.InvalidateAsync("users_by_role_RegularUser"), Times.Once,
+            "the role being left keeps listing the person until the hour is out");
+        _cache.Verify(c => c.InvalidateAsync("users_by_role_Moderator"), Times.Once,
+            "and the role being taken lists one name short for the same hour");
+    }
+
+    [Fact]
+    public async Task RefuseToSetTheRoleOfSomebodyWhoIsNotThere()
+    {
+        _userRepository.Setup(r => r.GetUserAsync("TestUser")).ReturnsAsync((GeneralUser?)null);
+
+        var act = () => _service.SetUserRole("TestUser", UserRole.Moderator);
+
+        // The repository throws on an unknown name, which the pipeline turns into a
+        // 500 on an endpoint whose contract documents a 404.
+        await act.Should().ThrowAsync<HttpException>();
+        _moderatedProfileRepository.Verify(
+            r => r.SetUserRole(It.IsAny<string>(), It.IsAny<UserRole>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 }

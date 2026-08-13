@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using DM.Domain.Core.Dto;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using DM.Domain.Core.Enums;
@@ -31,13 +32,10 @@ public class UpdatePreferencesRequest
 /// Partial update of paging preferences
 /// </summary>
 /// <remarks>
-/// Allowed values: 5, 10, 20, 30, 40, 50, 100, 200. An omitted field keeps its
-/// current value.
+/// Allowed values come from PagingPolicy. An omitted field keeps its current value.
 /// </remarks>
 public class UpdatePagingRequest : IValidatableObject
 {
-    private static readonly int[] AllowedValues = [5, 10, 20, 30, 40, 50, 100, 200];
-
     /// <summary>
     /// Number of posts per page in game rooms
     /// </summary>
@@ -75,7 +73,7 @@ public class UpdatePagingRequest : IValidatableObject
                      (EntitiesPerPage, nameof(EntitiesPerPage)),
                  })
         {
-            if (value.HasValue && !AllowedValues.Contains(value.Value))
+            if (value.HasValue && !PagingPolicy.Allows(value.Value))
             {
                 yield return new ValidationResult(
                     "Недопустимое количество элементов на страницу", [field]);

@@ -60,6 +60,10 @@ internal class DiceRollRepository : MongoCollectionRepository<DbDiceRoll>, IDice
         return Collection.InsertManyAsync(documents);
     }
 
+    /// <inheritdoc />
+    public Task DeleteByPostIdAsync(Guid postId) =>
+        Collection.DeleteManyAsync(Filter.Eq(d => d.PostId, postId));
+
     private static DbDiceRoll MapToDb(DiceRoll roll) => new()
     {
         Id = roll.Id,

@@ -9,6 +9,7 @@ import {
   nextTick,
 } from "vue";
 import dayjs from "dayjs";
+import { htmlToBbcode } from "@/shared/lib/utils/bbcode";
 import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import type { Post, PostReview } from "@/entities/game";
@@ -448,8 +449,19 @@ async function startEditPost() {
   try {
     const { data } = await gameApi.getPostForEdit(props.post.id);
     if (data && isEditingPost.value) {
-      editGameText.value = data.gameText ?? editGameText.value;
-      editMetaText.value = data.metagameText ?? editMetaText.value;
+      // htmlToBbcode rather than a plain assignment: the AuthorEdit audience
+      // returns HTML carrying data-bb-* attributes (BbConverter calls RenderHtml
+      // for every audience except plain text), while the editor takes and returns
+      // BBCode. Without the reverse conversion a [private] block is saved as
+      // markup, the server escapes it on the way out, and the private line is
+      // published to the whole room — the very harm this method asks for the
+      // author's audience to avoid.
+      editGameText.value = data.gameText
+        ? htmlToBbcode(data.gameText)
+        : editGameText.value;
+      editMetaText.value = data.metagameText
+        ? htmlToBbcode(data.metagameText)
+        : editMetaText.value;
     }
   } catch {
     // The editor is already open on the display text. Refusing to open it at

@@ -169,7 +169,14 @@ defineExpose({ focus });
           <span class="result-time">{{
             formatDateFull(result.createdUtc)
           }}</span>
-          <span class="result-snippet">{{ result.snippet }}</span>
+          <span class="result-snippet">
+            <template v-for="(part, index) in result.snippet" :key="index">
+              <mark v-if="part.isMatch" class="search-highlight">{{
+                part.text
+              }}</mark>
+              <template v-else>{{ part.text }}</template>
+            </template>
+          </span>
         </button>
 
         <div v-if="hasMore" class="load-more-row">

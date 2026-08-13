@@ -17,15 +17,6 @@ internal class ModerationIntentionResolver : IIntentionResolver<ModerationIntent
             ModerationIntention.CreateModNote => user.Role >= UserRole.Moderator,
             ModerationIntention.EditModNote => user.Role >= UserRole.Moderator,
             ModerationIntention.DeleteModNote => user.Role >= UserRole.Moderator,
-            ModerationIntention.ViewTickets => user.Role >= UserRole.Moderator,
-            ModerationIntention.ResolveTicket => user.Role >= UserRole.Moderator,
-            ModerationIntention.ViewLinkedProfiles => user.Role >= UserRole.Moderator,
-
-            // Any authenticated user can create tickets
-            ModerationIntention.CreateTicket => user.IsAuthenticated,
-
-            // Senior moderator+ actions
-            ModerationIntention.ManageCredentials => user.Role >= UserRole.SeniorModerator,
 
             // Admin only actions
             ModerationIntention.SetUserRole => user.Role >= UserRole.Admin,

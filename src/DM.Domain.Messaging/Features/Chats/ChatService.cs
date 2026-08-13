@@ -67,9 +67,13 @@ internal class ChatService : IChatService
         await ThrowIfAnyBlocksTheAuthor(allParticipants);
 
         var (chat, chatLinks) = _factory.CreateGroup(createChat.Title, allParticipants);
-        var result = await _repository.Create(chat, chatLinks);
 
-        await _unreadCountersRepository.CreateAsync(result.Id, UnreadEntryType.Message, allParticipants);
+        // Markers first, row second, commit on the line after it returns.
+        await using var counters = await _unreadCountersRepository.ReserveAsync(
+            UnreadMarker.ForReaders(chat.ChatId, UnreadEntryType.Message, allParticipants));
+
+        var result = await _repository.Create(chat, chatLinks);
+        counters.Commit();
 
         return result;
     }
@@ -172,10 +176,14 @@ internal class ChatService : IChatService
         }
 
         var (chat, chatLinks) = _factory.CreateDirect(currentUserId, otherUserId);
-        var result = await _repository.Create(chat, chatLinks);
 
-        await _unreadCountersRepository.CreateAsync(result.Id, UnreadEntryType.Message,
-            new[] { currentUserId, otherUserId }.Distinct());
+        // Markers first, row second, commit on the line after it returns.
+        await using var counters = await _unreadCountersRepository.ReserveAsync(
+            UnreadMarker.ForReaders(chat.ChatId, UnreadEntryType.Message,
+                new[] { currentUserId, otherUserId }));
+
+        var result = await _repository.Create(chat, chatLinks);
+        counters.Commit();
 
         return result;
     }
@@ -259,15 +267,18 @@ internal class ChatService : IChatService
             RemoveUserIds = removeParticipants
         };
 
-        var result = await _repository.Update(updateEntity);
+        // Markers of everybody joining go in first, the way they do on creation:
+        // a participant whose marker never landed borrows the parent of a
+        // neighbour when they open the conversation, and a conversation carrying
+        // somebody else's parent drops out of its own reader's total.
+        var joining = addParticipants.Length > 0
+            ? new[] { UnreadMarker.ForReaders(chat.UnreadEntityId, UnreadEntryType.Message, addParticipants) }
+            : [];
 
-        if (addParticipants.Length > 0)
-        {
-            await _unreadCountersRepository.CreateAsync(
-                chat.UnreadEntityId,
-                UnreadEntryType.Message,
-                addParticipants);
-        }
+        await using var counters = await _unreadCountersRepository.ReserveAsync(joining);
+
+        var result = await _repository.Update(updateEntity);
+        counters.Commit();
 
         // The other half of the same lifecycle. Without it a person removed from
         // the chat kept a marker that every later message incremented, on a

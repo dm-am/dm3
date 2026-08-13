@@ -28,15 +28,21 @@ public class PublishGraphShould
 {
     private const string Workflow = ".github/workflows/dotnet.yml";
 
+    /// <summary>The job that gives the images their moving names.</summary>
+    private const string Promotion = "promote-images";
+
     /// <summary>
     /// Jobs a publisher deliberately does not wait for.
     /// </summary>
     /// <remarks>
-    /// Empty, and an empty set is the answer: every check in the file is a check
-    /// that could stop a release. The set exists so that an exception has to be
-    /// written down rather than made by omission.
+    /// One entry, and it is the only shape that can ever be in here: a job that
+    /// runs after the publishers rather than before them. Waiting for it would be
+    /// a cycle, and it stops no release because there is nothing left to stop.
+    ///
+    /// Everything else in the file is a check that could, which is why the set is
+    /// written down rather than inferred: an exception has to be typed out.
     /// </remarks>
-    private static readonly HashSet<string> NotAGate = new(StringComparer.Ordinal);
+    private static readonly HashSet<string> NotAGate = new(StringComparer.Ordinal) { Promotion };
 
     /// <summary>
     /// A top-level job key: two spaces, a name, a colon, nothing after it.
@@ -118,6 +124,52 @@ public class PublishGraphShould
                     $"{publisher} pushes an image, and a check it does not wait for is a " +
                     "check that cannot stop the release");
         }
+    }
+
+    /// <summary>
+    /// One tag means one commit, and the moving names are set once.
+    /// </summary>
+    /// <remarks>
+    /// The publish matrix is three legs plus the frontend, and each used to set
+    /// "latest", the branch name and the release tag for itself. They finish at
+    /// different moments and any of them can fail, so those names ended up
+    /// pointing at whatever mixture of commits the run happened to leave behind -
+    /// while compose pins all four images to one tag on the promise that they came
+    /// from a single commit, and nothing downstream ever checks.
+    ///
+    /// So a publisher pushes exactly one immutable tag, and the promotion job
+    /// moves the names afterwards by digest. Nothing about that is visible in a
+    /// green run: the registry is not read by any test, and the mixture is only
+    /// found by whoever deploys it.
+    /// </remarks>
+    [Fact]
+    public void GiveTheMovingNamesOnceAndAfterEveryPublisher()
+    {
+        var workflow = File.ReadAllText(Path.Combine(RepositoryRoot, Workflow));
+        var jobs = Jobs();
+
+        jobs.Should().ContainKey(Promotion,
+            "without it the moving names are set by each publisher for itself");
+
+        var publishers = jobs.Keys
+            .Where(name => name.StartsWith("publish", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        publishers.Should().NotBeEmpty("the rule is about the jobs that push images");
+        jobs[Promotion].OrderBy(name => name, StringComparer.Ordinal).Should().Equal(publishers,
+            "a name moved before the last image is pushed names a release that does not exist yet");
+
+        // The moving names, in the vocabulary the metadata action spells them.
+        foreach (var moving in new[] { "type=raw,value=latest", "type=ref,event=branch", "type=ref,event=tag" })
+        {
+            workflow.Should().NotContain(moving,
+                $"{moving} in a publisher sets a shared name from one leg of a matrix, and the " +
+                "legs finish at different moments");
+        }
+
+        workflow.Should().Contain("type=sha,prefix=",
+            "the tag a publisher does push has to name the commit it was built from");
     }
 
     /// <summary>

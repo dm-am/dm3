@@ -31,7 +31,7 @@ internal class PasswordResetMailSender : IPasswordResetMailSender
     /// <inheritdoc />
     public async Task Send(string email, string username, Guid token)
     {
-        var confirmationLinkUrl = new Uri(new Uri(_siteAddresses.PublicUrl), $"reset-password/{token}");
+        var confirmationLinkUrl = new Uri(new Uri(_siteAddresses.PublicUrl), $"reset-password#token={token}");
         var emailBody = await _renderer.RenderAsync(new PasswordResetConfirmationViewModel(
             Username: username,
             ConfirmationLinkUrl: confirmationLinkUrl.ToString()));

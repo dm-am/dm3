@@ -41,9 +41,18 @@ RUN dotnet restore src/${PROJECT_NAME}/${PROJECT_NAME}.csproj
 # 3. Copy source code AFTER restore (only code changes invalidate this layer)
 COPY src/ src/
 
+# The commit the image was built from, stamped into the assembly so the process can
+# name its own release. Declared here rather than at the top: an argument that
+# changes on every commit invalidates every layer below it, and the restore above
+# is the expensive one.
+#
+# Left unset it is empty, which is what a local build wants - the reader turns into
+# an explicit "unknown" rather than a plausible wrong answer.
+ARG SOURCE_REVISION
+
 # 4. Publish. --no-restore: the restore above already ran for this project, and
 # without the flag publish does the whole of it a second time on every build.
-RUN dotnet publish src/${PROJECT_NAME}/${PROJECT_NAME}.csproj -c Release -o out --no-restore
+RUN dotnet publish src/${PROJECT_NAME}/${PROJECT_NAME}.csproj -c Release -o out --no-restore -p:SourceRevisionId=${SOURCE_REVISION}
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 
@@ -63,4 +72,10 @@ COPY --from=build /app/out ./
 USER dmuser
 
 ENV RUNTIME_PROJECT=${PROJECT_NAME}.dll
-ENTRYPOINT ["sh", "-c", "dotnet ${RUNTIME_PROJECT}"]
+
+# exec, so that dotnet replaces the shell and becomes PID 1. Without it the shell
+# is PID 1, docker stop delivers SIGTERM to the shell alone, and .NET never hears
+# it: no host shutdown, no log flush, no finishing the message already in hand.
+# Every stop ended in SIGKILL once the grace period ran out. The shell itself stays
+# because the exec form of ENTRYPOINT expands no variables.
+ENTRYPOINT ["sh", "-c", "exec dotnet ${RUNTIME_PROJECT}"]

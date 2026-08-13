@@ -31,7 +31,7 @@ internal class EmailChangeMailSender : IEmailChangeMailSender
     /// <inheritdoc />
     public async Task Send(string email, string username, Guid token)
     {
-        var confirmationLinkUrl = new Uri(new Uri(_siteAddresses.PublicUrl), $"confirm-email/{token}");
+        var confirmationLinkUrl = new Uri(new Uri(_siteAddresses.PublicUrl), $"confirm-email#token={token}");
         var emailBody = await _renderer.RenderAsync(new EmailChangeConfirmationViewModel(
             username,
             confirmationLinkUrl.ToString()));

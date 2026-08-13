@@ -54,4 +54,31 @@ public class LogFlushOnShutdownShould
             "Environment.Exit runs no finally block, so the flush in Main never happens on this path");
         flush.Should().BeLessThan(exit, "a flush after the process is gone flushes nothing");
     }
+
+    /// <summary>
+    /// The runtime is PID 1 in the container, so it hears the stop signal at all.
+    /// </summary>
+    /// <remarks>
+    /// The image starts through a shell, because the entry point interpolates the
+    /// project name and the exec form of ENTRYPOINT expands nothing. Without exec
+    /// the shell stays PID 1 and docker stop delivers SIGTERM to it alone: .NET
+    /// never runs its shutdown, the flush asserted above never happens, the message
+    /// a worker is holding is never finished, and the container dies of SIGKILL
+    /// when the grace period runs out. Nothing about that is visible in a log —
+    /// the log is exactly what is lost.
+    /// </remarks>
+    [Fact]
+    public void HandTheStopSignalToTheRuntimeItself()
+    {
+        var dockerfile = File.ReadAllText(Path.Combine(
+            DM.Testing.RepositoryLayout.Root, "docker", "app.Dockerfile"));
+
+        var entryPoint = dockerfile
+            .Split('\n')
+            .LastOrDefault(line => line.TrimStart().StartsWith("ENTRYPOINT", StringComparison.Ordinal));
+
+        entryPoint.Should().NotBeNull("the image has to start something");
+        entryPoint.Should().Contain("exec ",
+            "without it the shell keeps PID 1 and the runtime is never told to stop");
+    }
 }

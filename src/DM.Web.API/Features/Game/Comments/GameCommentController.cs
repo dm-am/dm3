@@ -1,4 +1,5 @@
 using DM.Web.API.Shared.Authentication;
+using DM.Domain.Core.Comments;
 using System;
 using System.Threading.Tasks;
 using DM.Domain.Game.Features.Comments;
@@ -66,7 +67,7 @@ public class GameCommentController : ControllerBase
     [HttpGet("{id}/comments", Name = nameof(GetGameComments))]
     [ProducesResponseType(typeof(ListEnvelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetGameComments(string id, [FromQuery] GameCommentsQuery q)
+    public async Task<IActionResult> GetGameComments(string id, [FromQuery] CommentsQuery q)
     {
         var gameId = await _gameApiService.ResolveId(id);
         var (comments, paging) = await _commentApiService.Get(gameId, q);

@@ -1,4 +1,5 @@
 using System.Threading;
+using DM.Domain.Core.Tokens;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Availability;
 using DM.Domain.Account.Features.Registration;
@@ -60,7 +61,9 @@ internal class RecoveryService : IRecoveryService
             // Send password reset email
             var token = _tokenFactory.Create(user.UserId, TokenType.PasswordChange);
             await _passwordResetRepository.ReplacePasswordResetToken(user.UserId, token);
-            await _passwordResetEmailSender.Send(user.Email, user.Username, token.TokenId);
+            // Secret, not TokenId: the row keeps a hash of this value and nothing
+            // that would let a reader of the table redeem the link.
+            await _passwordResetEmailSender.Send(user.Email, user.Username, token.Secret);
 
             // The journal the owner of the account reads: a reset he did not ask
             // for is the visible half of somebody working on his mailbox, and the
@@ -76,10 +79,13 @@ internal class RecoveryService : IRecoveryService
         if (pending != null)
         {
             // Resend activation email with new token
-            pending.TokenId = _guidFactory.Create();
+            // A resend issues a new secret rather than mailing the old one again:
+            // the old value is not recoverable from the row by design.
+            pending.Secret = _guidFactory.Create();
+            pending.SecretHash = ConfirmationSecret.Hash(pending.Secret);
             pending.TokenCreatedUtc = _dateTimeProvider.Now;
             await _registrationRepository.UpdatePending(pending);
-            await _activationEmailSender.Send(pending.Email, pending.TokenId);
+            await _activationEmailSender.Send(pending.Email, pending.Secret);
 
             _logger.LogInformation("Activation email resent for pending registration");
             return RecoveryResult.ActivationResent;

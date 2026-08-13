@@ -92,13 +92,17 @@ internal class PublicationCommentService : IPublicationCommentService
             publication.CommentCount + 1);
 
         await _countersRepository.IncrementAsync(publication.Id, UnreadEntryType.Message);
-        await _invokedEventProducer.SendAsync(EventType.NewBlogComment, commentId);
+        // The publication event, not the blog one: a comment carries the id of
+        // what it hangs on, so the blog generator joined Comments to Blogs on a
+        // publication id, matched nothing and produced no notification. Nothing
+        // failed — the author of a commented publication simply was never told.
+        await _invokedEventProducer.SendAsync(EventType.NewPublicationComment, commentId);
 
         return createdComment;
     }
 
     /// <inheritdoc />
-    public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid publicationId, PublicationCommentsQuery query,
+    public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid publicationId, CommentsQuery query,
         IReadOnlyCollection<Guid>? excludeUserIds = null)
     {
         await _publicationService.GetPublication(publicationId);
@@ -156,11 +160,12 @@ internal class PublicationCommentService : IPublicationCommentService
         {
             CommentId = updateComment.CommentId,
             Text = text,
-            LastUpdateUtc = _dateTimeProvider.Now
+            LastUpdateUtc = _dateTimeProvider.Now,
+            EditorUserId = currentUser.UserId
         };
 
         var updatedComment = await _repository.Update(entity);
-        await _invokedEventProducer.SendAsync(EventType.ChangedBlogComment, updateComment.CommentId);
+        await _invokedEventProducer.SendAsync(EventType.ChangedPublicationComment, updateComment.CommentId);
         return updatedComment;
     }
 
@@ -194,7 +199,7 @@ internal class PublicationCommentService : IPublicationCommentService
         await _repository.Delete(entity);
         await _countersRepository.DecrementAsync(comment.PublicationId, UnreadEntryType.Message, comment.CreatedUtc);
 
-        await _invokedEventProducer.SendAsync(EventType.DeletedBlogComment, commentId);
+        await _invokedEventProducer.SendAsync(EventType.DeletedPublicationComment, commentId);
     }
 
     /// <inheritdoc />

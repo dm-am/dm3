@@ -59,7 +59,16 @@ internal class NotificationDispatcherConsumer : BackgroundService
         // this way all along.
         await Task.Yield();
 
-        var parameters = new RabbitConsumerParameters("dm.notifications", QueueName, ProcessingOrder.Unmanaged)
+        // Sequential rather than unmanaged. Unmanaged is the one order the client
+        // implements by skipping the prefetch call altogether, so the broker hands
+        // over the whole queue at once and the worker holds every message of it in
+        // memory, unacknowledged, until it has worked through them. It buys no
+        // parallelism to pay for that: the handler runs on the client's async
+        // consumer, which delivers one message at a time on the channel either
+        // way. What it does buy is a backlog that no rule can see - depth is read
+        // off messages_ready, and a message already handed to a consumer is not
+        // ready any more.
+        var parameters = new RabbitConsumerParameters("dm.notifications", QueueName, ProcessingOrder.Sequential)
         {
             ExchangeName = InvokedEventsTransport.ExchangeName,
             RoutingKeys = ResolveHandledEventTypes().ToRoutingKeys(),
@@ -93,6 +102,12 @@ internal class NotificationDispatcherConsumer : BackgroundService
     /// matched, and RabbitMQ dropped it without a trace.
     /// Instances are resolved in a scope and released immediately; holding them
     /// on this singleton would capture their scoped dependencies.
+    ///
+    /// The price of deriving it: an event type no generator handles matches no
+    /// binding, so the broker returns it to the publisher as unroutable and the
+    /// client drops the return without a word. That counter is expected to be
+    /// nonzero on every stand from the first minute, and no threshold on it means
+    /// anything - which is why nothing alerts on it.
     /// </summary>
     private EventType[] ResolveHandledEventTypes()
     {

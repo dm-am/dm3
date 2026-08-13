@@ -62,7 +62,7 @@ public class MongoRetentionShould : IntegrationTestBase
         var userId = Guid.NewGuid();
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<IUnreadCountersRepository>();
-        await repository.CreateAsync(entityId, UnreadEntryType.Message, new[] { userId });
+        await repository.CreateMarkerAsync(entityId, UnreadEntryType.Message, new[] { userId });
 
         await repository.DeleteAsync(entityId, UnreadEntryType.Message);
 

@@ -130,9 +130,10 @@ internal class PublicationService : IPublicationService
         var user = _identityProvider.Current.User;
         var userId = user.UserId;
         var now = _dateTimeProvider.Now;
+        var publicationId = _guidFactory.Create();
         var entity = new CreatePublicationEntity
         {
-            PublicationId = _guidFactory.Create(),
+            PublicationId = publicationId,
             BlogId = createPublication.BlogId,
             RubricId = createPublication.RubricId,
             AuthorId = userId,
@@ -145,10 +146,14 @@ internal class PublicationService : IPublicationService
             PublishImmediately = createPublication.PublishImmediately,
             CreatedUtc = now
         };
+        // Markers first, row second, commit on the line after it returns.
+        await using var counters = await _unreadCountersRepository.ReserveAsync(
+            UnreadMarker.UnderParent(publicationId, createPublication.BlogId, UnreadEntryType.Message));
+
         var createdPublication = await _repository.CreatePublication(entity, ct);
-        await Task.WhenAll(
-            _unreadCountersRepository.CreateAsync(createdPublication.Id, createPublication.BlogId, UnreadEntryType.Message),
-            _eventProducer.SendAsync(EventType.NewPublication, createdPublication.Id));
+        counters.Commit();
+
+        await _eventProducer.SendAsync(EventType.NewPublication, createdPublication.Id);
         return createdPublication;
     }
 

@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Comments;
 using System.Threading.Tasks;
 using DM.Domain.Blog.Features.Comments;
 using DM.Web.API.Shared.Authentication;
@@ -80,7 +81,7 @@ public class BlogCommentController : ControllerBase
     [HttpGet("{id}/comments", Name = nameof(GetBlogComments))]
     [ProducesResponseType(typeof(ListEnvelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetBlogComments(string id, [FromQuery] BlogCommentsQuery q)
+    public async Task<IActionResult> GetBlogComments(string id, [FromQuery] CommentsQuery q)
     {
         var blogId = await _blogApiService.ResolveId(id);
         var (comments, paging) = await _commentApiService.Get(blogId, q);

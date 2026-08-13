@@ -58,20 +58,19 @@ internal class PasswordChangeService : IPasswordChangeService
     }
 
     /// <inheritdoc />
-    public async Task<PasswordResetTokenInfo?> GetTokenInfo(Guid tokenId)
+    public async Task<PasswordResetTokenInfo?> GetTokenInfo(Guid secret)
     {
-        var tokenMinCreatedUtc = _dateTimeProvider.Now - TimeSpan.FromHours(_tokenConfig.PasswordResetTokenLifetimeHours);
-        var isValid = await _repository.TokenValid(tokenId, tokenMinCreatedUtc);
-
-        if (!isValid)
+        var liveSince = _dateTimeProvider.Now - TimeSpan.FromHours(_tokenConfig.PasswordResetTokenLifetimeHours);
+        if (await _repository.TokenValid(secret, liveSince))
         {
-            // Token doesn't exist, is removed, or is too old
-            // Check if it exists at all (might be expired vs not found)
-            var user = await _repository.FindUser(tokenId);
-            return user == null ? null : PasswordResetTokenInfo.Expired();
+            return PasswordResetTokenInfo.Ready();
         }
 
-        return PasswordResetTokenInfo.Ready();
+        // Live and expired are different answers on the form: one opens the field,
+        // the other offers to request a new letter. Anything older than the window
+        // still in the table is an expired one; a secret nobody issued is null.
+        var expired = await _repository.FindUser(secret, DateTimeOffset.MinValue);
+        return expired == null ? null : PasswordResetTokenInfo.Expired();
     }
 
     /// <inheritdoc />
@@ -93,8 +92,11 @@ internal class PasswordChangeService : IPasswordChangeService
         }
 
         await _validator.ValidateAndThrowAsync(passwordChange);
+        // The window is checked here as well as in the repository: a reset opened
+        // with an expired secret must not fall through to the authenticated branch.
+        var liveSince = _dateTimeProvider.Now - TimeSpan.FromHours(_tokenConfig.PasswordResetTokenLifetimeHours);
         var user = passwordChange.Token.HasValue
-            ? await _repository.FindUser(passwordChange.Token.Value)
+            ? await _repository.FindUser(passwordChange.Token.Value, liveSince)
             : _identityProvider.Current.User;
 
         if (user == null)

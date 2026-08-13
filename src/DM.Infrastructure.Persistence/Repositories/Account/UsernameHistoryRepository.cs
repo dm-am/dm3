@@ -52,22 +52,6 @@ internal class UsernameHistoryRepository : IUsernameHistoryRepository
     }
 
     /// <inheritdoc />
-    public async Task Add(CreateUsernameHistory entry, CancellationToken ct = default)
-    {
-        var entity = new DbUsernameHistory
-        {
-            UsernameHistoryId = entry.UsernameHistoryId,
-            UserId = entry.UserId,
-            OldUsername = entry.OldUsername,
-            NewUsername = entry.NewUsername,
-            ChangedUtc = entry.ChangedUtc,
-            ApprovedByUserId = entry.ApprovedById
-        };
-        _dbContext.UsernameHistories.Add(entity);
-        await _dbContext.SaveChangesAsync(ct);
-    }
-
-    /// <inheritdoc />
     public async Task<UsernameHistoryEntry?> GetLatestByUserId(Guid userId, CancellationToken ct = default)
     {
         return await _dbContext.UsernameHistories

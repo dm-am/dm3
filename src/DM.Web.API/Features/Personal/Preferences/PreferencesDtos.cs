@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Dto;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using DM.Domain.Core.Enums;
@@ -30,37 +31,34 @@ public class Preferences
 /// User paging preferences for various list views
 /// </summary>
 /// <remarks>
-/// Allowed values: 5, 10, 20, 30, 40, 50, 100, 200.
-/// Default is 10 for all values.
+/// Allowed values and the default come from PagingPolicy.
 /// </remarks>
 public class Paging : IValidatableObject
 {
-    private static readonly int[] AllowedValues = { 5, 10, 20, 30, 40, 50, 100, 200 };
-
     /// <summary>
     /// Number of posts per page in game rooms
     /// </summary>
-    public int PostsPerPage { get; set; } = 10;
+    public int PostsPerPage { get; set; } = PagingPolicy.DefaultPageSize;
 
     /// <summary>
     /// Number of comments per page on games or topics
     /// </summary>
-    public int CommentsPerPage { get; set; } = 10;
+    public int CommentsPerPage { get; set; } = PagingPolicy.DefaultPageSize;
 
     /// <summary>
     /// Number of topics per page on forum boards
     /// </summary>
-    public int TopicsPerPage { get; set; } = 10;
+    public int TopicsPerPage { get; set; } = PagingPolicy.DefaultPageSize;
 
     /// <summary>
     /// Number of messages per page in conversations
     /// </summary>
-    public int MessagesPerPage { get; set; } = 10;
+    public int MessagesPerPage { get; set; } = PagingPolicy.DefaultPageSize;
 
     /// <summary>
     /// Number of items per page for other entity lists (users, games, etc.)
     /// </summary>
-    public int EntitiesPerPage { get; set; } = 10;
+    public int EntitiesPerPage { get; set; } = PagingPolicy.DefaultPageSize;
 
     /// <inheritdoc />
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
@@ -81,7 +79,7 @@ public class Paging : IValidatableObject
             yield return new ValidationResult("Недопустимое значение записей на страницу", new[] { nameof(EntitiesPerPage) });
     }
 
-    private static bool IsAllowed(int value) => Array.Exists(AllowedValues, v => v == value);
+    private static bool IsAllowed(int value) => PagingPolicy.Allows(value);
 }
 
 /// <summary>

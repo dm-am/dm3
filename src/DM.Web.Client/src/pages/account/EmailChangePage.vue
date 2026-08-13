@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRouter } from "vue-router";
+import { readConfirmationToken } from "@/shared/lib/utils/confirmationToken";
 import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
 import { accountApi } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
@@ -8,14 +9,15 @@ import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import StatusIcon from "@/shared/ui/Icon/StatusIcon.vue";
 import { parseApiErrors } from "@/shared/lib/utils/apiErrors";
 
-const route = useRoute();
 const router = useRouter();
 
 const { loading, error, execute } = useAsyncAction();
 const confirmed = ref(false);
 
 onMounted(async () => {
-  const token = route.params.token as string;
+  // The value arrives in the fragment and is cleared as it is read — see
+  // readConfirmationToken.
+  const token = readConfirmationToken();
   if (!token) {
     error.value = "Токен подтверждения отсутствует";
     return;

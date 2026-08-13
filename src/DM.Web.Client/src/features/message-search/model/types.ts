@@ -22,8 +22,21 @@ export type MessageSearchResult = {
   sourceTitle: string | null;
   id: string;
   createdUtc: string;
-  /** [private]-stripped preview, already truncated server-side. */
-  snippet: string;
+  /**
+   * The preview, split into the runs a reader sees: a window around the match
+   * with the match itself marked. [private] blocks are never in it.
+   *
+   * Segments and not a string of markup — the server marks the match, and a
+   * marked string would be the one field of this contract that had to be rendered
+   * as html. Printed as text nodes, the question does not arise.
+   */
+  snippet: SnippetSegment[];
+};
+
+/** One run of a search preview. */
+export type SnippetSegment = {
+  text: string;
+  isMatch: boolean;
 };
 
 /** Query params sent to GET /v1/search/messages. */

@@ -177,7 +177,8 @@ internal class TopicCommentService : ITopicCommentService
         {
             CommentId = updateComment.CommentId,
             Text = text,
-            LastUpdateUtc = _dateTimeProvider.Now
+            LastUpdateUtc = _dateTimeProvider.Now,
+            EditorUserId = currentUser.UserId
         };
 
         var updatedComment = await _repository.Update(updateEntity);
@@ -236,7 +237,11 @@ internal class TopicCommentService : ITopicCommentService
     /// <inheritdoc />
     public async Task MarkAllAsReadAsync()
     {
-        var boards = await _boardService.GetBoardsList();
+        // Identifiers, which is all the loop below reads. The list with counters
+        // fills them from two aggregate reads and three queries, and every one of
+        // those numbers is discarded a line later - by the very call that makes
+        // them all zero.
+        var boards = await _boardService.GetAvailableBoards();
         var userId = _identityProvider.Current.User.UserId;
         foreach (var board in boards)
         {

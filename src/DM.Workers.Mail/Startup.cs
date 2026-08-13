@@ -57,7 +57,7 @@ public class Startup
         // This worker exists to consume from the broker, so a broker it cannot
         // reach is exactly the condition its health has to report. A bare
         // AddHealthChecks() answered Healthy no matter what.
-        services.AddDmBrokerHealthCheck(_configuration);
+        services.AddDmBrokerHealthCheck(_configuration, ["messaging", "ready"]);
 
         services.AddMvc();
     }

@@ -251,7 +251,7 @@ public class ChatRoomMessagesShould : IntegrationTestBase
         await dbContext.SaveChangesAsync();
 
         await scope.ServiceProvider.GetRequiredService<IUnreadCountersRepository>()
-            .CreateAsync(roomId, TestConstants.TestGameId, UnreadEntryType.Message);
+            .CreateMarkerAsync(roomId, TestConstants.TestGameId, UnreadEntryType.Message);
 
         return (roomId, chatId);
     }

@@ -74,6 +74,13 @@
     <PackageVersion Include="OpenTelemetry.Contrib.Instrumentation.EntityFrameworkCore" Version="1.0.0-beta2" />
     <PackageVersion Include="OpenTelemetry.Exporter.Console" Version="1.17.0" />
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.17.0" />
+    <!-- Стабильной версии у этого экспортера не существует: он остается бетой у
+         самого проекта OpenTelemetry, и предрелизность тут не отставание. Ядро
+         вниз не тянет — зависимость объявлена диапазоном [1.10.0, 2.0.0), и в
+         графе разрешается версия соседних строк. Между бетами менялось поведение
+         суффикса _total и формата OpenMetrics, то есть поднятие в одиночку
+         переименует серии, на которые уже написаны правила и панели. Решено
+         2026-08-13 поднимать только вместе со следующим поднятием ядра. -->
     <PackageVersion Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.10.0-beta.1" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.12.0" />
@@ -82,6 +89,7 @@
     <PackageVersion Include="Polly" Version="8.4.1" />
     <PackageVersion Include="Serilog" Version="4.3.1" />
     <PackageVersion Include="Serilog.AspNetCore" Version="8.0.2" />
+    <PackageVersion Include="Serilog.Formatting.Compact" Version="2.0.0" />
     <PackageVersion Include="Serilog.Settings.Configuration" Version="8.0.2" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.0.0" />
     <PackageVersion Include="Serilog.Sinks.Grafana.Loki" Version="9.0.1" />
@@ -89,6 +97,15 @@
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="6.7.0" />
     <PackageVersion Include="Swashbuckle.AspNetCore.Swagger" Version="6.7.0" />
     <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerUI" Version="6.7.0" />
+    <!-- Не Testcontainers тянет ее сюда по своей воле: он объявляет нижнюю
+         границу 2025.1.0, а весь диапазон до нее включительно закрыт советом
+         GHSA-q939-rpr3-3284 (ScpClient пишет туда, куда скажет сервер, при
+         рекурсивной загрузке). Патч вышел в 2026.0.0, апстрим на него не
+         перешел даже в 4.13.0. Поднимается транзитивным пиннингом
+         сверху: граница у зависимости нижняя, поэтому 2026.0.0 ее
+         удовлетворяет, а не нарушает. Снять, когда Testcontainers потребует
+         2026.0.0 сам. -->
+    <PackageVersion Include="SSH.NET" Version="2026.0.0" />
     <PackageVersion Include="Testcontainers.MongoDb" Version="4.3.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.3.0" />
     <PackageVersion Include="Testcontainers.RabbitMq" Version="4.3.0" />

@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using DM.Domain.Account;
+using DM.Infrastructure.Persistence.MongoIntegration;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Configuration;
@@ -54,6 +56,16 @@ internal static class Program
             // reject a bare positional argument as an unrecognized switch.
             using var host = CreateHostBuilder().Build();
             await using var scope = host.Services.CreateAsyncScope();
+
+            // The Mongo indexes, before anything is written. A reset drops the
+            // database, and the init script only ever runs on an empty volume, so a
+            // reseeded Mongo held no index at all until somebody happened to start
+            // the API: the sidebar counters the whole site reads went to collection
+            // scans, and a racing pair of upserts had nothing stopping it from
+            // leaving two markers for one thing.
+            await scope.ServiceProvider.GetRequiredService<MongoIndexInitializer>()
+                .StartAsync(CancellationToken.None);
+
             var seeder = scope.ServiceProvider.GetRequiredService<DataSeeder>();
 
             if (command is AllCommand or UsersCommand)
@@ -110,6 +122,11 @@ internal static class Program
         {
             builder.RegisterModuleOnce<CoreModule>();
             builder.RegisterModuleOnce<PersistenceModule>();
+
+            // The Mongo index set, asserted before the seed writes anything. The
+            // hosts take it as a hosted service; the tool has no host to hook, so it
+            // registers the same class and calls it directly.
+            builder.RegisterType<MongoIndexInitializer>().AsSelf().SingleInstance();
 
             // Password hashing lives in the Account domain and its implementation is
             // internal, so the assembly scan is what picks it up. The same goes for

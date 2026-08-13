@@ -28,14 +28,12 @@ export const DEFAULT_PAGE_SIZES = {
  * The largest page the API serves.
  *
  * A take or limit above it is a validation error and not a shortened page
- * (API_DESIGN.md, "Pagination"), while the preference saved through
- * PATCH /v1/users/me/preferences goes up to 200: its whitelist allows that and
- * the account form offers it. The two are reconciled here, at the single point
- * where a saved preference becomes a request size, so that a reader who picked
- * 200 gets the largest page there is instead of a refused request and a list
- * that failed to load.
+ * (API_DESIGN.md, "Pagination"). It is the same number as the largest size the
+ * account form offers and the preference endpoint accepts — PagingPolicy on the
+ * server states all three — because a preference the reader can save and the API
+ * then refuses to serve is a setting that quietly does nothing.
  */
-export const MAX_API_PAGE_SIZE = 100;
+export const MAX_API_PAGE_SIZE = 200;
 
 /** The reader's preference, or the default, within what the API will serve. */
 function pageSize(preference: number | undefined, fallback: number): number {

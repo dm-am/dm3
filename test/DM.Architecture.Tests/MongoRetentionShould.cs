@@ -30,7 +30,7 @@ public class MongoRetentionShould
     private const string Initializer =
         "src/DM.Infrastructure.Persistence/MongoIntegration/MongoIndexInitializer.cs";
 
-    /// <summary>The bootstrap script for a fresh data volume, which mirrors the set.</summary>
+    /// <summary>The bootstrap script for a fresh data volume.</summary>
     private const string InitScript = "docker/mongo-init.js";
 
     /// <summary>Start of one collection's block of index declarations.</summary>
@@ -84,36 +84,30 @@ public class MongoRetentionShould
                 "an exemption for a collection the initializer no longer declares guards " +
                 "nothing and outlives its reason");
 
-    [Fact]
-    public void MirrorEveryTermInTheBootstrapScript() =>
-        Occurrences(Read(InitScript), ScriptTerm)
-            .Should().Be(Occurrences(Read(Initializer), DeclaresATerm),
-                "the script runs once on an empty volume and the initializer runs on every " +
-                "start, so a term declared in one and not the other makes the retention of " +
-                "a database depend on which of the two created it");
-
     /// <summary>
-    /// The count the bootstrap script prints is the count it creates.
+    /// The index set is declared in one place, and the bootstrap script is not it.
     /// </summary>
     /// <remarks>
-    /// The script ends by summarising itself, and that summary is the only part
-    /// of it a person reads after a deploy. It is also prose next to code, so it
-    /// drifts the moment an index is added or dropped and says nothing while it
-    /// does — a line reading "Total: 19 indexes" over eighteen createIndex calls
-    /// is indistinguishable from one that is right, and the reader takes the
-    /// failure of an index to appear as their own miscount.
+    /// The script used to hold a second copy of the whole set, and the two were kept
+    /// mirrored by a rule counting terms on both sides. A copy that can only ever be
+    /// applied to an empty volume drifts in one direction and is noticed by nobody,
+    /// and mirroring it only meant maintaining the drift in step. The initializer
+    /// asserts the set on every start of the API and of the seeder, which covers the
+    /// fresh volume as well, so what is left to hold is that the copy stays gone.
     /// </remarks>
     [Fact]
-    public void PrintTheNumberOfIndexesItActuallyCreates()
+    public void LeaveTheIndexSetToTheInitializerAlone()
     {
         var script = Read(InitScript);
-        var claimed = TotalClaimed.Match(script);
 
-        claimed.Success.Should().BeTrue("the script states its own total, and that is the claim");
-        int.Parse(claimed.Groups["total"].Value, CultureInfo.InvariantCulture).Should()
-            .Be(Occurrences(script, "createIndex("),
-                "the summary is what a person reads after a deploy instead of counting the " +
-                "calls above it");
+        Occurrences(script, "createIndex(").Should().Be(0,
+            "an index declared where it can only reach a brand-new volume is a copy " +
+            "that drifts one way and tells nobody");
+        Occurrences(script, ScriptTerm).Should().Be(0,
+            "a retention term is part of the stored index descriptor, and the script " +
+            "declares no indexes");
+        Occurrences(Read(Initializer), DeclaresATerm).Should().BeGreaterThan(0,
+            "the terms live in the initializer, and a rule matching nothing passes");
     }
 
     /// <summary>The self-summary at the end of the bootstrap script.</summary>

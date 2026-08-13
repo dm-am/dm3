@@ -16,6 +16,18 @@ public interface IBoardService
     Task<IEnumerable<Board>> GetBoardsList();
 
     /// <summary>
+    /// Get list of available boards without their unread counters
+    /// </summary>
+    /// <remarks>
+    /// The counters of the list above cost two aggregate reads across the document
+    /// store and three more queries behind them, and a caller that only needs to
+    /// know which boards exist throws every one of those away. Named apart rather
+    /// than parameterised so that the choice is made where it is paid for.
+    /// </remarks>
+    /// <returns>List of boards</returns>
+    Task<IEnumerable<Board>> GetAvailableBoards();
+
+    /// <summary>
     /// Get available board by title with counters
     /// </summary>
     /// <param name="boardTitle">Board title</param>

@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Tokens;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -117,7 +118,7 @@ public class ActivationServiceShould : UnitTestBase
         {
             PendingRegistrationId = Guid.NewGuid(),
             Email = "test@example.com",
-            TokenId = tokenId,
+            SecretHash = ConfirmationSecret.Hash(tokenId),
             TokenCreatedUtc = now.AddHours(-1)
         };
         var user = new CreateUser
@@ -173,7 +174,7 @@ public class ActivationServiceShould : UnitTestBase
         var pending = new PendingRegistration
         {
             Email = "test@example.com",
-            TokenId = tokenId,
+            SecretHash = ConfirmationSecret.Hash(tokenId),
             TokenCreatedUtc = now.AddHours(-1)
         };
 

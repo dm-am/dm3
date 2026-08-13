@@ -21,7 +21,7 @@ internal class ResolveTicketValidator : AbstractValidator<ResolveTicket>
     {
         RuleFor(r => r.Status)
             .Must(s => s is TicketStatus.Closed or TicketStatus.Spam)
-            .WithMessage("Status must be a resolution status (Closed or Spam)");
+            .WithMessage("Обращение можно закрыть или пометить спамом");
 
         RuleFor(r => r.Answer)
             .NotEmpty().WithMessage(ValidationError.Empty)

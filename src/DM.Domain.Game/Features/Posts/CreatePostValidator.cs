@@ -1,4 +1,5 @@
 using DM.Domain.Core.Exceptions;
+using DM.Domain.Core.Content;
 using FluentValidation;
 
 namespace DM.Domain.Game.Features.Posts;
@@ -19,6 +20,12 @@ internal class CreatePostValidator : AbstractValidator<CreatePost>
             .NotEmpty().WithMessage(ValidationError.Empty);
         RuleFor(p => p.GameText)
             .NotEmpty().WithMessage(ValidationError.Empty);
+
+        // An unclosed or nested [private] renders as private and indexes as
+        // public — see PrivateBlockMarkup.IsBalanced for which half of that is
+        // which. Refused here, where the author can still fix it.
+        RuleFor(p => p.GameText)
+            .Must(PrivateBlockMarkup.IsBalanced).WithMessage(ValidationError.Invalid);
 
         RuleForEach(p => p.DiceRolls).ChildRules(roll =>
         {

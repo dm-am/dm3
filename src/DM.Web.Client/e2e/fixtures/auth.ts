@@ -14,7 +14,8 @@ export const API_BASE_URL = process.env.VITE_API_URL || "http://localhost:5000";
  * Port of the preview server the suite runs against.
  *
  * Not a free choice: the API validates Origin twice (CORS allowlist and the
- * CSRF middleware), and its allowlist holds 5173, 5174 and 8080 only. On any
+ * CSRF middleware) against one derived list, and this port is in that list only
+ * because the e2e overlay puts it there for the run. On any
  * other port every request from the page is rejected and the whole tier reads
  * red for a reason that has nothing to do with the tests.
  */

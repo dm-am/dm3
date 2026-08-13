@@ -1,34 +1,35 @@
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import PasswordStrengthIndicator from "./PasswordStrengthIndicator.vue";
-import type { HibpStatus } from "./PasswordStrengthIndicator.vue";
 
 /**
- * The single line under the bar. The breach lookup had no branch in it at all:
- * while the request was out the line went on naming a strength, and the only
- * sign of the wait was a submit button that had gone dead.
+ * The single line under the bar, and what wins it.
+ *
+ * A rule the field itself broke comes first, because it names what to correct;
+ * the strength comes after, because it is advice rather than a refusal. There
+ * used to be a third state between them, a lookup against a public breach index,
+ * and it could not reach a verdict in any build but a developer's own — the
+ * document allows connections to this origin only.
  */
-const lineUnderTheBar = (password: string, hibpStatus: HibpStatus) =>
-  mount(PasswordStrengthIndicator, { props: { password, hibpStatus } }).text();
+const lineUnderTheBar = (password: string, isSameAsOld = false) =>
+  mount(PasswordStrengthIndicator, { props: { password, isSameAsOld } }).text();
 
 describe("PasswordStrengthIndicator", () => {
-  it("names the breach lookup while it is out", () => {
-    expect(lineUnderTheBar("correct horse", "checking")).toBe(
-      "Проверяем по базе утечек...",
+  it("names the rule the field broke before anything else", () => {
+    expect(lineUnderTheBar("short")).toBe("Минимум 8 символов");
+  });
+
+  it("names the strength of a password that breaks no rule", () => {
+    expect(lineUnderTheBar("correct horse")).toBe("Надежный");
+  });
+
+  it("keeps the old password above the strength", () => {
+    expect(lineUnderTheBar("correct horse", true)).toBe(
+      "Новый пароль совпадает с текущим",
     );
   });
 
-  it("goes back to the strength once the lookup answers", () => {
-    expect(lineUnderTheBar("correct horse", "safe")).toBe("Надежный");
-  });
-
-  it("keeps a rule the field itself broke above the lookup", () => {
-    expect(lineUnderTheBar("short", "checking")).toBe("Минимум 8 символов");
-  });
-
-  it("says so when the lookup answers that the password is in a breach", () => {
-    expect(lineUnderTheBar("correct horse", "compromised")).toBe(
-      "Пароль найден в утечках данных",
-    );
+  it("says nothing at all about an empty field", () => {
+    expect(lineUnderTheBar("")).toBe("");
   });
 });

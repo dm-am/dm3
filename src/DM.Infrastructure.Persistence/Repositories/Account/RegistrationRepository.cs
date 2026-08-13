@@ -48,7 +48,7 @@ internal class RegistrationRepository : IRegistrationRepository
         var entity = new DbPendingRegistration
         {
             PendingRegistrationId = pending.PendingRegistrationId,
-            TokenId = pending.TokenId,
+            SecretHash = pending.SecretHash,
             Email = pending.Email,
             PasswordHash = pending.PasswordHash,
             Salt = pending.Salt,
@@ -74,7 +74,7 @@ internal class RegistrationRepository : IRegistrationRepository
         if (existing != null)
         {
             // Update existing pending with new data
-            existing.TokenId = pending.TokenId;
+            existing.SecretHash = pending.SecretHash;
             existing.PasswordHash = pending.PasswordHash;
             existing.Salt = pending.Salt;
             existing.PasswordHashVersion = pending.PasswordHashVersion;
@@ -88,7 +88,7 @@ internal class RegistrationRepository : IRegistrationRepository
             var entity = new DbPendingRegistration
             {
                 PendingRegistrationId = pending.PendingRegistrationId,
-                TokenId = pending.TokenId,
+                SecretHash = pending.SecretHash,
                 Email = pending.Email,
                 PasswordHash = pending.PasswordHash,
                 Salt = pending.Salt,
@@ -115,7 +115,7 @@ internal class RegistrationRepository : IRegistrationRepository
         return new PendingRegistration
         {
             PendingRegistrationId = entity.PendingRegistrationId,
-            TokenId = entity.TokenId,
+            SecretHash = entity.SecretHash,
             Email = entity.Email,
             PasswordHash = entity.PasswordHash,
             Salt = entity.Salt,
@@ -134,7 +134,7 @@ internal class RegistrationRepository : IRegistrationRepository
 
         if (entity != null)
         {
-            entity.TokenId = pending.TokenId;
+            entity.SecretHash = pending.SecretHash;
             entity.Email = pending.Email;
             entity.PasswordHash = pending.PasswordHash;
             entity.Salt = pending.Salt;

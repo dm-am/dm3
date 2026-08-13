@@ -41,11 +41,6 @@ public interface IUserService : IUserLookupService
     Task<Core.Users.UserDetails> GetDetailsAsync(Guid userId);
 
     /// <summary>
-    /// Get users by role
-    /// </summary>
-    Task<IEnumerable<GeneralUser>> GetByRoleAsync(UserRole role);
-
-    /// <summary>
     /// Get username history for a user
     /// </summary>
     Task<IReadOnlyCollection<UsernameHistoryEntry>> GetUsernameHistoryAsync(Guid userId);

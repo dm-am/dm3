@@ -146,7 +146,11 @@ internal class TopicCommentRepository : ITopicCommentRepository
         if (dbComment != null)
         {
             dbComment.Text = updateComment.Text;
-            // Modification tracking is handled via Edit history, not inline ModifiedUtc
+            // The comment row keeps no modification stamp: ModifiedUtc is derived
+            // from the newest entry of this history, and the client draws its
+            // "edited" mark from that. Written here rather than at the call site so
+            // the text and its trace go in one SaveChanges.
+            CommentEdits.Record(_dbContext, _guidFactory, updateComment.CommentId, updateComment.EditorUserId, updateComment.LastUpdateUtc);
             await _dbContext.SaveChangesAsync();
         }
 

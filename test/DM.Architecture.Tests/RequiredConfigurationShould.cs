@@ -36,6 +36,82 @@ public class RequiredConfigurationShould
         ("CdnConfiguration", "SecretKey"),
     ];
 
+
+    /// <summary>
+    /// Running from sources reaches the stack compose brings up, with the
+    /// credentials compose brings it up with.
+    /// </summary>
+    /// <remarks>
+    /// The development overlays name localhost and the ports of that stack, so
+    /// they are not a separate environment - they are the same one, reached
+    /// without the container. They had drifted from the template all the same: the
+    /// password of the relational store, no credentials at all for the document
+    /// store while it requires them, and the administrator account of the object
+    /// store instead of the one scoped to the bucket.
+    ///
+    /// Nothing failed until somebody cloned the repository and ran the API from
+    /// sources, and what they got was a connection refused with no hint that the
+    /// answer was in a file two directories away.
+    ///
+    /// The template is the source: it is the file the installer copies to become
+    /// the environment, so a value read from anywhere else is a fourth copy.
+    /// </remarks>
+    [Fact]
+    public void ReachTheLocalStackWithTheCredentialsItIsBroughtUpWith()
+    {
+        var template = File.ReadAllText(Path.Combine(RepositoryRoot, "docker", ".env.example"));
+
+        string Declared(string key)
+        {
+            var value = Regex.Match(template, $@"^{Regex.Escape(key)}=(.+)$", RegexOptions.Multiline);
+            value.Success.Should().BeTrue($"{key} is what the stack is brought up with");
+            return value.Groups[1].Value.Trim();
+        }
+
+        var overlays = Directory
+            .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "appsettings.Development.json",
+                SearchOption.AllDirectories)
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                StringComparison.Ordinal))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                StringComparison.Ordinal))
+            .ToArray();
+
+        overlays.Should().HaveCountGreaterOrEqualTo(3,
+            "the hosts that are run from sources each carry one, and a walk that finds none " +
+            "passes on anything");
+
+        foreach (var overlay in overlays)
+        {
+            var settings = File.ReadAllText(overlay);
+            var name = Path.GetFileName(Path.GetDirectoryName(overlay)!);
+
+            if (settings.Contains("\"Rdb\"", StringComparison.Ordinal))
+            {
+                settings.Should().Contain($"Password={Declared("DM_APP_PASSWORD")}",
+                    $"{name} connects to the stack the template describes");
+                settings.Should().NotContain("User ID=postgres",
+                    $"{name} would hold the server rather than the database of this site");
+            }
+
+            if (settings.Contains("\"Mongo\"", StringComparison.Ordinal))
+            {
+                settings.Should().Contain($"{Declared("MONGO_USER")}:{Declared("MONGO_PASSWORD")}@",
+                    $"{name} reaches a store that requires credentials");
+                settings.Should().Contain("authSource=dm3",
+                    $"{name} authenticates against the database its user was created in");
+            }
+
+            if (settings.Contains("\"CdnConfiguration\"", StringComparison.Ordinal))
+            {
+                settings.Should().Contain($"\"{Declared("MINIO_APP_USER")}\"",
+                    $"{name} uses the account scoped to the bucket, not the administrator");
+                settings.Should().Contain($"\"{Declared("MINIO_APP_PASSWORD")}\"",
+                    $"{name} uses the secret of that account");
+            }
+        }
+    }
+
     private static readonly string[] Hosts =
         ["DM.Web.API", "DM.Workers.Mail", "DM.Workers.NotificationDispatcher", "DM.Tools.Seeder"];
 

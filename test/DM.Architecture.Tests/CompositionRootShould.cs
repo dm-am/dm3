@@ -9,6 +9,7 @@ using Autofac.Core;
 using Autofac.Core.Lifetime;
 using Autofac.Extensions.DependencyInjection;
 using DM.Domain.Core.Configuration;
+using DM.Infrastructure.Persistence.MongoIntegration;
 using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
@@ -128,6 +129,12 @@ public class CompositionRootShould
                 "that fails on the developer's machine after the database was already " +
                 "reset. Registration rather than activation, because activating a store " +
                 "client needs a store");
+
+        // Indexing runs first, before anything is written: a reset drops the Mongo
+        // database and the init script only ever runs on an empty volume, so the
+        // reseeded database held no index until somebody started the API.
+        container.IsRegistered(typeof(MongoIndexInitializer)).Should().BeTrue(
+            "the seeder asserts the Mongo index set itself");
     }
 
     /// <summary>
@@ -255,6 +262,40 @@ public class CompositionRootShould
                 $"{host} runs on {type.Name}, and a dependency it cannot resolve is a " +
                 "worker that builds, starts, reports healthy and fails on the first message");
         }
+    }
+
+    /// <summary>
+    /// A host with no requests has no current user, and says so.
+    /// </summary>
+    /// <remarks>
+    /// The notification worker declares this dependency because the notification
+    /// service asks for it, and it never reaches a path that reads it. It used to
+    /// be satisfied by scanning the whole account domain in — for that one
+    /// interface — which registered a provider whose backing field is null until a
+    /// request sets it, and an authorization context that answers Guest.
+    ///
+    /// Two failures nothing would have reported. A path arriving at the provider
+    /// gets a null reference from a property that promises an identity; a path
+    /// arriving at authorization is answered as an anonymous visitor, which is a
+    /// real answer to a question that has no reader behind it. Both are quiet, and
+    /// the second is quiet on the side that grants rather than refuses.
+    ///
+    /// Resolved in a scope because that is where the processor of this host is
+    /// resolved.
+    /// </remarks>
+    [Fact]
+    public void RefuseToNameACurrentUserInAHostThatServesNoRequests()
+    {
+        var container = Hosts.Single(h => h.Host == "DM.Workers.NotificationDispatcher").Container;
+        using var scope = container.BeginLifetimeScope();
+
+        var provider = scope.Resolve<DM.Domain.Core.Identity.IIdentityProvider>();
+
+        var read = () => provider.Current;
+        read.Should().Throw<InvalidOperationException>(
+            "work here comes off a queue and not out of a request, so there is no current " +
+            "user; answering with a null one or with an anonymous one turns a defect in the " +
+            "path into a decision made about somebody who is not there");
     }
 
     /// <summary>

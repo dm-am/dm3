@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Blog.Features.Invitations;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Dto;
@@ -74,6 +75,36 @@ internal class BlogInvitationRepository : IBlogInvitationRepository
             token.IsRemoved = true;
             await _dbContext.SaveChangesAsync(ct);
         }
+    }
+
+    /// <inheritdoc />
+    public async Task AcceptAssistantInvitation(
+        AddBlogAssistantEntity entity, Guid tokenId, CancellationToken ct = default)
+    {
+        // Both rows or neither. Written separately, a refusal in between left the
+        // invitation live next to an assistant who already has the rights it grants,
+        // and accepting it a second time added the person twice.
+        //
+        // Both writes go through the tracker, so one SaveChanges covers them and no
+        // explicit transaction is needed.
+        var token = await _dbContext.Tokens.FindAsync([tokenId], ct);
+        if (token == null) return;
+
+        var alreadyAssistant = await _dbContext.BlogAssistants
+            .AnyAsync(a => a.BlogId == entity.BlogId && a.UserId == entity.UserId, ct);
+
+        if (!alreadyAssistant)
+        {
+            _dbContext.BlogAssistants.Add(new Entities.Blog.BlogAssistant
+            {
+                BlogId = entity.BlogId,
+                UserId = entity.UserId,
+                JoinedUtc = entity.JoinedUtc
+            });
+        }
+
+        token.IsRemoved = true;
+        await _dbContext.SaveChangesAsync(ct);
     }
 
     /// <inheritdoc />

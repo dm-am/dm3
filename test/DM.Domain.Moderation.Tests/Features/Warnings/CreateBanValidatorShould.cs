@@ -162,7 +162,7 @@ public class CreateBanValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor("Duration")
-            .WithErrorMessage("Either DurationHours or ExpiresUtc must be specified for non-voluntary bans");
+            .WithErrorMessage("Для бана укажите срок или дату окончания");
     }
 
     /// <summary>

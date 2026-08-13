@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
 
@@ -19,7 +20,9 @@ public interface IAuthenticationService
     /// persistent lifetime; otherwise for the ordinary one</param>
     /// <param name="context">Session context with device info</param>
     /// <returns>Authentication identity</returns>
-    Task<IIdentity> Authenticate(string email, string password, bool rememberMe = true, SessionContext? context = null);
+    /// <param name="cancellationToken">Cancellation token of the request being served</param>
+    Task<IIdentity> Authenticate(string email, string password, bool rememberMe = true,
+        SessionContext? context = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Authenticate via token credentials

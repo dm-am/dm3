@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -8,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Infrastructure.Core.Configuration;
+using DM.Infrastructure.Core.Tracing;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Workers.NotificationDispatcher.Dispatching;
@@ -93,7 +95,8 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
             {
                 if (ShouldSendToChannel(settings?.DiscordPreferences, category.Value))
                 {
-                    await SendDiscordMessage(botIds.DiscordId, discordMessage, ct);
+                    await Deliver(DiscordChannel, eventType,
+                        () => SendDiscordMessage(botIds.DiscordId, discordMessage, ct));
                 }
             }
 
@@ -102,7 +105,8 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
             {
                 if (ShouldSendToChannel(settings?.TelegramPreferences, category.Value))
                 {
-                    await SendTelegramMessage(botIds.TelegramId, telegramMessage, ct);
+                    await Deliver(TelegramChannel, eventType,
+                        () => SendTelegramMessage(botIds.TelegramId, telegramMessage, ct));
                 }
             }
         }
@@ -118,7 +122,38 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
         return prefs.EnabledCategories.Contains(category);
     }
 
-    private async Task SendDiscordMessage(string userId, string message, CancellationToken ct)
+    /// <summary>Channel name the two bots are counted under.</summary>
+    private const string DiscordChannel = "discord";
+
+    /// <inheritdoc cref="DiscordChannel" />
+    private const string TelegramChannel = "telegram";
+
+    /// <summary>
+    /// Runs one send and counts what the channel refused.
+    /// </summary>
+    /// <remarks>
+    /// A bot answering 403 for every recipient - a token revoked, a bot removed
+    /// from a workspace, a chat blocked - was a warning line and nothing else.
+    /// The message had already been consumed successfully by then, because from
+    /// the pipeline's side it had: the swallowing happens here, below it. So
+    /// every channel that is down is invisible to every rule about the queue and
+    /// to every panel about the process.
+    ///
+    /// Both shapes of refusal, because they are the same event to a recipient who
+    /// received nothing: a status the bot API returns and an exception on the way
+    /// to it.
+    /// </remarks>
+    private static async Task Deliver(string channel, EventType eventType, Func<Task<bool>> send)
+    {
+        if (!await send())
+        {
+            MessagingMetrics.DeliveryFailed.Add(1,
+                MessagingMetrics.Channel(channel),
+                new KeyValuePair<string, object?>("event", eventType.ToString()));
+        }
+    }
+
+    private async Task<bool> SendDiscordMessage(string userId, string message, CancellationToken ct)
     {
         try
         {
@@ -136,7 +171,7 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
             {
                 _logger.LogWarning("Failed to create Discord DM channel for user {UserId}: {Status}",
                     userId, dmChannelResponse.StatusCode);
-                return;
+                return false;
             }
 
             var dmChannel = await dmChannelResponse.Content.ReadFromJsonAsync<JsonElement>(ct);
@@ -152,18 +187,20 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
             {
                 _logger.LogWarning("Failed to send Discord message to user {UserId}: {Status}",
                     userId, messageResponse.StatusCode);
-                return;
+                return false;
             }
 
             _logger.LogDebug("Sent Discord notification to user {UserId}", userId);
+            return true;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to send Discord notification to user {UserId}", userId);
+            return false;
         }
     }
 
-    private async Task SendTelegramMessage(string chatId, string message, CancellationToken ct)
+    private async Task<bool> SendTelegramMessage(string chatId, string message, CancellationToken ct)
     {
         try
         {
@@ -183,14 +220,16 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
                 var error = await response.Content.ReadAsStringAsync(ct);
                 _logger.LogWarning("Failed to send Telegram message to chat {ChatId}: {Status} - {Error}",
                     chatId, response.StatusCode, error);
-                return;
+                return false;
             }
 
             _logger.LogDebug("Sent Telegram notification to chat {ChatId}", chatId);
+            return true;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to send Telegram notification to chat {ChatId}", chatId);
+            return false;
         }
     }
 

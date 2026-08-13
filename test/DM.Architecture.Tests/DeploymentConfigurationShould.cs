@@ -32,8 +32,22 @@ public class DeploymentConfigurationShould
     private const string PreviewCompose = "docker-compose.preview.yml";
     private const string MirrorCompose = "docker-compose.mirror.yml";
     private const string NginxConfiguration = "nginx/nginx.conf";
+    private const string EdgeLocations = "nginx/edge-locations.conf";
+
+    /// <summary>
+    /// The edge as nginx assembles it: the file with its include resolved.
+    /// </summary>
+    /// <remarks>
+    /// Both servers of the edge include the same locations, which is the point of
+    /// the file - the TLS server used to be a commented-out copy and had already
+    /// drifted. A rule that read only nginx.conf would now be asserting about a
+    /// server with no routes in it and passing for the wrong reason.
+    /// </remarks>
+    private static string EdgeAsAssembled() => Read(NginxConfiguration)
+        .Replace("include /etc/nginx/edge-locations.conf;", Read(EdgeLocations), StringComparison.Ordinal);
     private const string ScrapeConfiguration = "prometheus.yml";
     private const string AlertDelivery = "prometheus/alertmanager.yml";
+    private const string AlertRules = "prometheus/alerts.yml";
     private const string AlertDeliveryEntrypoint = "alertmanager-init.sh";
     private const string EnvironmentTemplate = ".env.example";
 
@@ -149,7 +163,7 @@ public class DeploymentConfigurationShould
         var location = $"location {endpoint!.TrimEnd('/')}/";
         const string upstream = "proxy_pass http://imgproxy:8080/";
 
-        var running = ActiveDirectives(nginx);
+        var running = ActiveDirectives(EdgeAsAssembled());
         running.Should().Contain(location,
             $"the API hands out {endpoint}/... and nginx routes by prefix");
         running.Should().Contain(upstream,
@@ -157,12 +171,6 @@ public class DeploymentConfigurationShould
             "only way in, and the trailing slash strips the prefix the signature " +
             "does not cover");
 
-        var template = CommentedDirectives(nginx);
-        template.Should().Contain(location,
-            "the commented server is what gets switched on the day certificates " +
-            "arrive, and a route missing from it comes back as a blank avatar");
-        template.Should().Contain(upstream,
-            "the same route to the same upstream");
     }
 
     /// <summary>
@@ -244,6 +252,147 @@ public class DeploymentConfigurationShould
             verify.Should().Contain($"/var/backups/{store}",
                 $"{store} is backed up nightly, so the verifier has to look at it");
         }
+    }
+
+    /// <summary>
+    /// The suite is served from an origin the API under test answers to.
+    /// </summary>
+    /// <remarks>
+    /// The API validates the origin of a request twice — the CORS policy and the
+    /// check that stands in for a CSRF token read one derived list — and that list
+    /// is its public address plus the hosts of the site. The two development ports
+    /// are added only when the environment is Development, and the end-to-end job
+    /// runs Production on purpose, because a tier that exercises Development
+    /// proves nothing about the build that ships.
+    ///
+    /// So the port the suite serves the built bundle from has to be handed to the
+    /// API by the overlay that job writes. It was not, for a while, and nothing
+    /// said so: the origins used to be a declared array with this port in it, the
+    /// array became a derived list, and the two comments that asserted the port was
+    /// allowed went on asserting it. What that costs is a whole job's worth of
+    /// specs timing out on locators that never fill, with the cause three files
+    /// away from the failure.
+    /// </remarks>
+    [Fact]
+    public void ServeTheEndToEndSuiteFromAnOriginTheApiAnswersTo()
+    {
+        var fixtures = File.ReadAllText(Path.Combine(
+            RepositoryRoot, "src", "DM.Web.Client", "e2e", "fixtures", "auth.ts"));
+        var workflow = File.ReadAllText(
+            Path.Combine(RepositoryRoot, ".github", "workflows", "dotnet.yml"));
+
+        var declared = Regex.Match(fixtures, @"PREVIEW_PORT\s*=\s*(\d+)");
+        declared.Success.Should().BeTrue(
+            "the suite declares the port it serves the bundle from, and a walk that cannot " +
+            "find it checks nothing");
+
+        var port = declared.Groups[1].Value;
+
+        // From past the heredoc opener to the line that closes it: the marker of
+        // the opener is the word itself, so a search that starts at the whole
+        // command finds the end of the range inside its own beginning.
+        var overlay = Between(workflow,
+            "cat > docker/docker-compose.e2e.yml <<'YAML'", "\n        YAML");
+
+        overlay.Should().Contain($"AdditionalOrigins__0: \"http://localhost:{port}\"",
+            $"the bundle is served from port {port} and the API adds the development ports " +
+            "only under Development, which this job is not - so an origin it does not answer " +
+            "to means CORS drops every response and the origin check refuses every write");
+    }
+
+    /// <summary>
+    /// What the edge has to answer is written once and read twice.
+    /// </summary>
+    /// <remarks>
+    /// The pipeline checks the pair it builds before it publishes an image, and an
+    /// operator checks the public address after watchtower has replaced the
+    /// containers. Written out in both places, the two lists drift: the pipeline
+    /// goes on passing while the thing the operator runs stops covering what it
+    /// used to, and nobody is looking at the pair side by side.
+    ///
+    /// The readiness probe is asserted by name because it is the one an external
+    /// watcher is told to poll. Liveness answers green from a process that reaches
+    /// neither database, so a stand whose Postgres is gone would pass a heartbeat
+    /// built on it — and a heartbeat that cannot go red is a heartbeat nobody
+    /// needs.
+    /// </remarks>
+    [Fact]
+    public void CheckTheEdgeThroughOneListOfAssertions()
+    {
+        var script = File.ReadAllText(Path.Combine(DockerDirectory, "scripts", "smoke-edge.sh"));
+        var workflow = File.ReadAllText(
+            Path.Combine(RepositoryRoot, ".github", "workflows", "dotnet.yml"));
+
+        var smoke = Between(workflow,
+            "- name: The edge answers where the deployment needs it to", "- name: Logs on failure");
+
+        smoke.Should().Contain("smoke-edge.sh",
+            "the pipeline and the operator have to be checking the same things, and the only " +
+            "way to keep two lists equal is to have one");
+        smoke.Should().NotContain("curl",
+            "a second copy of the assertions beside the call to the script is the drift this " +
+            "exists to close");
+
+        script.Should().Contain("/_ready",
+            "this is the probe an external watcher polls: liveness answers green from a " +
+            "process that reaches neither database");
+        script.Should().Contain("401",
+            "the stand is closed at the edge, and a smoke test that never sees a refusal " +
+            "would pass just as well against an open one");
+    }
+
+    /// <summary>
+    /// The document points an external watcher at readiness, not at liveness.
+    /// </summary>
+    /// <remarks>
+    /// The difference is the whole value of the watcher. Liveness is answered by
+    /// the process being up; readiness asks the stores. Pointed at the first, an
+    /// external heartbeat stays green through exactly the outage it was bought to
+    /// find.
+    /// </remarks>
+    [Fact]
+    public void PointTheExternalWatcherAtReadiness()
+    {
+        var guide = File.ReadAllText(
+            Path.Combine(RepositoryRoot, "docs", "guides", "MONITORING.md"));
+
+        var outside = Between(guide, "### Наблюдение снаружи машины", "---");
+
+        outside.Should().NotBeNullOrWhiteSpace(
+            "the guide has a section about watching from outside the machine, and a walk that " +
+            "cannot find it checks nothing");
+        outside.Should().Contain("/_ready",
+            "readiness is what asks the stores, and it is the probe an external service is " +
+            "told to poll");
+    }
+
+    /// <summary>
+    /// The alert about a backup sends the reader where the backup writes.
+    /// </summary>
+    /// <remarks>
+    /// The rule named /var/log/dm3-backups.log and cron writes dm3-backup.log.
+    /// One letter, and it only ever matters at the one moment the rule exists
+    /// for: somebody woken by a failed backup, on a machine they are not fluent
+    /// in, typing a path that answers "no such file" — and reading that as
+    /// "logging is broken too" rather than as a typo in the alert. Nothing else
+    /// checks it: promtool validates the syntax of a description and has no
+    /// opinion about the sentence inside it.
+    ///
+    /// The installer is the source of truth, being the thing that creates the
+    /// file and rotates it.
+    /// </remarks>
+    [Fact]
+    public void SendTheReaderOfABackupAlertWhereTheBackupWrites()
+    {
+        var cron = File.ReadAllText(Path.Combine(DockerDirectory, "scripts", "install-cron.sh"));
+        var rules = File.ReadAllText(Path.Combine(DockerDirectory, "prometheus", "alerts.yml"));
+
+        var logFile = Regex.Match(cron, @"LOG_FILE=""([^""]+)""");
+        logFile.Success.Should().BeTrue("install-cron.sh declares where the backup log goes");
+
+        rules.Should().Contain(logFile.Groups[1].Value,
+            "the backup alert points the reader at a log, and a path that answers \"no such " +
+            "file\" at three in the morning reads as a second failure rather than as a typo");
     }
 
     /// <summary>
@@ -732,6 +881,38 @@ public class DeploymentConfigurationShould
     }
 
     /// <summary>
+    /// A server is not installed without an address to deliver mail to.
+    /// </summary>
+    /// <remarks>
+    /// Everything the site says out loud goes through one relay: activation, the
+    /// password reset, the warning sent to the old address when the new one is
+    /// changed, and every rule of alerts.yml by way of alertmanager. The compose
+    /// default is MailHog, which listens on loopback of the stand and is declared
+    /// restart: "no", so a server installed by the documented command delivered
+    /// all of it into a dead end — and the alerting contour looked complete while
+    /// reaching nobody. There is no Watchdog rule either, so its silence reads
+    /// exactly like health.
+    ///
+    /// Refused rather than defaulted: a contour that delivers nowhere is worse
+    /// than no contour at all, because it buys confidence.
+    /// </remarks>
+    [Fact]
+    public void RefuseToInstallAServerWithNowhereToSendMail()
+    {
+        var generator = File.ReadAllText(
+            Path.Combine(DockerDirectory, "scripts", "init-env.sh"));
+
+        var check = generator.IndexOf("is_empty MAIL_HOST", StringComparison.Ordinal);
+        check.Should().BeGreaterThan(-1,
+            "the relay address is the one answer a server cannot be given by a default");
+
+        var tail = generator[check..];
+        tail.Should().Contain("exit 1",
+            "a warning on stderr followed by exit 0 is a clean run to the installer " +
+            "calling this, which is how the environment stayed Development once already");
+    }
+
+    /// <summary>
     /// A server never comes up in Development, and never on the passwords printed
     /// in this repository.
     /// </summary>
@@ -851,6 +1032,120 @@ public class DeploymentConfigurationShould
         }
     }
 
+
+    /// <summary>
+    /// Nothing but the initialisation connects to Postgres as the superuser.
+    /// </summary>
+    /// <remarks>
+    /// Five workloads and the exporter all connected as postgres. What a leaked
+    /// password buys there is not the data of this site: it is the server - every
+    /// database on it, the roles, and COPY FROM PROGRAM, which runs commands as
+    /// the account the server runs as. The same leak against a role that owns one
+    /// database buys that database.
+    ///
+    /// Asserted on the connection strings and on the script together, because
+    /// either half alone passes while the stand does not come up: a role renamed
+    /// in the compose file and not in the script leaves every workload unable to
+    /// log in, and a script creating a role nobody uses is a role nobody uses.
+    ///
+    /// The database is created by the script rather than by the migration, and
+    /// owned by the application role: since Postgres 15 the right to create in the
+    /// public schema belongs to the owner of the database alone.
+    /// </remarks>
+    [Fact]
+    public void ReachPostgresAsARoleSomebodyCreatedForIt()
+    {
+        var compose = Read(BaseCompose);
+
+        var workload = Regex.Match(compose, @"DM_ConnectionStrings__Rdb:\s*(.+)");
+        workload.Success.Should().BeTrue("the workloads share one connection string");
+        workload.Value.Should().NotContain("User ID=postgres",
+            "a workload holding the superuser holds the server rather than this database");
+
+        var exporter = Regex.Match(compose, @"DATA_SOURCE_NAME:\s*(.+)");
+        exporter.Success.Should().BeTrue("the exporter has one of its own");
+        exporter.Value.Should().NotContain("postgresql://postgres",
+            "reading the statistics views needs pg_monitor and nothing else");
+
+        // Without the comments: this file explains itself at length, and a rule
+        // that reads the prose is satisfied by a statement somebody commented out.
+        var script = string.Join('\n', File
+            .ReadAllLines(Path.Combine(DockerDirectory, "postgres-init.sh"))
+            .Select(line => line.Trim())
+            .Where(line => !line.StartsWith("--", StringComparison.Ordinal))
+            .Where(line => !line.StartsWith('#')));
+
+        foreach (var role in new[] { "dm_app", "dm_exporter" })
+        {
+            script.Should().Contain($"CREATE ROLE {role}",
+                $"{role} is used by the deployment and created by nobody");
+        }
+
+        script.Should().Contain("OWNER dm_app",
+            "a database owned by the superuser leaves the application unable to create its " +
+            "own tables in the public schema");
+        script.Should().Contain("GRANT pg_monitor TO dm_exporter",
+            "the exporter reads the statistics views, and that is a predefined role");
+
+        ServiceBlock(compose, "postgres").Should().Contain("postgres-init.sh:/docker-entrypoint-initdb.d/",
+            "a script the server never runs creates nothing at all");
+    }
+
+    /// <summary>
+    /// A certificate can be issued, and the server that serves it is not a copy.
+    /// </summary>
+    /// <remarks>
+    /// The TLS server used to be a commented-out copy of the running one, sitting
+    /// there since the first day, and it had already drifted: no health probe, and a
+    /// listen directive in a form nginx has warned about since 1.25. The thing meant
+    /// to be switched on in the hour it was needed would not have started.
+    ///
+    /// Getting a certificate at all needs the challenge path answered over plain
+    /// http, in front of the basic-auth door, by both edges — the authority fetches
+    /// it anonymously from the public internet. The documented command was
+    /// `certbot --nginx`, which cannot work here: the edge runs in a container whose
+    /// configuration is mounted read-only, so the plugin has nothing on the host to
+    /// edit. None of that fails visibly until the day somebody needs https.
+    /// </remarks>
+    [Fact]
+    public void LeaveARoadToACertificateAtBothEdges()
+    {
+        var edge = Read(NginxConfiguration);
+        var pointOfPresence = Read("nginx/pop.conf.template");
+
+        foreach (var (name, configuration) in new[]
+                 {
+                     (NginxConfiguration, edge),
+                     ("pop.conf.template", pointOfPresence),
+                 })
+        {
+            ActiveDirectives(configuration).Should().Contain("location ^~ /.well-known/acme-challenge/",
+                $"{name} has to answer the challenge over plain http, and ^~ so it wins over " +
+                "the prefix that proxies the SPA");
+        }
+
+        ActiveDirectives(edge).Should().Contain("auth_basic off",
+            "the authority fetches the challenge anonymously, so the door cannot stand in front of it");
+
+        // The copy is gone, and so is the shape it was written in.
+        edge.Should().NotContain("listen 443 ssl http2",
+            "nginx has warned about that form since 1.25 and the image is newer than that");
+        edge.Should().Contain("include /etc/nginx/edge-locations.conf;",
+            "one set of locations for both servers, because the copy is what drifted");
+        pointOfPresence.Should().NotContain("listen 443 ssl http2",
+            "the same form, and the point of presence is the edge that already serves TLS");
+
+        var script = File.ReadAllText(Path.Combine(DockerDirectory, "scripts", "init-ssl.sh"));
+        script.Should().Contain("certonly --webroot",
+            "--nginx has nothing to edit: the configuration is mounted read-only into a container");
+        script.Should().Contain("--deploy-hook",
+            "nginx reads the certificate at start-up, so a renewal nobody reloads for is a " +
+            "certificate that expires while a fresh one sits on disk");
+
+        File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh")).Should().Contain("certbot",
+            "the tool the documented procedure runs has to be installed by the installer");
+    }
+
     /// <summary>
     /// The updater the guides call the update mechanism has to be started by the
     /// commands that deploy.
@@ -884,6 +1179,110 @@ public class DeploymentConfigurationShould
         ServiceBlock(Read(PreviewCompose), "dmfront").Should().Contain("watchtower.enable=true",
             "the SPA image is published by the same run and has to move with it");
     }
+
+    /// <summary>
+    /// The edge is recreated whenever a container it resolves by name is replaced.
+    /// </summary>
+    /// <remarks>
+    /// nginx resolves every upstream name once, while parsing its configuration, and
+    /// holds that address for the life of the process. There is no resolver directive
+    /// and there is not going to be one: a variable in proxy_pass re-resolves but
+    /// drops the URI part of the target, which two of the routes here depend on. So a
+    /// replaced container leaves the edge proxying to an address that is gone — a 502
+    /// on every request through it, for as long as nobody looks.
+    ///
+    /// Nothing in the stack notices. Compose outside Swarm never restarts a container
+    /// for being unhealthy: restart: unless-stopped reacts to the process exiting and
+    /// nothing else, and there is no autoheal here. The health check of the edge asks
+    /// the edge about itself and gets a cheerful answer from a container that cannot
+    /// reach a thing behind it.
+    ///
+    /// Which leaves the updater's own ordering as the mechanism, and labels as the
+    /// only place it is written down. Both directions are asserted: a container the
+    /// updater replaces has to be named by the edge, and a name in that list has to
+    /// belong to a container the updater actually watches — a dependency it does not
+    /// see triggers no restart, ever, while looking exactly like protection.
+    /// </remarks>
+    [Fact]
+    public void RecreateTheEdgeWhenAContainerItResolvesIsReplaced()
+    {
+        var stack = Read(BaseCompose) + "\n" + Read(PreviewCompose);
+        var edge = ServiceBlock(Read(PreviewCompose), "nginx");
+
+        edge.Should().Contain("watchtower.enable=true",
+            "with WATCHTOWER_LABEL_ENABLE a container without the label does not exist as " +
+            "far as the updater is concerned, so no linked restart can apply to it");
+
+        var declared = EdgeDependencies(edge);
+        declared.Should().NotBeEmpty(
+            "the edge holds the addresses of the containers behind it, so something has to " +
+            "put it back on its feet after one of them is replaced");
+
+        // Forwards: everything the edge resolves by name and the updater replaces.
+        foreach (var host in ResolvedHosts(File.ReadAllText(
+            Path.Combine(DockerDirectory, "nginx", "nginx.conf"))))
+        {
+            if (!Regex.IsMatch(stack, $@"^  {Regex.Escape(host)}:", RegexOptions.Multiline)) continue;
+            if (!ServiceBlock(stack, host).Contains("watchtower.enable=true", StringComparison.Ordinal)) continue;
+
+            var containerName = Regex.Match(ServiceBlock(stack, host), @"container_name:\s*'([\w-]+)'");
+            containerName.Success.Should().BeTrue($"{host} is a service of the stack and has a container name");
+            declared.Should().Contain(containerName.Groups[1].Value,
+                $"the updater replaces {host} on its own schedule, and the edge resolved it once");
+        }
+
+        // Backwards: a name in the list that the updater never touches.
+        foreach (var dependency in declared)
+        {
+            ServiceWithContainerName(stack, dependency).Should().Contain("watchtower.enable=true",
+                $"{dependency} is named as a reason to recreate the edge, and the updater " +
+                "does not watch it, so it never is one");
+        }
+
+        // The point of presence carries no application, and a list inherited from the
+        // main stand would name a container that does not exist there.
+        var pointOfPresence = ServiceBlock(Read(MirrorCompose), "nginx");
+        var api = Regex.Match(Read(BaseCompose), @"^  dmapi:\n(?:.*\n)*?\s*container_name:\s*'([\w-]+)'",
+            RegexOptions.Multiline);
+
+        api.Success.Should().BeTrue("the base stack names the API container");
+
+        // Its own list rather than the inherited one, and stated as a replacement:
+        // how compose merges label lists across three files is an implementation
+        // detail, and the list it would inherit names the API.
+        pointOfPresence.Should().Contain("labels: !override",
+            "silence here is not an empty list, it is the list of the main stand");
+        EdgeDependencies(pointOfPresence).Should().NotBeEmpty(
+            "the edge of the point of presence holds addresses the same way the main one does")
+            .And.NotContain(api.Groups[1].Value,
+            "the API does not run at the point of presence, and a dependency on a container " +
+            "that is never there is a line that reads like ordering and is not");
+    }
+
+    /// <summary>Container names the edge is told to wait for, as the label lists them.</summary>
+    private static string[] EdgeDependencies(string serviceBlock) => Regex
+        .Match(serviceBlock, @"watchtower\.depends-on=([^""\s]+)")
+        .Groups[1].Value
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>
+    /// Hosts an nginx configuration resolves by name and then holds. Names carrying a
+    /// variable are excluded: those are re-resolved on every request and are exactly
+    /// what this rule exists in place of.
+    /// </summary>
+    private static IEnumerable<string> ResolvedHosts(string configuration) => configuration
+        .Split('\n')
+        .Select(line => line.Trim())
+        .Where(line => !line.StartsWith('#'))
+        .SelectMany(line => new[]
+        {
+            Regex.Match(line, @"^server\s+([a-z0-9][a-z0-9._-]*):\d+;"),
+            Regex.Match(line, @"^proxy_pass\s+https?://([a-z0-9][a-z0-9._-]*)"),
+        })
+        .Where(match => match.Success)
+        .Select(match => match.Groups[1].Value)
+        .Where(host => !host.Contains('$') && !host.Contains('{'))
+        .Distinct();
 
     /// <summary>
     /// The log of every container on the server has a ceiling.
@@ -939,14 +1338,21 @@ public class DeploymentConfigurationShould
         var endpoint = Regex.Match(controller, @"RequestSizeLimit\((\d+) \* 1024 \* 1024\)");
         endpoint.Success.Should().BeTrue("the upload endpoint declares its own ceiling");
 
-        var edge = Regex.Match(
-            ActiveDirectives(Read(NginxConfiguration)), @"client_max_body_size (\d+)m;");
-        edge.Success.Should().BeTrue(
-            "without the directive the edge cuts every body at its own default of 1 MB");
+        // Both public edges. The point of presence proxies the upload path upstream,
+        // so a lower limit of its own refuses bodies the main edge and the endpoint
+        // both accept - for readers who came in by one address and not the other,
+        // which is the hardest shape of this to reproduce and the easiest to miss.
+        foreach (var name in new[] { NginxConfiguration, "nginx/pop.conf.template" })
+        {
+            var edge = Regex.Match(
+                ActiveDirectives(Read(name)), @"client_max_body_size (\d+)m;");
+            edge.Success.Should().BeTrue(
+                $"without the directive {name} cuts every body at its own default of 1 MB");
 
-        edge.Groups[1].Value.Should().Be(endpoint.Groups[1].Value,
-            "a lower limit at the edge refuses what the endpoint accepts, and a higher one " +
-            "carries the whole body across the network to be refused at the end of it");
+            edge.Groups[1].Value.Should().Be(endpoint.Groups[1].Value,
+                $"a lower limit in {name} refuses what the endpoint accepts, and a higher one " +
+                "carries the whole body across the network to be refused at the end of it");
+        }
     }
 
     /// <summary>
@@ -968,7 +1374,18 @@ public class DeploymentConfigurationShould
     {
         var nginx = Read(NginxConfiguration);
 
-        foreach (var server in new[] { ActiveDirectives(nginx), CommentedDirectives(nginx) })
+        // One server, and the TLS one includes the same file rather than copying it:
+        // the copy that used to sit here commented out had already lost this very
+        // location by the time anybody would have switched it on.
+        // Both public edges: the point of presence proxies these paths upstream, and
+        // without locations of their own they fall into the prefix that serves the
+        // SPA - which answers index.html with 200 to anything, so a heartbeat aimed
+        // there reports a healthy site for as long as the edge itself is alive.
+        foreach (var server in new[]
+                 {
+                     ActiveDirectives(EdgeAsAssembled()),
+                     ActiveDirectives(Read("nginx/pop.conf.template")),
+                 })
         {
             server.Should().Contain("location = /_health {",
                 "the heartbeat the guide recommends has to reach the API, not the SPA fallback");
@@ -1145,8 +1562,8 @@ public class DeploymentConfigurationShould
         var edge = Read(NginxConfiguration);
         var configurations = new Dictionary<string, string>
         {
-            ["nginx.conf, the server that runs"] = ActiveDirectives(edge),
-            ["nginx.conf, the template certificates switch on"] = CommentedDirectives(edge),
+            ["nginx.conf and the locations both of its servers include"] =
+                ActiveDirectives(EdgeAsAssembled()),
             ["pop.conf.template"] = ActiveDirectives(File.ReadAllText(
                 Path.Combine(DockerDirectory, "nginx", "pop.conf.template"))),
         };
@@ -1157,7 +1574,7 @@ public class DeploymentConfigurationShould
         // files happen to carry.
         var policyHeaders = new[]
         {
-            "X-Frame-Options", "X-Content-Type-Options", "X-XSS-Protection",
+            "X-Frame-Options", "X-Content-Type-Options",
             "Referrer-Policy", "Permissions-Policy",
         };
 
@@ -1232,9 +1649,11 @@ public class DeploymentConfigurationShould
     /// the one that decides it: it mounts /var/run/docker.sock, which is full
     /// control of the host.
     ///
-    /// minio/mc is the documented exception. It speaks to the server over the
-    /// admin API and the two are released together, so pinning the client apart
-    /// from the server is the failure mode rather than the fix.
+    /// There is no exception. minio/mc used to be one, on the argument that a
+    /// client pinned apart from its server is the failure mode - which is true and
+    /// is an argument for pinning them together, not for leaving one of them
+    /// floating: an unpinned client walks away from the pinned server on its own
+    /// schedule, and the first sign is a command the server does not know.
     ///
     /// "Names a version" used to be checked as "the last path segment contains a
     /// colon", which <c>containrrr/watchtower:latest</c> satisfies — the single
@@ -1280,7 +1699,6 @@ public class DeploymentConfigurationShould
         var references = composeImages
             .Concat(dockerfileImages)
             .Concat(shellImages)
-            .Where(reference => reference != "minio/mc")
             .ToList();
 
         references.Should().HaveCountGreaterThan(10, "the parser must find the image references");
@@ -1650,6 +2068,68 @@ public class DeploymentConfigurationShould
             $"the receiver {routed} is a name with nothing under it: alertmanager accepts " +
             "that and silently drops everything routed to it, which is the outcome having " +
             "no alertmanager already had");
+
+        // The receiver is watched like anything else it delivers alerts about. It
+        // cannot report its own absence - the report would go through it - but a rule
+        // firing on the page, and a letter the moment it is back saying how long the
+        // contour had no mouth, is the difference between finding out and not.
+        foreach (var target in targets)
+        {
+            var job = Regex.Match(scrapes,
+                @"job_name:\s*'([\w-]+)'\s*\n\s*static_configs:\s*\n\s*- targets:\s*\['"
+                + Regex.Escape(target) + @"'\]");
+
+            job.Success.Should().BeTrue(
+                $"nothing scrapes {target}, so the one component every other rule depends on " +
+                "is the one component no rule is about");
+
+            Read(AlertRules).Should().MatchRegex(@"up\{job=""" + Regex.Escape(job.Groups[1].Value) + @"""\}",
+                $"a target nobody alerts on is a page nobody opens");
+        }
+    }
+
+    /// <summary>
+    /// The contour says it is alive, and says so through the same channel it would
+    /// carry an incident by.
+    /// </summary>
+    /// <remarks>
+    /// Every other rule speaks when the site is unwell, and none of them speaks
+    /// when the contour itself breaks: a relay refusing mail, an alertmanager that
+    /// stopped, a rule file that failed to load. Silence then reads exactly like
+    /// health, which is why a whole set of alerts spent its life undelivered
+    /// without anybody noticing.
+    ///
+    /// Delivered by the ordinary receiver rather than by one of its own: a channel
+    /// that only the heartbeat uses proves the health of a channel nothing else
+    /// uses. Watching for its absence is outside the machine by construction — a
+    /// watchman living on the observed host cannot report its own death — and that
+    /// part is written in the deployment guide, not here.
+    /// </remarks>
+    [Fact]
+    public void SendAHeartbeatTheOwnerCanMissTheAbsenceOf()
+    {
+        var rules = Read(AlertRules);
+        var delivery = Read(AlertDelivery);
+
+        // Whole name, not a prefix: renaming the rule to WatchdogRetired leaves the
+        // substring in place and the check green over a contour with no heartbeat.
+        Regex.IsMatch(rules, @"^\s*- alert: Watchdog\s*$", RegexOptions.Multiline)
+            .Should().BeTrue(
+                "a contour with no always-firing rule cannot tell silence from health");
+        rules.Should().Contain("expr: vector(1)",
+            "the heartbeat fires unconditionally: anything evaluated against the site " +
+            "is silent precisely when the site is unreachable");
+
+        delivery.Should().Contain("severity = \"watchdog\"",
+            "the heartbeat is routed by its own matcher: grouped with incidents it " +
+            "would be buried by group_wait and repeat_interval meant for them");
+
+        var routedTo = Regex.Match(
+            delivery, @"severity = ""watchdog""[\s\S]*?receiver:\s*'?([\w-]+)'?");
+        routedTo.Success.Should().BeTrue("the heartbeat route has to name a receiver");
+        ReceiverBlock(delivery, routedTo.Groups[1].Value).Should().Contain("_configs:",
+            "a receiver that is a name with nothing under it drops what it is given, " +
+            "which is the failure this rule exists to make visible");
     }
 
     /// <summary>
@@ -1882,7 +2362,7 @@ public class DeploymentConfigurationShould
         })
         .FirstOrDefault(value => !string.IsNullOrEmpty(value));
 
-    /// <summary>Directives of the server that runs, without the commented template.</summary>
+    /// <summary>Directives that are not commented out.</summary>
     private static string ActiveDirectives(string configuration) =>
         Directives(configuration, commented: false);
 

@@ -45,6 +45,14 @@ server {
         return 200 "ok\n";
     }
 
+    # Челлендж центра сертификации: анонимный запрос из интернета, поэтому стоит
+    # перед редиректом. Префикс с ^~ бьет location / — иначе проверка уезжает на
+    # https, которого при первом выпуске еще нет.
+    location ^~ /.well-known/acme-challenge/ {
+        access_log off;
+        root /var/www/certbot;
+    }
+
     location / {
         return 301 https://$host$request_uri;
     }
@@ -55,8 +63,8 @@ server {
     http2 on;
     server_name _;
 
-    ssl_certificate     /etc/nginx/ssl/fullchain.pem;
-    ssl_certificate_key /etc/nginx/ssl/privkey.pem;
+    ssl_certificate     /etc/nginx/ssl/live/dm/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/live/dm/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers off;
     ssl_session_cache shared:pop_ssl:10m;
@@ -82,9 +90,8 @@ server {
     # политики. Пока значения совпадают, браузер приходит к тому же решению, но
     # как только их разведут в одном из слоев, исход будет решать разбор
     # конкретного заголовка, а не автор правки. Снимается ровно то, что тут же и
-    # ставится: X-XSS-Protection точка присутствия не выставляет, и пришедшая
-    # сверху копия остается единственной. Content-Security-Policy тут не ставит
-    # никто, и он проходит насквозь по той же причине.
+    # ставится. Content-Security-Policy тут не ставит никто, и он проходит
+    # насквозь по той же причине.
     proxy_hide_header X-Content-Type-Options;
     proxy_hide_header X-Frame-Options;
     proxy_hide_header Referrer-Policy;
@@ -109,6 +116,43 @@ server {
     # похода точки присутствия наверх. По ней приложение решает, помечать ли сессионную
     # куку как Secure, и подстановка своей схемы здесь выдает куку, которую
     # браузер молча выбрасывает.
+    # Живость и готовность приложения — точными совпадениями, как и на основном
+    # крае. Без своих локаций они падают в location /, который отдает фронтенд, а
+    # SPA отвечает index.html с кодом 200 на любой путь: внешний пульс, нацеленный
+    # сюда, рапортовал бы о здоровом сайте ровно столько, сколько жив край.
+    # Префикс тут нельзя: он опубликовал бы /_health/detail с перечнем всех
+    # зависимостей и их состоянием.
+    location = /_health {
+        access_log off;
+        proxy_pass ${POP_UPSTREAM};
+        proxy_ssl_server_name on;
+        proxy_ssl_name ${POP_UPSTREAM_HOST};
+        proxy_set_header Host ${POP_UPSTREAM_HOST};
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /_ready {
+        access_log off;
+        proxy_pass ${POP_UPSTREAM};
+        proxy_ssl_server_name on;
+        proxy_ssl_name ${POP_UPSTREAM_HOST};
+        proxy_set_header Host ${POP_UPSTREAM_HOST};
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Живость самого края и по https тоже: на 80 все прочее уезжает редиректом,
+    # поэтому по http эту пробу видит только docker изнутри контейнера.
+    location = /pop-health {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok
+";
+    }
+
     location /v1/ {
         proxy_pass ${POP_UPSTREAM};
         proxy_http_version 1.1;

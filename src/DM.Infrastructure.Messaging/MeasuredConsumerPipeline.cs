@@ -86,6 +86,13 @@ public sealed class MeasuredConsumerPipeline
         var started = Stopwatch.GetTimestamp();
         try
         {
+            // The token goes to the attempt and not to the policy. The policy
+            // handles every exception, cancellation among them, so an attempt that
+            // observes the token is retried like any other failure; handing it to
+            // ExecuteAsync instead would throw straight out of the middleware, and
+            // an exception that escapes here is what dead-letters the message.
+            // Where a message interrupted by a stop belongs is part of deciding
+            // how a consumer drains, and that is not decided in this file.
             var result = _retryPolicy is null
                 ? await next.Invoke(context, cancellationToken)
                 : await _retryPolicy.ExecuteAsync(() => next.Invoke(context, cancellationToken));

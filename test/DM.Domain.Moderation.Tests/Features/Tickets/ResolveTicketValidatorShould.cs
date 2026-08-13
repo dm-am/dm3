@@ -42,7 +42,7 @@ public class ResolveTicketValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Status)
-            .WithErrorMessage("Status must be a resolution status (Closed or Spam)");
+            .WithErrorMessage("Обращение можно закрыть или пометить спамом");
     }
 
     [Fact]
@@ -56,7 +56,7 @@ public class ResolveTicketValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Status)
-            .WithErrorMessage("Status must be a resolution status (Closed or Spam)");
+            .WithErrorMessage("Обращение можно закрыть или пометить спамом");
     }
 
     [Fact]

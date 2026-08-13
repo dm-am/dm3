@@ -11,11 +11,11 @@ internal class UpdateGameReviewValidator : AbstractValidator<UpdateGameReview>
     {
         RuleFor(x => x.ReviewId)
             .NotEmpty()
-            .WithMessage("Review ID is required");
+            .WithMessage("Укажите рецензию");
 
         RuleFor(x => x.Text)
             .MaximumLength(5000)
             .When(x => !string.IsNullOrEmpty(x.Text))
-            .WithMessage("Review text must not exceed 5000 characters");
+            .WithMessage("Рецензия не длиннее 5000 символов");
     }
 }

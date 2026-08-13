@@ -6,15 +6,19 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.Extensions;
 using DM.Infrastructure.Core.Extensions;
+using DM.Infrastructure.Core.Tracing;
 using Jamq.Client.Abstractions.Producing;
 using Jamq.Client.Rabbit.Producing;
+using Microsoft.Extensions.Logging;
 
 namespace DM.Infrastructure.Messaging.GeneralBus;
 
 /// <summary>
 /// Event producer implementation that sends domain events through RabbitMQ.
 /// </summary>
-internal class InvokedEventProducer(IProducerBuilder producerBuilder)
+internal class InvokedEventProducer(
+    IProducerBuilder producerBuilder,
+    ILogger<InvokedEventProducer> logger)
     : IEventProducer, IDisposable
 {
     private readonly IProducer<string, InvokedEvent> producer = producerBuilder.BuildRabbit<InvokedEvent>(
@@ -41,12 +45,35 @@ internal class InvokedEventProducer(IProducerBuilder producerBuilder)
     /// </remarks>
     public void Dispose() => (producer as IDisposable)?.Dispose();
 
-    public Task SendAsync(EventType eventType, Guid entityId) =>
-        producer.Send(GetRoutingKey(eventType), new InvokedEvent
+    /// <inheritdoc />
+    /// <remarks>
+    /// A refusal is logged and counted, never thrown. The write that produced the
+    /// event is committed by the time this runs, so a throw would turn a saved
+    /// comment into a 500 and the caller would post it twice; SYSTEM.md already
+    /// says an event is not the carrier of the fact, so the cheaper loss is the
+    /// event. The rule lives here because the alternative is the same try/catch
+    /// copied into every one of the seventy-odd call sites — and it was written
+    /// in three of them.
+    /// </remarks>
+    public async Task SendAsync(EventType eventType, Guid entityId)
+    {
+        try
         {
-            Type = eventType,
-            EntityId = entityId
-        }, CancellationToken.None);
+            await producer.Send(GetRoutingKey(eventType), new InvokedEvent
+            {
+                Type = eventType,
+                EntityId = entityId
+            }, CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            MessagingMetrics.PublishFailed.Add(1,
+                new KeyValuePair<string, object?>("event", eventType.ToString()),
+                new KeyValuePair<string, object?>("reason", exception.GetType().Name));
+            logger.LogWarning(exception,
+                "Failed to publish {EventType} for {EntityId}", eventType, entityId);
+        }
+    }
 
     public async Task SendAsync(IEnumerable<EventType> eventTypes, Guid entityId)
     {

@@ -31,6 +31,7 @@ public class RoomServiceShould : UnitTestBase
     private readonly Mock<IRoomRepository> _repository;
     private readonly Mock<IUnreadCountersRepository> _unreadCountersRepository;
     private readonly Mock<IEventProducer> _producer;
+    private readonly Mock<IGuidFactory> _guidFactory;
     private static readonly Guid CurrentUserId = Guid.NewGuid();
 
     private readonly Mock<IIdentityProvider> _identityProvider;
@@ -65,8 +66,8 @@ public class RoomServiceShould : UnitTestBase
         var identity = Identities.User(CurrentUserId, "testuser");
         _identityProvider.Setup(p => p.Current).Returns(identity);
 
-        var guidFactory = Mock<IGuidFactory>();
-        guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid());
+        _guidFactory = Mock<IGuidFactory>();
+        _guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid());
 
         _service = new RoomService(
             _gameService.Object,
@@ -77,7 +78,7 @@ public class RoomServiceShould : UnitTestBase
             _unreadCountersRepository.Object,
             _producer.Object,
             _identityProvider.Object,
-            guidFactory.Object);
+            _guidFactory.Object);
     }
 
     [Fact]
@@ -140,9 +141,15 @@ public class RoomServiceShould : UnitTestBase
         _repository.Setup(r => r.Create(It.IsAny<CreateRoomEntity>()))
             .ReturnsAsync(new Room { Id = roomId, GameId = gameId });
 
+        // The identifier is minted here and not learnt from the row: the marker is
+        // written before the row exists to return one.
+        _guidFactory.Setup(f => f.Create()).Returns(roomId);
+
         await _service.CreateAsync(createRoom);
 
-        _unreadCountersRepository.Verify(r => r.CreateAsync(roomId, gameId, UnreadEntryType.Message), Times.Once);
+        _unreadCountersRepository.Verify(r => r.CreateMarkerAsync(roomId, gameId, UnreadEntryType.Message), Times.Once);
+        _unreadCountersRepository.Verify(r => r.DeleteAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>()),
+            Times.Never, "the row landed, so the reservation was committed");
     }
 
     [Fact]

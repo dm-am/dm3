@@ -29,7 +29,7 @@ internal static class AttributeSpecificationRules
         // At most one descriptor across the whole schema
         if (specs.Count(s => s.IsDescriptor) > 1)
         {
-            yield return "Only one attribute may be marked as descriptor";
+            yield return "Описателем можно отметить только один атрибут";
         }
 
         foreach (var spec in specs)
@@ -45,7 +45,7 @@ internal static class AttributeSpecificationRules
             // BbCode specs may not be descriptor
             if (spec.Type == AttributeSpecificationType.BbCode && spec.IsDescriptor)
             {
-                yield return $"BBCode attribute '{title}' cannot be a descriptor";
+                yield return $"Атрибут '{title}' с разметкой не может быть описателем";
             }
 
             if (!IsListType(spec.Type))
@@ -58,7 +58,7 @@ internal static class AttributeSpecificationRules
             // List types require at least one value
             if (values.Count == 0)
             {
-                yield return $"List attribute '{title}' requires at least one value";
+                yield return $"У списка '{title}' должно быть хотя бы одно значение";
                 continue;
             }
 
@@ -66,14 +66,14 @@ internal static class AttributeSpecificationRules
             var distinctCount = values.Select(v => v.Value?.Trim()).Distinct().Count();
             if (distinctCount != values.Count)
             {
-                yield return $"List attribute '{title}' must not contain duplicate values";
+                yield return $"В списке '{title}' значения не должны повторяться";
             }
 
             // Text-number list requires both value and modifier for each option
             if (spec.Type == AttributeSpecificationType.TextNumberList &&
                 values.Any(v => string.IsNullOrWhiteSpace(v.Value) || v.Modifier == null))
             {
-                yield return $"Text-number list '{title}' requires both a value and a modifier for each option";
+                yield return $"В списке '{title}' у каждого варианта нужны и значение, и модификатор";
             }
         }
     }

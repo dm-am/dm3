@@ -149,14 +149,14 @@ public class CreateGlobalChatEventInput
     /// <summary>
     /// Event title
     /// </summary>
-    [Required(ErrorMessage = "Title is required")]
-    [StringLength(200, MinimumLength = 1, ErrorMessage = "Title must be between 1 and 200 characters")]
+    [Required(ErrorMessage = "Введите заголовок")]
+    [StringLength(200, MinimumLength = 1, ErrorMessage = "Заголовок от 1 до 200 символов")]
     public string Title { get; set; } = null!;
 
     /// <summary>
     /// Event description (BBCode)
     /// </summary>
-    [StringLength(10000, ErrorMessage = "Description must not exceed 10000 characters")]
+    [StringLength(10000, ErrorMessage = "Описание не длиннее 10000 символов")]
     public string? Description { get; set; }
 
     /// <summary>
@@ -183,13 +183,13 @@ public class UpdateGlobalChatEventInput
     /// <summary>
     /// Event title
     /// </summary>
-    [StringLength(200, MinimumLength = 1, ErrorMessage = "Title must be between 1 and 200 characters")]
+    [StringLength(200, MinimumLength = 1, ErrorMessage = "Заголовок от 1 до 200 символов")]
     public string? Title { get; set; }
 
     /// <summary>
     /// Event description (BBCode)
     /// </summary>
-    [StringLength(10000, ErrorMessage = "Description must not exceed 10000 characters")]
+    [StringLength(10000, ErrorMessage = "Описание не длиннее 10000 символов")]
     public string? Description { get; set; }
 
     /// <summary>
@@ -216,8 +216,8 @@ public class AddParticipantInput
     /// <summary>
     /// User username to add
     /// </summary>
-    [Required(ErrorMessage = "Username is required")]
-    [StringLength(20, MinimumLength = 1, ErrorMessage = "Username must be between 1 and 20 characters")]
+    [Required(ErrorMessage = "Введите имя пользователя")]
+    [StringLength(20, MinimumLength = 1, ErrorMessage = "Имя пользователя от 1 до 20 символов")]
     public string Username { get; set; } = null!;
 
     /// <summary>

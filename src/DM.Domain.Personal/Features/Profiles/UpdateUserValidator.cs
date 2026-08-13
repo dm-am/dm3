@@ -1,4 +1,5 @@
 using DM.Domain.Core.Exceptions;
+using DM.Domain.Core.Dto;
 using FluentValidation;
 
 namespace DM.Domain.Personal.Features.Profiles;
@@ -41,24 +42,19 @@ internal class UpdateUserValidator : AbstractValidator<UpdateUser>
             Unless(u => u.Settings.Paging == null, () =>
             {
                 RuleFor(u => u.Settings.Paging.CommentsPerPage)
-                    .GreaterThan(0).WithMessage(ValidationError.Invalid)
-                    .LessThan(200).WithMessage(ValidationError.Invalid);
+                    .Must(PagingPolicy.Allows).WithMessage(ValidationError.Invalid);
 
                 RuleFor(u => u.Settings.Paging.MessagesPerPage)
-                    .GreaterThan(0).WithMessage(ValidationError.Invalid)
-                    .LessThan(200).WithMessage(ValidationError.Invalid);
+                    .Must(PagingPolicy.Allows).WithMessage(ValidationError.Invalid);
 
                 RuleFor(u => u.Settings.Paging.PostsPerPage)
-                    .GreaterThan(0).WithMessage(ValidationError.Invalid)
-                    .LessThan(200).WithMessage(ValidationError.Invalid);
+                    .Must(PagingPolicy.Allows).WithMessage(ValidationError.Invalid);
 
                 RuleFor(u => u.Settings.Paging.TopicsPerPage)
-                    .GreaterThan(0).WithMessage(ValidationError.Invalid)
-                    .LessThan(200).WithMessage(ValidationError.Invalid);
+                    .Must(PagingPolicy.Allows).WithMessage(ValidationError.Invalid);
 
                 RuleFor(u => u.Settings.Paging.EntitiesPerPage)
-                    .GreaterThan(0).WithMessage(ValidationError.Invalid)
-                    .LessThan(200).WithMessage(ValidationError.Invalid);
+                    .Must(PagingPolicy.Allows).WithMessage(ValidationError.Invalid);
             });
         });
     }

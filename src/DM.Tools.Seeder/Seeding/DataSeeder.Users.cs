@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Tokens;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -197,7 +198,9 @@ internal sealed partial class DataSeeder
             var pending = new DM.Infrastructure.Persistence.Entities.Account.PendingRegistration
             {
                 PendingRegistrationId = _guidFactory.Create(),
-                TokenId = _guidFactory.Create(),
+                // The row keeps the hash; the secret exists only in the letter, and
+                // a seeded pending registration has no letter to belong to.
+                SecretHash = ConfirmationSecret.Hash(_guidFactory.Create()),
                 Email = pendingEmail,
                 PasswordHash = hash,
                 Salt = salt,

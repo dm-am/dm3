@@ -43,6 +43,11 @@ public class UpdateBlogCommentEntity
     /// Last edit timestamp
     /// </summary>
     public DateTimeOffset LastUpdateUtc { get; set; }
+
+    /// <summary>
+    /// User performing the edit
+    /// </summary>
+    public Guid EditorUserId { get; set; }
 }
 
 /// <summary>

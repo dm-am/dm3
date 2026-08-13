@@ -73,6 +73,17 @@ internal class BlogService : IBlogService
         _eventProducer = eventProducer;
     }
 
+    /// <summary>
+    /// The user the current read is on behalf of.
+    /// </summary>
+    /// <remarks>
+    /// Every single-blog read passes it down: the reader role of a private-draft
+    /// blog is IsViewerSubscriber, and the repository can only fill that field for
+    /// somebody. Guests resolve to <see cref="Guid.Empty" />, which matches no
+    /// subscriber.
+    /// </remarks>
+    private Guid ViewerId => _identityProvider.Current.User.UserId;
+
     /// <inheritdoc />
     public async Task<(IEnumerable<Blog> blogs, PagingResult paging)> GetPublicBlogs(
         PagingQuery query, BlogFilter filter, CancellationToken ct = default)
@@ -155,7 +166,7 @@ internal class BlogService : IBlogService
     /// <inheritdoc />
     public async Task<Blog> GetAsync(Guid blogId, CancellationToken ct = default)
     {
-        var blog = await _repository.Get(blogId, ct);
+        var blog = await _repository.Get(blogId, ViewerId, ct);
         if (blog == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
@@ -176,7 +187,7 @@ internal class BlogService : IBlogService
     /// <inheritdoc />
     public async Task<Blog> GetByPublicIdAsync(string publicId, CancellationToken ct = default)
     {
-        var blog = await _repository.GetByPublicId(publicId, ct);
+        var blog = await _repository.GetByPublicId(publicId, ViewerId, ct);
         if (blog == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
@@ -197,7 +208,7 @@ internal class BlogService : IBlogService
     /// <inheritdoc />
     public async Task<Blog> GetByOwnerUsernameAsync(string username, CancellationToken ct = default)
     {
-        var blog = await _repository.GetByOwnerUsernameAsync(username, ct);
+        var blog = await _repository.GetByOwnerUsernameAsync(username, ViewerId, ct);
         if (blog == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, $"Блог пользователя {username} не найден");
@@ -218,7 +229,7 @@ internal class BlogService : IBlogService
     /// <inheritdoc />
     public async Task<Blog> GetBlogAsync(Guid blogId, CancellationToken ct = default)
     {
-        var blog = await _repository.Get(blogId, ct);
+        var blog = await _repository.Get(blogId, ViewerId, ct);
         if (blog == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
@@ -542,8 +553,8 @@ internal class BlogService : IBlogService
         _intentionManager.ThrowIfForbidden(BlogIntention.SetStatusModeration);
 
         var blog = Guid.TryParse(id, out var guid)
-            ? await _repository.Get(guid, ct)
-            : await _repository.GetByPublicId(id, ct);
+            ? await _repository.Get(guid, ViewerId, ct)
+            : await _repository.GetByPublicId(id, ViewerId, ct);
         if (blog == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
@@ -580,8 +591,8 @@ internal class BlogService : IBlogService
         // and legality is checked BEFORE authorization so an illegal move on
         // an accessible blog is a clean 400.
         var blog = Guid.TryParse(id, out var guid)
-            ? await _repository.Get(guid, ct)
-            : await _repository.GetByPublicId(id, ct);
+            ? await _repository.Get(guid, ViewerId, ct)
+            : await _repository.GetByPublicId(id, ViewerId, ct);
         if (blog == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);

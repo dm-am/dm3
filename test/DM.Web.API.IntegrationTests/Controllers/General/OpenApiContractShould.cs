@@ -141,6 +141,82 @@ public class OpenApiContractShould : IntegrationTestBase
     }
 
     /// <summary>
+    /// Repo-relative, and committed. Every address the API answers without asking
+    /// who is calling.
+    /// </summary>
+    private static readonly string PublicRoutesSnapshotPath =
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "artifacts", "openapi-public-routes.json");
+
+    /// <summary>
+    /// Which operations are open to a visitor.
+    /// </summary>
+    /// <remarks>
+    /// Authentication is declared by an attribute and published as the operation
+    /// security of the document, so the only place the two hundred-odd answers to
+    /// "who may call this" can be read side by side is a generated artefact that
+    /// nothing versions. Dropping the attribute from a controller is one deleted
+    /// line in a diff and no failing test; here it is one added line in a file
+    /// whose whole subject is what a stranger may reach.
+    /// </remarks>
+    [Fact]
+    public async Task MatchTheCommittedPublicRoutesSnapshot()
+    {
+        var open = new SortedSet<string>(StringComparer.Ordinal);
+        var total = 0;
+
+        foreach (var group in SwaggerExtensions.ApiGroups)
+        {
+            var response = await Client.GetAsync($"/swagger/{group}/swagger.json");
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            if (!document.RootElement.TryGetProperty("paths", out var paths))
+            {
+                continue;
+            }
+
+            foreach (var path in paths.EnumerateObject())
+            {
+                foreach (var operation in path.Value.EnumerateObject())
+                {
+                    total++;
+                    if (!operation.Value.TryGetProperty("security", out _))
+                    {
+                        open.Add($"{operation.Name.ToUpperInvariant()} {path.Name}");
+                    }
+                }
+            }
+        }
+
+        total.Should().BeGreaterThan(0, "the API publishes operations");
+        open.Should().NotBeEmpty("the site is readable without an account");
+
+        var serialised = JsonSerializer.Serialize(open, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        }).Replace("\r\n", "\n") + "\n";
+
+        var existing = File.Exists(PublicRoutesSnapshotPath)
+            ? (await File.ReadAllTextAsync(PublicRoutesSnapshotPath)).Replace("\r\n", "\n")
+            : null;
+
+        if (existing == serialised)
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(PublicRoutesSnapshotPath)!);
+        await File.WriteAllTextAsync(PublicRoutesSnapshotPath, serialised);
+
+        existing.Should().NotBeNull(
+            "artifacts/openapi-public-routes.json is missing; it has just been written, review and commit it");
+        serialised.Should().Be(existing,
+            "the set of operations open to a visitor changed; artifacts/openapi-public-routes.json has just " +
+            "been rewritten, review the diff and commit it");
+    }
+
+    /// <summary>
     /// The published schemas, reduced to what a hand-written client has to
     /// agree with: schema name to its property names.
     /// </summary>

@@ -7,6 +7,15 @@
 # on a fraction of the code, so the reports have to be merged first - which is
 # the whole of what ReportGenerator does here.
 #
+# Why one pair of numbers and not one per assembly: a per-assembly floor is a
+# second set of numbers, each measured, written down and raised by hand, plus a
+# list of assemblies kept by hand - and an assembly missing from that list slips
+# out from under the floor silently, which makes the gate worse than one honest
+# number. More numbers also mean more occasions for a red build under time
+# pressure to be fixed by lowering one, the single use this must never be put to.
+# A drop inside one assembly is caught reading the diff. The frontend thresholds
+# are global for the same reason, though vitest offers perFile.
+#
 # The results directory is expected to hold one run. Merging two runs of
 # different configurations adds their generated sources to the denominator and
 # the number drifts down for no reason; CI checks out clean, and by hand the

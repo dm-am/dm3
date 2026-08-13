@@ -9,6 +9,7 @@ import {
   watch,
 } from "vue";
 import { useRouter, useRoute } from "vue-router";
+import { htmlToBbcode } from "@/shared/lib/utils/bbcode";
 import { useModal } from "vue-final-modal";
 import { storeToRefs } from "pinia";
 import {
@@ -716,7 +717,7 @@ async function startEdit(msg: GlobalChatMessage) {
   // Fetch the original BBCode from the backend — seeds ChatMessage's editor
   // once; further keystrokes stay inside ChatMessage's own local state.
   const { data } = await globalChatApi.getMessageForEdit(msg.id);
-  editText.value = data?.text || "";
+  editText.value = htmlToBbcode(data?.text || "");
 }
 
 function cancelEdit() {

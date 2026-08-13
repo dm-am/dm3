@@ -30,6 +30,13 @@ secrets/
 # in the index, so a hash committed once is public from then on.
 docker/nginx/.htpasswd
 
+# Сервер TLS, который пишет scripts/init-ssl.sh, и каталог челленджа: и то и
+# другое принадлежит машине, а не репозиторию.
+docker/nginx/tls/*
+!docker/nginx/tls/.gitkeep
+docker/nginx/acme/*
+!docker/nginx/acme/.gitkeep
+
 # Docker environment secrets
 docker/.env
 docker/.env.mirror
@@ -55,6 +62,9 @@ artifacts/*
 # пишет интеграционный набор. Некоммитимый слепок означает, что на чистом клоне
 # файла нет, и джоба падает на его отсутствии.
 !artifacts/openapi-routes.json
+# Слепок публичности — по той же причине: кто может позвать ручку, объявляется
+# атрибутом, и снятие атрибута иначе не видно ни в дифе, ни в упавшем тесте.
+!artifacts/openapi-public-routes.json
 
 # Test artifacts
 test_*.json

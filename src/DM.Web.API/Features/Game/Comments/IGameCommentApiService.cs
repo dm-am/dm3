@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Comments;
 using System.Threading.Tasks;
 using DM.Domain.Game.Features.Comments;
 using DM.Web.API.Shared.Dto;
@@ -19,7 +20,7 @@ public interface IGameCommentApiService
     /// <param name="gameId">Game identifier</param>
     /// <param name="query">Query with filtering, sorting and paging</param>
     /// <returns>Comments list with paging</returns>
-    Task<ListEnvelope<Comment>> Get(Guid gameId, GameCommentsQuery query);
+    Task<ListEnvelope<Comment>> Get(Guid gameId, CommentsQuery query);
 
     /// <summary>
     /// Create new comment

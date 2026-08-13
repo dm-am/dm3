@@ -55,6 +55,32 @@ public class StorageClockShould
     }
 
     /// <summary>
+    /// A generated identifier, taken off the framework instead of the factory.
+    /// </summary>
+    private static readonly Regex Identifier = new(
+        @"(?<![w.])Guids*.s*NewGuids*(s*)",
+        RegexOptions.Compiled);
+
+    /// <summary>
+    /// One source of new identifiers for the whole layer, and it is injected.
+    /// </summary>
+    /// <remarks>
+    /// The same argument as the clock above, and the same seam: the seeding tool
+    /// replaces IGuidFactory with a deterministic one so that a fixture built twice
+    /// is the same fixture, and every repository that calls Guid.NewGuid directly
+    /// is a hole in that. Ten of them called it while the factory was already
+    /// injected next door — the value is identical, which is exactly why the drift
+    /// went unnoticed until the seed stopped reproducing.
+    /// </remarks>
+    [Fact]
+    public void TakeNewIdentifiersOnlyThroughTheInjectedFactory()
+    {
+        Offenders(Identifier).Should().BeEmpty(
+            "the seeder swaps the factory for a deterministic one, and a repository " +
+            "that bypasses it hands out an identifier no fixture can predict");
+    }
+
+    /// <summary>
     /// A reader that reads nothing passes everything.
     /// </summary>
     [Fact]

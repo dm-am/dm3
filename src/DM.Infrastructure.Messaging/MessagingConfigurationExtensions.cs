@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using Jamq.Client.Abstractions.Consuming;
 using Jamq.Client.Abstractions.Producing;
 using Jamq.Client.DependencyInjection;
 using Jamq.Client.Rabbit.DependencyInjection;
+using RabbitMQ.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -39,6 +41,17 @@ public static class MessagingConfigurationExtensions
             .Validate(
                 r => Uri.TryCreate(r.Endpoint, UriKind.Absolute, out _),
                 "RabbitMqConfiguration:Endpoint must be an absolute URI, for example amqp://host:5672")
+            // The other three travel as fields rather than inside the endpoint, so
+            // nothing about the endpoint says whether they are there. Left empty
+            // they are not refused by the client either: it connects as the
+            // anonymous default and fails on the first publish, at which point the
+            // producer swallows the refusal by design and the site goes quiet.
+            .Validate(r => !string.IsNullOrWhiteSpace(r.Username),
+                "RabbitMqConfiguration:Username is required")
+            .Validate(r => !string.IsNullOrWhiteSpace(r.Password),
+                "RabbitMqConfiguration:Password is required")
+            .Validate(r => !string.IsNullOrWhiteSpace(r.VirtualHost),
+                "RabbitMqConfiguration:VirtualHost is required, use / for the default one")
             .ValidateOnStart();
 
         return services;
@@ -105,28 +118,52 @@ public static class MessagingConfigurationExtensions
     /// </remarks>
     /// <param name="services">Service collection.</param>
     /// <param name="configuration">Configuration to read the endpoint from.</param>
+    /// <param name="tags">Tags the host files this check under.</param>
     public static IServiceCollection AddDmBrokerHealthCheck(
-        this IServiceCollection services, IConfiguration configuration)
+        this IServiceCollection services, IConfiguration configuration, IEnumerable<string> tags)
     {
-        var rabbitMq = new RabbitMqConfiguration();
-        configuration.GetSection(nameof(RabbitMqConfiguration)).Bind(rabbitMq);
+        var rabbitMq = RabbitMqConfiguration.From(configuration);
 
         // A misconfigured endpoint is reported by AddDmMessageQueuing, whose
         // ValidateOnStart names the setting and says what a good value looks
         // like. That runs when the host starts, which is after this method — so
         // constructing the Uri unguarded here would pre-empt it with a bare
         // UriFormatException and no mention of which setting is at fault.
-        if (!Uri.TryCreate(rabbitMq.Endpoint, UriKind.Absolute, out var endpoint))
+        if (!Uri.TryCreate(rabbitMq.Endpoint, UriKind.Absolute, out _))
         {
             return services;
         }
 
+        // The same factory the client connects with, credentials and all. Handed a
+        // bare endpoint instead, the probe fell back to the library defaults -
+        // guest/guest on the default virtual host - and reported a broker the
+        // application could not log in to as Healthy, on the one signal that exists
+        // to say the opposite.
+        var factory = rabbitMq.CreateConnectionFactory();
         services.AddHealthChecks()
             .AddRabbitMQ(
-                rabbitConnectionString: endpoint,
+                setup: options => options.ConnectionFactory = factory,
                 name: "rabbitmq",
-                tags: new[] { "messaging", "ready" });
+                tags: tags);
 
         return services;
     }
+
+    /// <summary>
+    /// Declares the exchanges this host publishes to, before it publishes to them.
+    /// </summary>
+    /// <remarks>
+    /// Named by the host rather than derived from the producers, because a
+    /// producer is built in a scope and this is a decision about topology - the
+    /// same place the consumers declare theirs. The list of a host is asserted
+    /// against its producers by an architecture gate.
+    /// </remarks>
+    /// <param name="services">Service collection.</param>
+    /// <param name="exchangeNames">Exchanges this host publishes to.</param>
+    public static IServiceCollection AddDmPublishedExchanges(
+        this IServiceCollection services, params string[] exchangeNames) =>
+        services.AddHostedService(provider => new PublishedExchangeDeclaration(
+            provider.GetRequiredService<IAsyncConnectionFactory>(),
+            provider.GetRequiredService<ILogger<PublishedExchangeDeclaration>>(),
+            exchangeNames));
 }

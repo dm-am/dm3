@@ -98,8 +98,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("TokenCreatedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("TokenId")
-                        .HasColumnType("uuid");
+                    b.Property<byte[]>("SecretHash")
+                        .IsRequired()
+                        .HasColumnType("bytea");
 
                     b.HasKey("PendingRegistrationId");
 
@@ -110,9 +111,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_PendingRegistrations_Email");
 
-                    b.HasIndex("TokenId")
+                    b.HasIndex("SecretHash")
                         .IsUnique()
-                        .HasDatabaseName("IX_PendingRegistrations_TokenId");
+                        .HasDatabaseName("IX_PendingRegistrations_SecretHash");
 
                     b.ToTable("PendingRegistrations");
                 });
@@ -141,6 +142,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsRemoved")
                         .HasColumnType("boolean");
 
+                    b.Property<byte[]>("SecretHash")
+                        .HasColumnType("bytea");
+
                     b.Property<int>("Type")
                         .HasColumnType("integer");
 
@@ -154,6 +158,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasIndex("DeletedByUserId");
 
                     b.HasIndex("EntityId");
+
+                    b.HasIndex("SecretHash")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Tokens_SecretHash")
+                        .HasFilter("\"SecretHash\" IS NOT NULL");
 
                     b.HasIndex("UserId", "Type");
 
@@ -612,7 +621,8 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("BlogAssistantId");
 
-                    b.HasIndex("BlogId");
+                    b.HasIndex("BlogId", "UserId")
+                        .IsUnique();
 
                     b.HasIndex("UserId");
 
@@ -2185,10 +2195,15 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("LastCommentId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("SearchText")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("");
+
                     b.Property<NpgsqlTsVector>("SearchVector")
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("tsvector")
-                        .HasComputedColumnSql("setweight(to_tsvector('russian', coalesce(\"Title\", '')), 'A') || setweight(to_tsvector('russian', coalesce(\"Text\", '')), 'B')", true);
+                        .HasComputedColumnSql("setweight(to_tsvector('russian', coalesce(\"Title\", '')), 'A') || setweight(to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[private(=[^\\]]*)??\\][\\s\\S]*?\\[/private\\]', ' ', 'gi')), 'B')", true);
 
                     b.Property<string>("Text")
                         .IsRequired()
@@ -2572,7 +2587,8 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("GameAssistantId");
 
-                    b.HasIndex("GameId");
+                    b.HasIndex("GameId", "UserId")
+                        .IsUnique();
 
                     b.HasIndex("UserId");
 
@@ -2816,10 +2832,15 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("RoomId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("SearchText")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("");
+
                     b.Property<NpgsqlTsVector>("SearchVector")
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("tsvector")
-                        .HasComputedColumnSql("to_tsvector('russian', regexp_replace(coalesce(\"GameText\", ''), '\\[private(=[^\\]]*)?\\][\\s\\S]*?\\[/private\\]', ' ', 'gi'))", true);
+                        .HasComputedColumnSql("to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[private(=[^\\]]*)??\\][\\s\\S]*?\\[/private\\]', ' ', 'gi'))", true);
 
                     b.Property<bool>("SharePrivateWithAll")
                         .HasColumnType("boolean");
@@ -3086,10 +3107,15 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsRemoved")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("SearchText")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("");
+
                     b.Property<NpgsqlTsVector>("SearchVector")
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("tsvector")
-                        .HasComputedColumnSql("to_tsvector('russian', coalesce(\"Text\", ''))", true);
+                        .HasComputedColumnSql("to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[private(=[^\\]]*)??\\][\\s\\S]*?\\[/private\\]', ' ', 'gi'))", true);
 
                     b.Property<string>("Text")
                         .IsRequired()
@@ -3447,10 +3473,15 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsRemoved")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("SearchText")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("");
+
                     b.Property<NpgsqlTsVector>("SearchVector")
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("tsvector")
-                        .HasComputedColumnSql("to_tsvector('russian', coalesce(\"Text\", ''))", true);
+                        .HasComputedColumnSql("to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[private(=[^\\]]*)??\\][\\s\\S]*?\\[/private\\]', ' ', 'gi'))", true);
 
                     b.Property<string>("Text")
                         .IsRequired()

@@ -23,23 +23,26 @@ internal class PublicationCommentRepository : IPublicationCommentRepository
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
 
     public PublicationCommentRepository(
         DmDbContext dbContext,
         IMapper mapper,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        IGuidFactory guidFactory)
     {
         _dbContext = dbContext;
         _mapper = mapper;
         _dateTimeProvider = dateTimeProvider;
+        _guidFactory = guidFactory;
     }
 
     /// <inheritdoc />
-    public Task<int> Count(Guid publicationId, PublicationCommentsQuery query, IReadOnlyCollection<Guid>? excludeUserIds = null, CancellationToken ct = default) =>
+    public Task<int> Count(Guid publicationId, CommentsQuery query, IReadOnlyCollection<Guid>? excludeUserIds = null, CancellationToken ct = default) =>
         CommentQueries.Count(_dbContext, publicationId, query, excludeUserIds, "DM.PublicationComments.Count", ct);
 
     /// <inheritdoc />
-    public Task<IEnumerable<Comment>> Get(Guid publicationId, PublicationCommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null, CancellationToken ct = default) =>
+    public Task<IEnumerable<Comment>> Get(Guid publicationId, CommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null, CancellationToken ct = default) =>
         CommentQueries.Page(_dbContext, _mapper, publicationId, query, paging, excludeUserIds, "DM.PublicationComments.List", ct);
 
     /// <inheritdoc />
@@ -49,7 +52,7 @@ internal class PublicationCommentRepository : IPublicationCommentRepository
     /// <inheritdoc />
     public async Task<(Comment comment, Guid commentId)> Create(CreateComment createComment, Guid authorId, Guid publicationId, int newCommentCount, CancellationToken ct = default)
     {
-        var commentId = Guid.NewGuid();
+        var commentId = _guidFactory.Create();
         var now = _dateTimeProvider.Now;
 
         var dbComment = new DbComment
@@ -90,7 +93,11 @@ internal class PublicationCommentRepository : IPublicationCommentRepository
         if (dbComment != null)
         {
             dbComment.Text = entity.Text;
-            // Modification tracking is handled via Edit history, not inline ModifiedUtc
+            // The comment row keeps no modification stamp: ModifiedUtc is derived
+            // from the newest entry of this history, and the client draws its
+            // "edited" mark from that. Written here rather than at the call site so
+            // the text and its trace go in one SaveChanges.
+            CommentEdits.Record(_dbContext, _guidFactory, entity.CommentId, entity.EditorUserId, entity.LastUpdateUtc);
             await _dbContext.SaveChangesAsync(ct);
         }
 

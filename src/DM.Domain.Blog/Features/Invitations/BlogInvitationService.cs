@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
 using DM.Domain.Blog.Authorization;
 using DM.Domain.Blog.Features.Blogs;
+using DM.Domain.Blog.Features.Subscriptions;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Configuration;
@@ -27,6 +28,7 @@ internal class BlogInvitationService : IBlogInvitationService
     private readonly IBlogInvitationRepository _repository;
     private readonly IIntentionManager _intentionManager;
     private readonly IBlogService _blogService;
+    private readonly IBlogSubscriptionService _subscriptionService;
     private readonly IUserLookupService _userLookupService;
     private readonly IUserBlacklistChecker _userBlacklistChecker;
     private readonly IEventProducer _eventProducer;
@@ -39,6 +41,7 @@ internal class BlogInvitationService : IBlogInvitationService
         IBlogInvitationRepository repository,
         IIntentionManager intentionManager,
         IBlogService blogService,
+        IBlogSubscriptionService subscriptionService,
         IUserLookupService userLookupService,
         IUserBlacklistChecker userBlacklistChecker,
         IEventProducer eventProducer,
@@ -49,6 +52,7 @@ internal class BlogInvitationService : IBlogInvitationService
         _repository = repository;
         _intentionManager = intentionManager;
         _blogService = blogService;
+        _subscriptionService = subscriptionService;
         _userLookupService = userLookupService;
         _userBlacklistChecker = userBlacklistChecker;
         _eventProducer = eventProducer;
@@ -165,25 +169,43 @@ internal class BlogInvitationService : IBlogInvitationService
             throw new HttpException(HttpStatusCode.Gone, RefusalMessage.InvitationExpired);
         }
 
-        // Mark token as used
-        await _repository.Invalidate(tokenId);
-
         if (accept)
         {
             if (invitation.TargetRole == BlogRole.Assistant)
             {
-                // Add as assistant
-                await _blogService.AddAssistant(invitation.BlogId, userId);
+                // The assistant row and the spent invitation go in together: written
+                // separately, a refusal in between left the invitation live next to
+                // somebody who already holds what it grants.
+                await _repository.AcceptAssistantInvitation(new AddBlogAssistantEntity
+                {
+                    BlogId = invitation.BlogId,
+                    UserId = userId,
+                    JoinedUtc = _dateTimeProvider.Now
+                }, tokenId);
             }
             else
             {
-                // Add as subscriber (reader) via Subscribe
-                await _blogService.Subscribe(invitation.BlogId);
+                // Straight to the subscription, not through BlogService.Subscribe:
+                // that method is the public door and refuses a blog whose drafts
+                // are private, which is exactly the blog an invitation is issued
+                // for. Routed through it, a reader invitation to a private blog
+                // could never be accepted — the invited user got 403 on the only
+                // path that redeems it. The game side redeems its own reader
+                // invitation the same way, past its own public door.
+                //
+                // The subscription first and the token second: subscribing is
+                // idempotent, so a break between the two is repaired by following the
+                // same link again, while the other order would spend the invitation
+                // and leave nothing for the second attempt to do.
+                await _subscriptionService.SubscribeAsync(invitation.BlogId);
+                await _repository.Invalidate(tokenId);
             }
+
             await _eventProducer.SendAsync(EventType.BlogInvitationAccepted, tokenId);
         }
         else
         {
+            await _repository.Invalidate(tokenId);
             await _eventProducer.SendAsync(EventType.BlogInvitationRejected, tokenId);
         }
     }

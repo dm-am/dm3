@@ -1,10 +1,8 @@
 using System;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using Microsoft.AspNetCore.Http;
-using Serilog.Context;
 
 namespace DM.Web.API.Middleware;
 
@@ -38,17 +36,10 @@ public class CorrelationMiddleware
             : guidFactory.Create();
         setter.Current = correlationToken;
 
-        // Push TraceId to LogContext for correlation with OpenTelemetry traces
-        if (Activity.Current != null)
-        {
-            using (LogContext.PushProperty("TraceId", Activity.Current.TraceId.ToString()))
-            using (LogContext.PushProperty("SpanId", Activity.Current.SpanId.ToString()))
-            {
-                await next(httpContext);
-                return;
-            }
-        }
-
+        // The trace and span ids are not pushed here. The sink writes them out of
+        // the event itself, so a copy pushed from the request would name the span
+        // of the request on every line - including lines written inside a nested
+        // span, which are the ones worth linking from.
         await next(httpContext);
     }
 }

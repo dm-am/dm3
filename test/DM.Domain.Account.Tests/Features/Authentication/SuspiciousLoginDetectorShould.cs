@@ -129,4 +129,79 @@ public class SuspiciousLoginDetectorShould : UnitTestBase
 
     private static SecurityAuditEntry Entry(SecurityEventType type, string address) =>
         new() { EventType = type, IpAddress = address };
+
+    private static SecurityAuditEntry Entry(SecurityEventType type, string address, string device) =>
+        new() { EventType = type, IpAddress = address, DeviceInfo = device };
+
+    /// <summary>
+    /// A reconnection is not a new place.
+    /// </summary>
+    /// <remarks>
+    /// Compared exactly, the address of a residential connection changes on the
+    /// provider's schedule and the address of a phone changes every time it leaves
+    /// the house, so half the logins of an ordinary reader were called suspicious.
+    /// A warning that arrives on ordinary days is one nobody reads on the day it
+    /// matters, which is the only day it exists for.
+    /// </remarks>
+    [Fact]
+    public async Task TreatTheSameNetworkAsTheSamePlace()
+    {
+        Trail(
+            Entry(SecurityEventType.LoginSuccess, "203.0.113.42"),
+            Entry(SecurityEventType.LoginSuccess, KnownAddress));
+
+        var suspicious = await _detector.IsSuspiciousAsync(_userId, "203.0.113.180", null);
+
+        suspicious.Should().BeFalse("the provider renumbered the connection, nobody moved");
+    }
+
+    [Fact]
+    public async Task StillCallAnotherNetworkSuspicious()
+    {
+        Trail(
+            Entry(SecurityEventType.LoginSuccess, "203.0.113.42"),
+            Entry(SecurityEventType.LoginSuccess, KnownAddress));
+
+        var suspicious = await _detector.IsSuspiciousAsync(_userId, NewAddress, null);
+
+        suspicious.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// The device was taken as an argument and never read.
+    /// </summary>
+    /// <remarks>
+    /// A session opened from the owner's own network on a machine that has never
+    /// been seen — somebody sitting at a browser that is not theirs — was
+    /// indistinguishable from the owner opening their own laptop.
+    /// </remarks>
+    [Fact]
+    public async Task CallAnUnseenDeviceSuspiciousFromAKnownNetwork()
+    {
+        Trail(
+            Entry(SecurityEventType.LoginSuccess, KnownAddress, "Chrome on Windows"),
+            Entry(SecurityEventType.LoginSuccess, KnownAddress, "Chrome on Windows"));
+
+        var suspicious = await _detector.IsSuspiciousAsync(_userId, KnownAddress,
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 " +
+            "(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1");
+
+        suspicious.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SayNothingWhenTheSameDeviceReturnsToTheSameNetwork()
+    {
+        var chrome = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+        var device = DM.Domain.Core.Parsing.UserAgentParser.Parse(chrome);
+
+        Trail(
+            Entry(SecurityEventType.LoginSuccess, KnownAddress, device),
+            Entry(SecurityEventType.LoginSuccess, KnownAddress, device));
+
+        var suspicious = await _detector.IsSuspiciousAsync(_userId, KnownAddress, chrome);
+
+        suspicious.Should().BeFalse("the same browser on the same connection is the owner");
+    }
 }

@@ -250,12 +250,19 @@ public class UsernameChangeServiceShould : UnitTestBase
 
         result.RequestedUsername.Should().Be("newusername");
         result.Status.Should().Be(UsernameChangeRequestStatus.Completed);
-        _repository.Verify(r => r.UpdateUserUsername(userId, "newusername", It.IsAny<CancellationToken>()), Times.Once);
-        _historyRepository.Verify(h => h.Add(It.Is<CreateUsernameHistory>(hist =>
-            hist.UserId == userId &&
-            hist.OldUsername == "oldusername" &&
-            hist.NewUsername == "newusername"
-        ), It.IsAny<CancellationToken>()), Times.Once);
+        // One call, because the three rows go in together: separately, a refusal in
+        // between could leave the user renamed with the request still pending, and
+        // one approval then buys a second rename.
+        _repository.Verify(r => r.ApplyRename(
+            It.Is<UsernameChangeRequest>(req =>
+                req.UserId == userId &&
+                req.Status == UsernameChangeRequestStatus.Completed &&
+                req.ApprovalToken == null),
+            It.Is<CreateUsernameHistory>(hist =>
+                hist.UserId == userId &&
+                hist.OldUsername == "oldusername" &&
+                hist.NewUsername == "newusername"),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -312,11 +319,14 @@ public class UsernameChangeServiceShould : UnitTestBase
         var result = await _service.RollbackAsync(requestId);
 
         result.Status.Should().Be(UsernameChangeRequestStatus.Rejected);
-        _repository.Verify(r => r.UpdateUserUsername(userId, "oldusername", It.IsAny<CancellationToken>()), Times.Once);
-        _historyRepository.Verify(h => h.Add(It.Is<CreateUsernameHistory>(hist =>
-            hist.UserId == userId &&
-            hist.OldUsername == "newusername" &&
-            hist.NewUsername == "oldusername"
-        ), It.IsAny<CancellationToken>()), Times.Once);
+        _repository.Verify(r => r.ApplyRename(
+            It.Is<UsernameChangeRequest>(req =>
+                req.UserId == userId &&
+                req.Status == UsernameChangeRequestStatus.Rejected),
+            It.Is<CreateUsernameHistory>(hist =>
+                hist.UserId == userId &&
+                hist.OldUsername == "newusername" &&
+                hist.NewUsername == "oldusername"),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 }

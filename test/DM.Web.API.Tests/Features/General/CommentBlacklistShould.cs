@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Comments;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -72,16 +73,16 @@ public class CommentBlacklistShould : UnitTestBase
     {
         var commentService = Mock<IBlogCommentService>();
         commentService
-            .Setup(s => s.GetAsync(_entityId, It.IsAny<BlogCommentsQuery>(),
+            .Setup(s => s.GetAsync(_entityId, It.IsAny<CommentsQuery>(),
                 It.IsAny<IReadOnlyCollection<Guid>>()))
             .ReturnsAsync(NoComments);
 
         var service = new BlogCommentApiService(
             commentService.Object, _identityProvider.Object, _blacklist.Object, _mapper.Object);
 
-        await service.Get(_entityId, new BlogCommentsQuery());
+        await service.Get(_entityId, new CommentsQuery());
 
-        commentService.Verify(s => s.GetAsync(_entityId, It.IsAny<BlogCommentsQuery>(),
+        commentService.Verify(s => s.GetAsync(_entityId, It.IsAny<CommentsQuery>(),
             It.Is<IReadOnlyCollection<Guid>>(ids => ids != null && ids.Contains(_blockedId))), Times.Once);
     }
 
@@ -90,16 +91,16 @@ public class CommentBlacklistShould : UnitTestBase
     {
         var commentService = Mock<IPublicationCommentService>();
         commentService
-            .Setup(s => s.GetAsync(_entityId, It.IsAny<PublicationCommentsQuery>(),
+            .Setup(s => s.GetAsync(_entityId, It.IsAny<CommentsQuery>(),
                 It.IsAny<IReadOnlyCollection<Guid>>()))
             .ReturnsAsync(NoComments);
 
         var service = new PublicationCommentApiService(
             commentService.Object, _identityProvider.Object, _blacklist.Object, _mapper.Object);
 
-        await service.Get(_entityId, new PublicationCommentsQuery());
+        await service.Get(_entityId, new CommentsQuery());
 
-        commentService.Verify(s => s.GetAsync(_entityId, It.IsAny<PublicationCommentsQuery>(),
+        commentService.Verify(s => s.GetAsync(_entityId, It.IsAny<CommentsQuery>(),
             It.Is<IReadOnlyCollection<Guid>>(ids => ids != null && ids.Contains(_blockedId))), Times.Once);
     }
 
@@ -108,16 +109,16 @@ public class CommentBlacklistShould : UnitTestBase
     {
         var commentService = Mock<IPublicationCommentService>();
         commentService
-            .Setup(s => s.GetAsync(_entityId, It.IsAny<PublicationCommentsQuery>(),
+            .Setup(s => s.GetAsync(_entityId, It.IsAny<CommentsQuery>(),
                 It.IsAny<IReadOnlyCollection<Guid>>()))
             .ReturnsAsync(NoComments);
 
         var service = new PublicationCommentApiService(
             commentService.Object, _identityProvider.Object, _blacklist.Object, _mapper.Object);
 
-        await service.Get(_entityId, new PublicationCommentsQuery());
+        await service.Get(_entityId, new CommentsQuery());
 
-        commentService.Verify(s => s.GetAsync(_entityId, It.IsAny<PublicationCommentsQuery>(),
+        commentService.Verify(s => s.GetAsync(_entityId, It.IsAny<CommentsQuery>(),
             It.Is<IReadOnlyCollection<Guid>>(ids => ids != null && ids.Contains(_blockedId))), Times.Once);
     }
 
@@ -144,16 +145,16 @@ public class CommentBlacklistShould : UnitTestBase
     {
         var commentService = Mock<IGameCommentService>();
         commentService
-            .Setup(s => s.GetAsync(_entityId, It.IsAny<GameCommentsQuery>(),
+            .Setup(s => s.GetAsync(_entityId, It.IsAny<CommentsQuery>(),
                 It.IsAny<IReadOnlyCollection<Guid>>()))
             .ReturnsAsync(NoComments);
 
         var service = new GameCommentApiService(
             commentService.Object, _identityProvider.Object, _blacklist.Object, _mapper.Object);
 
-        await service.Get(_entityId, new GameCommentsQuery());
+        await service.Get(_entityId, new CommentsQuery());
 
-        commentService.Verify(s => s.GetAsync(_entityId, It.IsAny<GameCommentsQuery>(),
+        commentService.Verify(s => s.GetAsync(_entityId, It.IsAny<CommentsQuery>(),
             It.Is<IReadOnlyCollection<Guid>>(ids => ids != null && ids.Contains(_blockedId))), Times.Once);
     }
 }

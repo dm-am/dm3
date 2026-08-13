@@ -34,6 +34,10 @@ scrape_configs:
     static_configs:
       - targets: ['dm-pg-exporter:9187']
 
+  - job_name: 'mongo'
+    static_configs:
+      - targets: ['dm-mongo-exporter:9216']
+
   - job_name: 'node'
     static_configs:
       - targets: ['dm-node-exporter:9100']
@@ -41,3 +45,24 @@ scrape_configs:
   - job_name: 'rabbitmq'
     static_configs:
       - targets: ['dm-rmq:15692']
+
+  # The log store is the one dependency whose failure erases its own evidence: a
+  # sink cannot log that it failed to log. Applications write to the console as
+  # well, so nothing is lost, but Grafana goes quiet and reads as a quiet site.
+  - job_name: 'loki'
+    static_configs:
+      - targets: ['dm-loki:3100']
+
+  # The contour watches itself, because nothing else is here to. Every rule in
+  # this stack is posted to the receiver below, and a receiver that stopped
+  # answering swallows all of them - including the one that would have said so.
+  # The rule on this target cannot deliver either; what it buys is a firing alert
+  # visible on the rules page and, once the receiver is back, a letter that says
+  # how long it was gone.
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['dm-alertmanager:9093']
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

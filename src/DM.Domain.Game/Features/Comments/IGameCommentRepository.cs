@@ -20,7 +20,7 @@ public interface IGameCommentRepository
     /// <param name="gameId">Game identifier</param>
     /// <param name="query">Query parameters for filtering</param>
     /// <param name="excludeUserIds">Optional user IDs to exclude from count</param>
-    Task<int> Count(Guid gameId, GameCommentsQuery query, IReadOnlyCollection<Guid>? excludeUserIds = null);
+    Task<int> Count(Guid gameId, CommentsQuery query, IReadOnlyCollection<Guid>? excludeUserIds = null);
 
     /// <summary>
     /// Get comments with paging
@@ -29,7 +29,7 @@ public interface IGameCommentRepository
     /// <param name="query">Query parameters for filtering and sorting</param>
     /// <param name="paging">Paging data</param>
     /// <param name="excludeUserIds">Optional user IDs to exclude from results</param>
-    Task<IEnumerable<Comment>> Get(Guid gameId, GameCommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null);
+    Task<IEnumerable<Comment>> Get(Guid gameId, CommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null);
 
     /// <summary>
     /// Get single comment

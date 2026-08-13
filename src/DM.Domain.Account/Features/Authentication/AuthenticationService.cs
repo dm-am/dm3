@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Collections.Generic;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using System;
 using DM.Domain.Account.Configuration;
@@ -75,7 +76,8 @@ internal class AuthenticationService : IAuthenticationService
     }
 
     /// <inheritdoc />
-    public async Task<IIdentity> Authenticate(string email, string password, bool rememberMe = true, SessionContext? context = null)
+    public async Task<IIdentity> Authenticate(string email, string password, bool rememberMe = true,
+        SessionContext? context = null, CancellationToken cancellationToken = default)
     {
         // 1. PENDING CHECK - fast path, no throttling needed
         // Pending registrations have no password to brute-force
@@ -105,34 +107,59 @@ internal class AuthenticationService : IAuthenticationService
             return Identity.Fail(AuthenticationError.AccountLocked);
         }
 
-        // Progressive delay for bot protection
+        // Progressive delay for bot protection.
+        //
+        // Cancellable, and it is the one wait in this method long enough to matter:
+        // sleeping through a request the caller has already dropped holds the
+        // database connection and the scope of that request for the whole delay. A
+        // caller who cancels wins nothing by it - the wait happens before the
+        // password is looked at, so a cancelled attempt is not an attempt and is
+        // never counted as one.
         var delaySeconds = await _loginAttemptTracker.GetDelayForUser(origin);
         if (delaySeconds > 0)
         {
-            await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
+            await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken);
         }
 
         // 3. FIND USER BY EMAIL
         var (userFound, user) = await _repository.TryFindUserByEmail(email);
         ApplyActiveBans(user);
 
+        // One Argon2id, before anything branches on what was found.
+        //
+        // Every refusal below is required to cost the same, and in text they
+        // already read the same; in time they did not. A missing account and the
+        // system actor both reached their answer without hashing anything - the
+        // actor because its branch short-circuited on the role - and came back
+        // some hundred and fifty milliseconds sooner than a wrong password. That
+        // difference names which addresses exist and which one belongs to the
+        // robot, without a password having been tried at all.
+        //
+        // The actor is hashed against the decoy rather than against its own
+        // columns because the seed leaves them empty: it has no password, and the
+        // point here is to spend the time, not to ask a question with an answer.
+        var (salt, hash) = userFound && user!.Role != UserRole.System
+            ? (user.Salt, user.PasswordHash)
+            : (DecoySalt, DecoyHash);
+        var passwordMatches = _securityManager.ComparePasswords(password, salt, hash);
+
         switch (userFound)
         {
             case false:
-                // Paid so that this answer takes as long as a wrong password does,
-                // and not only reads the same: see DecoySalt.
-                _securityManager.ComparePasswords(password, DecoySalt, DecoyHash);
                 await _loginAttemptTracker.RecordFailedAttempt(origin);
                 _logger.LogWarning("Login failed: user not found");
                 return Identity.Fail(AuthenticationError.WrongLogin);
-            // The system actor is refused by its role, not by its credentials. The
-            // seed leaves its salt and hash empty, so today the comparison below is
-            // the only thing stopping it — an invariant living in two string columns.
+            // The system actor is refused by its role and not by its credentials,
+            // and the check is written out rather than left to its empty columns:
+            // an invariant living in two strings of a seed is one row away from
+            // being no invariant at all. It stands after the hash above and not
+            // instead of it - refused before paying, the robot's address answered
+            // sooner than every other and was identifiable by that alone.
+            //
             // Folded into this branch rather than answered separately so that the
             // attempt is counted, audited and reported exactly like a wrong password,
             // leaving the account indistinguishable from outside.
-            case true when user!.Role == UserRole.System ||
-                           !_securityManager.ComparePasswords(password, user.Salt, user.PasswordHash):
+            case true when user!.Role == UserRole.System || !passwordMatches:
                 await _loginAttemptTracker.RecordFailedAttempt(origin);
 
                 // Only the attempt that crosses the threshold reaches this while
@@ -175,7 +202,15 @@ internal class AuthenticationService : IAuthenticationService
                 var session = _sessionFactory.Create(persistent: rememberMe, context: context);
                 var settings = await _repository.FindUserSettings(user.UserId);
 
-                // Audit log: successful login
+                // Awaited, and it has to be. The suspicious-login check runs
+                // immediately after this method returns: it reads the trail newest
+                // first and drops the top entry as "this login". Left unawaited,
+                // the write races that read, and the check either meets a trail
+                // without its own entry or throws away a genuine earlier login
+                // instead. Waiting buys away no availability either - the journal,
+                // the session written below and the attempt counter read at the
+                // top of this method share one Mongo, so a login that got this far
+                // never had Mongo down.
                 await _auditService.LogAsync(user.UserId, SecurityEventType.LoginSuccess,
                     context?.IpAddress, context?.UserAgent);
 
@@ -239,11 +274,30 @@ internal class AuthenticationService : IAuthenticationService
             return Identity.Fail(AuthenticationError.SessionExpired);
         }
 
-        // Sliding window: refresh session when approaching expiration
+        // Sliding window with a ceiling, and the ceiling is the point. Extended from
+        // its own expiry on every visit, a session had no last day at all: a token
+        // taken once and used once a week outlives the account it belongs to, and
+        // nothing in the model says when it should have stopped. The two settings
+        // already name the lifetime a session was issued with, so the ceiling is
+        // that lifetime counted from issue rather than a third number.
+        var lifetime = session.Persistent
+            ? TimeSpan.FromDays(_config.PersistentSessionExpirationDays)
+            : TimeSpan.FromHours(_config.SessionExpirationHours);
+        var ceiling = session.CreatedUtc + lifetime;
+
         var sessionRefreshDelta = TimeSpan.FromMinutes(_config.SessionRefreshMinutes);
         if (session.ExpirationUtc < _dateTimeProvider.Now + sessionRefreshDelta)
         {
-            await _repository.RefreshSession(userId, sessionId, session.ExpirationUtc + sessionRefreshDelta);
+            var extended = session.ExpirationUtc + sessionRefreshDelta;
+            var refreshed = extended < ceiling ? extended : ceiling;
+
+            // Only forward. Against the ceiling the two are equal, and writing it
+            // again would be a database round trip on every request of the last
+            // window of every session.
+            if (refreshed > session.ExpirationUtc)
+            {
+                await _repository.RefreshSession(userId, sessionId, refreshed);
+            }
         }
 
         var activityTrackingInterval = TimeSpan.FromMinutes(_config.ActivityTrackingMinutes);

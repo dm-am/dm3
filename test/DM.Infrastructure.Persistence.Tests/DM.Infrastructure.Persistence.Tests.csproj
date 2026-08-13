@@ -8,9 +8,12 @@
 
     <ItemGroup>
         <PackageReference Include="FluentAssertions" />
-        <!-- The collector under UploadGarbageCollectorShould is exercised against a
-             real DbContext: the rule it holds is a query, and a mocked DbSet would
-             assert the mock. -->
+        <!-- A test double for repository code whose assertion is about the query
+             the code writes, where a mocked DbSet would assert the mock.
+             Admissible while the same path also runs against Postgres in the
+             integration tier, or while the defect is observable only because LINQ
+             over objects enumerates in insertion order. What the database decides
+             belongs in the Testcontainers tier. -->
         <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" />
         <PackageReference Include="xunit" />

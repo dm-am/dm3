@@ -57,20 +57,15 @@ public class CharacterNameLimitShould
     {
         var limit = CharacterPolicy.NameMaxLength;
 
-        var migration = Read(
-            "src", "DM.Infrastructure.Persistence", "Migrations", "20260729122733_InitialCreate.cs");
+        var migration = SchemaSources.Migration;
         Between(migration, "name: \"Characters\",", "constraints: table =>").Should().Contain(
             $"Name = table.Column<string>(type: \"character varying({limit})\", maxLength: {limit}",
             "the column is the third place the limit lives, and the only one the other two cannot talk out of it");
 
-        foreach (var snapshot in new[]
-                 {
-                     "DmDbContextModelSnapshot.cs",
-                     "20260729122733_InitialCreate.Designer.cs"
-                 })
+        foreach (var (snapshot, text) in SchemaSources.Snapshots)
         {
             var block = Between(
-                Read("src", "DM.Infrastructure.Persistence", "Migrations", snapshot),
+                text,
                 CharacterEntity, "b.ToTable(\"Characters\");");
 
             block.Should().Contain($".HasMaxLength({limit})",

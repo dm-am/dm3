@@ -3,13 +3,14 @@ using DM.Domain.Community.Authorization;
 using DM.Domain.Personal.Authorization;
 using DM.Infrastructure.Core;
 using DM.Domain.Core.Configuration;
+using DM.Domain.Core.Identity;
 using DM.Infrastructure.Core.Configuration;
-using DM.Infrastructure.Mail.Configuration;
 using DM.Infrastructure.Core.Extensions;
 using DM.Infrastructure.Core.Logging;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Mail;
 using DM.Infrastructure.Messaging;
+using DM.Infrastructure.Messaging.GeneralBus;
 using DM.Workers.NotificationDispatcher.Dispatching;
 using DM.Workers.NotificationDispatcher.Bot;
 using DM.Workers.NotificationDispatcher.Email;
@@ -20,7 +21,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using DM.Domain.Account;
 
 namespace DM.Workers.NotificationDispatcher;
 
@@ -49,16 +49,11 @@ public class Startup
     /// <param name="services"></param>
     public void ConfigureServices(IServiceCollection services)
     {
-        // AddDmAccountConfiguration is here because ConfigureContainer registers
-        // the whole account domain below. Its types read four option sections
-        // that this host bound none of, and IOptions of an unbound type hands
-        // out a default instead of throwing.
         services
             .AddOptions()
             .AddDmCoreConfiguration(_configuration)
             .AddDmMessageQueuing(_configuration)
             .AddDmMailConfiguration(_configuration)
-            .AddDmAccountConfiguration(_configuration)
             .AddDmLogging("DM.Notifications.Consumer", _configuration, _environment)
             // Every letter and both bot messages this host builds carry the way back
             // to what they are about, and the root of that link is the address this
@@ -73,8 +68,23 @@ public class Startup
             consumerBuilderDefaults: builder => builder.WithMiddleware<RetryingConsumerMiddleware>());
         services.AddHostedService<NotificationDispatcherConsumer>();
 
-        services.AddDmBrokerHealthCheck(_configuration);
+        // The two exchanges this host publishes to. Same reason as in the API:
+        // the client declares nothing on the producing side, so without this they
+        // exist only for as long as somebody has consumed them.
+        services.AddDmPublishedExchanges(
+            MailTransport.ExchangeName, RealtimeNotificationsTransport.ExchangeName);
 
+        services.AddDmBrokerHealthCheck(_configuration, ["messaging", "ready"]);
+
+        // No EnableRetryOnFailure here, unlike the API: this host retries the
+        // message rather than the query. RetryingConsumerMiddleware, registered
+        // above, replays the whole handler five times over 62 seconds, which
+        // outlasts a database restart, and everything the handler touches in
+        // Postgres is a read - so a replay costs nothing and covers more than a
+        // per-query retry would. The one read outside that cover is the address
+        // lookup inside a best-effort delivery, and losing it costs a letter and
+        // not the notification: that is written to the document store before any
+        // delivery starts.
         services
             .AddDbContext<DmDbContext>(options => options
                 .UseNpgsql(_configuration.GetConnectionString(nameof(ConnectionStrings.Rdb))))
@@ -102,15 +112,13 @@ public class Startup
         builder.RegisterDefaultTypes(communityAssembly);
         builder.RegisterMapper(communityAssembly);
 
-        // IIdentityProvider — needed by NotificationService for the Read/Mark methods,
-        // which are never called in the worker context (only CreateAsync
-        // is used). Register the same IdentityProvider as in the API
-        // so DI can resolve the constructor; Current stays null until first
-        // access (which never happens in the worker).
-        var accountAssembly = typeof(DM.Domain.Account.Authorization.AccountIntention).Assembly;
-        builder.RegisterDefaultTypes(accountAssembly);
-        builder.RegisterMapper(accountAssembly);
-        builder.RegisterModuleOnce<DM.Domain.Account.AccountModule>();
+        // IIdentityProvider, declared by NotificationService for its read and mark
+        // methods, which this host never calls - it only creates. The whole account
+        // domain used to be scanned in for that one interface, and it brought its
+        // option sections, its mapper profiles and an authorization context
+        // answering Guest with it. One registration instead, and it refuses rather
+        // than answers: see NoIdentityProvider.
+        builder.RegisterType<NoIdentityProvider>().As<IIdentityProvider>().InstancePerLifetimeScope();
 
         builder.RegisterModuleOnce<MailModule>();
 

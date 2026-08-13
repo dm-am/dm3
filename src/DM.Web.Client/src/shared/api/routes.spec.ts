@@ -52,7 +52,10 @@ function sourceFiles(dir: string, found: string[] = []): string[] {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) {
       if (entry !== "node_modules") sourceFiles(full, found);
-    } else if (entry.endsWith(".ts") && !entry.endsWith(".spec.ts")) {
+    } else if (
+      (entry.endsWith(".ts") || entry.endsWith(".vue")) &&
+      !entry.endsWith(".spec.ts")
+    ) {
       found.push(full);
     }
   }
@@ -87,7 +90,7 @@ function callsIn(file: string): { calls: Call[]; skipped: number } {
   // address it was written for sat in the file.
   const generic = String.raw`<[^<>]*(?:<[^<>]*(?:<[^<>]*>)?[^<>]*>)?[^<>]*>`;
   const pattern = new RegExp(
-    String.raw`\bApi\.(${CALLS.join("|")})\s*(?:${generic})?\s*\(\s*([^,)]+)`,
+    String.raw`\bApi\.(${CALLS.join("|")})\s*(?:${generic})?\s*\(\s*((?:\$\{[^}]*\}|[^,)])+)`,
     "g",
   );
 
@@ -131,10 +134,10 @@ function publishedRoutes(): Set<string> {
 }
 
 describe("client routes", () => {
-  const apiDirs = [
-    join(clientRoot, "entities"),
-    join(clientRoot, "shared", "api"),
-  ].filter(existsSync);
+  // The whole client, not the two folders that happened to hold most of the
+  // calls. A page asking for an address of its own was outside the walk, and so
+  // was every call written in a component rather than in a module.
+  const apiDirs = [clientRoot].filter(existsSync);
 
   it("has the published routes to compare against", () => {
     expect(
@@ -162,8 +165,11 @@ describe("client routes", () => {
       }
     }
 
-    // A gate that stops finding calls passes by checking nothing.
-    expect(checked).toBeGreaterThan(150);
+    // A gate that stops finding calls passes by checking nothing, so the floor
+    // sits just under the real count rather than comfortably below it: narrowing
+    // the walk back to a couple of folders has to be a red run and not a quieter
+    // one, and the difference between the two is six calls.
+    expect(checked).toBeGreaterThan(330);
     expect(unknown).toEqual([]);
   });
 });

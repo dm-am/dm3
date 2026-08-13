@@ -34,31 +34,6 @@ public enum ModerationIntention
     DeleteModNote,
 
     /// <summary>
-    /// View all moderation tickets
-    /// </summary>
-    ViewTickets,
-
-    /// <summary>
-    /// Create a moderation ticket
-    /// </summary>
-    CreateTicket,
-
-    /// <summary>
-    /// Resolve a moderation ticket
-    /// </summary>
-    ResolveTicket,
-
-    /// <summary>
-    /// View user's linked profiles
-    /// </summary>
-    ViewLinkedProfiles,
-
-    /// <summary>
-    /// Manage user credentials (force password reset, etc.)
-    /// </summary>
-    ManageCredentials,
-
-    /// <summary>
     /// Set user role (Admin only)
     /// </summary>
     SetUserRole,

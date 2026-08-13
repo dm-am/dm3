@@ -5,6 +5,14 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <!-- The integration tier owns the one database this project can be checked
+             against: what an expression index looks like once Postgres has normalised
+             it is not knowable without a server, and the initializer compares against
+             exactly that text. -->
+        <InternalsVisibleTo Include="DM.Web.API.IntegrationTests" />
+    </ItemGroup>
+
+    <ItemGroup>
       <PackageReference Include="FluentValidation" />
       <PackageReference Include="Microsoft.EntityFrameworkCore" />
       <PackageReference Include="Microsoft.EntityFrameworkCore.Design">

@@ -87,7 +87,7 @@ public class GameServiceShould : UnitTestBase
 
         _unreadCountersRepository = Mock<IUnreadCountersRepository>();
         var unreadCountersRepository = _unreadCountersRepository;
-        unreadCountersRepository.Setup(r => r.CreateAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>()))
+        unreadCountersRepository.Setup(r => r.CreateMarkerAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>()))
             .Returns(Task.CompletedTask);
         unreadCountersRepository.Setup(r => r.SelectByEntitiesAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>(), It.IsAny<Guid[]>()))
             .ReturnsAsync((Guid userId, UnreadEntryType type, Guid[] ids) =>
@@ -203,32 +203,14 @@ public class GameServiceShould : UnitTestBase
         await _service.CreateAsync(createGame);
 
         _unreadCountersRepository.Verify(
-            r => r.CreateAsync(roomId, gameId, UnreadEntryType.Message), Times.Once);
+            r => r.CreateMarkerAsync(roomId, gameId, UnreadEntryType.Message), Times.Once);
     }
 
-    /// <summary>
-    /// A committed game is not turned into a 500 by the announcement of it.
-    /// </summary>
-    /// <remarks>
-    /// The caller would try again and end up with two games. A lost event costs
-    /// the subscribers one notification, and an event is not the carrier of the
-    /// fact.
-    /// </remarks>
-    [Fact]
-    public async Task ReturnTheGameEvenWhenTheAnnouncementFails()
-    {
-        var createGame = new CreateGame { Title = "Test Game", SystemName = "Test System" };
-        var gameId = Guid.NewGuid();
-        _guidFactory.SetupSequence(g => g.Create()).Returns(gameId).Returns(Guid.NewGuid());
-        _repository.Setup(r => r.Create(It.IsAny<CreateGameEntity>(), It.IsAny<CreateRoomEntity>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new GameDetails { Id = gameId, Rooms = Array.Empty<Room>() });
-        _producer.Setup(p => p.SendAsync(EventType.NewGame, gameId))
-            .ThrowsAsync(new InvalidOperationException("broker down"));
-
-        var result = await _service.CreateAsync(createGame);
-
-        result.Id.Should().Be(gameId);
-    }
+    // A committed game not turned into a 500 by the announcement of it used to be
+    // asserted here, against a producer mocked to throw. The guard moved into the
+    // producer itself — see EventPublishingShould — because it was owed by all
+    // seventy-odd publishing call sites and written at one. A mock that throws now
+    // contradicts every implementation of the interface.
 
     [Fact]
     public async Task ThrowNotFoundWhenGameDoesNotExist()

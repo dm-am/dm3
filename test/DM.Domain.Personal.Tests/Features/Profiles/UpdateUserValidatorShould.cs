@@ -1,4 +1,5 @@
 using System.Linq;
+using DM.Domain.Core.Dto;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
@@ -130,10 +131,16 @@ public class UpdateUserValidatorShould : UnitTestBase
             .WithErrorMessage(ValidationError.Long);
     }
 
+    /// <summary>
+    /// The page size is one of the sizes the account form offers, not a number in
+    /// a range: 15 sits inside any plausible range and no list on the site is
+    /// paged by it.
+    /// </summary>
     [Theory]
     [InlineData(0)]
-    [InlineData(200)]
-    public void FailWhenCommentsPerPageIsOutOfRange(int value)
+    [InlineData(15)]
+    [InlineData(201)]
+    public void FailWhenCommentsPerPageIsNotAnOfferedSize(int value)
     {
         var settings = ValidSettings();
         settings.Paging.CommentsPerPage = value;
@@ -146,8 +153,9 @@ public class UpdateUserValidatorShould : UnitTestBase
 
     [Theory]
     [InlineData(0)]
-    [InlineData(200)]
-    public void FailWhenPostsPerPageIsOutOfRange(int value)
+    [InlineData(15)]
+    [InlineData(201)]
+    public void FailWhenPostsPerPageIsNotAnOfferedSize(int value)
     {
         var settings = ValidSettings();
         settings.Paging.PostsPerPage = value;
@@ -156,5 +164,24 @@ public class UpdateUserValidatorShould : UnitTestBase
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(u => u.Settings.Paging.PostsPerPage)
             .WithErrorMessage(ValidationError.Invalid);
+    }
+
+    /// <summary>
+    /// The largest offered size saves. It used to fail the whole form — the
+    /// validator demanded less than 200 while the form offered exactly 200 — so a
+    /// reader who picked it could not save an unrelated change either.
+    /// </summary>
+    [Fact]
+    public void AcceptTheLargestOfferedPageSize()
+    {
+        var settings = ValidSettings();
+        settings.Paging.CommentsPerPage = PagingPolicy.MaxPageSize;
+        settings.Paging.PostsPerPage = PagingPolicy.MaxPageSize;
+        var input = new UpdateUser { Settings = settings };
+
+        var result = validator.TestValidate(input);
+
+        result.ShouldNotHaveValidationErrorFor(u => u.Settings.Paging.CommentsPerPage);
+        result.ShouldNotHaveValidationErrorFor(u => u.Settings.Paging.PostsPerPage);
     }
 }

@@ -19,7 +19,7 @@ public interface IPublicationCommentRepository
     /// <param name="query">Query parameters for filtering</param>
     /// <param name="excludeUserIds">Optional user IDs to exclude from count</param>
     /// <param name="ct">Cancellation token</param>
-    Task<int> Count(Guid publicationId, PublicationCommentsQuery query, IReadOnlyCollection<Guid>? excludeUserIds = null, CancellationToken ct = default);
+    Task<int> Count(Guid publicationId, CommentsQuery query, IReadOnlyCollection<Guid>? excludeUserIds = null, CancellationToken ct = default);
 
     /// <summary>
     /// Get comments list of the publication
@@ -29,7 +29,7 @@ public interface IPublicationCommentRepository
     /// <param name="paging">Paging data</param>
     /// <param name="excludeUserIds">Optional user IDs to exclude from results</param>
     /// <param name="ct">Cancellation token</param>
-    Task<IEnumerable<Comment>> Get(Guid publicationId, PublicationCommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null, CancellationToken ct = default);
+    Task<IEnumerable<Comment>> Get(Guid publicationId, CommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null, CancellationToken ct = default);
 
     /// <summary>
     /// Get single comment by its identifier

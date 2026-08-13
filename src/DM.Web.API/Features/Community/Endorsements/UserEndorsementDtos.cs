@@ -54,8 +54,8 @@ public class CreateUserEndorsementRequest
     /// <summary>
     /// Endorsement text content (plain text, 10-5000 characters, positive only)
     /// </summary>
-    [Required(ErrorMessage = "Endorsement text is required")]
-    [StringLength(5000, MinimumLength = 10, ErrorMessage = "Endorsement text must be between 10 and 5000 characters")]
+    [Required(ErrorMessage = "Введите текст рекомендации")]
+    [StringLength(5000, MinimumLength = 10, ErrorMessage = "Рекомендация от 10 до 5000 символов")]
     public string Text { get; set; } = string.Empty;
 }
 
@@ -67,6 +67,6 @@ public class UpdateUserEndorsementRequest
     /// <summary>
     /// Updated endorsement text (plain text, 10-5000 characters, positive only)
     /// </summary>
-    [StringLength(5000, MinimumLength = 10, ErrorMessage = "Endorsement text must be between 10 and 5000 characters")]
+    [StringLength(5000, MinimumLength = 10, ErrorMessage = "Рекомендация от 10 до 5000 символов")]
     public string? Text { get; set; }
 }

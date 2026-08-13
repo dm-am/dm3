@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Content;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using DM.Domain.Core.Enums;
@@ -14,27 +15,30 @@ public class CreateGameRequest
     /// <summary>
     /// Game title
     /// </summary>
-    [Required(ErrorMessage = "Title is required")]
-    [StringLength(200, MinimumLength = 3, ErrorMessage = "Title must be between 3 and 200 characters")]
+    [Required(ErrorMessage = "Введите заголовок")]
+    [StringLength(GameFieldLimits.TitleMaxLength, MinimumLength = GameFieldLimits.TitleMinLength,
+        ErrorMessage = "Заголовок от 3 до 200 символов")]
     public string Title { get; set; } = "";
 
     /// <summary>
     /// RPG system name (e.g. "D&amp;D 5e", "GURPS", "Fate")
     /// </summary>
-    [StringLength(100, ErrorMessage = "System name cannot exceed 100 characters")]
+    [StringLength(GameFieldLimits.SystemMaxLength, ErrorMessage = "Название системы не длиннее 100 символов")]
     public string? System { get; set; }
 
     /// <summary>
     /// Narrative setting (e.g. "Forgotten Realms", "Warhammer 40k", "Original")
     /// </summary>
-    [StringLength(100, ErrorMessage = "Setting name cannot exceed 100 characters")]
+    [StringLength(GameFieldLimits.SettingMaxLength, ErrorMessage = "Название сеттинга не длиннее 100 символов")]
     public string? Setting { get; set; }
 
     /// <summary>
     /// Game description/info (BB-code formatted)
     /// </summary>
-    [Required(ErrorMessage = "Info is required")]
-    [MinLength(1, ErrorMessage = "Info cannot be empty")]
+    [Required(ErrorMessage = "Введите описание")]
+    // The domain's rule rather than an invention of the form: a game is chosen
+    // by this text, and the rule has been refusing short ones all along.
+    [MinLength(GameFieldLimits.InfoMinLength, ErrorMessage = "Описание от 200 символов")]
     public string Info { get; set; } = "";
 
     /// <summary>

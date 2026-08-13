@@ -14,6 +14,37 @@ namespace DM.Domain.Core.UnreadCounters;
 public static class UnreadCountersExtensions
 {
     /// <summary>
+    /// Writes the markers of an entity that is about to be inserted, and hands back
+    /// the reservation that takes them off again unless it is committed.
+    /// </summary>
+    /// <remarks>
+    /// The only legal way to write a marker. Bound with <c>await using</c> and
+    /// committed on the line after the insert returns — see
+    /// <see cref="UnreadCountersReservation" /> for why the order is this way round.
+    /// A marker refused midway takes back the ones already written before the
+    /// refusal leaves this method, so a caller never sees a half-written set.
+    /// </remarks>
+    public static async Task<UnreadCountersReservation> ReserveAsync(
+        this IUnreadCountersRepository repository, params UnreadMarker[] markers)
+    {
+        var reservation = new UnreadCountersReservation(repository);
+        try
+        {
+            foreach (var marker in markers)
+            {
+                await reservation.WriteAsync(marker);
+            }
+        }
+        catch
+        {
+            await reservation.DisposeAsync();
+            throw;
+        }
+
+        return reservation;
+    }
+
+    /// <summary>
     /// Fill counters fields for passed parent entities (count of entities with unread)
     /// </summary>
     public static Task FillParentCounters<TEntity>(this IUnreadCountersRepository repository,

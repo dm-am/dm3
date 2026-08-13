@@ -29,6 +29,7 @@ internal class PeriodDigestProcessor : IPeriodDigestProcessor
     private readonly IUnreadCountersRepository _unreadCounters;
     private readonly IEventProducer _eventProducer;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
     private readonly ILogger<PeriodDigestProcessor> _logger;
 
     public PeriodDigestProcessor(
@@ -37,6 +38,7 @@ internal class PeriodDigestProcessor : IPeriodDigestProcessor
         IUnreadCountersRepository unreadCounters,
         IEventProducer eventProducer,
         IDateTimeProvider dateTimeProvider,
+        IGuidFactory guidFactory,
         ILogger<PeriodDigestProcessor> logger)
     {
         _digestRepository = digestRepository;
@@ -44,6 +46,7 @@ internal class PeriodDigestProcessor : IPeriodDigestProcessor
         _unreadCounters = unreadCounters;
         _eventProducer = eventProducer;
         _dateTimeProvider = dateTimeProvider;
+        _guidFactory = guidFactory;
         _logger = logger;
     }
 
@@ -96,11 +99,18 @@ internal class PeriodDigestProcessor : IPeriodDigestProcessor
             ? new DateTimeOffset(year, month.Value, 1, 0, 0, 0, TimeSpan.Zero).AddMonths(1)
             : new DateTimeOffset(year + 1, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
+        // Markers first, row second, commit once the digest is claimed. The claim
+        // is the last thing that can fail here, so the commit waits for it: a run
+        // that loses the race returns without one and the reservation takes the
+        // markers back on its way out.
+        var topicId = _guidFactory.Create();
+        await using var counters = await _unreadCounters.ReserveAsync(
+            UnreadMarker.UnderParent(topicId, NewsBoardId, UnreadEntryType.Message));
+
         // Through the normal repository path, so numbering and side effects stay
-        // correct. It commits the topic immediately, which is why the marker step
-        // below has to be able to take it back.
+        // correct.
         var topic = await _topicRepository.Create(
-            new CreateTopicEntity { Title = title, Text = string.Empty },
+            new CreateTopicEntity { TopicId = topicId, Title = title, Text = string.Empty },
             SystemUser.Id,
             NewsBoardId,
             cancellationToken);
@@ -119,15 +129,15 @@ internal class PeriodDigestProcessor : IPeriodDigestProcessor
             return null;
         }
 
+        counters.Commit();
+
         await _digestRepository.RefreshLastTopic(NewsBoardId, cancellationToken);
 
-        // Post-commit side effects of the normal topic-creation path (mirrors
-        // TopicService.CreateAsync): the NewTopic event feeds the search indexer
-        // and realtime, the unread base row makes comment unread tracking work
-        // for the digest.
-        await Task.WhenAll(
-            _eventProducer.SendAsync(EventType.NewTopic, topic.Id),
-            _unreadCounters.CreateAsync(topic.Id, NewsBoardId, UnreadEntryType.Message));
+        // Post-commit side effect of the normal topic-creation path: the NewTopic
+        // event is what the notification dispatcher reads. Search is not on this
+        // road at all - the text column carries its own generated vector, written
+        // by the database with the row.
+        await _eventProducer.SendAsync(EventType.NewTopic, topic.Id);
 
         return title;
     }

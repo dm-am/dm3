@@ -31,6 +31,28 @@ public class BrokerObservabilityShould
     private const string Alerts = "docker/prometheus/alerts.yml";
     private const string Dashboard = "docker/grafana/dashboards/dm-consumers.json";
     private const string PushConsumer = "src/DM.Web.API/Realtime/RealtimeNotificationConsumer.cs";
+    private const string Logging = "src/DM.Infrastructure.Core/Logging/LoggingConfiguration.cs";
+
+    /// <summary>
+    /// A trace does not end at the broker.
+    /// </summary>
+    /// <remarks>
+    /// The context travels in the message headers, and the one line that makes a
+    /// consumer continue the trace rather than start a new one is the registration
+    /// of the client's instrumentation. Removed, nothing fails: every worker keeps
+    /// producing traces, and each of them is a root with no parent — so the request
+    /// that caused the work and the work itself stop being one story, which is
+    /// visible only to somebody already looking for the missing half.
+    ///
+    /// Asserted on the composition rather than by running a message through: the
+    /// test host removes the one registered consumer, and a listener of the test's
+    /// own would go on reporting spans after the line was gone.
+    /// </remarks>
+    [Fact]
+    public void KeepTheTraceOfARequestAcrossTheBroker() =>
+        Read(Logging).Should().Contain("AddJamqClientInstrumentation",
+            "without it a consumer opens a root span, and the request that sent the message " +
+            "is a separate trace nobody can reach from it");
 
     /// <summary>Port the metrics plugin answers on.</summary>
     private const string MetricsPort = "15692";
@@ -130,6 +152,10 @@ public class BrokerObservabilityShould
         dashboard.Should().Contain("rabbitmq_queue_",
             "the board is named after the consumers and has to answer whether they are " +
             "consuming");
+        dashboard.Should().Contain("dm_messaging_consumed_total",
+            "a short queue with a consumer on it is what a worker throwing on every message " +
+            "looks like too, so the queue side alone cannot tell work from the appearance " +
+            "of work");
         dashboard.Should().NotContain("http_server_request_duration_seconds_count",
             "the workers serve nothing but their own health probe, so their request rate " +
             "is the scrape interval drawn as a line");

@@ -16,10 +16,11 @@ namespace DM.Web.API.Middleware;
 /// </summary>
 /// <remarks>
 /// The API authenticates with a session cookie (BFF pattern), so the browser attaches
-/// credentials to a cross-site request by itself: validating the origin of a
-/// state-changing request is a primary CSRF control here, not defence in depth. It
-/// works together with SameSite=Lax on the session cookie, which covers the requests
-/// that carry no origin at all.
+/// credentials to a cross-site request by itself. Two controls stand here, and
+/// neither is the whole of it: SameSite=Lax keeps the session off a request another
+/// site started, and this check refuses the ones that arrive naming an origin the
+/// site does not answer on. The requests that carry no origin at all are covered by
+/// the first alone, which is why that branch passes them.
 /// </remarks>
 public class CsrfProtectionMiddleware
 {
@@ -74,11 +75,12 @@ public class CsrfProtectionMiddleware
             return;
         }
 
-        if (!IsOriginAllowed(origin, settings.Value.AllowedOrigins))
+        var allowed = settings.Value.BrowserOrigins();
+        if (!IsOriginAllowed(origin, allowed))
         {
             _logger.LogWarning(
                 "CSRF protection blocked request from origin {Origin}. Allowed: {AllowedOrigins}",
-                origin, string.Join(", ", settings.Value.AllowedOrigins));
+                origin, string.Join(", ", allowed));
 
             // ErrorHandlingMiddleware assembles the refusal body, and nothing else
             // does: it sits above this one in the pipeline, so an exception thrown
@@ -92,38 +94,18 @@ public class CsrfProtectionMiddleware
         await _next(context);
     }
 
-    private static string? ExtractOriginFromReferer(string? referer)
-    {
-        if (string.IsNullOrEmpty(referer))
-            return null;
+    private static string? ExtractOriginFromReferer(string? referer) =>
+        SiteAddressConfiguration.OriginOf(referer);
 
-        if (!Uri.TryCreate(referer, UriKind.Absolute, out var uri))
-            return null;
-
-        return $"{uri.Scheme}://{uri.Host}{(uri.IsDefaultPort ? "" : $":{uri.Port}")}";
-    }
-
-    private static bool IsOriginAllowed(string origin, string[] allowedOrigins)
-    {
-        if (!Uri.TryCreate(origin, UriKind.Absolute, out var originUri))
-            return false;
-
-        foreach (var allowed in allowedOrigins)
-        {
-            if (!Uri.TryCreate(allowed, UriKind.Absolute, out var allowedUri))
-                continue;
-
-            // Scheme, host (case-insensitive) and port. UseCors is handed this same
-            // list and compares an origin whole, so a scheme dropped here makes one
-            // list mean two policies and moves the refusal to the other middleware.
-            if (allowedUri.Scheme.Equals(originUri.Scheme, StringComparison.OrdinalIgnoreCase) &&
-                allowedUri.Host.Equals(originUri.Host, StringComparison.OrdinalIgnoreCase) &&
-                allowedUri.Port == originUri.Port)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    /// <summary>
+    /// Whether an origin is one this site answers on.
+    /// </summary>
+    /// <remarks>
+    /// Both sides go through the same normaliser, so a trailing slash, a spelt-out
+    /// default port or a capital letter in the host cannot make one list mean two
+    /// policies - UseCors is handed the same list and compares an origin whole.
+    /// </remarks>
+    private static bool IsOriginAllowed(string origin, IReadOnlyList<string> allowedOrigins) =>
+        SiteAddressConfiguration.OriginOf(origin) is { } normalized &&
+        allowedOrigins.Contains(normalized, StringComparer.Ordinal);
 }

@@ -386,6 +386,42 @@ public class BbParserWrapperShould
     }
 
     /// <summary>
+    /// Everything the author-edit rendering emits carries a data-bb-* marker.
+    /// </summary>
+    /// <remarks>
+    /// The reading variant closes the block with a recipients line, which is text
+    /// for a reader and nothing the reverse conversion can match: seeded into the
+    /// editor it arrived as literal markup the author had to delete by hand, and
+    /// saving it stored the markup. The addressees are already in the attribute
+    /// the tag is rebuilt from, so the author-edit variant closes on the div.
+    /// </remarks>
+    [Fact]
+    public void CloseThePrivateBlockWithoutTheRecipientsLine_OnAuthorEdit()
+    {
+        var tree = _parserProvider.GetForAuthorEdit(BbSurface.GamePost)
+            .Parse("[private=Вася]тайна[/private]");
+
+        var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
+
+        html.Should().Be(
+            "<div class=\"private-message\" data-bb-tag=\"private\" data-bb-addressees=\"Вася\">тайна</div>");
+    }
+
+    /// <summary>
+    /// The reader still gets the recipients line: the trade above is the author's
+    /// alone, and dropping it everywhere would hide who a private block is for.
+    /// </summary>
+    [Fact]
+    public void KeepTheRecipientsLine_ForAReader()
+    {
+        var tree = _parserProvider.GetForSurface(BbSurface.GamePost).Parse("[private=Вася]тайна[/private]");
+
+        var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
+
+        html.Should().Contain("<div class=\"private-message-header\">Получатели: Вася</div>");
+    }
+
+    /// <summary>
     /// The other half of that contract: encoding must not reach what the reader
     /// sees. An ordinary name stays itself, and an ampersand in it arrives as one
     /// character in the browser rather than as an entity on the page.

@@ -50,6 +50,18 @@ public class ForumSearchShould : IntegrationTestBase
             var hits = await Search("странник");
 
             hits.Should().ContainSingle(h => h.TopicTitle == "Хроники ольмагара");
+
+            // The preview comes from the same dictionary as the match, so it marks
+            // the inflected form rather than the word that was typed.
+            var snippet = hits.Single().Snippet;
+            snippet.Should().NotBeEmpty("a hit without a preview gives the reader nothing to read");
+            snippet.Should().Contain(segment => segment.IsMatch,
+                "the preview says which run of it is the match, and a preview that marks " +
+                "nothing is a highlight the client cannot draw");
+            string.Concat(snippet.Select(segment => segment.Text))
+                .Should().Contain("странник",
+                    "the run that was matched is the inflected form out of the text, not the " +
+                    "query that found it");
         }
         finally
         {
@@ -257,6 +269,21 @@ public class ForumSearchShould : IntegrationTestBase
         public Guid Id { get; set; }
         public Guid TopicId { get; set; }
         public string TopicTitle { get; set; } = "";
-        public string Snippet { get; set; } = "";
+
+        /// <summary>
+        /// Runs of the preview, not a marked-up string: the database marks the
+        /// match, and a string carrying those marks would have to be rendered as
+        /// markup by whoever read it. Declared as a string here, this row simply
+        /// failed to deserialise - which is a contract change nothing else in the
+        /// suite would have noticed.
+        /// </summary>
+        public IReadOnlyList<SnippetSegment> Snippet { get; set; } = [];
+    }
+
+    /// <summary>One run of a preview, as the wire carries it.</summary>
+    private class SnippetSegment
+    {
+        public string Text { get; set; } = "";
+        public bool IsMatch { get; set; }
     }
 }

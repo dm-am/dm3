@@ -19,19 +19,14 @@ public interface IGameInvitationRepository
     Task<IEnumerable<GameUser>> GetUsers(Guid gameId, CancellationToken ct = default);
 
     /// <summary>
-    /// Add assistant to game
+    /// Writes the assistant and spends the invitation that made them one, in one commit
     /// </summary>
-    Task AddAssistant(AddAssistantEntity entity, CancellationToken ct = default);
+    Task AcceptAssistantInvitation(AddAssistantEntity entity, Guid tokenId, CancellationToken ct = default);
 
     /// <summary>
     /// Remove assistant from game
     /// </summary>
     Task RemoveAssistant(Guid gameId, Guid userId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Update game master
-    /// </summary>
-    Task UpdateMaster(UpdateMasterEntity entity, CancellationToken ct = default);
 
     #endregion
 

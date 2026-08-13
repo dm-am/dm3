@@ -1,4 +1,7 @@
 using DM.Infrastructure.Core.Storage;
+using DM.Infrastructure.Mail;
+using DM.Infrastructure.Messaging;
+using DM.Infrastructure.Messaging.GeneralBus;
 using DM.Infrastructure.Persistence.MongoIntegration;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Web.API.HostedServices;
@@ -24,6 +27,13 @@ internal static class HostedServiceExtensions
     /// <param name="services">Service collection.</param>
     public static IServiceCollection AddDmHostedServices(this IServiceCollection services)
     {
+        // Nothing on the publishing side used to declare an exchange, so both of
+        // these existed only because some consumer had subscribed first. On a
+        // stand where a worker had never started, every publish went nowhere and
+        // said nothing.
+        services.AddDmPublishedExchanges(
+            InvokedEventsTransport.ExchangeName, MailTransport.ExchangeName);
+
         services.AddHostedService<RealtimeNotificationConsumer>();
         services.AddHostedService<WarmupService>();
 

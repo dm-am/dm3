@@ -48,7 +48,7 @@ PostgreSQL          MongoDB
 ### Flow: Email → Имя пользователя
 
 ```
-1. Регистрация email + пароля       → PendingRegistration (с TokenId)
+1. Регистрация email + пароля       → PendingRegistration (с хешем секрета)
 2. Email со ссылкой активации        → страница выбора Login
 3. Просмотр активации по токену      → форма выбора Login
 4. Подтверждение активации + login   → Создать User, auto-login
@@ -58,7 +58,7 @@ PostgreSQL          MongoDB
 
 - Имя пользователя (Login) выбирается ПОСЛЕ верификации email
 - Нельзя занять логин без подтвержденного email
-- PendingRegistration хранит TokenId внутри (без FK на Tokens)
+- PendingRegistration хранит хеш секрета активации (без FK на Tokens)
 - Cleanup: 7 дней для PendingRegistration
 
 ---
@@ -71,7 +71,8 @@ PostgreSQL          MongoDB
 
 ### Токены
 
-Параметры шифрования (алгоритм, ключ, nonce, тег) — единый источник [SECURITY.md](../conventions/SECURITY.md#требования-к-токенам).
+Параметры шифрования, правило хранения одноразовых ссылок и их передачи во
+фрагменте — единый источник [SECURITY.md](../conventions/SECURITY.md#требования-к-токенам).
 
 ### Сессии
 

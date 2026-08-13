@@ -158,15 +158,38 @@ internal class CharacterRepository : ICharacterRepository
             Value = a.Value
         });
 
-        _dbContext.Characters.Add(dbCharacter);
-        _dbContext.CharacterAttributes.AddRange(attributes);
-        await _dbContext.SaveChangesAsync();
-
-        // Adjust PcLimit if non-NPC character is created as Active
-        if (!createCharacter.IsNpc && createCharacter.InitialStatus == CharacterStatus.Active)
+        // Both writes or neither: separately, a refusal between them left a game
+        // with more active characters than the limit it announces, and nothing
+        // recomputes that number afterwards.
+        //
+        // Through the strategy because the API host configures EnableRetryOnFailure and
+        // a retrying strategy refuses a transaction opened by hand. The entities are
+        // built above so their identifiers survive a retry unchanged.
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        var attempted = false;
+        await strategy.ExecuteAsync(async () =>
         {
-            await AdjustPcLimitOnActivationAsync(createCharacter.GameId);
-        }
+            if (attempted)
+            {
+                _dbContext.ChangeTracker.Clear();
+            }
+
+            attempted = true;
+
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
+            _dbContext.Characters.Add(dbCharacter);
+            _dbContext.CharacterAttributes.AddRange(attributes);
+            await _dbContext.SaveChangesAsync();
+
+            // Adjust PcLimit if non-NPC character is created as Active
+            if (!createCharacter.IsNpc && createCharacter.InitialStatus == CharacterStatus.Active)
+            {
+                await AdjustPcLimitOnActivationAsync(createCharacter.GameId);
+            }
+
+            await transaction.CommitAsync();
+        });
 
         return await _dbContext.Characters
             .Where(c => c.CharacterId == createCharacter.CharacterId)
@@ -198,73 +221,92 @@ internal class CharacterRepository : ICharacterRepository
 
     public async Task<Character> Update(UpdateCharacterEntity updateCharacter)
     {
-        var character = await _dbContext.Characters.FindAsync(updateCharacter.CharacterId);
-        if (character == null)
+        // Both writes or neither, for the same reason as Create above. The read is
+        // inside the block: cleared out of the tracker by a retry, an entity read
+        // outside it would take every edit with it.
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        var attempted = false;
+        await strategy.ExecuteAsync(async () =>
         {
-            throw new InvalidOperationException($"Character {updateCharacter.CharacterId} not found");
-        }
-
-        // Track status change for PcLimit adjustment
-        var oldStatus = character.Status;
-        var newStatus = updateCharacter.Status ?? oldStatus;
-        var isNpc = updateCharacter.IsNpc ?? character.IsNpc;
-
-        // Update fields if provided
-        if (updateCharacter.Status.HasValue)
-            character.Status = updateCharacter.Status.Value;
-
-        if (updateCharacter.IsDead.HasValue)
-            character.IsDead = updateCharacter.IsDead.Value;
-
-        if (updateCharacter.IsPlayerLeft.HasValue)
-            character.IsPlayerLeft = updateCharacter.IsPlayerLeft.Value;
-
-        if (updateCharacter.IsPlayerExiled.HasValue)
-            character.IsPlayerExiled = updateCharacter.IsPlayerExiled.Value;
-
-        if (!string.IsNullOrEmpty(updateCharacter.Name))
-            character.Name = updateCharacter.Name;
-
-        if (updateCharacter.IsNpc.HasValue)
-            character.IsNpc = updateCharacter.IsNpc.Value;
-
-        if (updateCharacter.AccessPolicy.HasValue)
-            character.AccessPolicy = updateCharacter.AccessPolicy.Value;
-
-        // Modification tracking is handled via Edit history, not inline ModifiedUtc
-
-        // Update attributes
-        if (updateCharacter.Attributes != null && updateCharacter.Attributes.Any())
-        {
-            var existingAttributeIds = await GetAttributeIds(updateCharacter.CharacterId);
-            foreach (var attr in updateCharacter.Attributes)
+            if (attempted)
             {
-                if (existingAttributeIds.TryGetValue(attr.Id, out var existingId))
+                _dbContext.ChangeTracker.Clear();
+            }
+
+            attempted = true;
+
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
+            var character = await _dbContext.Characters.FindAsync(updateCharacter.CharacterId);
+            if (character == null)
+            {
+                throw new InvalidOperationException($"Character {updateCharacter.CharacterId} not found");
+            }
+
+            // Track status change for PcLimit adjustment
+            var oldStatus = character.Status;
+            var newStatus = updateCharacter.Status ?? oldStatus;
+            var isNpc = updateCharacter.IsNpc ?? character.IsNpc;
+
+            // Update fields if provided
+            if (updateCharacter.Status.HasValue)
+                character.Status = updateCharacter.Status.Value;
+
+            if (updateCharacter.IsDead.HasValue)
+                character.IsDead = updateCharacter.IsDead.Value;
+
+            if (updateCharacter.IsPlayerLeft.HasValue)
+                character.IsPlayerLeft = updateCharacter.IsPlayerLeft.Value;
+
+            if (updateCharacter.IsPlayerExiled.HasValue)
+                character.IsPlayerExiled = updateCharacter.IsPlayerExiled.Value;
+
+            if (!string.IsNullOrEmpty(updateCharacter.Name))
+                character.Name = updateCharacter.Name;
+
+            if (updateCharacter.IsNpc.HasValue)
+                character.IsNpc = updateCharacter.IsNpc.Value;
+
+            if (updateCharacter.AccessPolicy.HasValue)
+                character.AccessPolicy = updateCharacter.AccessPolicy.Value;
+
+            // Modification tracking is handled via Edit history, not inline ModifiedUtc
+
+            // Update attributes
+            if (updateCharacter.Attributes != null && updateCharacter.Attributes.Any())
+            {
+                var existingAttributeIds = await GetAttributeIds(updateCharacter.CharacterId);
+                foreach (var attr in updateCharacter.Attributes)
                 {
-                    var existingAttr = await _dbContext.CharacterAttributes.FindAsync(existingId);
-                    if (existingAttr != null)
-                        existingAttr.Value = attr.Value;
-                }
-                else
-                {
-                    _dbContext.CharacterAttributes.Add(new DbCharacterAttribute
+                    if (existingAttributeIds.TryGetValue(attr.Id, out var existingId))
                     {
-                        CharacterAttributeId = _guidFactory.Create(),
-                        CharacterId = updateCharacter.CharacterId,
-                        AttributeId = attr.Id,
-                        Value = attr.Value
-                    });
+                        var existingAttr = await _dbContext.CharacterAttributes.FindAsync(existingId);
+                        if (existingAttr != null)
+                            existingAttr.Value = attr.Value;
+                    }
+                    else
+                    {
+                        _dbContext.CharacterAttributes.Add(new DbCharacterAttribute
+                        {
+                            CharacterAttributeId = _guidFactory.Create(),
+                            CharacterId = updateCharacter.CharacterId,
+                            AttributeId = attr.Id,
+                            Value = attr.Value
+                        });
+                    }
                 }
             }
-        }
 
-        await _dbContext.SaveChangesAsync();
+            await _dbContext.SaveChangesAsync();
 
-        // Adjust RecruitmentPcLimit when non-NPC character status changes
-        if (!isNpc && oldStatus != newStatus)
-        {
-            await AdjustPcLimitAsync(character.GameId, oldStatus, newStatus);
-        }
+            // Adjust RecruitmentPcLimit when non-NPC character status changes
+            if (!isNpc && oldStatus != newStatus)
+            {
+                await AdjustPcLimitAsync(character.GameId, oldStatus, newStatus);
+            }
+
+            await transaction.CommitAsync();
+        });
 
         return await _dbContext.Characters
             .Where(c => c.CharacterId == updateCharacter.CharacterId)

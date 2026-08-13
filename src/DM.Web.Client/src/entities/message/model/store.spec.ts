@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { MAX_API_PAGE_SIZE } from "@/shared/lib/composables/usePaging";
 import { setActivePinia, createPinia } from "pinia";
 
 const { mockGetMessages, mockGetMessagesBefore, mockGetChat, mockSendMessage } =
@@ -266,16 +267,19 @@ describe("useMessagingStore, the size of the window", () => {
     expect(mockGetMessagesBefore).toHaveBeenCalledWith("c1", "cursor-1", 30);
   });
 
-  // 200 is a legal preference and an illegal page. Unclamped it comes back 400,
-  // and fetchMessages reads only `data`: the conversation would be drawn empty,
-  // with nothing on screen saying why.
+  // A size above every one the settings offer. Unclamped it comes back 400, and
+  // fetchMessages reads only `data`: the conversation would be drawn empty, with
+  // nothing on screen saying why. The cap is the largest size a reader may save,
+  // because a preference the API refuses is a setting that does nothing.
   it("asks for no more than the API serves", async () => {
-    readerChose(200);
+    readerChose(500);
     mockGetMessages.mockResolvedValue(page([1]));
 
     const store = useMessagingStore();
     await store.fetchMessages("c1" as never);
 
-    expect(mockGetMessages).toHaveBeenCalledWith("c1", { limit: 100 });
+    expect(mockGetMessages).toHaveBeenCalledWith("c1", {
+      limit: MAX_API_PAGE_SIZE,
+    });
   });
 });

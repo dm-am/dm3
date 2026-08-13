@@ -185,6 +185,9 @@ internal class BoardService : IBoardService
         await _cache.InvalidateAsync($"board_moderators_{board.Id}");
     }
 
+    /// <inheritdoc />
+    public async Task<IEnumerable<Board>> GetAvailableBoards() => await GetBoards();
+
     private async Task<Board[]> GetBoards(bool onlyAvailable = true)
     {
         var accessPolicy = onlyAvailable

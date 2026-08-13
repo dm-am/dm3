@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Caching;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Identity;
@@ -33,6 +34,7 @@ internal class TopicService : ITopicService
     private readonly IUnreadCountersRepository _unreadCountersRepository;
     private readonly IUserLookupService _userLookupService;
     private readonly IEventProducer _invokedEventProducer;
+    private readonly IGuidFactory _guidFactory;
     private readonly ICache _cache;
 
     public TopicService(
@@ -46,6 +48,7 @@ internal class TopicService : ITopicService
         IUnreadCountersRepository unreadCountersRepository,
         IUserLookupService userLookupService,
         IEventProducer invokedEventProducer,
+        IGuidFactory guidFactory,
         ICache cache)
     {
         _createValidator = createValidator;
@@ -58,6 +61,7 @@ internal class TopicService : ITopicService
         _unreadCountersRepository = unreadCountersRepository;
         _userLookupService = userLookupService;
         _invokedEventProducer = invokedEventProducer;
+        _guidFactory = guidFactory;
         _cache = cache;
     }
 
@@ -79,22 +83,28 @@ internal class TopicService : ITopicService
         _intentionManager.ThrowIfForbidden(ForumIntention.CreateTopic, board);
 
         var author = _identityProvider.Current.User;
+        var topicId = _guidFactory.Create();
         var createEntity = new CreateTopicEntity
         {
+            TopicId = topicId,
             Title = createTopic.Title,
             // Topic bodies render on the Comment surface where [mod] is a green
             // mod block; strip it when authored by a non-moderator.
             Text = ModBlockSanitizer.SanitizeForAuthor(createTopic.Text, author.Role)
         };
+
+        // Markers first, row second, commit on the line after it returns.
+        await using var counters = await _unreadCountersRepository.ReserveAsync(
+            UnreadMarker.UnderParent(topicId, board.Id, UnreadEntryType.Message));
+
         var topic = await _repository.Create(
             createEntity,
             author.UserId,
             board.Id,
             ct);
+        counters.Commit();
 
-        await Task.WhenAll(
-            _invokedEventProducer.SendAsync(EventType.NewTopic, topic.Id),
-            _unreadCountersRepository.CreateAsync(topic.Id, board.Id, UnreadEntryType.Message));
+        await _invokedEventProducer.SendAsync(EventType.NewTopic, topic.Id);
 
         // The cacheable-boards listing fast path uses a short TTL
         // (CachePolicy.Medium = 1 min) so a fresh topic becomes visible

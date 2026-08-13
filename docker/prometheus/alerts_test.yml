@@ -1,0 +1,85 @@
+# Unit-тесты правил алертинга (promtool test rules).
+#
+# promtool check config разбирает синтаксис и молчит о смысле: выражение,
+# читающее не ту серию, парсится ровно так же, как правильное. Здесь правило
+# прогоняется по заданному ряду и проверяется, что оно срабатывает именно на том
+# состоянии, ради которого написано.
+#
+# Не полный набор. Правила, срабатывающие на up == 0 и absent(), проверяются
+# самим наличием цели в prometheus.yml — их дублирование здесь ничего не ловит.
+# Сюда попадает то, где выражение можно написать синтаксически верно и по смыслу
+# мимо: суммы по нескольким сериям и разрезы по меткам.
+
+rule_files:
+  - alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  # Очередь, которую консьюмер разобрал в память: ready ноль, unacked две
+  # тысячи. По одной серии ready это здоровая пустая очередь, и правило молчало
+  # ровно там, где отставание уже случилось.
+  - interval: 1m
+    input_series:
+      - series: 'rabbitmq_queue_messages_ready{queue="dm.notifications"}'
+        values: '0+0x15'
+      - series: 'rabbitmq_queue_messages_unacked{queue="dm.notifications"}'
+        values: '2000+0x15'
+    alert_rule_test:
+      - eval_time: 11m
+        alertname: QueueBacklog
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              queue: dm.notifications
+            exp_annotations:
+              summary: "Queue dm.notifications is backing up"
+              description: "More than 1000 messages have been waiting or in flight for 10 minutes. Both halves count: work a consumer has taken and not finished is a backlog the queue depth alone does not show."
+
+  # Обратная сторона: сумма ниже порога молчит. Без этого случая правило,
+  # срабатывающее всегда, прошло бы проверку выше.
+  - interval: 1m
+    input_series:
+      - series: 'rabbitmq_queue_messages_ready{queue="dm.notifications"}'
+        values: '10+0x15'
+      - series: 'rabbitmq_queue_messages_unacked{queue="dm.notifications"}'
+        values: '5+0x15'
+    alert_rule_test:
+      - eval_time: 11m
+        alertname: QueueBacklog
+        exp_alerts: []
+
+  # Отказы доставки разрезаются по каналу: одно правило на все каналы назвало бы
+  # в письме "channel" пустым, и получатель не узнал бы, какой из них лежит.
+  - interval: 1m
+    input_series:
+      - series: 'dm_messaging_delivery_failed_total{channel="email",event="NewTopic"}'
+        values: '0+60x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: DeliveriesFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              channel: email
+            exp_annotations:
+              summary: "Notifications over email are not being delivered"
+              description: "The channel is refusing what it is handed. Nothing retries these: the message was acknowledged when the sender swallowed the refusal."
+
+  # Отказы входа разрезаются по причине: WrongLogin потоком — это перебор
+  # адресов, WrongPassword — перебор паролей, и общее число не говорит ни того,
+  # ни другого.
+  - interval: 1m
+    input_series:
+      - series: 'dm_auth_login_failed_total{reason="WrongLogin"}'
+        values: '0+600x20'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: AuthFailureSpike
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              reason: WrongLogin
+            exp_annotations:
+              summary: "Logins are being refused as WrongLogin"
+              description: "Sustained refusals of one kind. WrongLogin at this rate is somebody walking a list of addresses; WrongPassword against few addresses is somebody walking a list of passwords; AccountLocked is either of those having gone on long enough to lock real people out."

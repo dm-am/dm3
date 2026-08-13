@@ -60,6 +60,6 @@ public class CreateGameReviewRequest
     /// Review text (10-10000 characters, BBCode supported)
     /// </summary>
     [Required]
-    [StringLength(10000, MinimumLength = 10, ErrorMessage = "Review text must be between 10 and 10000 characters")]
+    [StringLength(10000, MinimumLength = 10, ErrorMessage = "Рецензия от 10 до 10000 символов")]
     public string Text { get; set; } = string.Empty;
 }

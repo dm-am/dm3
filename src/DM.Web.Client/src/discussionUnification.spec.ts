@@ -51,6 +51,15 @@ const NOT_MOVED_YET: Record<string, string> = {
     "the topic is the reference the section was cut from, and moves last on its own",
 };
 
+/**
+ * What the exemption above does not cover, and what drifted while it stood: the
+ * section shows its skeleton before the first page only, so a refetch keeps the
+ * rows the store deliberately holds while revalidating. The forum copy showed it
+ * on every load and wiped the list on a change of page, filter or sort. A tag
+ * this rule can count is not the thing these two have to agree on.
+ */
+const SKELETON_CONDITION = /v-if="[^"]*[Ll]oading[^"]*&&[^"]*!s*comments/;
+
 /** The slice of the template AST this walk reads; the rest is ignored. */
 interface Node {
   type: number;
@@ -128,5 +137,13 @@ describe("the discussion is one section", () => {
   it("has the game and the blog discussions on the section", () => {
     const users = renderers("DiscussionSection");
     for (const page of CONNECTED) expect(users).toContain(page);
+  });
+
+  it("keeps a list on screen while it reloads, section or copy", () => {
+    const sources = [SECTION, ...Object.keys(NOT_MOVED_YET)];
+    for (const file of sources) {
+      const template = readFileSync(join(CLIENT_SRC, file), "utf8");
+      expect(SKELETON_CONDITION.test(template), file).toBe(true);
+    }
   });
 });

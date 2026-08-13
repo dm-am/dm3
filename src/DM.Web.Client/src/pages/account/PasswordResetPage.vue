@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRouter } from "vue-router";
+import { readConfirmationToken } from "@/shared/lib/utils/confirmationToken";
 import { useNewPasswordField } from "@/shared/lib/composables/useNewPasswordField";
 import { accountApi } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
@@ -12,7 +13,6 @@ import {
 import StatusIcon from "@/shared/ui/Icon/StatusIcon.vue";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
 
-const route = useRoute();
 const router = useRouter();
 
 // Page state: loading -> ready/expired/invalid/completed
@@ -21,18 +21,18 @@ const pageState = ref<PageState>("loading");
 const submitting = ref(false);
 
 // Password field with HIBP check
-const {
-  password: newPassword,
-  hibpStatus,
-  isValid,
-  onInput: onPasswordInput,
-  onBlur: onPasswordBlur,
-} = useNewPasswordField();
+const { password: newPassword, isValid } = useNewPasswordField();
 
-// Check token on mount
+// The value arrives in the fragment and is cleared as it is read, so it is read
+// once and kept: in the path it went into browser history and into the access log
+// of the edge.
+const token = ref("");
+
 onMounted(async () => {
-  const token = route.params.token as string;
-  const { data, error } = await accountApi.getPasswordResetTokenInfo(token);
+  token.value = readConfirmationToken();
+  const { data, error } = await accountApi.getPasswordResetTokenInfo(
+    token.value,
+  );
 
   if (error || !data) {
     pageState.value = "invalid";
@@ -54,9 +54,8 @@ const submit = async () => {
   submitting.value = true;
   passwordError.value = "";
 
-  const token = route.params.token as string;
   const { data, error } = await accountApi.completePasswordReset(
-    token,
+    token.value,
     newPassword.value,
   );
 
@@ -158,13 +157,8 @@ function goHome() {
               placeholder="Введите новый пароль"
               autocomplete="new-password"
               :disabled="submitting"
-              @input="onPasswordInput"
-              @blur="onPasswordBlur"
             />
-            <PasswordStrengthIndicator
-              :password="newPassword"
-              :hibp-status="hibpStatus"
-            />
+            <PasswordStrengthIndicator :password="newPassword" />
             <div v-if="passwordError" class="field-error">
               {{ passwordError }}
             </div>

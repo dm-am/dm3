@@ -55,7 +55,7 @@ internal class MessageSearchApiService : IMessageSearchApiService
             SourceTitle = h.SourceTitle,
             Id = h.Id,
             CreatedUtc = h.CreatedUtc,
-            Snippet = h.Snippet
+            Snippet = h.SnippetSegments
         });
 
         return new CursorEnvelope<MessageSearchResult>(rows, paging);

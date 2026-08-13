@@ -36,7 +36,7 @@ export type LoginCredentials = {
   email: string;
   password: string;
   website?: string; // Honeypot field for bot protection
-  /** Remember session for 1 year (true) or 24 hours (false) */
+  /** True keeps the session cookie past browser close; both lifetimes come from server configuration */
   rememberMe?: boolean;
 };
 

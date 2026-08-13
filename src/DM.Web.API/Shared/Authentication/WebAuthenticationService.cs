@@ -1,8 +1,13 @@
 using System;
+using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Account.Features.Security;
+using DM.Domain.Core.Enums;
+using DM.Domain.Core.Events;
 using DM.Domain.Core.Identity;
+using DM.Infrastructure.Core.Tracing;
 using DM.Web.API.Shared.Authentication.Credentials;
 using DM.Web.API.Shared.Http;
 using Microsoft.AspNetCore.Http;
@@ -19,6 +24,7 @@ internal class WebAuthenticationService : IWebAuthenticationService
     private readonly ISuspiciousLoginDetector suspiciousLoginDetector;
     private readonly ISuspiciousLoginNotificationSender suspiciousLoginNotificationSender;
     private readonly ISecurityAuditRepository securityAuditRepository;
+    private readonly IEventProducer eventProducer;
     private readonly ILogger<WebAuthenticationService> logger;
 
     /// <inheritdoc />
@@ -29,6 +35,7 @@ internal class WebAuthenticationService : IWebAuthenticationService
         ISuspiciousLoginDetector suspiciousLoginDetector,
         ISuspiciousLoginNotificationSender suspiciousLoginNotificationSender,
         ISecurityAuditRepository securityAuditRepository,
+        IEventProducer eventProducer,
         ILogger<WebAuthenticationService> logger)
     {
         this.authenticationService = authenticationService;
@@ -37,6 +44,7 @@ internal class WebAuthenticationService : IWebAuthenticationService
         this.suspiciousLoginDetector = suspiciousLoginDetector;
         this.suspiciousLoginNotificationSender = suspiciousLoginNotificationSender;
         this.securityAuditRepository = securityAuditRepository;
+        this.eventProducer = eventProducer;
         this.logger = logger;
     }
 
@@ -44,7 +52,10 @@ internal class WebAuthenticationService : IWebAuthenticationService
     {
         LoginCredentials loginCredentials => await authenticationService.Authenticate(
             loginCredentials.Email, loginCredentials.Password, loginCredentials.RememberMe,
-            ExtractSessionContext(httpContext)),
+            ExtractSessionContext(httpContext),
+            // The progressive delay of this path is long enough that a reader who
+            // gave up leaves a request asleep behind them, holding its connection.
+            httpContext?.RequestAborted ?? CancellationToken.None),
         TokenCredentials tokenCredentials => await authenticationService.Authenticate(tokenCredentials.Token),
         UnconditionalCredentials unconditionalCredentials => await authenticationService.Authenticate(
             unconditionalCredentials.UserId, ExtractSessionContext(httpContext)),
@@ -87,6 +98,15 @@ internal class WebAuthenticationService : IWebAuthenticationService
                 {
                     await securityAuditRepository.LogAsync(identity.User.UserId, SecurityEventType.SuspiciousLogin,
                         sessionContext?.IpAddress, sessionContext?.UserAgent);
+
+                    // The notification on the site, beside the letter below. The
+                    // event type, its wording and its category all existed and
+                    // nothing ever produced it, so the Security category the
+                    // settings screen offers was one item short of what it promised.
+                    // No try/catch here: the producer swallows a refusal and counts
+                    // it, which is the trade SYSTEM.md states for every event.
+                    await eventProducer.SendAsync(
+                        EventType.SuspiciousLoginActivity, identity.User.UserId);
                 }
 
                 if (isSuspicious && !string.IsNullOrEmpty(identity.User.Email))
@@ -95,22 +115,46 @@ internal class WebAuthenticationService : IWebAuthenticationService
                         "Suspicious login detected for user {UserId} from IP {IpAddress}",
                         identity.User.UserId, sessionContext?.IpAddress);
 
-                    // Fire and forget - don't block login
-                    _ = Task.Run(async () =>
+                    // Awaited inside the request, and it has to be. Sending this
+                    // publishes to dm.mail.sending through MailSender, which lives
+                    // in the scope of the request and gives its rented channel back
+                    // in Dispose - so the publish is only legal while that scope is
+                    // alive. Handed to a task the request does not wait for, it
+                    // raced the end of the request with nothing ordering the two,
+                    // and the losing side published through a disposed sender.
+                    //
+                    // The login must not fail over an informational letter, so a
+                    // refusal is swallowed - the security journal above is the
+                    // record that matters and it is already written. Swallowing is
+                    // only allowed while it is counted, and the counter is the one
+                    // the event bus uses for the same trade.
+                    //
+                    // What must not be done here: no timeout through Task.WhenAny
+                    // and no second Task.Run. Both put an abandoned task back on
+                    // top of a disposable owned by someone else's scope, which is
+                    // the original defect. A ceiling on publishing, if one is ever
+                    // needed, belongs to the connection factory and applies to all
+                    // nine letters of the product at once.
+                    try
                     {
-                        try
-                        {
-                            await suspiciousLoginNotificationSender.SendAsync(
-                                identity.User.Email,
-                                identity.User.Username,
-                                sessionContext?.IpAddress,
-                                sessionContext?.UserAgent);
-                        }
-                        catch (Exception ex)
-                        {
-                            logger.LogWarning(ex, "Failed to send suspicious login notification");
-                        }
-                    });
+                        await suspiciousLoginNotificationSender.SendAsync(
+                            identity.User.Email,
+                            identity.User.Username,
+                            sessionContext?.IpAddress,
+                            sessionContext?.UserAgent);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessagingMetrics.PublishFailed.Add(1,
+                            new KeyValuePair<string, object?>("event", nameof(SecurityEventType.SuspiciousLogin)),
+                            new KeyValuePair<string, object?>("reason", ex.GetType().Name));
+
+                        // The identifier, not the address: the address names a
+                        // person, and the store keeps a month of whatever is
+                        // written to it.
+                        logger.LogWarning(ex,
+                            "Failed to send suspicious login notification for {UserId}", identity.User.UserId);
+                    }
                 }
             }
             catch (Exception ex)

@@ -60,6 +60,51 @@ public static class MessagingMetrics
     public static readonly Histogram<double> Duration =
         Meter.CreateHistogram<double>("dm.messaging.duration", "s", "End-to-end message processing latency");
 
+    /// <summary>
+    /// Events the publisher could not hand to the broker. Attributes:
+    /// <c>event</c> (event type), <c>reason</c> (exception type).
+    /// </summary>
+    /// <remarks>
+    /// An event is not the carrier of the fact — SYSTEM.md says so, and the
+    /// publisher therefore swallows a refusal instead of turning a committed
+    /// write into a 500. That trade only holds while someone can see the
+    /// swallowing: without this counter a broker that refuses every publish looks
+    /// exactly like a quiet site, and the first symptom is a user asking why
+    /// notifications stopped.
+    ///
+    /// Not only the bus. The one letter whose loss a caller swallows on the same
+    /// terms — the warning about a login from an unknown address — counts here
+    /// too, so <c>event</c> names what failed to leave rather than which pipe it
+    /// was leaving through.
+    /// </remarks>
+    public static readonly Counter<long> PublishFailed =
+        Meter.CreateCounter<long>("dm.messaging.publish_failed", null, "Events the publisher could not hand to the broker");
+
+    /// <summary>
+    /// Notifications that reached their channel and were refused by it.
+    /// Attributes: <c>channel</c> (email, discord, telegram, realtime),
+    /// <c>event</c> (notification type).
+    /// </summary>
+    /// <remarks>
+    /// The far end of the same trade as <see cref="PublishFailed"/>, and the one
+    /// that was invisible. A message is taken off the queue, handed to a sender,
+    /// and the sender swallows what the channel answered: a bot that returns 403
+    /// for every chat, a relay that refuses every letter and a push nobody is
+    /// subscribed to are all a warning line and an acknowledged message. The
+    /// consumer counters say the message was consumed successfully, because from
+    /// the pipeline's side it was — the swallowing happens below it.
+    ///
+    /// The channel and the type of notification, and nothing about the recipient:
+    /// the address, the chat and the user are what makes a failure specific, and
+    /// a label carrying any of them multiplies streams per user without bound.
+    /// </remarks>
+    public static readonly Counter<long> DeliveryFailed = Meter.CreateCounter<long>(
+        "dm.messaging.delivery_failed", null, "Notifications a channel refused to deliver");
+
+    /// <summary>Attribute set naming the channel a delivery was attempted through.</summary>
+    /// <param name="channel">Channel name.</param>
+    public static KeyValuePair<string, object?> Channel(string channel) => new("channel", channel);
+
     /// <summary>Attribute set naming the queue a measurement belongs to.</summary>
     /// <param name="queue">Queue name.</param>
     public static KeyValuePair<string, object?> Queue(string queue) => new("queue", queue);

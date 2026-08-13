@@ -65,8 +65,9 @@ internal class LoginRecordService : ILoginRecordService
         catch (Exception ex)
         {
             // Recording a sign-in never fails the sign-in. The address stays out of
-            // the message: it identifies a person and the log store has no
-            // retention. The trace id and the security audit log carry the rest.
+            // the message: it identifies a person, and the store keeps a month of
+            // whatever is written to it. The trace id and the security audit log
+            // carry the rest.
             _logger.LogWarning(ex, "Failed to record login attempt");
         }
     }

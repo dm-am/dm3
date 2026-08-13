@@ -32,11 +32,7 @@ public class NotificationLinkShould
     /// <summary>A game identifier as EncodeToReadable writes one.</summary>
     private const string GameIdentifier = "poterjannye-hroniki~aBcD-1_2";
 
-    private static readonly SiteAddressConfiguration Addresses = new()
-    {
-        PublicUrl = PublicUrl,
-        Addresses = new Dictionary<string, string> { ["main"] = PublicUrl }
-    };
+    private static readonly SiteAddressConfiguration Addresses = new() { PublicUrl = PublicUrl };
 
     /// <summary>The payload of a game notification, identifier and all.</summary>
     private static readonly object GameMetadata = new

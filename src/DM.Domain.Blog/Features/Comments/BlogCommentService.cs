@@ -83,7 +83,7 @@ internal class BlogCommentService : IBlogCommentService
     }
 
     /// <inheritdoc />
-    public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid blogId, BlogCommentsQuery query,
+    public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid blogId, CommentsQuery query,
         IReadOnlyCollection<Guid>? excludeUserIds = null)
     {
         await _blogService.GetBlogAsync(blogId);
@@ -140,7 +140,8 @@ internal class BlogCommentService : IBlogCommentService
         {
             CommentId = updateComment.CommentId,
             Text = text,
-            LastUpdateUtc = _dateTimeProvider.Now
+            LastUpdateUtc = _dateTimeProvider.Now,
+            EditorUserId = currentUser.UserId
         };
 
         var updatedComment = await _repository.Update(entity);

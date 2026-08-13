@@ -40,13 +40,23 @@ const SvgIconStub = {
 
 const SecondaryTextStub = { template: "<span><slot /></span>" };
 
-const hit = (id: string, snippet: string) => ({
+const hit = (id: string, text: string) => ({
   sourceType: "global" as const,
   sourceId: "c1",
   sourceTitle: null,
   id,
   createdUtc: "2026-01-01T10:00:00Z",
-  snippet,
+  snippet: [{ text, isMatch: false }],
+});
+
+/** A preview the server marked: a window with the match inside it. */
+const marked = (id: string, before: string, match: string, after: string) => ({
+  ...hit(id, before),
+  snippet: [
+    { text: before, isMatch: false },
+    { text: match, isMatch: true },
+    { text: after, isMatch: false },
+  ],
 });
 
 const answer = (...hits: ReturnType<typeof hit>[]) => ({
@@ -117,6 +127,36 @@ describe("MessageSearchBar", () => {
     expect(dropdown.findAll(".result-row")).toHaveLength(2);
     expect(wrapper.find(".result-group").exists()).toBe(false);
     expect(wrapper.text()).not.toContain("Глобальный чат");
+  });
+
+  // The preview used to be the first two hundred characters of the message, so
+  // the words that were searched for were usually not in it at all — and could
+  // not have been found by looking, because the search matches by lexeme: a query
+  // for "странник" matches "странников".
+  it("marks the words the search matched", async () => {
+    const wrapper = mountBar();
+    mockSearchMessages.mockResolvedValue(
+      answer(marked("m1", "мимо шли ", "странников", " к реке")),
+    );
+    await search(wrapper, "странник");
+
+    const highlighted = wrapper.findAll("mark.search-highlight");
+    expect(highlighted).toHaveLength(1);
+    expect(highlighted[0].text()).toBe("странников");
+    expect(wrapper.find(".result-snippet").text()).toContain("к реке");
+  });
+
+  // Segments and not a string of markup: the server marks the match, and a marked
+  // string would be the one field of this contract rendered as html.
+  it("prints a preview that looks like markup as text", async () => {
+    const wrapper = mountBar();
+    mockSearchMessages.mockResolvedValue(answer(hit("m1", "<b>не тег</b>")));
+    await search(wrapper, "тег");
+
+    expect(wrapper.find(".result-snippet").text()).toContain("<b>не тег</b>");
+    expect(
+      wrapper.find(".result-snippet").element.querySelector("b"),
+    ).toBeNull();
   });
 
   it("stays open after a jump, so the next hit is one click away", async () => {

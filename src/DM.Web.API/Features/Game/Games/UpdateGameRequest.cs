@@ -23,19 +23,19 @@ public class UpdateGameRequest
     /// <summary>
     /// Game title
     /// </summary>
-    [StringLength(200, MinimumLength = 3, ErrorMessage = "Title must be between 3 and 200 characters")]
+    [StringLength(200, MinimumLength = 3, ErrorMessage = "Заголовок от 3 до 200 символов")]
     public string? Title { get; set; }
 
     /// <summary>
     /// RPG system name
     /// </summary>
-    [StringLength(100, ErrorMessage = "System name cannot exceed 100 characters")]
+    [StringLength(100, ErrorMessage = "Название системы не длиннее 100 символов")]
     public string? System { get; set; }
 
     /// <summary>
     /// Narrative setting
     /// </summary>
-    [StringLength(100, ErrorMessage = "Setting name cannot exceed 100 characters")]
+    [StringLength(100, ErrorMessage = "Название сеттинга не длиннее 100 символов")]
     public string? Setting { get; set; }
 
     /// <summary>

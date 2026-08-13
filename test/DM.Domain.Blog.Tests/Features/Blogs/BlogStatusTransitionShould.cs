@@ -104,7 +104,7 @@ public class BlogStatusTransitionShould : UnitTestBase
             ActivatedUtc = activatedUtc,
             ClosedUtc = closedUtc
         };
-        _repository.Setup(r => r.Get(blogId, It.IsAny<CancellationToken>()))
+        _repository.Setup(r => r.Get(blogId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(blog);
         _repository.Setup(r => r.UpdateBlog(It.IsAny<UpdateBlogEntity>(), It.IsAny<CancellationToken>()))
             .Callback<UpdateBlogEntity, CancellationToken>((update, _) => _capturedUpdate = update)
@@ -323,7 +323,7 @@ public class BlogStatusTransitionShould : UnitTestBase
     {
         var blogId = Guid.NewGuid();
         var blog = new BlogDto { Id = blogId, Status = ModuleStatus.Draft };
-        _repository.Setup(r => r.GetByPublicId("abcde", It.IsAny<CancellationToken>()))
+        _repository.Setup(r => r.GetByPublicId("abcde", It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(blog);
         _repository.Setup(r => r.UpdateBlog(It.IsAny<UpdateBlogEntity>(), It.IsAny<CancellationToken>()))
             .Callback<UpdateBlogEntity, CancellationToken>((update, _) => _capturedUpdate = update)
@@ -339,7 +339,7 @@ public class BlogStatusTransitionShould : UnitTestBase
     public async Task RejectStatusChangeOfMissingBlogWithNotFound()
     {
         var blogId = Guid.NewGuid();
-        _repository.Setup(r => r.Get(blogId, It.IsAny<CancellationToken>()))
+        _repository.Setup(r => r.Get(blogId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((BlogDto?)null);
 
         var act = async () => await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Start);

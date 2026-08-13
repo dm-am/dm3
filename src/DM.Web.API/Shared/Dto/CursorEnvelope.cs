@@ -29,15 +29,21 @@ public class CursorEnvelope<T>
 /// <summary>
 /// Cursor-based pagination information
 /// </summary>
+/// <remarks>
+/// Next and prev follow the order the endpoint itself sorts by, not a fixed
+/// direction in time, and the cursor value is opaque - it is produced by one
+/// endpoint and handed back to the same one. Which order that is belongs to the
+/// endpoint and is documented there.
+/// </remarks>
 public class CursorPaging
 {
     /// <summary>
-    /// Cursor for the next page (newer messages)
+    /// Cursor for the next page in the order the endpoint sorts by
     /// </summary>
     public string? NextCursor { get; set; }
 
     /// <summary>
-    /// Cursor for the previous page (older messages)
+    /// Cursor for the previous page in the order the endpoint sorts by
     /// </summary>
     public string? PrevCursor { get; set; }
 

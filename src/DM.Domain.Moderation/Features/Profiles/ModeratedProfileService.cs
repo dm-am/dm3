@@ -36,7 +36,7 @@ internal class ModeratedProfileService : IModeratedProfileService
     {
         var normalizedUsername = username.ToLowerInvariant();
         var user = await _cache.GetOrCreateAsync(
-            $"user_details_{normalizedUsername}",
+            CacheKeys.UserDetails(normalizedUsername),
             () => _userRepository.GetUserDetailsAsync(username),
             CachePolicy.Medium);
 
@@ -61,8 +61,10 @@ internal class ModeratedProfileService : IModeratedProfileService
 
         await _moderatedProfileRepository.UpdateUserInfo(username, info);
 
-        // Invalidate cache
-        await _cache.InvalidateAsync($"user_details_{username.ToLowerInvariant()}");
+        // Both keys of the same document: it is read by name on the profile page and
+        // by identifier everywhere a link to that person is built.
+        await _cache.InvalidateAsync(CacheKeys.UserDetails(username));
+        await _cache.InvalidateAsync(CacheKeys.UserDetails(user.UserId));
 
         return await GetProfile(username);
     }
@@ -81,9 +83,27 @@ internal class ModeratedProfileService : IModeratedProfileService
                 });
         }
 
+        // Read before the write, for the identifier and for the role being left.
+        // The repository throws on an unknown name, which the pipeline turns into a
+        // 500 on an endpoint that documents a 404.
+        var user = await _userRepository.GetUserAsync(username);
+        if (user == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(username));
+        }
+
+        var previousRole = user.Role;
+
         await _moderatedProfileRepository.SetUserRole(username, role);
 
-        // Invalidate cache
-        await _cache.InvalidateAsync($"user_details_{username.ToLowerInvariant()}");
+        // Four keys, because a role change moves the user between two lists and is
+        // read back by two different keys. The role listing lives an hour and was
+        // invalidated by nothing at all: for that hour the staff page showed the
+        // person under the role they no longer hold, and the role they now hold
+        // showed one name short.
+        await _cache.InvalidateAsync(CacheKeys.UserDetails(username));
+        await _cache.InvalidateAsync(CacheKeys.UserDetails(user.UserId));
+        await _cache.InvalidateAsync(CacheKeys.UsersByRole(previousRole));
+        await _cache.InvalidateAsync(CacheKeys.UsersByRole(role));
     }
 }

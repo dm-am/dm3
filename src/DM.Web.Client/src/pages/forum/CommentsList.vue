@@ -118,8 +118,14 @@ function pagingAnchor(): HTMLElement | null {
       :scroll-anchor="pagingAnchor"
     />
 
-    <!-- Loading state -->
-    <CommentSkeleton v-if="commentsLoading" />
+    <!-- Loading: the skeleton stands in before the first page only, so a refetch
+         keeps the comments already on screen. The store holds the stale rows on
+         purpose while it revalidates, and blanking them here threw that away: on
+         the busiest comment surface of the site a change of page, filter or sort
+         wiped the list, while the same change in a game or a blog left it in
+         place. Same condition as DiscussionSection, which this list is the
+         reference for. -->
+    <CommentSkeleton v-if="commentsLoading && !comments?.resources.length" />
 
     <!-- Error state: a failed load must not be presented as fake-empty.
          Shown only when there are no stale comments to keep on screen. -->

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Blog.Features.Invitations;
@@ -28,6 +29,14 @@ public interface IBlogInvitationRepository
     /// Invalidate (soft delete) an invitation
     /// </summary>
     Task Invalidate(Guid tokenId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Writes the assistant and spends the invitation that made them one, in one commit
+    /// </summary>
+    /// <param name="entity">Blog assistant</param>
+    /// <param name="tokenId">Invitation being spent</param>
+    /// <param name="ct">Cancellation token</param>
+    Task AcceptAssistantInvitation(AddBlogAssistantEntity entity, Guid tokenId, CancellationToken ct = default);
 
     /// <summary>
     /// Get an invitation by token ID

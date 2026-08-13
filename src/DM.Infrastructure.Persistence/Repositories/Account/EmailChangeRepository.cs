@@ -53,6 +53,8 @@ internal class EmailChangeRepository : IEmailChangeRepository
         var tokenEntity = new TokenEntity
         {
             TokenId = tokenDto.TokenId,
+            // The letter carries tokenDto.Secret; the row keeps only its hash.
+            SecretHash = tokenDto.SecretHash,
             UserId = tokenDto.UserId,
             EntityId = tokenDto.EntityId,
             CreatedUtc = tokenDto.CreatedUtc,

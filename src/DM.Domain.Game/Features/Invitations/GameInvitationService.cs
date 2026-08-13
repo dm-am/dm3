@@ -166,7 +166,10 @@ internal class GameInvitationService : IGameInvitationService
                 break;
 
             case TokenType.GameReaderInvitation:
-                // Auto-subscribe as reader
+                // The subscription first and the token second, on purpose: subscribing
+                // is idempotent, so a break between the two is repaired by following
+                // the same link again. The other order would spend the invitation and
+                // leave nothing for the second attempt to do.
                 await _subscriptionService.SubscribeAsync(gameId, ct);
                 await _repository.RemoveInvitation(tokenId, ct);
                 await _producer.SendAsync(EventType.ReaderInvitationAccepted, tokenId);
@@ -181,8 +184,7 @@ internal class GameInvitationService : IGameInvitationService
                     UserId = currentUserId,
                     JoinedUtc = _dateTimeProvider.Now
                 };
-                await _repository.AddAssistant(addEntity, ct);
-                await _repository.RemoveInvitation(tokenId, ct);
+                await _repository.AcceptAssistantInvitation(addEntity, tokenId, ct);
                 await _producer.SendAsync(EventType.AssignmentRequestAccepted, tokenId);
                 break;
 

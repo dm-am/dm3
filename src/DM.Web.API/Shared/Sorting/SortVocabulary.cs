@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Comments;
 using System.Collections.Generic;
 using System.Linq;
 using DM.Domain.Blog.Features.Comments;
@@ -56,14 +57,10 @@ public static class SortVocabulary
             // GET /v1/blogs — BlogRepository.ApplySorting
             [typeof(BlogsQuery)] =
                 ["created", "title", "status", "popularity", "activated", "closed"],
-            // GET /v1/blogs/{id}/comments — BlogCommentRepository.ApplySorting
-            [typeof(BlogCommentsQuery)] = CommentFields,
-            // GET /v1/publications/{id}/comments — PublicationCommentRepository.ApplySorting
-            [typeof(PublicationCommentsQuery)] = CommentFields,
-            // GET /v1/topics/{id}/comments — TopicCommentRepository.ApplySorting
+            // The four comment lists — GET /v1/{blogs,publications,topics,games}/{id}/comments,
+            // sorted by the shared block in CommentQueries — ask the same query type
+            // and therefore hold one entry, not four.
             [typeof(CommentsQuery)] = CommentFields,
-            // GET /v1/games/{id}/comments — GameCommentRepository.ApplySorting
-            [typeof(GameCommentsQuery)] = CommentFields,
             // GET /v1/polls — PollRepository.BuildSort (plus the "status" order it
             // handles before the switch)
             [typeof(PollsQuery)] = ["status", "starts", "ends"],

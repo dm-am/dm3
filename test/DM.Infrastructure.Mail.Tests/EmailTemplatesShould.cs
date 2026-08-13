@@ -39,15 +39,14 @@ public class EmailTemplatesShould : IAsyncDisposable
     private readonly HtmlRenderer _htmlRenderer;
     private readonly TemplateRenderer _renderer;
 
-    /// <summary>Two addresses, the shape every deployment of this site has.</summary>
-    private static readonly SiteAddressConfiguration SiteAddresses = new()
+    /// <summary>
+    /// What this deployment is. Deliberately a host of nobody: the footer must
+    /// name the addresses of the site, and taking them from here instead would
+    /// pass while naming whatever the stand happens to answer on.
+    /// </summary>
+    private static readonly SiteAddressConfiguration Deployment = new()
     {
         PublicUrl = "https://example.test",
-        Addresses = new Dictionary<string, string>
-        {
-            ["main"] = "https://example.test",
-            ["second"] = "https://second.example.test"
-        }
     };
 
     public EmailTemplatesShould()
@@ -57,7 +56,7 @@ public class EmailTemplatesShould : IAsyncDisposable
         _services = services.BuildServiceProvider();
         _htmlRenderer = EmailRendering.CreateHtmlRenderer(
             _services.GetRequiredService<ILoggerFactory>(),
-            SiteAddresses);
+            Deployment);
         _renderer = new TemplateRenderer(NullLogger<TemplateRenderer>.Instance, _htmlRenderer);
     }
 
@@ -73,9 +72,8 @@ public class EmailTemplatesShould : IAsyncDisposable
         var body = await _renderer.RenderAsync(
             new PasswordChangeNotificationViewModel("Аллигатор"));
 
-        foreach (var url in SiteAddresses.Addresses.Values)
+        foreach (var host in DM.Domain.Core.Site.SiteAddresses.Hosts)
         {
-            var host = new Uri(url).Host;
             body.Should().Contain(host,
                 $"a letter is read when {host} may be the only address that answers");
         }
@@ -307,7 +305,7 @@ public class EmailTemplatesShould : IAsyncDisposable
         var builder = new ContainerBuilder();
         builder.RegisterInstance(NullLoggerFactory.Instance).As<ILoggerFactory>();
         builder.RegisterGeneric(typeof(NullLogger<>)).As(typeof(ILogger<>)).SingleInstance();
-        builder.RegisterInstance(Options.Create(SiteAddresses)).As<IOptions<SiteAddressConfiguration>>();
+        builder.RegisterInstance(Options.Create(Deployment)).As<IOptions<SiteAddressConfiguration>>();
         builder.RegisterModule<MailModule>();
         await using var container = builder.Build();
 

@@ -40,12 +40,7 @@ public class NotificationMarkupShould
     /// <summary>The addresses of the site, as configuration gives them.</summary>
     private static readonly SiteAddressConfiguration Addresses = new()
     {
-        PublicUrl = "https://example.test",
-        Addresses = new Dictionary<string, string>
-        {
-            ["main"] = "https://example.test",
-            ["second"] = "https://second.example.test"
-        }
+        PublicUrl = "https://example.test"
     };
 
     /// <summary>A game title and a username are whatever their owner typed.</summary>
@@ -67,6 +62,30 @@ public class NotificationMarkupShould
         body.Should().Contain(EscapedName);
         body.Should().Contain("Смените пароль",
             "escaping must not turn Russian text into numeric references");
+    }
+
+    /// <summary>
+    /// The footer names every address the site answers on.
+    /// </summary>
+    /// <remarks>
+    /// A mailbox is the only place a reader can still be reached once the address
+    /// he uses stops answering, and this is the letter he gets most often. The list
+    /// used to be deployment configuration, and no deployment path ever filled it
+    /// in — the line was empty everywhere.
+    ///
+    /// The public address of the fixture is a host of nobody on purpose: taking the
+    /// list from the deployment instead would pass while naming whatever the stand
+    /// happens to answer on.
+    /// </remarks>
+    [Fact]
+    public void NameEveryAddressOfTheSiteInTheFooter()
+    {
+        var body = NotificationEmailSender.BuildEmailBody(Event, Metadata, Addresses);
+
+        foreach (var host in DM.Domain.Core.Site.SiteAddresses.Hosts)
+        {
+            body.Should().Contain(host);
+        }
     }
 
     [Fact]

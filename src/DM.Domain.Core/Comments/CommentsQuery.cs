@@ -1,14 +1,22 @@
 using System;
 using System.Collections.Generic;
-using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
 
-namespace DM.Domain.Game.Features.Comments;
+namespace DM.Domain.Core.Comments;
 
 /// <summary>
-/// Query parameters for game comment list filtering
+/// What a reader asks of a page of comments, whichever discussion it is a page of.
 /// </summary>
-public class GameCommentsQuery : PagingQuery, ICommentsQuery
+/// <remarks>
+/// The binder's side of <see cref="ICommentsQuery" />. Four modules held a copy of
+/// this class apiece, identical down to the doc comments, and the two tiers around
+/// them had already stopped copying: the storage layer filters through the
+/// interface, and the client states the same six fields once. A per-module class
+/// bought nothing but the chance for one of the four to drift — a sort key added
+/// here and missing there reads to the user as a discussion where sorting is
+/// broken.
+/// </remarks>
+public class CommentsQuery : PagingQuery, ICommentsQuery
 {
     /// <summary>
     /// Text search by comment content (case-insensitive contains)

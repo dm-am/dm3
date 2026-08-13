@@ -11,6 +11,6 @@ public class ReorderPinnedRequest
     /// <summary>
     /// Topic IDs in desired order (first = top of list)
     /// </summary>
-    [Required(ErrorMessage = "Topic IDs required")]
+    [Required(ErrorMessage = "Укажите топики")]
     public Guid[] TopicIds { get; set; } = [];
 }

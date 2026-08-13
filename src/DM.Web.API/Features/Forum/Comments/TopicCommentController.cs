@@ -1,4 +1,5 @@
 using DM.Web.API.Shared.Authentication;
+using DM.Domain.Core.Comments;
 using System;
 using System.Threading.Tasks;
 using DM.Domain.Forum.Features.Comments;

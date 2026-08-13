@@ -10,7 +10,7 @@ public class CreateCommentRequest
     /// <summary>
     /// Comment text (BB-code formatted)
     /// </summary>
-    [Required(ErrorMessage = "Text is required")]
-    [MinLength(1, ErrorMessage = "Text cannot be empty")]
+    [Required(ErrorMessage = "Введите текст")]
+    [MinLength(1, ErrorMessage = "Введите текст")]
     public string Text { get; set; } = "";
 }

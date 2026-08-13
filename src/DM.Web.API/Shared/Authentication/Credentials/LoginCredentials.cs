@@ -11,16 +11,16 @@ public class LoginCredentials : AuthCredentials
     /// User email address
     /// </summary>
     /// <example>john@example.com</example>
-    [Required(ErrorMessage = "Email is required")]
-    [StringLength(100, MinimumLength = 1, ErrorMessage = "Email must be between 1 and 100 characters")]
-    [EmailAddress(ErrorMessage = "Invalid email format")]
+    [Required(ErrorMessage = "Введите почту")]
+    [StringLength(100, MinimumLength = 1, ErrorMessage = "Почта от 1 до 100 символов")]
+    [EmailAddress(ErrorMessage = "Неверный формат почты")]
     public string Email { get; set; } = "";
 
     /// <summary>
     /// User password
     /// </summary>
-    [Required(ErrorMessage = "Password is required")]
-    [StringLength(128, MinimumLength = 1, ErrorMessage = "Password must be between 1 and 128 characters")]
+    [Required(ErrorMessage = "Введите пароль")]
+    [StringLength(128, MinimumLength = 1, ErrorMessage = "Пароль от 1 до 128 символов")]
     public string Password { get; set; } = "";
 
     /// <summary>
@@ -33,11 +33,13 @@ public class LoginCredentials : AuthCredentials
     public string? Website { get; set; }
 
     /// <summary>
-    /// Remember session for 30 days (true) or 24 hours (false)
+    /// Keep the session past the browser being closed
     /// </summary>
     /// <remarks>
-    /// When true, the session cookie will persist for 30 days (NIST SP 800-63B AAL1 recommendation).
-    /// When false, the session expires after 24 hours of inactivity.
+    /// True issues a persistent session cookie and the longer of the two
+    /// configured lifetimes; false issues the ordinary one. Both are counted
+    /// from the moment of login and extended when the session is used close to
+    /// its expiry, so neither is a sliding window of inactivity.
     /// Defaults to true for convenience.
     /// </remarks>
     public bool RememberMe { get; set; } = true;

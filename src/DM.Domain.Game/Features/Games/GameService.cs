@@ -163,36 +163,24 @@ internal class GameService : IGameService
             OrderNumber = 1
         };
 
-        // The counters go in first, and are undone if the game does not.
+        // Markers first, row second, commit on the line after it returns — see
+        // UnreadCountersReservation for why that way round.
         //
-        // There is no transaction across PostgreSQL and MongoDB and no outbox —
-        // DATA_STORAGE.md says both in as many words — so what a feature living
-        // in two stores owes is an explicit order: what is written first, and who
-        // clears the remainder. Written after the insert, a failed Mongo call
-        // left a committed game whose unread counters do not exist and never
-        // will: nothing recreates them, and the badge of that game reads zero for
-        // everybody forever. Written first, the same failure loses a game nobody
-        // has seen yet, and the caller may simply try again.
-        //
-        // The identifiers are ours already, generated above, so this needs no
-        // round trip to learn them.
-        await InitializeCountersAsync(gameId, roomId);
+        // The room is parented by its game, the way RoomService parents every room
+        // created afterwards. Left to the self-parented form, the first room of a
+        // game was its own parent, so it alone was missing from every read that
+        // sums a game's rooms.
+        await using var counters = await _unreadCountersRepository.ReserveAsync(
+            UnreadMarker.UnderParent(roomId, gameId, UnreadEntryType.Message),
+            UnreadMarker.SelfParented(gameId, UnreadEntryType.Message),
+            UnreadMarker.SelfParented(gameId, UnreadEntryType.Character));
 
-        GameDetails createdGame;
-        try
-        {
-            createdGame = await _repository.Create(createGameEntity, createRoomEntity);
-        }
-        catch
-        {
-            // Compensation, by the mechanism the collection already has: the
-            // markers are stamped removed and the expiry index collects them.
-            await _unreadCountersRepository.DeleteAsync(roomId, UnreadEntryType.Message);
-            await _unreadCountersRepository.DeleteAsync(gameId, UnreadEntryType.Message);
-            await _unreadCountersRepository.DeleteAsync(gameId, UnreadEntryType.Character);
-            throw;
-        }
+        var createdGame = await _repository.Create(createGameEntity, createRoomEntity);
+        counters.Commit();
 
+        // The game is committed by now, so nothing below it may turn a created
+        // game into a 500: the caller would try again and end up with two. Each
+        // step below therefore states what its own failure costs.
         if (!string.IsNullOrEmpty(createGame.AssistantUsername))
         {
             try
@@ -207,25 +195,26 @@ internal class GameService : IGameService
         }
 
         // One statement instead of a round trip per blocked user, the way the
-        // blog side already copies the same list.
+        // blog side already copies the same list. A lost copy costs the master a
+        // list they can refill from the game's own blacklist screen.
         if (createGame.CopyBlacklist)
         {
-            var copied = await _gameBlacklistRepository.CopyFromPersonalBlacklist(createdGame.Id, userId);
-            _logger.LogDebug("Copied personal blacklist to game blacklist with {Count} users", copied);
+            try
+            {
+                var copied = await _gameBlacklistRepository.CopyFromPersonalBlacklist(createdGame.Id, userId);
+                _logger.LogDebug("Copied personal blacklist to game blacklist with {Count} users", copied);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception,
+                    "Failed to copy the personal blacklist into game {GameId}", createdGame.Id);
+            }
         }
 
-        // The game is committed by now, so nothing below it may turn a created
-        // game into a 500: the caller would try again and end up with two. A lost
-        // event costs the subscribers one notification, which SYSTEM.md allows —
-        // an event is not the carrier of the fact.
-        try
-        {
-            await PublishGameCreatedAsync(createdGame.Id);
-        }
-        catch (Exception exception)
-        {
-            _logger.LogWarning(exception, "Failed to announce the new game {GameId}", createdGame.Id);
-        }
+        // A lost event costs the subscribers one notification, which SYSTEM.md
+        // allows — an event is not the carrier of the fact. The producer swallows
+        // and counts a refusal, so this needs no guard of its own.
+        await _producer.SendAsync(EventType.NewGame, createdGame.Id);
 
         _logger.LogInformation("Game created successfully. GameId={GameId}, Title={Title}, MasterId={MasterId}",
             createdGame.Id, createGame.Title, userId);
@@ -263,29 +252,9 @@ internal class GameService : IGameService
         var isAnonymous = !identity.User.IsAuthenticated;
         var pageSize = identity.Settings.Paging.EntitiesPerPage;
 
-        // Only cache simple anonymous queries (no search, no complex filters, no date ranges)
-        var canCache = isAnonymous
-            && query.Skip == 0
-            && string.IsNullOrEmpty(query.Search)
-            && query.RequiredTags == null
-            && query.OptionalTags == null
-            && query.ExcludedTags == null
-            && (query.OwnerUsernames == null || query.OwnerUsernames.Count == 0)
-            && string.IsNullOrEmpty(query.PlayerUsername)
-            && query.Participating != true
-            && !query.CreatedFromUtc.HasValue && !query.CreatedToUtc.HasValue
-            && !query.ActivatedFromUtc.HasValue && !query.ActivatedToUtc.HasValue
-            && !query.ClosedFromUtc.HasValue && !query.ClosedToUtc.HasValue
-            && !query.RecruitmentStartedFromUtc.HasValue && !query.RecruitmentStartedToUtc.HasValue;
-
-        if (canCache)
+        if (isAnonymous && IsCacheableAnonymousQuery(query))
         {
-            var statusPart = query.Statuses is { Count: > 0 } ? string.Join("_", query.Statuses) : "all";
-            var recruitingPart = query.RecruitmentFilter.HasValue ? $"_recruiting_{query.RecruitmentFilter.Value}" : "";
-            var closedReasonPart = query.ClosedReasonFilter.HasValue ? $"_closedReason_{query.ClosedReasonFilter.Value}" : "";
-            var sortPart = !string.IsNullOrEmpty(query.SortBy) ? $"_sort_{query.SortBy}_{query.SortOrder ?? "desc"}" : "";
-            var takePart = $"_take_{query.Take}";
-            var cacheKey = $"{GamesByStatusCacheKeyPrefix}{statusPart}{recruitingPart}{closedReasonPart}{sortPart}{takePart}";
+            var cacheKey = BuildAnonymousCacheKey(query);
             var cached = await _cache.GetOrCreateAsync(cacheKey, async () =>
             {
                 var totalCount = await _repository.Count(query, Guid.Empty);
@@ -753,25 +722,77 @@ internal class GameService : IGameService
     #region Private Methods
 
     /// <summary>
-    /// Initialize unread counters for game and room
+    /// Whether an anonymous listing may be served from the shared cache.
     /// </summary>
-    private async Task InitializeCountersAsync(Guid gameId, Guid roomId)
-    {
-        // The room is parented by its game, the way RoomService parents every
-        // room created afterwards. Left to the one-argument overload, the first
-        // room of a game was its own parent, so it alone was missing from every
-        // read that sums a game's rooms.
-        await _unreadCountersRepository.CreateAsync(roomId, gameId, UnreadEntryType.Message);
-        await _unreadCountersRepository.CreateAsync(gameId, UnreadEntryType.Message);
-        await _unreadCountersRepository.CreateAsync(gameId, UnreadEntryType.Character);
-    }
+    /// <remarks>
+    /// The entry is shared by every anonymous reader, so what may be cached is
+    /// exactly what the key below can tell apart. Everything the key does not
+    /// carry has to be refused here instead — the two are one decision, which is
+    /// why they sit together and are checked against each other by a test that
+    /// walks the properties of the query.
+    ///
+    /// Two of these are not merely about the key. A premoderation filter is a
+    /// moderation capability, refused above for an anonymous caller by the
+    /// intention check; repeating it here means the correctness of a shared cache
+    /// entry does not rest on a guard in another method. Participation filters
+    /// are about a reader, and an anonymous caller is not one.
+    /// </remarks>
+    internal static bool IsCacheableAnonymousQuery(GamesQuery query) =>
+        query.Skip == 0
+        && string.IsNullOrEmpty(query.Search)
+        && query.RequiredTags == null
+        && query.OptionalTags == null
+        && query.ExcludedTags == null
+        && (query.OwnerUsernames == null || query.OwnerUsernames.Count == 0)
+        && string.IsNullOrEmpty(query.PlayerUsername)
+        && query.PlayerParticipation == null
+        // Absent rather than "not true". The repository acts on true alone, so
+        // false and absent are one listing and could share one entry - but then
+        // the key would no longer tell apart everything this agrees to serve, and
+        // that invariant is what is checked. A parameter that asks for nothing is
+        // not worth an exception to it.
+        && query.Participating is null
+        && query.PremoderationStatuses is null or { Count: 0 }
+        && !query.CreatedFromUtc.HasValue && !query.CreatedToUtc.HasValue
+        && !query.ActivatedFromUtc.HasValue && !query.ActivatedToUtc.HasValue
+        && !query.ClosedFromUtc.HasValue && !query.ClosedToUtc.HasValue
+        && !query.RecruitmentStartedFromUtc.HasValue && !query.RecruitmentStartedToUtc.HasValue;
 
     /// <summary>
-    /// Publish game created event
+    /// The key one anonymous listing is stored under.
     /// </summary>
-    private Task PublishGameCreatedAsync(Guid gameId)
+    /// <remarks>
+    /// Normalised the way the repository reads the same fields, and not the way
+    /// they arrived. The sort order used to be written into the key only when a
+    /// sort field came with it, while the repository reads the order in every
+    /// branch including the default one: ?sortOrder=asc and ?sortOrder=desc were
+    /// two different listings sharing one entry, so for the length of the entry's
+    /// life whichever arrived second was served the first one's page. The same
+    /// normalisation removes a cheaper waste beside it — SortBy differing only in
+    /// case, and statuses differing only in order, were separate entries holding
+    /// identical pages.
+    /// </remarks>
+    internal static string BuildAnonymousCacheKey(GamesQuery query)
     {
-        return _producer.SendAsync(EventType.NewGame, gameId);
+        var statusPart = query.Statuses is { Count: > 0 }
+            ? string.Join("_", query.Statuses.OrderBy(status => status))
+            : "all";
+        var recruitingPart = query.RecruitmentFilter.HasValue
+            ? $"_recruiting_{query.RecruitmentFilter.Value}"
+            : "";
+        var closedReasonPart = query.ClosedReasonFilter.HasValue
+            ? $"_closedReason_{query.ClosedReasonFilter.Value}"
+            : "";
+
+        // Exactly what ApplySorting reads: the field lowercased, and the order
+        // ascending only on a case-insensitive "asc" and descending otherwise.
+        var order = string.Equals(query.SortOrder, "asc", StringComparison.OrdinalIgnoreCase)
+            ? "asc"
+            : "desc";
+        var sortPart = $"_sort_{query.SortBy?.ToLowerInvariant() ?? ""}_{order}";
+
+        return $"{GamesByStatusCacheKeyPrefix}{statusPart}{recruitingPart}{closedReasonPart}" +
+            $"{sortPart}_take_{query.Take}";
     }
 
     /// <summary>

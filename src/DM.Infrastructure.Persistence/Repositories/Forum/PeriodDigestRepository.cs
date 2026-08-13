@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Abstractions;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,8 +14,13 @@ namespace DM.Infrastructure.Persistence.Repositories.Forum;
 internal class PeriodDigestRepository : IPeriodDigestRepository
 {
     private readonly DmDbContext _dbContext;
+    private readonly IGuidFactory _guidFactory;
 
-    public PeriodDigestRepository(DmDbContext dbContext) => _dbContext = dbContext;
+    public PeriodDigestRepository(DmDbContext dbContext, IGuidFactory guidFactory)
+    {
+        _dbContext = dbContext;
+        _guidFactory = guidFactory;
+    }
 
     /// <inheritdoc />
     public Task<bool> DigestExists(int year, int? month, CancellationToken cancellationToken = default) =>
@@ -39,7 +45,7 @@ internal class PeriodDigestRepository : IPeriodDigestRepository
 
             _dbContext.PeriodDigestTopics.Add(new PeriodDigestTopic
             {
-                PeriodDigestTopicId = Guid.NewGuid(),
+                PeriodDigestTopicId = _guidFactory.Create(),
                 Year = year,
                 Month = month,
                 TopicId = topicId,

@@ -49,8 +49,8 @@ public class CreateWebsiteTestimonialRequest
     /// <summary>
     /// Testimonial text content (10-1000 characters, plain text, positive only)
     /// </summary>
-    [Required(ErrorMessage = "Testimonial text is required")]
-    [StringLength(1000, MinimumLength = 10, ErrorMessage = "Testimonial text must be between 10 and 1000 characters")]
+    [Required(ErrorMessage = "Введите текст отзыва")]
+    [StringLength(1000, MinimumLength = 10, ErrorMessage = "Отзыв от 10 до 1000 символов")]
     public string Text { get; set; } = string.Empty;
 }
 
@@ -62,6 +62,6 @@ public class UpdateWebsiteTestimonialRequest
     /// <summary>
     /// Updated testimonial text (10-1000 characters, plain text, positive only)
     /// </summary>
-    [StringLength(1000, MinimumLength = 10, ErrorMessage = "Testimonial text must be between 10 and 1000 characters")]
+    [StringLength(1000, MinimumLength = 10, ErrorMessage = "Отзыв от 10 до 1000 символов")]
     public string? Text { get; set; }
 }

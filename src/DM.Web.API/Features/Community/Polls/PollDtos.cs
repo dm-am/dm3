@@ -98,34 +98,34 @@ public class CreatePollRequest
     /// Poll question/title (5-500 characters)
     /// </summary>
     /// <example>What's your favorite programming language?</example>
-    [Required(ErrorMessage = "Title is required")]
-    [StringLength(500, MinimumLength = 5, ErrorMessage = "Title must be between 5 and 500 characters")]
+    [Required(ErrorMessage = "Введите заголовок")]
+    [StringLength(500, MinimumLength = 5, ErrorMessage = "Заголовок от 5 до 500 символов")]
     public string Title { get; set; } = "";
 
     /// <summary>
     /// Optional description/details for the poll (max 1000 characters)
     /// </summary>
-    [StringLength(1000, ErrorMessage = "Details cannot exceed 1000 characters")]
+    [StringLength(1000, ErrorMessage = "Описание не длиннее 1000 символов")]
     public string? Details { get; set; }
 
     /// <summary>
     /// Poll start date and time (UTC)
     /// </summary>
-    [Required(ErrorMessage = "Start date is required")]
+    [Required(ErrorMessage = "Укажите дату начала")]
     public DateTimeOffset StartsUtc { get; set; }
 
     /// <summary>
     /// Poll end date and time (UTC)
     /// </summary>
-    [Required(ErrorMessage = "End date is required")]
+    [Required(ErrorMessage = "Укажите дату окончания")]
     public DateTimeOffset EndsUtc { get; set; }
 
     /// <summary>
     /// Answer options (2-10 options required)
     /// </summary>
-    [Required(ErrorMessage = "Options are required")]
-    [MinLength(2, ErrorMessage = "At least 2 options are required")]
-    [MaxLength(10, ErrorMessage = "Maximum 10 options allowed")]
+    [Required(ErrorMessage = "Добавьте варианты ответа")]
+    [MinLength(2, ErrorMessage = "Нужно хотя бы два варианта ответа")]
+    [MaxLength(10, ErrorMessage = "Не больше десяти вариантов ответа")]
     public List<string> Options { get; set; } = new();
 
     /// <summary>
@@ -142,13 +142,13 @@ public class UpdatePollRequest
     /// <summary>
     /// Updated poll title (5-500 characters, optional)
     /// </summary>
-    [StringLength(500, MinimumLength = 5, ErrorMessage = "Title must be between 5 and 500 characters")]
+    [StringLength(500, MinimumLength = 5, ErrorMessage = "Заголовок от 5 до 500 символов")]
     public string? Title { get; set; }
 
     /// <summary>
     /// Updated description/details (max 1000 characters, optional)
     /// </summary>
-    [StringLength(1000, ErrorMessage = "Details cannot exceed 1000 characters")]
+    [StringLength(1000, ErrorMessage = "Описание не длиннее 1000 символов")]
     public string? Details { get; set; }
 
     /// <summary>

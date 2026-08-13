@@ -64,10 +64,12 @@ internal class AchievementRepository : IAchievementRepository
 
     public async Task<IReadOnlyCollection<AchievementType>> GetTypesAsync(bool includeInactive, CancellationToken ct = default)
     {
-        var query = _db.AchievementTypes
-            .AsNoTracking()
-            .Include(t => t.Category)
-            .AsQueryable();
+        // No Include: the projection below reads the category through the
+        // mapping, and the two filters over it join it anyway. Left in, it was a
+        // line that changed neither the SQL nor the result - which is the worst
+        // kind, because the next reader takes it for the thing that makes the
+        // category available.
+        var query = _db.AchievementTypes.AsNoTracking();
         if (!includeInactive) query = query.Where(t => t.Category.IsActive);
         return await query
             .OrderBy(t => t.Category.SortOrder)

@@ -4,6 +4,7 @@ using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Blog.Authorization;
 using DM.Domain.Blog.Features.Blogs;
+using DM.Domain.Blog.Features.Subscriptions;
 using BlogDto = DM.Domain.Blog.Features.Blogs.Blog;
 using DM.Domain.Blog.Features.Invitations;
 using DM.Domain.Core.Abstractions;
@@ -30,6 +31,7 @@ public class BlogInvitationServiceShould : UnitTestBase
     private readonly Mock<IBlogInvitationRepository> _repository;
     private readonly Mock<IIntentionManager> _intentionManager;
     private readonly Mock<IBlogService> _blogService;
+    private readonly Mock<IBlogSubscriptionService> _subscriptionService;
     private readonly Mock<IUserLookupService> _userLookupService;
     private readonly Mock<IUserBlacklistChecker> _userBlacklistChecker;
     private readonly Mock<IEventProducer> _eventProducer;
@@ -43,6 +45,7 @@ public class BlogInvitationServiceShould : UnitTestBase
         _repository = Mock<IBlogInvitationRepository>();
         _intentionManager = Mock<IIntentionManager>();
         _blogService = Mock<IBlogService>();
+        _subscriptionService = Mock<IBlogSubscriptionService>();
         _userLookupService = Mock<IUserLookupService>();
         _userBlacklistChecker = Mock<IUserBlacklistChecker>();
         _eventProducer = Mock<IEventProducer>();
@@ -59,6 +62,7 @@ public class BlogInvitationServiceShould : UnitTestBase
             _repository.Object,
             _intentionManager.Object,
             _blogService.Object,
+            _subscriptionService.Object,
             _userLookupService.Object,
             _userBlacklistChecker.Object,
             _eventProducer.Object,
@@ -199,6 +203,40 @@ public class BlogInvitationServiceShould : UnitTestBase
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
+    /// A reader invitation is redeemed past the public subscription door.
+    /// </summary>
+    /// <remarks>
+    /// BlogService.Subscribe refuses a blog whose drafts are private, which is
+    /// precisely the blog an invitation exists for: routed through it, the only
+    /// path that redeems a reader invitation answered the invited user 403, and
+    /// the invitation could never be accepted at all. The game side redeems its
+    /// own reader invitation past its own public door for the same reason.
+    /// </remarks>
+    [Fact]
+    public async Task SubscribeTheReaderWithoutThePublicDoor()
+    {
+        var tokenId = Guid.NewGuid();
+        var blogId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var invitation = new BlogInvitation
+        {
+            TokenId = tokenId,
+            BlogId = blogId,
+            InvitedUser = new GeneralUser { UserId = userId },
+            TargetRole = BlogRole.Reader,
+            ExpiresUtc = DateTimeOffset.UtcNow.AddDays(30)
+        };
+
+        _identityProvider.Setup(p => p.Current).Returns(CreateAuthenticatedIdentity(userId));
+        _repository.Setup(r => r.GetInvitation(tokenId, default)).ReturnsAsync(invitation);
+
+        await _service.AcceptInvitation(tokenId);
+
+        _subscriptionService.Verify(s => s.SubscribeAsync(blogId, default), Times.Once);
+        _blogService.Verify(s => s.Subscribe(It.IsAny<Guid>(), default), Times.Never);
     }
 
     [Fact]

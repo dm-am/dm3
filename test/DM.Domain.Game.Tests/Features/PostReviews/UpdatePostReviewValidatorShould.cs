@@ -47,6 +47,6 @@ public class UpdatePostReviewValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(r => r.ReviewId)
-            .WithErrorMessage("Review ID is required");
+            .WithErrorMessage("Укажите рецензию");
     }
 }

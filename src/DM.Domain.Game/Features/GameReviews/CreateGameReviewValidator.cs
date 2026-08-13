@@ -11,12 +11,12 @@ internal class CreateGameReviewValidator : AbstractValidator<CreateGameReview>
     {
         RuleFor(x => x.GameId)
             .NotEmpty()
-            .WithMessage("Game ID is required");
+            .WithMessage("Укажите игру");
 
         RuleFor(x => x.Text)
             .NotEmpty()
-            .WithMessage("Review text is required")
+            .WithMessage("Введите текст рецензии")
             .MaximumLength(5000)
-            .WithMessage("Review text must not exceed 5000 characters");
+            .WithMessage("Рецензия не длиннее 5000 символов");
     }
 }

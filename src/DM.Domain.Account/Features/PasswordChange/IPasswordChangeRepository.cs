@@ -15,14 +15,23 @@ public interface IPasswordChangeRepository
     Task<AuthenticatedUser?> FindUser(string username);
 
     /// <summary>
-    /// Find user by token
+    /// Find the user a live reset secret belongs to
     /// </summary>
-    Task<AuthenticatedUser?> FindUser(Guid tokenId);
+    /// <remarks>
+    /// Takes the value from the letter, not a row identifier: the row keeps only a
+    /// hash of it. Type, removal and age are checked inside — the invariant used to
+    /// depend on a validator having run first.
+    /// </remarks>
+    /// <param name="secret">Value from the confirmation link</param>
+    /// <param name="createdSince">Oldest moment a token may have been issued at</param>
+    Task<AuthenticatedUser?> FindUser(Guid secret, DateTimeOffset createdSince);
 
     /// <summary>
-    /// Check if token is valid
+    /// Whether a reset secret is live
     /// </summary>
-    Task<bool> TokenValid(Guid tokenId, DateTimeOffset createdSince);
+    /// <param name="secret">Value from the confirmation link</param>
+    /// <param name="createdSince">Oldest moment a token may have been issued at</param>
+    Task<bool> TokenValid(Guid secret, DateTimeOffset createdSince);
 
     /// <summary>
     /// Save user password changes
@@ -30,6 +39,6 @@ public interface IPasswordChangeRepository
     /// <param name="userId">User identifier</param>
     /// <param name="passwordHash">New password hash</param>
     /// <param name="salt">New password salt</param>
-    /// <param name="tokenIdToInvalidate">Optional token to mark as removed</param>
-    Task UpdatePassword(Guid userId, string passwordHash, string salt, Guid? tokenIdToInvalidate);
+    /// <param name="secretToInvalidate">Optional reset secret to spend</param>
+    Task UpdatePassword(Guid userId, string passwordHash, string salt, Guid? secretToInvalidate);
 }

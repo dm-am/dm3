@@ -33,6 +33,9 @@ public class AuthenticationServiceShould : UnitTestBase
     private readonly Mock<IEventProducer> _eventProducer;
     private readonly AuthenticationService _service;
 
+    private static readonly Guid _userId = Guid.Parse("7b1c2d3e-4f50-4a61-8b72-9c83d4e5f607");
+    private static readonly Guid _sessionId = Guid.Parse("1a2b3c4d-5e6f-4071-8293-a4b5c6d7e8f9");
+
     public AuthenticationServiceShould()
     {
         _securityManager = Mock<ISecurityManager>();
@@ -48,7 +51,9 @@ public class AuthenticationServiceShould : UnitTestBase
         var config = Options.Create(new AuthenticationConfiguration
         {
             SessionRefreshMinutes = 60,
-            ActivityTrackingMinutes = 5
+            ActivityTrackingMinutes = 5,
+            SessionExpirationHours = 24,
+            PersistentSessionExpirationDays = 365
         });
 
         _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
@@ -324,9 +329,14 @@ public class AuthenticationServiceShould : UnitTestBase
         _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
         _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
         // Everything a successful login needs is stubbed, a matching password
-        // included: what stops the robot in production is the empty salt and hash
-        // the seed writes, and the refusal has to hold without them
-        _securityManager.Setup(s => s.ComparePasswords("password", user.Salt, user.PasswordHash))
+        // included: what stops the robot is the check on its role, and the refusal
+        // has to hold with the credentials of a real account behind it.
+        //
+        // Any arguments, because the actor is deliberately hashed against the
+        // decoy rather than against its own columns - the seed leaves those empty,
+        // and the hash exists to spend the time, not to ask a question.
+        _securityManager
+            .Setup(s => s.ComparePasswords(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .Returns(true);
         _sessionFactory.Setup(f => f.Create(true, null))
             .Returns(new CreateSession { Id = Guid.NewGuid() });
@@ -342,6 +352,13 @@ public class AuthenticationServiceShould : UnitTestBase
         // the one account that exists but can never be logged into
         result.Error.Should().Be(AuthenticationError.WrongPassword);
         _repository.Verify(r => r.AddSession(It.IsAny<Guid>(), It.IsAny<CreateSession>()), Times.Never);
+
+        // And it pays for the refusal like every other refusal does. Short-circuited
+        // on the role, this answer came back some hundred and fifty milliseconds
+        // before any other and named the robot's address by that alone.
+        _securityManager.Verify(
+            s => s.ComparePasswords(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Once);
     }
 
     [Fact]
@@ -583,5 +600,84 @@ public class AuthenticationServiceShould : UnitTestBase
         var thrown = await Assert.ThrowsAsync<HttpException>(
             () => _service.TerminateSession(otherUserId, sessionId));
         thrown.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+    /// <summary>
+    /// A session has a last day, and refreshing it does not move that day.
+    /// </summary>
+    /// <remarks>
+    /// The sliding window extended the session from its own expiry, so a token used
+    /// once a week never expired at all: the account it belongs to could be renamed,
+    /// have its password changed and be forgotten, and the token would still open a
+    /// session. The ceiling is the lifetime the session was issued with, counted from
+    /// issue - which is a number the configuration already states rather than a third
+    /// one nobody chose.
+    /// </remarks>
+    [Fact]
+    public async Task RefreshASessionNoFurtherThanTheDayItWasIssuedFor()
+    {
+        var now = new DateTimeOffset(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
+        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+
+        // Issued 23 hours ago against a 24 hour lifetime and inside the refresh
+        // window: an unbounded slide would push it half an hour past the ceiling.
+        var session = new Session
+        {
+            Id = _sessionId,
+            CreatedUtc = now.AddHours(-23),
+            ExpirationUtc = now.AddMinutes(30),
+            Persistent = false,
+        };
+
+        await AuthenticateWith(session);
+
+        _repository.Verify(
+            r => r.RefreshSession(_userId, _sessionId, session.CreatedUtc.AddHours(24)),
+            Times.Once,
+            "the ceiling is the lifetime it was issued with, counted from issue");
+    }
+
+    [Fact]
+    public async Task StopRefreshingASessionThatHasReachedItsCeiling()
+    {
+        var now = new DateTimeOffset(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
+        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+
+        // Already at the ceiling: every request of the last window would otherwise
+        // write the same value again.
+        var session = new Session
+        {
+            Id = _sessionId,
+            CreatedUtc = now.AddHours(-23),
+            ExpirationUtc = now.AddHours(-23).AddHours(24),
+            Persistent = false,
+        };
+
+        await AuthenticateWith(session);
+
+        _repository.Verify(
+            r => r.RefreshSession(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<DateTimeOffset>()),
+            Times.Never);
+    }
+
+    /// <summary>Runs token authentication against a session and nothing else.</summary>
+    private async Task AuthenticateWith(Session session)
+    {
+        var user = new AuthenticatedUser
+        {
+            UserId = _userId,
+            Username = "reader",
+            Role = UserRole.RegularUser,
+            LastActivityUtc = session.CreatedUtc,
+        };
+
+        _repository.Setup(r => r.FindUser(_userId)).ReturnsAsync(user);
+        _repository.Setup(r => r.FindUserSession(_userId, _sessionId)).ReturnsAsync(session);
+        _repository.Setup(r => r.FindUserSettings(_userId)).ReturnsAsync(UserSettings.Default);
+        _cryptoService
+            .Setup(c => c.Decrypt(It.IsAny<string>()))
+            .ReturnsAsync(
+                "{\"userId\":\"" + _userId + "\",\"sessionId\":\"" + _sessionId + "\"}");
+
+        await _service.Authenticate("token");
     }
 }

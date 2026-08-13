@@ -14,17 +14,7 @@ public class MessagingModule : Module
     /// <inheritdoc />
     protected override void Load(ContainerBuilder builder)
     {
-        builder.Register(ctx =>
-            {
-                var parameters = ctx.Resolve<IOptions<RabbitMqConfiguration>>().Value;
-                return new ConnectionFactory
-                {
-                    Endpoint = new AmqpTcpEndpoint(new Uri(parameters.Endpoint)),
-                    UserName = parameters.Username,
-                    Password = parameters.Password,
-                    VirtualHost = parameters.VirtualHost,
-                };
-            })
+        builder.Register(ctx => ctx.Resolve<IOptions<RabbitMqConfiguration>>().Value.CreateConnectionFactory())
             .As<IAsyncConnectionFactory>()
             .SingleInstance();
 

@@ -124,7 +124,7 @@ internal class UserService : IUserService
     {
         var normalizedUsername = username.ToLowerInvariant();
         var user = await _cache.GetOrCreateAsync(
-            $"user_details_{normalizedUsername}",
+            CacheKeys.UserDetails(normalizedUsername),
             () => _repository.GetUserDetailsAsync(username),
             CachePolicy.Medium);
 
@@ -140,7 +140,7 @@ internal class UserService : IUserService
     public async Task<UserDetails> GetDetailsAsync(Guid userId)
     {
         var user = await _cache.GetOrCreateAsync(
-            $"user_details_{userId}",
+            CacheKeys.UserDetails(userId),
             () => _repository.GetUserDetailsAsync(userId),
             CachePolicy.Medium);
 
@@ -151,13 +151,6 @@ internal class UserService : IUserService
 
         return user;
     }
-
-    /// <inheritdoc />
-    public Task<IEnumerable<GeneralUser>> GetByRoleAsync(UserRole role) =>
-        _cache.GetOrCreateAsync(
-            $"users_by_role_{role}",
-            () => _repository.GetUsersByRoleAsync(role),
-            CachePolicy.LongLived);
 
     /// <inheritdoc />
     public Task<IReadOnlyCollection<UsernameHistoryEntry>> GetUsernameHistoryAsync(Guid userId) =>
@@ -253,8 +246,8 @@ internal class UserService : IUserService
         await _repository.UpdateUser(userEntityUpdate, settingsEntityUpdate);
 
         // Invalidate cache for both username and userId lookups
-        await _cache.InvalidateAsync($"user_details_{updateUser.Username.ToLowerInvariant()}");
-        await _cache.InvalidateAsync($"user_details_{user.UserId}");
+        await _cache.InvalidateAsync(CacheKeys.UserDetails(updateUser.Username));
+        await _cache.InvalidateAsync(CacheKeys.UserDetails(user.UserId));
 
         return await GetDetailsAsync(updateUser.Username);
     }
@@ -271,8 +264,8 @@ internal class UserService : IUserService
         // Best-effort cleanup (S3 + DB cleanup is done by the background GC worker).
         await _uploadsCleanup.CollectObsoleteAsync(userId, UploadType.UserAvatar);
 
-        await _cache.InvalidateAsync($"user_details_{userId}");
-        await _cache.InvalidateAsync($"user_{user.Username}");
+        await _cache.InvalidateAsync(CacheKeys.UserDetails(userId));
+        await _cache.InvalidateAsync(CacheKeys.UserDetails(user.Username));
 
         // Push to open tabs — the avatar is now null/default.
         await _avatarBroadcaster.BroadcastAvatarChangedAsync(userId);

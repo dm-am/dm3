@@ -90,7 +90,7 @@ internal class GameCommentService : IGameCommentService
     }
 
     /// <inheritdoc />
-    public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid gameId, GameCommentsQuery query,
+    public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid gameId, CommentsQuery query,
         IReadOnlyCollection<Guid>? excludeUserIds = null)
     {
         var game = await _gameService.GetAsync(gameId);
@@ -148,7 +148,8 @@ internal class GameCommentService : IGameCommentService
         {
             CommentId = updateComment.CommentId,
             Text = text,
-            ModifiedUtc = _dateTimeProvider.Now
+            ModifiedUtc = _dateTimeProvider.Now,
+            EditorUserId = currentUser.UserId
         };
 
         var updatedComment = await _repository.Update(entity);

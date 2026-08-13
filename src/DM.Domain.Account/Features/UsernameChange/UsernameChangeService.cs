@@ -227,8 +227,11 @@ internal partial class UsernameChangeService : IUsernameChangeService
         if (!usernameAvailable || usernameReserved)
             throw new HttpException(HttpStatusCode.Conflict, "Имя недоступно");
 
-        // Record history
-        await _historyRepository.Add(new CreateUsernameHistory
+        // The history row, the new name and the resolved request go in together.
+        // Written one at a time, a refusal in between left a rename half applied -
+        // and, worst of the three, a renamed user whose request was still pending,
+        // which is one approval spent on two renames.
+        var history = new CreateUsernameHistory
         {
             UsernameHistoryId = _guidFactory.Create(),
             UserId = request.UserId,
@@ -236,18 +239,14 @@ internal partial class UsernameChangeService : IUsernameChangeService
             NewUsername = newUsername,
             ChangedUtc = now,
             ApprovedById = request.ResolvedByUserId
-        });
+        };
 
-        // Update user's username
-        await _repository.UpdateUserUsername(request.UserId, newUsername);
-
-        // Update request
         request.RequestedUsername = newUsername;
         request.Status = UsernameChangeRequestStatus.Completed;
         request.ApprovalToken = null; // Invalidate token
         request.UserUsername = newUsername; // Update the local copy for MapToEntry
 
-        await _repository.Update(request);
+        await _repository.ApplyRename(request, history);
 
         return MapToEntry(request);
     }
@@ -283,8 +282,8 @@ internal partial class UsernameChangeService : IUsernameChangeService
 
         var now = _dateTimeProvider.Now;
 
-        // Record the rollback in history
-        await _historyRepository.Add(new CreateUsernameHistory
+        // The same three rows as the rename above, and together for the same reason.
+        var rollback = new CreateUsernameHistory
         {
             UsernameHistoryId = _guidFactory.Create(),
             UserId = request.UserId,
@@ -292,10 +291,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
             NewUsername = previousUsername,
             ChangedUtc = now,
             ApprovedById = currentUser.UserId
-        });
-
-        // Update username back to previous
-        await _repository.UpdateUserUsername(request.UserId, previousUsername);
+        };
 
         // Mark request as rejected (rolled back)
         request.Status = UsernameChangeRequestStatus.Rejected;
@@ -303,7 +299,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
             $" | Откат модератором {currentUser.Username}: имя '{currentUsername}' отменено";
         request.UserUsername = previousUsername; // Update local copy for MapToEntry
 
-        await _repository.Update(request);
+        await _repository.ApplyRename(request, rollback);
 
         return MapToEntry(request);
     }

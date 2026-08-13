@@ -23,10 +23,17 @@ import AccountActivationPage from "./AccountActivationPage.vue";
 import PasswordResetPage from "./PasswordResetPage.vue";
 
 vi.mock("vue-router", () => ({
-  useRoute: () => ({ params: { token: "a-token" }, query: {} }),
+  useRoute: () => ({ params: {}, query: {} }),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   RouterLink: { template: "<a><slot /></a>" },
 }));
+
+// The value arrives in the fragment rather than in the path: a fragment is never
+// sent to a server, so it is in no access log and in no Referer. The pages read it
+// through readConfirmationToken, which also clears it from the address.
+beforeEach(() => {
+  window.location.hash = "#token=a-token";
+});
 
 /** A request that never settles: the page stays in the state under test. */
 const pending = () => new Promise(() => {}) as never;

@@ -1,6 +1,7 @@
 ﻿<script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRouter } from "vue-router";
+import { readConfirmationToken } from "@/shared/lib/utils/confirmationToken";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useAuthStore, UsernameInput, accountApi } from "@/entities/user";
 
@@ -21,7 +22,6 @@ type ActivationPhase =
   | "submitting"
   | "success";
 
-const route = useRoute();
 const router = useRouter();
 const toast = useToast();
 const userStore = useAuthStore();
@@ -59,7 +59,10 @@ const canSubmit = computed(() => {
 });
 
 onMounted(async () => {
-  token.value = route.params.token as string;
+  // The value arrives in the fragment and is cleared from the address as it is
+  // read: in the path it went into browser history and into the access log of
+  // the edge, for a value that is the single factor of the confirmation.
+  token.value = readConfirmationToken();
 
   if (!token.value) {
     phase.value = "notFound";

@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Tokens;
 using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Account.Configuration;
@@ -70,7 +71,8 @@ internal class EmailChangeService : IEmailChangeService
         await _repository.RequestChange(user.UserId, emailChange.Email, token);
 
         // Send confirmation to NEW email
-        await _mailSender.Send(emailChange.Email, emailChange.Username, token.TokenId);
+        // Secret, not TokenId — see ConfirmationSecret.
+        await _mailSender.Send(emailChange.Email, emailChange.Username, token.Secret);
 
         // Security: send warning to OLD email about the change request
         // This helps detect account takeover attempts

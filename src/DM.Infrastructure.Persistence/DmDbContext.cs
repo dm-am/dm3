@@ -1,6 +1,12 @@
+using System.Linq;
+using DM.Infrastructure.Core.Parsing;
+using DM.Infrastructure.Persistence.Repositories.Search;
+using System.Threading.Tasks;
+using System.Threading;
 using System;
 using System.Linq.Expressions;
 using DM.Domain.Core.Configuration;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Entities.Blog;
 using DM.Infrastructure.Persistence.Entities.Shared;
@@ -28,6 +34,69 @@ namespace DM.Infrastructure.Persistence;
 public class DmDbContext : DbContext
 {
     /// <inheritdoc />
+    /// <summary>
+    /// The bodies whose visible text is projected beside them, and where each one
+    /// keeps that body.
+    /// </summary>
+    /// <remarks>
+    /// A table rather than an interface on the entities: what makes a property the
+    /// searchable body of a row is what it means, and the surface it is displayed
+    /// on is a fact about the feature rather than about the type. [private] is a
+    /// node of the tree only on the surfaces that declare it, so a projection made
+    /// on the wrong one leaves the block a literal and puts its contents into the
+    /// index and into every preview.
+    /// </remarks>
+    private static readonly (Type Entity, string Body, BbSurface Surface)[] ProjectedBodies =
+    [
+        (typeof(Message), nameof(Message.Text), BbSurface.GlobalChatMessage),
+        (typeof(Post), nameof(Post.GameText), BbSurface.GamePost),
+        (typeof(Topic), nameof(Topic.Text), BbSurface.Comment),
+        (typeof(Comment), nameof(Comment.Text), BbSurface.Comment),
+    ];
+
+    /// <summary>
+    /// Refreshes the projected text of everything about to be written.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than in an interceptor because the context is constructed in
+    /// five places - three hosts and two test factories - and an interceptor
+    /// forgotten in one of them leaves that path writing rows whose projection is
+    /// stale or empty, which nothing fails on and which shows up as a body that
+    /// cannot be found by its own words.
+    /// </remarks>
+    private void ProjectSearchText()
+    {
+        foreach (var (type, body, surface) in ProjectedBodies)
+        {
+            foreach (var entry in ChangeTracker.Entries().Where(e => e.Entity.GetType() == type))
+            {
+                if (entry.State != EntityState.Added &&
+                    !(entry.State == EntityState.Modified && entry.Property(body).IsModified))
+                {
+                    continue;
+                }
+
+                entry.Property("SearchText").CurrentValue =
+                    SearchTextProjection.Of(entry.Property(body).CurrentValue as string, surface);
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        ProjectSearchText();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    /// <inheritdoc />
+    public override Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        ProjectSearchText();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
     public DmDbContext(DbContextOptions options) : base(options)
     {
     }
@@ -62,6 +131,24 @@ public class DmDbContext : DbContext
             // one that does will find the extension already in place.
             modelBuilder.HasPostgresExtension("pg_trgm");
         }
+
+        #region Assistant Indexes
+
+        // A person assists a game or a blog once. The row is written when an
+        // invitation is redeemed, and redeeming it twice - two accepts of the same
+        // live link arriving together - passed the "already an assistant" read on
+        // both sides and inserted the person twice. Nothing downstream dedupes:
+        // the assistant list showed the name twice and removing them left one row
+        // behind, still holding the rights.
+        modelBuilder.Entity<GameAssistant>()
+            .HasIndex(a => new { a.GameId, a.UserId })
+            .IsUnique();
+
+        modelBuilder.Entity<BlogAssistant>()
+            .HasIndex(a => new { a.BlogId, a.UserId })
+            .IsUnique();
+
+        #endregion
 
         #region UserEndorsement Indexes
 
@@ -238,31 +325,66 @@ public class DmDbContext : DbContext
 
         #region Full-text search (PostgreSQL tsvector)
 
+        // One spelling of the expression, because four copies of it is four places
+        // for the configuration to drift and nothing compiles any of them. The
+        // dictionary itself is named beside the repositories that query these
+        // columns: it has to agree across the two, and nothing here can see them.
+        static string SearchVectorSql(string column) =>
+            $"to_tsvector('{SearchTextConfiguration.Name}', regexp_replace(coalesce(\"{column}\", ''), " +
+            $"'{PrivateBlockMarkup.BlockPattern}', ' ', 'gi'))";
+
+
         // Generated STORED tsvector columns + GIN indexes power every full-text
         // search in the system: messages and game posts (GET /v1/search/messages),
-        // forum topics and comments (GET /v1/search/forum). The Post expression
-        // strips [private=…]…[/private] blocks BEFORE indexing, so private text
-        // is never tokenized and can never be matched or previewed by anyone.
+        // forum topics and comments (GET /v1/search/forum).
+        //
+        // All four read SearchText - the visible text of the body, written beside
+        // it by SearchTextProjection. Read off the raw body instead, the index
+        // tokenised markup: a tag name was a word one could search for, and the
+        // preview built from the same string showed a reader fragments of BBCode.
+        // The regexp below strips [private=…]…[/private] before indexing and is a
+        // second lock over the projection, which already removes it: the column
+        // cannot fail, and a process can.
+        //
         // regexp_replace, setweight and explicit-config to_tsvector are all
         // IMMUTABLE, so every expression here is valid inside a generated column.
         // Shadow "SearchVector" properties keep the tsvector off the
         // domain-facing entity surface.
+        // The visible text of every indexed body, kept beside it. Declared for all
+        // providers and not only for Postgres: the in-memory store used by the unit
+        // tier has to carry the same shape, and a column that exists in one and not
+        // the other is a difference the tests cannot see.
+        modelBuilder.Entity<Message>().Property<string>("SearchText").HasDefaultValue(string.Empty);
+        modelBuilder.Entity<Post>().Property<string>("SearchText").HasDefaultValue(string.Empty);
+        modelBuilder.Entity<Topic>().Property<string>("SearchText").HasDefaultValue(string.Empty);
+        modelBuilder.Entity<Comment>().Property<string>("SearchText").HasDefaultValue(string.Empty);
+
         if (isPostgres)
         {
             modelBuilder.Entity<Message>(b =>
             {
                 b.Property<NpgsqlTsVector>("SearchVector")
-                    .HasComputedColumnSql("to_tsvector('russian', coalesce(\"Text\", ''))", stored: true);
+                    .HasComputedColumnSql(SearchVectorSql("SearchText"), stored: true);
                 b.HasIndex("SearchVector").HasMethod("gin");
             });
 
             modelBuilder.Entity<Post>(b =>
             {
+                // The pattern is the shared one, not a copy of it: the same string
+                // cuts a block out of a snippet in .NET, and a second spelling here
+                // means indexing text no preview shows — or hiding text the index
+                // holds.
+                //
+                // Cut unconditionally, although two room settings can open a private
+                // block to everyone who reads the room. A generated column sees its
+                // own row and nothing else, so honouring them would mean either a
+                // denormalised copy of the setting on every post - stale the moment
+                // the setting changes, and stale in the direction that leaves
+                // private text indexed - or a rewrite of every post in the room
+                // inside the transaction that changes it. The index stays strictly
+                // narrower than the page: never wider.
                 b.Property<NpgsqlTsVector>("SearchVector")
-                    .HasComputedColumnSql(
-                        "to_tsvector('russian', regexp_replace(coalesce(\"GameText\", ''), " +
-                        "'\\[private(=[^\\]]*)?\\][\\s\\S]*?\\[/private\\]', ' ', 'gi'))",
-                        stored: true);
+                    .HasComputedColumnSql(SearchVectorSql("SearchText"), stored: true);
                 b.HasIndex("SearchVector").HasMethod("gin").HasDatabaseName("IX_Posts_SearchVector");
             });
 
@@ -273,8 +395,8 @@ public class DmDbContext : DbContext
             {
                 b.Property<NpgsqlTsVector>("SearchVector")
                     .HasComputedColumnSql(
-                        "setweight(to_tsvector('russian', coalesce(\"Title\", '')), 'A') || " +
-                        "setweight(to_tsvector('russian', coalesce(\"Text\", '')), 'B')",
+                        $"setweight(to_tsvector('{SearchTextConfiguration.Name}', coalesce(\"Title\", '')), 'A') || " +
+                        $"setweight({SearchVectorSql("SearchText")}, 'B')",
                         stored: true);
                 b.HasIndex("SearchVector").HasMethod("gin").HasDatabaseName("IX_Topics_SearchVector");
             });
@@ -287,7 +409,7 @@ public class DmDbContext : DbContext
             modelBuilder.Entity<Comment>(b =>
             {
                 b.Property<NpgsqlTsVector>("SearchVector")
-                    .HasComputedColumnSql("to_tsvector('russian', coalesce(\"Text\", ''))", stored: true);
+                    .HasComputedColumnSql(SearchVectorSql("SearchText"), stored: true);
                 b.HasIndex("SearchVector").HasMethod("gin").HasDatabaseName("IX_Comments_SearchVector");
             });
         }
@@ -2174,6 +2296,15 @@ public class DmDbContext : DbContext
             .HasForeignKey(t => t.CreatorId)
             .IsRequired(false)
             .OnDelete(DeleteBehavior.SetNull);
+        // Every lookup of a mailed confirmation goes by this hash, and two live
+        // tokens may not share one. Filtered, because an invitation carries no
+        // secret at all: it is redeemed by the addressee while signed in, and its
+        // identifier is not a credential.
+        modelBuilder.Entity<Token>()
+            .HasIndex(t => t.SecretHash)
+            .HasDatabaseName("IX_Tokens_SecretHash")
+            .IsUnique()
+            .HasFilter("\"SecretHash\" IS NOT NULL");
         modelBuilder.Entity<Token>()
             .HasOne(t => t.DeletedBy)
             .WithMany()
@@ -2276,9 +2407,10 @@ public class DmDbContext : DbContext
                 .HasDatabaseName("IX_PendingRegistrations_Email")
                 .IsUnique();
 
-            // Fast lookup by activation token
-            entity.HasIndex(p => p.TokenId)
-                .HasDatabaseName("IX_PendingRegistrations_TokenId")
+            // Activation is looked up by the hash of the mailed secret, which is
+            // also the only form of it the row holds.
+            entity.HasIndex(p => p.SecretHash)
+                .HasDatabaseName("IX_PendingRegistrations_SecretHash")
                 .IsUnique();
 
             // For cleanup of old pending registrations (>7 days)

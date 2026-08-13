@@ -253,42 +253,84 @@ internal class BlogRepository : IBlogRepository
     }
 
     /// <inheritdoc />
-    public async Task<BlogDto?> Get(Guid blogId, CancellationToken ct = default)
+    public async Task<BlogDto?> Get(Guid blogId, Guid viewerId, CancellationToken ct = default)
     {
         // Note: Include not needed with ProjectTo - AutoMapper generates SQL subqueries
-        return await _dbContext.Blogs
+        var blog = await _dbContext.Blogs
             .TagWith("DM.Blog.Get")
             .Where(b => b.BlogId == blogId)
             // AsSplitQuery: BlogDto's Rubrics/Assistants/Tokens collections.
             .ProjectTo<BlogDto>(_mapper.ConfigurationProvider)
             .AsSplitQuery()
             .FirstOrDefaultAsync(ct);
+
+        if (blog is not null)
+        {
+            // The subscriber summary is ignored by the projection and filled only
+            // here. This read is the one every authorization decision about the
+            // blog is made on, and the reader role is IsViewerSubscriber: without
+            // this call a subscriber of a private-draft blog is indistinguishable
+            // from a stranger and cannot read the blog they were invited to. The
+            // game side fills the same field on its own single-game read for the
+            // same reason.
+            await FillSubscriberSummary(new[] { blog }, viewerId, ct);
+        }
+
+        return blog;
     }
 
     /// <inheritdoc />
-    public async Task<BlogDto?> GetByPublicId(string publicId, CancellationToken ct = default)
+    public async Task<BlogDto?> GetByPublicId(string publicId, Guid viewerId, CancellationToken ct = default)
     {
         // Note: Include not needed with ProjectTo - AutoMapper generates SQL subqueries
-        return await _dbContext.Blogs
+        var blog = await _dbContext.Blogs
             .TagWith("DM.Blog.GetByPublicId")
             .Where(b => b.PublicId == publicId)
             // AsSplitQuery: BlogDto's Rubrics/Assistants/Tokens collections.
             .ProjectTo<BlogDto>(_mapper.ConfigurationProvider)
             .AsSplitQuery()
             .FirstOrDefaultAsync(ct);
+
+        if (blog is not null)
+        {
+            // The subscriber summary is ignored by the projection and filled only
+            // here. This read is the one every authorization decision about the
+            // blog is made on, and the reader role is IsViewerSubscriber: without
+            // this call a subscriber of a private-draft blog is indistinguishable
+            // from a stranger and cannot read the blog they were invited to. The
+            // game side fills the same field on its own single-game read for the
+            // same reason.
+            await FillSubscriberSummary(new[] { blog }, viewerId, ct);
+        }
+
+        return blog;
     }
 
     /// <inheritdoc />
-    public async Task<BlogDto?> GetByOwnerUsernameAsync(string username, CancellationToken ct = default)
+    public async Task<BlogDto?> GetByOwnerUsernameAsync(string username, Guid viewerId, CancellationToken ct = default)
     {
         // Note: Include not needed with ProjectTo - AutoMapper generates SQL subqueries
-        return await _dbContext.Blogs
+        var blog = await _dbContext.Blogs
             .TagWith("DM.Blog.GetByUsername")
             .Where(b => b.Author.Username.ToLower() == username.ToLower())
             // AsSplitQuery: BlogDto's Rubrics/Assistants/Tokens collections.
             .ProjectTo<BlogDto>(_mapper.ConfigurationProvider)
             .AsSplitQuery()
             .FirstOrDefaultAsync(ct);
+
+        if (blog is not null)
+        {
+            // The subscriber summary is ignored by the projection and filled only
+            // here. This read is the one every authorization decision about the
+            // blog is made on, and the reader role is IsViewerSubscriber: without
+            // this call a subscriber of a private-draft blog is indistinguishable
+            // from a stranger and cannot read the blog they were invited to. The
+            // game side fills the same field on its own single-game read for the
+            // same reason.
+            await FillSubscriberSummary(new[] { blog }, viewerId, ct);
+        }
+
+        return blog;
     }
 
     /// <inheritdoc />
@@ -488,7 +530,10 @@ internal class BlogRepository : IBlogRepository
         _dbContext.Blogs.Add(blog);
         await _dbContext.SaveChangesAsync(ct);
 
-        return await Get(entity.BlogId, ct) ?? throw new InvalidOperationException("Blog not found after creation");
+        // The owner reads their own write, and an owner is never a subscriber of
+        // their own blog — the viewer flag this fills is false either way.
+        return await Get(entity.BlogId, entity.OwnerId, ct)
+               ?? throw new InvalidOperationException("Blog not found after creation");
     }
 
     /// <inheritdoc />
@@ -526,7 +571,9 @@ internal class BlogRepository : IBlogRepository
         blog.UpdatedUtc = entity.UpdatedUtc;
         await _dbContext.SaveChangesAsync(ct);
 
-        return await Get(entity.BlogId, ct) ?? throw new InvalidOperationException("Blog not found after update");
+        // Same as after creation: the writer reads their own write.
+        return await Get(entity.BlogId, blog.AuthorId, ct)
+               ?? throw new InvalidOperationException("Blog not found after update");
     }
 
     /// <inheritdoc />

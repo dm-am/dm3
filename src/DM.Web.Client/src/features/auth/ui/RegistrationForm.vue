@@ -71,10 +71,7 @@ const emailField = useValidatedField({
 // Password field with HIBP check
 const {
   password: newPassword,
-  hibpStatus,
   isValid: isPasswordValid,
-  onInput: onPasswordInput,
-  onBlur: onPasswordBlur,
   reset: resetPassword,
 } = useNewPasswordField();
 
@@ -322,14 +319,9 @@ const handleRecovery = () => {
             v-model="newPassword"
             id="password"
             autocomplete="new-password"
-            @input="onPasswordInput"
-            @blur="onPasswordBlur"
             @keydown.enter.prevent="submitPassword"
           />
-          <PasswordStrengthIndicator
-            :password="newPassword"
-            :hibp-status="hibpStatus"
-          />
+          <PasswordStrengthIndicator :password="newPassword" />
         </form-field>
 
         <!-- Rules consent stays locked until the rules were actually

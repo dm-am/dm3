@@ -81,11 +81,11 @@ public class NewestCommentExceptShould
         {
             "topic" => new TopicCommentRepository(context, null!, null!, null!)
                 .GetNewestCommentIdExcept(EntityId, deleted),
-            "blog" => new BlogCommentRepository(context, null!, null!)
+            "blog" => new BlogCommentRepository(context, null!, null!, null!)
                 .GetNewestCommentIdExcept(EntityId, deleted),
-            "publication" => new PublicationCommentRepository(context, null!, null!)
+            "publication" => new PublicationCommentRepository(context, null!, null!, null!)
                 .GetNewestCommentIdExcept(EntityId, deleted),
-            _ => new GameCommentRepository(context, null!)
+            _ => new GameCommentRepository(context, null!, null!)
                 .GetNewestCommentIdExcept(EntityId, deleted),
         };
 

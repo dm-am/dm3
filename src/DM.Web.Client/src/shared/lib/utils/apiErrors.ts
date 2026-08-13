@@ -1,4 +1,5 @@
 import type { BadRequestError } from "@/shared/api/models/common";
+import { readFieldError } from "@/shared/lib/errors/validationErrors";
 
 /**
  * Parse API validation errors into a normalized format.
@@ -21,11 +22,20 @@ export function parseApiErrors(
 }
 
 /**
- * Get first error message for a field, or undefined.
+ * The first thing wrong with a field, ready to show under it.
+ *
+ * This used to return the entry as it stands while a second function with the
+ * same job, one module over, translated the code into a sentence. The domain
+ * answers in codes — "Short", "Long", "Invalid" — so the difference reached the
+ * reader: one form showed a message under the field and the next showed an
+ * English word.
+ *
+ * An unknown code is returned as it stands, so a new code on the server is
+ * visible rather than hidden behind a generic phrase.
  */
 export function getFieldError(
   errors: Record<string, string[]>,
   field: string,
 ): string | undefined {
-  return errors[field.toLowerCase()]?.[0];
+  return readFieldError(errors, field);
 }

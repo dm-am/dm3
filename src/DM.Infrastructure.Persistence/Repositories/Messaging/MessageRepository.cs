@@ -326,35 +326,51 @@ internal class MessageRepository : IMessageRepository
     /// <inheritdoc />
     public async Task Delete(Guid messageId, Guid deletedByUserId, CancellationToken ct = default)
     {
-        // Get chat info before deletion
-        var messageInfo = await _dbContext.Messages
-            .Where(m => m.MessageId == messageId)
-            .Select(m => new { m.ChatId, m.Chat.LastMessageId })
-            .FirstOrDefaultAsync(ct);
-
-        // Mark message as removed
-        await _dbContext.Messages
-            .Where(m => m.MessageId == messageId)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(m => m.IsRemoved, true)
-                .SetProperty(m => m.DeletedByUserId, deletedByUserId)
-                .SetProperty(m => m.DeletedUtc, _dateTimeProvider.Now), ct);
-
-        // If this was the last message in chat, update LastMessageId
-        if (messageInfo?.LastMessageId == messageId)
+        // Both writes or neither. Separately, a refusal between them left the chat
+        // pointing at a message that is gone: the conversation shows its own deleted
+        // last line in every list, and nothing recomputes the pointer afterwards.
+        //
+        // Through the strategy because the API host configures EnableRetryOnFailure and
+        // a retrying strategy refuses a transaction opened by hand. Both reads are
+        // inside the block so a retry sees the state it is retrying against; both
+        // writes are set-based, so the change tracker takes no part.
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async cancellation =>
         {
-            // The tie-break is what matters here: ordered by CreatedUtc alone, two
-            // messages sharing the chat's last timestamp made LastMessageId whichever
-            // one the plan returned. Removed messages were already excluded — the
-            // global soft-delete filter applies to _dbContext.Messages too, so the
-            // message flagged just above was never a candidate.
-            var newLastMessageId = await OldestLast(ChatMessages(messageInfo.ChatId))
-                .Select(m => (Guid?)m.MessageId)
-                .FirstOrDefaultAsync(ct);
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellation);
 
-            await _dbContext.Chats
-                .Where(c => c.ChatId == messageInfo.ChatId)
-                .ExecuteUpdateAsync(s => s.SetProperty(c => c.LastMessageId, newLastMessageId), ct);
-        }
+            // Get chat info before deletion
+            var messageInfo = await _dbContext.Messages
+                .Where(m => m.MessageId == messageId)
+                .Select(m => new { m.ChatId, m.Chat.LastMessageId })
+                .FirstOrDefaultAsync(cancellation);
+
+            // Mark message as removed
+            await _dbContext.Messages
+                .Where(m => m.MessageId == messageId)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(m => m.IsRemoved, true)
+                    .SetProperty(m => m.DeletedByUserId, deletedByUserId)
+                    .SetProperty(m => m.DeletedUtc, _dateTimeProvider.Now), cancellation);
+
+            // If this was the last message in chat, update LastMessageId
+            if (messageInfo?.LastMessageId == messageId)
+            {
+                // The tie-break is what matters here: ordered by CreatedUtc alone, two
+                // messages sharing the chat's last timestamp made LastMessageId whichever
+                // one the plan returned. Removed messages were already excluded — the
+                // global soft-delete filter applies to _dbContext.Messages too, so the
+                // message flagged just above was never a candidate.
+                var newLastMessageId = await OldestLast(ChatMessages(messageInfo.ChatId))
+                    .Select(m => (Guid?)m.MessageId)
+                    .FirstOrDefaultAsync(cancellation);
+
+                await _dbContext.Chats
+                    .Where(c => c.ChatId == messageInfo.ChatId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.LastMessageId, newLastMessageId), cancellation);
+            }
+
+            await transaction.CommitAsync(cancellation);
+        }, ct);
     }
 }

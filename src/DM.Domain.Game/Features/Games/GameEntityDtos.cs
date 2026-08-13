@@ -626,6 +626,11 @@ public class UpdateGameCommentEntity
     /// Last edit timestamp
     /// </summary>
     public DateTimeOffset ModifiedUtc { get; set; }
+
+    /// <summary>
+    /// User performing the edit
+    /// </summary>
+    public Guid EditorUserId { get; set; }
 }
 
 /// <summary>
@@ -724,37 +729,6 @@ public class AddAssistantEntity
     /// Joined timestamp
     /// </summary>
     public DateTimeOffset JoinedUtc { get; set; }
-}
-
-/// <summary>
-/// Entity DTO for updating master (repository level)
-/// </summary>
-public class UpdateMasterEntity
-{
-    /// <summary>
-    /// Game identifier
-    /// </summary>
-    public Guid GameId { get; set; }
-
-    /// <summary>
-    /// New master user identifier
-    /// </summary>
-    public Guid NewMasterId { get; set; }
-
-    /// <summary>
-    /// Old master user identifier (becomes assistant)
-    /// </summary>
-    public Guid OldMasterId { get; set; }
-
-    /// <summary>
-    /// GameAssistant link identifier for old master (pre-generated)
-    /// </summary>
-    public Guid NewAssistantId { get; set; }
-
-    /// <summary>
-    /// When the old master became assistant
-    /// </summary>
-    public DateTimeOffset AssistantJoinedUtc { get; set; }
 }
 
 /// <summary>

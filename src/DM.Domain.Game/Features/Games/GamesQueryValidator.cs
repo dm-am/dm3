@@ -26,45 +26,45 @@ internal class GamesQueryValidator : AbstractValidator<GamesQuery>
     {
         RuleFor(q => q.Search)
             .MaximumLength(200)
-            .WithMessage("Search query must not exceed 200 characters");
+            .WithMessage("Поисковый запрос не длиннее 200 символов");
 
         // Username policy: 2-20 characters (see docs/conventions/USERNAME_POLICY.md)
         // Format validation not needed here - invalid usernames simply won't match any user
         RuleForEach(q => q.OwnerUsernames)
             .NotEmpty()
-            .WithMessage("Username cannot be empty")
+            .WithMessage("Введите имя пользователя")
             .MaximumLength(20)
             .When(q => q.OwnerUsernames != null)
-            .WithMessage("Username must not exceed 20 characters");
+            .WithMessage("Имя пользователя не длиннее 20 символов");
 
         RuleFor(q => q.PlayerUsername)
             .MaximumLength(20)
-            .WithMessage("Username must not exceed 20 characters");
+            .WithMessage("Имя пользователя не длиннее 20 символов");
 
         RuleFor(q => q.SortBy)
             .Must(BeValidSortField)
             .When(q => !string.IsNullOrEmpty(q.SortBy))
-            .WithMessage($"SortBy must be one of: {string.Join(", ", AllowedSortFields)}");
+            .WithMessage("Недопустимое поле сортировки");
 
         RuleFor(q => q.SortOrder)
             .Must(BeValidSortOrder)
             .When(q => !string.IsNullOrEmpty(q.SortOrder))
-            .WithMessage("SortOrder must be 'asc' or 'desc'");
+            .WithMessage("Порядок сортировки: asc или desc");
 
         RuleForEach(q => q.RequiredTags)
             .GreaterThan(0)
             .When(q => q.RequiredTags != null)
-            .WithMessage("Tag IDs must be positive integers");
+            .WithMessage("Метка указана неверно");
 
         RuleForEach(q => q.OptionalTags)
             .GreaterThan(0)
             .When(q => q.OptionalTags != null)
-            .WithMessage("Tag IDs must be positive integers");
+            .WithMessage("Метка указана неверно");
 
         RuleForEach(q => q.ExcludedTags)
             .GreaterThan(0)
             .When(q => q.ExcludedTags != null)
-            .WithMessage("Tag IDs must be positive integers");
+            .WithMessage("Метка указана неверно");
     }
 
     private static bool BeValidSortField(string? sortBy) =>

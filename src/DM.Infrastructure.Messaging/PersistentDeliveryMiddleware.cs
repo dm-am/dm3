@@ -11,7 +11,7 @@ namespace DM.Infrastructure.Messaging;
 /// <remarks>
 /// The client writes the body and leaves BasicProperties untouched, which leaves
 /// delivery mode at 1: the broker holds such a message in memory only. Every
-/// queue in the system is declared durable, so a restart of the broker used to
+/// queue holding work is declared durable, so a restart of the broker used to
 /// bring back the queues and none of their contents — including dm.mail.sending,
 /// where a letter is the only record that a registration confirmation is owed,
 /// and the dead-letter queue, which exists precisely so a human can look at what

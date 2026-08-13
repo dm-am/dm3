@@ -65,9 +65,10 @@ internal class RoomService : IRoomService
         var lastRoomInfo = await _repository.GetLastRoomInfo(createRoom.GameId);
         var orderNumber = (lastRoomInfo?.OrderNumber ?? 0) + 1;
 
+        var roomId = _guidFactory.Create();
         var entity = new CreateRoomEntity
         {
-            RoomId = _guidFactory.Create(),
+            RoomId = roomId,
             GameId = createRoom.GameId,
             Title = createRoom.Title.Trim(),
             Type = createRoom.Type,
@@ -78,8 +79,13 @@ internal class RoomService : IRoomService
             OrderNumber = orderNumber
         };
 
+        // Markers first, row second, commit on the line after it returns.
+        await using var counters = await _unreadCountersRepository.ReserveAsync(
+            UnreadMarker.UnderParent(roomId, game.Id, UnreadEntryType.Message));
+
         var room = await _repository.Create(entity);
-        await _unreadCountersRepository.CreateAsync(room.Id, game.Id, UnreadEntryType.Message);
+        counters.Commit();
+
         await _producer.SendAsync(EventType.NewRoom, room.Id);
 
         return room;

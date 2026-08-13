@@ -104,7 +104,8 @@ if [ "$MODE" = "server" ] && [ "$EXISTING" = 0 ]; then
     # Only on a file this run created. Rotating the passwords of a stand that is
     # already up locks the API out of stores whose users were created with the
     # old ones, so an existing file keeps whatever it holds and says so below.
-    for secret in POSTGRES_PASSWORD RABBITMQ_DEFAULT_PASS MINIO_ROOT_PASSWORD \
+    for secret in POSTGRES_PASSWORD DM_APP_PASSWORD DM_EXPORTER_PASSWORD \
+                  RABBITMQ_DEFAULT_PASS MINIO_ROOT_PASSWORD \
                   GF_SECURITY_ADMIN_PASSWORD MONGO_ROOT_PASSWORD MONGO_PASSWORD \
                   MINIO_APP_PASSWORD MINIO_IMGPROXY_PASSWORD; do
         set_value "$secret" "$(openssl rand -hex 24)"
@@ -121,6 +122,24 @@ fi
 # script said so in a note on stderr and exited 0.
 if [ "$MODE" = "server" ]; then
     set_value ASPNETCORE_ENVIRONMENT Production
+fi
+
+# The address of the mail relay is a required answer on a server, not a default.
+# Everything the site says out loud goes through it: activation, the password
+# reset, the warning sent to the old address when somebody changes the new one,
+# and every rule of alerts.yml by way of alertmanager. The compose default is
+# MailHog, which listens on loopback of the stand and is declared restart: "no",
+# so a server installed by the documented command delivered all of that into a
+# dead end - while the alerting contour looked complete. Refused rather than
+# warned about: a contour that delivers nowhere is worse than no contour, because
+# it buys confidence. There is no Watchdog rule either, so its silence is
+# indistinguishable from health.
+if [ "$MODE" = "server" ] && is_empty MAIL_HOST; then
+    echo "Error: MAIL_HOST is not set." >&2
+    echo "On a server it is the address of the mail relay: the letters of the site" >&2
+    echo "and every alert of alertmanager travel through it. Set MAIL_HOST and" >&2
+    echo "MAIL_PORT in $ENV_FILE (see docker/.env.example), then run this again." >&2
+    exit 1
 fi
 
 # Replaced rather than kept, and only on a server. Nothing is bound to this
@@ -154,7 +173,8 @@ if [ "$MODE" = "server" ]; then
     # not on the list because the template no longer carries one: it is empty
     # there, generated above, and replaced outright on a server.
     SHARED=""
-    for secret in POSTGRES_PASSWORD RABBITMQ_DEFAULT_PASS MINIO_ROOT_PASSWORD \
+    for secret in POSTGRES_PASSWORD DM_APP_PASSWORD DM_EXPORTER_PASSWORD \
+                  RABBITMQ_DEFAULT_PASS MINIO_ROOT_PASSWORD \
                   GF_SECURITY_ADMIN_PASSWORD MONGO_ROOT_PASSWORD MONGO_PASSWORD \
                   MINIO_APP_PASSWORD MINIO_IMGPROXY_PASSWORD; do
         example_value="$(sed -n "s|^${secret}=||p" "$EXAMPLE_FILE" | head -1)"

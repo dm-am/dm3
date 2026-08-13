@@ -157,6 +157,15 @@ public sealed record TopicUpdateResult(Topic Topic, bool Changed);
 public class CreateTopicEntity
 {
     /// <summary>
+    /// Identifier of the topic to be created
+    /// </summary>
+    /// <remarks>
+    /// Minted by the caller, because the unread markers of the topic are written
+    /// before the row is — see UnreadCountersReservation for why that way round.
+    /// </remarks>
+    public required Guid TopicId { get; init; }
+
+    /// <summary>
     /// Topic title
     /// </summary>
     public string Title { get; set; } = null!;

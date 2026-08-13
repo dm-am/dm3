@@ -16,18 +16,18 @@ namespace DM.Domain.Core.UnreadCounters;
 /// overload created the marker.
 /// </para>
 /// <para>
-/// The two-argument <see cref="CreateAsync(Guid,Guid,UnreadEntryType)" /> takes
+/// The two-argument <see cref="CreateMarkerAsync(Guid,Guid,UnreadEntryType)" /> takes
 /// it explicitly and gets a container: a topic is parented by its board, a room
 /// by its game, a publication by its blog. Those markers are anonymous — one per
 /// entity, shared by every reader who has not opened it yet — and a
 /// parent-scoped read means "how much is unread in this board".
 /// </para>
 /// <para>
-/// The three-argument <see cref="CreateAsync(Guid,UnreadEntryType,IEnumerable{Guid})" />
+/// The three-argument <see cref="CreateMarkerAsync(Guid,UnreadEntryType,IEnumerable{Guid})" />
 /// takes a list of readers instead and parents each marker by the reader
 /// themselves. A conversation has no container, so without this "all my
 /// conversations" would not be a parent-scoped read at all. The
-/// <see cref="CreateAsync(Guid,UnreadEntryType)" /> overload is the degenerate
+/// <see cref="CreateMarkerAsync(Guid,UnreadEntryType)" /> overload is the degenerate
 /// case: the entity is its own parent.
 /// </para>
 /// <para>
@@ -46,7 +46,7 @@ public interface IUnreadCountersRepository
     /// <param name="entityId">Entity Id</param>
     /// <param name="entryType">Entry type</param>
     /// <param name="userIds">User Ids</param>
-    Task CreateAsync(Guid entityId, UnreadEntryType entryType, IEnumerable<Guid> userIds);
+    Task CreateMarkerAsync(Guid entityId, UnreadEntryType entryType, IEnumerable<Guid> userIds);
 
     /// <summary>
     /// Create a counter for the entity
@@ -54,20 +54,34 @@ public interface IUnreadCountersRepository
     /// <param name="entityId">Entity Id</param>
     /// <param name="parentId">Parent entity Id</param>
     /// <param name="entryType">Entry type</param>
-    Task CreateAsync(Guid entityId, Guid parentId, UnreadEntryType entryType);
+    Task CreateMarkerAsync(Guid entityId, Guid parentId, UnreadEntryType entryType);
 
     /// <summary>
     /// Create a counter for the entity without parent
     /// </summary>
     /// <param name="entityId">Entity id</param>
     /// <param name="entryType">Entry type</param>
-    Task CreateAsync(Guid entityId, UnreadEntryType entryType);
+    Task CreateMarkerAsync(Guid entityId, UnreadEntryType entryType);
 
     /// <summary>
     /// Increment counter of the entity for every user
     /// </summary>
     /// <param name="entityId">Entity Id</param>
     /// <param name="entryType">Entry type</param>
+    /// <remarks>
+    /// Does not throw. Every caller reaches the three adjusting writes after its
+    /// own write has been committed, and no transaction spans the two stores, so
+    /// an exception here would answer a caller with a failure for work that was
+    /// in fact done - leaving the reader looking at their own post beside an
+    /// error saying it was not saved, and a retry writing it twice. A lost count
+    /// is the smaller and bounded loss: the badge is derived, and one "mark as
+    /// read" resets it. The failure is counted and logged rather than raised.
+    ///
+    /// The creating and removing writes do throw, and are meant to: a marker that
+    /// was never created is not a wrong number, it is an entity nobody counts at
+    /// all, and their order against the relational write is what lets that
+    /// failure arrive while the row can still be rolled back.
+    /// </remarks>
     Task IncrementAsync(Guid entityId, UnreadEntryType entryType);
 
     /// <summary>
@@ -76,6 +90,7 @@ public interface IUnreadCountersRepository
     /// <param name="entityId">Entity Id</param>
     /// <param name="entryType">Entry type</param>
     /// <param name="excludeUserId">User Id to exclude from increment</param>
+    /// <remarks><inheritdoc cref="IncrementAsync" path="/remarks" /></remarks>
     Task IncrementExcludingAsync(Guid entityId, UnreadEntryType entryType, Guid excludeUserId);
 
     /// <summary>
@@ -84,6 +99,7 @@ public interface IUnreadCountersRepository
     /// <param name="entityId">Entity Id</param>
     /// <param name="entryType">Entry type</param>
     /// <param name="createDate">Given time</param>
+    /// <remarks><inheritdoc cref="IncrementAsync" path="/remarks" /></remarks>
     Task DecrementAsync(Guid entityId, UnreadEntryType entryType, DateTimeOffset createDate);
 
     /// <summary>
@@ -97,7 +113,7 @@ public interface IUnreadCountersRepository
     /// Remove the counters of one entity for certain users
     /// </summary>
     /// <remarks>
-    /// The mirror of the three-argument <see cref="CreateAsync(Guid,UnreadEntryType,IEnumerable{Guid})" />,
+    /// The mirror of the three-argument <see cref="CreateMarkerAsync(Guid,UnreadEntryType,IEnumerable{Guid})" />,
     /// and the half of the lifecycle that was missing. A person can be counted
     /// into an entity two ways and counted out of it none: removed from a group
     /// chat, their marker went on being incremented by every message in a

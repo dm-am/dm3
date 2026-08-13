@@ -75,8 +75,8 @@ public class CreateMessageInput
     /// <summary>
     /// Message text content (BBCode)
     /// </summary>
-    [Required(ErrorMessage = "Message text is required")]
-    [StringLength(10000, MinimumLength = 1, ErrorMessage = "Message text must be between 1 and 10000 characters")]
+    [Required(ErrorMessage = "Введите текст сообщения")]
+    [StringLength(10000, MinimumLength = 1, ErrorMessage = "Сообщение от 1 до 10000 символов")]
     public string Text { get; set; } = "";
 }
 
@@ -88,7 +88,7 @@ public class UpdateMessageInput
     /// <summary>
     /// Updated message text content (BBCode)
     /// </summary>
-    [Required(ErrorMessage = "Message text is required")]
-    [StringLength(10000, MinimumLength = 1, ErrorMessage = "Message text must be between 1 and 10000 characters")]
+    [Required(ErrorMessage = "Введите текст сообщения")]
+    [StringLength(10000, MinimumLength = 1, ErrorMessage = "Сообщение от 1 до 10000 символов")]
     public string Text { get; set; } = "";
 }

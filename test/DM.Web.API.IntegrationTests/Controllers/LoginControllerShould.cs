@@ -45,9 +45,10 @@ public class LoginControllerShould : IntegrationTestBase
     public async Task Login_AsCredentiallessSystemAccount_ReturnsBadRequest()
     {
         // The system author is seeded with an empty salt and hash, and the seed
-        // comment states it cannot log in. Nothing enforces that explicitly — it
-        // holds because a stored empty hash can never equal a computed one — so
-        // this pins the invariant rather than leaving it to be rediscovered.
+        // comment states it cannot log in. The refusal is written out by role in
+        // the authentication service rather than left to those two empty columns,
+        // and this pins the invariant from the outside: the columns are a row away
+        // from being filled, the role is not.
         var credentials = new { email = "system@dm.local", password = "anything123" };
         var response = await Client.PostAsJsonAsync("/v1/account/login", credentials);
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);

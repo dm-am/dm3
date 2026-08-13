@@ -68,6 +68,6 @@ public class ViolatorsQuery
     /// </remarks>
     /// <example>all</example>
     [RegularExpression("^(all|banned|points-only)$",
-        ErrorMessage = "Ban state must be one of: all, banned, points-only")]
+        ErrorMessage = "Недопустимое значение фильтра")]
     public string BanState { get; set; } = "all";
 }

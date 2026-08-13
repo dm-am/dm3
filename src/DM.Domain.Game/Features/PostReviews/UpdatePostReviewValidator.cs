@@ -11,6 +11,6 @@ internal class UpdatePostReviewValidator : AbstractValidator<UpdatePostReview>
     {
         RuleFor(r => r.ReviewId)
             .NotEmpty()
-            .WithMessage("Review ID is required");
+            .WithMessage("Укажите рецензию");
     }
 }

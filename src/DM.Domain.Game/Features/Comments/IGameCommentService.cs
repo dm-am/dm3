@@ -22,7 +22,7 @@ public interface IGameCommentService
     /// <param name="gameId">Game identifier</param>
     /// <param name="query">Query with filtering, sorting and paging</param>
     /// <param name="excludeUserIds">Optional user IDs to exclude from results</param>
-    Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid gameId, GameCommentsQuery query,
+    Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid gameId, CommentsQuery query,
         IReadOnlyCollection<Guid>? excludeUserIds = null);
 
     /// <summary>

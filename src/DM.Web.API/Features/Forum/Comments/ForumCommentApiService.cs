@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Comments;
 using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Core.Identity;

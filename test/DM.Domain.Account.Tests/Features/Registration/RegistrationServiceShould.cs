@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using DM.Domain.Core.Tokens;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -99,7 +101,8 @@ public class RegistrationServiceShould : UnitTestBase
         _repository.Verify(r => r.AddPending(It.Is<PendingRegistration>(p =>
             p.Email == registration.Email.ToLowerInvariant() &&
             p.PendingRegistrationId == pendingId &&
-            p.TokenId == tokenId &&
+            p.Secret == tokenId &&
+            p.SecretHash.SequenceEqual(ConfirmationSecret.Hash(tokenId)) &&
             p.AcceptedRules == registration.AcceptedRules
         )), Times.Once);
         _mailSender.Verify(m => m.Send(registration.Email, tokenId), Times.Once);

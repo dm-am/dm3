@@ -11,11 +11,11 @@ internal class UpdateUserEndorsementValidator : AbstractValidator<UpdateUserEndo
     {
         RuleFor(x => x.EndorsementId)
             .NotEmpty()
-            .WithMessage("Endorsement ID is required");
+            .WithMessage("Укажите рекомендацию");
 
         RuleFor(x => x.Text)
             .MaximumLength(5000)
             .When(x => !string.IsNullOrEmpty(x.Text))
-            .WithMessage("Endorsement text must not exceed 5000 characters");
+            .WithMessage("Рекомендация не длиннее 5000 символов");
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Tokens;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,10 +27,11 @@ internal class ActivationRepository : IActivationRepository
     }
 
     /// <inheritdoc />
-    public async Task<PendingRegistration?> FindPendingByToken(Guid tokenId, CancellationToken cancellationToken = default)
+    public async Task<PendingRegistration?> FindPendingByToken(Guid secret, CancellationToken cancellationToken = default)
     {
+        var hash = ConfirmationSecret.Hash(secret);
         var entity = await _dbContext.PendingRegistrations
-            .FirstOrDefaultAsync(p => p.TokenId == tokenId, cancellationToken);
+            .FirstOrDefaultAsync(p => p.SecretHash == hash, cancellationToken);
 
         if (entity == null)
             return null;
@@ -37,7 +39,7 @@ internal class ActivationRepository : IActivationRepository
         return new PendingRegistration
         {
             PendingRegistrationId = entity.PendingRegistrationId,
-            TokenId = entity.TokenId,
+            SecretHash = entity.SecretHash,
             Email = entity.Email,
             PasswordHash = entity.PasswordHash,
             Salt = entity.Salt,
@@ -65,7 +67,18 @@ internal class ActivationRepository : IActivationRepository
             LastActivityUtc = user.CreatedUtc
         };
 
-        // Use execution strategy to support NpgsqlRetryingExecutionStrategy with transactions
+        // Both writes or neither: an account created without its pending row
+        // removed can be activated a second time, and a pending row removed
+        // without its account is a registration that can never be finished and
+        // cannot be started again either - the address is taken by a row nobody
+        // can log in as.
+        //
+        // Through the strategy because the API host configures EnableRetryOnFailure,
+        // and a transaction opened outside one is retried by nothing. No tracker
+        // reset between attempts, unlike the repositories that do reset: dbUser is
+        // built above this block, so Add puts the same instance back into Added
+        // whatever a failed attempt left behind, and the pending row read below is
+        // re-read by FindAsync from the state the rollback restored.
         var strategy = _dbContext.Database.CreateExecutionStrategy();
         await strategy.ExecuteAsync(async () =>
         {

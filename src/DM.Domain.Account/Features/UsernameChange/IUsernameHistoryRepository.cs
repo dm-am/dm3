@@ -22,11 +22,6 @@ public interface IUsernameHistoryRepository : IUsernameHistoryReader
     Task<bool> IsUsernameReservedForOthers(string username, Guid excludeUserId, CancellationToken ct = default);
 
     /// <summary>
-    /// Record a username change
-    /// </summary>
-    Task Add(CreateUsernameHistory entry, CancellationToken ct = default);
-
-    /// <summary>
     /// Get the latest (most recent) username change for a user
     /// </summary>
     Task<UsernameHistoryEntry?> GetLatestByUserId(Guid userId, CancellationToken ct = default);

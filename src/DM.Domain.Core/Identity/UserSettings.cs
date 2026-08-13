@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.Identity;
@@ -36,11 +37,11 @@ public class UserSettings
     {
         Paging = new PagingSettings
         {
-            TopicsPerPage = 10,
-            CommentsPerPage = 10,
-            PostsPerPage = 10,
-            MessagesPerPage = 10,
-            EntitiesPerPage = 10
+            TopicsPerPage = PagingPolicy.DefaultPageSize,
+            CommentsPerPage = PagingPolicy.DefaultPageSize,
+            PostsPerPage = PagingPolicy.DefaultPageSize,
+            MessagesPerPage = PagingPolicy.DefaultPageSize,
+            EntitiesPerPage = PagingPolicy.DefaultPageSize
         },
         Theme = Theme.Light
     };

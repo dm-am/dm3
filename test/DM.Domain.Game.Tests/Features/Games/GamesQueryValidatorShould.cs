@@ -42,7 +42,7 @@ public class GamesQueryValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(q => q.Search)
-            .WithErrorMessage("Search query must not exceed 200 characters");
+            .WithErrorMessage("Поисковый запрос не длиннее 200 символов");
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public class GamesQueryValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor("OwnerUsernames[0]")
-            .WithErrorMessage("Username cannot be empty");
+            .WithErrorMessage("Введите имя пользователя");
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public class GamesQueryValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor("OwnerUsernames[0]")
-            .WithErrorMessage("Username must not exceed 20 characters");
+            .WithErrorMessage("Имя пользователя не длиннее 20 символов");
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public class GamesQueryValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(q => q.PlayerUsername)
-            .WithErrorMessage("Username must not exceed 20 characters");
+            .WithErrorMessage("Имя пользователя не длиннее 20 символов");
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public class GamesQueryValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(q => q.SortOrder)
-            .WithErrorMessage("SortOrder must be 'asc' or 'desc'");
+            .WithErrorMessage("Порядок сортировки: asc или desc");
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public class GamesQueryValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor("RequiredTags[0]")
-            .WithErrorMessage("Tag IDs must be positive integers");
+            .WithErrorMessage("Метка указана неверно");
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public class GamesQueryValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor("OptionalTags[0]")
-            .WithErrorMessage("Tag IDs must be positive integers");
+            .WithErrorMessage("Метка указана неверно");
     }
 
     [Fact]
@@ -139,6 +139,6 @@ public class GamesQueryValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor("ExcludedTags[0]")
-            .WithErrorMessage("Tag IDs must be positive integers");
+            .WithErrorMessage("Метка указана неверно");
     }
 }

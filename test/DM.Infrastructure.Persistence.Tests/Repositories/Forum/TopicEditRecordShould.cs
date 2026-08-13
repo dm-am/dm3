@@ -8,6 +8,8 @@ using DM.Domain.Forum.Features.Topics;
 using DM.Infrastructure.Persistence.Repositories.Forum;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.InMemory.Internal;
 using Moq;
 using Xunit;
 using DbBoard = DM.Infrastructure.Persistence.Entities.Forum.Board;
@@ -53,8 +55,13 @@ public class TopicEditRecordShould
 
     private static DmDbContext Seeded()
     {
+        // The repository writes the topic and the board summary inside one
+        // transaction, and the in-memory store has none: unsuppressed, the warning
+        // it raises about ignoring the transaction is thrown as an error. What this
+        // class asserts is which rows appear, and that is the same either way.
         var context = new DmDbContext(new DbContextOptionsBuilder<DmDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options);
 
         context.Users.AddRange(

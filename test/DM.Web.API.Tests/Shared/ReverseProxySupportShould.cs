@@ -106,18 +106,78 @@ public class ReverseProxySupportShould : UnitTestBase
             .WithMessage("*172.16.0.0*");
     }
 
-    private static async Task Handle(HttpContext context, params string[] trustedNetworks)
+    private const string PointOfPresenceAddress = "198.51.100.4";
+
+    /// <summary>
+    /// A second edge in front of the first is a second hop, and both halves of that
+    /// have to be written down.
+    /// </summary>
+    /// <remarks>
+    /// Each proxy appends the peer it saw to the header, so behind two of them the
+    /// visitor is two entries from the end. Left at one hop the application reads
+    /// the address of the nearer edge instead — one address for every visitor, which
+    /// makes the per-account rate limit a shared budget for the whole site and
+    /// writes the same address into every line of the login journal.
+    ///
+    /// The trusted entry is the address of that second edge and nothing wider: a
+    /// range covers whoever else lives in it, and the header they send is believed.
+    /// </remarks>
+    [Fact]
+    public async Task ReadThroughEveryEdgeThatWasDeclared()
+    {
+        var context = CreateContext(peerAddress: ProxyAddress,
+            forwardedFor: $"{ClientAddress}, {PointOfPresenceAddress}");
+
+        await Handle(context, 2, "172.16.0.0/12", $"{PointOfPresenceAddress}/32");
+
+        context.GetClientAddress().Should().Be(ClientAddress);
+    }
+
+    [Fact]
+    public async Task StopAtTheEdgeNobodyDeclared()
+    {
+        var context = CreateContext(peerAddress: ProxyAddress,
+            forwardedFor: $"{ClientAddress}, {PointOfPresenceAddress}");
+
+        await Handle(context, 2, "172.16.0.0/12");
+
+        context.GetClientAddress().Should().Be(PointOfPresenceAddress,
+            "an edge that is not on the list is a caller like any other, and the entry " +
+            "in front of it is whatever that caller chose to write");
+    }
+
+    [Fact]
+    public async Task BelieveNoEntryBeyondTheEdgesThatWereDeclared()
+    {
+        var context = CreateContext(peerAddress: ProxyAddress,
+            forwardedFor: $"{ForgedAddress}, {ClientAddress}, {PointOfPresenceAddress}");
+
+        await Handle(context, 2, "172.16.0.0/12", $"{PointOfPresenceAddress}/32");
+
+        context.GetClientAddress().Should().Be(ClientAddress,
+            "the count of hops is the whole of the protection: the middleware never " +
+            "reaches the entry the visitor wrote");
+    }
+
+    private static async Task Handle(HttpContext context, params string[] trustedNetworks) =>
+        await Handle(context, 1, trustedNetworks);
+
+    private static async Task Handle(HttpContext context, int proxyCount, params string[] trustedNetworks)
     {
         var middleware = new ForwardedHeadersMiddleware(
-            _ => Task.CompletedTask, NullLoggerFactory.Instance, BuildOptions(trustedNetworks));
+            _ => Task.CompletedTask, NullLoggerFactory.Instance, BuildOptions(proxyCount, trustedNetworks));
         await middleware.Invoke(context);
     }
 
-    private static IOptions<ForwardedHeadersOptions> BuildOptions(params string[] trustedNetworks)
+    private static IOptions<ForwardedHeadersOptions> BuildOptions(params string[] trustedNetworks) =>
+        BuildOptions(1, trustedNetworks);
+
+    private static IOptions<ForwardedHeadersOptions> BuildOptions(int proxyCount, params string[] trustedNetworks)
     {
         var settings = new Dictionary<string, string?>
         {
-            [$"{nameof(ReverseProxyConfiguration)}:{nameof(ReverseProxyConfiguration.ProxyCount)}"] = "1"
+            [$"{nameof(ReverseProxyConfiguration)}:{nameof(ReverseProxyConfiguration.ProxyCount)}"] =
+                proxyCount.ToString()
         };
         for (var i = 0; i < trustedNetworks.Length; i++)
         {

@@ -105,9 +105,14 @@ public class EmailChangeServiceShould : UnitTestBase
             Username = "testuser",
             Email = "old@example.com"
         };
+        // TokenId names the row and Secret goes into the letter: two different
+        // values, which is the whole point of the change.
+        var secret = Guid.NewGuid();
         var token = new CreateToken
         {
             TokenId = tokenId,
+            Secret = secret,
+            SecretHash = ConfirmationSecret.Hash(secret),
             Type = TokenType.EmailChange
         };
 
@@ -121,7 +126,8 @@ public class EmailChangeServiceShould : UnitTestBase
         _repository.Verify(r => r.InvalidateOldEmailChangeTokens(userId), Times.Once);
         _repository.Verify(r => r.RequestChange(userId, emailChange.Email, token), Times.Once,
                         "запрос кладет адрес в ожидание: аккаунт отвечает по старому, пока ссылка не открыта");
-        _mailSender.Verify(m => m.Send(emailChange.Email, emailChange.Username, tokenId), Times.Once);
+        _mailSender.Verify(m => m.Send(emailChange.Email, emailChange.Username, secret), Times.Once);
+        _mailSender.Verify(m => m.Send(emailChange.Email, emailChange.Username, tokenId), Times.Never);
         _eventProducer.Verify(e => e.SendAsync(EventType.EmailChanged, userId), Times.Once);
     }
 
@@ -141,9 +147,14 @@ public class EmailChangeServiceShould : UnitTestBase
             Username = "testuser",
             Email = "old@example.com"
         };
+        // TokenId names the row and Secret goes into the letter: two different
+        // values, which is the whole point of the change.
+        var secret = Guid.NewGuid();
         var token = new CreateToken
         {
             TokenId = tokenId,
+            Secret = secret,
+            SecretHash = ConfirmationSecret.Hash(secret),
             Type = TokenType.EmailChange
         };
 

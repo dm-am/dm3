@@ -46,17 +46,30 @@ public interface IBlogRepository
     /// <summary>
     /// Get blog by ID
     /// </summary>
-    Task<Blog?> Get(Guid blogId, CancellationToken ct = default);
+    /// <param name="blogId">Blog identifier</param>
+    /// <param name="viewerId">
+    /// The user the read is on behalf of (<see cref="Guid.Empty" /> for a guest);
+    /// every authorization decision about a private draft is made on this read,
+    /// and the reader role is <see cref="Blog.IsViewerSubscriber" />.
+    /// </param>
+    /// <param name="ct">Cancellation token</param>
+    Task<Blog?> Get(Guid blogId, Guid viewerId, CancellationToken ct = default);
 
     /// <summary>
     /// Get blog by public ID (5-letter URL identifier)
     /// </summary>
-    Task<Blog?> GetByPublicId(string publicId, CancellationToken ct = default);
+    /// <param name="publicId">Readable blog address</param>
+    /// <param name="viewerId">The user the read is on behalf of — see <see cref="Get" />.</param>
+    /// <param name="ct">Cancellation token</param>
+    Task<Blog?> GetByPublicId(string publicId, Guid viewerId, CancellationToken ct = default);
 
     /// <summary>
     /// Get blog by owner username (personal blog)
     /// </summary>
-    Task<Blog?> GetByOwnerUsernameAsync(string username, CancellationToken ct = default);
+    /// <param name="username">Owner login</param>
+    /// <param name="viewerId">The user the read is on behalf of — see <see cref="Get" />.</param>
+    /// <param name="ct">Cancellation token</param>
+    Task<Blog?> GetByOwnerUsernameAsync(string username, Guid viewerId, CancellationToken ct = default);
 
     /// <summary>
     /// Get rubrics for a blog

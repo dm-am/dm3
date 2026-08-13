@@ -46,7 +46,7 @@ public class UpdateGameReviewValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.ReviewId)
-            .WithErrorMessage("Review ID is required");
+            .WithErrorMessage("Укажите рецензию");
     }
 
     [Fact]
@@ -60,6 +60,6 @@ public class UpdateGameReviewValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Text)
-            .WithErrorMessage("Review text must not exceed 5000 characters");
+            .WithErrorMessage("Рецензия не длиннее 5000 символов");
     }
 }

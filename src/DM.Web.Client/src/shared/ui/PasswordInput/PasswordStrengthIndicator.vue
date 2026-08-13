@@ -8,13 +8,10 @@
       />
     </div>
     <!-- One line under the bar, in this order: a rule the field itself broke,
-         then the breach lookup while it is out, then the strength. The wait no
-         longer disables the submit button, so this line is the whole of what
-         the lookup shows while it waits. -->
+         then the strength. Breaches are not among them - the document allows
+         connections to this origin only, so the lookup that used to run here
+         never left the browser, and the server is what answers that question. -->
     <div v-if="warningText" class="warning-text">{{ warningText }}</div>
-    <div v-else-if="hibpStatus === 'checking'" class="checking-text">
-      Проверяем по базе утечек...
-    </div>
     <div
       v-else-if="strengthText"
       class="strength-text"
@@ -28,16 +25,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-export type HibpStatus = "idle" | "checking" | "compromised" | "safe";
-
 const props = withDefaults(
   defineProps<{
     password: string;
-    hibpStatus?: HibpStatus;
     isSameAsOld?: boolean;
   }>(),
   {
-    hibpStatus: "idle",
     isSameAsOld: false,
   },
 );
@@ -46,8 +39,6 @@ const meetsMinimum = computed(() => props.password.length >= 8);
 
 const warningText = computed(() => {
   if (!meetsMinimum.value) return "Минимум 8 символов";
-  if (props.hibpStatus === "compromised")
-    return "Пароль найден в утечках данных";
   if (props.isSameAsOld) return "Новый пароль совпадает с текущим";
   return null;
 });
@@ -60,12 +51,7 @@ const strengthText = computed(() => {
   return "Надежный";
 });
 
-const hasError = computed(
-  () =>
-    !meetsMinimum.value ||
-    props.hibpStatus === "compromised" ||
-    props.isSameAsOld,
-);
+const hasError = computed(() => !meetsMinimum.value || props.isSameAsOld);
 
 const barPercent = computed(() => {
   const len = props.password.length;
@@ -113,10 +99,6 @@ const barClass = computed(() => {
   font-size: $secondary-font-size
   color: $accent-red
 
-.checking-text
-  margin-top: $tiny
-  font-size: $secondary-font-size
-  color: $text-muted
 
 .strength-text
   margin-top: $tiny

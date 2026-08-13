@@ -183,23 +183,44 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
     }
 
     /// <inheritdoc />
-    public async Task UpdateUserUsername(Guid userId, string newUsername, CancellationToken ct = default)
+    public async Task ApplyRename(
+        UsernameChangeRequest request, CreateUsernameHistory history, CancellationToken ct = default)
     {
-        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.UserId == userId, ct);
-        if (user != null)
+        var entity = await _dbContext.UsernameChangeRequests
+            .FirstOrDefaultAsync(r => r.RequestId == request.RequestId, ct);
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.UserId == request.UserId, ct);
+
+        if (entity == null || user == null) return;
+
+        _dbContext.UsernameHistories.Add(new Entities.Account.UsernameHistory
         {
-            user.Username = newUsername;
-            await _dbContext.SaveChangesAsync(ct);
-        }
+            UsernameHistoryId = history.UsernameHistoryId,
+            UserId = history.UserId,
+            OldUsername = history.OldUsername,
+            NewUsername = history.NewUsername,
+            ChangedUtc = history.ChangedUtc,
+            ApprovedByUserId = history.ApprovedById
+        });
+
+        user.Username = history.NewUsername;
+
+        entity.RequestedUsername = request.RequestedUsername;
+        entity.Status = request.Status;
+        entity.ApprovalToken = request.ApprovalToken;
+        entity.ApprovalTokenExpiresUtc = request.ApprovalTokenExpiresUtc;
+        entity.ResolvedUtc = request.ResolvedUtc;
+        entity.ResolvedByUserId = request.ResolvedByUserId;
+        entity.ResolverComment = request.ResolverComment;
+
+        // All three rows are tracked, so one SaveChanges is the transaction and an
+        // explicit one here would be machinery around a guarantee already given.
+        await _dbContext.SaveChangesAsync(ct);
     }
 
     /// <inheritdoc />
     public async Task<bool> IsUsernameAvailable(string username, Guid? excludeUserId = null, CancellationToken ct = default) =>
         !await AccountReservation.UsernameTaken(_dbContext.Users, username, excludeUserId, ct);
 
-    /// <inheritdoc />
-    public Task SaveChanges(CancellationToken ct = default) =>
-        _dbContext.SaveChangesAsync(ct);
 
     /// <inheritdoc />
     public Task<int> ExpireUnreviewedRequests(

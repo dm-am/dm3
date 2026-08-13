@@ -83,6 +83,20 @@ internal static class RateLimitingExtensions
     };
 
     /// <summary>
+    /// Whether this deployment counts requests at all.
+    /// </summary>
+    /// <remarks>
+    /// One reading of the setting, and one default. The registration below and
+    /// whatever else asks - the startup warning, today - have to agree on what an
+    /// absent key means, and a second literal true is how the two come to disagree
+    /// silently: a deployment would be limited and reported as unlimited, or the
+    /// other way round, with nothing anywhere saying which.
+    /// </remarks>
+    /// <param name="configuration">Configuration to read the setting from.</param>
+    internal static bool IsEnabled(IConfiguration configuration) =>
+        configuration.GetValue("RateLimiting:Enabled", true);
+
+    /// <summary>
     /// Adds the rate limiter with every policy of the API.
     /// </summary>
     /// <param name="services">Service collection.</param>
@@ -94,7 +108,7 @@ internal static class RateLimitingExtensions
     public static IServiceCollection AddDmRateLimiting(
         this IServiceCollection services, IConfiguration configuration)
     {
-        var enabled = configuration.GetValue("RateLimiting:Enabled", true);
+        var enabled = IsEnabled(configuration);
 
         services.AddRateLimiter(options =>
         {

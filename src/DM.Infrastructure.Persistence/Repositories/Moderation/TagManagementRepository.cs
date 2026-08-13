@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Abstractions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -17,10 +18,12 @@ namespace DM.Infrastructure.Persistence.Repositories.Moderation;
 internal class TagManagementRepository : ITagManagementRepository
 {
     private readonly DmDbContext _dbContext;
+    private readonly IGuidFactory _guidFactory;
 
-    public TagManagementRepository(DmDbContext dbContext)
+    public TagManagementRepository(DmDbContext dbContext, IGuidFactory guidFactory)
     {
         _dbContext = dbContext;
+        _guidFactory = guidFactory;
     }
 
     /// <inheritdoc />
@@ -71,7 +74,7 @@ internal class TagManagementRepository : ITagManagementRepository
     {
         var group = new DbTagGroup
         {
-            TagGroupId = Guid.NewGuid(),
+            TagGroupId = _guidFactory.Create(),
             Title = createGroup.Title,
             Description = createGroup.Description,
             SortOrder = createGroup.SortOrder
@@ -187,7 +190,7 @@ internal class TagManagementRepository : ITagManagementRepository
     {
         var tag = new DbTag
         {
-            TagId = Guid.NewGuid(),
+            TagId = _guidFactory.Create(),
             // Drawn from a sequence rather than computed as MAX + 1 over the table: two
             // creates in one moment read one maximum, and deletion below is physical, so a
             // maximum that walks backwards hands the number of the tag just deleted — the

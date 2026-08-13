@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Abstractions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -16,14 +17,17 @@ internal class BoardModeratorRepository : IBoardModeratorRepository
 {
     private readonly DmDbContext _dmDbContext;
     private readonly IMapper _mapper;
+    private readonly IGuidFactory _guidFactory;
 
     /// <inheritdoc />
     public BoardModeratorRepository(
         DmDbContext dmDbContext,
-        IMapper mapper)
+        IMapper mapper,
+        IGuidFactory guidFactory)
     {
         _dmDbContext = dmDbContext;
         _mapper = mapper;
+        _guidFactory = guidFactory;
     }
 
     /// <inheritdoc />
@@ -42,7 +46,7 @@ internal class BoardModeratorRepository : IBoardModeratorRepository
     {
         var boardModerator = new BoardModerator
         {
-            BoardModeratorId = Guid.NewGuid(),
+            BoardModeratorId = _guidFactory.Create(),
             BoardId = boardId,
             UserId = userId
         };

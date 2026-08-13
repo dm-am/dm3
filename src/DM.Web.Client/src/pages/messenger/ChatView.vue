@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
+import { htmlToBbcode } from "@/shared/lib/utils/bbcode";
 import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useMessagingStore } from "@/entities/message";
@@ -318,7 +319,7 @@ async function startEdit(msg: Message) {
   // Fetch the original BBCode from the backend — seeds ChatMessage's editor
   // once; further keystrokes stay inside ChatMessage's own local state.
   const { data } = await messagingApi.getMessageForEdit(msg.id);
-  editText.value = data?.text || "";
+  editText.value = htmlToBbcode(data?.text || "");
 }
 
 function cancelEdit() {

@@ -123,13 +123,13 @@ public class LastCommentPointerShould
         new(context, null!, null!, null!);
 
     private static BlogCommentRepository Blogs(DmDbContext context) =>
-        new(context, null!, null!);
+        new(context, null!, null!, null!);
 
     private static PublicationCommentRepository Publications(DmDbContext context) =>
-        new(context, null!, null!);
+        new(context, null!, null!, null!);
 
     private static GameCommentRepository Games(DmDbContext context) =>
-        new(context, null!);
+        new(context, null!, null!);
 
     [Fact]
     public async Task StayOnTheTopicWhenAnEarlierCommentGoes()

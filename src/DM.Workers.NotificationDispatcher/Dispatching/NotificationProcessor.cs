@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Core.Enums;
+using DM.Infrastructure.Core.Tracing;
 using DM.Infrastructure.Messaging.GeneralBus;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Workers.NotificationDispatcher.Notifiers;
@@ -140,6 +141,9 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
         }
         catch (Exception exception)
         {
+            MessagingMetrics.DeliveryFailed.Add(1,
+                MessagingMetrics.Channel(channel),
+                new KeyValuePair<string, object?>("event", eventType.ToString()));
             _logger.LogWarning(exception, "Failed to deliver notification of {EventType} over {Channel}",
                 eventType, channel);
         }

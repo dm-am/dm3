@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Comments;
 using System.Threading.Tasks;
 using DM.Domain.Blog.Features.PublicationComments;
 using DM.Web.API.Shared.Authentication;
@@ -75,7 +76,7 @@ public class PublicationCommentController : ControllerBase
     [HttpGet("{id}/comments", Name = nameof(GetPublicationComments))]
     [ProducesResponseType(typeof(ListEnvelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetPublicationComments(Guid id, [FromQuery] PublicationCommentsQuery q) =>
+    public async Task<IActionResult> GetPublicationComments(Guid id, [FromQuery] CommentsQuery q) =>
         Ok(await _commentApiService.Get(id, q));
 
     /// <summary>

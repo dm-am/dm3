@@ -40,7 +40,7 @@ public class CreatePostReviewValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(r => r.PostId)
-            .WithErrorMessage("Post ID is required");
+            .WithErrorMessage("Укажите пост");
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public class CreatePostReviewValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(r => r.Sign)
-            .WithErrorMessage("Invalid review sign");
+            .WithErrorMessage("Оценка указана неверно");
     }
 
     [Fact]
@@ -70,6 +70,6 @@ public class CreatePostReviewValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(r => r.Text)
-            .WithErrorMessage("Review text is required");
+            .WithErrorMessage("Введите текст рецензии");
     }
 }

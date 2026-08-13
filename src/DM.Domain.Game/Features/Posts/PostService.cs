@@ -112,21 +112,48 @@ internal class PostService : IPostService
             CreatedUtc = now
         };
 
-        var createdPost = await _repository.Create(entity);
-
         // Roll and persist any requested dice server-side (doc 4.2.2.13).
         // The client already gates the composer on the room setting, but the
         // server must not trust the payload — dice are dropped when the room
         // has rolling disabled.
+        //
+        // Rolled and stored before the post, and undone if the post does not
+        // follow. There is no transaction across PostgreSQL and MongoDB and no
+        // outbox — DATA_STORAGE.md says both — so a feature living in two stores
+        // owes an explicit order: what is written first, and who clears the
+        // remainder. A roll is the one thing here that cannot be produced again,
+        // because rolling a second time answers a different number: written after
+        // the post, a failed Mongo call left a committed post whose dice are gone
+        // for good, and the author has no way to get the same throw back. Written
+        // first, the same failure loses a post nobody has seen and the author may
+        // simply post again. The post id is ours already, generated above.
         var diceSpecs = createPost.DiceRolls?.ToList() ?? new List<CreatePostDiceRoll>();
-        if (diceSpecs.Count > 0 && room.Settings?.DiceEnabled == true)
+        var rolls = diceSpecs.Count > 0 && room.Settings?.DiceEnabled == true
+            ? _diceRoller.Roll(entity.PostId, now, diceSpecs)
+            : [];
+
+        if (rolls.Count > 0)
         {
-            var rolls = _diceRoller.Roll(createdPost.Id, now, diceSpecs);
+            await _diceRollRepository.CreateAsync(rolls);
+        }
+
+        Post createdPost;
+        try
+        {
+            createdPost = await _repository.Create(entity);
+        }
+        catch
+        {
             if (rolls.Count > 0)
             {
-                await _diceRollRepository.CreateAsync(rolls);
-                createdPost.DiceRolls = rolls;
+                await _diceRollRepository.DeleteByPostIdAsync(entity.PostId);
             }
+            throw;
+        }
+
+        if (rolls.Count > 0)
+        {
+            createdPost.DiceRolls = rolls;
         }
 
         await _unreadCountersRepository.IncrementAsync(createdPost.RoomId, UnreadEntryType.Message);

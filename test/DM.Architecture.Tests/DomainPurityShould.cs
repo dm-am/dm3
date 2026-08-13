@@ -100,4 +100,52 @@ public class DomainPurityShould
             "the domain holds the rules of the game, not the machinery that stores " +
             "or ships them, see the class remarks for what this closes");
     }
+
+    /// <summary>
+    /// Operations of a store, which no contract of the domain declares.
+    /// </summary>
+    /// <remarks>
+    /// Each is a step of a unit of work rather than a thing the domain wants
+    /// done. A repository that offers them lets a service open a transaction,
+    /// write through two other repositories and commit — spreading one unit of
+    /// work across three contracts, none of which can be read to find out what it
+    /// covers, and none of which the retrying execution strategy is wrapped
+    /// around.
+    /// </remarks>
+    private static readonly string[] StoragePrimitives =
+        ["SaveChanges", "BeginTransaction", "CommitTransaction", "RollbackTransaction", "Flush"];
+
+    /// <summary>
+    /// A repository is asked for an outcome, not for a step of a transaction.
+    /// </summary>
+    /// <remarks>
+    /// One had drifted: a bare SaveChanges on the contract of the username-change
+    /// repository, never called by anything. Nothing failed while it sat there,
+    /// and nothing would have failed on the day something called it either — the
+    /// call would simply have committed whatever another repository happened to
+    /// have left tracked on the shared context, at a moment nobody chose.
+    /// </remarks>
+    [Fact]
+    public void AskForOutcomesRatherThanForStepsOfATransaction()
+    {
+        var contracts = DomainAssemblies()
+            .SelectMany(assembly => assembly.GetTypes())
+            .Where(type => type.IsInterface)
+            .ToArray();
+
+        contracts.Should().NotBeEmpty(
+            "the domain declares its contracts as interfaces, and finding none passes " +
+            "whatever they declare");
+
+        contracts
+            .SelectMany(contract => contract
+                .GetMethods()
+                .Where(method => StoragePrimitives.Contains(method.Name, StringComparer.Ordinal))
+                .Select(method => $"{contract.Name}.{method.Name}"))
+            .OrderBy(offender => offender, StringComparer.Ordinal)
+            .Should().BeEmpty(
+                "these are steps of a unit of work, and a contract offering one lets a caller " +
+                "commit whatever another repository left tracked on the shared context, at a " +
+                "moment nobody chose and outside the strategy that retries it");
+    }
 }

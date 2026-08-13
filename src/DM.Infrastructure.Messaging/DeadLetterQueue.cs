@@ -22,9 +22,17 @@ public static class DeadLetterQueue
     /// lands in it.
     /// </summary>
     /// <remarks>
-    /// Called before the consumer subscribes: an exchange nothing declared silently
-    /// discards what is dead-lettered into it, which loses the message exactly as
-    /// quietly as having no dead-letter exchange at all.
+    /// Called before the consumer subscribes, and knowingly doubling the client:
+    /// naming a dead-letter exchange in the consumer parameters already has the
+    /// client declare this same topology. The double stands because that is an
+    /// internal of a pinned version, and losing it fails in silence - an exchange
+    /// nothing declared discards what is dead-lettered into it exactly as quietly
+    /// as having no dead-letter exchange at all.
+    ///
+    /// The price of the double is agreement argument for argument: fanout,
+    /// durable, not auto-deleted; the queue durable, not exclusive, not
+    /// auto-deleted; an empty binding key. A declaration that disagrees is
+    /// answered with 406 when the consumer subscribes, and the host stops.
     ///
     /// The queue is terminal on purpose. A TTL on it plus a dead-letter exchange
     /// pointing back at the working one is an unbounded retry loop with no attempt

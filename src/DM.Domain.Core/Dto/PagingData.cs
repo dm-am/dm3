@@ -17,7 +17,12 @@ public class PagingData
     public PagingData(PagingQuery query, int defaultPageSize, int totalCount)
     {
         var pageSize = query.Take > 0 ? query.Take : defaultPageSize;
-        var entityNumber = query.Skip + 1; // Convert 0-based skip to 1-based entity number
+        // 1-based entity number, widened before the increment. Skip is bound as
+        // [0, int.MaxValue], and at the top of that range the increment wrapped to
+        // int.MinValue: PagingResult then clamped the page back to 1, so a query
+        // that had run OFFSET 2147483647 came back reporting page one and skip
+        // zero - an empty answer describing itself as the beginning of the list.
+        var entityNumber = (int)Math.Min((long)query.Skip + 1, int.MaxValue);
 
         Result = PagingResult.Create(totalCount, entityNumber, pageSize);
         Skip = query.Skip;

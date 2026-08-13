@@ -157,17 +157,33 @@ internal class GameInvitationRepository : IGameInvitationRepository
     }
 
     /// <inheritdoc />
-    public async Task AddAssistant(AddAssistantEntity entity, CancellationToken ct = default)
+    public async Task AcceptAssistantInvitation(
+        AddAssistantEntity entity, Guid tokenId, CancellationToken ct = default)
     {
-        var assistant = new GameAssistant
-        {
-            GameAssistantId = entity.GameAssistantId,
-            GameId = entity.GameId,
-            UserId = entity.UserId,
-            JoinedUtc = entity.JoinedUtc
-        };
+        // Both rows or neither. Written separately, a refusal in between left the
+        // invitation live next to an assistant who already has the rights it grants,
+        // and accepting it a second time added the person twice.
+        //
+        // The token is spent through the tracker rather than set-based, so one
+        // SaveChanges covers both and no explicit transaction is needed.
+        var token = await _dbContext.Tokens.FirstOrDefaultAsync(t => t.TokenId == tokenId, ct);
+        if (token == null) return;
 
-        _dbContext.GameAssistants.Add(assistant);
+        var alreadyAssistant = await _dbContext.GameAssistants
+            .AnyAsync(ga => ga.GameId == entity.GameId && ga.UserId == entity.UserId, ct);
+
+        if (!alreadyAssistant)
+        {
+            _dbContext.GameAssistants.Add(new GameAssistant
+            {
+                GameAssistantId = entity.GameAssistantId,
+                GameId = entity.GameId,
+                UserId = entity.UserId,
+                JoinedUtc = entity.JoinedUtc
+            });
+        }
+
+        token.IsRemoved = true;
         await _dbContext.SaveChangesAsync(ct);
     }
 
@@ -177,32 +193,6 @@ internal class GameInvitationRepository : IGameInvitationRepository
         await _dbContext.GameAssistants
             .Where(ga => ga.GameId == gameId && ga.UserId == userId)
             .ExecuteDeleteAsync(ct);
-    }
-
-    /// <inheritdoc />
-    public async Task UpdateMaster(UpdateMasterEntity entity, CancellationToken ct = default)
-    {
-        // Add old master as assistant
-        var assistant = new GameAssistant
-        {
-            GameAssistantId = entity.NewAssistantId,
-            GameId = entity.GameId,
-            UserId = entity.OldMasterId,
-            JoinedUtc = entity.AssistantJoinedUtc
-        };
-
-        _dbContext.GameAssistants.Add(assistant);
-
-        // Remove new master from assistants if they were one
-        await _dbContext.GameAssistants
-            .Where(ga => ga.GameId == entity.GameId && ga.UserId == entity.NewMasterId)
-            .ExecuteDeleteAsync(ct);
-
-        // Update game master
-        await _dbContext.Games
-            .Where(g => g.GameId == entity.GameId)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(g => g.MasterId, entity.NewMasterId), ct);
     }
 
     #endregion
@@ -347,15 +337,39 @@ internal class GameInvitationRepository : IGameInvitationRepository
     /// <inheritdoc />
     public async Task<GameInvitationToken> InvalidateAndCreateInvitation(CreateGameInvitationEntity entity, CancellationToken ct = default)
     {
-        // Invalidate existing invitations of same type for this user
-        await _dbContext.Tokens
-            .Where(t => t.EntityId == entity.GameId &&
-                       t.UserId == entity.UserId &&
-                       t.Type == entity.TokenType &&
-                       !t.IsRemoved)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(t => t.IsRemoved, true), ct);
+        // Both writes or neither: separately, a refusal between them left the person
+        // with every invitation to this game dead and no new one issued, and the only
+        // way out is for the master to notice and invite them again.
+        //
+        // Through the strategy because the API host configures EnableRetryOnFailure and
+        // a retrying strategy refuses a transaction opened by hand.
+        GameInvitationToken created = null!;
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        var attempted = false;
+        await strategy.ExecuteAsync(async cancellation =>
+        {
+            if (attempted)
+            {
+                _dbContext.ChangeTracker.Clear();
+            }
 
-        return await CreateInvitation(entity, ct);
+            attempted = true;
+
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellation);
+
+            // Invalidate existing invitations of same type for this user
+            await _dbContext.Tokens
+                .Where(t => t.EntityId == entity.GameId &&
+                           t.UserId == entity.UserId &&
+                           t.Type == entity.TokenType &&
+                           !t.IsRemoved)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(t => t.IsRemoved, true), cancellation);
+
+            created = await CreateInvitation(entity, cancellation);
+            await transaction.CommitAsync(cancellation);
+        }, ct);
+
+        return created;
     }
 
     /// <inheritdoc />

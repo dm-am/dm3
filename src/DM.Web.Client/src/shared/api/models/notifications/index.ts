@@ -41,6 +41,7 @@ export enum NotificationType {
   NewPublication = "NewPublication",
   LikedPublication = "LikedPublication",
   NewBlogComment = "NewBlogComment",
+  NewPublicationComment = "NewPublicationComment",
   LikedBlogComment = "LikedBlogComment",
   BlogInvitationCreated = "BlogInvitationCreated",
   BlogInvitationAccepted = "BlogInvitationAccepted",
@@ -65,6 +66,14 @@ export enum NotificationType {
   // Games
   NewGame = "NewGame",
   NewCharacter = "NewCharacter",
+
+  // Security. These reach the owner of the account and nobody else, and they
+  // carry no link: what a suspicious login or a changed password points at is
+  // not a page.
+  PasswordChanged = "PasswordChanged",
+  EmailChanged = "EmailChanged",
+  SuspiciousLoginActivity = "SuspiciousLoginActivity",
+  AccountLocked = "AccountLocked",
 }
 
 export type NotificationId = Id<string>;

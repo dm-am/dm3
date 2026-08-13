@@ -60,12 +60,9 @@
             v-model="newPassword"
             type="password"
             autocomplete="new-password"
-            @input="onNewPasswordInput"
-            @blur="onNewPasswordBlur"
           />
           <PasswordStrengthIndicator
             :password="newPassword"
-            :hibp-status="hibpStatus"
             :is-same-as-old="isSameAsOld"
           />
           <template #hint>Минимум 8 символов</template>
@@ -135,11 +132,8 @@ const confirmPassword = ref("");
 // New password field with HIBP check and same-as-old validation
 const {
   password: newPassword,
-  hibpStatus,
   isSameAsOld,
   isValid: isNewPasswordValid,
-  onInput: onNewPasswordInput,
-  onBlur: onNewPasswordBlur,
 } = useNewPasswordField({ oldPassword });
 
 const passwordsMatch = computed(

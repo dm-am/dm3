@@ -1,3 +1,5 @@
+using DM.Domain.Core.Dto;
+using System.Collections.Generic;
 using System;
 
 namespace DM.Web.API.Features.General.Search;
@@ -35,9 +37,14 @@ public class MessageSearchResult
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Preview text with [private] blocks stripped, so addressee-only game-post
-    /// content is never exposed in search results. [mod] is public on read and
-    /// is left intact.
+    /// Preview of the matched text, split into the runs a reader sees. A run marked
+    /// as a match is where the search found its words.
     /// </summary>
-    public string Snippet { get; set; } = "";
+    /// <remarks>
+    /// Segments rather than a marked-up string: the database marks the match, and a
+    /// string carrying those marks would be the one field of this contract a client
+    /// had to render as markup — from a document nobody escaped. [private] blocks
+    /// are never present, so addressee-only content is not exposed here.
+    /// </remarks>
+    public IReadOnlyList<SnippetSegment> Snippet { get; set; } = [];
 }

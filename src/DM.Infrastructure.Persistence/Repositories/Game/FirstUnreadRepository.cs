@@ -34,114 +34,172 @@ internal class FirstUnreadRepository : IFirstUnreadRepository
         IReadOnlyList<Guid> roomIds,
         IDictionary<Guid, DateTime> lastReadTimes)
     {
-        foreach (var roomId in roomIds)
+        if (roomIds.Count == 0)
         {
-            var lastRead = lastReadTimes.TryGetValue(roomId, out var time)
-                ? time
-                : DateTime.MinValue;
-
-            var firstUnread = await _dbContext.Posts
-                .Where(p => p.RoomId == roomId && !p.IsRemoved)
-                .Where(p => p.CreatedUtc > lastRead)
-                .OrderBy(p => p.CreatedUtc)
-                .Select(p => new { p.PostId, p.CreatedUtc })
-                .FirstOrDefaultAsync();
-
-            if (firstUnread != null)
-            {
-                var postNumber = await _dbContext.Posts
-                    .Where(p => p.RoomId == roomId && !p.IsRemoved)
-                    .CountAsync(p => p.CreatedUtc <= firstUnread.CreatedUtc);
-
-                var totalUnread = 0;
-                foreach (var rid in roomIds)
-                {
-                    var roomLastRead = lastReadTimes.TryGetValue(rid, out var t)
-                        ? t
-                        : DateTime.MinValue;
-                    totalUnread += await _dbContext.Posts
-                        .Where(p => p.RoomId == rid && !p.IsRemoved)
-                        .CountAsync(p => p.CreatedUtc > roomLastRead);
-                }
-
-                return new FirstUnreadPostResult
-                {
-                    RoomId = roomId,
-                    PostId = firstUnread.PostId,
-                    PostNumber = postNumber,
-                    TotalUnreadCount = totalUnread,
-                    HasUnread = true
-                };
-            }
+            return null;
         }
 
-        return null;
+        var summaries = await RoomSummaries(
+            roomIds,
+            roomId => lastReadTimes.TryGetValue(roomId, out var time) ? time : DateTime.MinValue);
+
+        // The first room in reading order that has anything unread. The order is
+        // the caller's: GetAccessibleRoomIds sorts by OrderNumber, which is the
+        // order the rooms are shown in.
+        var room = roomIds
+            .Select(id => summaries.GetValueOrDefault(id))
+            .FirstOrDefault(summary => summary != null);
+
+        if (room == null)
+        {
+            return null;
+        }
+
+        var postId = await _dbContext.Posts
+            .Where(p => p.RoomId == room.RoomId && !p.IsRemoved && p.CreatedUtc == room.FirstUtc)
+            .Select(p => p.PostId)
+            .FirstAsync();
+
+        var postNumber = await _dbContext.Posts
+            .Where(p => p.RoomId == room.RoomId && !p.IsRemoved)
+            .CountAsync(p => p.CreatedUtc <= room.FirstUtc);
+
+        return new FirstUnreadPostResult
+        {
+            RoomId = room.RoomId,
+            PostId = postId,
+            PostNumber = postNumber,
+            TotalUnreadCount = summaries.Values.Sum(s => s.Count),
+            HasUnread = true
+        };
     }
 
     public async Task<FirstUnreadPostResult?> GetFirstPostInRooms(IReadOnlyList<Guid> roomIds)
     {
-        foreach (var roomId in roomIds)
+        if (roomIds.Count == 0)
         {
-            var firstPost = await _dbContext.Posts
-                .Where(p => p.RoomId == roomId && !p.IsRemoved)
-                .OrderBy(p => p.CreatedUtc)
-                .Select(p => new { p.PostId })
-                .FirstOrDefaultAsync();
-
-            if (firstPost != null)
-            {
-                var totalCount = 0;
-                foreach (var rid in roomIds)
-                {
-                    totalCount += await _dbContext.Posts
-                        .Where(p => p.RoomId == rid && !p.IsRemoved)
-                        .CountAsync();
-                }
-
-                return new FirstUnreadPostResult
-                {
-                    RoomId = roomId,
-                    PostId = firstPost.PostId,
-                    PostNumber = 1,
-                    TotalUnreadCount = totalCount,
-                    HasUnread = true
-                };
-            }
+            return null;
         }
 
-        return null;
+        // Everything counts as unread here, so the same summary with no lower
+        // bound answers both halves: which room comes first and how many posts
+        // the game holds in total.
+        var summaries = await RoomSummaries(roomIds, _ => DateTime.MinValue);
+
+        var room = roomIds
+            .Select(id => summaries.GetValueOrDefault(id))
+            .FirstOrDefault(summary => summary != null);
+
+        if (room == null)
+        {
+            return null;
+        }
+
+        var postId = await _dbContext.Posts
+            .Where(p => p.RoomId == room.RoomId && !p.IsRemoved && p.CreatedUtc == room.FirstUtc)
+            .Select(p => p.PostId)
+            .FirstAsync();
+
+        return new FirstUnreadPostResult
+        {
+            RoomId = room.RoomId,
+            PostId = postId,
+            PostNumber = 1,
+            TotalUnreadCount = summaries.Values.Sum(s => s.Count),
+            HasUnread = true
+        };
     }
 
     public async Task<FirstUnreadPostResult?> GetLastPostInRooms(IReadOnlyList<Guid> roomIds)
     {
-        for (var i = roomIds.Count - 1; i >= 0; i--)
+        if (roomIds.Count == 0)
         {
-            var roomId = roomIds[i];
-            var lastPost = await _dbContext.Posts
-                .Where(p => p.RoomId == roomId && !p.IsRemoved)
-                .OrderByDescending(p => p.CreatedUtc)
-                .Select(p => new { p.PostId })
-                .FirstOrDefaultAsync();
-
-            if (lastPost != null)
-            {
-                var postCount = await _dbContext.Posts
-                    .Where(p => p.RoomId == roomId && !p.IsRemoved)
-                    .CountAsync();
-
-                return new FirstUnreadPostResult
-                {
-                    RoomId = roomId,
-                    PostId = lastPost.PostId,
-                    PostNumber = postCount,
-                    TotalUnreadCount = 0,
-                    HasUnread = false
-                };
-            }
+            return null;
         }
 
-        return null;
+        var summaries = await RoomSummaries(roomIds, _ => DateTime.MinValue);
+
+        // The last room in reading order that holds anything — this is where a
+        // reader with nothing unread is put down.
+        var room = roomIds
+            .Reverse()
+            .Select(id => summaries.GetValueOrDefault(id))
+            .FirstOrDefault(summary => summary != null);
+
+        if (room == null)
+        {
+            return null;
+        }
+
+        var postId = await _dbContext.Posts
+            .Where(p => p.RoomId == room.RoomId && !p.IsRemoved && p.CreatedUtc == room.LastUtc)
+            .Select(p => p.PostId)
+            .FirstAsync();
+
+        return new FirstUnreadPostResult
+        {
+            RoomId = room.RoomId,
+            PostId = postId,
+            PostNumber = room.Count,
+            TotalUnreadCount = 0,
+            HasUnread = false
+        };
     }
+
+    /// <summary>
+    /// One row per room that holds a post past its own lower bound.
+    /// </summary>
+    /// <remarks>
+    /// A room per query, and a second pass over every room to total them up, cost
+    /// 2N+1 round trips to open a game — and this runs on every "go to first
+    /// unread". The bound differs per room, so the rooms are asked as a union of
+    /// per-room aggregates: one statement, and the database groups it.
+    /// </remarks>
+    /// <param name="roomIds">Rooms to summarise</param>
+    /// <param name="lowerBound">Moment each room is counted from, exclusive</param>
+    private async Task<Dictionary<Guid, RoomPostSummary>> RoomSummaries(
+        IReadOnlyList<Guid> roomIds,
+        Func<Guid, DateTime> lowerBound)
+    {
+        IQueryable<RoomPostSummary>? union = null;
+
+        foreach (var roomId in roomIds)
+        {
+            // The bound arrives as a bare DateTime, and the column is a
+            // DateTimeOffset: the implicit conversion reads an unspecified Kind as
+            // local time, which throws outright for DateTime.MinValue anywhere east
+            // of UTC. These moments are UTC — say so.
+            var from = new DateTimeOffset(DateTime.SpecifyKind(lowerBound(roomId), DateTimeKind.Utc));
+            var part = _dbContext.Posts
+                .Where(p => p.RoomId == roomId && !p.IsRemoved && p.CreatedUtc > from)
+                .GroupBy(p => p.RoomId)
+                .Select(g => new RoomPostSummary
+                {
+                    RoomId = g.Key,
+                    Count = g.Count(),
+                    FirstUtc = g.Min(p => p.CreatedUtc),
+                    LastUtc = g.Max(p => p.CreatedUtc)
+                });
+
+            union = union == null ? part : union.Concat(part);
+        }
+
+        var rows = await union!.ToListAsync();
+        return rows.ToDictionary(row => row.RoomId);
+    }
+
+    /// <summary>
+    /// What one room contributes to the answer: how many posts, and the edges of
+    /// the range they occupy.
+    /// </summary>
+    private sealed class RoomPostSummary
+    {
+        public Guid RoomId { get; init; }
+        public int Count { get; init; }
+        public DateTimeOffset FirstUtc { get; init; }
+        public DateTimeOffset LastUtc { get; init; }
+    }
+
 
     public async Task<FirstUnreadCommentResult?> FindFirstUnreadComment(Guid gameId, DateTime lastRead)
     {

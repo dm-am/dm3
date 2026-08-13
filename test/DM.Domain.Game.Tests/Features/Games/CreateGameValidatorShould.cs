@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Content;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Exceptions;
@@ -58,15 +59,44 @@ public class CreateGameValidatorShould : UnitTestBase
     {
         var input = new CreateGame
         {
-            Title = new string('a', 101),
+            Title = new string('a', GameFieldLimits.TitleMaxLength + 1),
             SystemName = "D&D 5e",
             NarrativeSetting = "Forgotten Realms",
-            Info = new string('b', 200)
+            Info = new string('b', GameFieldLimits.InfoMinLength)
         };
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldHaveValidationErrorFor(x => x.Title)
             .WithErrorMessage(ValidationError.Long);
+    }
+
+    /// <summary>
+    /// The bound itself, from the inside: a field filled to the limit the contract
+    /// publishes is accepted here.
+    /// </summary>
+    /// <remarks>
+    /// The two layers used to disagree — the contract allowed 200 characters of
+    /// title and this validator cut it at 100 — so everything between the numbers
+    /// was accepted by the form and refused after the button. Checking only the
+    /// "one over the limit" case leaves that gap invisible: it fails either way.
+    /// </remarks>
+    [Fact]
+    public async Task AcceptFieldsFilledToTheLimitTheContractPublishes()
+    {
+        var input = new CreateGame
+        {
+            Title = new string('a', GameFieldLimits.TitleMaxLength),
+            SystemName = new string('b', GameFieldLimits.SystemMaxLength),
+            NarrativeSetting = new string('c', GameFieldLimits.SettingMaxLength),
+            Info = new string('d', GameFieldLimits.InfoMinLength)
+        };
+
+        var result = await validator.TestValidateAsync(input);
+
+        result.ShouldNotHaveValidationErrorFor(x => x.Title);
+        result.ShouldNotHaveValidationErrorFor(x => x.SystemName);
+        result.ShouldNotHaveValidationErrorFor(x => x.NarrativeSetting);
+        result.ShouldNotHaveValidationErrorFor(x => x.Info);
     }
 
     [Fact]
@@ -91,9 +121,9 @@ public class CreateGameValidatorShould : UnitTestBase
         var input = new CreateGame
         {
             Title = "Valid Title",
-            SystemName = new string('a', 51),
+            SystemName = new string('a', GameFieldLimits.SystemMaxLength + 1),
             NarrativeSetting = "Forgotten Realms",
-            Info = new string('b', 200)
+            Info = new string('b', GameFieldLimits.InfoMinLength)
         };
 
         var result = await validator.TestValidateAsync(input);
@@ -124,8 +154,8 @@ public class CreateGameValidatorShould : UnitTestBase
         {
             Title = "Valid Title",
             SystemName = "D&D 5e",
-            NarrativeSetting = new string('a', 51),
-            Info = new string('b', 200)
+            NarrativeSetting = new string('a', GameFieldLimits.SettingMaxLength + 1),
+            Info = new string('b', GameFieldLimits.InfoMinLength)
         };
 
         var result = await validator.TestValidateAsync(input);

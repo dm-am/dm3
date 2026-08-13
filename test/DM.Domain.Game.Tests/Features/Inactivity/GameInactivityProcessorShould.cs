@@ -69,7 +69,7 @@ public class GameInactivityProcessorShould : UnitTestBase
         // Every write the processor can make is recorded, so a test asserts the
         // set of games acted on instead of one interaction at a time.
         _commentRepository
-            .Setup(r => r.Count(It.IsAny<Guid>(), It.IsAny<GameCommentsQuery>(), It.IsAny<IReadOnlyCollection<Guid>?>()))
+            .Setup(r => r.Count(It.IsAny<Guid>(), It.IsAny<CommentsQuery>(), It.IsAny<IReadOnlyCollection<Guid>?>()))
             .ReturnsAsync(0);
         _commentRepository.Setup(r => r.Create(It.IsAny<CreateGameCommentEntity>()))
             .Callback<CreateGameCommentEntity>(_createdComments.Add)
@@ -151,7 +151,7 @@ public class GameInactivityProcessorShould : UnitTestBase
                 It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { gameId1, gameId2 });
         _commentRepository
-            .Setup(r => r.Count(It.IsAny<Guid>(), It.IsAny<GameCommentsQuery>(), It.IsAny<IReadOnlyCollection<Guid>?>()))
+            .Setup(r => r.Count(It.IsAny<Guid>(), It.IsAny<CommentsQuery>(), It.IsAny<IReadOnlyCollection<Guid>?>()))
             .ReturnsAsync(5);
 
         await _processor.WarnInactiveGamesAsync(CancellationToken.None);
@@ -202,7 +202,7 @@ public class GameInactivityProcessorShould : UnitTestBase
                 It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { failingGameId, healthyGameId });
         _commentRepository
-            .Setup(r => r.Count(failingGameId, It.IsAny<GameCommentsQuery>(), It.IsAny<IReadOnlyCollection<Guid>?>()))
+            .Setup(r => r.Count(failingGameId, It.IsAny<CommentsQuery>(), It.IsAny<IReadOnlyCollection<Guid>?>()))
             .ThrowsAsync(new Exception("DB error"));
 
         await _processor.WarnInactiveGamesAsync(CancellationToken.None);
@@ -332,7 +332,7 @@ public class GameInactivityProcessorShould : UnitTestBase
                 It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { gameId1, gameId2 });
         _commentRepository
-            .Setup(r => r.Count(It.IsAny<Guid>(), It.IsAny<GameCommentsQuery>(), It.IsAny<IReadOnlyCollection<Guid>?>()))
+            .Setup(r => r.Count(It.IsAny<Guid>(), It.IsAny<CommentsQuery>(), It.IsAny<IReadOnlyCollection<Guid>?>()))
             .ReturnsAsync(10);
 
         await _processor.WarnFrozenGamesAsync(CancellationToken.None);
@@ -365,7 +365,7 @@ public class GameInactivityProcessorShould : UnitTestBase
                 It.IsAny<TimeSpan>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { failingGameId, healthyGameId });
         _commentRepository
-            .Setup(r => r.Count(failingGameId, It.IsAny<GameCommentsQuery>(), It.IsAny<IReadOnlyCollection<Guid>?>()))
+            .Setup(r => r.Count(failingGameId, It.IsAny<CommentsQuery>(), It.IsAny<IReadOnlyCollection<Guid>?>()))
             .ThrowsAsync(new Exception("DB error"));
 
         await _processor.WarnFrozenGamesAsync(CancellationToken.None);

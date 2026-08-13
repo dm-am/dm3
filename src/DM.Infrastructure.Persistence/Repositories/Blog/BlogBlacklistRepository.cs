@@ -20,15 +20,18 @@ internal class BlogBlacklistRepository : IBlogBlacklistRepository
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
 
     public BlogBlacklistRepository(
         DmDbContext dbContext,
         IMapper mapper,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        IGuidFactory guidFactory)
     {
         _dbContext = dbContext;
         _mapper = mapper;
         _dateTimeProvider = dateTimeProvider;
+        _guidFactory = guidFactory;
     }
 
     /// <inheritdoc />
@@ -53,7 +56,7 @@ internal class BlogBlacklistRepository : IBlogBlacklistRepository
     {
         var entry = new BlogBlacklist
         {
-            EntryId = Guid.NewGuid(),
+            EntryId = _guidFactory.Create(),
             BlogId = blogId,
             BlockedUserId = blockedUserId,
             BlockedByUserId = blockedByUserId,
@@ -120,7 +123,7 @@ internal class BlogBlacklistRepository : IBlogBlacklistRepository
         {
             var entry = new BlogBlacklist
             {
-                EntryId = Guid.NewGuid(),
+                EntryId = _guidFactory.Create(),
                 BlogId = blogId,
                 BlockedUserId = blockedUserId,
                 BlockedByUserId = ownerId,

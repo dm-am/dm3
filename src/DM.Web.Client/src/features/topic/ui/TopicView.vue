@@ -8,6 +8,7 @@
  * pure presentational shell.
  */
 import { computed, ref } from "vue";
+import { htmlToBbcode } from "@/shared/lib/utils/bbcode";
 import { storeToRefs } from "pinia";
 import { forumApi } from "@/entities/forum";
 import type { Topic } from "@/entities/forum";
@@ -168,7 +169,7 @@ async function startEdit() {
     return;
   }
   editTitle.value = props.topic.title;
-  editText.value = unwrapResource<Topic>(data)?.description ?? "";
+  editText.value = htmlToBbcode(unwrapResource<Topic>(data)?.description ?? "");
   isEditing.value = true;
 }
 

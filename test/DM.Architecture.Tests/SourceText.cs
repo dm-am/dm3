@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 
@@ -43,4 +44,68 @@ internal static class SourceText
     /// <param name="path">Absolute path of the source file.</param>
     internal static string ReadCode(string path) =>
         Comments.Replace(File.ReadAllText(path), string.Empty);
+
+    /// <summary>
+    /// Signature followed by a body or an expression body. The capture keeps the
+    /// parameter list, and the position of the match is where the body starts.
+    /// </summary>
+    private static readonly Regex Signature = new(
+        @"(?<sig>(?:public|private|protected|internal)[^;{}()]*?\s(?<name>\w+)\s*\((?<args>[^)]*)\))\s*(?<open>=>|\{)",
+        RegexOptions.Compiled | RegexOptions.Singleline);
+
+    /// <summary>One method of a type: what it is called, what it takes, what it does.</summary>
+    internal readonly record struct Member(string Name, string Parameters, string Body);
+
+    /// <summary>
+    /// The methods a file declares, each with its body.
+    /// </summary>
+    /// <remarks>
+    /// One parser, because two of them existed and the second was written by
+    /// copying the first. Brace counting rather than a syntax tree: the rules that
+    /// read this ask where a call sits relative to another call, which survives
+    /// being approximate, and a parser dependency in this tier would put a compiler
+    /// in the directory the ArchUnit loader scans.
+    /// </remarks>
+    internal static IReadOnlyList<Member> Members(string code)
+    {
+        var members = new List<Member>();
+        foreach (Match match in Signature.Matches(code))
+        {
+            members.Add(new Member(
+                match.Groups["name"].Value,
+                match.Groups["args"].Value,
+                BodyAfter(code, match)));
+        }
+
+        return members;
+    }
+
+    /// <summary>
+    /// Everything after a signature: up to the matching closing brace, or, for an
+    /// expression body, up to the semicolon that ends the statement.
+    /// </summary>
+    private static string BodyAfter(string code, Match signature)
+    {
+        var start = signature.Index + signature.Length;
+        if (signature.Groups["open"].Value == "=>")
+        {
+            var end = code.IndexOf(';', start);
+            return end < 0 ? code[start..] : code[start..end];
+        }
+
+        var depth = 1;
+        for (var i = start; i < code.Length; i++)
+        {
+            if (code[i] == '{')
+            {
+                depth++;
+            }
+            else if (code[i] == '}' && --depth == 0)
+            {
+                return code[start..i];
+            }
+        }
+
+        return code[start..];
+    }
 }

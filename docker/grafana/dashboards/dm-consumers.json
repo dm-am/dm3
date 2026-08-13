@@ -27,13 +27,19 @@
     },
     {
       "title": "Queue Depth",
+      "description": "Waiting and in flight. A message handed to a consumer is no longer ready, so the ready series alone draws an empty queue for a worker that has taken a thousand messages and is working through them slowly.",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 4 },
       "targets": [
         {
           "expr": "rabbitmq_queue_messages_ready{queue=~\"dm.*\"}",
-          "legendFormat": "{{queue}}",
+          "legendFormat": "{{queue}} ready",
           "refId": "A"
+        },
+        {
+          "expr": "rabbitmq_queue_messages_unacked{queue=~\"dm.*\"}",
+          "legendFormat": "{{queue}} in flight",
+          "refId": "B"
         }
       ],
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
@@ -65,9 +71,37 @@
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
     },
     {
-      "title": "Consumer GC Heap",
+      "title": "Messages Processed",
+      "description": "What the consumers did with what they took. A short queue says nothing on its own: a worker throwing on every message keeps it exactly as short as one that finishes them.",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        {
+          "expr": "sum by (queue) (rate(dm_messaging_consumed_total[5m]))",
+          "legendFormat": "{{queue}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] }
+    },
+    {
+      "title": "Message Processing p95",
+      "description": "End to end, retries included. The boundaries of this histogram are chosen for it rather than inherited from the SDK, whose top bucket is ten seconds - shorter than one retry ladder.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, queue) (rate(dm_messaging_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{queue}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
+      "title": "Consumer GC Heap",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
       "targets": [
         {
           "expr": "process_runtime_dotnet_gc_heap_size_bytes{job=~\"dm-(notification|mail)-worker\"}",
@@ -80,7 +114,7 @@
     {
       "title": "Consumer GC Collections",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
       "targets": [
         {
           "expr": "rate(process_runtime_dotnet_gc_collections_count_total{job=~\"dm-(notification|mail)-worker\"}[5m])",

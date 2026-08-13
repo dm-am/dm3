@@ -51,6 +51,28 @@ public class SessionCookieShould : UnitTestBase
             "over https travels in the clear");
     }
 
+    /// <summary>
+    /// The cookie does not travel on a request another site started.
+    /// </summary>
+    /// <remarks>
+    /// The origin check lets one shape of request through without asking: no
+    /// Origin header and no Referer, which a browser does not send on a cross-site
+    /// subrequest and a non-browser client does not send at all. What makes that
+    /// branch safe is this attribute — the session simply is not attached to such
+    /// a request — and until now nothing asserted it. The symmetry check below
+    /// does not cover it either: both halves read the same options helper, so they
+    /// would agree on any value, correct or not.
+    /// </remarks>
+    [Fact]
+    public async Task WithholdTheSessionFromCrossSiteSubrequests()
+    {
+        var written = await Written("dm.am", false);
+
+        written.SameSite.Should().Be(Microsoft.Net.Http.Headers.SameSiteMode.Lax,
+            "the origin check passes a request with neither Origin nor Referer, and what " +
+            "keeps that from being a hole is the cookie not travelling cross-site");
+    }
+
     [Theory]
     [MemberData(nameof(Transports))]
     public async Task ClearTheSessionWithTheAttributesItWasWrittenWith(string host, bool isHttps)

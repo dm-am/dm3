@@ -462,12 +462,13 @@ describe("useBoardsStore", () => {
       expect(store.comments?.resources).toEqual(mockComments);
     });
 
-    it("clears comments before loading", async () => {
+    it("keeps the comments on screen while it reloads", async () => {
       const store = useBoardsStore();
-      store.comments = {
+      const shown = {
         resources: [createMockComment("old", "old")],
         paging: null,
       } as any;
+      store.comments = shown;
       store.selectedTopic = createMockTopic("topic-1", "Topic", "board-1");
 
       mockGetComments.mockResolvedValue({
@@ -475,11 +476,16 @@ describe("useBoardsStore", () => {
         error: null,
       });
 
-      // Comments are cleared at start of fetch
+      // A change of page, filter or sort has no cached entry under its own key,
+      // and clearing the list there wiped what the reader was looking at — the
+      // opposite of the stale-while-revalidate this method exists for.
       const fetchPromise = store.searchComments({ number: 1 });
-      expect(store.comments).toBeNull();
+      // Reactive wrapper, so identity is not the question: what matters is that
+      // the rows are still there.
+      expect(store.comments).toStrictEqual(shown);
 
       await fetchPromise;
+      expect(store.comments?.resources).toEqual([]);
     });
   });
 

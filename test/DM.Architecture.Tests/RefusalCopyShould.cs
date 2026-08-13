@@ -27,11 +27,17 @@ namespace DM.Architecture.Tests;
 /// one gets copied from. Only sources under src/ are read: the helpers that raise
 /// these exceptions inside the test suites answer nobody.
 ///
-/// Three things are checked, and the wording itself is not one of them: that the
-/// message is written in the language of the interface, that it spells the letter
-/// "e" without the dots, and that a wording written twice was not written twice.
-/// A message taken from a shared constant leaves no literal at the throw and is
-/// invisible to all three, which is the intended outcome and not a hole.
+/// Two roads lead to the same reader: a thrown refusal, whose message becomes the
+/// title of the problem document, and a failed validation, whose message becomes
+/// one of its errors. Both are scanned for language; only the first is scanned for
+/// repetition, because a validator saying "введите почту" wherever there is an
+/// email field is one sentence in its places, not one refusal spelled twice.
+///
+/// The wording itself is not checked: only that it is written in the language of
+/// the interface, that it spells the letter "e" without the dots, and — for
+/// refusals — that a wording written twice was not written twice. A message taken
+/// from a shared constant leaves no literal at the site and is invisible to all
+/// three, which is the intended outcome and not a hole.
 /// </remarks>
 public class RefusalCopyShould
 {
@@ -51,6 +57,39 @@ public class RefusalCopyShould
         @"new\s+(?:HttpException|HttpBadRequestException)\s*\(" +
         @"|Create(?:Validation)?ProblemDetails\s*\(",
         RegexOptions.Compiled);
+
+    /// <summary>
+    /// Where a failed validation takes its wording.
+    /// </summary>
+    /// <remarks>
+    /// A refusal by the other road: the message of a FluentValidation rule and of a
+    /// data annotation goes into the errors of the problem document, and the client
+    /// shows it verbatim. Written in English at 79 sites, it answered a Russian
+    /// screen with "Title must be between 3 and 200 characters" — and the scan meant
+    /// to prevent exactly that read only throw sites.
+    ///
+    /// Held apart from the throw sites because only the language rules apply to
+    /// both. A wording repeated across validators is not the drift the deduplication
+    /// rule is about: every DTO with an email field asks for an email the same way,
+    /// and that is one sentence said in the places it belongs, not one refusal
+    /// spelled twice.
+    /// </remarks>
+    private static readonly Regex ValidationWording = new(
+        @"WithMessage\s*\(" +
+        @"|ErrorMessage\s*=\s*" +
+        // A rule that yields its own message instead of handing one to the
+        // library. The schema rules do it that way, and the five sentences they
+        // return stayed English through a translation pass that read call sites
+        // alone — the reader gets them the same way as any other validation error.
+        @"|yield\s+return\s+(?=\$?"")",
+        RegexOptions.Compiled);
+
+    /// <summary>
+    /// A FluentValidation placeholder, which is filled in by the library rather
+    /// than read by anyone: {PropertyName}, {{{ErrorMessage}}} and their kin.
+    /// </summary>
+    private static readonly Regex PlaceholderOnly = new(
+        @"^\s*(?:\{+\w+\}+\s*)+$", RegexOptions.Compiled);
 
     /// <summary>
     /// Russian letters, matched by Unicode block. A hand-written a-to-ya range would
@@ -82,7 +121,7 @@ public class RefusalCopyShould
     [Fact]
     public void BeWrittenInRussian()
     {
-        var offenders = ThrowSites()
+        var offenders = EveryWording()
             .Where(site => site.Messages.Count > 0)
             .Where(site => !site.Messages.Any(message => Cyrillic.IsMatch(message)))
             .Select(Describe)
@@ -96,7 +135,7 @@ public class RefusalCopyShould
     [Fact]
     public void SpellEWithoutDots()
     {
-        var offenders = ThrowSites()
+        var offenders = EveryWording()
             .Where(site => site.Messages.Any(message => message.IndexOfAny(EWithDots) >= 0))
             .Select(Describe)
             .ToList();
@@ -109,7 +148,7 @@ public class RefusalCopyShould
     [Fact]
     public void CallTheChatEventByTheNameTheInterfaceGivesIt()
     {
-        var offenders = ThrowSites()
+        var offenders = EveryWording()
             .Where(site => site.Messages.Any(message => OtherNounForAnEvent.IsMatch(message)))
             .Select(Describe)
             .ToList();
@@ -150,7 +189,14 @@ public class RefusalCopyShould
     private static string Normalize(string message) =>
         Whitespace.Replace(Hole.Replace(message, "{}"), " ").Trim();
 
-    private static IReadOnlyList<ThrowSite> ThrowSites()
+    private static IReadOnlyList<ThrowSite> ThrowSites() =>
+        Sites(RefusalWording, atLeast: 200);
+
+    /// <summary>Every wording a refused person reads, of either kind.</summary>
+    private static IReadOnlyList<ThrowSite> EveryWording() =>
+        [.. ThrowSites(), .. Sites(ValidationWording, atLeast: 100)];
+
+    private static IReadOnlyList<ThrowSite> Sites(Regex wording, int atLeast)
     {
         var root = RepositoryRoot;
         var sites = new List<ThrowSite>();
@@ -160,15 +206,18 @@ public class RefusalCopyShould
             var text = File.ReadAllText(source);
             var relative = Path.GetRelativePath(root.FullName, source).Replace('\\', '/');
 
-            foreach (Match refusal in RefusalWording.Matches(text))
+            foreach (Match refusal in wording.Matches(text))
             {
                 var line = text.Take(refusal.Index).Count(symbol => symbol == '\n') + 1;
-                sites.Add(new ThrowSite(relative, line, Messages(text, refusal.Index + refusal.Length)));
+                var messages = Messages(text, refusal.Index + refusal.Length)
+                    .Where(message => !PlaceholderOnly.IsMatch(message))
+                    .ToList();
+                sites.Add(new ThrowSite(relative, line, messages));
             }
         }
 
-        sites.Should().HaveCountGreaterOrEqualTo(200,
-            "a rule that matches nothing passes: the domain services alone refuse more often than that");
+        sites.Should().HaveCountGreaterOrEqualTo(atLeast,
+            "a rule that matches nothing passes");
         return sites;
     }
 

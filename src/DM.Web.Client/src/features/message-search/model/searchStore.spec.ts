@@ -32,7 +32,7 @@ const hit = (id: string) => ({
   sourceTitle: null,
   id,
   createdUtc: "2026-01-01T00:00:00Z",
-  snippet: "hello",
+  snippet: [{ text: "hello", isMatch: false }],
 });
 
 const page = (

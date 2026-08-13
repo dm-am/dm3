@@ -112,8 +112,9 @@ internal class TopicRepository : ITopicRepository
         // them on both pages and the other on neither.
         sortedDbQuery = sortedDbQuery.ThenBy(t => t.TopicId);
 
-        // Read-only projection: AsNoTracking avoids EF Core's change
-        // tracker overhead. See PERFORMANCE.md → "AsNoTracking".
+        // ProjectTo materialises the Topic DTO and not the entity, so the change
+        // tracker is not involved either way. AsNoTracking stays as the default of
+        // a read path. See PERFORMANCE.md → "AsNoTracking".
         var topics = await sortedDbQuery
             .Page(pagingData)
             .AsNoTracking()
@@ -342,7 +343,7 @@ internal class TopicRepository : ITopicRepository
     /// <inheritdoc />
     public async Task<Topic> Create(CreateTopicEntity createTopic, Guid authorId, Guid boardId, CancellationToken ct = default)
     {
-        var topicId = _guidFactory.Create();
+        var topicId = createTopic.TopicId;
         var now = _dateTimeProvider.Now;
 
         // The API host configures EnableRetryOnFailure, and a retrying execution
@@ -419,69 +420,94 @@ internal class TopicRepository : ITopicRepository
     /// <inheritdoc />
     public async Task<TopicUpdateResult> Update(UpdateTopicEntity updateTopic, Guid? boardId = null)
     {
+        // Both writes or neither. The second one recomputes the denormalised summary
+        // of the boards a move touches, and separately a refusal between them left
+        // two boards counting a topic that is no longer theirs - a number nothing
+        // recomputes until the next topic moves.
+        //
+        // Through the strategy because the API host configures EnableRetryOnFailure and
+        // a retrying strategy refuses a transaction opened by hand. The read is
+        // inside the block: cleared out of the tracker by a retry, an entity read
+        // outside it would take every edit with it.
         var changed = false;
-        var topic = await _dbContext.Topics.FindAsync(updateTopic.TopicId);
-        if (topic != null)
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        var attempted = false;
+        await strategy.ExecuteAsync(async () =>
         {
-            if (!string.IsNullOrEmpty(updateTopic.Title))
+            if (attempted)
             {
-                topic.Title = updateTopic.Title.Trim();
+                _dbContext.ChangeTracker.Clear();
             }
 
-            // null = don't update (the UpdateTopic contract); an empty
-            // string is a deliberate clear — topic text is optional.
-            if (updateTopic.Text != null)
-            {
-                topic.Text = updateTopic.Text.Trim();
-            }
+            attempted = true;
 
-            if (updateTopic.IsClosed.HasValue)
-            {
-                topic.IsClosed = updateTopic.IsClosed.Value;
-            }
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
-            if (updateTopic.IsAttached.HasValue)
+            var topic = await _dbContext.Topics.FindAsync(updateTopic.TopicId);
+            if (topic != null)
             {
-                topic.IsAttached = updateTopic.IsAttached.Value;
-            }
-
-            // A move changes the summary of both boards: the one losing the topic
-            // and the one gaining it.
-            var previousBoardId = topic.BoardId;
-            if (boardId.HasValue)
-            {
-                topic.BoardId = boardId.Value;
-            }
-
-            // The tracker is the one fact about whether this request changed anything:
-            // a request that round-trips the values the topic already holds leaves it
-            // Unchanged. Both consequences hang off it — no row in the edit history,
-            // and no ChangedTopic announcement, since a notification whose actor is
-            // read back from that history would otherwise name the previous editor.
-            changed = _dbContext.Entry(topic).State == EntityState.Modified;
-
-            // The topic row keeps its author and no editor, so the history is the
-            // only record of who changed it.
-            if (updateTopic.EditorUserId != Guid.Empty && changed)
-            {
-                _dbContext.TopicEdits.Add(new Entities.Forum.TopicEdit
+                if (!string.IsNullOrEmpty(updateTopic.Title))
                 {
-                    TopicEditId = _guidFactory.Create(),
-                    TopicId = topic.TopicId,
-                    EditorUserId = updateTopic.EditorUserId,
-                    EditedUtc = _dateTimeProvider.Now
-                });
-            }
+                    topic.Title = updateTopic.Title.Trim();
+                }
 
-            await _dbContext.SaveChangesAsync();
+                // null = don't update (the UpdateTopic contract); an empty
+                // string is a deliberate clear — topic text is optional.
+                if (updateTopic.Text != null)
+                {
+                    topic.Text = updateTopic.Text.Trim();
+                }
 
-            if (boardId.HasValue && boardId.Value != previousBoardId)
-            {
-                await RefreshBoardTopicSummary(previousBoardId);
-                await RefreshBoardTopicSummary(boardId.Value);
+                if (updateTopic.IsClosed.HasValue)
+                {
+                    topic.IsClosed = updateTopic.IsClosed.Value;
+                }
+
+                if (updateTopic.IsAttached.HasValue)
+                {
+                    topic.IsAttached = updateTopic.IsAttached.Value;
+                }
+
+                // A move changes the summary of both boards: the one losing the topic
+                // and the one gaining it.
+                var previousBoardId = topic.BoardId;
+                if (boardId.HasValue)
+                {
+                    topic.BoardId = boardId.Value;
+                }
+
+                // The tracker is the one fact about whether this request changed anything:
+                // a request that round-trips the values the topic already holds leaves it
+                // Unchanged. Both consequences hang off it — no row in the edit history,
+                // and no ChangedTopic announcement, since a notification whose actor is
+                // read back from that history would otherwise name the previous editor.
+                changed = _dbContext.Entry(topic).State == EntityState.Modified;
+
+                // The topic row keeps its author and no editor, so the history is the
+                // only record of who changed it.
+                if (updateTopic.EditorUserId != Guid.Empty && changed)
+                {
+                    _dbContext.TopicEdits.Add(new Entities.Forum.TopicEdit
+                    {
+                        TopicEditId = _guidFactory.Create(),
+                        TopicId = topic.TopicId,
+                        EditorUserId = updateTopic.EditorUserId,
+                        EditedUtc = _dateTimeProvider.Now
+                    });
+                }
+
                 await _dbContext.SaveChangesAsync();
+
+                if (boardId.HasValue && boardId.Value != previousBoardId)
+                {
+                    await RefreshBoardTopicSummary(previousBoardId);
+                    await RefreshBoardTopicSummary(boardId.Value);
+                    await _dbContext.SaveChangesAsync();
+                }
             }
-        }
+
+            await transaction.CommitAsync();
+        });
 
         var updated = await _dbContext.Topics
             .TagWith("DM.Forum.UpdatedTopic")
@@ -495,14 +521,33 @@ internal class TopicRepository : ITopicRepository
     /// <inheritdoc />
     public async Task Delete(Guid topicId, Guid deletedByUserId)
     {
-        var topic = await _dbContext.Topics.FindAsync(topicId);
-        if (topic != null)
+        // Both writes or neither: separately, a refusal between them left the board
+        // counting a topic that is gone. The read is inside the block for the same
+        // reason as in Update above.
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        var attempted = false;
+        await strategy.ExecuteAsync(async () =>
         {
-            SoftDelete.Mark(topic, deletedByUserId, _dateTimeProvider.Now);
-            await _dbContext.SaveChangesAsync();
-            await RefreshBoardTopicSummary(topic.BoardId);
-            await _dbContext.SaveChangesAsync();
-        }
+            if (attempted)
+            {
+                _dbContext.ChangeTracker.Clear();
+            }
+
+            attempted = true;
+
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
+            var topic = await _dbContext.Topics.FindAsync(topicId);
+            if (topic != null)
+            {
+                SoftDelete.Mark(topic, deletedByUserId, _dateTimeProvider.Now);
+                await _dbContext.SaveChangesAsync();
+                await RefreshBoardTopicSummary(topic.BoardId);
+                await _dbContext.SaveChangesAsync();
+            }
+
+            await transaction.CommitAsync();
+        });
     }
 
     /// <summary>

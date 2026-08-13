@@ -11,14 +11,14 @@ internal class CreatePostReviewValidator : AbstractValidator<CreatePostReview>
     {
         RuleFor(r => r.PostId)
             .NotEmpty()
-            .WithMessage("Post ID is required");
+            .WithMessage("Укажите пост");
 
         RuleFor(r => r.Sign)
             .IsInEnum()
-            .WithMessage("Invalid review sign");
+            .WithMessage("Оценка указана неверно");
 
         RuleFor(r => r.Text)
             .NotEmpty()
-            .WithMessage("Review text is required");
+            .WithMessage("Введите текст рецензии");
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace DM.Domain.Core.Content;
@@ -19,6 +20,68 @@ public static class PrivateBlockMarkup
 {
     /// <summary>Tag name of the private addressee block.</summary>
     public const string TagName = "private";
+
+    /// <summary>
+    /// A whole block, opening tag through closing tag, for the paths that have to
+    /// cut one out of raw text: the stored search vector, the ILike filter behind
+    /// it and the snippet the search results show.
+    /// </summary>
+    /// <remarks>
+    /// One string because two of those paths are PostgreSQL and one is .NET, and
+    /// the two engines read the same text differently. The optional attribute
+    /// carries a lazy quantifier of its own because Postgres takes the greediness
+    /// of a whole expression from its first quantifier: with a greedy one there,
+    /// the lazy body below it was ignored and a single substitution ate everything
+    /// from the first opening tag to the last closing one. Public text standing
+    /// between two private blocks disappeared from the index, from the filter and
+    /// from the snippet — and only in Postgres, so the .NET copy of the same
+    /// string agreed with nothing.
+    /// </remarks>
+    public const string BlockPattern = @"\[private(=[^\]]*)??\][\s\S]*?\[/private\]";
+
+    /// <summary>
+    /// Whether every private block in the text is closed, and none is opened
+    /// inside another.
+    /// </summary>
+    /// <remarks>
+    /// An unclosed block is not a block: nothing cuts it out, so its text is
+    /// indexed, matched and shown in a search preview, while the page renders it
+    /// as private and hides it. The author sees a hidden line and the search sees
+    /// a public one. A nested block is the other half of the same problem — the
+    /// cut ends at the first closing tag, and the remainder of the outer block
+    /// comes back out as public text.
+    ///
+    /// Refused at the save path rather than repaired: what the author meant by a
+    /// tag they did not close cannot be guessed, and the two possible guesses —
+    /// close it at the end, or drop it — differ by exactly who reads the rest of
+    /// the post.
+    /// </remarks>
+    /// <param name="source">Raw BBCode as the author submitted it</param>
+    public static bool IsBalanced(string? source)
+    {
+        if (string.IsNullOrEmpty(source) ||
+            source.IndexOf(TagName, StringComparison.OrdinalIgnoreCase) < 0)
+        {
+            return true;
+        }
+
+        var opens = OpenTagRegex.Matches(source).Select(match => (match.Index, IsOpen: true));
+        var closes = CloseTagRegex.Matches(source).Select(match => (match.Index, IsOpen: false));
+
+        var depth = 0;
+        foreach (var tag in opens.Concat(closes).OrderBy(tag => tag.Index))
+        {
+            depth += tag.IsOpen ? 1 : -1;
+            // Below zero is a closing tag with nothing open before it; above one is
+            // a block opened inside a block.
+            if (depth is < 0 or > 1)
+            {
+                return false;
+            }
+        }
+
+        return depth == 0;
+    }
 
     /// <summary>
     /// Opening tag in any casing, with or without an attribute. The quoted

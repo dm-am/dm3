@@ -15,6 +15,14 @@ trim_trailing_whitespace = true
 [*.cs]
 indent_size = 4
 
+# CA2254 ships with the SDK and is off by default. An interpolated or
+# concatenated logging template inlines the value into the message text: the
+# property is lost to a structured query, and a secret spelled there cannot be
+# taken back - the log store keeps the line for a month and the container log
+# keeps a copy of its own. Concatenation of constants stays legal, so a template
+# wrapped across lines still builds.
+dotnet_diagnostic.CA2254.severity = error
+
 # Solution files
 [*.sln]
 indent_style = tab

@@ -19,16 +19,19 @@ internal class GameBlacklistRepository : IGameBlacklistRepository
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
 
     /// <inheritdoc />
     public GameBlacklistRepository(
         DmDbContext dbContext,
         IMapper mapper,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        IGuidFactory guidFactory)
     {
         _dbContext = dbContext;
         _mapper = mapper;
         _dateTimeProvider = dateTimeProvider;
+        _guidFactory = guidFactory;
     }
 
     /// <inheritdoc />
@@ -60,7 +63,7 @@ internal class GameBlacklistRepository : IGameBlacklistRepository
         {
             _dbContext.GameBlacklists.Add(new GameBlacklist
             {
-                EntryId = Guid.NewGuid(),
+                EntryId = _guidFactory.Create(),
                 GameId = gameId,
                 BlockedUserId = blockedUserId,
                 BlockedByUserId = ownerId,
@@ -80,7 +83,7 @@ internal class GameBlacklistRepository : IGameBlacklistRepository
     {
         var blacklistEntry = new GameBlacklist
         {
-            EntryId = Guid.NewGuid(),
+            EntryId = _guidFactory.Create(),
             GameId = gameId,
             BlockedUserId = blockedUserId,
             BlockedByUserId = blockedByUserId,

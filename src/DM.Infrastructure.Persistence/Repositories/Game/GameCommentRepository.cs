@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Abstractions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -21,21 +22,24 @@ internal class GameCommentRepository : IGameCommentRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
+    private readonly IGuidFactory _guidFactory;
 
     public GameCommentRepository(
         DmDbContext dbContext,
-        IMapper mapper)
+        IMapper mapper,
+        IGuidFactory guidFactory)
     {
         _dbContext = dbContext;
         _mapper = mapper;
+        _guidFactory = guidFactory;
     }
 
     /// <inheritdoc />
-    public Task<int> Count(Guid gameId, GameCommentsQuery query, IReadOnlyCollection<Guid>? excludeUserIds = null) =>
+    public Task<int> Count(Guid gameId, CommentsQuery query, IReadOnlyCollection<Guid>? excludeUserIds = null) =>
         CommentQueries.Count(_dbContext, gameId, query, excludeUserIds, "DM.GameComments.Count");
 
     /// <inheritdoc />
-    public Task<IEnumerable<Comment>> Get(Guid gameId, GameCommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null) =>
+    public Task<IEnumerable<Comment>> Get(Guid gameId, CommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null) =>
         CommentQueries.Page(_dbContext, _mapper, gameId, query, paging, excludeUserIds, "DM.GameComments.List");
 
     /// <inheritdoc />
@@ -81,7 +85,11 @@ internal class GameCommentRepository : IGameCommentRepository
         if (comment != null)
         {
             comment.Text = updateComment.Text;
-            // Modification tracking is handled via Edit history, not inline ModifiedUtc
+            // The comment row keeps no modification stamp: ModifiedUtc is derived
+            // from the newest entry of this history, and the client draws its
+            // "edited" mark from that. Written here rather than at the call site so
+            // the text and its trace go in one SaveChanges.
+            CommentEdits.Record(_dbContext, _guidFactory, updateComment.CommentId, updateComment.EditorUserId, updateComment.ModifiedUtc);
             await _dbContext.SaveChangesAsync();
         }
 

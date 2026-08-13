@@ -21,12 +21,13 @@ internal class MailConsumer : BackgroundService
     /// <summary>Queue this worker reads, as both the topology and the metrics name it.</summary>
     internal const string QueueName = "dm.mail.sending";
 
-    // A literal of its own although it reads the same. The exchange the letters are
-    // published to is written out on the producer side, in MailSender, so binding the
-    // two names together here would rename one end of the route on the day the other
-    // end is left alone - and a letter published to an exchange nothing is bound to is
-    // dropped by the broker without a trace.
-    private const string ConsumerExchangeName = "dm.mail.sending";
+    // The producer's name, not a copy of it. Two literals were kept here on the
+    // theory that they protect the route from a one-sided rename; they do the
+    // opposite - a rename of either was silent, and a letter published to an
+    // exchange nothing is bound to is dropped by the broker without a trace. One
+    // constant moves both ends at once. The queue above keeps a literal of its
+    // own because it is a different thing that happens to read the same.
+    private const string ConsumerExchangeName = MailTransport.ExchangeName;
 
     private const string DeadLetterExchangeName = "dm.mail.unsent";
 

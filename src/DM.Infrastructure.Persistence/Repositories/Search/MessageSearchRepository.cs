@@ -21,11 +21,14 @@ namespace DM.Infrastructure.Persistence.Repositories.Search;
 /// </summary>
 internal class MessageSearchRepository : IMessageSearchRepository
 {
-    private const string SearchConfig = "russian";
+    private const string SearchConfig = SearchTextConfiguration.Name;
 
     // Must match the [private] strip used by the Post.SearchVector generated
     // column (DmDbContext) and PostRepository — private text is never previewed.
     private const string PrivateBlockPattern = SearchSnippet.PrivateBlockPattern;
+
+    /// <summary>The one branch of this search that reads a different table.</summary>
+    private const string GameSourceType = "game";
 
     private readonly DmDbContext _dbContext;
     private readonly ICursorService _cursorService;
@@ -34,6 +37,89 @@ internal class MessageSearchRepository : IMessageSearchRepository
     {
         _dbContext = dbContext;
         _cursorService = cursorService;
+    }
+
+    /// <summary>
+    /// Fills in the preview of a page: a window around the match, with the match
+    /// marked.
+    /// </summary>
+    /// <remarks>
+    /// A second pass over the page rather than part of the projection above, and
+    /// not for tidiness. ts_headline re-parses the document it is given, and in the
+    /// select list of the ranked query it would run for every message that matched
+    /// anywhere the reader can see - to be thrown away by the paging a moment
+    /// later. Here it runs once per row a reader will actually see.
+    ///
+    /// The window is what makes the preview worth reading. Cut from the beginning
+    /// instead, it showed the first two hundred characters and almost never the
+    /// words that were searched for; and it could not have found them by looking,
+    /// because the search matches by lexeme - a query for "странник" matches
+    /// "странников", which no substring of the query occurs in.
+    /// </remarks>
+    private async Task Preview(MessageSearchHit[] page, string query, CancellationToken ct)
+    {
+        if (page.Length == 0)
+        {
+            return;
+        }
+
+        // A filter with no words in it - by author, by date - matches every row
+        // equally, and there is nothing to build a window around. The fallback
+        // strips the private block a second time: the projection already removed
+        // it, the column cannot fail and a process can.
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            foreach (var row in page)
+            {
+                row.SnippetSegments = SearchSnippet.Plain(row.Snippet);
+            }
+
+            return;
+        }
+
+        var messageIds = page.Where(h => h.SourceType != GameSourceType).Select(h => h.Id).ToArray();
+        var postIds = page.Where(h => h.SourceType == GameSourceType).Select(h => h.Id).ToArray();
+
+        var headlines = new Dictionary<Guid, string>();
+
+        if (messageIds.Length > 0)
+        {
+            foreach (var row in await _dbContext.Messages
+                .Where(m => messageIds.Contains(m.MessageId))
+                .Select(m => new
+                {
+                    m.MessageId,
+                    Headline = EF.Functions.WebSearchToTsQuery(SearchConfig, query)
+                        .GetResultHeadline(SearchConfig, EF.Property<string>(m, "SearchText"), SearchSnippet.HeadlineOptions),
+                })
+                .ToArrayAsync(ct))
+            {
+                headlines[row.MessageId] = row.Headline;
+            }
+        }
+
+        if (postIds.Length > 0)
+        {
+            foreach (var row in await _dbContext.Posts
+                .Where(p => postIds.Contains(p.PostId))
+                .Select(p => new
+                {
+                    p.PostId,
+                    Headline = EF.Functions.WebSearchToTsQuery(SearchConfig, query)
+                        .GetResultHeadline(SearchConfig, EF.Property<string>(p, "SearchText"), SearchSnippet.HeadlineOptions),
+                })
+                .ToArrayAsync(ct))
+            {
+                headlines[row.PostId] = row.Headline;
+            }
+        }
+
+        foreach (var row in page)
+        {
+            row.SnippetSegments = headlines.TryGetValue(row.Id, out var headline)
+                ? SearchSnippet.Highlight(headline)
+                : SearchSnippet.Plain(row.Snippet);
+        }
     }
 
     /// <inheritdoc />
@@ -97,7 +183,7 @@ internal class MessageSearchRepository : IMessageSearchRepository
                 SourceTitle = null,
                 Id = m.MessageId,
                 CreatedUtc = m.CreatedUtc,
-                Snippet = m.Text
+                Snippet = EF.Property<string>(m, "SearchText")
             }));
         }
 
@@ -128,7 +214,7 @@ internal class MessageSearchRepository : IMessageSearchRepository
                 SourceTitle = m.Chat.Title,
                 Id = m.MessageId,
                 CreatedUtc = m.CreatedUtc,
-                Snippet = m.Text
+                Snippet = EF.Property<string>(m, "SearchText")
             }));
         }
 
@@ -154,14 +240,16 @@ internal class MessageSearchRepository : IMessageSearchRepository
 
             branches.Add(q.Select(p => new MessageSearchHit
             {
-                SourceType = "game",
+                SourceType = GameSourceType,
                 SourceId = p.Room.GameId,
                 SourceTitle = p.Room.Game.Title,
                 Id = p.PostId,
                 CreatedUtc = p.CreatedUtc,
+                // The projected visible text, which the vector of this row is built
+                // from as well: a preview can show nothing the index refused.
                 // Snippet from the SAME [private]-stripped expression as the
                 // index — private content is never previewed.
-                Snippet = DmDbContext.RegexpReplace(p.GameText, PrivateBlockPattern, " ", "gi")
+                Snippet = EF.Property<string>(p, "SearchText")
             }));
         }
 
@@ -180,14 +268,7 @@ internal class MessageSearchRepository : IMessageSearchRepository
 
         var hasMore = rows.Length > limit;
         var page = rows.Take(limit).ToArray();
-        foreach (var row in page)
-        {
-            // Strip [private] blocks before previewing: search snippets bypass
-            // the viewer-scoped Display render, so raw [private] content would
-            // otherwise leak to any searcher. [mod] is public on read, so it is
-            // left intact. Done server-side, before truncation.
-            row.Snippet = SearchSnippet.Truncate(SearchSnippet.StripPrivateBlocks(row.Snippet));
-        }
+        await Preview(page, freeText, ct);
 
         string? nextCursor = null;
         if (hasMore && page.Length > 0)
@@ -196,13 +277,19 @@ internal class MessageSearchRepository : IMessageSearchRepository
             nextCursor = _cursorService.CreateBeforeCursor(last.Id, last.CreatedUtc);
         }
 
+        // Forward only. The cursor decodes to "older than (timestamp, id)" and
+        // there is no reverse walk over the three branches, so there is no
+        // previous-page cursor to hand out - and an envelope must not report a page
+        // it cannot produce. It did: HasPrev was true from the second page on while
+        // PrevCursor stayed null, which reads to any client as "there is a page
+        // back, ask me for it" with nothing to ask with.
         return new CursorResult<MessageSearchHit>
         {
             Data = page,
             NextCursor = nextCursor,
             PrevCursor = null,
             HasNext = hasMore,
-            HasPrev = cursorTs.HasValue
+            HasPrev = false
         };
     }
 

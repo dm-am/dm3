@@ -17,6 +17,7 @@
  * character. The backend is the final authority.
  */
 import { computed, onMounted, ref, watch } from "vue";
+import { htmlToBbcode } from "@/shared/lib/utils/bbcode";
 import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import {
@@ -104,8 +105,8 @@ const isOwner = computed(
 // --- Full character for the form ----------------------------------------------
 // The list endpoint returns characters without attributes, so the form is fed
 // from the single-character AuthorEdit fetch: non-BBCode raw values in `value`,
-// BBCode raw source in `valueBbText`. Without this seed, saving would drop
-// every attribute the user did not retype.
+// BBCode rendered round-trip HTML in `valueBbText`. Without this seed, saving
+// would drop every attribute the user did not retype.
 const detail = ref<Character | null>(null);
 const detailLoading = ref(false);
 const detailError = ref(false);
@@ -131,11 +132,18 @@ watch(
 );
 
 // Raw initial values keyed by specification id for CharacterForm.
+//
+// valueBbText comes from the AuthorEdit audience, which returns HTML carrying
+// data-bb-* attributes rather than the source: BbConverter calls RenderHtml for
+// every audience except plain text. The editor takes and returns BBCode, so it
+// escapes incoming HTML and hands it back as the field's text on save.
+// htmlToBbcode is the reverse half of that same round trip.
 const initialValues = computed<Record<string, string>>(() => {
   const map: Record<string, string> = {};
   for (const attr of detail.value?.attributes ?? []) {
+    const bbText = attr.valueBbText as unknown as string | undefined;
     map[attr.id as unknown as string] =
-      attr.value ?? (attr.valueBbText as unknown as string) ?? "";
+      attr.value ?? (bbText ? htmlToBbcode(bbText) : "");
   }
   return map;
 });

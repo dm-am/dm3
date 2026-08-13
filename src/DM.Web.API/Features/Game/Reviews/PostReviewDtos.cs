@@ -71,12 +71,12 @@ public class CreatePostReviewRequest
     /// <summary>
     /// Rating sign (required): Positive, Neutral, or Negative
     /// </summary>
-    [Required(ErrorMessage = "Sign is required")]
+    [Required(ErrorMessage = "Укажите оценку")]
     public ReviewSign Sign { get; set; }
 
     /// <summary>
     /// Review text (required, BBCode supported)
     /// </summary>
-    [Required(ErrorMessage = "Text is required")]
+    [Required(ErrorMessage = "Введите текст")]
     public string Text { get; set; } = null!;
 }

@@ -16,11 +16,14 @@ permissions:
   contents: read
 
 # A newer push to the same branch supersedes the run in flight — except on the
-# refs that publish. Four images go to the registry as four separate steps, and
-# docker-compose.yml pins them to one tag on the promise that they were built
-# from one commit; a run cancelled between the second and the third leaves
-# `latest` naming a mixture, which nothing afterwards detects. On a pull request
-# there is nothing to publish, so superseding is free.
+# refs that publish. Cancelling between two legs of the publish matrix leaves the
+# registry holding half of a release, and the run that superseded it will not
+# rebuild the half that made it.
+#
+# What guarantees that one tag means one commit is promote-images, which sets the
+# moving names after every publisher has finished; this only keeps a superseded
+# run from leaving orphaned digests behind. On a pull request there is nothing to
+# publish, so superseding is free.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ !(github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v')) }}
@@ -189,13 +192,21 @@ jobs:
     # docker-compose.preview.yml are the combination that gets deployed and the
     # compose-topology job validates exactly that pair. A knob that must never
     # reach a server does not belong in that set.
-    - name: Overlay that turns rate limiting off for the run
+    - name: Overlay that turns rate limiting off and lets the preview origin in
       run: |
         cat > docker/docker-compose.e2e.yml <<'YAML'
         services:
           dmapi:
             environment:
               DM_RateLimiting__Enabled: "false"
+              # The port the suite serves the built bundle from. The API derives
+              # the origins a browser may call it from - its public address plus
+              # the site's own hosts - and adds the two development ports only
+              # when the environment is Development, which this job is not. Left
+              # out, every request from the page carries an origin the API does
+              # not answer to: CORS drops the responses and the origin check
+              # refuses the writes, so the specs fail on locators that never fill.
+              DM_SiteAddressConfiguration__AdditionalOrigins__0: "http://localhost:5174"
         YAML
 
     # --build on the migration line too. Its image is the API image, and the API
@@ -234,8 +245,9 @@ jobs:
       run: npx playwright install --with-deps chromium
 
     # playwright.config.ts builds the bundle and serves it with vite preview on
-    # port 5174, which is the only free choice: the API validates Origin twice
-    # and its allowlist holds 5173, 5174 and 8080.
+    # port 5174. The API validates Origin twice - the CORS policy and the check
+    # that stands in for a CSRF token read one derived list - and 5174 is not in
+    # it under Production, so the overlay above adds it for this run.
     - name: Run the suite
       working-directory: src/DM.Web.Client
       run: npx playwright test --project=chromium
@@ -372,11 +384,12 @@ jobs:
       uses: docker/metadata-action@v5
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.image_suffix }}
-        tags: |
-          type=sha,prefix=
-          type=ref,event=branch
-          type=ref,event=tag
-          type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+        # One tag, and it names a commit. The moving names - latest, the branch,
+        # the release tag - are set by promote-images once every publisher has
+        # finished, because each leg of this matrix finishes at its own moment: set
+        # here, "latest" was whatever mixture of commits the legs happened to end
+        # in, and a leg that failed left the others carrying the name alone.
+        tags: type=sha,prefix=
 
     - name: Build and push image
       uses: docker/build-push-action@v5
@@ -388,8 +401,12 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         build-args: |
           PROJECT_NAME=${{ matrix.project }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+          SOURCE_REVISION=${{ github.sha }}
+        # A scope per image. Left unnamed, all four builds write the default scope
+        # of the same ref and overwrite one another's index: the cache is present,
+        # paid for, and useless.
+        cache-from: type=gha,scope=${{ matrix.image_suffix }}
+        cache-to: type=gha,mode=max,scope=${{ matrix.image_suffix }}
 
   # The frontend has its own context and Dockerfile, so it cannot ride the
   # publish matrix without conditionals in every step. Until this job existed the
@@ -424,11 +441,12 @@ jobs:
       uses: docker/metadata-action@v5
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-front
-        tags: |
-          type=sha,prefix=
-          type=ref,event=branch
-          type=ref,event=tag
-          type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+        # One tag, and it names a commit. The moving names - latest, the branch,
+        # the release tag - are set by promote-images once every publisher has
+        # finished, because each leg of this matrix finishes at its own moment: set
+        # here, "latest" was whatever mixture of commits the legs happened to end
+        # in, and a leg that failed left the others carrying the name alone.
+        tags: type=sha,prefix=
 
     - name: Build and push image
       uses: docker/build-push-action@v5
@@ -437,8 +455,57 @@ jobs:
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        cache-from: type=gha,scope=front
+        cache-to: type=gha,mode=max,scope=front
+
+# The moving names of the images, set once and after everything that could
+  # still fail.
+  #
+  # Each publisher pushes one tag, and it names a commit. "latest", the branch
+  # name and the release tag are what a deployment actually pulls, and until this
+  # job existed each leg of the publish matrix set them for itself, at whatever
+  # moment it happened to finish: a leg that failed left the other three carrying
+  # the name alone, and compose pins all four to one tag on the promise that they
+  # came from one commit. Nothing downstream detects the mixture.
+  #
+  # imagetools create copies a manifest by digest, so nothing is rebuilt here and
+  # the bytes a moving name resolves to are the bytes that were tested.
+  promote-images:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    needs: [ publish, publish-frontend ]
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - name: Log in to the registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Point the moving names at this commit
+      run: |
+        SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+
+        NAMES=""
+        case "${{ github.ref }}" in
+          refs/heads/main) NAMES="latest main" ;;
+          refs/heads/dev)  NAMES="dev" ;;
+          refs/tags/v*)    NAMES="${GITHUB_REF#refs/tags/}" ;;
+        esac
+
+        # Nothing to move on a ref that publishes no name of its own.
+        [ -n "$NAMES" ] || exit 0
+
+        for image in api worker-mail worker-notification front; do
+          REPO="${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-$image"
+          for name in $NAMES; do
+            docker buildx imagetools create --tag "$REPO:$name" "$REPO:$SHA"
+          done
+        done
 
   # A build context that does not exist, an overlay that no longer parses or a
   # service renamed out from under the installer must fail here, not on the
@@ -520,10 +587,36 @@ jobs:
     - name: The edge and the SPA server configurations must parse
       run: |
         # The upstreams are resolved at start-up and none of them exists here.
+        # The password file is mounted because the door lives in the shared
+        # locations file now, and nginx refuses one it cannot open.
+        printf 'preview:$apr1$syntax$0123456789abcdefghijk\n' > /tmp/edge-htpasswd
         docker run --rm \
           --add-host dmapi:127.0.0.1 --add-host dmfront:127.0.0.1 \
           --add-host minio:127.0.0.1 --add-host imgproxy:127.0.0.1 \
           -v "$PWD/docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
+          -v "$PWD/docker/nginx/edge-locations.conf:/etc/nginx/edge-locations.conf:ro" \
+          -v "/tmp/edge-htpasswd:/etc/nginx/.htpasswd:ro" \
+          nginx:1.27-alpine nginx -t
+        # And with the TLS server the issuing script writes. This is the half that
+        # used to be a commented-out copy: nothing parsed it, and by the time
+        # anybody would have switched it on it had lost the health probe and
+        # carried a listen directive nginx has warned about since 1.25.
+        mkdir -p /tmp/edge-tls /tmp/edge-ssl/live/dm
+        openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+          -keyout /tmp/edge-ssl/live/dm/privkey.pem \
+          -out /tmp/edge-ssl/live/dm/fullchain.pem \
+          -subj "/CN=edge-syntax-check" 2>/dev/null
+        sed -n '/^cat > /,/^EOF$/p' docker/scripts/init-ssl.sh \
+          | sed '1d;$d;s/\$PRIMARY/edge-syntax-check/g' \
+          > /tmp/edge-tls/tls.conf
+        docker run --rm \
+          --add-host dmapi:127.0.0.1 --add-host dmfront:127.0.0.1 \
+          --add-host minio:127.0.0.1 --add-host imgproxy:127.0.0.1 \
+          -v "$PWD/docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
+          -v "$PWD/docker/nginx/edge-locations.conf:/etc/nginx/edge-locations.conf:ro" \
+          -v "/tmp/edge-htpasswd:/etc/nginx/.htpasswd:ro" \
+          -v "/tmp/edge-tls:/etc/nginx/tls:ro" \
+          -v "/tmp/edge-ssl:/etc/nginx/ssl:ro" \
           nginx:1.27-alpine nginx -t
         # The SPA config is a server block, not a whole configuration: it is
         # mounted where the image includes it from.
@@ -534,9 +627,10 @@ jobs:
         # own. It arrives as a template, so the image's own entrypoint renders it
         # first; the certificate is generated here because the configuration
         # refuses to start without one, which is the point of it.
-        mkdir -p /tmp/pop-ssl
+        mkdir -p /tmp/pop-ssl/live/dm
         openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
-          -keyout /tmp/pop-ssl/privkey.pem -out /tmp/pop-ssl/fullchain.pem \
+          -keyout /tmp/pop-ssl/live/dm/privkey.pem \
+          -out /tmp/pop-ssl/live/dm/fullchain.pem \
           -subj "/CN=pop-syntax-check" 2>/dev/null
         docker run --rm \
           --add-host dmfront:127.0.0.1 \
@@ -548,6 +642,30 @@ jobs:
           nginx:1.27-alpine \
           sh -c '/docker-entrypoint.sh nginx -t'
 
+    # The installer's first act, and the one that has to hold: run twice it
+    # reached a clone into a non-empty directory and died there, having already
+    # installed packages and restarted the docker daemon of a running stand.
+    - name: The installer must refuse a directory it would install over
+      run: |
+        empty="$(mktemp -d)"
+        bash docker/scripts/require-empty-install-dir.sh "$empty" ||
+          { echo "::error::the guard refuses an empty directory, so the installer can never run"; exit 1; }
+
+        occupied="$(mktemp -d)"
+        touch "$occupied/docker-compose.yml"
+        if bash docker/scripts/require-empty-install-dir.sh "$occupied" 2>/dev/null; then
+          echo "::error::the guard accepts a directory that already holds a stand"; exit 1
+        fi
+
+        # Order is the whole point: asked after apt, the answer arrives on a
+        # machine the installer has already changed.
+        guard=$(grep -n 'require-empty-install-dir.sh' docker/setup-server.sh | head -1 | cut -d: -f1)
+        clone=$(grep -n 'git clone' docker/setup-server.sh | head -1 | cut -d: -f1)
+        apt=$(grep -n 'apt install' docker/setup-server.sh | head -1 | cut -d: -f1)
+        test -n "$guard" || { echo "::error::setup-server.sh never asks the guard"; exit 1; }
+        test "$guard" -lt "$clone" || { echo "::error::the guard runs after the clone it exists to precede"; exit 1; }
+        test "$guard" -lt "$apt" || { echo "::error::the guard runs after the packages are installed"; exit 1; }
+
     - name: The Prometheus configuration and its alert rules must parse
       run: |
         docker run --rm \
@@ -555,6 +673,19 @@ jobs:
           -v "$PWD/docker/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro" \
           --entrypoint promtool prom/prometheus:v2.51.0 \
           check config /etc/prometheus/prometheus.yml
+
+    # And parsing is all the step above does. An expression that reads the wrong
+    # series parses exactly as well as the right one: the backlog rule counted
+    # only the messages still waiting, so a worker holding a thousand of them
+    # read as an empty queue, and the rule was silent on the very state it was
+    # written for. These run each rule over a series and assert what it does.
+    - name: The alert rules must fire on what they are written for
+      run: |
+        docker run --rm \
+          -v "$PWD/docker/prometheus:/rules:ro" \
+          -w /rules \
+          --entrypoint promtool prom/prometheus:v2.51.0 \
+          test rules alerts_test.yml
 
     # promtool above is happy with rules that go nowhere, and that is what this
     # repository ran: rule_files with no alerting section and no alertmanager to
@@ -674,19 +805,11 @@ jobs:
         docker compose up -d --build --wait dmapi
         docker compose up -d --build --wait nginx
 
+    # The same script an operator runs against the public address after the
+    # containers have been replaced. Written out here as well, the two lists were
+    # one edit away from a pipeline that checks something the operator does not.
     - name: The edge answers where the deployment needs it to
-      run: |
-        status() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
-        # The heartbeat the monitoring guide recommends: the liveness of the API
-        # itself, reachable without the stand credentials. Answered by the SPA
-        # fallback with 200 before it had a location of its own.
-        test "$(status http://localhost/_health)" = 200
-        test "$(status http://localhost/nginx-health)" = 200
-        # Everything else is behind basic auth, the SPA and the API alike.
-        test "$(status http://localhost/)" = 401
-        test "$(status http://localhost/v1/boards)" = 401
-        test "$(status -u preview:smoke-test-password http://localhost/)" = 200
-        test "$(status -u preview:smoke-test-password http://localhost/v1/boards)" = 200
+      run: bash docker/scripts/smoke-edge.sh http://localhost preview smoke-test-password
 
     - name: Logs on failure
       if: failure()

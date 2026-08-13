@@ -14,6 +14,22 @@ public class CreateToken
     public Guid TokenId { get; set; }
 
     /// <summary>
+    /// The value that goes into the confirmation link, for the types that mail one.
+    /// </summary>
+    /// <remarks>
+    /// Never stored: the row keeps <see cref="SecretHash" /> instead. Empty for an
+    /// invitation, which is redeemed by the addressee inside the site and is
+    /// therefore an identifier rather than a credential — see
+    /// <see cref="ConfirmationSecret" />.
+    /// </remarks>
+    public Guid Secret { get; set; }
+
+    /// <summary>
+    /// What the row keeps for <see cref="Secret" />.
+    /// </summary>
+    public byte[]? SecretHash { get; set; }
+
+    /// <summary>
     /// User identifier
     /// </summary>
     public Guid UserId { get; set; }

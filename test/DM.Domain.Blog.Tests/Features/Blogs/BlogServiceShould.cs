@@ -143,7 +143,7 @@ public class BlogServiceShould : UnitTestBase
         var blog = new BlogDto { Id = blogId, DraftVisibility = DraftVisibility.Public };
         var updateBlog = new UpdateBlog { BlogId = blogId, Title = "Updated" };
 
-        _repository.Setup(r => r.Get(blogId, default)).ReturnsAsync(blog);
+        _repository.Setup(r => r.Get(blogId, It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(blog);
         _repository.Setup(r => r.UpdateBlog(It.IsAny<UpdateBlogEntity>(), default))
             .ReturnsAsync(blog);
 
@@ -168,7 +168,7 @@ public class BlogServiceShould : UnitTestBase
         };
 
         _identityProvider.Setup(p => p.Current).Returns(identity);
-        _repository.Setup(r => r.Get(blogId, default)).ReturnsAsync(blog);
+        _repository.Setup(r => r.Get(blogId, It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(blog);
 
         var act = async () => await _service.Subscribe(blogId);
 
@@ -186,7 +186,7 @@ public class BlogServiceShould : UnitTestBase
 
         _repository.Setup(r => r.GetRubric(rubricId, default))
             .ReturnsAsync((new Rubric { Id = rubricId }, blogId));
-        _repository.Setup(r => r.Get(blogId, default)).ReturnsAsync(blog);
+        _repository.Setup(r => r.Get(blogId, It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(blog);
         _repository.Setup(r => r.UpdateRubric(It.IsAny<UpdateRubricEntity>(), default))
             .ReturnsAsync(new Rubric { Id = rubricId, Title = "Renamed" });
 
@@ -219,7 +219,7 @@ public class BlogServiceShould : UnitTestBase
         var orderedIds = new[] { second, first };
         var blog = new BlogDto { Id = blogId, DraftVisibility = DraftVisibility.Public };
 
-        _repository.Setup(r => r.Get(blogId, default)).ReturnsAsync(blog);
+        _repository.Setup(r => r.Get(blogId, It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(blog);
         _repository.Setup(r => r.ReorderRubrics(blogId, It.IsAny<IReadOnlyList<Guid>>(), default))
             .Returns(Task.CompletedTask);
         // The order replaces the blog's whole order, so the body is checked against
@@ -248,7 +248,7 @@ public class BlogServiceShould : UnitTestBase
         var second = Guid.NewGuid();
         var blog = new BlogDto { Id = blogId, DraftVisibility = DraftVisibility.Public };
 
-        _repository.Setup(r => r.Get(blogId, default)).ReturnsAsync(blog);
+        _repository.Setup(r => r.Get(blogId, It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(blog);
         _repository.Setup(r => r.GetRubrics(blogId, default))
             .ReturnsAsync(new[] { new Rubric { Id = first }, new Rubric { Id = second } });
 
@@ -278,7 +278,7 @@ public class BlogServiceShould : UnitTestBase
             .Returns(Identity.Success(user, new Session(), UserSettings.Default, "token"));
 
         var blog = new BlogDto { Id = blogId, DraftVisibility = DraftVisibility.Public };
-        _repository.Setup(r => r.Get(blogId, default)).ReturnsAsync(blog);
+        _repository.Setup(r => r.Get(blogId, It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(blog);
 
         // Blog-level unread fill runs inside GetAsync — return 0 for the blog.
         _unreadCountersRepository
@@ -327,7 +327,7 @@ public class BlogServiceShould : UnitTestBase
         // total publications) and A is the total comment count for the rubric.
         var blogId = Guid.NewGuid();
         var blog = new BlogDto { Id = blogId, DraftVisibility = DraftVisibility.Public };
-        _repository.Setup(r => r.Get(blogId, default)).ReturnsAsync(blog);
+        _repository.Setup(r => r.Get(blogId, It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(blog);
 
         var r1 = Guid.NewGuid();
         var p1 = Guid.NewGuid();

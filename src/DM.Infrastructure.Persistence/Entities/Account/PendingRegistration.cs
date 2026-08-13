@@ -22,7 +22,7 @@ public class PendingRegistration
     /// Token for email activation link (embedded, no FK to Tokens table).
     /// Updated on resend.
     /// </summary>
-    public Guid TokenId { get; set; }
+    public byte[] SecretHash { get; set; } = null!;
 
     /// <summary>
     /// Email address (unique, lowercase)

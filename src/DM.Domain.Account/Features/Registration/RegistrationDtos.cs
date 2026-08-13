@@ -17,7 +17,13 @@ public class PendingRegistration
     /// <summary>
     /// Token for email activation link
     /// </summary>
-    public Guid TokenId { get; set; }
+    public byte[] SecretHash { get; set; } = null!;
+
+    /// <summary>
+    /// The value the activation letter carries. Never stored — the row keeps
+    /// <see cref="SecretHash" />.
+    /// </summary>
+    public Guid Secret { get; set; }
 
     /// <summary>
     /// Email address (lowercase)

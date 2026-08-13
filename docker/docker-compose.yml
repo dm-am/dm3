@@ -18,6 +18,7 @@ volumes:
   miniodata:
   rmqdata:
   alertmanagerdata:
+  prometheusdata:
 
 # Переменные с дефолтами для локальной разработки.
 # Точка присутствия свой набор переопределяет в .env.mirror — секретов там нет.
@@ -31,8 +32,20 @@ x-workload-env: &workload-env
   # RequireRole(Admin).
   ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
 
+  # === Наблюдаемость ===
+  # Уровень логов, единственный на оба синка. Пусто — по окружению: Debug в
+  # Development, иначе Information. Значение задается на время разбора инцидента
+  # и снимается после: Development ради Debug включать нельзя, тот же флаг
+  # публикует Swagger и снимает HSTS. Меняется рестартом, читается один раз на
+  # старте; значение вне перечня Serilog валит старт, а не молча откатывается.
+  DM_Observability__MinimumLevel: ${LOG_MINIMUM_LEVEL:-}
+
   # === Базы данных ===
-  DM_ConnectionStrings__Rdb: Host=${DB_HOST:-dm-pg};Port=5432;User ID=postgres;Password=${POSTGRES_PASSWORD};Database=dm3;Pooling=true;MinPoolSize=0;MaxPoolSize=100;Connection Idle Lifetime=60;${DB_SSL_MODE:-}
+  # Роль приложения, а не суперпользователь. Утекший пароль суперпользователя это
+  # не данные сайта, а сервер: все базы на нем, роли и COPY FROM PROGRAM. Роль
+  # создает postgres-init.sh при первой инициализации тома, ей же принадлежит
+  # база — с Postgres 15 право CREATE в схеме public есть только у владельца.
+  DM_ConnectionStrings__Rdb: Host=${DB_HOST:-dm-pg};Port=5432;User ID=${DB_USER:-dm_app};Password=${DM_APP_PASSWORD};Database=dm3;Pooling=true;MinPoolSize=0;MaxPoolSize=100;Connection Idle Lifetime=60;${DB_SSL_MODE:-}
   # maxPoolSize repeats the MaxPoolSize of the line above on purpose: both cap the
   # connections one process holds at once, and this driver returns a connection
   # after each operation where Npgsql holds one for a whole unit of work, so the
@@ -106,13 +119,13 @@ x-workload-env: &workload-env
 
   # === Адреса сайта ===
   # PublicUrl — адрес, которым это развертывание называет само себя: из него
-  # собираются все ссылки в письмах. AllowedOrigins читают и политика CORS, и
-  # проверка Origin вместо CSRF-токена, поэтому список один.
-  # Перечень адресов сайта (Addresses) живет в appsettings.json: он меняется
-  # раз в несколько лет и одинаков для всех развертываний.
+  # собираются все ссылки в письмах. Перечень адресов, по которым сайт открывается,
+  # переменной не имеет: он одинаков для всех развертываний и объявлен в коде.
+  #
+  # Список источников, с которых браузеру разрешено звать API, отдельно не
+  # ведется: он выводится из этих же адресов. Пока он велся, его не заполнял ни
+  # один путь развертывания — стенд отказывал бы на входе собственному адресу.
   DM_SiteAddressConfiguration__PublicUrl: ${WEB_URL:-http://localhost:5173}
-  DM_SiteAddressConfiguration__AllowedOrigins__0: ${CORS_URL_0:-http://localhost:5173}
-  DM_SiteAddressConfiguration__AllowedOrigins__1: ${CORS_URL_1:-http://localhost:8080}
 
 # Build context shared by every image this repository produces. CI builds them
 # and pushes them under one tag per run, which is why all four image references
@@ -135,8 +148,13 @@ services:
       - '127.0.0.1:5432:5432'
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Читаются postgres-init.sh при первой инициализации тома: создать роль
+      # приложения может только тот, у кого она еще не создана.
+      DM_APP_PASSWORD: ${DM_APP_PASSWORD}
+      DM_EXPORTER_PASSWORD: ${DM_EXPORTER_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/postgres-init.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d dm3"]
       interval: 10s
@@ -308,7 +326,12 @@ services:
     container_name: 'dm-minio-init'
     # Unpinned like the image backup-minio.sh runs: mc talks to the server over
     # its admin API, and the two are released together.
-    image: 'minio/mc'
+    # Пришпилен в шаг с сервером выше: mc ходит в administrative API, где согласие
+    # версий и проверяется, и двигаются обе строки одним коммитом. Метка своя —
+    # у клиента отдельный цикл выпусков, поэтому взят ближайший выпуск после
+    # серверного, а не та же строка. Неприпшпиленный клиент уезжает от сервера сам
+    # по себе, и первым признаком будет команда, которой сервер не знает.
+    image: 'minio/mc:RELEASE.2024-06-20T14-50-54Z'
     entrypoint: ["/bin/sh", "/minio-init.sh"]
     environment:
       MINIO_ENDPOINT: http://${MINIO_HOST:-dm-minio}:9000
@@ -387,6 +410,10 @@ services:
       - '127.0.0.1:4318:4318'
     environment:
       COLLECTOR_OTLP_ENABLED: 'true'
+      # Memory storage is unbounded by default and this service runs under a
+      # 256M limit, so the ceiling is what keeps the collector alive instead of
+      # being OOM-killed - which loses every trace it was holding, silently.
+      MEMORY_MAX_TRACES: '10000'
     healthcheck:
       test: ["CMD-SHELL", "wget --spider -q http://localhost:14269/ || exit 1"]
       interval: 10s
@@ -409,6 +436,18 @@ services:
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
       - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml
+      # Без тома история метрик живет ровно до перезапуска контейнера, а его
+      # делает каждая остановка юнита: расследовать вчерашний инцидент было бы
+      # нечем, и заметить это можно только тогда, когда уже поздно.
+      - prometheusdata:/prometheus
+    # Указан целиком: command перекрывает CMD образа, поэтому пропущенный флаг
+    # это не значение по умолчанию, а отсутствующая настройка.
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=90d"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
     healthcheck:
       test: ["CMD-SHELL", "wget --spider -q http://localhost:9090/-/healthy || exit 1"]
       interval: 10s
@@ -497,9 +536,36 @@ services:
     image: prometheuscommunity/postgres-exporter:v0.15.0
     container_name: 'dm-pg-exporter'
     environment:
-      DATA_SOURCE_NAME: "postgresql://postgres:${POSTGRES_PASSWORD}@dm-pg:5432/dm3?sslmode=disable"
+      # pg_monitor и ничего больше: экспортеру нужны представления статистики, а
+      # не таблицы, и уж точно не сервер.
+      DATA_SOURCE_NAME: "postgresql://dm_exporter:${DM_EXPORTER_PASSWORD}@dm-pg:5432/dm3?sslmode=disable"
     depends_on:
       postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.1'
+
+  # Второе хранилище наблюдается наравне с первым. Без экспортера единственным
+  # сигналом о нем была проба в /_ready, которую никто не опрашивает: остановка
+  # Mongo не давала ни одного алерта, а счетчики непрочитанного и журнал
+  # безопасности живут именно там.
+  mongodb-exporter:
+    image: percona/mongodb_exporter:0.40.0
+    container_name: 'dm-mongo-exporter'
+    command:
+      - "--collect-all"
+      - "--compatible-mode"
+    environment:
+      # maxPoolSize повторяет число приложения, а не выбирает свое: в файле оно
+      # одно, и правило о согласии потолков держит его одним. Экспортеру этот
+      # потолок все равно недостижим — он опрашивает сервер раз в интервал сбора.
+      MONGODB_URI: "mongodb://${MONGO_ROOT_USER:-root}:${MONGO_ROOT_PASSWORD}@dm-mongo:27017/?authSource=admin&maxPoolSize=100"
+    depends_on:
+      mongo:
         condition: service_healthy
     restart: unless-stopped
     deploy:

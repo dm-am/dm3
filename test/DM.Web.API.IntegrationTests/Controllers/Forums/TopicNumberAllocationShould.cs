@@ -110,7 +110,7 @@ public class TopicNumberAllocationShould : IntegrationTestBase
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<ITopicRepository>();
         return await repository.Create(
-            new CreateTopicEntity { Title = $"Concurrent topic {index}", Text = "text" },
+            new CreateTopicEntity { TopicId = Guid.NewGuid(), Title = $"Concurrent topic {index}", Text = "text" },
             TestConstants.TestUserId, boardId);
     }
 

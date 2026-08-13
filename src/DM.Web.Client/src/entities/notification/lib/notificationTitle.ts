@@ -23,6 +23,7 @@ const TITLES: Partial<Record<NotificationType, string>> = {
   [NotificationType.NewPublication]: "Новая публикация",
   [NotificationType.LikedPublication]: "Лайк на публикацию",
   [NotificationType.NewBlogComment]: "Новый комментарий в блоге",
+  [NotificationType.NewPublicationComment]: "Новый комментарий к публикации",
   [NotificationType.LikedBlogComment]: "Лайк на комментарий в блоге",
   [NotificationType.BlogInvitationCreated]: "Приглашение в блог",
 
@@ -34,6 +35,13 @@ const TITLES: Partial<Record<NotificationType, string>> = {
 
   // Games
   [NotificationType.NewCharacter]: "Новая заявка на персонажа",
+
+  // Security. Untitled, all four of them showed as the bare fallback word in the
+  // one list a reader checks after something happened to their account.
+  [NotificationType.PasswordChanged]: "Пароль изменен",
+  [NotificationType.EmailChanged]: "Почта изменена",
+  [NotificationType.SuspiciousLoginActivity]: "Подозрительная активность входа",
+  [NotificationType.AccountLocked]: "Вход в аккаунт временно заблокирован",
 
   // Subscriptions
   [NotificationType.NewCommentInSubscribedTopic]:

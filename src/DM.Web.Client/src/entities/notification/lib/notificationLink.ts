@@ -23,6 +23,7 @@ export function notificationLink(
       return payload.blogId ? `/blogs/${payload.blogId}` : null;
 
     case NotificationType.NewBlogComment:
+    case NotificationType.NewPublicationComment:
     case NotificationType.LikedBlogComment:
       return payload.blogId ? `/blogs/${payload.blogId}` : null;
 

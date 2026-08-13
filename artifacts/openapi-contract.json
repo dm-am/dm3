@@ -1,4 +1,8 @@
 {
+  "DM.Domain.Core.Dto.SnippetSegment": [
+    "isMatch",
+    "text"
+  ],
   "DM.Web.API.Features.Account.Authentication.LoginRequest": [
     "email",
     "password",

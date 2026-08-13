@@ -40,6 +40,13 @@ public class PostServiceShould : UnitTestBase
     private readonly Mock<IEventProducer> _producer;
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Guid _currentUserId = Guid.NewGuid();
+
+    /// <summary>
+    /// The id the factory hands the service. The post id is generated before the
+    /// write rather than read back from it — that is what lets the dice be stored
+    /// first — so a test that wants to talk about the post has to know it up front.
+    /// </summary>
+    private readonly Guid _postId = Guid.NewGuid();
     private readonly PostService _service;
 
     public PostServiceShould()
@@ -67,7 +74,7 @@ public class PostServiceShould : UnitTestBase
         dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
 
         var guidFactory = Mock<IGuidFactory>();
-        guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid());
+        guidFactory.Setup(g => g.Create()).Returns(_postId);
 
         _repository = Mock<IPostRepository>();
 
@@ -158,7 +165,7 @@ public class PostServiceShould : UnitTestBase
     public async Task RollAndPersistDiceWhenRoomDiceEnabled()
     {
         var roomId = Guid.NewGuid();
-        var postId = Guid.NewGuid();
+        var postId = _postId;
         var createPost = new CreatePost
         {
             RoomId = roomId,
@@ -188,6 +195,53 @@ public class PostServiceShould : UnitTestBase
             It.Is<IEnumerable<CreatePostDiceRoll>>(s => s.Count() == 1)), Times.Once);
         _diceRollRepository.Verify(r => r.CreateAsync(rolledDice), Times.Once);
         result.DiceRolls.Should().BeSameAs(rolledDice);
+    }
+
+    /// <summary>
+    /// The dice go into Mongo before the post goes into PostgreSQL, and come back
+    /// out if the post does not follow.
+    /// </summary>
+    /// <remarks>
+    /// There is no transaction across the two stores, so the order is the whole
+    /// guarantee. A roll cannot be produced a second time — rolling again answers
+    /// a different number — so of the two possible losses only the post is
+    /// recoverable: the author simply posts again.
+    /// </remarks>
+    [Fact]
+    public async Task DropTheDiceWhenThePostDoesNotFollowThem()
+    {
+        var roomId = Guid.NewGuid();
+        var postId = _postId;
+        var createPost = new CreatePost
+        {
+            RoomId = roomId,
+            GameText = "Test post",
+            DiceRolls = new[] { new CreatePostDiceRoll { EdgesCount = 20, DiceCount = 1 } }
+        };
+        var room = new RoomToUpdate
+        {
+            Id = roomId,
+            Pendencies = new List<PostPendency>(),
+            Accesses = new List<RoomAccess>(),
+            Game = new GameDto(),
+            Settings = new RoomSettings { DiceEnabled = true }
+        };
+        var rolledDice = new List<DiceRoll> { new() { Id = Guid.NewGuid(), PostId = postId, EdgesCount = 20 } };
+
+        _roomRepository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(room);
+        _diceRoller
+            .Setup(r => r.Roll(postId, It.IsAny<DateTimeOffset>(), It.IsAny<IEnumerable<CreatePostDiceRoll>>()))
+            .Returns(rolledDice);
+        _repository.Setup(r => r.Create(It.IsAny<CreatePostEntity>()))
+            .ThrowsAsync(new InvalidOperationException("insert failed"));
+
+        var act = async () => await _service.CreateAsync(createPost);
+
+        // The failure still reaches the caller: what is compensated is the
+        // remainder in the other store, not the error.
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        _diceRollRepository.Verify(r => r.CreateAsync(rolledDice), Times.Once);
+        _diceRollRepository.Verify(r => r.DeleteByPostIdAsync(postId), Times.Once);
     }
 
     [Fact]

@@ -199,7 +199,7 @@ public class PasswordChangeServiceShould : UnitTestBase
         };
 
         _identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
-        _repository.Setup(r => r.FindUser(tokenId)).ReturnsAsync(user);
+        _repository.Setup(r => r.FindUser(tokenId, It.IsAny<DateTimeOffset>())).ReturnsAsync(user);
         _securityManager.Setup(s => s.ComparePasswords(passwordChange.NewPassword, user.Salt, user.PasswordHash))
             .Returns(false);
         _compromisedPasswordChecker.Setup(c => c.IsCompromisedAsync(passwordChange.NewPassword))
@@ -233,7 +233,7 @@ public class PasswordChangeServiceShould : UnitTestBase
     {
         var tokenId = Guid.NewGuid();
         _repository.Setup(r => r.TokenValid(tokenId, It.IsAny<DateTimeOffset>())).ReturnsAsync(false);
-        _repository.Setup(r => r.FindUser(tokenId)).ReturnsAsync((AuthenticatedUser?)null);
+        _repository.Setup(r => r.FindUser(tokenId, It.IsAny<DateTimeOffset>())).ReturnsAsync((AuthenticatedUser?)null);
 
         var result = await _service.GetTokenInfo(tokenId);
 

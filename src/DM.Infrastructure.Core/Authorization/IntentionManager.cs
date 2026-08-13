@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Exceptions;
+using DM.Infrastructure.Core.Tracing;
 using Microsoft.Extensions.Logging;
 
 namespace DM.Infrastructure.Core.Authorization;
@@ -36,6 +37,13 @@ internal class IntentionManager : IIntentionManager
             return matchingResolver.IsAllowed(_authorizationContextProvider.CurrentSubject, intention);
         }
 
+        // Counted as well as logged. Refusing is the right answer to a question
+        // nobody wrote an answer for, and it is the same answer the rules give when
+        // they mean it - so without a number nobody notices a whole feature quietly
+        // refusing everybody.
+        AuthorizationMetrics.ResolverMissing.Add(1,
+            new KeyValuePair<string, object?>("intention", typeof(TIntention).Name),
+            new KeyValuePair<string, object?>("target", "none"));
         _logger.LogError("No matching resolver found for intention type {intentionType}", typeof(TIntention));
         return false;
     }
@@ -52,6 +60,9 @@ internal class IntentionManager : IIntentionManager
             return matchingResolver.IsAllowed(_authorizationContextProvider.CurrentSubject, intention, target);
         }
 
+        AuthorizationMetrics.ResolverMissing.Add(1,
+            new KeyValuePair<string, object?>("intention", typeof(TIntention).Name),
+            new KeyValuePair<string, object?>("target", typeof(TTarget).Name));
         _logger.LogError(
             "No matching resolver found for intention type {intentionType} and target type {targetType}",
             typeof(TIntention), typeof(TTarget));

@@ -675,19 +675,19 @@ const router = createRouter({
         },
         {
           name: "activation",
-          path: "/activate/:token",
+          path: "/activate",
           meta: { title: "Активация аккаунта" },
           component: () => import("@/pages/account/AccountActivationPage.vue"),
         },
         {
           name: "confirm-email",
-          path: "/confirm-email/:token",
+          path: "/confirm-email",
           meta: { title: "Подтверждение почты" },
           component: () => import("@/pages/account/EmailChangePage.vue"),
         },
         {
           name: "reset-password",
-          path: "/reset-password/:token",
+          path: "/reset-password",
           meta: { title: "Сброс пароля" },
           component: () => import("@/pages/account/PasswordResetPage.vue"),
         },
@@ -877,7 +877,15 @@ router.onError((error) => {
     /import\(\)/i.test(message) ||
     error?.name === "ChunkLoadError";
 
-  if (!isChunkLoadError) return;
+  if (!isChunkLoadError) {
+    // Hand the default back. vue-router logs an uncaught navigation error itself
+    // only while no error listener is registered, so registering this one for the
+    // stale-chunk case took that away from every other error - and RouterLink and
+    // popstate swallow the rejection with catch(noop), which left a failed link
+    // click and a failed back button leaving no trace anywhere at all.
+    console.error("Navigation error:", error);
+    return;
+  }
   if (sessionStorage.getItem(CHUNK_RELOAD_FLAG)) return;
 
   sessionStorage.setItem(CHUNK_RELOAD_FLAG, "1");

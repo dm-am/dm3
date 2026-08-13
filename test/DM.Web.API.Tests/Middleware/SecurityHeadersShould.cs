@@ -61,7 +61,34 @@ public class SecurityHeadersShould : UnitTestBase
         policy.Should().NotContain(" ws:");
     }
 
-    private async Task<string> Policy(string environmentName)
+    /// <summary>
+    /// The retired header stays retired.
+    /// </summary>
+    /// <remarks>
+    /// X-XSS-Protection asked for a filter that no browser this application runs
+    /// in still has, and the one implementation that did have it was removed
+    /// because the filter itself introduced holes. Sent anyway, it was a line in
+    /// every response and a row in the requirements table claiming a defence that
+    /// nothing performs - which is worse than no line, because a reader counts it.
+    ///
+    /// Asserted rather than deleted quietly: it is one line to add back, it breaks
+    /// nothing when added, and the whole cost of it is that it says something
+    /// untrue.
+    /// </remarks>
+    [Fact]
+    public async Task SendNoHeaderThatNoBrowserStillHonours()
+    {
+        var headers = await Headers(Environments.Production);
+
+        headers.Should().NotContainKey("X-XSS-Protection",
+            "the filter it asks for exists in no browser this runs in, and asking for " +
+            "it reads as a defence nothing performs");
+    }
+
+    private async Task<string> Policy(string environmentName) =>
+        (await Headers(environmentName))["Content-Security-Policy"].ToString();
+
+    private async Task<IHeaderDictionary> Headers(string environmentName)
     {
         var environment = Mock<IWebHostEnvironment>();
         environment.Setup(e => e.EnvironmentName).Returns(environmentName);
@@ -71,6 +98,6 @@ public class SecurityHeadersShould : UnitTestBase
 
         await middleware.InvokeAsync(context);
 
-        return context.Response.Headers["Content-Security-Policy"].ToString();
+        return context.Response.Headers;
     }
 }

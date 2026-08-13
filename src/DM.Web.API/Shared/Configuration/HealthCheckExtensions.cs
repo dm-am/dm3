@@ -21,9 +21,6 @@ internal static class HealthCheckExtensions
     {
         var connectionStrings = new ConnectionStrings();
         configuration.GetSection(nameof(ConnectionStrings)).Bind(connectionStrings);
-        var rabbitMq = new RabbitMqConfiguration();
-        configuration.GetSection(nameof(RabbitMqConfiguration)).Bind(rabbitMq);
-
         services.AddHealthChecks()
             .AddNpgSql(
                 connectionString: connectionStrings.Rdb,
@@ -32,17 +29,19 @@ internal static class HealthCheckExtensions
             .AddMongoDb(
                 mongodbConnectionString: connectionStrings.Mongo,
                 name: "mongodb",
-                tags: new[] { "db", "ready" })
-            // Not "ready" here, unlike in the consumer workers: readiness answers
-            // "can this instance serve a request", and every request is served
-            // without the broker — publishing an event is fire-and-forget
-            // alongside the response. Tagging it ready pulled the whole site out
-            // of rotation over a delayed notification. A worker has the opposite
-            // answer: taking messages off a queue is all it does.
-            .AddRabbitMQ(
-                rabbitConnectionString: new Uri(rabbitMq.Endpoint),
-                name: "rabbitmq",
-                tags: new[] { "messaging" });
+                tags: new[] { "db", "ready" });
+
+        // Not "ready" here, unlike in the consumer workers: readiness answers
+        // "can this instance serve a request", and every request is served
+        // without the broker — publishing an event is fire-and-forget alongside
+        // the response. Tagging it ready pulled the whole site out of rotation
+        // over a delayed notification. A worker has the opposite answer: taking
+        // messages off a queue is all it does.
+        //
+        // Through the shared registration so the probe connects as the user the
+        // client connects as. Given a bare endpoint it fell back to the library
+        // defaults and reported Healthy about a broker nobody could log in to.
+        services.AddDmBrokerHealthCheck(configuration, ["messaging"]);
 
         return services;
     }

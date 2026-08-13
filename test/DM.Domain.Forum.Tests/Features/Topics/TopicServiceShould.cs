@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Caching;
 using DM.Domain.Core.Dto;
@@ -34,6 +35,7 @@ public class TopicServiceShould : UnitTestBase
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<IAccessPolicyConverter> _accessPolicyConverter;
     private readonly Mock<ITopicRepository> _repository;
+    private readonly Mock<IGuidFactory> _guidFactory;
     private readonly Mock<IUnreadCountersRepository> _unreadCountersRepository;
     private readonly Mock<IUserLookupService> _userLookupService;
     private readonly Mock<IEventProducer> _eventProducer;
@@ -75,8 +77,11 @@ public class TopicServiceShould : UnitTestBase
             It.IsAny<Guid>(),
             It.IsAny<CancellationToken>()));
 
+        _guidFactory = Mock<IGuidFactory>();
+        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid);
+
         _unreadCountersRepository = Mock<IUnreadCountersRepository>();
-        _unreadCountersRepository.Setup(r => r.CreateAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<UnreadEntryType>()))
+        _unreadCountersRepository.Setup(r => r.CreateMarkerAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<UnreadEntryType>()))
             .Returns(Task.CompletedTask);
         _unreadCountersRepository.Setup(r => r.SelectByEntitiesAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>(), It.IsAny<Guid[]>()))
             .ReturnsAsync((Guid userId, UnreadEntryType type, Guid[] ids) =>
@@ -111,6 +116,7 @@ public class TopicServiceShould : UnitTestBase
             _unreadCountersRepository.Object,
             _userLookupService.Object,
             _eventProducer.Object,
+            _guidFactory.Object,
             cache.Object);
     }
 
@@ -136,6 +142,10 @@ public class TopicServiceShould : UnitTestBase
         var board = new Board { Id = boardId, Title = "General" };
         _boardService.Setup(s => s.GetBoard("General", true)).ReturnsAsync(board);
 
+        // The identifier is minted here and not learnt from the row: the marker is
+        // written before the row exists to return one.
+        _guidFactory.Setup(f => f.Create()).Returns(topicId);
+
         var expectedTopic = new Topic { Id = topicId };
         _createTopicSetup.ReturnsAsync(expectedTopic);
 
@@ -144,8 +154,35 @@ public class TopicServiceShould : UnitTestBase
 
         result.Should().Be(expectedTopic);
         _unreadCountersRepository.Verify(
-            r => r.CreateAsync(topicId, boardId, UnreadEntryType.Message),
+            r => r.CreateMarkerAsync(topicId, boardId, UnreadEntryType.Message),
             Times.Once);
+        _unreadCountersRepository.Verify(
+            r => r.DeleteAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>()),
+            Times.Never,
+            "the row landed, so the reservation was committed");
+    }
+
+    [Fact]
+    public async Task TakeTheUnreadMarkerBackWhenTheTopicRowDoesNotLand()
+    {
+        var boardId = Guid.NewGuid();
+        var topicId = Guid.NewGuid();
+        _boardService.Setup(s => s.GetBoard("General", true))
+            .ReturnsAsync(new Board { Id = boardId, Title = "General" });
+        _guidFactory.Setup(f => f.Create()).Returns(topicId);
+        _createTopicSetup.ThrowsAsync(new InvalidOperationException("storage refused"));
+
+        var createTopic = new CreateTopic { BoardTitle = "General", Title = "Test Topic", Text = "Test" };
+        await _service.Awaiting(s => s.CreateAsync(createTopic))
+            .Should().ThrowAsync<InvalidOperationException>(
+                "the refusal of the store is what the caller has to see");
+
+        // Written first and taken back, so the failure loses a topic nobody has
+        // seen. The other order left a committed topic whose counters never exist.
+        _unreadCountersRepository.Verify(
+            r => r.CreateMarkerAsync(topicId, boardId, UnreadEntryType.Message), Times.Once);
+        _unreadCountersRepository.Verify(
+            r => r.DeleteAsync(topicId, UnreadEntryType.Message), Times.Once);
     }
 
     [Fact]

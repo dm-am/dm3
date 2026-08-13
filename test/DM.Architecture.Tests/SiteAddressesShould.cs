@@ -25,17 +25,46 @@ namespace DM.Architecture.Tests;
 public class SiteAddressesShould
 {
     /// <summary>
+    /// The two declarations name the same addresses.
+    /// </summary>
+    /// <remarks>
+    /// Two copies exist for a reason the client states: the moment somebody needs
+    /// the other address is the moment the site stopped answering, and a request
+    /// cannot be served then. What the reason does not buy is the right to
+    /// disagree - one copy carrying an address the other does not is a footer
+    /// sending a reader to a host nobody serves, or a letter that forgets the door
+    /// that still works.
+    /// </remarks>
+    [Fact]
+    public void DeclareTheSameAddressesOnBothSides()
+    {
+        var client = Regex
+            .Matches(
+                File.ReadAllText(Path.Combine(RepositoryRoot,
+                    "src", "DM.Web.Client", "src", "shared", "config", "site.ts")),
+                @"host:\s*""([^""]+)""")
+            .Select(match => match.Groups[1].Value)
+            .ToList();
+
+        client.Should().HaveCountGreaterOrEqualTo(2,
+            "the walk has to find the declaration, and a list of one is a site with no mirror");
+        client.Should().BeEquivalentTo(DM.Domain.Core.Site.SiteAddresses.Hosts,
+            "the server names these addresses in every letter and the client draws them in " +
+            "the footer, and the two lists have no way of noticing they disagree");
+    }
+
+    /// <summary>
     /// Where an address of the site is allowed to be written down.
     /// </summary>
     /// <remarks>
-    /// The server keeps its list in appsettings, the client keeps its own so
-    /// that the footer can name the other address with the network down, and
-    /// each is a declaration rather than a use. Tests name addresses because
-    /// they assert about them.
+    /// The server keeps one declaration in code and the client keeps its own, so
+    /// that the footer can name the other address with the network down; each is a
+    /// declaration rather than a use. Tests name addresses because they assert
+    /// about them.
     /// </remarks>
     private static readonly string[] DeclarationFiles =
     {
-        Path.Combine("src", "DM.Web.API", "appsettings.json"),
+        Path.Combine("src", "DM.Domain.Core", "Site", "SiteAddresses.cs"),
         Path.Combine("src", "DM.Web.Client", "src", "shared", "config", "site.ts"),
         Path.Combine("src", "DM.Web.Client", "src", "shared", "config", "site.spec.ts")
     };

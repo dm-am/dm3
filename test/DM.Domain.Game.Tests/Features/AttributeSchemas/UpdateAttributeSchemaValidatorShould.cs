@@ -166,7 +166,7 @@ public class UpdateAttributeSchemaValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(s => s.Specifications)
-            .WithErrorMessage("Only one attribute may be marked as descriptor");
+            .WithErrorMessage("Описателем можно отметить только один атрибут");
     }
 
     [Fact]
@@ -183,7 +183,7 @@ public class UpdateAttributeSchemaValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(s => s.Specifications)
-            .WithErrorMessage("BBCode attribute 'Strength' cannot be a descriptor");
+            .WithErrorMessage("Атрибут 'Strength' с разметкой не может быть описателем");
     }
 
     [Fact]
@@ -200,7 +200,7 @@ public class UpdateAttributeSchemaValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(s => s.Specifications)
-            .WithErrorMessage("List attribute 'Strength' requires at least one value");
+            .WithErrorMessage("У списка 'Strength' должно быть хотя бы одно значение");
     }
 
     [Fact]
@@ -221,7 +221,7 @@ public class UpdateAttributeSchemaValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(s => s.Specifications)
-            .WithErrorMessage("List attribute 'Strength' must not contain duplicate values");
+            .WithErrorMessage("В списке 'Strength' значения не должны повторяться");
     }
 
     [Fact]
@@ -238,6 +238,6 @@ public class UpdateAttributeSchemaValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(s => s.Specifications)
-            .WithErrorMessage("Text-number list 'Strength' requires both a value and a modifier for each option");
+            .WithErrorMessage("В списке 'Strength' у каждого варианта нужны и значение, и модификатор");
     }
 }

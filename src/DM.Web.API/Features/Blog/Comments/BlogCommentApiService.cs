@@ -36,7 +36,7 @@ internal class BlogCommentApiService : IBlogCommentApiService
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<Comment>> Get(Guid blogId, BlogCommentsQuery query)
+    public async Task<ListEnvelope<Comment>> Get(Guid blogId, CommentsQuery query)
     {
         var excludeUserIds = await CommentReading.HiddenAuthorsAsync(
             _blacklistChecker, _identityProvider.Current);

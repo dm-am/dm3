@@ -110,11 +110,12 @@ internal class PostRepository : IPostRepository
 
     public async Task<(IEnumerable<Post> Posts, int TotalCount)> GetRated(PostsQuery query, Guid viewerId)
     {
-        // Read-only query path feeding the home-page widgets (best of week,
-        // latest featured, Pulse). AsNoTracking drops EF Core's change
-        // tracker — we never intend to mutate these entities, and the
-        // rich projection below holds a full Post reference which would
-        // otherwise be tracked. See PERFORMANCE.md → "AsNoTracking".
+        // Read-only path feeding the home-page widgets (best of week, latest
+        // featured, Pulse). PostWithRating below holds a Post reference, but it is
+        // never materialised: the terminals are CountAsync and a scalar anonymous
+        // projection, so nothing here reaches the change tracker either way.
+        // AsNoTracking stays as the default of a read path.
+        // See PERFORMANCE.md → "AsNoTracking".
         var baseQuery = _dbContext.Posts
             .AsNoTracking()
             .TagWith("DM.Game.PostsRated")
@@ -571,22 +572,48 @@ internal class PostRepository : IPostRepository
     /// </remarks>
     public async Task Delete(Guid postId, Guid deletedByUserId)
     {
-        var post = await _dbContext.Posts.FindAsync(postId);
-        if (post == null)
-        {
-            return;
-        }
-
-        var authorId = post.AuthorId;
+        // The strategy wrapper is required because the API host configures
+        // EnableRetryOnFailure.
         var strategy = _dbContext.Database.CreateExecutionStrategy();
+        var attempted = false;
         await strategy.ExecuteAsync(async () =>
         {
+            if (attempted)
+            {
+                // A retry replays this block. SaveChanges leaves the post Unchanged
+                // even when the transaction around it rolls back, so without the
+                // clear the second attempt writes no soft-delete at all and still
+                // takes the rating point away — a live post with its author charged
+                // for deleting it.
+                _dbContext.ChangeTracker.Clear();
+            }
+
+            attempted = true;
+
+            // Read inside the block: the clear above drops the tracked post, so it
+            // has to be loaded again. On the first attempt this costs nothing extra.
+            var post = await _dbContext.Posts.FindAsync(postId);
+            if (post == null)
+            {
+                return;
+            }
+
+            var authorId = post.AuthorId;
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
             SoftDelete.Mark(post, deletedByUserId, _dateTimeProvider.Now);
             await _dbContext.SaveChangesAsync();
 
+            // IgnoreQueryFilters, because the row this has to reach may be soft
+            // deleted. The counter was raised when the post was written and has to
+            // come back down when it is removed, and moderation removes the posts
+            // of deactivated accounts as a matter of course - so without this the
+            // update matched no rows, silently, and the count kept a post that no
+            // longer exists. Nothing recomputes it afterwards: it is a column, not
+            // a view, and the only trace of the drift is a number on a profile
+            // nobody can reconcile against the posts.
             await _dbContext.Users
+                .IgnoreQueryFilters()
                 .Where(u => u.UserId == authorId)
                 .ExecuteUpdateAsync(u => u.SetProperty(x => x.QuantityRating, x => x.QuantityRating - 1));
 

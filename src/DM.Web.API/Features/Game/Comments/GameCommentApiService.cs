@@ -36,7 +36,7 @@ internal class GameCommentApiService : IGameCommentApiService
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<Comment>> Get(Guid gameId, GameCommentsQuery query)
+    public async Task<ListEnvelope<Comment>> Get(Guid gameId, CommentsQuery query)
     {
         var excludeUserIds = await CommentReading.HiddenAuthorsAsync(
             _blacklistChecker, _identityProvider.Current);

@@ -51,13 +51,22 @@ public class AuthenticationConfiguration
     /// <summary>
     /// Progressive delay configuration for failed login attempts.
     /// Each entry: [attemptThreshold, delaySeconds]
-    /// Default: 0-2 attempts = 0s, 3-4 = 1s, 5-9 = 5s, 10+ = 30s
+    /// Default: 0-2 attempts = 0s, 3-4 = 1s, 5-9 = 3s, 10+ = 5s
     /// </summary>
+    /// <remarks>
+    /// The ceiling has to stay well under the request timeout of the client. At
+    /// thirty seconds it was the timeout: from the tenth attempt on, the answer
+    /// never arrived, and what the reader got instead of "wrong password" was a
+    /// toast about the connection dropping - which says the site is broken rather
+    /// than that the password is wrong, and says it to whoever is simply mistyping.
+    /// The lockout after fifteen attempts is what stops guessing; these seconds only
+    /// make it expensive, and they cost the honest reader too.
+    /// </remarks>
     public int[][] LoginDelaySchedule { get; set; } =
     {
         new[] { 3, 1 },    // 3+ attempts: 1 second delay
-        new[] { 5, 5 },    // 5+ attempts: 5 seconds delay
-        new[] { 10, 30 }   // 10+ attempts: 30 seconds delay
+        new[] { 5, 3 },    // 5+ attempts: 3 seconds delay
+        new[] { 10, 5 }    // 10+ attempts: 5 seconds delay
     };
 
     /// <summary>

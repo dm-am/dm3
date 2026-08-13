@@ -4,8 +4,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Infrastructure.Core.Tracing;
 using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.MongoIntegration;
+using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 
 namespace DM.Infrastructure.Persistence.Shared.UnreadCounters;
@@ -16,16 +18,19 @@ using IUnreadCountersRepository = DM.Domain.Core.UnreadCounters.IUnreadCountersR
 internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounter>, IUnreadCountersRepository
 {
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly ILogger<UnreadCountersRepository> _logger;
 
     /// <inheritdoc />
     public UnreadCountersRepository(DmMongoClient client,
-        IDateTimeProvider dateTimeProvider) : base(client)
+        IDateTimeProvider dateTimeProvider,
+        ILogger<UnreadCountersRepository> logger) : base(client)
     {
         _dateTimeProvider = dateTimeProvider;
+        _logger = logger;
     }
 
     /// <inheritdoc />
-    public Task CreateAsync(Guid entityId, UnreadEntryType entryType, IEnumerable<Guid> userIds)
+    public Task CreateMarkerAsync(Guid entityId, UnreadEntryType entryType, IEnumerable<Guid> userIds)
     {
         // Upsert, not insert: a user can be counted in for an entity they already
         // have a marker in — removed from a group chat once and added back — and
@@ -54,7 +59,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     }
 
     /// <inheritdoc />
-    public Task CreateAsync(Guid entityId, Guid parentId, UnreadEntryType entryType)
+    public Task CreateMarkerAsync(Guid entityId, Guid parentId, UnreadEntryType entryType)
     {
         // Same reason as above: the anonymous marker is addressed by the key the
         // unique index enforces, so a repeated create resets it instead of failing
@@ -74,34 +79,71 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     }
 
     /// <inheritdoc />
-    public Task CreateAsync(Guid entityId, UnreadEntryType entryType) => CreateAsync(entityId, entityId, entryType);
+    public Task CreateMarkerAsync(Guid entityId, UnreadEntryType entryType) => CreateMarkerAsync(entityId, entityId, entryType);
 
     /// <inheritdoc />
-    public Task IncrementAsync(Guid entityId, UnreadEntryType entryType)
-    {
-        return Collection.UpdateManyAsync(
+    public Task IncrementAsync(Guid entityId, UnreadEntryType entryType) =>
+        CountedAsync("increment", entityId, entryType, () => Collection.UpdateManyAsync(
             Filter.Eq(c => c.EntityId, entityId) &
             Filter.Eq(c => c.EntryType, entryType),
-            UpdateBuilder.Inc(c => c.Counter, 1));
-    }
+            UpdateBuilder.Inc(c => c.Counter, 1)));
 
     /// <inheritdoc />
-    public Task IncrementExcludingAsync(Guid entityId, UnreadEntryType entryType, Guid excludeUserId)
-    {
-        return Collection.UpdateManyAsync(
+    public Task IncrementExcludingAsync(Guid entityId, UnreadEntryType entryType, Guid excludeUserId) =>
+        CountedAsync("increment_excluding", entityId, entryType, () => Collection.UpdateManyAsync(
             Filter.Eq(c => c.EntityId, entityId) &
             Filter.Eq(c => c.EntryType, entryType) &
             Filter.Ne(c => c.UserId, excludeUserId),
-            UpdateBuilder.Inc(c => c.Counter, 1));
-    }
+            UpdateBuilder.Inc(c => c.Counter, 1)));
 
     /// <inheritdoc />
-    public Task DecrementAsync(Guid entityId, UnreadEntryType entryType, DateTimeOffset createDate)
+    public Task DecrementAsync(Guid entityId, UnreadEntryType entryType, DateTimeOffset createDate) =>
+        CountedAsync("decrement", entityId, entryType, () => Collection.UpdateManyAsync(
+            Filter.Eq(c => c.EntityId, entityId) &
+            Filter.Eq(c => c.EntryType, entryType) &
+            Filter.Lt(c => c.LastReadUtc, createDate.UtcDateTime),
+            UpdateBuilder.Inc(c => c.Counter, -1)));
+
+    /// <summary>
+    /// Runs one adjustment of an existing marker and keeps its failure to itself.
+    /// </summary>
+    /// <remarks>
+    /// Every caller of these three reaches them after its own write has been
+    /// committed to PostgreSQL, and there is no transaction spanning the two
+    /// stores. So an exception here does not undo anything - it travels up through
+    /// a service that has already committed, and the caller is answered with a
+    /// failure for work that was in fact done. The reader then sees the post they
+    /// wrote, plus an error saying it was not written, and a retry writes it twice.
+    ///
+    /// Losing the count is the smaller loss, and it is bounded: the badge is a
+    /// derived number, one "mark as read" resets it, and nothing else is built on
+    /// it. That trade only holds while somebody can see it happening, which is
+    /// what the counter and the entry are for.
+    ///
+    /// The three creating and removing writes are deliberately not routed through
+    /// this. A marker that was never created is not a wrong number, it is an
+    /// entity nobody is counting at all, and the reservation that orders those
+    /// writes before the relational row exists precisely so that this failure
+    /// arrives while the row can still be rolled back.
+    /// </remarks>
+    private async Task CountedAsync(
+        string operation, Guid entityId, UnreadEntryType entryType, Func<Task> write)
     {
-        return Collection.UpdateManyAsync(Filter.Eq(c => c.EntityId, entityId) &
-                                          Filter.Eq(c => c.EntryType, entryType) &
-                                          Filter.Lt(c => c.LastReadUtc, createDate.UtcDateTime),
-            UpdateBuilder.Inc(c => c.Counter, -1));
+        try
+        {
+            await write();
+        }
+        catch (Exception exception)
+        {
+            StorageMetrics.WriteLost.Add(1,
+                StorageMetrics.Store(StorageMetrics.DocumentStore),
+                StorageMetrics.Operation($"unread_counters.{operation}"),
+                new KeyValuePair<string, object?>("reason", exception.GetType().Name));
+            _logger.LogWarning(exception,
+                "Unread counter {Operation} lost for {EntryType} {EntityId}: the work it " +
+                "belongs to is already committed",
+                operation, entryType, entityId);
+        }
     }
 
     /// <inheritdoc />
@@ -126,7 +168,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
         var readers = userIds.Distinct().ToArray();
 
         // Nobody to forget is not an error, the same way nobody to count in is
-        // not one for CreateAsync above.
+        // not one for CreateMarkerAsync above.
         return readers.Length == 0
             ? Task.CompletedTask
             : Collection.UpdateManyAsync(

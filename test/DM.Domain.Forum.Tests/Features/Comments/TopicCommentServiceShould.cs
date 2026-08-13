@@ -38,6 +38,7 @@ public class TopicCommentServiceShould : UnitTestBase
     private readonly Mock<IUnreadCountersRepository> _countersRepository;
     private readonly Mock<IEventProducer> _eventProducer;
     private readonly Mock<IUserBlacklistChecker> _blacklistChecker;
+    private readonly Mock<IBoardService> _boardService;
     private readonly ISetup<ITopicCommentRepository, Task<Comment>> _createCommentSetup;
     private readonly TopicCommentService _service;
 
@@ -54,7 +55,7 @@ public class TopicCommentServiceShould : UnitTestBase
             .ReturnsAsync(new ValidationResult());
 
         _topicService = Mock<ITopicService>();
-        var boardService = Mock<IBoardService>();
+        _boardService = Mock<IBoardService>();
 
         _intentionManager = Mock<IIntentionManager>();
         _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<TopicIntention>(), It.IsAny<Topic>()));
@@ -85,7 +86,7 @@ public class TopicCommentServiceShould : UnitTestBase
             createValidator.Object,
             updateValidator.Object,
             _topicService.Object,
-            boardService.Object,
+            _boardService.Object,
             _intentionManager.Object,
             _identityProvider.Object,
             dateTimeProvider.Object,
@@ -306,5 +307,39 @@ public class TopicCommentServiceShould : UnitTestBase
         var result = await _service.GetFirstUnreadAsync("news", 3);
 
         result.Should().BeSameAs(firstComment);
+    }
+    /// <summary>
+    /// Marking the whole forum read asks for the boards and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// The list with counters is the expensive one: it fills a per-board unread
+    /// number from two aggregate reads over the document store and three queries
+    /// behind them. This loop reads identifiers, and the very call it makes with
+    /// them is what sets every one of those numbers to zero — so the work was
+    /// computed, carried across a service boundary and discarded a line later,
+    /// every time somebody clicked the link.
+    ///
+    /// Invisible from the outside: the page answers, the badges clear, and the
+    /// only difference is a handful of queries nobody counts.
+    /// </remarks>
+    [Fact]
+    public async Task AskForTheBoardsWithoutTheCountersItIsAboutToZero()
+    {
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+
+        _boardService
+            .Setup(s => s.GetAvailableBoards())
+            .ReturnsAsync([new Board { Id = first }, new Board { Id = second }]);
+
+        await _service.MarkAllAsReadAsync();
+
+        _countersRepository.Verify(
+            r => r.FlushAllAsync(_currentUserId, UnreadEntryType.Message, first), Times.Once);
+        _countersRepository.Verify(
+            r => r.FlushAllAsync(_currentUserId, UnreadEntryType.Message, second), Times.Once);
+        _boardService.Verify(s => s.GetBoardsList(), Times.Never,
+            "the counters that call fills are the ones this method zeroes, so every read " +
+            "behind them is work computed and thrown away");
     }
 }

@@ -58,6 +58,47 @@ public class RateLimitPipelineShould
             "a flood has to be refused before it costs a session lookup");
     }
 
+    /// <summary>
+    /// Every request leaves one line, and only one.
+    /// </summary>
+    /// <remarks>
+    /// The framework logs requests at Information, and the source override cuts
+    /// Microsoft to Warning to keep its noise out of the store — so the store held
+    /// what the application chose to say and nothing at all about what was asked of
+    /// it. A 404 nobody expected, a route answering 500 to one caller, the request
+    /// behind a slow page: none of them left a trace anywhere.
+    ///
+    /// The position is the other half. Below the error handler an exception passes
+    /// through the logging middleware, which records it as Error and rethrows — a
+    /// second entry on top of the one the handler writes, differing only in wording,
+    /// and two entries per failure is how a log stops being read. Above the
+    /// correlation middleware the line carries no token, which is the one thing that
+    /// ties a refusal to the request that caused it.
+    /// </remarks>
+    [Fact]
+    public void WriteOneLinePerRequestBelowTheTokenAndAboveTheHandler()
+    {
+        var startup = SourceText.ReadCode(
+            Path.Combine(RepositoryRoot.FullName, "src", "DM.Web.API", "Startup.cs"));
+
+        var correlation = startup.IndexOf(
+            "UseMiddleware<CorrelationMiddleware>()", StringComparison.Ordinal);
+        var logging = startup.IndexOf("UseSerilogRequestLogging(", StringComparison.Ordinal);
+        var errors = startup.IndexOf(
+            "UseMiddleware<ErrorHandlingMiddleware>()", StringComparison.Ordinal);
+
+        correlation.Should().BeGreaterThan(-1, "the token is part of the pipeline");
+        errors.Should().BeGreaterThan(-1, "the error handler is part of the pipeline");
+        logging.Should().BeGreaterThan(-1,
+            "without it nothing records that a request happened, and the framework's own " +
+            "record is cut by the source override that keeps its noise out of the store");
+
+        correlation.Should().BeLessThan(logging,
+            "a line without the correlation token cannot be tied to the refusal it explains");
+        logging.Should().BeLessThan(errors,
+            "below the handler every failure is written twice, in two different wordings");
+    }
+
     [Fact]
     public void SayInTheContractWhatABudgetIsCountedPer()
     {

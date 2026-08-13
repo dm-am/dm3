@@ -33,7 +33,7 @@ internal class ForumSearchApiService : IForumSearchApiService
             BoardId = h.BoardId,
             BoardTitle = h.BoardTitle,
             CreatedUtc = h.CreatedUtc,
-            Snippet = h.Snippet,
+            Snippet = h.SnippetSegments,
         });
 
         return new ListEnvelope<ForumSearchResult>(rows, new PagingInfo(paging));

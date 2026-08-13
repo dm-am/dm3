@@ -32,7 +32,7 @@ internal class RegistrationMailSender : IRegistrationMailSender
     /// <inheritdoc />
     public async Task Send(string email, Guid token)
     {
-        var confirmationLinkUrl = new Uri(new Uri(_siteAddresses.PublicUrl), $"activate/{token}");
+        var confirmationLinkUrl = new Uri(new Uri(_siteAddresses.PublicUrl), $"activate#token={token}");
         var emailBody = await _renderer.RenderAsync(new RegistrationConfirmationViewModel(
             ConfirmationLinkUrl: confirmationLinkUrl.ToString()));
         await _mailSender.SendAsync(new EmailLetter

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
+import { htmlToBbcode } from "@/shared/lib/utils/bbcode";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import type {
@@ -188,7 +189,7 @@ async function startEdit() {
     toastError("Не удалось загрузить текст комментария");
     return;
   }
-  editText.value = unwrapResource<Comment>(data)?.text ?? "";
+  editText.value = htmlToBbcode(unwrapResource<Comment>(data)?.text ?? "");
   isEditing.value = true;
 }
 

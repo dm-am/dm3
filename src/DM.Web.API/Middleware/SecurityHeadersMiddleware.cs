@@ -12,7 +12,6 @@ namespace DM.Web.API.Middleware;
 /// Adds essential security headers to protect against common vulnerabilities:
 /// - X-Frame-Options: Prevents clickjacking attacks
 /// - X-Content-Type-Options: Prevents MIME-type sniffing
-/// - X-XSS-Protection: Enables XSS filter in older browsers
 /// - Referrer-Policy: Controls referrer information
 /// - Permissions-Policy: Restricts browser features
 /// - Content-Security-Policy: Prevents XSS and data injection attacks
@@ -45,9 +44,6 @@ public class SecurityHeadersMiddleware
 
         // Prevent MIME-type sniffing
         headers["X-Content-Type-Options"] = "nosniff";
-
-        // Enable XSS filter in older browsers (deprecated but harmless)
-        headers["X-XSS-Protection"] = "1; mode=block";
 
         // Control referrer information sent to other sites
         headers["Referrer-Policy"] = "strict-origin-when-cross-origin";

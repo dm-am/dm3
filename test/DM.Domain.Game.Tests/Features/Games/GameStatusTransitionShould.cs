@@ -83,7 +83,7 @@ public class GameStatusTransitionShould : UnitTestBase
         var gameBlacklistRepository = Mock<IGameBlacklistRepository>();
 
         var unreadCountersRepository = Mock<IUnreadCountersRepository>();
-        unreadCountersRepository.Setup(r => r.CreateAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>()))
+        unreadCountersRepository.Setup(r => r.CreateMarkerAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>()))
             .Returns(Task.CompletedTask);
         unreadCountersRepository.Setup(r => r.SelectByEntitiesAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>(), It.IsAny<Guid[]>()))
             .ReturnsAsync((Guid userId, UnreadEntryType type, Guid[] ids) =>

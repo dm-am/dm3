@@ -1,6 +1,4 @@
 import { ref, computed, type Ref } from "vue";
-import { useHibpCheck } from "./useHibpCheck";
-import type { HibpStatus } from "@/shared/ui/PasswordInput";
 
 export interface UseNewPasswordFieldOptions {
   /** Ref to old password for comparison (password change form) */
@@ -8,16 +6,10 @@ export interface UseNewPasswordFieldOptions {
 }
 
 /**
- * Composable for new password field with HIBP check and validation
+ * Composable for a new password field: the rules the field itself can judge.
  */
 export function useNewPasswordField(options: UseNewPasswordFieldOptions = {}) {
   const password = ref("");
-  const {
-    isCompromised,
-    isChecking,
-    checkPassword,
-    reset: resetHibp,
-  } = useHibpCheck();
 
   const meetsMinimum = computed(() => password.value.length >= 8);
 
@@ -28,53 +20,28 @@ export function useNewPasswordField(options: UseNewPasswordFieldOptions = {}) {
       password.value === options.oldPassword.value,
   );
 
-  const hibpStatus = computed<HibpStatus>(() => {
-    if (isChecking.value) return "checking";
-    if (isCompromised.value) return "compromised";
-    return "safe";
-  });
-
   /**
    * Whether the form may be sent.
    *
-   * The wait for the breach lookup is not part of it. An answer still on the
-   * wire used to disable the submit button while nothing on screen said why,
-   * which reads as a control that stopped working; the wait belongs under the
-   * field, and the strength indicator names it there.
+   * Breaches are not on this list, and there is nowhere on the client they could
+   * be. The document's Content-Security-Policy allows connections to this origin
+   * and no other, so the lookup that used to run here was refused before it left
+   * the browser in every build except a developer's own — the field showed
+   * "checking" for a few milliseconds and never reached a verdict.
    *
-   * The verdict is part of it, and stays. The server refuses a breached
-   * password too (RefusalMessage.PasswordBreached), but both lookups are
-   * fail-open: HibpPasswordChecker allows the password whenever its own call to
-   * HIBP does not answer, so a verdict the client already holds is the only one
-   * guaranteed to be there.
+   * The server checks, on all three forms that set a password, and its refusal
+   * arrives at the field on submit as RefusalMessage.PasswordBreached.
    */
-  const isValid = computed(
-    () => meetsMinimum.value && !isCompromised.value && !isSameAsOld.value,
-  );
-
-  const onInput = () => {
-    resetHibp();
-  };
-
-  const onBlur = async () => {
-    if (meetsMinimum.value && !isSameAsOld.value) {
-      await checkPassword(password.value);
-    }
-  };
+  const isValid = computed(() => meetsMinimum.value && !isSameAsOld.value);
 
   const reset = () => {
     password.value = "";
-    resetHibp();
   };
 
   return {
     password,
-    hibpStatus,
     isSameAsOld,
     isValid,
-    isChecking,
-    onInput,
-    onBlur,
     reset,
   };
 }

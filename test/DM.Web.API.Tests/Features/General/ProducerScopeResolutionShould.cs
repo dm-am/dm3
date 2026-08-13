@@ -22,7 +22,7 @@ namespace DM.Web.API.Tests.Features.General;
 /// were not disposable, so every resolution that published anything left a channel
 /// open for the life of the process. With the shipped defaults (16 pools of 256)
 /// the pool threw after about four thousand published events, and from then on
-/// every publish in the API failed: no search indexing, no notifications, no mail.
+/// every publish in the API failed: no notifications and no letters.
 ///
 /// Three properties keep that closed, and this asserts all three because any one
 /// alone is not enough: the implementation must be disposable (or nothing returns

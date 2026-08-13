@@ -19,9 +19,14 @@ INSTALL_DIR="/opt/dm3"
 DM_REF="${DM_REF:-${DM_BRANCH:-dev}}"
 DM_BRANCH="$DM_REF"
 
+# Before anything is installed or restarted. Asked here rather than left to the
+# clone below, which is where a repeat run used to die - after apt and after a
+# restart of the docker daemon on a live stand.
+bash "$(dirname "$0")/scripts/require-empty-install-dir.sh" "$INSTALL_DIR"
+
 echo "=== Установка Docker ==="
 sudo apt update
-sudo apt install -y docker.io docker-compose-plugin git iptables-persistent openssl
+sudo apt install -y docker.io docker-compose-plugin git iptables-persistent openssl certbot
 
 echo "=== Настройка Docker для текущего пользователя ==="
 sudo usermod -aG docker "$USER"
@@ -118,6 +123,13 @@ echo "Логин: preview"
 # остается в терминале, в истории сессии и в логе установки, если она шла через
 # tee. Вдобавок под set -u эта строка роняла установщик на последнем шаге, если
 # пароль вводили в промпт init-htpasswd.sh, а не экспортировали.
+echo ""
+echo "Стенд отвечает по http: сертификата пока нет, самоподписанного не будет —"
+echo "предупреждение браузера учит кликать сквозь предупреждения."
+echo "Когда появится домен:"
+echo "  bash $INSTALL_DIR/docker/scripts/init-ssl.sh <домен>"
+echo "  sudo systemctl restart dm3"
+echo "  sudo certbot renew --dry-run"
 echo ""
 echo "Для смены пароля:"
 echo "  bash $INSTALL_DIR/docker/scripts/init-htpasswd.sh"

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using DM.Domain.Core.Tokens;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Security;
@@ -57,11 +58,17 @@ internal class RegistrationService : IRegistrationService
         var (hash, salt) = _securityManager.GeneratePassword(registration.Password);
         var now = _dateTimeProvider.Now;
 
-        // Create PendingRegistration with embedded TokenId
+        // The letter carries the secret; the row keeps its hash — see
+        // ConfirmationSecret for why a confirmation link is stored like a password.
+        // The row identifier is drawn first, keeping the order the deterministic
+        // factory of the seeding tool is read in.
+        var pendingId = _guidFactory.Create();
+        var secret = _guidFactory.Create();
         var pending = new PendingRegistration
         {
-            PendingRegistrationId = _guidFactory.Create(),
-            TokenId = _guidFactory.Create(),
+            PendingRegistrationId = pendingId,
+            Secret = secret,
+            SecretHash = ConfirmationSecret.Hash(secret),
             Email = registration.Email.ToLowerInvariant(),
             PasswordHash = hash,
             Salt = salt,
@@ -81,6 +88,6 @@ internal class RegistrationService : IRegistrationService
         }
 
         // Send confirmation email (no username yet)
-        await _mailSender.Send(registration.Email, pending.TokenId);
+        await _mailSender.Send(registration.Email, pending.Secret);
     }
 }

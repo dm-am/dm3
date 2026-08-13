@@ -128,16 +128,16 @@ public class GameCommentServiceShould : UnitTestBase
     public async Task AuthorizeReadCommentsAction()
     {
         var gameId = Guid.NewGuid();
-        var query = new GameCommentsQuery { Skip = 0 };
+        var query = new CommentsQuery { Skip = 0 };
         var game = new GameDto
         {
             Id = gameId,
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
         };
         _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _repository.Setup(r => r.Count(gameId, It.IsAny<GameCommentsQuery>(), It.IsAny<IReadOnlyCollection<Guid>?>()))
+        _repository.Setup(r => r.Count(gameId, It.IsAny<CommentsQuery>(), It.IsAny<IReadOnlyCollection<Guid>?>()))
             .ReturnsAsync(0);
-        _repository.Setup(r => r.Get(gameId, It.IsAny<GameCommentsQuery>(), It.IsAny<PagingData>(), It.IsAny<IReadOnlyCollection<Guid>?>()))
+        _repository.Setup(r => r.Get(gameId, It.IsAny<CommentsQuery>(), It.IsAny<PagingData>(), It.IsAny<IReadOnlyCollection<Guid>?>()))
             .ReturnsAsync(Array.Empty<Comment>());
 
         await _service.GetAsync(gameId, query);

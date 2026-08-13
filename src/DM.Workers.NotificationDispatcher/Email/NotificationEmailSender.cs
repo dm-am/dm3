@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -6,6 +7,7 @@ using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Domain.Core.Enums;
 using DM.Workers.NotificationDispatcher.Dispatching;
+using DM.Infrastructure.Core.Tracing;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Account.Settings;
 using DM.Infrastructure.Persistence.MongoIntegration;
@@ -15,6 +17,7 @@ using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 
 using DM.Domain.Core.Configuration;
+using DM.Domain.Core.Site;
 using DM.Domain.Core.Mail;
 using Microsoft.Extensions.Options;
 
@@ -109,12 +112,18 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
                     Body = body
                 });
 
-                // Recipient identified by user, not by address: the log store has no
-                // retention and an address names a person.
+                // Recipient identified by user, not by address: entries live for a
+                // month and an address names a person.
                 _logger.LogDebug("Sent email notification for event {EventType}", eventType);
             }
             catch (Exception ex)
             {
+                // The message was consumed successfully - from the pipeline's side
+                // it was, the swallowing is here - so a relay refusing every letter
+                // is invisible to every rule about the queue.
+                MessagingMetrics.DeliveryFailed.Add(1,
+                    MessagingMetrics.Channel("email"),
+                    new KeyValuePair<string, object?>("event", eventType.ToString()));
                 _logger.LogWarning(ex, "Failed to send email notification to user {UserId} for event {EventType}",
                     userId, eventType);
                 // Continue with other users
@@ -187,21 +196,19 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
 
         // Footer
         sb.AppendLine("<div style=\"padding: 15px; background: #eee; text-align: center; color: #666; font-size: 12px;\">");
-        // The address of the site is deployment configuration, not a constant:
-        // a letter built on one address and read by someone who only reaches
-        // the other one leads nowhere. This letter is the one a reader gets most
-        // often, so it is also where the full list of addresses is worth the two
-        // lines: a mailbox is the only place he can still be reached once the
-        // address he uses stops answering.
+        // The link is built on the address this deployment answers on, because a
+        // letter built on one address and read by somebody who only reaches the
+        // other one leads nowhere. The list below is the other half of that: a
+        // mailbox is the only place a reader can still be reached once the address
+        // he uses stops answering, and this is the letter he gets most often.
+        //
+        // The list is a fact of the product rather than a setting: as a setting it
+        // was one every deployment had to fill in and none ever did, so the line
+        // was empty everywhere.
         sb.AppendLine($"<p>Это автоматическое уведомление с сайта <a href=\"{addresses.PublicUrl}\">Dungeon Master</a></p>");
-        var hosts = addresses.Addresses.Values
-            .Where(url => !string.IsNullOrWhiteSpace(url))
-            .Select(url => new Uri(url).Host)
-            .Distinct()
-            .ToList();
-        if (hosts.Count > 1)
+        if (SiteAddresses.Hosts.Count > 1)
         {
-            sb.AppendLine($"<p>Сайт открывается по адресам: {string.Join(", ", hosts)}</p>");
+            sb.AppendLine($"<p>Сайт открывается по адресам: {string.Join(", ", SiteAddresses.Hosts)}</p>");
         }
         sb.AppendLine("<p>Вы можете отключить email-уведомления в настройках профиля.</p>");
         sb.AppendLine("</div>");

@@ -15,8 +15,9 @@ namespace DM.Web.API.Features.Messaging.GlobalChat;
 /// Global chat message endpoints
 /// </summary>
 /// <remarks>
-/// Provides access to global chat messages for all authenticated users.
-/// Global chat is a site-wide chat room visible to everyone.
+/// Global chat is a site-wide chat room. Reading it needs no account — the page
+/// is part of what a visitor sees; writing to it does, and a ban on public speech
+/// closes that half.
 /// </remarks>
 [ApiController]
 [Route("v1/global-chat")]

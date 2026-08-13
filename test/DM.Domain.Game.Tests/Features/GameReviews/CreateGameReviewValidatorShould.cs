@@ -34,7 +34,7 @@ public class CreateGameReviewValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.GameId)
-            .WithErrorMessage("Game ID is required");
+            .WithErrorMessage("Укажите игру");
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public class CreateGameReviewValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Text)
-            .WithErrorMessage("Review text is required");
+            .WithErrorMessage("Введите текст рецензии");
     }
 
     [Fact]
@@ -62,6 +62,6 @@ public class CreateGameReviewValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Text)
-            .WithErrorMessage("Review text must not exceed 5000 characters");
+            .WithErrorMessage("Рецензия не длиннее 5000 символов");
     }
 }

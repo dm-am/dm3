@@ -142,7 +142,11 @@ public class PublicationCommentServiceShould : UnitTestBase
 
         await _service.CreateAsync(createComment);
 
-        _eventProducer.Verify(p => p.SendAsync(EventType.NewBlogComment, commentId), Times.Once);
+        // The publication event, not the blog one: a comment carries the id of
+        // whatever it hangs on, so the blog generator joined Comments to Blogs on
+        // a publication id and produced nothing at all.
+        _eventProducer.Verify(p => p.SendAsync(EventType.NewPublicationComment, commentId), Times.Once);
+        _eventProducer.Verify(p => p.SendAsync(EventType.NewBlogComment, It.IsAny<Guid>()), Times.Never);
     }
 
     [Fact]
@@ -185,6 +189,94 @@ public class PublicationCommentServiceShould : UnitTestBase
 
         result.Should().Be(comment);
         _repository.Verify(r => r.Update(It.IsAny<UpdatePublicationCommentEntity>(), default), Times.Never);
+    }
+
+    /// <summary>
+    /// Deleting the last comment moves the pointer to the one before it.
+    /// </summary>
+    /// <remarks>
+    /// Two things were uncovered here, and this is both of them. Deletion in this
+    /// service had no test at all, alone among the four that carry comments; and
+    /// the branch that moves the "last comment" pointer has none in any of the
+    /// four, because every one of them deletes a comment that is not the last.
+    ///
+    /// What that branch costs when it is wrong: the publication keeps pointing at
+    /// a comment that no longer exists, so the list shows a last activity nobody
+    /// can open, and the count beside it is one too many.
+    /// </remarks>
+    [Fact]
+    public async Task PointAtTheCommentBeforeTheLastOneWhenTheLastIsDeleted()
+    {
+        var commentId = Guid.NewGuid();
+        var publicationId = Guid.NewGuid();
+        var successorId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+
+        var comment = new PublicationCommentToDelete
+        {
+            Id = commentId,
+            EntityId = publicationId,
+            IsLastComment = true,
+            PublicationCommentCount = 5,
+            CreatedUtc = DateTimeOffset.UtcNow
+        };
+
+        _identityProvider.Setup(p => p.Current).Returns(CreateAuthenticatedIdentity(userId));
+        _repository.Setup(r => r.GetForDelete(commentId, default)).ReturnsAsync(comment);
+        _repository
+            .Setup(r => r.GetNewestCommentIdExcept(publicationId, commentId, default))
+            .ReturnsAsync(successorId);
+
+        DeletePublicationCommentEntity? deleted = null;
+        _repository
+            .Setup(r => r.Delete(It.IsAny<DeletePublicationCommentEntity>(), default))
+            .Callback<DeletePublicationCommentEntity, CancellationToken>((entity, _) => deleted = entity);
+
+        await _service.DeleteAsync(commentId);
+
+        _intentionManager.Verify(
+            m => m.ThrowIfForbidden(CommentIntention.Delete, It.IsAny<Comment>()), Times.Once);
+
+        deleted.Should().NotBeNull("the deletion is what the repository is handed");
+        deleted!.NewLastCommentId.Should().Be(successorId,
+            "the pointer has to move off the comment being removed, or the publication " +
+            "keeps advertising an activity nobody can open");
+        deleted.NewCommentCount.Should().Be(4,
+            "the count beside it is one less than it was");
+        deleted.DeletedByUserId.Should().Be(userId,
+            "who removed it is the one thing the row cannot recover afterwards");
+    }
+
+    [Fact]
+    public async Task LeaveThePointerAloneWhenTheDeletedCommentIsNotTheLast()
+    {
+        var commentId = Guid.NewGuid();
+        var publicationId = Guid.NewGuid();
+
+        var comment = new PublicationCommentToDelete
+        {
+            Id = commentId,
+            EntityId = publicationId,
+            IsLastComment = false,
+            PublicationCommentCount = 5,
+            CreatedUtc = DateTimeOffset.UtcNow
+        };
+
+        _identityProvider.Setup(p => p.Current).Returns(CreateAuthenticatedIdentity(Guid.NewGuid()));
+        _repository.Setup(r => r.GetForDelete(commentId, default)).ReturnsAsync(comment);
+
+        DeletePublicationCommentEntity? deleted = null;
+        _repository
+            .Setup(r => r.Delete(It.IsAny<DeletePublicationCommentEntity>(), default))
+            .Callback<DeletePublicationCommentEntity, CancellationToken>((entity, _) => deleted = entity);
+
+        await _service.DeleteAsync(commentId);
+
+        deleted!.NewLastCommentId.Should().BeNull(
+            "the last comment is somebody else's and stays where it is");
+        _repository.Verify(
+            r => r.GetNewestCommentIdExcept(It.IsAny<Guid>(), It.IsAny<Guid>(), default), Times.Never,
+            "a search for a successor that is not needed is a query per deletion");
     }
 
     private static IIdentity CreateAuthenticatedIdentity(Guid userId)

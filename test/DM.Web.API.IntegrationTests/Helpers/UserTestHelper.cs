@@ -1,4 +1,5 @@
 using System.Net;
+using DM.Domain.Core.Tokens;
 using System.Net.Http.Json;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Account;
@@ -56,13 +57,21 @@ public static class UserTestHelper
                 $"PendingRegistration not found for email '{email}'");
         }
 
+        // The row keeps only a hash of the activation secret, so the value that
+        // went into the letter cannot be read back out of the database — which is
+        // the property under test elsewhere. The helper therefore issues a secret
+        // of its own and stamps its hash onto the pending row.
+        var secret = Guid.NewGuid();
+        pending.SecretHash = ConfirmationSecret.Hash(secret);
+        await db.SaveChangesAsync();
+
         // 3. Activate with chosen login (token in the header, username in body)
         var activateRequest = new { username = login };
         var activate = new HttpRequestMessage(HttpMethod.Post, "/v1/account/activation")
         {
             Content = JsonContent.Create(activateRequest)
         };
-        activate.Headers.Add(TokenHeaders.Account, pending.TokenId.ToString());
+        activate.Headers.Add(TokenHeaders.Account, secret.ToString());
         var activateResponse = await client.SendAsync(activate);
         if (activateResponse.StatusCode != HttpStatusCode.OK)
         {

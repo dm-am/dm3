@@ -42,7 +42,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Serilog;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace DM.Web.API;
@@ -103,8 +105,28 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         // one stays with the host rather than moving into the core extension.
         services.AddOptions<SiteAddressConfiguration>()
             .Bind(configuration.GetSection(nameof(SiteAddressConfiguration)))
-            .Validate(s => s.AllowedOrigins?.Length > 0, "SiteAddressConfiguration:AllowedOrigins is required")
+            // Derived, so what is asserted is that something was declared to derive
+            // from. A deployment that names neither its public address nor any
+            // address of the site refuses every browser at the door, and the list it
+            // refuses against would be empty rather than wrong.
+            .Validate(s => s.BrowserOrigins().Count > 0,
+                "SiteAddressConfiguration:PublicUrl or SiteAddressConfiguration:Addresses must name at least one address")
+            // A typo drops an address out of the derived list silently, and the site
+            // then refuses the very address it is served on.
+            .Validate(
+                s => s.AdditionalOrigins.Prepend(s.PublicUrl)
+                    .Where(a => !string.IsNullOrWhiteSpace(a))
+                    .All(a => SiteAddressConfiguration.OriginOf(a) != null),
+                "SiteAddressConfiguration: every declared address must be an absolute http or https URL")
             .ValidateOnStart();
+
+        // The development server of the client, and only where one exists. A
+        // deployment declares its addresses and leaves this untouched.
+        if (_environment.IsDevelopment())
+        {
+            services.PostConfigure<SiteAddressConfiguration>(s =>
+                s.AdditionalOrigins = [.. s.AdditionalOrigins, "http://localhost:5173", "http://localhost:5174"]);
+        }
 
         // X-Forwarded-* is honoured for the configured proxy networks only.
         // Without this every caller could name its own address, and that address
@@ -267,6 +289,17 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             Environment.Exit(0);
         }
 
+        // The only trace a deployment running without limits leaves. The setting
+        // is turned off by hand and defaults to on, so the unlimited mode is
+        // always somebody's decision - but nothing about a running instance says
+        // which mode it is in: no header, no health field, and every policy still
+        // resolves by name because they are registered as no-ops.
+        if (!RateLimitingExtensions.IsEnabled(configuration))
+        {
+            logger.LogWarning(
+                "Rate limiting is off: every policy is registered as a no-op limiter");
+        }
+
         // First in the pipeline: everything downstream — the rate limiter
         // partitions, the login journal, the security audit — reads the peer
         // address, so it has to be the client's before any of them run.
@@ -290,6 +323,28 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         appBuilder
             .UseResponseCompression()
             .UseMiddleware<CorrelationMiddleware>()
+            // One line per request, and until now there were none. The framework's
+            // own request logging is at Information, which the source override cuts
+            // to Warning to keep the framework's noise out of the store - so the
+            // store held what the application chose to say and nothing about what was
+            // asked of it. A 404 nobody expected, a route answering 500 for one
+            // caller, the request behind a slow page: none of them left a trace.
+            //
+            // Above the error handler on purpose. Below it, an exception would pass
+            // through this middleware, which would log it as Error and rethrow - a
+            // second record on top of the one the handler already wrote, differing
+            // only in wording.
+            //
+            // After the correlation middleware, so the token is on the line: tying a
+            // refusal to its request is the whole reason that token exists.
+            .UseSerilogRequestLogging(options =>
+            {
+                options.EnrichDiagnosticContext = (diagnostic, context) =>
+                {
+                    diagnostic.Set("Host", context.Request.Host.Value);
+                    diagnostic.Set("Address", context.GetClientAddress());
+                };
+            })
             .UseMiddleware<ErrorHandlingMiddleware>()
             // Before the response cache, which is the order ASP.NET requires and
             // the reverse of what stood here. A cacheable endpoint answered its
@@ -304,7 +359,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             // CORS middleware emits Vary: Origin and the cache keys entries by
             // it - one caller's allowance is not served to another.
             .UseCors(b => b
-                .WithOrigins(siteAddresses.Value.AllowedOrigins)
+                .WithOrigins([.. siteAddresses.Value.BrowserOrigins()])
                 // Two hand kept lists, both silent when wrong. A request header
                 // absent from the first never reaches the server at all: the
                 // preflight is answered without it and the browser drops the

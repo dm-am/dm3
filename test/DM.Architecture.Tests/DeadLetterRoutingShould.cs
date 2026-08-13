@@ -30,7 +30,7 @@ public class DeadLetterRoutingShould
     /// <summary>Assignment of the dead-letter exchange inside those parameters.</summary>
     private const string RoutesPoisonMessages = "DeadLetterExchange =";
 
-    /// <summary>The single place that puts a dead-letter exchange on the broker.</summary>
+    /// <summary>Our own declaration of that exchange, which the client's has to match.</summary>
     private const string DeclaresTheDestination = "DeadLetterQueue.DeclareTerminal(";
 
     /// <summary>
@@ -76,8 +76,44 @@ public class DeadLetterRoutingShould
             .Where(path => !File.ReadAllText(path).Contains(DeclaresTheDestination, StringComparison.Ordinal))
             .Select(path => Path.GetFileName(path))
             .Should().BeEmpty(
-                "naming an exchange nobody declared loses the message just as quietly: the " +
-                "broker discards what it cannot route out of the queue");
+                "the client declares this topology as well, and the two have to agree " +
+                "argument for argument: a declaration missing here leaves the destination to " +
+                "an internal of a pinned version, and one that drifts is answered with 406 " +
+                "when the consumer subscribes");
+
+    /// <summary>The processing order the client implements by not limiting anything.</summary>
+    private const string NoPrefetchAtAll = "ProcessingOrder.Unmanaged";
+
+    /// <summary>
+    /// A consumer takes what it can finish, not what the queue holds.
+    /// </summary>
+    /// <remarks>
+    /// The client implements this one order by skipping the prefetch call
+    /// altogether, so the broker hands over the entire queue and the worker holds
+    /// every message of it in memory, unacknowledged, until it works through them.
+    /// Nothing is gained for that: the handler runs on the client's async
+    /// consumer, which delivers one message at a time on the channel whatever the
+    /// order says.
+    ///
+    /// And the backlog it builds is the invisible kind. A message delivered to a
+    /// consumer is no longer ready, so depth read off the ready series shows an
+    /// empty queue for a worker sitting on a thousand messages — the alert stays
+    /// green, the panel stays flat, and the first symptom is a reader asking why
+    /// a notification took an hour.
+    ///
+    /// Asserted on the sources for the same reason as everything else here: the
+    /// parameters are built inside a background service that needs a live broker
+    /// to reach that line.
+    /// </remarks>
+    [Fact]
+    public void BoundWhatEachConsumerTakesAtOnce() =>
+        Consumers
+            .Where(path => File.ReadAllText(path).Contains(NoPrefetchAtAll, StringComparison.Ordinal))
+            .Select(Path.GetFileName)
+            .Should().BeEmpty(
+                "this order is the one the client implements by never limiting the prefetch, " +
+                "so the worker holds the whole queue in memory and the backlog it builds is " +
+                "invisible to a depth read off the ready series");
 
     /// <summary>
     /// The exemption has to keep naming a consumer that exists, or a rename turns

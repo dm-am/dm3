@@ -16,8 +16,8 @@ public class ResendActivation
     /// User email address (must match the account's registered email)
     /// </summary>
     /// <example>user@example.com</example>
-    [Required(ErrorMessage = "Email is required")]
-    [EmailAddress(ErrorMessage = "Invalid email format")]
-    [StringLength(100, ErrorMessage = "Email must not exceed 100 characters")]
+    [Required(ErrorMessage = "Введите почту")]
+    [EmailAddress(ErrorMessage = "Неверный формат почты")]
+    [StringLength(100, ErrorMessage = "Почта не длиннее 100 символов")]
     public string Email { get; set; } = "";
 }

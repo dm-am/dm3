@@ -464,6 +464,28 @@ function unescapeHtml(text: string): string {
 }
 
 /**
+ * Rebuild a [private] tag from a matched element.
+ *
+ * Four shapes reach this: the span the editor emits and the div the server
+ * renders, each in a marked and an unmarked form. The addressees are unescaped
+ * so entities do not accumulate across round trips, and an empty list gives the
+ * bare tag — [private=] renders the same block, but it is not what the author
+ * typed, and it is what they would see on the next edit of a post addressed to
+ * nobody.
+ *
+ * @param _ - Whole match, unused
+ * @param character - Addressee list from the element's attribute
+ * @param content - Text the block wraps
+ * @returns The BBCode tag
+ */
+function toPrivateTag(_: string, character: string, content: string): string {
+  const addressees = unescapeHtml(character);
+  return addressees
+    ? `[private=${addressees}]${content}[/private]`
+    : `[private]${content}[/private]`;
+}
+
+/**
  * Escape attribute value for safe HTML insertion.
  *
  * @param value - Attribute value to escape
@@ -1023,11 +1045,8 @@ function phase2_convertMarkedHtml(state: HtmlToBbcodeState): HtmlToBbcodeState {
     return `[img]${safeSrc}[/img]`;
   });
 
-  // Private - unescape character attribute to prevent entity accumulation on
-  // round-trip. Two shapes, one rule: the span the editor emits and the div the
-  // server renders for the author's own view of a post.
-  const toPrivateTag = (_: string, character: string, content: string) =>
-    `[private=${unescapeHtml(character)}]${content}[/private]`;
+  // Private - two shapes, one rule: the span the editor emits and the div the
+  // server renders for the author's own view of a post. See toPrivateTag.
   bbcode = bbcode.replace(HTML_TO_BB_MARKED.private, toPrivateTag);
   bbcode = bbcode.replace(HTML_TO_BB_MARKED.privateBlock, toPrivateTag);
   // Silently strip any stray legacy cut markers — see HTML_TO_BB_MARKED.cutLegacy note.
@@ -1098,10 +1117,8 @@ function phase3_convertUnmarkedHtml(
 
   bbcode = bbcode.replace(HTML_TO_BB_UNMARKED.spoiler, "[spoiler]$1[/spoiler]");
   bbcode = bbcode.replace(HTML_TO_BB_UNMARKED.nsfw, "[nsfw]$1[/nsfw]");
-  // Unmarked private - unescape character name. Two shapes for one tag: the
-  // span older content carries and the div the server renders it as today.
-  const toPrivateTag = (_: string, character: string, content: string) =>
-    `[private=${unescapeHtml(character)}]${content}[/private]`;
+  // Unmarked private - two shapes for one tag: the span older content carries
+  // and the div the server renders it as today. See toPrivateTag.
   bbcode = bbcode.replace(HTML_TO_BB_UNMARKED.private, toPrivateTag);
   bbcode = bbcode.replace(HTML_TO_BB_UNMARKED.privateBlock, toPrivateTag);
 

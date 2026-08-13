@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -18,7 +19,7 @@ namespace DM.Infrastructure.Persistence.Repositories.Search;
 /// </summary>
 internal class ForumSearchRepository : IForumSearchRepository
 {
-    private const string SearchConfig = "russian";
+    private const string SearchConfig = SearchTextConfiguration.Name;
     private const string TopicEntityType = "topic";
     private const string CommentEntityType = "comment";
 
@@ -27,6 +28,90 @@ internal class ForumSearchRepository : IForumSearchRepository
     public ForumSearchRepository(DmDbContext dbContext)
     {
         _dbContext = dbContext;
+    }
+
+    /// <summary>
+    /// Fills in the preview of a page: a window around the match, with the match
+    /// marked.
+    /// </summary>
+    /// <remarks>
+    /// A second pass over the page rather than part of the projection above, and
+    /// not for tidiness. ts_headline re-parses the document it is given, and in the
+    /// select list of the ranked query it would run for every row that matched
+    /// anywhere in the forum - thousands of them - to be thrown away by the paging
+    /// a moment later. Here it runs once per row a reader will actually see.
+    ///
+    /// The window is what makes the preview worth reading. Cut from the beginning
+    /// instead, it showed the first two hundred characters of a topic and almost
+    /// never the words that were searched for; and it could not have found them by
+    /// looking, because the search matches by lexeme - a query for "странник"
+    /// matches "странников", which no substring of the query occurs in.
+    /// </remarks>
+    private async Task Preview(ForumSearchHit[] page, string query, CancellationToken ct)
+    {
+        if (page.Length == 0)
+        {
+            return;
+        }
+
+        // A filter with no words in it - by author, by date - matches every row
+        // equally, and there is nothing to build a window around.
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            foreach (var row in page)
+            {
+                row.SnippetSegments = SearchSnippet.Plain(row.Snippet);
+            }
+
+            return;
+        }
+
+        var topicIds = page.Where(h => h.EntityType == TopicEntityType).Select(h => h.Id).ToArray();
+        var commentIds = page.Where(h => h.EntityType == CommentEntityType).Select(h => h.Id).ToArray();
+
+        var headlines = new Dictionary<Guid, string>();
+
+        if (topicIds.Length > 0)
+        {
+            foreach (var row in await _dbContext.Topics
+                .Where(t => topicIds.Contains(t.TopicId))
+                .Select(t => new
+                {
+                    t.TopicId,
+                    Headline = EF.Functions.WebSearchToTsQuery(SearchConfig, query)
+                        .GetResultHeadline(SearchConfig, EF.Property<string>(t, "SearchText"), SearchSnippet.HeadlineOptions),
+                })
+                .ToArrayAsync(ct))
+            {
+                headlines[row.TopicId] = row.Headline;
+            }
+        }
+
+        if (commentIds.Length > 0)
+        {
+            foreach (var row in await _dbContext.Comments
+                .Where(c => commentIds.Contains(c.CommentId))
+                .Select(c => new
+                {
+                    c.CommentId,
+                    Headline = EF.Functions.WebSearchToTsQuery(SearchConfig, query)
+                        .GetResultHeadline(SearchConfig, EF.Property<string>(c, "SearchText"), SearchSnippet.HeadlineOptions),
+                })
+                .ToArrayAsync(ct))
+            {
+                headlines[row.CommentId] = row.Headline;
+            }
+        }
+
+        foreach (var row in page)
+        {
+            // StripPrivateBlocks over the fallback stays as a second lock over the
+            // projection, which already removed the block: the column cannot fail
+            // and a process can.
+            row.SnippetSegments = headlines.TryGetValue(row.Id, out var headline)
+                ? SearchSnippet.Highlight(headline)
+                : SearchSnippet.Plain(row.Snippet);
+        }
     }
 
     /// <inheritdoc />
@@ -51,7 +136,7 @@ internal class ForumSearchRepository : IForumSearchRepository
                 BoardId = t.BoardId,
                 BoardTitle = t.Board.Title,
                 CreatedUtc = t.CreatedUtc,
-                Snippet = t.Text,
+                Snippet = EF.Property<string>(t, "SearchText"),
                 Rank = EF.Property<NpgsqlTsVector>(t, "SearchVector")
                     .Rank(EF.Functions.WebSearchToTsQuery(SearchConfig, query)),
             });
@@ -73,7 +158,7 @@ internal class ForumSearchRepository : IForumSearchRepository
                 BoardId = t.BoardId,
                 BoardTitle = t.Board.Title,
                 CreatedUtc = c.CreatedUtc,
-                Snippet = c.Text,
+                Snippet = EF.Property<string>(c, "SearchText"),
                 Rank = EF.Property<NpgsqlTsVector>(c, "SearchVector")
                     .Rank(EF.Functions.WebSearchToTsQuery(SearchConfig, query)),
             });
@@ -86,6 +171,13 @@ internal class ForumSearchRepository : IForumSearchRepository
             return ([], 0);
         }
 
+        // ts_rank runs with the default normalisation flag, which ignores the
+        // length of the document: rank grows with the number of occurrences alone,
+        // so a long topic repeating the term outranks a short one about it, and
+        // equal ranks fall through to recency below. Picking a flag blind would
+        // also reorder against the A and B weights the topic vector already pays
+        // for - a decision worth making when this endpoint has a UI and a corpus
+        // to look at, and not before.
         var rows = await combined
             .OrderByDescending(h => h.Rank)
             .ThenByDescending(h => h.CreatedUtc)
@@ -94,10 +186,7 @@ internal class ForumSearchRepository : IForumSearchRepository
             .Take(pagingData.Take)
             .ToArrayAsync(ct);
 
-        foreach (var row in rows)
-        {
-            row.Snippet = SearchSnippet.Truncate(SearchSnippet.StripPrivateBlocks(row.Snippet));
-        }
+        await Preview(rows, query, ct);
 
         return (rows, totalCount);
     }

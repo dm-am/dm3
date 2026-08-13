@@ -43,7 +43,7 @@ internal class CommunityProfileService : ICommunityProfileService
     {
         var normalizedUsername = username.ToLowerInvariant();
         var user = await _cache.GetOrCreateAsync(
-            $"user_details_{normalizedUsername}",
+            CacheKeys.UserDetails(normalizedUsername),
             () => _userRepository.GetUserDetailsAsync(username),
             CachePolicy.Medium);
 
@@ -59,7 +59,7 @@ internal class CommunityProfileService : ICommunityProfileService
     public async Task<UserDetails> GetProfile(Guid userId)
     {
         var user = await _cache.GetOrCreateAsync(
-            $"user_details_{userId}",
+            CacheKeys.UserDetails(userId),
             () => _userRepository.GetUserDetailsAsync(userId),
             CachePolicy.Medium);
 
@@ -91,7 +91,7 @@ internal class CommunityProfileService : ICommunityProfileService
     /// <inheritdoc />
     public Task<IEnumerable<GeneralUser>> GetUsersByRole(UserRole role) =>
         _cache.GetOrCreateAsync(
-            $"users_by_role_{role}",
+            CacheKeys.UsersByRole(role),
             () => _userRepository.GetUsersByRoleAsync(role),
             CachePolicy.LongLived);
 

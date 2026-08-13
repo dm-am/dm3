@@ -13,11 +13,40 @@ services:
   nginx:
     container_name: 'dm-nginx'
     image: 'nginx:1.27-alpine'
+    # The edge resolves the name of every container behind it once, when it parses
+    # its configuration, and holds the address it got. A replaced container comes
+    # back on a new address, and the edge keeps proxying to the old one until it is
+    # itself recreated - a 502 on every request, lasting until somebody notices.
+    #
+    # The first label is not about updating nginx. With WATCHTOWER_LABEL_ENABLE a
+    # container without it does not exist as far as the updater is concerned, so no
+    # linked restart can apply to it. The second names container_name values, not
+    # service names and not upstream group names: that is what the updater sorts
+    # and restarts by, and a name it does not recognise is skipped in silence.
+    #
+    # The accepted cost: the edge now follows the nginx:1.27-alpine tag on its own.
+    # Pinning a digest instead would mean an edge that never receives a patch and
+    # that nobody ever moves, and the price of following the tag is a few seconds
+    # of the whole site being down on a deployment, against a permanent 502 on the
+    # API path. Anything the updater does not watch - the object store, the image
+    # renderer, a manual --force-recreate - is recreated by whoever recreates it,
+    # per the rule in DEPLOYMENT.md.
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "com.centurylinklabs.watchtower.depends-on=dm-api,dm-front"
     ports:
       - '80:80'
+      - '443:443'
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/edge-locations.conf:/etc/nginx/edge-locations.conf:ro
       - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro
+      # Пусто до первого выпуска сертификата, и это рабочее состояние: край
+      # отдает http, пока отдавать https нечем. scripts/init-ssl.sh кладет сюда
+      # сервер TLS и редирект на домен, для которого сертификат выпущен.
+      - ./nginx/tls:/etc/nginx/tls:ro
+      - ./nginx/acme:/var/www/certbot:ro
+      - ${SSL_ROOT:-/etc/letsencrypt}:/etc/nginx/ssl:ro
     depends_on:
       dmapi:
         condition: service_healthy

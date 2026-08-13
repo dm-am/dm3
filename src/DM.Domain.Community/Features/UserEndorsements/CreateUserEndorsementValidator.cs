@@ -11,12 +11,12 @@ internal class CreateUserEndorsementValidator : AbstractValidator<CreateUserEndo
     {
         RuleFor(x => x.TargetUserId)
             .NotEmpty()
-            .WithMessage("Target user ID is required");
+            .WithMessage("Укажите пользователя");
 
         RuleFor(x => x.Text)
             .NotEmpty()
-            .WithMessage("Endorsement text is required")
+            .WithMessage("Введите текст рекомендации")
             .MaximumLength(5000)
-            .WithMessage("Endorsement text must not exceed 5000 characters");
+            .WithMessage("Рекомендация не длиннее 5000 символов");
     }
 }

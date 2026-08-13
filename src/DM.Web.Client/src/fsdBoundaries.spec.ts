@@ -157,6 +157,17 @@ describe("FSD boundaries, as the linter actually applies them", () => {
     }
   });
 
+  // Addressing is the only property a door has: a slice enters through the file
+  // that names it and through no other, and that is the whole of what the extra
+  // four files buy. The allow-probe below cannot hold it — an allow-probe passes
+  // by resolving nothing, so it would go on passing against a door addressed to
+  // somebody else, or against a path that does not exist at all.
+  it("refuses a door addressed to another slice", () => {
+    expect(
+      refusals("src/entities/game/probe.ts", "@/entities/user/@x/testimonial"),
+    ).toHaveLength(1);
+  });
+
   describe("what the barrel rule must not break", () => {
     const allowed: [string, string][] = [
       // The barrel itself.

@@ -21,8 +21,10 @@ datasources:
     url: http://dm-loki:3100
     editable: false
     jsonData:
-      # Every log line carries the trace id (ActivityEnricher), so a log opens
-      # the trace it belongs to without a copy-paste.
+      # Every log line carries the trace id, written by the log sink out of the
+      # event, so a log opens the trace it belongs to without a copy-paste. The
+      # name matters as much as the value: an enricher writing a property of this
+      # name has it renamed by the sink, and this expression then matches nothing.
       derivedFields:
         - name: TraceId
           matcherRegex: '"TraceId":"(\w+)"'

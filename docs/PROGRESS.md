@@ -53,4 +53,4 @@
 **Форум:** [/forum](http://localhost:5173/forum) · [/forum/general](http://localhost:5173/forum/general) · [/forum/general/4](http://localhost:5173/forum/general/4) · /forum/general/4/unread · /forum-topic/:topicId
 **Чат/сообщения:** [/global-chat](http://localhost:5173/global-chat) · /messenger · /messenger/c/:id · /messenger/user/:username
 **Модерация (Moderator+):** /moderation · /moderation/moderators · /moderation/games · /moderation/blogs · /moderation/bans · /moderation/warnings · /moderation/rated-posts · /moderation/new-users · /moderation/violators · /moderation/support · /moderation/complaints · /moderation/tickets/:id · /moderation/uploads · /moderation/username-changes · /moderation/tags · /moderation/awards · /moderation/awards/series/:id · /moderation/award-types · /moderation/achievements · /moderation/fundraising
-**Auth/служебные:** /auth/callback · /activate/:token · /confirm-email/:token · /reset-password/:token · /error/:code
+**Auth/служебные:** /auth/callback · /activate · /confirm-email · /reset-password · /error/:code

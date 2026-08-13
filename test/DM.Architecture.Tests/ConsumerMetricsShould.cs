@@ -62,7 +62,13 @@ public class ConsumerMetricsShould
         ("process_runtime_", "dm-api"),
         ("rabbitmq_", "rabbitmq"),
         ("pg_", "postgres"),
+        ("mongodb_", "mongo"),
         ("node_", "node"),
+        // The contour instruments itself, and the two halves of it are targets like
+        // any other: a rule about the receiver is as silent as any rule over a name
+        // nobody scrapes.
+        ("alertmanager_", "alertmanager"),
+        ("prometheus_", "prometheus"),
     ];
 
     /// <summary>
@@ -215,13 +221,197 @@ public class ConsumerMetricsShould
         source.Contains("MessagingMetrics", StringComparison.Ordinal) ||
         source.Contains(SharedPipeline, StringComparison.Ordinal);
 
+    /// <summary>A metrics class declaring the meter its instruments belong to.</summary>
+    private static readonly Regex MeterOwner = new(
+        @"class\s+(\w+)[\s\S]{0,400}?const\s+string\s+MeterName", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Every meter this project declares reaches the exporter.
+    /// </summary>
+    /// <remarks>
+    /// Naming the one meter that existed made this a rule about that meter rather
+    /// than about meters: three more were declared after it, each with its own
+    /// AddMeter line, and nothing would have said a word had any of those lines
+    /// been forgotten. An unregistered meter is the worst shape of this defect,
+    /// because the instruments still record - the code runs, the counters rise in
+    /// process memory, and the scrape simply has no series - so it reads from the
+    /// inside exactly like instrumentation that works.
+    /// </remarks>
     [Fact]
-    public void RegisterTheMeterWithTheExporter() =>
-        File.ReadAllText(Path.Combine(
-                RepositoryRoot, "src", "DM.Infrastructure.Core", "Logging", "LoggingConfiguration.cs"))
-            .Should().Contain("MessagingMetrics.MeterName",
-                "an instrument nobody added to the meter provider is written at runtime and " +
-                "exported nowhere, which looks exactly like no instrumentation at all");
+    public void RegisterEveryMeterWithTheExporter()
+    {
+        var registration = SourceText.ReadCode(Path.Combine(
+            RepositoryRoot, "src", "DM.Infrastructure.Core", "Logging", "LoggingConfiguration.cs"));
+
+        var owners = MetricsSources()
+            .SelectMany(path => MeterOwner.Matches(File.ReadAllText(path)))
+            .Select(match => match.Groups[1].Value)
+            .ToList();
+
+        owners.Should().NotBeEmpty(
+            "the sources declare meters, and a walk that finds none of them passes everything");
+
+        foreach (var owner in owners)
+        {
+            registration.Should().Contain($"{owner}.MeterName",
+                $"{owner} declares a meter the provider is never told about, so its " +
+                "instruments record into process memory and are exported nowhere - which " +
+                "looks from the inside exactly like instrumentation that works");
+        }
+    }
+
+    /// <summary>The instrument names of one meter, by the class that owns it.</summary>
+    private static IReadOnlyCollection<string> InstrumentsOf(string owner)
+    {
+        var source = MetricsSources()
+            .FirstOrDefault(path => Path.GetFileNameWithoutExtension(path) == owner);
+
+        source.Should().NotBeNull($"{owner} is the class this rule is about");
+
+        return Instrument.Matches(File.ReadAllText(source!))
+            .Select(match => match.Groups[1].Value.Replace('.', '_'))
+            .ToArray();
+    }
+
+    private static IEnumerable<string> MetricsSources() => Directory
+        .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*Metrics.cs", SearchOption.AllDirectories)
+        .Where(IsAuthored);
+
+    /// <summary>
+    /// The meters whose measurements nobody is waiting on, and why each is one.
+    /// </summary>
+    /// <remarks>
+    /// Named rather than derived, because what puts a meter here is not visible in
+    /// a declaration: it is whether a failure it counts has a caller left to
+    /// return an error to. Both entries are asserted to exist, so an entry cannot
+    /// outlive the class it excuses.
+    /// </remarks>
+    private static readonly (string Owner, string Why)[] Unattended =
+    [
+        // A message is taken off a queue with nobody on the other end of it, and
+        // the sender swallows a refusal on purpose so that one dead channel does
+        // not cost the recipient duplicates over the channels that are up.
+        ("MessagingMetrics", "a delivery that fails answers nobody"),
+        // The relational write is already committed when the document write runs,
+        // and no transaction spans the two, so the failure has nothing left to
+        // unwind and the request that caused it has already answered success.
+        ("StorageMetrics", "a dropped write is answered as a success"),
+    ];
+
+    /// <summary>
+    /// Every failure nobody is waiting on is read by a rule.
+    /// </summary>
+    /// <remarks>
+    /// These counters measure unattended work: there is no caller to return an
+    /// error to and no page to turn red, so a counter no rule reads is the same
+    /// silence as no counter at all - written, exported, and looked at by nobody
+    /// until a reader asks why a notification never came or why a badge has been
+    /// wrong for a week.
+    ///
+    /// Deliberately not every failure counter in the project. An upload that fails
+    /// answers its caller in the same request, so a rule about it is a choice; the
+    /// failures listed above answer nobody, so a rule about them is the only
+    /// answer there is.
+    /// </remarks>
+    [Fact]
+    public void AlertOnEveryFailureNobodyIsWaitingOn()
+    {
+        var rules = File.ReadAllText(
+            Path.Combine(RepositoryRoot, "docker", "prometheus", "alerts.yml"));
+
+        foreach (var (owner, why) in Unattended)
+        {
+            var failures = InstrumentsOf(owner)
+                .Where(name => name.Contains("_failed", StringComparison.Ordinal)
+                    || name.Contains("_lost", StringComparison.Ordinal))
+                .ToList();
+
+            failures.Should().NotBeEmpty(
+                $"{owner} is listed as measuring work nobody is waiting on, and a meter with " +
+                "no failure among its instruments does not belong on that list");
+
+            foreach (var failure in failures)
+            {
+                rules.Should().Contain(failure,
+                    $"{failure} counts work that was lost while {why}, and a count no rule " +
+                    "reads is the same silence as no count at all");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Every sender counts what its channel refused.
+    /// </summary>
+    /// <remarks>
+    /// The pipeline counts a delivery that threw, and none of these throw: each
+    /// sender catches its own failures on purpose, so that one dead channel cannot
+    /// cost the recipient a second copy over the channels that are up. Which means
+    /// the pipeline's counter never sees the ordinary case - a bot answering 403
+    /// for every recipient, a relay rejecting every letter - and the only place
+    /// that can count it is the sender itself.
+    ///
+    /// By the file rather than by a list, so that a channel added later is asked
+    /// the same question. Nothing about a new sender fails without this: it
+    /// compiles, it runs, it logs its warning, and the channel it speaks for is
+    /// missing from every rule and every panel for as long as nobody asks.
+    /// </remarks>
+    [Fact]
+    public void CountWhatEverySenderSwallows()
+    {
+        var senders = Directory
+            .EnumerateFiles(Path.Combine(RepositoryRoot, "src", "DM.Workers.NotificationDispatcher"),
+                "*Sender.cs", SearchOption.AllDirectories)
+            .Where(IsAuthored)
+            .Where(path => !Path.GetFileName(path).StartsWith("I", StringComparison.Ordinal))
+            .ToList();
+
+        senders.Should().NotBeEmpty(
+            "the dispatcher delivers through senders, and a walk that finds none of them " +
+            "passes everything");
+
+        senders
+            .Where(path => !File.ReadAllText(path).Contains(
+                "MessagingMetrics.DeliveryFailed", StringComparison.Ordinal))
+            .Select(Relative)
+            .Should().BeEmpty(
+                "a sender swallows what its channel refused so that the other channels are " +
+                "not replayed, and a swallowed failure nobody counts is a reader who never " +
+                "got the notification and nothing anywhere saying so");
+    }
+
+    /// <summary>
+    /// Refusals at the front door are read by a rule, under both of the names they
+    /// arrive under.
+    /// </summary>
+    /// <remarks>
+    /// Two halves, because a login is refused in two places. Past the limiter the
+    /// application decides, and the reason it decided is the whole information -
+    /// a run of WrongLogin is somebody walking a list of addresses, a run of
+    /// WrongPassword against few addresses is somebody walking a list of
+    /// passwords. Before the limiter nothing of the sort runs, so the only trace
+    /// of a run being turned away is the status on the request series.
+    ///
+    /// Neither half fails visibly on its own: the site answers, the dashboards
+    /// stay green, and the difference between a busy evening of typos and a
+    /// credential-stuffing run is a number nobody computes.
+    /// </remarks>
+    [Fact]
+    public void AlertOnRefusalsAtTheFrontDoor()
+    {
+        var rules = File.ReadAllText(
+            Path.Combine(RepositoryRoot, "docker", "prometheus", "alerts.yml"));
+
+        foreach (var refusal in InstrumentsOf("AuthenticationMetrics"))
+        {
+            rules.Should().Contain(refusal,
+                $"{refusal} carries the reason a login was refused, which is the one thing " +
+                "the request series cannot say");
+        }
+
+        rules.Should().MatchRegex(@"http_response_status_code=""429""",
+            "the limiter answers before any code that could count a reason runs, so a run " +
+            "being turned away at the door is visible only as a status");
+    }
 
     [Fact]
     public void AlertAndDrawOnlyOnSeriesSomethingPublishes()
@@ -302,6 +492,107 @@ public class ConsumerMetricsShould
         }
 
         published.Should().NotBeEmpty("this project exports series of its own too");
+    }
+
+    /// <summary>An instrument declaration with its unit argument.</summary>
+    private static readonly Regex InstrumentWithUnit = new(
+        @"Create(?<kind>Counter|Histogram|UpDownCounter|ObservableGauge|ObservableCounter)<[^>]+>\(\s*""(?<name>dm\.[a-z0-9._]+)""\s*,\s*(?<unit>null|""[^""]*"")",
+        RegexOptions.Compiled);
+
+    /// <summary>
+    /// Units the Prometheus exporter knows how to turn into a suffix.
+    /// </summary>
+    /// <remarks>
+    /// The exporter maps the UCUM table and appends anything else verbatim, so a
+    /// counter declared in "uploads" was exported as dm_uploads_success_uploads_total.
+    /// Two entries because two are what this project measures; a third belongs here
+    /// the day something is measured in it, and is a decision rather than a typo.
+    /// </remarks>
+    private static readonly HashSet<string> Units = new(StringComparer.Ordinal) { "s", "By" };
+
+    /// <summary>
+    /// A measurement carries its unit and a count carries none.
+    /// </summary>
+    /// <remarks>
+    /// Nothing fails when this is wrong. The instrument records, the exporter
+    /// exports, and the series simply has a name nobody would write down from the
+    /// declaration - so the rule about it, or the panel drawing it, matches nothing
+    /// and stays as silent as it would be if everything were healthy. Which is the
+    /// same defect class the walk above exists for, arriving from the other side.
+    /// </remarks>
+    [Fact]
+    public void DeclareOnlyUnitsTheExporterUnderstands()
+    {
+        var declarations = Directory
+            .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(IsAuthored)
+            .SelectMany(path => InstrumentWithUnit.Matches(File.ReadAllText(path)))
+            .Select(match => (
+                Name: match.Groups["name"].Value,
+                Kind: match.Groups["kind"].Value,
+                Unit: match.Groups["unit"].Value.Trim('"')))
+            .ToList();
+
+        declarations.Should().NotBeEmpty(
+            "the expression has to find the declarations, and one that matches none passes " +
+            "whatever they say");
+
+        foreach (var (name, kind, unit) in declarations)
+        {
+            if (kind.EndsWith("Counter", StringComparison.Ordinal))
+            {
+                unit.Should().Be("null",
+                    $"{name} counts things, and a word the exporter does not know is appended " +
+                    "verbatim in front of _total");
+                continue;
+            }
+
+            unit.Should().NotBe("null", $"{name} measures something, and a measurement has a unit");
+            Units.Should().Contain(unit,
+                $"{name} is declared in a unit the exporter cannot map, so it exports under a " +
+                "name nobody would write a rule from");
+        }
+    }
+
+    /// <summary>
+    /// Every histogram of this project has boundaries somebody chose.
+    /// </summary>
+    /// <remarks>
+    /// The SDK ships one default ladder for the whole process and its top bucket is
+    /// ten seconds. A histogram left on it answers questions with an interpolation
+    /// between boundaries picked for something else, and it answers them in exactly
+    /// the same tone as one whose boundaries were picked for it — which is the
+    /// failure: a p95 read off the defaults is a number, and it is wrong.
+    ///
+    /// Bytes make it plainer. Measured against a ladder meant for seconds, every
+    /// upload this site accepts lands in the same bucket and the histogram carries
+    /// no information whatsoever.
+    /// </remarks>
+    [Fact]
+    public void ChooseTheBucketsOfEveryHistogram()
+    {
+        var declared = Directory
+            .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(IsAuthored)
+            .SelectMany(path => Regex.Matches(File.ReadAllText(path), @"CreateHistogram<[^>]+>\(\s*""(dm\.[a-z0-9._]+)"""))
+            .Select(match => match.Groups[1].Value)
+            .ToList();
+
+        declared.Should().NotBeEmpty("the expression has to find the histograms it is about");
+
+        var configured = Regex
+            .Matches(
+                SourceText.ReadCode(Path.Combine(RepositoryRoot,
+                    "src", "DM.Infrastructure.Core", "Logging", "LoggingConfiguration.cs")),
+                @"AddView\(\s*""(dm\.[a-z0-9._]+)""")
+            .Select(match => match.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        declared.Should().BeSubsetOf(configured,
+            "a histogram nobody configured is one measured against the defaults of the SDK");
+        configured.Should().BeSubsetOf(declared,
+            "a view naming an instrument that no longer exists configures nothing and reads " +
+            "like it configures something");
     }
 
     /// <summary>Instrument names declared in the sources, as the exporter sanitises them.</summary>
