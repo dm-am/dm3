@@ -18,4 +18,9 @@ public interface IModeratedProfileRepository
     /// Set user role (moderator/admin action)
     /// </summary>
     Task SetUserRole(string username, UserRole role, CancellationToken ct = default);
+
+    /// <summary>
+    /// Put the user under moderation watch, or take them off it
+    /// </summary>
+    Task SetModerationWatch(string username, bool underWatch, CancellationToken ct = default);
 }

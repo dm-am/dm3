@@ -294,7 +294,10 @@ internal class GameInvitationService : IGameInvitationService
     private async Task<GameDto> GetGameOrThrow(Guid gameId)
     {
         var currentUserId = _identityProvider.Current?.User?.UserId ?? Guid.Empty;
-        var game = await _gameRepository.GetGame(gameId, currentUserId);
+        // The invitation paths are lead-only on their own gates, so the
+        // premoderation rank buys nothing here: a mentor who may judge a game
+        // still may not staff it.
+        var game = await _gameRepository.GetGame(gameId, currentUserId, mayJudgePremoderation: false);
         if (game == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);

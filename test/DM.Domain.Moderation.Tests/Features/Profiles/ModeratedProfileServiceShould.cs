@@ -160,6 +160,89 @@ public class ModeratedProfileServiceShould : UnitTestBase
             "and the role being taken lists one name short for the same hour");
     }
 
+    #region Moderation watch
+
+    /// <summary>
+    /// The manual watch flag: set it, clear it, and read the profile back.
+    /// </summary>
+    /// <remarks>
+    /// It is not the violators list. That one is recomputed from active warnings
+    /// and bans on every read and lapses when they expire; this is the case where
+    /// moderation decided the lapse should not happen yet, so it is stored and
+    /// only a moderator moves it.
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task WriteTheModerationWatchTheModeratorAsksFor(bool underWatch)
+    {
+        SetupExistingUser();
+
+        await _service.SetModerationWatch("TestUser", underWatch);
+
+        _moderatedProfileRepository.Verify(
+            r => r.SetModerationWatch("TestUser", underWatch, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task AuthorizeSetModerationWatchWhenMovingTheWatch()
+    {
+        SetupExistingUser();
+
+        await _service.SetModerationWatch("TestUser", true);
+
+        _intentionManager.Verify(
+            m => m.ThrowIfForbidden(ModerationIntention.SetModerationWatch), Times.Once);
+    }
+
+    /// <summary>
+    /// Both keys of the user document, as on every other write here.
+    /// </summary>
+    /// <remarks>
+    /// A stale copy of this field is not cosmetic: it is what the creation path
+    /// reads to decide whether the user's next game or blog is premoderated.
+    /// </remarks>
+    [Fact]
+    public async Task InvalidateBothKeysOfTheUserAfterMovingTheWatch()
+    {
+        SetupExistingUser();
+
+        await _service.SetModerationWatch("TestUser", true);
+
+        _cache.Verify(c => c.InvalidateAsync("user_details_testuser"), Times.Once);
+        _cache.Verify(c => c.InvalidateAsync($"user_details_{_userId}"), Times.Once);
+    }
+
+    [Fact]
+    public async Task RefuseToMoveTheWatchOfSomebodyWhoIsNotThere()
+    {
+        _userRepository.Setup(r => r.GetUserAsync("TestUser")).ReturnsAsync((GeneralUser?)null);
+
+        var act = () => _service.SetModerationWatch("TestUser", true);
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.Message.Contains("не найден"));
+        _moderatedProfileRepository.Verify(
+            r => r.SetModerationWatch(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    private void SetupExistingUser()
+    {
+        _userRepository.Setup(r => r.GetUserAsync("TestUser"))
+            .ReturnsAsync(new GeneralUser { UserId = _userId, Username = "TestUser" });
+        _moderatedProfileRepository
+            .Setup(r => r.SetModerationWatch(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        _cache.Setup(c => c.GetOrCreateAsync(
+                "user_details_testuser",
+                It.IsAny<Func<Task<UserDetails?>>>(),
+                It.IsAny<TimeSpan>()))
+            .ReturnsAsync(new UserDetails { UserId = _userId, Username = "TestUser" });
+    }
+
+    #endregion
+
     [Fact]
     public async Task RefuseToSetTheRoleOfSomebodyWhoIsNotThere()
     {

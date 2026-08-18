@@ -8,7 +8,8 @@ import PagingWithSeparators from "@/shared/ui/Paging/PagingWithSeparators.vue";
 import LeadText from "@/shared/ui/Layout/LeadText.vue";
 import { DashSeparator } from "@/shared/ui/DashSeparator";
 import { ErrorState } from "@/shared/ui/ErrorState";
-import { TestimonialCard, TestimonialSkeleton } from "@/entities/testimonial";
+import { TestimonialSkeleton } from "@/entities/testimonial";
+import { TestimonialEditable } from "@/features/testimonial-edit";
 import { TestimonialDeleteButton } from "@/features/testimonial-delete";
 import {
   TestimonialsFilter,
@@ -111,14 +112,17 @@ function pagingAnchor(): HTMLElement | null {
           v-for="(testimonial, index) in testimonials.resources"
           :key="testimonial.id"
         >
-          <TestimonialCard
+          <!-- The card plus its own "Редактировать": the editor replaces the
+               text where it stands, which a control in #controls cannot do.
+               Deletion stays a separate control in that slot. -->
+          <TestimonialEditable
             :testimonial="testimonial"
             :search-query="filterState.search"
           >
             <template #controls>
               <TestimonialDeleteButton :testimonial="testimonial" />
             </template>
-          </TestimonialCard>
+          </TestimonialEditable>
           <DashSeparator
             v-if="index < testimonials.resources.length - 1"
             spacing="tiny"

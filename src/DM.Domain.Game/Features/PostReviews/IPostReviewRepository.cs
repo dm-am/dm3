@@ -9,6 +9,11 @@ namespace DM.Domain.Game.Features.PostReviews;
 /// <summary>
 /// Repository for post review operations
 /// </summary>
+/// <remarks>
+/// The post author's quality rating is a stored counter and not a sum over the
+/// reviews, so nothing recomputes it: it travels with the row that owes it, in
+/// the same write, and is never moved by a call of its own.
+/// </remarks>
 public interface IPostReviewRepository
 {
     // ═══ READ ═══
@@ -62,23 +67,25 @@ public interface IPostReviewRepository
     Task<bool> ExistsAsync(Guid authorId, Guid postId);
 
     /// <summary>
-    /// Create new post review
+    /// Create new post review, moving the post author's quality rating with it
     /// </summary>
     /// <param name="entity">Review data</param>
-    Task<PostReview> CreateAsync(CreatePostReviewEntity entity);
+    /// <param name="qualityRatingDelta">
+    /// What the review is worth to the post author's quality rating: zero for a
+    /// neutral review, the sign otherwise
+    /// </param>
+    Task<PostReview> CreateAsync(CreatePostReviewEntity entity, int qualityRatingDelta);
 
     /// <summary>
-    /// Update post review
+    /// Update post review, moving the post author's quality rating with it
     /// </summary>
     /// <param name="entity">Update data</param>
-    Task<PostReview> UpdateAsync(UpdatePostReviewEntity entity);
-
-    /// <summary>
-    /// Update user quality rating based on post review
-    /// </summary>
-    /// <param name="userId">User identifier</param>
-    /// <param name="ratingDelta">Rating change (+1 or -1)</param>
-    Task UpdateUserQualityRatingAsync(Guid userId, int ratingDelta);
+    /// <param name="qualityRatingDelta">
+    /// What the change is worth to the post author's quality rating: the
+    /// difference between the new sign and the old one on an edit, the sign
+    /// taken back on a removal, zero when neither moves
+    /// </param>
+    Task<PostReview> UpdateAsync(UpdatePostReviewEntity entity, int qualityRatingDelta);
 
     // ═══ ELIGIBILITY ═══
 

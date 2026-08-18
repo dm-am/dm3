@@ -56,10 +56,16 @@ internal partial class UsernameChangeService : IUsernameChangeService
 
         await _validator.ValidateAndThrowAsync(request);
 
-        // Check no pending/approved request exists
-        var existing = await _repository.GetPendingByUserId(currentUser.UserId);
+        // A request awaiting a moderator and an approval whose name is not yet
+        // chosen are both changes already in flight. A finished one - rejected,
+        // completed, or expired by either deadline - holds nothing, and asking
+        // again is the only way forward from it.
+        var existing = await _repository.GetActiveByUserId(currentUser.UserId, _dateTimeProvider.Now);
         if (existing != null)
-            throw new HttpException(HttpStatusCode.Conflict, "Заявка на смену имени уже отправлена");
+            throw new HttpException(HttpStatusCode.Conflict,
+                existing.Status == UsernameChangeRequestStatus.Approved
+                    ? RefusalMessage.UsernameChangeAlreadyApproved
+                    : RefusalMessage.UsernameChangeAlreadyFiled);
 
         var now = _dateTimeProvider.Now;
         var dto = new UsernameChangeRequest
@@ -73,7 +79,16 @@ internal partial class UsernameChangeService : IUsernameChangeService
             CreatedUtc = now
         };
 
-        await _repository.Add(dto);
+        try
+        {
+            await _repository.Add(dto);
+        }
+        catch (DuplicateEntityException)
+        {
+            // Two requests sent at once: the index refused the second, and the
+            // answer is the same one the pre-check would have given.
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.UsernameChangeAlreadyFiled);
+        }
 
         return new UsernameChangeRequestEntry
         {
@@ -181,17 +196,29 @@ internal partial class UsernameChangeService : IUsernameChangeService
     }
 
     /// <inheritdoc />
-    public async Task<UsernameChangeRequestEntry?> GetByApprovalTokenAsync(Guid token)
+    public async Task<UsernameChangeApprovalInfo?> GetApprovalInfoAsync(Guid token)
     {
         var entity = await _repository.GetByApprovalToken(token);
         if (entity == null) return null;
 
-        // Check if token is expired
-        var now = _dateTimeProvider.Now;
-        if (entity.ApprovalTokenExpiresUtc < now)
-            return null;
+        // A name already chosen through this link is not the same event as a link
+        // that ran out, and the page says opposite things about them. Both used to
+        // answer null, so both came out as "ссылка недействительна или устарела" -
+        // told to someone whose name had in fact been changed.
+        if (entity.Status == UsernameChangeRequestStatus.Completed)
+            return UsernameChangeApprovalInfo.Used();
 
-        return MapToEntry(entity);
+        // Everything else the approval can no longer be: the hourly pass has moved
+        // the request to Expired, or it has not run yet and only the stored moment
+        // says so, or a moderator rolled the rename back. All three leave the
+        // reader the same thing to do - ask again - so they are one answer.
+        if (entity.Status != UsernameChangeRequestStatus.Approved ||
+            entity.ApprovalTokenExpiresUtc < _dateTimeProvider.Now)
+        {
+            return UsernameChangeApprovalInfo.Expired();
+        }
+
+        return UsernameChangeApprovalInfo.Ready(entity.UserUsername ?? string.Empty);
     }
 
     /// <inheritdoc />
@@ -202,6 +229,13 @@ internal partial class UsernameChangeService : IUsernameChangeService
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.LinkInvalidOrExpired);
 
         var now = _dateTimeProvider.Now;
+
+        // Asked before the clock, and not after it: the moment stored on a spent
+        // request is the one its approval carried, so a link used on the first day
+        // and opened again on the third answered "срок действия истек" to someone
+        // whose name had already been changed.
+        if (request.Status == UsernameChangeRequestStatus.Completed)
+            throw new HttpException(HttpStatusCode.Conflict, "Имя уже изменено по этой ссылке");
 
         // Check if token is expired
         if (request.ApprovalTokenExpiresUtc < now)
@@ -224,8 +258,10 @@ internal partial class UsernameChangeService : IUsernameChangeService
         // Only check if the username is reserved by OTHER users
         var usernameReserved = await _historyRepository.IsUsernameReservedForOthers(newUsername, request.UserId);
 
+        // Approval and choice are days apart, so the name can be gone by the time
+        // it is asked for. The reader keeps the form and picks another one.
         if (!usernameAvailable || usernameReserved)
-            throw new HttpException(HttpStatusCode.Conflict, "Имя недоступно");
+            throw new HttpException(HttpStatusCode.Conflict, "Это имя уже занято");
 
         // The history row, the new name and the resolved request go in together.
         // Written one at a time, a refusal in between left a rename half applied -
@@ -242,8 +278,11 @@ internal partial class UsernameChangeService : IUsernameChangeService
         };
 
         request.RequestedUsername = newUsername;
+        // Completed is what spends the approval; every path that could spend it
+        // twice is refused above. The token itself stays on the row, because
+        // erasing it is what made a used link and an unknown one the same row-less
+        // lookup - and the reader of a used link was told the link was bad.
         request.Status = UsernameChangeRequestStatus.Completed;
-        request.ApprovalToken = null; // Invalidate token
         request.UserUsername = newUsername; // Update the local copy for MapToEntry
 
         await _repository.ApplyRename(request, history);
@@ -295,8 +334,9 @@ internal partial class UsernameChangeService : IUsernameChangeService
 
         // Mark request as rejected (rolled back)
         request.Status = UsernameChangeRequestStatus.Rejected;
-        request.ResolverComment = (request.ResolverComment ?? "") +
-            $" | Откат модератором {currentUser.Username}: имя '{currentUsername}' отменено";
+        request.ResolverComment = ResolutionComment.Join(
+            request.ResolverComment,
+            $"Откат модератором {currentUser.Username}: имя '{currentUsername}' отменено");
         request.UserUsername = previousUsername; // Update local copy for MapToEntry
 
         await _repository.ApplyRename(request, rollback);
@@ -312,10 +352,26 @@ internal partial class UsernameChangeService : IUsernameChangeService
         RequestedUsername = request.RequestedUsername,
         Reason = request.Reason,
         Status = request.Status,
+        ExpiryReason = ResolveExpiryReason(request),
         CreatedUtc = request.CreatedUtc,
         ApprovalTokenExpiresUtc = request.ApprovalTokenExpiresUtc,
         ResolvedUtc = request.ResolvedUtc,
         ResolvedByUsername = request.ResolverUsername,
         ResolverComment = request.ResolverComment
     };
+
+    /// <summary>
+    /// Expiry is reached by two different deadlines that share one status. The
+    /// approval branch is the only writer of <see cref="UsernameChangeRequest.ApprovalTokenExpiresUtc"/>,
+    /// and the expiry job keeps it on the row, so its presence says the request
+    /// was approved before it expired.
+    /// </summary>
+    private static UsernameChangeExpiryReason? ResolveExpiryReason(UsernameChangeRequest request)
+    {
+        if (request.Status != UsernameChangeRequestStatus.Expired) return null;
+
+        return request.ApprovalTokenExpiresUtc.HasValue
+            ? UsernameChangeExpiryReason.ApprovalLapsed
+            : UsernameChangeExpiryReason.Unreviewed;
+    }
 }

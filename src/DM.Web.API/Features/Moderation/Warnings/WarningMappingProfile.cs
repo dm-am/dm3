@@ -21,6 +21,12 @@ internal class WarningMappingProfile : Profile
             .ForMember(d => d.EntityType, s => s.MapFrom(w => w.EntityType.ToString()))
             .ForMember(d => d.Points, s => s.MapFrom(w => w.Points))
             .ForMember(d => d.Reason, s => s.MapFrom(w => w.Text))
+            // The evidence trio. Moderator-facing only: PublicWarning below
+            // carries none of it, so the profile page still shows a stranger
+            // nothing but points and dates.
+            .ForMember(d => d.EntitySnapshot, s => s.MapFrom(w => w.EntitySnapshot))
+            .ForMember(d => d.EntityUrl, s => s.MapFrom(w => w.EntityUrl))
+            .ForMember(d => d.EntityEditedAfterWarning, s => s.MapFrom(w => w.EntityEditedAfterWarning))
             .ForMember(d => d.CreatedUtc, s => s.MapFrom(w => w.CreatedUtc))
             .ForMember(d => d.IsActive, s => s.MapFrom(w => !w.IsRemoved));
 

@@ -1,21 +1,30 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useAuthStore, userIsModerator } from "@/entities/user";
+import {
+  useAuthStore,
+  userIsSeniorModerator,
+  UserAutocomplete,
+} from "@/entities/user";
 import { useCreateTestimonial } from "../model";
 import TextArea from "@/shared/ui/TextArea/TextArea.vue";
 import Button from "@/shared/ui/Button/Button.vue";
 
 const userStore = useAuthStore();
 
-// Single policy owner: testimonials are a moderator-curated review barrier —
-// regular users post feedback in the forum topic instead. See
-// pages/about/TestimonialsPage.vue, which renders this form unconditionally.
-const canAddTestimonial = computed(() => userIsModerator(userStore.user));
+// Single policy owner: testimonials are a curated review barrier — regular
+// users post feedback in the forum topic instead. The rank is the server's,
+// not a looser one: WebsiteTestimonialIntentionResolver admits Create for
+// SeniorModerator and above (an admin posts on a user's behalf), so an
+// ordinary moderator opening this form would have been answered 403.
+// See pages/about/TestimonialsPage.vue, which renders this form unconditionally.
+const canAddTestimonial = computed(() => userIsSeniorModerator(userStore.user));
 
 const {
   formExpanded,
+  authorUsername,
   testimonialText,
   isSubmitting,
+  authorError,
   errorMessage,
   toggleForm,
   submitTestimonial,
@@ -36,6 +45,23 @@ const {
     <div class="expand-fold" :class="{ open: formExpanded }">
       <div class="expand-fold-clip" :inert="!formExpanded">
         <div class="review-form">
+          <!-- The entry is signed by the participant named here, not by the
+               moderator filling the form in. The same picker the other
+               moderation forms use (award grant, invitations, roles). -->
+          <form-field
+            label="Автор отзыва"
+            name="testimonialAuthor"
+            :errors="authorError ? [authorError] : []"
+          >
+            <template #hint
+              >Отзыв будет опубликован от имени этого участника</template
+            >
+            <UserAutocomplete
+              id="testimonialAuthor"
+              v-model="authorUsername"
+              placeholder="Имя пользователя"
+            />
+          </form-field>
           <form-field
             label="Текст отзыва (обычный текст, без форматирования)"
             name="testimonialText"

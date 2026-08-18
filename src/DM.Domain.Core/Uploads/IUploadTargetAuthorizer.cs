@@ -29,4 +29,32 @@ public interface IUploadTargetAuthorizer
     /// </summary>
     /// <param name="targetId">Identifier of the entity the upload points at</param>
     Task EnsureAllowedAsync(Guid targetId);
+
+    /// <summary>
+    /// Throws unless the current user may read the bytes of an upload attached to
+    /// the target.
+    /// </summary>
+    /// <remarks>
+    /// Asked on every request for the file, not once when a link is handed out: a
+    /// URL that grants access by being known is a pass to whoever ends up holding
+    /// it, and the closed prefixes exist precisely so that no such pass is issued.
+    ///
+    /// Refuses with 404 rather than 403 wherever the target itself would be
+    /// invisible. A 403 on a private game's attachment answers the question the
+    /// closed room was keeping shut.
+    /// </remarks>
+    /// <param name="targetId">Identifier of the entity the upload points at</param>
+    Task EnsureReadAllowedAsync(Guid targetId);
+
+    /// <summary>
+    /// Whether the current user may take an upload off the target, beyond the
+    /// file's owner and Moderator+ that the upload's own intention already admits.
+    /// </summary>
+    /// <remarks>
+    /// An answer rather than a refusal, because the caller composes it with that
+    /// intention: a false here is not "no", it is "no extra right from the entity
+    /// this file hangs on".
+    /// </remarks>
+    /// <param name="targetId">Identifier of the entity the upload points at</param>
+    Task<bool> MayDetachAsync(Guid targetId);
 }

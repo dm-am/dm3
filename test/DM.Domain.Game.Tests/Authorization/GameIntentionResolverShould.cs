@@ -34,18 +34,181 @@ public class GameIntentionResolverShould : UnitTestBase
         resolver.IsAllowed(AuthenticatedUser.Guest, GameIntention.Create).Should().BeFalse();
     }
 
-    [Fact]
-    public void AllowSetStatusModerationForMentor()
+    /// <summary>
+    /// A premoderation verdict is a rank and nothing else: the mentor and
+    /// everybody above one in moderation, whatever their relationship to the game.
+    /// </summary>
+    [Theory]
+    [InlineData(UserRole.Mentor, true)]
+    [InlineData(UserRole.Moderator, true)]
+    [InlineData(UserRole.SeniorModerator, true)]
+    [InlineData(UserRole.Admin, true)]
+    [InlineData(UserRole.RegularUser, false)]
+    public void AllowAPremoderationVerdictFromTheMentorRankUpwards(UserRole role, bool expected)
     {
-        var user = Create.User().WithRole(UserRole.Mentor).Please();
-        resolver.IsAllowed(user, GameIntention.SetStatusModeration).Should().BeTrue();
+        var user = Create.User().WithRole(role).Please();
+        resolver.IsAllowed(user, GameIntention.SetStatusModeration).Should().Be(expected);
     }
 
     [Fact]
-    public void ForbidSetStatusModerationForPlayer()
+    public void RefuseAPremoderationVerdictToAGuest()
     {
-        var user = Create.User().WithRole(UserRole.RegularUser).Please();
-        resolver.IsAllowed(user, GameIntention.SetStatusModeration).Should().BeFalse();
+        resolver.IsAllowed(AuthenticatedUser.Guest, GameIntention.SetStatusModeration)
+            .Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Whoever may pass the verdict may open the game it is pending on, holding
+    /// no role in that game whatsoever.
+    /// </summary>
+    /// <remarks>
+    /// The curator arm cannot cover this: a game in AwaitingEdits records no
+    /// curator, and that is the status every newbie's game is created in. Until
+    /// the rank arm existed the read gate stopped at senior moderation, so a
+    /// mentor and a moderator were handed a queue whose every entry refused them.
+    /// </remarks>
+    [Theory]
+    [InlineData(PremoderationStatus.AwaitingEdits, UserRole.Mentor, true)]
+    [InlineData(PremoderationStatus.AwaitingEdits, UserRole.Moderator, true)]
+    [InlineData(PremoderationStatus.AwaitingEdits, UserRole.SeniorModerator, true)]
+    [InlineData(PremoderationStatus.AwaitingEdits, UserRole.Admin, true)]
+    [InlineData(PremoderationStatus.AwaitingEdits, UserRole.RegularUser, false)]
+    [InlineData(PremoderationStatus.AwaitingApproval, UserRole.Mentor, true)]
+    [InlineData(PremoderationStatus.AwaitingApproval, UserRole.Moderator, true)]
+    [InlineData(PremoderationStatus.AwaitingApproval, UserRole.SeniorModerator, true)]
+    [InlineData(PremoderationStatus.AwaitingApproval, UserRole.Admin, true)]
+    [InlineData(PremoderationStatus.AwaitingApproval, UserRole.RegularUser, false)]
+    public void OpenAPremoderatedGameToExactlyTheRanksThatMayJudgeIt(
+        PremoderationStatus premoderationStatus, UserRole role, bool expected)
+    {
+        var game = new GameBuilder()
+            .WithStatus(ModuleStatus.Active)
+            .WithPremoderationStatus(premoderationStatus)
+            .Please();
+        var user = Create.User().WithRole(role).Please();
+
+        resolver.IsAllowed(user, GameIntention.Read, game).Should().Be(expected);
+
+        // The two halves of one right: seeing the game and moving it along
+        // premoderation answer the same for a reader who holds no role in it.
+        resolver.IsAllowed(user, GameIntention.Read, game)
+            .Should().Be(resolver.IsAllowed(user, GameIntention.SetStatusModeration));
+    }
+
+    [Theory]
+    [InlineData(PremoderationStatus.AwaitingEdits)]
+    [InlineData(PremoderationStatus.AwaitingApproval)]
+    public void KeepAPremoderatedGameShutToAGuest(PremoderationStatus premoderationStatus)
+    {
+        var game = new GameBuilder()
+            .WithStatus(ModuleStatus.Active)
+            .WithPremoderationStatus(premoderationStatus)
+            .Please();
+
+        resolver.IsAllowed(AuthenticatedUser.Guest, GameIntention.Read, game).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// A player of somebody else's game is a stranger to this one: the rank arm
+    /// is a rank and the role arms are about this game, and neither of them is a
+    /// claim about games the reader plays elsewhere.
+    /// </summary>
+    [Fact]
+    public void KeepAPremoderatedGameShutToAPlayerOfAnotherGame()
+    {
+        var playerId = Guid.NewGuid();
+        var otherGame = new GameBuilder().WithPlayers(playerId).Please();
+        var premoderatedGame = new GameBuilder()
+            .WithPremoderationStatus(PremoderationStatus.AwaitingEdits)
+            .Please();
+        var user = Create.User(playerId).WithRole(UserRole.RegularUser).Please();
+
+        resolver.IsAllowed(user, GameIntention.Read, otherGame).Should().BeTrue();
+        resolver.IsAllowed(user, GameIntention.Read, premoderatedGame).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// The rank opens games awaiting a verdict and nothing else. A private draft
+    /// is hidden by its author's choice, not by premoderation, and no mentor is
+    /// owed a look at it.
+    /// </summary>
+    [Theory]
+    [InlineData(UserRole.Mentor)]
+    [InlineData(UserRole.Moderator)]
+    public void KeepAPrivateDraftShutToTheRanksThatJudgePremoderation(UserRole role)
+    {
+        var draft = new GameBuilder()
+            .WithStatus(ModuleStatus.Draft)
+            .WithPremoderationStatus(PremoderationStatus.Approved)
+            .WithDraftVisibility(DraftVisibility.Private)
+            .Please();
+
+        resolver.IsAllowed(Create.User().WithRole(role).Please(), GameIntention.Read, draft)
+            .Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Asking for a verdict is the master's move and nobody else's.
+    /// </summary>
+    /// <remarks>
+    /// Not the assistant's, who fills the same form in; not the curating mentor's,
+    /// who is on the settings page for exactly that reason; and not senior
+    /// moderation's, which may edit the game but does not speak for its author.
+    /// This is why the move has an intention of its own instead of riding on
+    /// EditSettings.
+    /// </remarks>
+    [Fact]
+    public void AllowSubmitForApprovalToTheMasterAlone()
+    {
+        var masterId = Guid.NewGuid();
+        var assistantId = Guid.NewGuid();
+        var mentorId = Guid.NewGuid();
+        var game = new GameBuilder()
+            .WithMaster(masterId)
+            .WithAssistants(assistantId)
+            .WithMentor(mentorId)
+            .WithPremoderationStatus(PremoderationStatus.AwaitingEdits)
+            .Please();
+
+        resolver.IsAllowed(
+            Create.User(masterId).WithRole(UserRole.RegularUser).Please(),
+            GameIntention.SubmitForApproval, game).Should().BeTrue();
+        resolver.IsAllowed(
+            Create.User(assistantId).WithRole(UserRole.RegularUser).Please(),
+            GameIntention.SubmitForApproval, game).Should().BeFalse();
+        resolver.IsAllowed(
+            Create.User(mentorId).WithRole(UserRole.Mentor).Please(),
+            GameIntention.SubmitForApproval, game).Should().BeFalse();
+        resolver.IsAllowed(
+            Create.User().WithRole(UserRole.SeniorModerator).Please(),
+            GameIntention.SubmitForApproval, game).Should().BeFalse();
+        resolver.IsAllowed(
+            AuthenticatedUser.Guest, GameIntention.SubmitForApproval, game).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// The master may ask from any premoderation status the resolver is shown.
+    /// </summary>
+    /// <remarks>
+    /// Which status the move is legal from is the machine's answer and is given
+    /// before this gate is asked, so an author who submits twice hears that the
+    /// move is illegal - a 400 naming the status - and not that they are not
+    /// themselves. Restating the condition here would turn that into a 403.
+    /// </remarks>
+    [Theory]
+    [InlineData(PremoderationStatus.AwaitingEdits)]
+    [InlineData(PremoderationStatus.AwaitingApproval)]
+    [InlineData(PremoderationStatus.Approved)]
+    public void AnswerSubmitForApprovalOnIdentityAndNotOnStatus(PremoderationStatus current)
+    {
+        var masterId = Guid.NewGuid();
+        var game = new GameBuilder()
+            .WithMaster(masterId)
+            .WithPremoderationStatus(current)
+            .Please();
+        var user = Create.User(masterId).WithRole(UserRole.RegularUser).Please();
+
+        resolver.IsAllowed(user, GameIntention.SubmitForApproval, game).Should().BeTrue();
     }
 
     [Fact]
@@ -129,19 +292,34 @@ public class GameIntentionResolverShould : UnitTestBase
         resolver.IsAllowed(user, GameIntention.Read, game).Should().BeTrue();
     }
 
+    /// <summary>
+    /// The rank admits a mentor to a premoderated game somebody else curates, and
+    /// to one nobody curates at all.
+    /// </summary>
+    /// <remarks>
+    /// This used to be the opposite assertion — the assignment admitted, the rank
+    /// did not — and it could not hold once the verdict became a site-wide move
+    /// legal from every status: a game in AwaitingEdits records no curator, so
+    /// under the old rule the queue's own entries refused the mentor reading them.
+    /// What the rank still does not open is a game hidden by something other than
+    /// premoderation; that half is asserted just below.
+    /// </remarks>
     [Fact]
-    public void ForbidReadOfAPremoderatedGameForAMentorWhoDoesNotCurateIt()
+    public void AllowReadOfAPremoderatedGameForAMentorWhoDoesNotCurateIt()
     {
-        var game = new GameBuilder()
+        var curatedByAnother = new GameBuilder()
             .WithStatus(ModuleStatus.Draft)
             .WithPremoderationStatus(PremoderationStatus.AwaitingApproval)
             .WithMentor(Guid.NewGuid())
             .Please();
+        var curatedByNobody = new GameBuilder()
+            .WithStatus(ModuleStatus.Draft)
+            .WithPremoderationStatus(PremoderationStatus.AwaitingEdits)
+            .Please();
         var user = Create.User().WithRole(UserRole.Mentor).Please();
 
-        // The site role staffs the review queue, it does not open every hidden
-        // game: what admits a mentor is the assignment, not the rank.
-        resolver.IsAllowed(user, GameIntention.Read, game).Should().BeFalse();
+        resolver.IsAllowed(user, GameIntention.Read, curatedByAnother).Should().BeTrue();
+        resolver.IsAllowed(user, GameIntention.Read, curatedByNobody).Should().BeTrue();
     }
 
     [Fact]
@@ -636,10 +814,14 @@ public class GameIntentionResolverShould : UnitTestBase
             new GameBuilder().WithPendingPlayerInvitation(userId).Please()
         };
 
+        // The two decided without a target. Create, because the game does not
+        // exist yet; SetStatusModeration, because a premoderation verdict is a
+        // rank and asking the game about it would let a game grant one. Both are
+        // answered by the subject-only overload, asserted below.
+        var targetless = new[] { GameIntention.Create, GameIntention.SetStatusModeration };
+
         var ungrantable = Enum.GetValues<GameIntention>()
-            // Create is the one intention decided without a target: the game
-            // does not exist yet, and the subject-only overload answers it.
-            .Where(intention => intention != GameIntention.Create)
+            .Where(intention => !targetless.Contains(intention))
             .Where(intention => !actors.Any(actor =>
                 targets.Any(target => resolver.IsAllowed(actor, intention, target))))
             .Select(intention => intention.ToString())
@@ -648,5 +830,6 @@ public class GameIntentionResolverShould : UnitTestBase
         ungrantable.Should().BeEmpty(
             "an intention nobody can ever be granted is a rule with no subject");
         resolver.IsAllowed(actors[1], GameIntention.Create).Should().BeTrue();
+        resolver.IsAllowed(actors[2], GameIntention.SetStatusModeration).Should().BeTrue();
     }
 }

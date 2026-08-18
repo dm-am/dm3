@@ -16,5 +16,14 @@ internal class UpdateRoomValidator : AbstractValidator<UpdateRoom>
             RuleFor(r => r.Title)
                 .NotEmpty().WithMessage(ValidationError.Empty)
                 .MaximumLength(100).WithMessage(ValidationError.Long));
+
+        // Both columns are read back by comparing against the named members, so
+        // an integer outside the enum is stored as a room that is of no known
+        // type and of no known access. Null passes: omitted keeps the stored value.
+        RuleFor(r => r.Type)
+            .IsInEnum().WithMessage(ValidationError.Invalid);
+
+        RuleFor(r => r.AccessType)
+            .IsInEnum().WithMessage(ValidationError.Invalid);
     }
 }

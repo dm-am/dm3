@@ -97,7 +97,6 @@ export const BbLink = Mark.create<BbLinkOptions>({
 
   renderHTML({ HTMLAttributes }) {
     // Extract text to exclude it from HTML attributes (it's stored in data-bb-text)
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { text: _text, ...rest } = HTMLAttributes;
     return [
       "a",

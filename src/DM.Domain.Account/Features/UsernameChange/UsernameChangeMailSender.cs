@@ -30,9 +30,15 @@ internal class UsernameChangeMailSender : IUsernameChangeMailSender
     /// <inheritdoc />
     public async Task SendApprovalAsync(string email, string username, Guid approvalToken)
     {
+        // In the fragment and not in the path, as every other mailed link here is:
+        // a fragment is not sent to a server, so the value stays out of the access
+        // log of the edge, out of the Referer of what the page then requests and
+        // out of the browser history. In the path it was in all three - and it
+        // pointed at an address the site does not route, so the letter led to a
+        // 404 besides.
         var approvalLink = new Uri(
             new Uri(_siteAddresses.PublicUrl),
-            $"account/username-change/{approvalToken}");
+            $"change-username#token={approvalToken}");
 
         var body = await _renderer.RenderAsync(new UsernameChangeApprovalViewModel(
             username,

@@ -348,4 +348,133 @@ public class BlogServiceShould : UnitTestBase
         rubric.UnreadPublicationsCount.Should().Be(2); // anon: N = total publications
         rubric.UnreadCommentsCount.Should().Be(6);     // 4 + 2 total comments
     }
+
+    /// <summary>
+    /// The two gates GetAsync throws on, asked instead of thrown: the form
+    /// everything living inside a blog needs, because their refusal has to be a
+    /// 404 and a thrown gate produces a 403.
+    /// </summary>
+    /// <remarks>
+    /// A blog that is not there answers the same as one the caller may not open:
+    /// the whole point of the question is that the two cannot be told apart from
+    /// outside.
+    /// </remarks>
+    [Theory]
+    [InlineData(DraftVisibility.Public, PremoderationStatus.Approved, true, true, true)]
+    [InlineData(DraftVisibility.Private, PremoderationStatus.Approved, false, true, false)]
+    [InlineData(DraftVisibility.Private, PremoderationStatus.Approved, true, true, true)]
+    [InlineData(DraftVisibility.Public, PremoderationStatus.AwaitingApproval, true, false, false)]
+    [InlineData(DraftVisibility.Public, PremoderationStatus.AwaitingEdits, true, false, false)]
+    [InlineData(DraftVisibility.Public, PremoderationStatus.AwaitingApproval, true, true, true)]
+    public async Task AnswerWhetherTheViewerMaySeeTheBlog(
+        DraftVisibility draftVisibility,
+        PremoderationStatus premoderationStatus,
+        bool mayViewDraft,
+        bool mayViewPending,
+        bool expected)
+    {
+        var blogId = Guid.NewGuid();
+        _repository.Setup(r => r.Get(blogId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BlogDto
+            {
+                Id = blogId,
+                DraftVisibility = draftVisibility,
+                PremoderationStatus = premoderationStatus
+            });
+        _intentionManager
+            .Setup(m => m.IsAllowed(BlogIntention.ViewDraft, It.IsAny<BlogDto>()))
+            .Returns(mayViewDraft);
+        _intentionManager
+            .Setup(m => m.IsAllowed(BlogIntention.ViewPremoderationPending, It.IsAny<BlogDto>()))
+            .Returns(mayViewPending);
+
+        var visible = await _service.IsVisibleToViewerAsync(blogId);
+
+        visible.Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task AnswerThatAnAbsentBlogIsNotVisible()
+    {
+        var blogId = Guid.NewGuid();
+        _repository.Setup(r => r.Get(blogId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((BlogDto?)null);
+        _intentionManager
+            .Setup(m => m.IsAllowed(It.IsAny<BlogIntention>(), It.IsAny<BlogDto>()))
+            .Returns(true);
+
+        var visible = await _service.IsVisibleToViewerAsync(blogId);
+
+        visible.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// The three single-blog reads answer on a blog the caller may not open
+    /// exactly as on one that is not there.
+    /// </summary>
+    /// <remarks>
+    /// They used to throw the visibility gate instead of asking it, which made
+    /// every one of them a 403 — and a 403 says the identifier resolves. The
+    /// alias is five letters and the routes are open to guests, so that was the
+    /// same oracle the two status endpoints were closed against, reached by an
+    /// ordinary read.
+    /// </remarks>
+    [Theory]
+    [InlineData(DraftVisibility.Private, PremoderationStatus.Approved)]
+    [InlineData(DraftVisibility.Public, PremoderationStatus.AwaitingApproval)]
+    [InlineData(DraftVisibility.Public, PremoderationStatus.AwaitingEdits)]
+    public async Task AnswerOnAHiddenBlogTheWayItAnswersOnNoBlogAtAll(
+        DraftVisibility draftVisibility, PremoderationStatus premoderationStatus)
+    {
+        var blogId = Guid.NewGuid();
+        var hidden = new BlogDto
+        {
+            Id = blogId,
+            PublicId = "alias",
+            DraftVisibility = draftVisibility,
+            PremoderationStatus = premoderationStatus,
+            Author = new GeneralUser { Username = "owner" }
+        };
+        HideEveryBlogFromTheCaller();
+        _repository.Setup(r => r.Get(blogId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(hidden);
+        _repository.Setup(r => r.GetByPublicId("alias", It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(hidden);
+        _repository.Setup(r => r.GetByOwnerUsernameAsync("owner", It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(hidden);
+
+        await ShouldBeNotFound(() => _service.GetAsync(blogId));
+        await ShouldBeNotFound(() => _service.GetByPublicIdAsync("alias"));
+        await ShouldBeNotFound(() => _service.GetByOwnerUsernameAsync("owner"));
+    }
+
+    /// <summary>
+    /// The other side of the line: a blog the caller can see is read, and the
+    /// refusal of an action on it stays the 403 the action's own gate produces.
+    /// </summary>
+    [Fact]
+    public async Task StillRefuseAnActionOnAVisibleBlogWithForbidden()
+    {
+        var blogId = Guid.NewGuid();
+        var visible = new BlogDto { Id = blogId, DraftVisibility = DraftVisibility.Public };
+        _repository.Setup(r => r.Get(blogId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(visible);
+        _intentionManager
+            .Setup(m => m.ThrowIfForbidden(BlogIntention.EditSettings, visible))
+            .Throws(new HttpException(HttpStatusCode.Forbidden, "Недостаточно прав"));
+
+        var act = async () => await _service.Update(new UpdateBlog { BlogId = blogId, Title = "Правка" });
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+    }
+
+    private void HideEveryBlogFromTheCaller() =>
+        _intentionManager
+            .Setup(m => m.IsAllowed(It.IsAny<BlogIntention>(), It.IsAny<BlogDto>()))
+            .Returns(false);
+
+    private static async Task ShouldBeNotFound(Func<Task> act) =>
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.NotFound);
 }

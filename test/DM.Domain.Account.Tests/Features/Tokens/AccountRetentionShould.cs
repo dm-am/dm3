@@ -106,9 +106,11 @@ public class AccountRetentionShould : UnitTestBase
 
         await new UsernameChangeExpiryProcessor(repository.Object, _clock.Object).ExpireApprovalTokensAsync();
 
+        // The reason travels without a separator glued to it: approving takes no
+        // comment, so it is normally the whole text the requester reads.
         repository.Verify(r => r.ExpireApprovalTokens(
             Now,
-            It.Is<string>(comment => comment.StartsWith(" | ")),
+            It.Is<string>(reason => reason.StartsWith("Токен истек")),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 

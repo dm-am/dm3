@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using CommentariesAccessMode = DM.Domain.Core.Enums.CommentsAccessMode;
 
@@ -42,6 +43,13 @@ public class UpdateGameRequest
     /// Game description/info (BB-code formatted)
     /// </summary>
     public string? Info { get; set; }
+
+    /// <summary>
+    /// Game tag short identifiers, the ones GET /games/tags serves. The whole
+    /// set, not a delta: an omitted field leaves the tags alone, and an empty
+    /// list clears them.
+    /// </summary>
+    public IEnumerable<int>? Tags { get; set; }
 
     /// <summary>
     /// Privacy settings. An omitted block leaves every setting unchanged.

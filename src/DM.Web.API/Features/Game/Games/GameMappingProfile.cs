@@ -76,6 +76,10 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.SubscribersCount, s => s.MapFrom(g => g.SubscribersCount))
             .ForMember(d => d.ActiveCharacters, s => s.MapFrom(g => g.ActiveCharacters))
             .ForMember(d => d.SubscriberUsernames, s => s.MapFrom(g => g.SubscriberUsernames))
+            // The turn marker and its names travel together and are mapped
+            // explicitly for the same reason the two collections above are.
+            .ForMember(d => d.AwaitsViewerTurn, s => s.MapFrom(g => g.AwaitsViewerTurn))
+            .ForMember(d => d.AwaitedCharacterNames, s => s.MapFrom(g => g.AwaitedCharacterNames))
             .ForMember(d => d.Recruitment, s => s.MapFrom(g => g.Recruitment))
             .ForMember(d => d.GameReviewsCount, s => s.MapFrom(g => g.GameReviewsCount))
             .ForMember(d => d.PostReviewsCount, s => s.MapFrom(g => g.PostReviewsCount));
@@ -158,6 +162,11 @@ internal class GameMappingProfile : Profile
         // its own Ignore() below. Now the request names the editable fields and
         // nothing else, so a field added to the response cannot become writable
         // by being added.
+        //
+        // Tags map by convention: both sides are the short identifiers the tag
+        // list serves, and both spell "leave them alone" as null. They used to
+        // carry an Ignore(), which is what made tags a creation-time decision
+        // and nothing else.
         CreateMap<UpdateGameRequest, DtoUpdateGame>()
             .ForMember(g => g.SystemName, s => s.MapFrom(g => g.System))
             .ForMember(g => g.NarrativeSetting, s => s.MapFrom(g => g.Setting))
@@ -173,7 +182,6 @@ internal class GameMappingProfile : Profile
             .ForMember(g => g.DraftVisibility, opt => opt.Ignore())
             .ForMember(g => g.MentorId, opt => opt.Ignore())
             .ForMember(g => g.RecruitmentStartedUtc, opt => opt.Ignore())
-            .ForMember(g => g.IsRemoved, opt => opt.Ignore())
-            .ForMember(g => g.Tags, opt => opt.Ignore());
+            .ForMember(g => g.IsRemoved, opt => opt.Ignore());
     }
 }

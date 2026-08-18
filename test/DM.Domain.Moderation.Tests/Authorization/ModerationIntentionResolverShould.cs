@@ -49,4 +49,42 @@ public class ModerationIntentionResolverShould : UnitTestBase
     {
         resolver.IsAllowed(AuthenticatedUser.Guest, intention).Should().BeFalse();
     }
+
+    /// <summary>
+    /// The manual moderation watch sits at the rank that keeps the violators list
+    /// and issues the warnings, not at the one that edits profile text.
+    /// </summary>
+    [Theory]
+    [InlineData(UserRole.Guest, false)]
+    [InlineData(UserRole.RegularUser, false)]
+    [InlineData(UserRole.Mentor, false)]
+    [InlineData(UserRole.Moderator, true)]
+    [InlineData(UserRole.SeniorModerator, true)]
+    [InlineData(UserRole.Admin, true)]
+    public void AllowTheModerationWatchFromModeratorUpwards(UserRole role, bool expected)
+    {
+        var user = role == UserRole.Guest
+            ? AuthenticatedUser.Guest
+            : Create.User().WithRole(role).Please();
+
+        resolver.IsAllowed(user, ModerationIntention.SetModerationWatch).Should().Be(expected);
+    }
+
+    /// <summary>
+    /// Every intention the enum declares is granted to somebody, and refused to
+    /// somebody. A member added with no arm behind it lands here.
+    /// </summary>
+    [Fact]
+    public void AnswerEveryIntentionTheEnumDeclares()
+    {
+        var admin = Create.User().WithRole(UserRole.Admin).Please();
+
+        foreach (var intention in System.Enum.GetValues<ModerationIntention>())
+        {
+            resolver.IsAllowed(admin, intention).Should().BeTrue(
+                "an intention nobody can ever be granted is a rule with no subject");
+            resolver.IsAllowed(AuthenticatedUser.Guest, intention).Should().BeFalse(
+                "and one a guest is granted is not a moderation rule at all");
+        }
+    }
 }

@@ -63,6 +63,27 @@ public class UserEndorsementController : ControllerBase
         Ok(await _endorsementApiService.GetWritten(username, q));
 
     /// <summary>
+    /// Ask whether the caller may write a recommendation about this user
+    /// </summary>
+    /// <remarks>
+    /// The whole rule set the POST below enforces — signed in, not oneself,
+    /// past probation, played in the same game, no recommendation for this
+    /// pair yet — evaluated in advance and answered as one flag plus the
+    /// refusal sentence. A client draws the "write a recommendation" control
+    /// on that flag and therefore never offers what the POST would reject.
+    /// A guest is answered 200 with canCreate=false, not 401: "may I?" has an
+    /// answer for anonymous readers too.
+    /// </remarks>
+    /// <param name="username">Prospective recipient's username.</param>
+    /// <response code="200">Whether a recommendation may be written, and why not.</response>
+    /// <response code="404">User not found.</response>
+    [HttpGet("eligibility", Name = nameof(GetUserEndorsementEligibility))]
+    [ProducesResponseType(typeof(Envelope<EndorsementEligibility>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetUserEndorsementEligibility(string username) =>
+        Ok(await _endorsementApiService.GetEligibility(username));
+
+    /// <summary>
     /// Create user endorsement
     /// </summary>
     /// <remarks>

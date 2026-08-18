@@ -65,6 +65,8 @@ public class WebsiteTestimonialController : ControllerBase
     /// </summary>
     /// <remarks>
     /// Creates a positive testimonial about the website.
+    /// The testimonial is posted on behalf of the participant named in
+    /// `authorUsername` - senior moderation submits it, the named user signs it.
     /// Only one testimonial per user is allowed.
     /// Plain text only - NO BBCode support.
     /// NO likes support.
@@ -73,12 +75,16 @@ public class WebsiteTestimonialController : ControllerBase
     /// <response code="201">Testimonial created successfully</response>
     /// <response code="400">Invalid testimonial data</response>
     /// <response code="401">User not authenticated</response>
+    /// <response code="403">Not allowed (below senior moderation)</response>
+    /// <response code="404">Named author does not exist</response>
     /// <response code="409">Testimonial already exists</response>
     [HttpPost(Name = nameof(CreateWebsiteTestimonial))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<WebsiteTestimonialDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreateWebsiteTestimonial([FromBody] CreateWebsiteTestimonialRequest request)
     {
@@ -91,14 +97,15 @@ public class WebsiteTestimonialController : ControllerBase
     /// </summary>
     /// <remarks>
     /// Updates an existing testimonial.
-    /// Can be updated by the author or a moderator.
+    /// Can be updated by the named author or by senior moderation
+    /// (WebsiteTestimonialIntention.Edit) - an ordinary moderator cannot.
     /// </remarks>
     /// <param name="id">Testimonial identifier</param>
     /// <param name="request">Update data</param>
     /// <response code="200">Testimonial updated successfully</response>
     /// <response code="400">Invalid update data</response>
     /// <response code="401">User not authenticated</response>
-    /// <response code="403">Not allowed (not author or moderator)</response>
+    /// <response code="403">Not allowed (not the author, not senior moderation)</response>
     /// <response code="404">Testimonial not found</response>
     [HttpPatch("{id:guid}", Name = nameof(UpdateWebsiteTestimonial))]
     [AuthenticationRequired]
@@ -116,12 +123,13 @@ public class WebsiteTestimonialController : ControllerBase
     /// </summary>
     /// <remarks>
     /// Deletes an existing testimonial.
-    /// Can be deleted by the author or a moderator.
+    /// Senior moderation only (WebsiteTestimonialIntention.Delete) - the named
+    /// author cannot retract their own entry.
     /// </remarks>
     /// <param name="id">Testimonial identifier</param>
     /// <response code="204">Testimonial deleted successfully</response>
     /// <response code="401">User not authenticated</response>
-    /// <response code="403">Not allowed (not author or moderator)</response>
+    /// <response code="403">Not allowed (below senior moderation)</response>
     /// <response code="404">Testimonial not found</response>
     [HttpDelete("{id:guid}", Name = nameof(DeleteWebsiteTestimonial))]
     [AuthenticationRequired]

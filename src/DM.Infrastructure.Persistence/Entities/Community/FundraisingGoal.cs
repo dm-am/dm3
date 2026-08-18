@@ -22,6 +22,13 @@ public class FundraisingGoal
     public Guid FundraisingGoalId { get; set; }
 
     /// <summary>
+    /// What the money is being collected for, shown above the progress bar
+    /// </summary>
+    [Required]
+    [MaxLength(200)]
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>
     /// Target amount to collect
     /// </summary>
     public decimal GoalAmount { get; set; }

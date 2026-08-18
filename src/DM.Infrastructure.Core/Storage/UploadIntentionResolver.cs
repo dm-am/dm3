@@ -13,7 +13,7 @@ internal class UploadIntentionResolver :
     public bool IsAllowed(IAuthorizationSubject user, UploadIntention intention) => intention switch
     {
         // Listing all uploads across users - moderator and above (doc 4.2.3.8.9:
-        // the "Все загруженное" page is available to moderator/senior mod/admin)
+        // the "Все загруженные файлы" page is available to moderator/senior mod/admin)
         UploadIntention.ListAll => user.IsAuthenticated && user.Role >= UserRole.Moderator,
 
         // Listing specific user's uploads - moderator and above

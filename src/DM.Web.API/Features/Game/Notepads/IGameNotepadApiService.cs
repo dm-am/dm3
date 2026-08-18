@@ -48,6 +48,20 @@ public interface IGameNotepadApiService
 
     #endregion
 
+    #region Character Master Notepad
+
+    /// <summary>
+    /// Get the notes the game leads keep about a character (derives gameId from character)
+    /// </summary>
+    Task<ListEnvelope<NotepadEntryResponse>> GetCharacterMasterNotepadEntries(Guid characterId);
+
+    /// <summary>
+    /// Create entry in the notes the game leads keep about a character (derives gameId from character)
+    /// </summary>
+    Task<Envelope<NotepadEntryResponse>> CreateCharacterMasterNotepadEntry(Guid characterId, CreateNotepadEntryRequest request);
+
+    #endregion
+
     #region Common Operations
 
     /// <summary>

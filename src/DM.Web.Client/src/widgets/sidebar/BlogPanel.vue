@@ -26,10 +26,15 @@
 //     leaves the blog mentor out, because unlike the game curator he only
 //     approves publications. Senior moderation is admitted by the intention
 //     and still gets no row — staff powers are not interface copy.
+//     "Отправить на проверку" is narrower than the edit items — the owner
+//     alone, and only while the blog is on edits
+//     (BlogIntention.SubmitForApproval plus the premoderation machine's one
+//     legality condition).
 //   "Действия с блогом" — any authenticated user except the owner
 //     (subscribe toggle, via features/blog-actions).
-//   "Модерация блога" — premoderation is Mentor+ (global),
-//     delete-others-blog is SeniorModerator+ (mirrors the game panel).
+//   "Модерация блога" — the premoderation verdict is Mentor+ (global) and is
+//     two rows, both legal from every status; delete-others-blog is
+//     SeniorModerator+ (mirrors the game panel).
 //
 // Four data-states per UI_STANDARDS: skeleton (initial load), error,
 // empty (blog not found), content.
@@ -67,6 +72,15 @@ const {
 
 // Owner/assistant may edit the blog (settings, publications, status).
 const canEdit = computed(() => canManage.value);
+
+// Asking a mentor to look at the blog is the owner's move and nobody else's:
+// the server admits BlogIntention.SubmitForApproval for the owner only, and the
+// premoderation machine refuses the move from any status but AwaitingEdits.
+// Both halves are repeated here, because a row the server would answer 403 or
+// 400 to is a promise the panel had no right to make.
+const canSubmitForApproval = computed(
+  () => isOwner.value && blog.value?.premoderationStatus === "AwaitingEdits",
+);
 
 const { user } = storeToRefs(useAuthStore());
 const router = useRouter();
@@ -117,14 +131,32 @@ interface ModAction {
 }
 const pendingMod = ref<ModAction | null>(null);
 
+// The three premoderation moves, each with the wording of its own dialog
+// (mirrors GamePanel).
+const PREMOD_PROMPTS: Record<
+  BlogPremoderationTransition,
+  { title: string; message: string; confirmLabel: string }
+> = {
+  [BlogPremoderationTransition.SetApproved]: {
+    title: "Одобрение блога",
+    message: "Одобрить блог? Он станет виден всем.",
+    confirmLabel: "Одобрить",
+  },
+  [BlogPremoderationTransition.SetAwaitingEdits]: {
+    title: "Возврат на доработку",
+    message: "Вернуть блог автору на доработку?",
+    confirmLabel: "Вернуть",
+  },
+  [BlogPremoderationTransition.SubmitForApproval]: {
+    title: "Отправка на проверку",
+    message: "Отправить блог на проверку наставнику?",
+    confirmLabel: "Отправить",
+  },
+};
+
 function askPremod(t: BlogPremoderationTransition) {
-  const send = t === BlogPremoderationTransition.SendToPremoderation;
   pendingMod.value = {
-    title: send ? "Премодерация" : "Снятие с премодерации",
-    message: send
-      ? "Отправить блог на премодерацию?"
-      : "Снять блог с премодерации?",
-    confirmLabel: send ? "Отправить" : "Снять",
+    ...PREMOD_PROMPTS[t],
     run: async () => {
       const error = await store.changePremoderation(t);
       if (error) notifyFailure(error, "Не удалось изменить премодерацию");
@@ -227,6 +259,18 @@ async function confirmMod() {
                edit items and the notepad link to mirror GamePanel's order. -->
           <BlogStatusButtons variant="strip" />
         </template>
+        <!-- The owner's own premoderation move. Not inside the canEdit block:
+             an assistant writes in the blog but does not declare it ready. -->
+        <li v-if="canSubmitForApproval" class="link">
+          <span class="muted" aria-hidden="true">- </span>
+          <button
+            type="button"
+            class="strip-action"
+            @click="askPremod(BlogPremoderationTransition.SubmitForApproval)"
+          >
+            Отправить на проверку
+          </button>
+        </li>
         <li v-if="canUseNotepad" class="link">
           <span class="muted" aria-hidden="true">- </span>
           <router-link :to="{ name: 'blog-notepad', params: { id: routeId } }"
@@ -244,17 +288,17 @@ async function confirmMod() {
       <!-- "Модерация блога" section (global roles) -->
       <template v-if="showModeration">
         <SidebarSectionTitle>Модерация блога</SidebarSectionTitle>
+        <!-- The verdict, both ways. Legal from every status on the server, so
+             neither row is hidden by the blog's current premoderation state. -->
         <template v-if="isGlobalMentor">
           <li class="link">
             <span class="muted" aria-hidden="true">- </span>
             <button
               type="button"
               class="strip-action"
-              @click="
-                askPremod(BlogPremoderationTransition.SendToPremoderation)
-              "
+              @click="askPremod(BlogPremoderationTransition.SetApproved)"
             >
-              Отправить на премодерацию
+              Одобрить блог
             </button>
           </li>
           <li class="link">
@@ -262,11 +306,9 @@ async function confirmMod() {
             <button
               type="button"
               class="strip-action"
-              @click="
-                askPremod(BlogPremoderationTransition.RemoveFromPremoderation)
-              "
+              @click="askPremod(BlogPremoderationTransition.SetAwaitingEdits)"
             >
-              Снять с премодерации
+              Вернуть на доработку
             </button>
           </li>
         </template>

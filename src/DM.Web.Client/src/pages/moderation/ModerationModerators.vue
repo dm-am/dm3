@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * ModerationModerators — "Модерация" (product doc 4.2.1.5 first link).
+ * ModerationModerators — "Модераторы" (product doc 4.2.1.5 first link).
  * Lists the moderation team with zones of responsibility: forum boards,
  * curated games and curated blogs (GET v1/moderation/moderators,
  * highest role first). Moderator+ (server-enforced via RequireRole).
@@ -50,7 +50,7 @@ onMounted(fetch);
 
 <template>
   <div class="moderation-moderators">
-    <page-title>Модерация</page-title>
+    <page-title>Модераторы</page-title>
 
     <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
 

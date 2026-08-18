@@ -11,11 +11,11 @@ using Xunit;
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
 /// <summary>
-/// The unique indexes over lower(Email) and lower(Username) are what make a login lookup an
-/// index scan instead of a sequential one, and what stops two accounts differing only by
-/// letter case. EF cannot express an expression index, so they are asserted by the
-/// application at startup rather than written into the migration by hand — which is what
-/// keeps the migration safe to regenerate.
+/// Indexes EF cannot express are asserted by the application at startup rather than written
+/// into the migration by hand, which is what keeps the migration safe to regenerate. Two of
+/// them stop accounts differing only by letter case and turn a login lookup into an index
+/// scan; one stops a second name change request racing past the check that reads before it
+/// writes.
 /// </summary>
 public class ExpressionIndexShould : IntegrationTestBase
 {
@@ -71,12 +71,12 @@ public class ExpressionIndexShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Whatever the declaration says, these two properties are the point of it.
+    /// Whatever the declaration says, uniqueness is what every index in this set exists for.
     /// </summary>
     /// <remarks>
     /// The check above compares two strings and would go on passing if both of them were
-    /// changed together into something that indexes the raw column. This is the part that
-    /// cannot be satisfied by agreement: unique, and over the lowered value.
+    /// changed together into an index that constrains nothing. This is the part that cannot
+    /// be satisfied by agreement.
     /// </remarks>
     [Theory]
     [MemberData(nameof(Declared))]
@@ -85,10 +85,45 @@ public class ExpressionIndexShould : IntegrationTestBase
         var declared = ExpressionIndexInitializer.Declared.Single(index => index.Name == indexName);
 
         declared.Definition.Should().Contain("UNIQUE",
-            "two accounts differing only by letter case are two accounts nobody can tell " +
-            "apart, and no later repair can decide which of them owns the address");
-        declared.Definition.Should().Contain("lower",
-            "the lookup compares lower(column) to lower(value), and an index over the raw " +
-            "column serves neither that predicate nor the invariant");
+            "every index declared here exists to refuse a duplicate, and one that only " +
+            "speeds a lookup up would let the duplicate through while looking the same");
+    }
+
+    /// <summary>
+    /// The case-folding pair indexes the lowered value, not the raw column.
+    /// </summary>
+    /// <remarks>
+    /// Two accounts differing only by letter case are two accounts nobody can tell apart,
+    /// and no later repair can decide which of them owns the address. The lookup compares
+    /// lower(column) to lower(value), so an index over the raw column serves neither that
+    /// predicate nor the invariant.
+    /// </remarks>
+    [Theory]
+    [InlineData("IX_Users_Email_Lower")]
+    [InlineData("IX_Users_Username_Lower")]
+    public void FoldCaseWhereTwoSpellingsAreOneAccount(string indexName)
+    {
+        var declared = ExpressionIndexInitializer.Declared.Single(index => index.Name == indexName);
+
+        declared.Definition.Should().Contain("lower");
+    }
+
+    /// <summary>
+    /// The name change index constrains requests awaiting a moderator and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Without the predicate the account could file one request in its lifetime: every
+    /// finished request would keep the slot. And the predicate cannot be widened to include
+    /// approvals, because an approval stops being in flight when its link runs out rather
+    /// than when its status changes, and no index predicate can be written against the
+    /// clock - that half is the service's to judge.
+    /// </remarks>
+    [Fact]
+    public void ConstrainOnlyTheNameChangeRequestsThatAwaitAModerator()
+    {
+        var declared = ExpressionIndexInitializer.Declared
+            .Single(index => index.Name == "IX_UsernameChangeRequests_UserId_Pending");
+
+        declared.Definition.Should().Contain("""WHERE ("Status" = 0)""");
     }
 }

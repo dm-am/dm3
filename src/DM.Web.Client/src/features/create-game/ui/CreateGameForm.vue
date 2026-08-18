@@ -10,9 +10,8 @@ import FormField from "@/shared/ui/Form/FormField.vue";
 import { Select } from "@/shared/ui/Select";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { AttributeSchemaEditor } from "@/features/attribute-schema-editor/@x/create-game";
-import TagSelector from "./TagSelector.vue";
 import AssistantSelector from "./AssistantSelector.vue";
-import { gameApi } from "@/entities/game";
+import { gameApi, TagSelector } from "@/entities/game";
 import {
   CommentariesAccessMode,
   type CreateGameInput,

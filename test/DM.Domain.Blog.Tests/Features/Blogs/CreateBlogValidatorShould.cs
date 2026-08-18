@@ -31,6 +31,19 @@ public class CreateBlogValidatorShould : UnitTestBase
     }
 
     [Fact]
+    public void FailWhenDraftVisibilityIsNotInEnum()
+    {
+        var input = new CreateBlog
+        {
+            Title = "My Blog",
+            DraftVisibility = (DraftVisibility)30000
+        };
+        var result = validator.TestValidate(input);
+        result.ShouldHaveValidationErrorFor(x => x.DraftVisibility)
+            .WithErrorMessage(ValidationError.Invalid);
+    }
+
+    [Fact]
     public void FailWhenTitleIsEmpty()
     {
         var input = new CreateBlog { Title = "" };

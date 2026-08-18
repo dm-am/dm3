@@ -4,6 +4,9 @@
     <SidebarSkeleton v-if="loading && !fundraising" :lines="3" />
     <template v-else>
       <li v-if="fundraising">
+        <!-- What the money is for, above the bar: a bare pair of numbers says
+             how far along the collection is and not what it is a collection for. -->
+        <div class="goal-title">{{ fundraising.title }}</div>
         <ProgressBar
           :current="fundraising.collectedAmount"
           :goal="fundraising.goalAmount"
@@ -71,6 +74,9 @@ void fetch();
 
 <style scoped lang="sass">
 @import "@/assets/styles/Inputs"
+
+.goal-title
+  font-weight: bold
 
 .fetch-error
   display: block

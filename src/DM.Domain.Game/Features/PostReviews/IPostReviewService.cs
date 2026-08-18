@@ -18,11 +18,18 @@ public interface IPostReviewService
     Task<PostReview> CreateAsync(CreatePostReview createReview);
 
     /// <summary>
-    /// Get single review by ID
+    /// Get a single review of a named post.
     /// </summary>
-    /// <param name="id">Review ID</param>
-    /// <returns>Review or throws if not found</returns>
-    Task<PostReview> GetAsync(Guid id);
+    /// <remarks>
+    /// Read through the post: a review is only as readable as the post it is
+    /// about, and a post lives in a room whose access list decides who may open
+    /// it. A review belonging to some other post answers as one that is not
+    /// there, so the two identifiers of the route have to agree.
+    /// </remarks>
+    /// <param name="postId">Post the review belongs to</param>
+    /// <param name="reviewId">Review ID</param>
+    /// <returns>Review, or throws if the post is out of reach or the review is not its own</returns>
+    Task<PostReview> GetAsync(Guid postId, Guid reviewId);
 
     /// <summary>
     /// Get reviews for a specific post
@@ -78,9 +85,9 @@ public interface IPostReviewService
     Task<bool> HasRecentReviewInGameAsync(Guid authorId, Guid gameId);
 
     /// <summary>
-    /// Check if review can be edited (within 24 hours of creation)
+    /// Check if review can still be edited by its author (15-minute window)
     /// </summary>
     /// <param name="review">Review to check</param>
-    /// <returns>True if review can still be edited</returns>
+    /// <returns>True if the edit window is still open</returns>
     bool CanEdit(PostReview review);
 }

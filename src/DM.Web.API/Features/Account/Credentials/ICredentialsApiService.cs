@@ -43,11 +43,11 @@ public interface ICredentialsApiService
     Task<UsernameChangeResponse?> GetUsernameChangeStatusAsync();
 
     /// <summary>
-    /// Get username change request by approval token
+    /// Get the state of an approval token
     /// </summary>
     /// <param name="token">Approval token from notification</param>
-    /// <returns>Request details or null if invalid</returns>
-    Task<UsernameChangeResponse?> GetUsernameChangeApprovalAsync(Guid token);
+    /// <returns>Token state, or null when no request was issued for it</returns>
+    Task<UsernameChangeApprovalInfo?> GetUsernameChangeApprovalAsync(Guid token);
 
     /// <summary>
     /// Complete username change with chosen name

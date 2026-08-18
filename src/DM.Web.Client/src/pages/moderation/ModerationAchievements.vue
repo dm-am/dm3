@@ -169,8 +169,8 @@ async function confirmDeleteTier() {
         <table class="tier-table">
           <thead>
             <tr>
-              <th>Tier</th>
-              <th>Code</th>
+              <th>Тир</th>
+              <th>Код</th>
               <th>Название</th>
               <th>Порог</th>
               <th></th>
@@ -190,14 +190,14 @@ async function confirmDeleteTier() {
                   class="text-button"
                   @click="openEditTier(t)"
                 >
-                  Edit
+                  Правка
                 </button>
                 <button
                   type="button"
                   class="text-button danger"
                   @click="deleteTierTarget = t"
                 >
-                  Del
+                  Удалить
                 </button>
               </td>
             </tr>

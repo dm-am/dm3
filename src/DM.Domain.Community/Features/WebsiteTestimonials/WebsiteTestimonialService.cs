@@ -10,6 +10,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
+using DM.Domain.Core.Users;
 using FluentValidation;
 
 namespace DM.Domain.Community.Features.WebsiteTestimonials;
@@ -21,6 +22,7 @@ internal class WebsiteTestimonialService : IWebsiteTestimonialService
     private readonly IValidator<UpdateWebsiteTestimonial> _updateValidator;
     private readonly IIntentionManager _intentionManager;
     private readonly IWebsiteTestimonialRepository _repository;
+    private readonly IUserReadRepository _userRepository;
     private readonly IEventProducer _producer;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IGuidFactory _guidFactory;
@@ -32,6 +34,7 @@ internal class WebsiteTestimonialService : IWebsiteTestimonialService
         IValidator<UpdateWebsiteTestimonial> updateValidator,
         IIntentionManager intentionManager,
         IWebsiteTestimonialRepository repository,
+        IUserReadRepository userRepository,
         IEventProducer producer,
         IDateTimeProvider dateTimeProvider,
         IGuidFactory guidFactory,
@@ -41,6 +44,7 @@ internal class WebsiteTestimonialService : IWebsiteTestimonialService
         _updateValidator = updateValidator;
         _intentionManager = intentionManager;
         _repository = repository;
+        _userRepository = userRepository;
         _producer = producer;
         _dateTimeProvider = dateTimeProvider;
         _guidFactory = guidFactory;
@@ -53,22 +57,32 @@ internal class WebsiteTestimonialService : IWebsiteTestimonialService
         await _createValidator.ValidateAndThrowAsync(createTestimonial);
         _intentionManager.ThrowIfForbidden(WebsiteTestimonialIntention.Create);
 
-        var currentUserId = _identityProvider.Current.User.UserId;
+        // The entry is signed by the participant the moderator named, not by the
+        // moderator who submitted it. An unknown name is refused here: written
+        // through unresolved, it would either sign the wrong person or store a
+        // foreign key to nobody.
+        var authorId = await _userRepository.FindUserIdAsync(createTestimonial.AuthorUsername);
+        if (authorId == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound,
+                RefusalMessage.UserNotFoundByUsername(createTestimonial.AuthorUsername));
+        }
 
-        // Check if user already has a testimonial (one per user). A second one
-        // is a conflict of state, which is what the controller declares and what
-        // the form on the other side branches on: Gone said neither "not found"
-        // nor "deleted" here and matched nothing the caller was written for.
-        var existing = await _repository.GetByAuthor(currentUserId);
+        // One testimonial per participant. A second one is a conflict of state,
+        // which is what the controller declares and what the form on the other
+        // side branches on: Gone said neither "not found" nor "deleted" here and
+        // matched nothing the caller was written for.
+        var existing = await _repository.GetByAuthor(authorId.Value);
         if (existing != null)
         {
-            throw new HttpException(HttpStatusCode.Conflict, "У вас уже есть отзыв");
+            throw new HttpException(HttpStatusCode.Conflict,
+                $"У участника {createTestimonial.AuthorUsername} уже есть отзыв");
         }
 
         var entity = new CreateWebsiteTestimonialEntity
         {
             Id = _guidFactory.Create(),
-            AuthorId = currentUserId,
+            AuthorId = authorId.Value,
             CreatedUtc = _dateTimeProvider.Now.UtcDateTime,
             Text = createTestimonial.Text
         };

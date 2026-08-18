@@ -35,6 +35,7 @@ namespace DM.Domain.Game.Tests.Features.Games;
 public class GameStatusTransitionShould : UnitTestBase
 {
     private readonly Mock<IGameRepository> _repository;
+    private readonly Mock<IIntentionManager> _intentionManager;
     private readonly Mock<IEventProducer> _producer;
     private readonly Mock<IDateTimeProvider> _dateTimeProvider;
     private readonly GameService _service;
@@ -60,9 +61,10 @@ public class GameStatusTransitionShould : UnitTestBase
         dataResolver.Setup(r => r.ResolveTagIds(It.IsAny<IEnumerable<int>?>()))
             .ReturnsAsync(Array.Empty<Guid>());
 
-        var intentionManager = Mock<IIntentionManager>();
-        intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<GameIntention>()));
-        intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<GameIntention>(), It.IsAny<GameDto>()));
+        _intentionManager = Mock<IIntentionManager>();
+        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<GameIntention>()));
+        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<GameIntention>(), It.IsAny<GameDto>()));
+        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<GameIntention>(), It.IsAny<GameDetails>()));
 
         var schemaService = Mock<IAttributeSchemaService>();
 
@@ -118,7 +120,7 @@ public class GameStatusTransitionShould : UnitTestBase
             updateGameValidator.Object,
             creationValidator.Object,
             dataResolver.Object,
-            intentionManager.Object,
+            _intentionManager.Object,
             schemaService.Object,
             _repository.Object,
             userRepository.Object,
@@ -142,7 +144,8 @@ public class GameStatusTransitionShould : UnitTestBase
         ClosedReason closedReason = ClosedReason.None,
         DateTimeOffset? activatedUtc = null,
         DateTimeOffset? closedUtc = null,
-        PremoderationStatus premoderationStatus = PremoderationStatus.Approved)
+        PremoderationStatus premoderationStatus = PremoderationStatus.Approved,
+        Guid? masterId = null)
     {
         var gameId = Guid.NewGuid();
         var game = new GameDetails
@@ -153,9 +156,15 @@ public class GameStatusTransitionShould : UnitTestBase
             ActivatedUtc = activatedUtc,
             ClosedUtc = closedUtc,
             PremoderationStatus = premoderationStatus,
+            Master = new DM.Domain.Core.Dto.GeneralUser { UserId = masterId ?? _currentUserId },
             Recruitment = new GameRecruitment()
         };
-        _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<CancellationToken>()))
+        _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(game);
+        // The mentor's two moves read past the accessibility scope, because a game
+        // awaiting edits has no curator and the scope would hide it from them.
+        _repository.Setup(r => r.GetGameDetailsForModeration(
+                gameId, _currentUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(game);
         _repository.Setup(r => r.Update(It.IsAny<UpdateGameEntity>(), It.IsAny<CancellationToken>()))
             .Callback<UpdateGameEntity, CancellationToken>((update, _) => _capturedUpdate = update)
@@ -372,40 +381,16 @@ public class GameStatusTransitionShould : UnitTestBase
 
     #region Premoderation
 
-    [Fact]
-    public async Task SendGameToPremoderationAndAssignCurator()
-    {
-        var gameId = SetupGame(ModuleStatus.Draft, premoderationStatus: PremoderationStatus.AwaitingEdits);
-
-        await _service.ChangePremoderationAsync(gameId.ToString(), ModulePremoderationTransition.SendToPremoderation);
-
-        _capturedUpdate!.PremoderationStatus.Should().Be(PremoderationStatus.AwaitingApproval);
-        _capturedUpdate.MentorId.Should().Be(_currentUserId);
-        _capturedUpdate.SetMentorId.Should().BeTrue();
-        _producer.Verify(p => p.SendAsync(
-            It.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusGameModeration)), gameId), Times.Once);
-    }
-
     [Theory]
     [InlineData(PremoderationStatus.Approved)]
     [InlineData(PremoderationStatus.AwaitingApproval)]
-    public async Task RejectSendToPremoderationWhenNotAwaitingEdits(PremoderationStatus premoderationStatus)
+    [InlineData(PremoderationStatus.AwaitingEdits)]
+    public async Task ApproveAGameFromAnyStatusAndClearTheCurator(PremoderationStatus current)
     {
-        var gameId = SetupGame(ModuleStatus.Draft, premoderationStatus: premoderationStatus);
+        var gameId = SetupGame(ModuleStatus.Draft, premoderationStatus: current);
 
-        var act = async () => await _service.ChangePremoderationAsync(
-            gameId.ToString(), ModulePremoderationTransition.SendToPremoderation);
-
-        await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
-    public async Task RemoveGameFromPremoderationAndClearCurator()
-    {
-        var gameId = SetupGame(ModuleStatus.Draft, premoderationStatus: PremoderationStatus.AwaitingApproval);
-
-        await _service.ChangePremoderationAsync(gameId.ToString(), ModulePremoderationTransition.RemoveFromPremoderation);
+        await _service.ChangePremoderationAsync(
+            gameId.ToString(), ModulePremoderationTransition.SetApproved);
 
         _capturedUpdate!.PremoderationStatus.Should().Be(PremoderationStatus.Approved);
         _capturedUpdate.MentorId.Should().BeNull();
@@ -416,16 +401,103 @@ public class GameStatusTransitionShould : UnitTestBase
 
     [Theory]
     [InlineData(PremoderationStatus.Approved)]
+    [InlineData(PremoderationStatus.AwaitingApproval)]
     [InlineData(PremoderationStatus.AwaitingEdits)]
-    public async Task RejectRemoveFromPremoderationWhenNotAwaitingApproval(PremoderationStatus premoderationStatus)
+    public async Task ReturnAGameForEditsFromAnyStatusAndRecordTheCurator(PremoderationStatus current)
     {
-        var gameId = SetupGame(ModuleStatus.Draft, premoderationStatus: premoderationStatus);
+        var gameId = SetupGame(ModuleStatus.Draft, premoderationStatus: current);
+
+        await _service.ChangePremoderationAsync(
+            gameId.ToString(), ModulePremoderationTransition.SetAwaitingEdits);
+
+        _capturedUpdate!.PremoderationStatus.Should().Be(PremoderationStatus.AwaitingEdits);
+        _capturedUpdate.MentorId.Should().Be(_currentUserId);
+        _capturedUpdate.SetMentorId.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// The two verdicts are a rank and nothing else, so they are asked of the
+    /// targetless intention — before the game is read, which is what keeps a
+    /// stranger probing aliases from learning whether one resolves.
+    /// </summary>
+    [Theory]
+    [InlineData(ModulePremoderationTransition.SetApproved)]
+    [InlineData(ModulePremoderationTransition.SetAwaitingEdits)]
+    public async Task AskTheMentorRankForAVerdictAndNothingAboutTheGame(
+        ModulePremoderationTransition transition)
+    {
+        var gameId = SetupGame(ModuleStatus.Draft, premoderationStatus: PremoderationStatus.AwaitingEdits);
+
+        await _service.ChangePremoderationAsync(gameId.ToString(), transition);
+
+        _intentionManager.Verify(
+            m => m.ThrowIfForbidden(GameIntention.SetStatusModeration), Times.Once);
+        _intentionManager.Verify(
+            m => m.ThrowIfForbidden(GameIntention.SubmitForApproval, It.IsAny<GameDetails>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SubmitAGameAwaitingEditsForApprovalWithoutTouchingTheCurator()
+    {
+        var gameId = SetupGame(ModuleStatus.Draft, premoderationStatus: PremoderationStatus.AwaitingEdits);
+
+        await _service.ChangePremoderationAsync(
+            gameId.ToString(), ModulePremoderationTransition.SubmitForApproval);
+
+        _capturedUpdate!.PremoderationStatus.Should().Be(PremoderationStatus.AwaitingApproval);
+        _capturedUpdate.SetMentorId.Should().BeFalse();
+        _producer.Verify(p => p.SendAsync(
+            It.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusGameModeration)), gameId), Times.Once);
+    }
+
+    /// <summary>
+    /// The author's move is a fact about the game, so it is asked of the targeted
+    /// intention — and the mentor rank is not asked at all, because the master
+    /// making this move normally does not hold it.
+    /// </summary>
+    [Fact]
+    public async Task AskTheGameWhoTheAuthorIsAndNotTheMentorRank()
+    {
+        var gameId = SetupGame(ModuleStatus.Draft, premoderationStatus: PremoderationStatus.AwaitingEdits);
+
+        await _service.ChangePremoderationAsync(
+            gameId.ToString(), ModulePremoderationTransition.SubmitForApproval);
+
+        _intentionManager.Verify(
+            m => m.ThrowIfForbidden(GameIntention.SubmitForApproval, It.IsAny<GameDetails>()), Times.Once);
+        _intentionManager.Verify(
+            m => m.ThrowIfForbidden(GameIntention.SetStatusModeration), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(PremoderationStatus.Approved)]
+    [InlineData(PremoderationStatus.AwaitingApproval)]
+    public async Task RejectSubmitForApprovalWhenNotAwaitingEdits(PremoderationStatus current)
+    {
+        var gameId = SetupGame(ModuleStatus.Draft, premoderationStatus: current);
 
         var act = async () => await _service.ChangePremoderationAsync(
-            gameId.ToString(), ModulePremoderationTransition.RemoveFromPremoderation);
+            gameId.ToString(), ModulePremoderationTransition.SubmitForApproval);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest);
+    }
+
+    /// <summary>
+    /// Illegality is answered before authorization, as on the status machine: the
+    /// author gets a 400 naming the move, not a 403 about who they are.
+    /// </summary>
+    [Fact]
+    public async Task RefuseAnIllegalSubmitBeforeAskingWhoTheCallerIs()
+    {
+        var gameId = SetupGame(ModuleStatus.Draft, premoderationStatus: PremoderationStatus.Approved);
+
+        var act = async () => await _service.ChangePremoderationAsync(
+            gameId.ToString(), ModulePremoderationTransition.SubmitForApproval);
+
+        await act.Should().ThrowAsync<HttpException>();
+        _intentionManager.Verify(
+            m => m.ThrowIfForbidden(GameIntention.SubmitForApproval, It.IsAny<GameDetails>()), Times.Never);
     }
 
     #endregion

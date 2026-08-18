@@ -21,4 +21,10 @@ public class UpdateMessageEntity
     /// Updated removed status (null to keep current)
     /// </summary>
     public bool? IsRemoved { get; set; }
+
+    /// <summary>
+    /// User performing the edit. The message row keeps an author and no editor,
+    /// so the edit history is the only record that it was changed at all.
+    /// </summary>
+    public Guid EditorUserId { get; set; }
 }

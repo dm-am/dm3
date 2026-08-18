@@ -33,6 +33,15 @@ public class TagGroup
     public int SortOrder { get; set; }
 
     /// <summary>
+    /// How many tags of this group one game may carry; null means no limit
+    /// </summary>
+    /// <remarks>
+    /// A catalogue value and not a constant in code: moderation edits it, and a
+    /// change to it takes effect without a release.
+    /// </remarks>
+    public int? MaxTagsPerGame { get; set; }
+
+    /// <summary>
     /// Tags under the group
     /// </summary>
     [InverseProperty(nameof(Tag.TagGroup))]

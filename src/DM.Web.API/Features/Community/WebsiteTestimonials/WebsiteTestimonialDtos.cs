@@ -47,6 +47,17 @@ public class WebsiteTestimonialDto
 public class CreateWebsiteTestimonialRequest
 {
     /// <summary>
+    /// Username of the participant the testimonial is signed by
+    /// </summary>
+    /// <remarks>
+    /// Testimonials are posted by senior moderation on behalf of a participant,
+    /// so the author is named in the request. Without it the entry carried the
+    /// submitting moderator's name.
+    /// </remarks>
+    [Required(ErrorMessage = "Укажите автора отзыва")]
+    public string AuthorUsername { get; set; } = string.Empty;
+
+    /// <summary>
     /// Testimonial text content (10-1000 characters, plain text, positive only)
     /// </summary>
     [Required(ErrorMessage = "Введите текст отзыва")]

@@ -66,9 +66,19 @@ public enum BlogIntention
     CreateComment,
 
     /// <summary>
-    /// Handle premoderation (mentor approval/rejection)
+    /// Deliver a premoderation verdict on somebody else's blog: approve it, or
+    /// send it back for edits. Site-wide and targetless — the rule is a rank
+    /// (Mentor and everybody above), not a relationship with the blog.
     /// </summary>
     SetStatusModeration,
+
+    /// <summary>
+    /// Ask for a premoderation verdict on your own blog. The owner's move and
+    /// nobody else's: not an assistant's, not the mentor's. Kept apart from
+    /// <see cref="EditSettings" /> on purpose — the people who may fill the blog's
+    /// form in are not the person who may declare it ready.
+    /// </summary>
+    SubmitForApproval,
 
     /// <summary>
     /// View a blog that is pending premoderation (not yet approved)

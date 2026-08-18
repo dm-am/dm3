@@ -117,6 +117,12 @@ public class UsernameChangeRequestEntry
     public UsernameChangeRequestStatus Status { get; set; }
 
     /// <summary>
+    /// Which deadline expired the request, set only when
+    /// <see cref="Status"/> is <see cref="UsernameChangeRequestStatus.Expired"/>.
+    /// </summary>
+    public UsernameChangeExpiryReason? ExpiryReason { get; set; }
+
+    /// <summary>
     /// When the request was created
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }

@@ -18,5 +18,12 @@ internal class UpdateBlogValidator : AbstractValidator<UpdateBlog>
                 .NotEmpty().WithMessage(ValidationError.Empty)
                 .MaximumLength(200).WithMessage(ValidationError.Long);
         });
+
+        // The value decides who sees the drafts, and it is compared against the
+        // named members rather than range-checked downstream: an integer outside
+        // the enum is neither Private nor Public and quietly reads as the more
+        // open of the two. Null passes — omitted means "keep what is stored".
+        RuleFor(x => x.DraftVisibility)
+            .IsInEnum().WithMessage(ValidationError.Invalid);
     }
 }

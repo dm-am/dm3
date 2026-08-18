@@ -20,8 +20,13 @@ import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import BlogPanel from "./BlogPanel.vue";
 import SidebarSectionTitle from "./SidebarSectionTitle.vue";
-import { useBlogDetailsStore, type Blog } from "@/entities/blog";
+import {
+  useBlogDetailsStore,
+  type Blog,
+  type BlogPremoderationStatus,
+} from "@/entities/blog";
 import { useAuthStore } from "@/entities/user";
+import { UserRole } from "@/shared/api/models/common";
 
 const stubs = {
   "router-link": {
@@ -61,18 +66,26 @@ const blog = {
   ],
 } as unknown as Blog;
 
-function mountPanel() {
-  useBlogDetailsStore().blog = blog;
+function mountPanel(premoderationStatus?: BlogPremoderationStatus) {
+  useBlogDetailsStore().blog = { ...blog, premoderationStatus };
   return mount(BlogPanel, { props: { blogId: "aaaab" }, global: { stubs } });
 }
 
-function signedInAs(username: string) {
+function signedInAs(username: string, role?: UserRole) {
   const auth = useAuthStore();
-  auth.user = { username } as unknown as NonNullable<typeof auth.user>;
+  auth.user = { username, role } as unknown as NonNullable<typeof auth.user>;
 }
 
-/** What a row copies as: a non-breaking space is still a space. */
-const copied = (text: string) => text.replace(/\u00a0/g, " ").trim();
+/**
+ * What a row copies as: a non-breaking space is still a space, and a run of
+ * whitespace is one space — the markup indents a button's caption onto its own
+ * line, and the browser collapses that the same way this does.
+ */
+const copied = (text: string) =>
+  text
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 /** Every menu row, in the order the menu renders them. */
 function rows(wrapper: ReturnType<typeof mountPanel>) {
@@ -121,5 +134,76 @@ describe("BlogPanel", () => {
     expect(headings.map((heading) => heading.text())).toEqual([
       "Управление блогом",
     ]);
+  });
+
+  // Premoderation, mirroring the game panel: the server grants exactly three
+  // moves to two different audiences, and a row shown to anybody else is a
+  // promise the server answers with 403 or 400.
+  describe("premoderation", () => {
+    const SUBMIT = "- Отправить на проверку";
+    const APPROVE = "- Одобрить блог";
+    const RETURN = "- Вернуть на доработку";
+
+    it("offers the owner the submit row while the blog is on edits", () => {
+      signedInAs("Автор");
+      expect(rows(mountPanel("AwaitingEdits"))).toContain(SUBMIT);
+    });
+
+    it.each([
+      ["AwaitingApproval", "AwaitingApproval" as BlogPremoderationStatus],
+      ["Approved", "Approved" as BlogPremoderationStatus],
+      ["not sent at all", undefined],
+    ])(
+      "hides the submit row from the owner when the status is %s",
+      (_name, status) => {
+        signedInAs("Автор");
+        expect(rows(mountPanel(status))).not.toContain(SUBMIT);
+      },
+    );
+
+    // BlogIntention.SubmitForApproval admits the owner alone: an assistant
+    // writes in the blog, the mentor approves its publications, and neither
+    // declares the blog itself ready.
+    it("hides the submit row from a reader on edits", () => {
+      signedInAs("Читатель");
+      expect(rows(mountPanel("AwaitingEdits"))).not.toContain(SUBMIT);
+    });
+
+    it("hides the submit row from a site mentor who is not the owner", () => {
+      signedInAs("Наставник", UserRole.Mentor);
+      expect(rows(mountPanel("AwaitingEdits"))).not.toContain(SUBMIT);
+    });
+
+    // Both verdicts are legal from every status on the server, so neither row
+    // is keyed on the status the blog happens to be in.
+    it.each([
+      ["Approved" as BlogPremoderationStatus],
+      ["AwaitingApproval" as BlogPremoderationStatus],
+      ["AwaitingEdits" as BlogPremoderationStatus],
+    ])("gives a site mentor both verdicts from %s", (status) => {
+      signedInAs("Наставник", UserRole.Mentor);
+      const menu = rows(mountPanel(status));
+
+      expect(menu).toContain(APPROVE);
+      expect(menu).toContain(RETURN);
+    });
+
+    it("keeps the verdicts away from the owner", () => {
+      signedInAs("Автор");
+      const menu = rows(mountPanel("AwaitingEdits"));
+
+      expect(menu).not.toContain(APPROVE);
+      expect(menu).not.toContain(RETURN);
+    });
+
+    // The mentor-only round trip the machine no longer has. Its two rows named
+    // transitions the server has deleted, so both were a guaranteed 400.
+    it("no longer offers the old take-in / release pair", () => {
+      signedInAs("Админ", UserRole.Admin);
+      const menu = rows(mountPanel("AwaitingEdits"));
+
+      expect(menu).not.toContain("- Отправить на премодерацию");
+      expect(menu).not.toContain("- Снять с премодерации");
+    });
   });
 });

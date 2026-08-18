@@ -116,12 +116,37 @@ export type SessionInfo = {
 export type UsernameChangeRequest = {
   id: string;
   currentUsername: string;
+  requestedUsername?: string;
   reason: string;
-  status: "Pending" | "Approved" | "Rejected";
+  // Completed and Expired are reached by the flow itself rather than by a
+  // moderator — one when the name is chosen, one when a deadline passes — and
+  // GET /account/username-change returns the latest request whatever state it
+  // is in, so both arrive here.
+  status: "Pending" | "Approved" | "Rejected" | "Completed" | "Expired";
+  // Expiry has two roads into one status and they mean opposite things: nobody
+  // read the request, or an approval went unused. Set only when status is
+  // "Expired", and computed by the server so the client never reads it out of
+  // the resolution comment.
+  expiryReason?: "Unreviewed" | "ApprovalLapsed";
   createdUtc: string;
+  approvalTokenExpiresUtc?: string;
   resolvedUtc?: string;
   resolvedByUsername?: string;
   resolverComment?: string;
+};
+
+/**
+ * What the approval link a moderator issued is still good for.
+ *
+ * Four answers, because they call for four different things from the reader: a
+ * live approval opens the form, a closed window sends them back for a new
+ * request, a link already spent asks nothing of them, and a value no request
+ * was issued for (a 404, so not a status here) is a broken link.
+ */
+export type UsernameChangeApprovalInfo = {
+  status: "ready" | "expired" | "used";
+  /** The name being changed. Sent for "ready" only. */
+  currentUsername?: string;
 };
 
 /**

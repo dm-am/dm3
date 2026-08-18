@@ -41,6 +41,7 @@ internal class FundraisingGoalRepository : IFundraisingGoalRepository
             throw new InvalidOperationException("Fundraising goal not found");
         }
 
+        dbGoal.Title = update.Title;
         dbGoal.GoalAmount = update.GoalAmount;
         dbGoal.CollectedAmount = update.CollectedAmount;
         dbGoal.ModifiedUtc = modifiedUtc;

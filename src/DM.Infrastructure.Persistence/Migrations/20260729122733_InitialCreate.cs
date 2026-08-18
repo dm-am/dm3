@@ -115,7 +115,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     TagGroupId = table.Column<Guid>(type: "uuid", nullable: false),
                     Title = table.Column<string>(type: "text", nullable: false),
                     Description = table.Column<string>(type: "text", nullable: true),
-                    SortOrder = table.Column<int>(type: "integer", nullable: false)
+                    SortOrder = table.Column<int>(type: "integer", nullable: false),
+                    MaxTagsPerGame = table.Column<int>(type: "integer", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -396,6 +397,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     FundraisingGoalId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Title = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     GoalAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
                     CollectedAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
                     ModifiedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
@@ -1091,7 +1093,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         column: x => x.TargetPostId,
                         principalTable: "Posts",
                         principalColumn: "PostId",
-                        onDelete: ReferentialAction.SetNull);
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -1113,6 +1115,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     QualityRating = table.Column<int>(type: "integer", nullable: false),
                     QuantityRating = table.Column<int>(type: "integer", nullable: false),
                     IsNewbie = table.Column<bool>(type: "boolean", nullable: false, computedColumnSql: "\"QuantityRating\" < 100", stored: true),
+                    IsUnderModerationWatch = table.Column<bool>(type: "boolean", nullable: false),
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
                     Status = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
                     Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
@@ -1458,6 +1461,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     EntityType = table.Column<int>(type: "integer", nullable: false),
                     CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     Text = table.Column<string>(type: "text", nullable: false),
+                    EntitySnapshot = table.Column<string>(type: "text", nullable: true),
                     Points = table.Column<int>(type: "integer", nullable: false),
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false)
                 },
@@ -1587,28 +1591,28 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             migrationBuilder.InsertData(
                 table: "FundraisingGoals",
-                columns: new[] { "FundraisingGoalId", "CollectedAmount", "GoalAmount", "ModifiedUtc", "UpdatedByUserId" },
-                values: new object[] { new Guid("00000000-0000-0000-0005-000000000001"), 17000m, 50000m, new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null });
+                columns: new[] { "FundraisingGoalId", "CollectedAmount", "GoalAmount", "ModifiedUtc", "Title", "UpdatedByUserId" },
+                values: new object[] { new Guid("00000000-0000-0000-0005-000000000001"), 17000m, 50000m, new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), "Хостинг и домен на год", null });
 
             migrationBuilder.InsertData(
                 table: "TagGroups",
-                columns: new[] { "TagGroupId", "Description", "SortOrder", "Title" },
+                columns: new[] { "TagGroupId", "Description", "MaxTagsPerGame", "SortOrder", "Title" },
                 values: new object[,]
                 {
-                    { new Guid("00000000-0000-0000-0005-000000000001"), "Ролевая система или набор правил, по которым ведется игра", 0, "Система" },
-                    { new Guid("00000000-0000-0000-0005-000000000002"), "Жанр и сеттинг игрового мира", 1, "Жанр" },
-                    { new Guid("00000000-0000-0000-0005-000000000003"), "Тип игрового процесса и взаимодействия между участниками", 2, "Формат игры" },
-                    { new Guid("00000000-0000-0000-0005-000000000004"), "Стиль и объем игровых постов", 3, "Формат постов" },
-                    { new Guid("00000000-0000-0000-0005-000000000005"), "Ожидаемая скорость игры и частота постов", 4, "Темп" },
-                    { new Guid("00000000-0000-0000-0005-000000000006"), "Особые требования и ограничения для участников", 5, "Ограничения" },
-                    { new Guid("00000000-0000-0000-0005-000000000007"), "Игры от новичков и для новичков", 6, "Новички" },
-                    { new Guid("00000000-0000-0000-0005-000000000008"), "Контент, требующий осознанного согласия участников", 7, "Деликатный контент" }
+                    { new Guid("00000000-0000-0000-0005-000000000001"), "Ролевая система или набор правил, по которым ведется игра", 2, 0, "Система" },
+                    { new Guid("00000000-0000-0000-0005-000000000002"), "Жанр и сеттинг игрового мира", 3, 1, "Жанр" },
+                    { new Guid("00000000-0000-0000-0005-000000000003"), "Тип игрового процесса и взаимодействия между участниками", 2, 2, "Формат игры" },
+                    { new Guid("00000000-0000-0000-0005-000000000004"), "Стиль и объем игровых постов", 1, 3, "Формат постов" },
+                    { new Guid("00000000-0000-0000-0005-000000000005"), "Ожидаемая скорость игры и частота постов", 1, 4, "Темп" },
+                    { new Guid("00000000-0000-0000-0005-000000000006"), "Особые требования и ограничения для участников", null, 5, "Ограничения" },
+                    { new Guid("00000000-0000-0000-0005-000000000007"), "Игры от новичков и для новичков", null, 6, "Новички" },
+                    { new Guid("00000000-0000-0000-0005-000000000008"), "Контент, требующий осознанного согласия участников", null, 7, "Деликатный контент" }
                 });
 
             migrationBuilder.InsertData(
                 table: "Users",
-                columns: new[] { "UserId", "AccessPolicy", "AvatarUploadId", "BirthdayDate", "BlacklistSettings", "CreatedUtc", "DiscordId", "Email", "Gender", "Info", "IsRemoved", "LastActivityUtc", "Location", "Name", "PasswordHash", "PasswordHashVersion", "QualityRating", "QuantityRating", "RatingDisabled", "Role", "Salt", "ShowBirthday", "Status", "TelegramId", "Username" },
-                values: new object[] { new Guid("00000000-0000-0000-0000-000000000001"), 0, null, null, 19, new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, "system@dm.local", 0, null, false, null, null, null, "", 0, 0, 0, true, 6, "", false, null, null, "Робот-Администратор" });
+                columns: new[] { "UserId", "AccessPolicy", "AvatarUploadId", "BirthdayDate", "BlacklistSettings", "CreatedUtc", "DiscordId", "Email", "Gender", "Info", "IsRemoved", "IsUnderModerationWatch", "LastActivityUtc", "Location", "Name", "PasswordHash", "PasswordHashVersion", "QualityRating", "QuantityRating", "RatingDisabled", "Role", "Salt", "ShowBirthday", "Status", "TelegramId", "Username" },
+                values: new object[] { new Guid("00000000-0000-0000-0000-000000000001"), 0, null, null, 19, new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, "system@dm.local", 0, null, false, false, null, null, null, "", 0, 0, 0, true, 6, "", false, null, null, "Робот-Администратор" });
 
             migrationBuilder.InsertData(
                 table: "AchievementTypes",
@@ -1726,19 +1730,19 @@ namespace DM.Infrastructure.Persistence.Migrations
                     { new Guid("00000000-0000-0000-0000-000000000032"), "Тактические бои и позиционирование", 50, 6, new Guid("00000000-0000-0000-0005-000000000003"), "Тактика" },
                     { new Guid("00000000-0000-0000-0000-000000000033"), "Короткие посты в 1-3 абзаца", 51, 0, new Guid("00000000-0000-0000-0005-000000000004"), "Короткопост" },
                     { new Guid("00000000-0000-0000-0000-000000000034"), "Развернутые литературные посты", 52, 1, new Guid("00000000-0000-0000-0005-000000000004"), "Литературная" },
-                    { new Guid("00000000-0000-0000-0000-000000000035"), "Посты раз в несколько дней", 53, 0, new Guid("00000000-0000-0000-0005-000000000005"), "Неторопливый" },
-                    { new Guid("00000000-0000-0000-0000-000000000036"), "Несколько постов в день", 54, 1, new Guid("00000000-0000-0000-0005-000000000005"), "Скоростной" },
-                    { new Guid("00000000-0000-0000-0000-000000000037"), "Нецензурная лексика запрещена", 55, 0, new Guid("00000000-0000-0000-0005-000000000006"), "Без мата" },
-                    { new Guid("00000000-0000-0000-0000-000000000038"), "Минимум жестокости и крови", 56, 1, new Guid("00000000-0000-0000-0005-000000000006"), "Без насилия" },
-                    { new Guid("00000000-0000-0000-0000-000000000039"), "Повышенные требования к грамотности", 57, 2, new Guid("00000000-0000-0000-0005-000000000006"), "Grammar Nazi" },
+                    { new Guid("00000000-0000-0000-0000-000000000035"), "Посты раз в несколько дней", 53, 1, new Guid("00000000-0000-0000-0005-000000000005"), "Неторопливый" },
+                    { new Guid("00000000-0000-0000-0000-000000000036"), "Несколько постов в день", 54, 0, new Guid("00000000-0000-0000-0005-000000000005"), "Скоростной" },
+                    { new Guid("00000000-0000-0000-0000-000000000037"), "Нецензурная лексика запрещена", 55, 1, new Guid("00000000-0000-0000-0005-000000000006"), "Без мата" },
+                    { new Guid("00000000-0000-0000-0000-000000000038"), "Минимум жестокости и крови", 56, 2, new Guid("00000000-0000-0000-0005-000000000006"), "Без насилия" },
+                    { new Guid("00000000-0000-0000-0000-000000000039"), "Повышенные требования к грамотности", 57, 0, new Guid("00000000-0000-0000-0005-000000000006"), "Grammar Nazi" },
                     { new Guid("00000000-0000-0000-0000-00000000003a"), "Игра для знакомой компании", 58, 3, new Guid("00000000-0000-0000-0005-000000000006"), "Для своих" },
                     { new Guid("00000000-0000-0000-0000-00000000003b"), "Обсуждение игровых вопросов во внешнем мессенджере", 59, 4, new Guid("00000000-0000-0000-0005-000000000006"), "Обязателен мессенджер" },
                     { new Guid("00000000-0000-0000-0000-00000000003c"), "Игра подходит для начинающих", 60, 0, new Guid("00000000-0000-0000-0005-000000000007"), "Для новичков" },
                     { new Guid("00000000-0000-0000-0000-00000000003d"), "Мастер игры — начинающий", 61, 1, new Guid("00000000-0000-0000-0005-000000000007"), "Мастер-новичок" },
                     { new Guid("00000000-0000-0000-0000-00000000003e"), "Возможны продолжительные периоды без постов", 62, 2, new Guid("00000000-0000-0000-0005-000000000005"), "Сухие сезоны" },
                     { new Guid("00000000-0000-0000-0000-00000000003f"), "Erotic Role-Play: [tipimg:/images/erp-tooltip.gif]эротические сцены[/tipimg] как основа игрового процесса", 63, 0, new Guid("00000000-0000-0000-0005-000000000008"), "ERP" },
-                    { new Guid("00000000-0000-0000-0000-000000000040"), "Чернуха, максимально шокирующий и отталкивающий контент без ограничений", 64, 1, new Guid("00000000-0000-0000-0005-000000000008"), "Шок-контент" },
-                    { new Guid("00000000-0000-0000-0000-000000000041"), "Игра затрагивает спорные или чувствительные социальные темы", 65, 2, new Guid("00000000-0000-0000-0005-000000000008"), "Острые темы" }
+                    { new Guid("00000000-0000-0000-0000-000000000040"), "Чернуха, максимально шокирующий и отталкивающий контент без ограничений", 64, 2, new Guid("00000000-0000-0000-0005-000000000008"), "Шок-контент" },
+                    { new Guid("00000000-0000-0000-0000-000000000041"), "Игра затрагивает спорные или чувствительные социальные темы", 65, 1, new Guid("00000000-0000-0000-0005-000000000008"), "Острые темы" }
                 });
 
             migrationBuilder.InsertData(

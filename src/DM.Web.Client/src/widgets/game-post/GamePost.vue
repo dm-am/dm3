@@ -12,8 +12,20 @@ import dayjs from "dayjs";
 import { htmlToBbcode } from "@/shared/lib/utils/bbcode";
 import { useRoute, type RouteLocationRaw } from "vue-router";
 import { storeToRefs } from "pinia";
-import type { Post, PostReview } from "@/entities/game";
-import { gameApi, GameLink, PostReviewItem, RoomLink } from "@/entities/game";
+import type {
+  DiceRoll,
+  Post,
+  PostAttachment,
+  PostReview,
+} from "@/entities/game";
+import {
+  gameApi,
+  GameLink,
+  PostReviewItem,
+  RoomLink,
+  reviewSignToNumber,
+  reviewSignName,
+} from "@/entities/game";
 import { ContentText } from "@/shared/ui/Content";
 import { SecondaryText } from "@/shared/ui/Layout";
 import { Tooltip } from "@/shared/ui/Tooltip";
@@ -21,6 +33,15 @@ import { TruncatedContent } from "@/shared/ui/TruncatedContent";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { UserLink, userIsModerator } from "@/entities/user";
+import {
+  MAX_POST_ATTACHMENTS,
+  POST_ATTACHMENT_ACCEPT,
+  describeAttachmentProblem,
+  uploadPostAttachments,
+} from "@/features/upload";
+import { uploadApi } from "@/shared/api";
+import { apiUrl } from "@/shared/api/client";
+import { formatFileSize } from "@/shared/lib/utils/fileSize";
 import { AvatarImg } from "@/shared/ui/AvatarImg";
 import { trimHtmlWhitespace } from "@/shared/lib/utils/bbcodeInteractive";
 import { useAuthStore } from "@/shared/stores/auth";
@@ -159,19 +180,23 @@ const reviewsCollapseId = computed(() => `post-reviews-${postId.value}`);
  * "= T" total, built in script so the template never needs adjacent
  * mustaches (whitespace-condense would otherwise glue "+2= 6" together).
  */
-function diceLinePrefix(roll: {
-  dice: number;
-  result: number;
-  bonus?: number;
-}): string {
+function diceLinePrefix(roll: DiceRoll): string {
+  const values = (roll.results ?? []).map((die) => die.value);
   const bonusPart = roll.bonus
     ? ` ${roll.bonus > 0 ? "+" : ""}${roll.bonus}`
     : "";
-  return `d${roll.dice}: ${roll.result}${bonusPart}`;
+  // Several dice are shown as the throw itself, "3d6: 4 2 6", so the reader can
+  // check the total; one die needs no list beside its own value.
+  const thrown = values.length > 1 ? values.join(" ") : (values[0] ?? "");
+  return `${roll.rolls}d${roll.edges}: ${thrown}${bonusPart}`;
 }
 
-function diceLineTotal(roll: { result: number; bonus?: number }): string {
-  return `= ${roll.result + (roll.bonus || 0)}`;
+function diceLineTotal(roll: DiceRoll): string {
+  const sum = (roll.results ?? []).reduce(
+    (running: number, die) => running + die.value,
+    0,
+  );
+  return `= ${sum + (roll.bonus || 0)}`;
 }
 
 // Rating — "Рейтинг: +N" format, bold colored link
@@ -481,6 +506,98 @@ async function saveEditPost() {
   emit("edited", postId.value);
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Attachments
+// ──────────────────────────────────────────────────────────────────────────────
+// Kept locally once the post is on screen, so adding or removing a file updates
+// the block in place — the same override idiom the edited text uses, and for the
+// same reason: the parent refetches the page for its own purposes, not for this.
+const attachmentsOverride = ref<PostAttachment[] | null>(null);
+const attachments = computed<PostAttachment[]>(
+  () => attachmentsOverride.value ?? props.post?.attachments ?? [],
+);
+const attachmentError = ref<string | null>(null);
+const attachmentBusy = ref(false);
+const attachmentsFull = computed(
+  () => attachments.value.length >= MAX_POST_ATTACHMENTS,
+);
+
+/**
+ * Absolute address of an attachment.
+ *
+ * The payload carries the API path and the origin is the client's to add; the
+ * endpoint behind it re-decides who may read the bytes on every request, so the
+ * address grants nothing on its own.
+ */
+function attachmentHref(attachment: PostAttachment): string {
+  return apiUrl(attachment.url);
+}
+
+async function addAttachments(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const chosen = Array.from(input.files ?? []);
+  // The picker keeps the chosen file selected, so picking the same one twice
+  // fires no change event and looks like a dead control.
+  input.value = "";
+  if (!postId.value || attachmentBusy.value || chosen.length === 0) return;
+
+  attachmentError.value = null;
+  const accepted: File[] = [];
+  for (const file of chosen) {
+    if (attachments.value.length + accepted.length >= MAX_POST_ATTACHMENTS) {
+      attachmentError.value = `Не больше ${MAX_POST_ATTACHMENTS} файлов`;
+      break;
+    }
+    const problem = describeAttachmentProblem(file);
+    if (problem) {
+      attachmentError.value = `${file.name}: ${problem}`;
+      continue;
+    }
+    accepted.push(file);
+  }
+  if (accepted.length === 0) return;
+
+  attachmentBusy.value = true;
+  const { failedNames } = await uploadPostAttachments(postId.value, accepted);
+  attachmentBusy.value = false;
+
+  if (failedNames.length > 0) {
+    attachmentError.value = `Не удалось приложить: ${failedNames.join(", ")}`;
+  }
+  if (failedNames.length < accepted.length) {
+    await refreshAttachments();
+  }
+}
+
+async function removeAttachment(attachment: PostAttachment) {
+  if (attachmentBusy.value) return;
+  attachmentBusy.value = true;
+  const { error } = await uploadApi.deleteUpload(attachment.id);
+  attachmentBusy.value = false;
+  if (error) {
+    notifyFailure(error, "Не удалось убрать вложение");
+    return;
+  }
+  attachmentsOverride.value = attachments.value.filter(
+    (a) => a.id !== attachment.id,
+  );
+}
+
+/**
+ * Re-read the post for its attachment list.
+ *
+ * The upload answers with the file's own record, not with the post's list, and
+ * building the list from those answers would have the client decide an order
+ * the server already decides.
+ */
+async function refreshAttachments() {
+  if (!postId.value) return;
+  const { data } = await gameApi.getPost(postId.value);
+  if (data?.resource) {
+    attachmentsOverride.value = data.resource.attachments ?? [];
+  }
+}
+
 const isDeleted = ref(false);
 const showDeleteConfirm = ref(false);
 const deletingPost = ref(false);
@@ -586,6 +703,37 @@ async function submitReview() {
   } finally {
     submittingReview.value = false;
   }
+}
+
+/**
+ * A review changed sign, so the post's rating moved by the difference. The
+ * card renders its own new text; what only this widget can keep true is the
+ * number in the left column, which is a sum over the very reviews it lists.
+ */
+function onReviewUpdated({ id, sign }: { id: string; sign: number }) {
+  const review = reviews.value.find((r) => r.id === id);
+  if (!review) return;
+  const previous = reviewSignToNumber(review.sign);
+  if (previous !== sign) {
+    ratingOverride.value = (postRating.value ?? 0) + (sign - previous);
+  }
+  // Written back in the spelling the wire uses, so a second edit measures its
+  // delta against a sign and not against a number that reads as neutral.
+  review.sign = reviewSignName(sign) as unknown as PostReview["sign"];
+}
+
+/**
+ * A deleted review takes its sign out of the post's rating and its row out of
+ * the count — the two numbers the server recomputes from the surviving rows,
+ * mirrored here so the page does not have to be refetched to agree with it.
+ * The row leaves the list as well: with it gone the reader may rate the post
+ * again, which is exactly what the server would now allow.
+ */
+function onReviewDeleted({ id, sign }: { id: string; sign: number }) {
+  if (!reviews.value.some((r) => r.id === id)) return;
+  reviews.value = reviews.value.filter((r) => r.id !== id);
+  reviewCountOverride.value = Math.max(0, reviewCount.value - 1);
+  ratingOverride.value = (postRating.value ?? 0) - sign;
 }
 </script>
 
@@ -707,6 +855,57 @@ async function submitReview() {
                 :max-height="200"
                 :is-moderator="isModerator"
               />
+              <!-- Attachments are their own requests, not part of the patch:
+                   the post's text and its files live in different tables and
+                   the edit endpoint deliberately carries only the two texts. -->
+              <div class="edit-attachments">
+                <span class="edit-label">Вложения</span>
+                <ul v-if="attachments.length" class="attachment-list">
+                  <li
+                    v-for="file in attachments"
+                    :key="file.id"
+                    class="attachment-chip"
+                  >
+                    <a
+                      class="attachment-name"
+                      :href="attachmentHref(file)"
+                      target="_blank"
+                      rel="noopener"
+                      >{{ file.fileName }}</a
+                    >
+                    <span class="attachment-size">{{
+                      formatFileSize(file.sizeBytes)
+                    }}</span>
+                    <button
+                      type="button"
+                      class="attachment-remove"
+                      aria-label="Убрать вложение"
+                      :disabled="attachmentBusy"
+                      @click="removeAttachment(file)"
+                    >
+                      {{ symbols.close }}
+                    </button>
+                  </li>
+                </ul>
+                <!-- Only the author attaches: the server refuses everyone else,
+                     moderators included, and a live control that always ends in
+                     a refusal is a promise the client has no right to make. -->
+                <label v-if="isPostAuthor" class="attachment-add">
+                  <input
+                    type="file"
+                    class="attachment-input"
+                    :accept="POST_ATTACHMENT_ACCEPT"
+                    :disabled="attachmentBusy || attachmentsFull"
+                    multiple
+                    @change="addAttachments"
+                  />
+                  <span class="attachment-add-label">Прикрепить файл</span>
+                </label>
+                <div v-if="attachmentError" class="attachment-error">
+                  {{ attachmentError }}
+                </div>
+              </div>
+
               <div class="edit-actions">
                 <button
                   class="edit-btn save"
@@ -734,8 +933,8 @@ async function submitReview() {
 
               <div v-if="hasDiceRolls" class="dice-rolls">
                 <div
-                  v-for="roll in post.diceRolls"
-                  :key="roll.id"
+                  v-for="(roll, rollIndex) in post.diceRolls"
+                  :key="rollIndex"
                   class="dice-roll"
                 >
                   <span class="dice-result"
@@ -748,6 +947,27 @@ async function submitReview() {
                     roll.comment
                   }}</span>
                 </div>
+              </div>
+
+              <!-- Files, as names and sizes. No previews: a thumbnail would
+                   have to come from a service reading the bucket with its own
+                   credentials, and the link it hands out works for whoever
+                   holds it — which is the one thing an attachment in a closed
+                   room must not have. -->
+              <div v-if="attachments.length" class="attachments">
+                <a
+                  v-for="file in attachments"
+                  :key="file.id"
+                  class="attachment"
+                  :href="attachmentHref(file)"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <span class="attachment-name">{{ file.fileName }}</span>
+                  <span class="attachment-size">{{
+                    formatFileSize(file.sizeBytes)
+                  }}</span>
+                </a>
               </div>
 
               <div v-if="hasMetagameText" class="metagame-text">
@@ -839,6 +1059,9 @@ async function submitReview() {
             :number="i + 1"
             :to="reviewRoute(review.id)"
             :highlight="isReviewHighlighted(review)"
+            :editable="editable"
+            @updated="onReviewUpdated"
+            @deleted="onReviewDeleted"
           />
           <!-- Review form (eligible logged-in users) -->
           <li v-if="showReviews && showReviewForm" class="review-form">
@@ -1279,4 +1502,95 @@ button.rating-value
   color: $text-muted
   font-size: $tertiary-font-size
   font-style: italic
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Attachments — read view under the game text, edit view inside the editor
+// ──────────────────────────────────────────────────────────────────────────────
+.attachments
+  display: flex
+  flex-wrap: wrap
+  gap: $small
+  padding: 0 2px
+  margin-top: $small
+
+.attachment
+  display: inline-flex
+  align-items: baseline
+  gap: $tiny
+  padding: 2px $tiny
+  border: 1px solid $border
+  border-radius: $border-radius
+  text-decoration: none
+
+  &:hover .attachment-name
+    text-decoration: underline
+
+.attachment-name
+  color: $link
+  overflow-wrap: anywhere
+
+.attachment-size
+  color: $text-muted
+  font-size: $secondary-font-size
+
+.edit-attachments
+  display: flex
+  flex-direction: column
+  align-items: flex-start
+  gap: $tiny
+  margin-top: $small
+
+.attachment-list
+  list-style: none
+  display: flex
+  flex-wrap: wrap
+  gap: $small
+  margin: 0
+
+.attachment-chip
+  display: inline-flex
+  align-items: center
+  gap: $tiny
+  padding: $tiny $small
+  background-color: $bg-element
+  border: 1px solid $border
+  border-radius: $border-radius
+
+.attachment-remove
+  display: inline-flex
+  align-items: center
+  justify-content: center
+  padding: 0 $tiny
+  border: none
+  background: transparent
+  color: $text-muted
+  font-size: $font-size
+  line-height: 1
+  cursor: pointer
+
+  &:hover:not(:disabled)
+    color: $accent-red
+
+// The native picker is the click target and the label covers it, the same way
+// the avatar picker does.
+.attachment-add
+  position: relative
+  display: inline-flex
+
+.attachment-input
+  position: absolute
+  inset: 0
+  width: 100%
+  opacity: 0
+  cursor: pointer
+
+  &:disabled
+    cursor: default
+
+.attachment-add-label
+  +button
+
+.attachment-error
+  color: $accent-red
+  font-size: $secondary-font-size
 </style>

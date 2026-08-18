@@ -8,6 +8,7 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Rooms;
 using DM.Infrastructure.Persistence.RelationalStorage;
+using DM.Domain.Core.Enums;
 using Microsoft.EntityFrameworkCore;
 using DbRoom = DM.Infrastructure.Persistence.Entities.Game.Posts.Room;
 
@@ -33,17 +34,22 @@ internal class RoomRepository : IRoomRepository
 
     #region Read Operations
 
-    public async Task<IEnumerable<Room>> GetAllVisible(Guid gameId, Guid userId)
+    public async Task<IEnumerable<Room>> GetAllVisible(
+        Guid gameId, Guid userId, bool mayJudgePremoderation)
     {
         var visible = _dbContext.Rooms
             .Where(r => r.GameId == gameId)
-            .Where(GameAccessibilityFilters.RoomAvailable(userId, listingOnly: true));
+            .Where(GameAccessibilityFilters.RoomAvailable(
+                userId, listingOnly: true, mayJudgePremoderation: mayJudgePremoderation));
 
         // Which of them the reader may actually open, asked with the very
         // filter every point read uses: a row in the menu and the page behind
-        // it can then never disagree about who gets in.
+        // it can then never disagree about who gets in. The rank goes into both
+        // asks for that reason — handed to one of them only, the menu would name
+        // rooms the point read then answered 404 for.
         var enterable = (await visible
-            .Where(GameAccessibilityFilters.RoomAvailable(userId))
+            .Where(GameAccessibilityFilters.RoomAvailable(
+                userId, mayJudgePremoderation: mayJudgePremoderation))
             .Select(r => r.RoomId)
             .ToArrayAsync())
             .ToHashSet();
@@ -61,11 +67,12 @@ internal class RoomRepository : IRoomRepository
         return rooms;
     }
 
-    public Task<Room?> GetAvailable(Guid roomId, Guid userId)
+    public Task<Room?> GetAvailable(Guid roomId, Guid userId, bool mayJudgePremoderation)
     {
         return _dbContext.Rooms
             .Where(r => r.RoomId == roomId)
-            .Where(GameAccessibilityFilters.RoomAvailable(userId))
+            .Where(GameAccessibilityFilters.RoomAvailable(
+                userId, mayJudgePremoderation: mayJudgePremoderation))
             .ProjectTo<Room>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync()!;
     }
@@ -279,26 +286,68 @@ internal class RoomRepository : IRoomRepository
 
     public async Task Delete(Guid roomId, Guid deletedByUserId)
     {
-        var room = await _dbContext.Rooms.FindAsync(roomId);
-        if (room == null) return;
-
-        // Remove from linked list
-        if (room.PreviousRoomId.HasValue)
+        // Two writes: the room itself and the attachments of its posts. A refusal
+        // between them leaves the room gone with its files still served, or the
+        // files retired under a room nobody deleted, and nothing repairs either.
+        // The strategy wrapper is required because the API host configures
+        // EnableRetryOnFailure.
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        var attempted = false;
+        await strategy.ExecuteAsync(async () =>
         {
-            var prevRoom = await _dbContext.Rooms.FindAsync(room.PreviousRoomId.Value);
-            if (prevRoom != null)
-                prevRoom.NextRoomId = room.NextRoomId;
-        }
+            if (attempted)
+            {
+                // A retry replays this block, and SaveChanges leaves the entities
+                // Unchanged even when the transaction around it rolled back: the
+                // second attempt would otherwise write no soft-delete at all.
+                _dbContext.ChangeTracker.Clear();
+            }
 
-        if (room.NextRoomId.HasValue)
-        {
-            var nextRoom = await _dbContext.Rooms.FindAsync(room.NextRoomId.Value);
-            if (nextRoom != null)
-                nextRoom.PreviousRoomId = room.PreviousRoomId;
-        }
+            attempted = true;
 
-        SoftDelete.Mark(room, deletedByUserId, _dateTimeProvider.Now);
-        await _dbContext.SaveChangesAsync();
+            var room = await _dbContext.Rooms.FindAsync(roomId);
+            if (room == null) return;
+
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
+            // Remove from linked list
+            if (room.PreviousRoomId.HasValue)
+            {
+                var prevRoom = await _dbContext.Rooms.FindAsync(room.PreviousRoomId.Value);
+                if (prevRoom != null)
+                    prevRoom.NextRoomId = room.NextRoomId;
+            }
+
+            if (room.NextRoomId.HasValue)
+            {
+                var nextRoom = await _dbContext.Rooms.FindAsync(room.NextRoomId.Value);
+                if (nextRoom != null)
+                    nextRoom.PreviousRoomId = room.PreviousRoomId;
+            }
+
+            var now = _dateTimeProvider.Now;
+            SoftDelete.Mark(room, deletedByUserId, now);
+
+            // The attachments of this room's posts retire with it. Two reasons
+            // they cannot be left for the game sweep: deleting a room does not
+            // soft-delete its posts, so the orphan sweeper - which only walks
+            // removed rows - never reaches these files; and the game-level sweep
+            // selects its rows through the post's room, which the soft-delete
+            // filter has by then hidden, so a room deleted before its game takes
+            // its files out of both paths at once.
+            await _dbContext.Uploads
+                .Where(u => u.Type == UploadType.PostAttachment
+                            && u.TargetPostId.HasValue
+                            && _dbContext.Posts.Any(p => p.PostId == u.TargetPostId.Value
+                                                         && p.RoomId == roomId))
+                .ExecuteUpdateAsync(u => u
+                    .SetProperty(x => x.IsRemoved, true)
+                    .SetProperty(x => x.DeletedByUserId, (Guid?)deletedByUserId)
+                    .SetProperty(x => x.DeletedUtc, (DateTimeOffset?)now));
+
+            await _dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+        });
     }
 
     #endregion

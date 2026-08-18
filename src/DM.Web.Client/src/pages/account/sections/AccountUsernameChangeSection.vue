@@ -10,6 +10,16 @@
       <!-- Loading state -->
       <div v-if="loading" class="loading-state">Загрузка...</div>
 
+      <!-- The state could not be read: offering the form here would promise
+           something the server may refuse. -->
+      <div v-else-if="loadError" class="status-card status-card--failed">
+        <div class="status-header">
+          <span class="status-icon">{{ symbols.cross }}</span>
+          <span class="status-title">{{ loadError }}</span>
+        </div>
+        <p class="status-note">Обновите страницу, чтобы попробовать снова.</p>
+      </div>
+
       <!-- Pending request status card -->
       <div
         v-else-if="existingRequest && existingRequest.status === 'Pending'"
@@ -70,6 +80,40 @@
           Ваша заявка на смену имени одобрена. Проверьте почту для получения
           ссылки на выбор нового имени.
         </p>
+      </div>
+
+      <!-- Expired notification -->
+      <div
+        v-else-if="existingRequest && existingRequest.status === 'Expired'"
+        class="status-card status-card--expired"
+      >
+        <div class="status-header">
+          <SvgIcon name="clock" class="status-icon" />
+          <span class="status-title">Заявка истекла</span>
+        </div>
+        <div class="status-details">
+          <div v-if="existingRequest.resolverComment" class="status-row">
+            <span class="status-label">Комментарий:</span>
+            <span>{{ existingRequest.resolverComment }}</span>
+          </div>
+          <div v-if="existingRequest.resolvedByUsername" class="status-row">
+            <span class="status-label">Модератор:</span>
+            <span>{{ existingRequest.resolvedByUsername }}</span>
+          </div>
+        </div>
+        <p class="status-note">{{ expiryNote }}</p>
+      </div>
+
+      <!-- Completed notification -->
+      <div
+        v-else-if="existingRequest && existingRequest.status === 'Completed'"
+        class="status-card status-card--completed"
+      >
+        <div class="status-header">
+          <span class="status-icon">{{ symbols.checkmark }}</span>
+          <span class="status-title">Имя изменено</span>
+        </div>
+        <p class="status-note">Заявка выполнена. Вы можете подать новую.</p>
       </div>
 
       <!-- Create request form -->
@@ -137,12 +181,28 @@ const existingRequest = ref<UsernameChangeRequest | null>(null);
 const reason = ref("");
 const submitting = ref(false);
 const submitError = ref<string | null>(null);
+const loadError = ref<string | null>(null);
 
-// Can create new request: no pending request, and either no request or rejected
+const LOAD_FAILED = "Не удалось узнать состояние заявки";
+
+// A request in flight is one awaiting a moderator, or an approval whose name is
+// not yet chosen: those hold a change already asked for. Every other state holds
+// nothing - rejection and both expiries granted no name, completion spent its
+// grant - and asking again is the only way forward. The server draws the same
+// line, and used to be the more permissive of the two.
+const IN_FLIGHT = ["Pending", "Approved"];
+
 const canCreateRequest = computed(() => {
-  if (loading.value) return false;
+  if (loading.value || loadError.value) return false;
   if (!existingRequest.value) return true;
-  return existingRequest.value.status === "Rejected";
+  return !IN_FLIGHT.includes(existingRequest.value.status);
+});
+
+const expiryNote = computed(() => {
+  const lapsed = existingRequest.value?.expiryReason === "ApprovalLapsed";
+  return lapsed
+    ? "Заявка была одобрена, но новое имя не выбрано в отведенное время. Вы можете подать новую."
+    : "Модераторы не рассмотрели заявку за отведенный срок. Вы можете подать новую.";
 });
 
 const canSubmit = computed(() => {
@@ -155,12 +215,15 @@ onMounted(async () => {
 
 async function loadExistingRequest() {
   loading.value = true;
-  const { data } = await accountApi.getUsernameChangeRequest();
+  const { data, error } = await accountApi.getUsernameChangeRequest();
   loading.value = false;
 
-  if (data) {
-    existingRequest.value = data;
-  }
+  // A failed read used to be indistinguishable from "never asked": the section
+  // offered the form to someone whose request was already in flight, and the
+  // server refused it with a conflict that landed as a validation note under
+  // the reason field, where there was nothing to correct.
+  loadError.value = error ? describeFailure(error, LOAD_FAILED) : null;
+  existingRequest.value = data ?? null;
 }
 
 async function submitRequest() {
@@ -176,6 +239,14 @@ async function submitRequest() {
   submitting.value = false;
 
   if (error) {
+    // A conflict means the section is looking at a stale state - the request was
+    // filed elsewhere, or an approval is still live. Re-read it and let the card
+    // say so, instead of explaining it under the reason field.
+    if (error.status === 409) {
+      await loadExistingRequest();
+      toast.error(describeFailure(error, "Не удалось отправить заявку"));
+      return;
+    }
     submitError.value = describeFailure(error, "Не удалось отправить заявку");
     return;
   }
@@ -225,6 +296,18 @@ async function submitRequest() {
     +tint($accent-green, 15%)
     border: 1px solid $accent-green
 
+  &--expired
+    +tint($text-muted, 15%)
+    border: 1px solid $text-muted
+
+  &--completed
+    +tint($accent-green, 15%)
+    border: 1px solid $accent-green
+
+  &--failed
+    +tint($accent-red, 15%)
+    border: 1px solid $accent-red
+
 .status-header
   display: flex
   align-items: center
@@ -243,6 +326,15 @@ async function submitRequest() {
   .status-card--approved &
     color: $accent-green
 
+  .status-card--expired &
+    color: $text-muted
+
+  .status-card--completed &
+    color: $accent-green
+
+  .status-card--failed &
+    color: $accent-red
+
 .status-title
   font-weight: 600
 
@@ -254,6 +346,15 @@ async function submitRequest() {
 
   .status-card--approved &
     color: $accent-green
+
+  .status-card--expired &
+    color: $text-muted
+
+  .status-card--completed &
+    color: $accent-green
+
+  .status-card--failed &
+    color: $accent-red
 
 .status-details
   display: flex

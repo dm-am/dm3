@@ -51,4 +51,21 @@ public interface IUser
     /// Total number of user's posts
     /// </summary>
     int QuantityRating { get; set; }
+
+    /// <summary>
+    /// Whether the user is still on probation by post count
+    /// </summary>
+    bool IsNewbie { get; }
+
+    /// <summary>
+    /// Whether moderation is watching what this user creates: their new games and
+    /// blogs are premoderated the way a newbie's are.
+    /// </summary>
+    /// <remarks>
+    /// Set and cleared by hand by a moderator, and by nothing else. Deliberately
+    /// not the same thing as the violators list, which is recomputed from active
+    /// warnings and bans and therefore lapses on its own when they expire: this
+    /// flag is the case where moderation decided the lapse should not happen yet.
+    /// </remarks>
+    bool IsUnderModerationWatch { get; set; }
 }

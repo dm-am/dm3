@@ -12,6 +12,7 @@ const loading = ref(true);
 const loadError = ref<string | null>(null);
 const saving = ref(false);
 
+const title = ref("");
 const goalAmount = ref<number>(0);
 const collectedAmount = ref<number>(0);
 
@@ -24,6 +25,7 @@ async function load() {
   if (error || !data) {
     loadError.value = "Не удалось загрузить данные сбора средств";
   } else {
+    title.value = data.resource.title;
     goalAmount.value = data.resource.goalAmount;
     collectedAmount.value = data.resource.collectedAmount;
   }
@@ -33,12 +35,14 @@ async function load() {
 async function save() {
   saving.value = true;
   const { data, error } = await fundraisingApi.updateFundraising({
+    title: title.value.trim(),
     goalAmount: goalAmount.value,
     collectedAmount: collectedAmount.value,
   });
   if (error || !data) {
     showError("Не удалось сохранить изменения");
   } else {
+    title.value = data.resource.title;
     goalAmount.value = data.resource.goalAmount;
     collectedAmount.value = data.resource.collectedAmount;
     success("Сбор средств обновлен");
@@ -57,8 +61,19 @@ onMounted(load);
     <div v-else-if="loadError" class="error">{{ loadError }}</div>
     <form v-else class="fundraising-form" @submit.prevent="save">
       <SecondaryText>
-        Значения отображаются в блоке "Поддержка проекта" в правом сайдбаре.
+        Значения отображаются в блоке "Поддержка проекта" в правом сайдбаре и на
+        странице "Помочь проекту".
       </SecondaryText>
+      <div class="form-field">
+        <label for="fundraising-title">Название сбора</label>
+        <input
+          id="fundraising-title"
+          v-model="title"
+          type="text"
+          maxlength="200"
+          required
+        />
+      </div>
       <div class="form-field">
         <label for="fundraising-goal">Цель (р.)</label>
         <input

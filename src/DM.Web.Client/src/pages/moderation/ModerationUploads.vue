@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * ModerationUploads — "Все загруженное" (doc 4.2.3.8.9). Every file
+ * ModerationUploads — "Все загруженные файлы" (doc 4.2.3.8.9). Every file
  * uploaded to the website, newest first, paged (GET v1/uploads?scope=all,
  * moderator+ gated server-side, doc 4.2.3.8.9). A username filter narrows to
  * one user's uploads. Delete soft-deletes the file (ConfirmDialog-gated).
@@ -23,6 +23,7 @@ import { formatFileSize } from "@/shared/lib/utils/fileSize";
 import {
   isImage,
   fileExt,
+  uploadHref,
   uploadPreviewColumn,
   uploadFileColumn,
 } from "@/shared/lib/utils/upload";
@@ -135,8 +136,8 @@ async function confirmDelete() {
         >
           <template #cell-preview="{ row }">
             <img
-              v-if="isImage(row) && row.url"
-              :src="row.url"
+              v-if="isImage(row)"
+              :src="uploadHref(row)"
               :alt="row.originalFileName"
               class="upload-thumb"
               loading="lazy"
@@ -145,15 +146,13 @@ async function confirmDelete() {
           </template>
           <template #cell-file="{ row }">
             <a
-              v-if="row.url"
-              :href="row.url"
+              :href="uploadHref(row)"
               target="_blank"
               rel="noopener"
               class="upload-name"
             >
               {{ row.originalFileName }}
             </a>
-            <span v-else class="upload-name">{{ row.originalFileName }}</span>
           </template>
           <template #cell-uploader="{ row }">
             <router-link

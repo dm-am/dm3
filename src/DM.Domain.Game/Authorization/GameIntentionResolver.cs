@@ -15,7 +15,10 @@ internal class GameIntentionResolver :
     public bool IsAllowed(IAuthorizationSubject user, GameIntention intention) => intention switch
     {
         GameIntention.Create when user.IsAuthenticated => true,
-        GameIntention.SetStatusModeration when user.IsAuthenticated => user.Role >= UserRole.Mentor,
+        // The premoderation verdict, and by the same right the reading of the
+        // game it is passed on: PremoderationAccess owns the rank so that the
+        // Read arm below and GameAccessibilityFilters cannot answer differently.
+        GameIntention.SetStatusModeration => user.MayJudgePremoderation(),
         _ => false
     };
 
@@ -27,7 +30,6 @@ internal class GameIntentionResolver :
         }
 
         var userIsSeniorModerator = user.Role >= UserRole.SeniorModerator;
-        var userIsMentor = user.Role >= UserRole.Mentor;
         var roles = target.GetRoles(user.UserId);
 
         return intention switch
@@ -45,6 +47,15 @@ internal class GameIntentionResolver :
             // line the moderation queue links to a 403 on the very game the link
             // exists for.
             //
+            // The rank arm beside it is the same sentence for the case the
+            // curator arm cannot cover: a game in AwaitingEdits records no
+            // curator at all — the status every newbie's game is created in — so
+            // whoever may pass the verdict has to be able to open the game
+            // without being named on it. It is keyed on the premoderation status
+            // and opens nothing else: a private draft and a removed game stay
+            // shut to a mentor. GameAccessibilityFilters carries the same arm, or
+            // the row would never reach this gate.
+            //
             // The blacklist is not one of the arms and must not become one. It
             // closes writing, not reading: the game stays public to everybody
             // else, so hiding it from one person would promise a privacy it does
@@ -52,6 +63,8 @@ internal class GameIntentionResolver :
             GameIntention.Read => userIsSeniorModerator ||
                                   roles.HasEditAccess() ||
                                   roles.Contains(GameRole.Mentor) ||
+                                  PremoderationAccess.IsPending(target.PremoderationStatus) &&
+                                  user.MayJudgePremoderation() ||
                                   target.HasPendingInvitation(user.UserId) ||
                                   ModuleVisibility.IsPubliclyVisible(
                                       target.Status, target.PremoderationStatus, target.DraftVisibility),
@@ -75,12 +88,22 @@ internal class GameIntentionResolver :
             GameIntention.Delete when user.IsAuthenticated => userIsSeniorModerator ||
                                                               user.UserId == target.Master.UserId,
 
-            // Premoderation: mentor takes game for review (AwaitingApproval -> Approved sets MentorId)
-            GameIntention.SetStatusModeration when target.PremoderationStatus == PremoderationStatus.AwaitingApproval =>
-                userIsSeniorModerator || userIsMentor,
-            // Premoderation: mentor returns game for edits
-            GameIntention.SetStatusDraft when target.PremoderationStatus != PremoderationStatus.Approved =>
-                userIsSeniorModerator || roles.Contains(GameRole.Mentor),
+            // Premoderation, the author's half: the master asks a mentor to look
+            // at the game. Only the master — an assistant fills the form in, the
+            // curator helps shape it, and neither of them decides that the game is
+            // ready to be judged.
+            //
+            // Identity only. Which premoderation status the move is legal from is
+            // the machine's answer (ModulePremoderationPolicy), given before this
+            // gate is asked, so an author who submits twice is told the move is
+            // illegal rather than that they are not themselves.
+            //
+            // The mentor's half of premoderation is not here and must not come
+            // back: it is a rank, answered by the targetless resolver above. Two
+            // arms used to sit here for it, one keyed on AwaitingApproval and one
+            // on the SetStatusDraft vocabulary, and nothing ever asked either.
+            GameIntention.SubmitForApproval when user.IsAuthenticated =>
+                user.UserId == target.Master.UserId,
 
             // Draft -> Active (publish)
             GameIntention.SetStatusActive when target.Status == ModuleStatus.Draft =>

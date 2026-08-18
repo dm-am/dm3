@@ -17,6 +17,13 @@ import { symbols } from "@/shared/lib/utils/icons";
 import { Select, type SelectOption } from "@/shared/ui/Select";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { composerDraftKey } from "@/shared/lib/utils/draftKey";
+import {
+  MAX_POST_ATTACHMENTS,
+  POST_ATTACHMENT_ACCEPT,
+  describeAttachmentProblem,
+  uploadPostAttachments,
+} from "@/features/upload";
+import { formatFileSize } from "@/shared/lib/utils/fileSize";
 import { GamePost } from "@/widgets/game-post";
 import { GamePostSkeleton } from "@/shared/ui/Skeleton";
 import { notifyFailure } from "@/shared/lib/errors";
@@ -198,6 +205,41 @@ const gameText = ref("");
 const metagameText = ref("");
 const submitting = ref(false);
 const composerError = ref<string | null>(null);
+
+// Attachments. Chosen here, uploaded after the post exists: an attachment names
+// the post it belongs to, and the post has no identifier until it is created.
+const pendingFiles = ref<File[]>([]);
+const attachmentError = ref<string | null>(null);
+const attachmentsFull = computed(
+  () => pendingFiles.value.length >= MAX_POST_ATTACHMENTS,
+);
+
+function chooseAttachments(event: Event) {
+  const input = event.target as HTMLInputElement;
+  attachmentError.value = null;
+
+  for (const file of Array.from(input.files ?? [])) {
+    if (attachmentsFull.value) {
+      attachmentError.value = `Не больше ${MAX_POST_ATTACHMENTS} файлов`;
+      break;
+    }
+    const problem = describeAttachmentProblem(file);
+    if (problem) {
+      attachmentError.value = `${file.name}: ${problem}`;
+      continue;
+    }
+    pendingFiles.value.push(file);
+  }
+
+  // The picker keeps the chosen file selected, so picking the same one again
+  // fires no change event and the second attempt looks like a dead control.
+  input.value = "";
+}
+
+function removePendingFile(index: number) {
+  pendingFiles.value.splice(index, 1);
+  attachmentError.value = null;
+}
 const gameEditorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 const metaEditorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 
@@ -251,8 +293,9 @@ async function submitPost() {
   if (!text || submitting.value || !room.value?.id) return;
   submitting.value = true;
   composerError.value = null;
+  attachmentError.value = null;
 
-  const { error } = await gameApi.createPost(room.value.id as string, {
+  const { data, error } = await gameApi.createPost(room.value.id as string, {
     characterId:
       selectedPostAs.value && selectedPostAs.value !== MASTER_VALUE
         ? selectedPostAs.value
@@ -263,17 +306,45 @@ async function submitPost() {
       diceEnabled.value && diceRolls.value.length ? diceRolls.value : undefined,
   });
 
-  submitting.value = false;
   if (error) {
+    submitting.value = false;
     composerError.value = "Не удалось отправить пост";
     return;
   }
+
+  // Two phases, and the order is forced: an attachment names the post it hangs
+  // on, so the post has to exist first. That makes a partial outcome possible —
+  // the post is published, a file is not — and the composer says so plainly
+  // rather than clearing itself as if everything had worked. The failed files
+  // stay in the list so the author can see which ones, and the post's own edit
+  // mode is where they get a second try.
+  const postId = data?.resource?.id as string | undefined;
+  if (postId && pendingFiles.value.length > 0) {
+    const { failedNames } = await uploadPostAttachments(
+      postId,
+      pendingFiles.value,
+    );
+    pendingFiles.value = pendingFiles.value.filter((f) =>
+      failedNames.includes(f.name),
+    );
+    if (failedNames.length > 0) {
+      composerError.value =
+        "Пост опубликован, но файлы не приложились: " +
+        `${failedNames.join(", ")}. Приложите их через правку поста.`;
+    }
+  }
+
+  submitting.value = false;
 
   // Reset the composer and refresh the room + posts (rooms refresh clears the
   // fulfilled pendency / unread counters).
   gameText.value = "";
   metagameText.value = "";
   diceRolls.value = [];
+  // Files that failed to attach belong to the post they were meant for, not to
+  // the next one: left staged, they would ride along with whatever is written
+  // after it.
+  pendingFiles.value = [];
   gameEditorRef.value?.clear();
   metaEditorRef.value?.clear();
   await gameStore.loadRooms(gameId.value);
@@ -563,6 +634,48 @@ async function dismissPendency(pendencyId: string) {
         </div>
       </div>
 
+      <!-- Attachments: chosen now, uploaded once the post exists -->
+      <div class="attachments">
+        <div class="attachments-title">Вложения</div>
+        <ul v-if="pendingFiles.length" class="attachment-list">
+          <li
+            v-for="(file, i) in pendingFiles"
+            :key="i"
+            class="attachment-chip"
+          >
+            <span class="attachment-chip-label">{{ file.name }}</span>
+            <span class="attachment-chip-size">{{
+              formatFileSize(file.size)
+            }}</span>
+            <button
+              type="button"
+              class="attachment-chip-remove"
+              aria-label="Убрать вложение"
+              @click="removePendingFile(i)"
+            >
+              {{ symbols.close }}
+            </button>
+          </li>
+        </ul>
+        <label class="attachment-add">
+          <input
+            type="file"
+            class="attachment-input"
+            :accept="POST_ATTACHMENT_ACCEPT"
+            :disabled="submitting || attachmentsFull"
+            multiple
+            @change="chooseAttachments"
+          />
+          <span class="attachment-add-label">Прикрепить файл</span>
+        </label>
+        <SecondaryText class="attachment-hint">
+          Не больше {{ MAX_POST_ATTACHMENTS }} картинок, до 5 МБ каждая
+        </SecondaryText>
+        <div v-if="attachmentError" class="composer-error">
+          {{ attachmentError }}
+        </div>
+      </div>
+
       <div v-if="composerError" class="composer-error">
         {{ composerError }}
       </div>
@@ -812,4 +925,75 @@ async function dismissPendency(pendencyId: string) {
 .dice-add-btn
   flex-shrink: 0
   +button
+
+// Attachments borrow the dice block's shape: a titled section, chosen items as
+// chips with a remove control, and one button that adds another.
+.attachments
+  margin-top: $medium
+
+.attachments-title
+  color: $text-muted
+  font-size: $secondary-font-size
+  margin-bottom: $small
+
+.attachment-list
+  list-style: none
+  display: flex
+  flex-wrap: wrap
+  gap: $small
+  margin: 0 0 $small
+
+.attachment-chip
+  display: inline-flex
+  align-items: center
+  gap: $tiny
+  padding: $tiny $small
+  background-color: $bg-element
+  border: 1px solid $border
+  border-radius: $border-radius
+
+.attachment-chip-label
+  font-weight: bold
+  color: $heading
+  overflow-wrap: anywhere
+
+.attachment-chip-size
+  color: $text-muted
+
+.attachment-chip-remove
+  display: inline-flex
+  align-items: center
+  justify-content: center
+  padding: 0 $tiny
+  border: none
+  background: transparent
+  color: $text-muted
+  font-size: $font-size
+  line-height: 1
+  cursor: pointer
+  &:hover
+    color: $accent-red
+
+// The native picker is the click target and is covered by the label, which is
+// what everything else that takes a file does.
+.attachment-add
+  position: relative
+  display: inline-flex
+
+.attachment-input
+  position: absolute
+  inset: 0
+  width: 100%
+  opacity: 0
+  cursor: pointer
+
+  &:disabled
+    cursor: default
+
+.attachment-add-label
+  +button
+
+.attachment-hint
+  display: block
+  margin-top: $tiny
 </style>

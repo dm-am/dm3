@@ -141,6 +141,102 @@ public class GameNotepadServiceShould : UnitTestBase
     }
 
     [Fact]
+    public async Task AuthorizeGetCharacterMasterEntriesAction()
+    {
+        var gameId = Guid.NewGuid();
+        var characterId = Guid.NewGuid();
+        var game = CreateGame(gameId);
+        var character = new Character { Id = characterId, GameId = gameId };
+        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
+        _characterService.Setup(s => s.GetAsync(characterId)).ReturnsAsync(character);
+        _repository.Setup(r => r.GetEntriesAsync(NotepadType.CharacterMaster, gameId, characterId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<NotepadEntry>());
+
+        await _service.GetCharacterMasterEntries(gameId, characterId);
+
+        // Scoped to the character and to this notepad type. Read against the
+        // player scope instead, the notes the leads keep would answer with what
+        // the player wrote — the two notepads share a table and a character.
+        _repository.Verify(r => r.GetEntriesAsync(
+            NotepadType.CharacterMaster, gameId, characterId, It.IsAny<CancellationToken>()), Times.Once);
+        _intentionManager.Verify(m => m.ThrowIfForbidden(
+            NotepadIntention.Read,
+            It.Is<NotepadAuthContext>(c =>
+                c.NotepadType == NotepadType.CharacterMaster && c.OwnerId == characterId)), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateCharacterMasterEntry()
+    {
+        var gameId = Guid.NewGuid();
+        var characterId = Guid.NewGuid();
+        var createEntry = new CreateNotepadEntry { Title = "Test Entry", Content = "Content" };
+        var game = CreateGame(gameId);
+        var character = new Character { Id = characterId, GameId = gameId };
+        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
+        _characterService.Setup(s => s.GetAsync(characterId)).ReturnsAsync(character);
+        _repository.Setup(r => r.CreateEntryAsync(It.IsAny<CreateNotepadEntryInternal>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new NotepadEntry { Id = Guid.NewGuid() });
+
+        var result = await _service.CreateCharacterMasterEntry(gameId, characterId, createEntry);
+
+        result.Should().NotBeNull();
+        _repository.Verify(r => r.CreateEntryAsync(
+            It.Is<CreateNotepadEntryInternal>(e =>
+                e.NotepadType == NotepadType.CharacterMaster &&
+                e.ContainerId == gameId &&
+                e.OwnerId == characterId),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DecideTheNotesKeptAboutACharacterWithoutAskingWhoOwnsIt()
+    {
+        var gameId = Guid.NewGuid();
+        var characterId = Guid.NewGuid();
+        var game = CreateGame(gameId);
+        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
+        _repository.Setup(r => r.GetEntriesAsync(NotepadType.CharacterMaster, gameId, characterId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<NotepadEntry>());
+
+        await _service.GetCharacterMasterEntries(gameId, characterId);
+
+        // This notepad is answered by the game role alone, which is what makes
+        // it exist for every character rather than for the ones with a player.
+        // A character owner in the context would be a second way in.
+        _intentionManager.Verify(m => m.ThrowIfForbidden(
+            NotepadIntention.Read,
+            It.Is<NotepadAuthContext>(c => c.CharacterOwnerId == null)), Times.Once);
+        _characterService.Verify(s => s.GetAsync(It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AuthorizeAnEntryOfTheNotesKeptAboutACharacter()
+    {
+        var entryId = Guid.NewGuid();
+        var gameId = Guid.NewGuid();
+        var characterId = Guid.NewGuid();
+        var entry = new NotepadEntry
+        {
+            Id = entryId,
+            NotepadType = NotepadType.CharacterMaster,
+            ContainerId = gameId,
+            OwnerId = characterId,
+            AuthorId = Guid.NewGuid()
+        };
+        _repository.Setup(r => r.GetEntryAsync(entryId, It.IsAny<CancellationToken>())).ReturnsAsync(entry);
+        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(CreateGame(gameId));
+
+        // The entry endpoints take an id and nothing else, so the type guard in
+        // front of them is what decides whether this service answers for the
+        // entry at all. A notepad it serves must pass it.
+        var result = await _service.GetEntry(entryId);
+
+        result.Should().BeSameAs(entry);
+        _intentionManager.Verify(m => m.ThrowIfForbidden(NotepadIntention.Read, It.IsAny<NotepadAuthContext>()), Times.Once);
+    }
+
+    [Fact]
     public async Task ThrowNotFoundWhenEntryDoesNotExist()
     {
         var entryId = Guid.NewGuid();

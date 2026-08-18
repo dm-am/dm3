@@ -43,4 +43,19 @@ internal class UserAvatarUploadAuthorizer : IUploadTargetAuthorizer
 
         return Task.CompletedTask;
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// An avatar is shown wherever its owner is named, so it is served from a
+    /// prefix the bucket answers to anybody. Nothing is withheld here that the
+    /// public address does not already give away.
+    /// </remarks>
+    public Task EnsureReadAllowedAsync(Guid targetId) => Task.CompletedTask;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Nobody but the owner and Moderator+, which is what the upload's own
+    /// intention already says. A user is not an entity with editors.
+    /// </remarks>
+    public Task<bool> MayDetachAsync(Guid targetId) => Task.FromResult(false);
 }

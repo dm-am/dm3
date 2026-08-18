@@ -32,6 +32,7 @@ internal class FundraisingApiService : IFundraisingApiService
     {
         var updateGoal = new UpdateFundraisingGoal
         {
+            Title = request.Title,
             GoalAmount = request.GoalAmount,
             CollectedAmount = request.CollectedAmount
         };

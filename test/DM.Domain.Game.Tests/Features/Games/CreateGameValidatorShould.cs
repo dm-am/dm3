@@ -2,6 +2,7 @@ using System;
 using DM.Domain.Core.Content;
 using System.Threading;
 using System.Threading.Tasks;
+using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Users;
 using DM.Domain.Game.Features.Games;
@@ -36,6 +37,23 @@ public class CreateGameValidatorShould : UnitTestBase
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Fact]
+    public async Task FailWhenCommentsAccessModeIsNotInEnum()
+    {
+        var input = new CreateGame
+        {
+            Title = "Valid Game Title",
+            SystemName = "D&D 5e",
+            NarrativeSetting = "Forgotten Realms",
+            Info = new string('a', GameFieldLimits.InfoMinLength),
+            CommentsAccessMode = (CommentsAccessMode)30000
+        };
+
+        var result = await validator.TestValidateAsync(input);
+        result.ShouldHaveValidationErrorFor(x => x.CommentsAccessMode)
+            .WithErrorMessage(ValidationError.Invalid);
     }
 
     [Fact]

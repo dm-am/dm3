@@ -56,6 +56,21 @@ public class CreateRoomAccessValidatorShould : UnitTestBase
     }
 
     [Fact]
+    public async Task FailWhenPolicyIsNotInEnum()
+    {
+        var input = new CreateRoomAccess
+        {
+            RoomId = Guid.NewGuid(),
+            CharacterId = Guid.NewGuid(),
+            Policy = (RoomAccessPolicy)30000
+        };
+
+        var result = await validator.TestValidateAsync(input);
+        result.ShouldHaveValidationErrorFor(c => c.Policy)
+            .WithErrorMessage(ValidationError.Invalid);
+    }
+
+    [Fact]
     public async Task FailWhenPolicyIsNoAccess()
     {
         var input = new CreateRoomAccess

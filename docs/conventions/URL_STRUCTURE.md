@@ -149,6 +149,7 @@ flowchart LR
 /activate#token={token}
 /confirm-email#token={token}
 /reset-password#token={token}
+/change-username#token={token}
 ```
 
 Значение живет во фрагменте URL, а не в пути: фрагмент не уходит на сервер

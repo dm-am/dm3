@@ -10,6 +10,7 @@ import {
   createKeyedCache,
   stableCacheKey,
 } from "@/shared/lib/utils/keyedCache";
+import { unwrapResource } from "@/shared/api";
 import { testimonialApi } from "../api";
 
 /**
@@ -90,13 +91,49 @@ export const useTestimonialStore = defineStore("testimonials", () => {
     return { error };
   }
 
-  async function createTestimonial(text: string) {
-    const { data, error } = await testimonialApi.createTestimonial({ text });
-    if (!error && data && testimonials.value) {
-      testimonials.value.resources.unshift(data);
+  /**
+   * Post a testimonial signed by `authorUsername`.
+   *
+   * The author is named rather than taken from the session: only senior
+   * moderation may create one and it is always posted on someone else's
+   * behalf (WebsiteTestimonialIntentionResolver.Create).
+   */
+  async function createTestimonial(authorUsername: string, text: string) {
+    const { data, error } = await testimonialApi.createTestimonial({
+      authorUsername,
+      text,
+    });
+    // The endpoint answers with an Envelope. Unshifting the envelope itself
+    // put a resource-shaped nothing at the head of the list: no author, no
+    // text, and the card rendering it had neither to draw.
+    const created = unwrapResource<WebsiteTestimonial>(data);
+    if (!error && created && testimonials.value) {
+      testimonials.value.resources.unshift(created);
       cache.clear();
     }
-    return { data, error };
+    return { data: created, error };
+  }
+
+  /**
+   * Rewrite the text of one testimonial in place.
+   *
+   * The row on screen is replaced with what the server answered rather than
+   * with what was typed, so the modification stamp the card shows is the one
+   * the server recorded. Every cached page is dropped for the same reason
+   * removal drops them: another page may hold this entry as it was.
+   */
+  async function updateTestimonial(id: WebsiteTestimonialId, text: string) {
+    const { data, error } = await testimonialApi.updateTestimonial(id, {
+      text,
+    });
+    const updated = unwrapResource<WebsiteTestimonial>(data);
+    if (!error && updated && testimonials.value) {
+      const list = testimonials.value.resources;
+      const at = list.findIndex((r) => r.id === id);
+      if (at >= 0) list[at] = updated;
+      cache.clear();
+    }
+    return { data: updated, error };
   }
 
   return {
@@ -106,5 +143,6 @@ export const useTestimonialStore = defineStore("testimonials", () => {
     fetchTestimonials,
     removeTestimonial,
     createTestimonial,
+    updateTestimonial,
   };
 });

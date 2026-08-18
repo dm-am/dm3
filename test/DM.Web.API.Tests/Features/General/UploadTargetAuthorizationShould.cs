@@ -54,7 +54,7 @@ public class UploadTargetAuthorizationShould : UnitTestBase
 
         _imageProcessing = Mock<IImageProcessingService>();
         _imageProcessing
-            .Setup(s => s.ProcessAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.ProcessAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<UploadType>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ProcessedImage(new byte[] { 1, 2, 3 }, "image/png", ".png", 200, 150));
 
         _repository = Mock<IUploadRepository>();
@@ -134,7 +134,7 @@ public class UploadTargetAuthorizationShould : UnitTestBase
             // expected
         }
 
-        _imageProcessing.Verify(s => s.ProcessAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _imageProcessing.Verify(s => s.ProcessAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<UploadType>(), It.IsAny<CancellationToken>()), Times.Never);
         _objectStorage.Verify(s => s.PutAsync(
                 It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
@@ -142,12 +142,18 @@ public class UploadTargetAuthorizationShould : UnitTestBase
     }
 
     /// <summary>
-    /// The object key is all that stands between a private room's attachment and
-    /// anyone handed its address: the bucket answers anonymously, by design, for
-    /// avatars, and attachments live under the same policy.
+    /// A key is never reused and never overwritten, so it has to stay unique for
+    /// as long as the bucket lives.
     /// </summary>
+    /// <remarks>
+    /// Not access control, and the name of this test used to say it was. The
+    /// bucket answers anonymously on the avatar prefixes and nowhere else, and an
+    /// attachment's bytes come from an endpoint that authorizes the caller — the
+    /// length of a key was never what kept a private room private, and reading it
+    /// as though it were is how a truncated key gets proposed as a saving.
+    /// </remarks>
     [Fact]
-    public async Task NameTheObjectWithEnoughRandomnessForTheUrlToBeTheAccessControl()
+    public async Task NameTheObjectWithEnoughRandomnessToNeverCollide()
     {
         var written = new List<NewUpload>();
         _repository.Setup(r => r.AddAsync(Capture.In(written)))
@@ -159,7 +165,7 @@ public class UploadTargetAuthorizationShould : UnitTestBase
 
         written.Should().ContainSingle();
         var suffix = written[0].ObjectKey.Split('_')[^1].Split('.')[0];
-        // Eight hex is 32 bits, next to a user id anybody can read off the page
+        // A whole GUID in "N" form: 32 hex characters, not a prefix of one
         suffix.Should().HaveLength(32).And.MatchRegex("^[0-9a-f]+$");
     }
 
@@ -226,6 +232,11 @@ public class UploadTargetAuthorizationShould : UnitTestBase
 
         public Task EnsureAllowedAsync(Guid targetId) =>
             throw new HttpException(HttpStatusCode.Forbidden, "Недостаточно прав для этого действия");
+
+        public Task EnsureReadAllowedAsync(Guid targetId) =>
+            throw new HttpException(HttpStatusCode.NotFound, "Файл не найден");
+
+        public Task<bool> MayDetachAsync(Guid targetId) => Task.FromResult(false);
     }
 
     private sealed class AllowingAuthorizer : IUploadTargetAuthorizer
@@ -235,5 +246,9 @@ public class UploadTargetAuthorizationShould : UnitTestBase
         public UploadType Type { get; }
 
         public Task EnsureAllowedAsync(Guid targetId) => Task.CompletedTask;
+
+        public Task EnsureReadAllowedAsync(Guid targetId) => Task.CompletedTask;
+
+        public Task<bool> MayDetachAsync(Guid targetId) => Task.FromResult(true);
     }
 }

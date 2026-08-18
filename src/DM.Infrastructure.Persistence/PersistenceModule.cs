@@ -197,6 +197,10 @@ public class PersistenceModule : Module
             .As<IWarningRepository>()
             .InstancePerLifetimeScope();
 
+        builder.RegisterType<WarningEntityResolver>()
+            .As<IWarningEntityResolver>()
+            .InstancePerLifetimeScope();
+
         builder.RegisterType<BanRepository>()
             .As<IBanRepository>()
             .InstancePerLifetimeScope();

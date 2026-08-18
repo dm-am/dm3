@@ -19,14 +19,18 @@
 //
 // Role gates (never a single blanket "moderator" gate):
 //   "Управление игрой" — the header shows for Master/Assistant/Mentor.
-//     "Настройки" and "Блокнот мастера" are Master/Assistant/Mentor; the
+//     "Настройки" is Master/Assistant/Mentor and "Заметки игры" narrower
+//     still — Master/Assistant, the two the notepad resolver admits; the
 //     rest of the edit items ("Создать NPC", "Редактировать NPC", the status
-//     buttons) are Master/Assistant only.
+//     buttons) are Master/Assistant only. "Отправить на проверку" is narrower
+//     still — the master alone, and only while the game is on edits
+//     (GameIntention.SubmitForApproval plus the premoderation machine's one
+//     legality condition).
 //   "Действия с игрой" — any authenticated user except the master
 //     (subscribe / apply-to-join, via features/game-actions).
-//   "Модерация игры" — premoderation is Mentor+ (global),
-//     delete-others-game is SeniorModerator+, reset-recruitment is
-//     Admin-only.
+//   "Модерация игры" — the premoderation verdict is Mentor+ (global) and is
+//     two rows, both legal from every status; delete-others-game is
+//     SeniorModerator+, reset-recruitment is Admin-only.
 //
 // Four data-states per UI_STANDARDS: skeleton (initial load), error,
 // empty (game not found), content.
@@ -72,6 +76,15 @@ const {
 // The game mentor ("Наставник" — helper to a novice master) is not one of them.
 const canEdit = computed(() => isMaster.value || isAssistant.value);
 
+// Asking a mentor to look at the game is the master's move and nobody else's:
+// the server admits GameIntention.SubmitForApproval for the master only, and
+// the premoderation machine refuses the move from any status but AwaitingEdits.
+// Both halves are repeated here, because a row the server would answer 403 or
+// 400 to is a promise the panel had no right to make.
+const canSubmitForApproval = computed(
+  () => isMaster.value && game.value?.premoderationStatus === "AwaitingEdits",
+);
+
 // The settings page is wider than that, and the link has to match it or the
 // audience it was widened for reaches the page only by typing the URL:
 // GameIntention.EditSettings admits the curating mentor, because helping a
@@ -80,9 +93,12 @@ const canEdit = computed(() => isMaster.value || isAssistant.value);
 // not interface copy, and "Модерация игры" below is where they live.
 const canEditSettings = computed(() => canManage.value);
 
-// The game notepad is shared master/assistant/mentor scratch space (GLOSSARY:
-// MasterNotepad) — hidden from players and readers.
-const canUseNotepad = computed(() => canManage.value);
+// "Заметки игры" — the notepad of the game, shared by the master and the
+// assistants and hidden from everyone else. Narrower than the settings row
+// above: NotepadIntentionResolver answers this notepad with HasEditAccess, so
+// the curating mentor is refused, and the row used to offer a mentor a page
+// the API answered 403 to.
+const canUseNotepad = computed(() => isMaster.value || isAssistant.value);
 
 const { user } = storeToRefs(useAuthStore());
 const router = useRouter();
@@ -178,14 +194,33 @@ interface ModAction {
 }
 const pendingMod = ref<ModAction | null>(null);
 
+// The three premoderation moves, each with the wording of its own dialog. One
+// table, because the row, the question and the request have to name the same
+// move: two of them differ only in which way the verdict goes.
+const PREMOD_PROMPTS: Record<
+  GamePremoderationTransition,
+  { title: string; message: string; confirmLabel: string }
+> = {
+  [GamePremoderationTransition.SetApproved]: {
+    title: "Одобрение игры",
+    message: "Одобрить игру? Она станет видна всем.",
+    confirmLabel: "Одобрить",
+  },
+  [GamePremoderationTransition.SetAwaitingEdits]: {
+    title: "Возврат на доработку",
+    message: "Вернуть игру автору на доработку?",
+    confirmLabel: "Вернуть",
+  },
+  [GamePremoderationTransition.SubmitForApproval]: {
+    title: "Отправка на проверку",
+    message: "Отправить игру на проверку наставнику?",
+    confirmLabel: "Отправить",
+  },
+};
+
 function askPremod(t: GamePremoderationTransition) {
-  const send = t === GamePremoderationTransition.SendToPremoderation;
   pendingMod.value = {
-    title: send ? "Премодерация" : "Выпуск из премодерации",
-    message: send
-      ? "Отправить игру на премодерацию?"
-      : "Выпустить игру из премодерации?",
-    confirmLabel: send ? "Отправить" : "Выпустить",
+    ...PREMOD_PROMPTS[t],
     run: async () => {
       const error = await store.changePremoderation(t);
       if (error) notifyFailure(error, "Не удалось изменить премодерацию");
@@ -365,10 +400,22 @@ async function confirmMod() {
           <!-- Status transition buttons (Master/Assistant) -->
           <GameStatusButtons variant="strip" />
         </template>
+        <!-- The master's own premoderation move. Not inside the canEdit block:
+             an assistant edits the game but does not declare it ready. -->
+        <li v-if="canSubmitForApproval" class="link">
+          <span class="muted" aria-hidden="true">- </span>
+          <button
+            type="button"
+            class="strip-action"
+            @click="askPremod(GamePremoderationTransition.SubmitForApproval)"
+          >
+            Отправить на проверку
+          </button>
+        </li>
         <li v-if="canUseNotepad" class="link">
           <span class="muted" aria-hidden="true">- </span>
           <router-link :to="{ name: 'game-notepad', params: { id: publicId } }"
-            >Блокнот мастера</router-link
+            >Заметки игры</router-link
           >
         </li>
       </template>
@@ -382,17 +429,17 @@ async function confirmMod() {
       <!-- "Модерация игры" section (global roles) -->
       <template v-if="showModeration">
         <SidebarSectionTitle>Модерация игры</SidebarSectionTitle>
+        <!-- The verdict, both ways. Legal from every status on the server, so
+             neither row is hidden by the game's current premoderation state. -->
         <template v-if="isGlobalMentor">
           <li class="link">
             <span class="muted" aria-hidden="true">- </span>
             <button
               type="button"
               class="strip-action"
-              @click="
-                askPremod(GamePremoderationTransition.SendToPremoderation)
-              "
+              @click="askPremod(GamePremoderationTransition.SetApproved)"
             >
-              Отправить на премодерацию
+              Одобрить игру
             </button>
           </li>
           <li class="link">
@@ -400,11 +447,9 @@ async function confirmMod() {
             <button
               type="button"
               class="strip-action"
-              @click="
-                askPremod(GamePremoderationTransition.RemoveFromPremoderation)
-              "
+              @click="askPremod(GamePremoderationTransition.SetAwaitingEdits)"
             >
-              Выпустить из премодерации
+              Вернуть на доработку
             </button>
           </li>
         </template>

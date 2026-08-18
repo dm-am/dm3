@@ -26,12 +26,31 @@ public static class GameAccessibilityFilters
     /// <summary>
     /// Game is accessible for user
     /// </summary>
-    public static Expression<Func<DbGame, bool>> GameAvailable(Guid userId) => game =>
+    /// <param name="userId">Reader</param>
+    /// <param name="mayJudgePremoderation">
+    /// Whether the reader holds the site-wide rank that passes premoderation
+    /// verdicts (<see cref="DM.Domain.Core.Authorization.PremoderationAccess.MayJudgePremoderation" />,
+    /// asked of the intention and handed down, because a filter cannot ask it
+    /// itself). It opens games awaiting a verdict and nothing else — see the arm
+    /// below. Defaults to false, which is the answer for every list read: the
+    /// moderation worklist has its own scope and a mentor's ordinary game list
+    /// must not silently fill with other people's unapproved games.
+    /// </param>
+    public static Expression<Func<DbGame, bool>> GameAvailable(
+        Guid userId, bool mayJudgePremoderation = false) => game =>
         !game.IsRemoved &&
         (
             game.MasterId == userId ||
             game.Assistants.Any(a => a.UserId == userId) ||
             game.MentorId == userId ||
+            // Whoever may pass the verdict may open the game the verdict is
+            // pending on. Not "may open hidden games": the arm is keyed on the
+            // premoderation status alone, so a private draft stays shut and a
+            // removed game is already gone above. Restated as a tree for the same
+            // reason as the visibility rule below, and pinned by the same test.
+            (mayJudgePremoderation &&
+             (game.PremoderationStatus == PremoderationStatus.AwaitingApproval ||
+              game.PremoderationStatus == PremoderationStatus.AwaitingEdits)) ||
             // User has pending invitation (player, reader, or assistant)
             game.Tokens.Any(t =>
                 t.UserId == userId &&
@@ -62,14 +81,36 @@ public static class GameAccessibilityFilters
     /// list of everybody who may not open it, so it has to cut here, in the
     /// query, and not on the client over a payload that still carries the room.
     /// </param>
+    /// <param name="mayJudgePremoderation">
+    /// The same parameter <see cref="GameAvailable" /> takes, answering the same
+    /// question about the same game: whether the reader holds the rank that
+    /// passes premoderation verdicts. Handed down rather than asked here,
+    /// because a filter cannot ask it. Defaults to false, so every read that
+    /// does not serve the verdict — the pulse, search, first-unread — keeps
+    /// answering the public rule alone.
+    /// </param>
     public static Expression<Func<DbRoom, bool>> RoomAvailable(
-        Guid userId, bool listingOnly = false) => room =>
+        Guid userId, bool listingOnly = false, bool mayJudgePremoderation = false) => room =>
         !room.IsRemoved &&
         !room.Game.IsRemoved &&
         (
             room.Game.MasterId == userId ||
             room.Game.Assistants.Any(a => a.UserId == userId) ||
             room.Game.MentorId == userId ||
+            // The same arm GameAvailable carries, over the game the room belongs
+            // to: whoever may pass the verdict on a game may open its rooms,
+            // because a game whose room list is empty cannot be judged. Keyed on
+            // the premoderation status alone — the set PremoderationAccess.IsPending
+            // names — so a private draft stays shut and a removed game is already
+            // gone above. Restated as a tree for the same reason as the rule below.
+            //
+            // The game half only. The room's own access type is decided by the
+            // block after this one and the rank is not one of its arms: the judge
+            // reads the game the way any reader of it would, entering the open
+            // rooms and seeing the closed ones named.
+            (mayJudgePremoderation &&
+             (room.Game.PremoderationStatus == PremoderationStatus.AwaitingApproval ||
+              room.Game.PremoderationStatus == PremoderationStatus.AwaitingEdits)) ||
             // Visibility of the game the room belongs to: the same rule as
             // ModuleVisibility.IsPubliclyVisible, restated as an expression tree
             // for the same reason as in GameAvailable and pinned by the same test.

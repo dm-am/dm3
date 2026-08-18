@@ -93,7 +93,7 @@ public class ListBoundsShould : IntegrationTestBase
     /// </summary>
     /// <remarks>
     /// Separated from the list above because the two claims are different and only
-    /// one of them was true. The roster of a game and the five notepads were sitting
+    /// one of them was true. The roster of a game and the notepads were sitting
     /// among the endpoints declared bounded by their subject while the analysis of
     /// this finding said the opposite about them in as many words: CharacterRepository
     /// .GetCharacters and NotepadRepository both end in ToArrayAsync with no Skip and
@@ -117,6 +117,7 @@ public class ListBoundsShould : IntegrationTestBase
     private static readonly HashSet<string> GrowingWithoutAPage = new(StringComparer.Ordinal)
     {
         "GET /v1/blogs/{blogId}/notepad",
+        "GET /v1/characters/{id}/master-notepad",
         "GET /v1/characters/{id}/notepad",
         "GET /v1/games/{id}/characters",
         "GET /v1/games/{id}/notepad",

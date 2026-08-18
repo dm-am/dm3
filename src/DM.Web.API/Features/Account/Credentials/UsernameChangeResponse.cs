@@ -34,6 +34,13 @@ public class UsernameChangeResponse
     public UsernameChangeRequestStatus Status { get; set; }
 
     /// <summary>
+    /// Which deadline expired the request. Set only when the status is
+    /// <see cref="UsernameChangeRequestStatus.Expired"/>: an unreviewed request
+    /// and a lapsed approval share that status but mean opposite things.
+    /// </summary>
+    public UsernameChangeExpiryReason? ExpiryReason { get; set; }
+
+    /// <summary>
     /// When the request was created (UTC)
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }

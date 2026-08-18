@@ -23,8 +23,11 @@ import {
   useGameDetailsStore,
   type Character,
   type Game,
+  type GamePremoderationStatus,
   type Room,
 } from "@/entities/game";
+import { useAuthStore } from "@/entities/user";
+import { UserRole } from "@/shared/api/models/common";
 
 const stubs = {
   "router-link": {
@@ -68,9 +71,16 @@ const rooms = [
   },
 ] as unknown as Room[];
 
-function mountPanel(participation: GameParticipation[] = []) {
+function mountPanel(
+  participation: GameParticipation[] = [],
+  premoderationStatus?: GamePremoderationStatus,
+) {
   const store = useGameDetailsStore();
-  store.game = { ...game, participation } as unknown as Game;
+  store.game = {
+    ...game,
+    participation,
+    premoderationStatus,
+  } as unknown as Game;
   store.rooms = rooms;
   // A non-empty slice keeps the mount off the network: the panel loads
   // characters only when it holds none.
@@ -80,8 +90,25 @@ function mountPanel(participation: GameParticipation[] = []) {
   return mount(GamePanel, { props: { gameId: "abcde" }, global: { stubs } });
 }
 
-/** What a row copies as: a non-breaking space is still a space. */
-const copied = (text: string) => text.replace(/\u00a0/g, " ").trim();
+/** Sign in, optionally with a site-wide role. Must precede mountPanel. */
+function signedInAs(role?: UserRole) {
+  const auth = useAuthStore();
+  auth.user = {
+    username: "Кто-то",
+    role,
+  } as unknown as NonNullable<typeof auth.user>;
+}
+
+/**
+ * What a row copies as: a non-breaking space is still a space, and a run of
+ * whitespace is one space \u2014 the markup indents a button's caption onto its own
+ * line, and the browser collapses that the same way this does.
+ */
+const copied = (text: string) =>
+  text
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 /** Every menu row, in the order the menu renders them. */
 function rows(wrapper: ReturnType<typeof mountPanel>) {
@@ -129,11 +156,20 @@ describe("GamePanel", () => {
   // GameIntention.EditSettings admits the curating mentor, so the menu has to
   // carry the link: without it the page is reachable only by typing the URL,
   // and the audience the intention was widened for never sees it.
-  it("gives the curating mentor the settings link and the notepad", () => {
+  it("gives the curating mentor the settings link", () => {
     const menu = rows(mountPanel([GameParticipation.Moderator]));
 
     expect(menu).toContain("- Настройки");
-    expect(menu).toContain("- Блокнот мастера");
+  });
+
+  // The notepad of the game is narrower than the settings page:
+  // NotepadIntentionResolver answers it with HasEditAccess, which is master and
+  // assistant only. The row used to be offered to a mentor and refused by the
+  // API on arrival.
+  it("keeps the notes of the game away from the curating mentor", () => {
+    expect(rows(mountPanel([GameParticipation.Moderator]))).not.toContain(
+      "- Заметки игры",
+    );
   });
 
   it("keeps the game's own edit items away from the curating mentor", () => {
@@ -147,7 +183,7 @@ describe("GamePanel", () => {
     const menu = rows(mountPanel([GameParticipation.Player]));
 
     expect(menu).not.toContain("- Настройки");
-    expect(menu).not.toContain("- Блокнот мастера");
+    expect(menu).not.toContain("- Заметки игры");
   });
 
   it("keeps every edit item for the master", () => {
@@ -155,6 +191,85 @@ describe("GamePanel", () => {
 
     expect(menu).toContain("- Настройки");
     expect(menu).toContain("- Создать NPC");
-    expect(menu).toContain("- Блокнот мастера");
+    expect(menu).toContain("- Заметки игры");
+  });
+
+  // Premoderation. The server grants exactly three moves and grants them to
+  // two different audiences; a row the panel shows to anybody else is a
+  // promise the server answers with 403 or 400, which is the defect this
+  // whole wave has been catching.
+  describe("premoderation", () => {
+    const SUBMIT = "- Отправить на проверку";
+    const APPROVE = "- Одобрить игру";
+    const RETURN = "- Вернуть на доработку";
+
+    it("offers the master the submit row while the game is on edits", () => {
+      expect(
+        rows(mountPanel([GameParticipation.Owner], "AwaitingEdits")),
+      ).toContain(SUBMIT);
+    });
+
+    it.each([
+      ["AwaitingApproval", "AwaitingApproval" as GamePremoderationStatus],
+      ["Approved", "Approved" as GamePremoderationStatus],
+      ["not sent at all", undefined],
+    ])(
+      "hides the submit row from the master when the status is %s",
+      (_name, status) => {
+        expect(
+          rows(mountPanel([GameParticipation.Owner], status)),
+        ).not.toContain(SUBMIT);
+      },
+    );
+
+    // GameIntention.SubmitForApproval admits the master alone. An assistant
+    // fills the form in and the curating mentor helps shape it; neither of
+    // them declares the game ready.
+    it.each([
+      ["an assistant", GameParticipation.Authority],
+      ["the curating mentor", GameParticipation.Moderator],
+      ["a player", GameParticipation.Player],
+    ])("hides the submit row from %s on edits", (_name, participation) => {
+      expect(rows(mountPanel([participation], "AwaitingEdits"))).not.toContain(
+        SUBMIT,
+      );
+    });
+
+    it("hides the submit row from a site mentor who is not the master", () => {
+      signedInAs(UserRole.Mentor);
+      expect(rows(mountPanel([], "AwaitingEdits"))).not.toContain(SUBMIT);
+    });
+
+    // Both verdicts are legal from every status on the server, so neither row
+    // is keyed on the status the game happens to be in.
+    it.each([
+      ["Approved" as GamePremoderationStatus],
+      ["AwaitingApproval" as GamePremoderationStatus],
+      ["AwaitingEdits" as GamePremoderationStatus],
+    ])("gives a site mentor both verdicts from %s", (status) => {
+      signedInAs(UserRole.Mentor);
+      const menu = rows(mountPanel([], status));
+
+      expect(menu).toContain(APPROVE);
+      expect(menu).toContain(RETURN);
+    });
+
+    it("keeps the verdicts away from a signed-in regular user", () => {
+      signedInAs(UserRole.RegularUser);
+      const menu = rows(mountPanel([GameParticipation.Owner], "AwaitingEdits"));
+
+      expect(menu).not.toContain(APPROVE);
+      expect(menu).not.toContain(RETURN);
+    });
+
+    // The mentor-only round trip the machine no longer has. Its two rows
+    // named transitions the server has deleted, so both were a guaranteed 400.
+    it("no longer offers the old take-in / release pair", () => {
+      signedInAs(UserRole.Admin);
+      const menu = rows(mountPanel([GameParticipation.Owner], "AwaitingEdits"));
+
+      expect(menu).not.toContain("- Отправить на премодерацию");
+      expect(menu).not.toContain("- Выпустить из премодерации");
+    });
   });
 });

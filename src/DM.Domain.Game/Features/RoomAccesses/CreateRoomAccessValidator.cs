@@ -14,6 +14,7 @@ internal class CreateRoomAccessValidator : AbstractValidator<CreateRoomAccess>
         IUserLookupService userLookupService)
     {
         RuleFor(c => c.Policy)
+            .IsInEnum().WithMessage(ValidationError.Invalid)
             .Must(p => p != RoomAccessPolicy.NoAccess).WithMessage(ValidationError.Invalid);
 
         When(c => c.CharacterId.HasValue, () =>

@@ -226,7 +226,8 @@ internal class MessageService : IMessageService
         var updateEntity = new UpdateMessageEntity
         {
             MessageId = updateMessage.MessageId,
-            Text = text
+            Text = text,
+            EditorUserId = _identityProvider.Current.User.UserId
         };
 
         var updatedMessage = await _repository.Update(updateEntity);

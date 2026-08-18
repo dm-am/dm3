@@ -236,6 +236,17 @@ const router = createRouter({
           component: () => import("@/pages/profile/ProfileSubpage.vue"),
           props: { subpage: "given-game-reviews" },
         },
+        // Writing a recommendation about the owner of this profile. Not one of
+        // the six list subpages above — it is the only write screen among them
+        // — but it borrows their header and their 404. requiresAuth bounces a
+        // guest to the login form and back; every other condition is the
+        // server's, asked by the page itself.
+        {
+          name: "write-endorsement",
+          path: "/users/:username/write-endorsement",
+          meta: { requiresAuth: true, dynamicTitle: true },
+          component: () => import("@/pages/profile/ProfileEndorsementForm.vue"),
+        },
         {
           name: "profile-uploads",
           path: "/users/:username/uploads",
@@ -343,6 +354,16 @@ const router = createRouter({
               component: () => import("@/pages/blog/PublicationCreate.vue"),
             },
             {
+              // One publication with its own discussion. Named by its own
+              // title, which is data, so the section is announced through
+              // useZoneSection instead of standing in meta — the same way a
+              // room and a character sheet are named.
+              name: "blog-publication",
+              path: "feed/:pubId",
+              meta: { dynamicTitle: true },
+              component: () => import("@/pages/blog/PublicationPage.vue"),
+            },
+            {
               name: "blog-publication-edit",
               path: "feed/:pubId/edit",
               meta: {
@@ -443,7 +464,7 @@ const router = createRouter({
           meta: {
             requiresAuth: true,
             moderationZone: true,
-            title: "Модерация",
+            title: "Модераторы",
           },
           component: () =>
             import("@/pages/moderation/ModerationModerators.vue"),
@@ -656,7 +677,7 @@ const router = createRouter({
             {
               name: "game-notepad",
               path: "notes",
-              meta: { section: "Блокнот мастера" },
+              meta: { section: "Заметки игры" },
               component: () => import("@/pages/game/GameNotepad.vue"),
             },
           ],
@@ -698,6 +719,15 @@ const router = createRouter({
           path: "/reset-password",
           meta: { title: "Сброс пароля" },
           component: () => import("@/pages/account/PasswordResetPage.vue"),
+        },
+        // Reached from the approval letter, and open to a guest for the same
+        // reason its neighbours are: the letter is often opened in a browser
+        // where nobody is signed in.
+        {
+          name: "change-username",
+          path: "/change-username",
+          meta: { title: "Смена имени" },
+          component: () => import("@/pages/account/UsernameChangePage.vue"),
         },
         {
           name: "support",
@@ -756,6 +786,17 @@ const router = createRouter({
           path: "/forum-topic/:topicId",
           meta: { title: "Переход к топику" },
           component: () => import("@/pages/redirect/TopicRedirect.vue"),
+        },
+        // Publication resolver, the same shape and for the same reason: the
+        // canonical address of a publication is /blogs/{blog}/feed/{pub} and a
+        // notification payload names the blog in the readable-guid form, which
+        // the blog endpoint does not take. The publication endpoint does, so
+        // the blog is read off the publication and the URL is replaced.
+        {
+          name: "publication-redirect",
+          path: "/publication/:pubId",
+          meta: { title: "Переход к публикации" },
+          component: () => import("@/pages/redirect/PublicationRedirect.vue"),
         },
         // Mockup catalogs under /dev are registered in development builds only. Vite
         // substitutes import.meta.env.DEV with false when building, so rollup drops the

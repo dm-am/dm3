@@ -173,7 +173,8 @@ public class UpdateBlogRequest
 public class BlogPremoderationChangeRequest
 {
     /// <summary>
-    /// Requested premoderation transition (SendToPremoderation / RemoveFromPremoderation)
+    /// Requested premoderation transition (SetApproved / SetAwaitingEdits by a
+    /// mentor, SubmitForApproval by the owner)
     /// </summary>
     public ModulePremoderationTransition Transition { get; set; }
 }

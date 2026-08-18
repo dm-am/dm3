@@ -11,9 +11,17 @@ namespace DM.Domain.Account.Features.UsernameChange;
 public interface IUsernameChangeRepository
 {
     /// <summary>
-    /// Get pending request for user
+    /// Get the request that is still in flight for a user: awaiting a moderator,
+    /// or approved with a live link and the name not yet chosen. Both hold a
+    /// change the user has already asked for, so neither may be asked for twice.
+    /// An approval whose link has run out holds nothing and is not in flight,
+    /// whether or not the expiry pass has caught it yet.
     /// </summary>
-    Task<UsernameChangeRequest?> GetPendingByUserId(Guid userId, CancellationToken ct = default);
+    /// <param name="userId">Whose request to look for.</param>
+    /// <param name="now">Moment the approval deadline is compared against.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<UsernameChangeRequest?> GetActiveByUserId(
+        Guid userId, DateTimeOffset now, CancellationToken ct = default);
 
     /// <summary>
     /// Get latest request for user (any status)
@@ -75,12 +83,16 @@ public interface IUsernameChangeRepository
         DateTimeOffset createdBefore, DateTimeOffset resolvedUtc, string comment, CancellationToken ct = default);
 
     /// <summary>
-    /// Expire approved requests whose approval token has run out by
-    /// <paramref name="now" />, and withdraw the token.
+    /// Withdraw approvals whose window has closed by <paramref name="now" />.
     /// </summary>
+    /// <remarks>
+    /// The status is what is withdrawn, not the token: the row stays reachable by
+    /// the value in the letter so the page can tell a link that ran out from one
+    /// that was never issued.
+    /// </remarks>
     /// <param name="now">Moment the pass runs at; the stored expiration is compared against it.</param>
-    /// <param name="commentSuffix">Text appended to the resolution comment already there.</param>
+    /// <param name="expiredReason">Why the approval lapsed; written on its own when no comment is there.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Number of requests expired.</returns>
-    Task<int> ExpireApprovalTokens(DateTimeOffset now, string commentSuffix, CancellationToken ct = default);
+    Task<int> ExpireApprovalTokens(DateTimeOffset now, string expiredReason, CancellationToken ct = default);
 }

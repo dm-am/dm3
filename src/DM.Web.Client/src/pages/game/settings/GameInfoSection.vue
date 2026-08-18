@@ -1,21 +1,27 @@
 <script setup lang="ts">
 /**
  * GameInfoSection — edit the game's core details (title / system / setting),
- * recruitment (open + PC limit) and privacy settings. Persists via
+ * tags, recruitment (open + PC limit) and privacy settings. Persists via
  * gameApi.updateGame (PATCH games/{id}/details) then reloads the game.
+ *
+ * Tags were settable only while the game was being created, so a master who
+ * mislabelled a game was stuck with the labels. They are the same control and
+ * the same catalog as on the creation form: moderation owns the vocabulary at
+ * /moderation/tags and nobody invents a tag here.
  *
  * The public description (info) is intentionally NOT edited here: the details
  * endpoint returns it as server-rendered HTML (InfoBbText), so there is no raw
  * BBCode source to round-trip through an editor without corrupting it. Editing
  * the description needs a raw-source endpoint that does not exist yet.
  */
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import {
   useGameDetailsStore,
   gameApi,
   CommentariesAccessMode,
-  type Game,
+  TagSelector,
+  type UpdateGameInput,
 } from "@/entities/game";
 import { Form, FormField } from "@/shared/ui/Form";
 import { Select } from "@/shared/ui/Select";
@@ -41,6 +47,18 @@ const pcLimit = ref("");
 const viewPrivates = ref(false);
 const viewDice = ref(false);
 const commentariesAccess = ref(CommentariesAccessMode.Public);
+const tags = ref<number[]>([]);
+const storedTags = ref<number[]>([]);
+
+/** Same members, order aside: the selector is a set, the payload is a list. */
+const tagsChanged = computed(() => {
+  const before = [...storedTags.value].sort((a, b) => a - b);
+  const after = [...tags.value].sort((a, b) => a - b);
+  return (
+    before.length !== after.length ||
+    before.some((id, index) => id !== after[index])
+  );
+});
 
 const saving = ref(false);
 
@@ -52,6 +70,8 @@ watch(
     title.value = g.title ?? "";
     system.value = g.system ?? "";
     setting.value = g.setting ?? "";
+    tags.value = [...(g.tagIds ?? [])];
+    storedTags.value = [...(g.tagIds ?? [])];
     isRecruitmentOpen.value = g.recruitment?.isOpen ?? false;
     pcLimit.value =
       g.recruitment?.pcLimit != null ? String(g.recruitment.pcLimit) : "";
@@ -70,12 +90,19 @@ async function save() {
   const parsedLimit = pcLimit.value.trim()
     ? parseInt(pcLimit.value, 10)
     : undefined;
-  const patch: Partial<Game> = {
+  const patch: UpdateGameInput = {
     title: title.value.trim(),
     system: system.value.trim(),
     setting: setting.value.trim(),
+    // The whole set, or nothing at all. The server replaces the game's tags
+    // with what arrives here, so an empty list is how the last tag comes off -
+    // but an untouched set is not sent, because the per-group limits are
+    // checked only on what is submitted. A game imported over its limits would
+    // otherwise refuse every settings save, including one that only fixes a
+    // typo in the title, and the master would have to make tag decisions before
+    // being allowed to fix anything. Untouched means untouched.
+    tags: tagsChanged.value ? [...tags.value] : undefined,
     recruitment: {
-      ...game.value.recruitment,
       isOpen: isRecruitmentOpen.value,
       pcLimit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
     },
@@ -119,6 +146,10 @@ async function save() {
           type="text"
           maxlength="100"
         />
+      </FormField>
+
+      <FormField label="Теги" name="game-tags">
+        <TagSelector v-model="tags" />
       </FormField>
 
       <FormField>

@@ -52,10 +52,19 @@ public class PublicationController : ControllerBase
     /// <summary>
     /// Get publication by ID
     /// </summary>
-    /// <param name="id">Publication identifier</param>
+    /// <remarks>
+    /// The read route takes the readable-guid form as well as the plain guid, which
+    /// the write routes below do not need: an editor reaches them with an id read
+    /// off a loaded publication, while this one is also reached from a notification,
+    /// and a notification names a publication the way every payload does — title and
+    /// base64. The constraint here refused that form before the model binder that
+    /// exists for it (ReadableGuidBinder) was ever asked, so the link a reader
+    /// followed answered 404 with no body.
+    /// </remarks>
+    /// <param name="id">Publication identifier (guid or readable guid)</param>
     /// <response code="200">Publication details</response>
     /// <response code="404">Publication not found</response>
-    [HttpGet("publications/{id:guid}", Name = nameof(GetPublication))]
+    [HttpGet("publications/{id}", Name = nameof(GetPublication))]
     [ProducesResponseType(typeof(Envelope<Publication>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPublication(Guid id) =>

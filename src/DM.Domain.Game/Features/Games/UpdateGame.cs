@@ -70,9 +70,11 @@ public class UpdateGame
     public CommentsAccessMode? CommentsAccessMode { get; set; }
 
     /// <summary>
-    /// Game tag identifiers
+    /// Game tag short identifiers — the same public alias the creation form
+    /// speaks, translated to the tags' own identifiers on the way in. Null
+    /// leaves the tags alone; an empty list clears them.
     /// </summary>
-    public IEnumerable<Guid> Tags { get; set; } = [];
+    public IEnumerable<int>? Tags { get; set; }
 
     #region Internal fields (set by service)
 

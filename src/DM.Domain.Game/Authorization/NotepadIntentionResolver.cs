@@ -9,12 +9,13 @@ using DM.Domain.Game.Features.Games;
 namespace DM.Domain.Game.Authorization;
 
 /// <summary>
-/// Context for game notepad authorization (Master and Player notepads only)
+/// Context for game notepad authorization (Master, Player and CharacterMaster
+/// notepads only)
 /// </summary>
 public class NotepadAuthContext
 {
     /// <summary>
-    /// Type of notepad (Master or Player)
+    /// Type of notepad (Master, Player or CharacterMaster)
     /// </summary>
     public NotepadType NotepadType { get; set; }
 
@@ -24,7 +25,7 @@ public class NotepadAuthContext
     public Guid ContainerId { get; set; }
 
     /// <summary>
-    /// Owner identifier for Player notepad (CharacterId)
+    /// Owner identifier for the two character notepads (CharacterId)
     /// </summary>
     public Guid? OwnerId { get; set; }
 
@@ -36,7 +37,7 @@ public class NotepadAuthContext
     public Guid? AuthorId { get; set; }
 
     /// <summary>
-    /// Game roles (for Master/Player notepads)
+    /// Game roles of the asker
     /// </summary>
     public IEnumerable<GameRole> GameRoles { get; set; } = Array.Empty<GameRole>();
 
@@ -59,12 +60,20 @@ internal class NotepadIntentionResolver : IIntentionResolver<NotepadIntention, N
     ///
     /// Access first also means authorship opens nothing by itself: whoever left
     /// the game keeps no right over the notes they left behind.
+    ///
+    /// Three notepads hang off a game and the access half is where they part.
+    /// The notepad of the game is the leads'; the notes of a player are that
+    /// player's and shut to everyone else, the master included; the notes the
+    /// leads keep about a character are the leads' and shut to the player who
+    /// owns it. The two character notepads therefore never overlap - which is
+    /// the point of writing them as separate types rather than as one notepad
+    /// read differently by different people.
     /// </remarks>
     public bool IsAllowed(IAuthorizationSubject user, NotepadIntention intention, NotepadAuthContext target)
     {
         var hasAccess = target.NotepadType switch
         {
-            NotepadType.Master => IsAllowedForMasterNotepad(target),
+            NotepadType.Master or NotepadType.CharacterMaster => IsAllowedForGameLeads(target),
             NotepadType.Player => IsAllowedForPlayerNotepad(user, target),
             _ => false
         };
@@ -84,27 +93,33 @@ internal class NotepadIntentionResolver : IIntentionResolver<NotepadIntention, N
             // Delete adds the game master, who answers for what the notepads of
             // the game hold. The arm names the master and not every lead on
             // purpose: an assistant reaches the whole master notepad, and what
-            // an assistant removes from it is what they wrote themselves.
+            // an assistant removes from it is what they wrote themselves. It
+            // reaches no player's notes either way - the access half above has
+            // already refused the master there.
             NotepadIntention.Delete => IsEntryAuthor(user, target) ||
                                        target.GameRoles.Contains(GameRole.Master)
         };
     }
 
-    private static bool IsAllowedForMasterNotepad(NotepadAuthContext target)
+    /// <summary>
+    /// The notepad of the game and the notes kept about a character: master or
+    /// assistant, and nobody else. The curating mentor is out of both - looking
+    /// after a game lets a mentor speak in it, not read what its leads write
+    /// down. So is site administration: only game roles are consulted here.
+    /// </summary>
+    private static bool IsAllowedForGameLeads(NotepadAuthContext target)
     {
-        // Master notepad: only master or assistant can access
         return target.GameRoles.HasEditAccess();
     }
 
+    /// <summary>
+    /// A player's own notes about their character, and the one notepad of a game
+    /// its master cannot open. Leading the game is not a key to it: the player
+    /// writes here for themselves, and a notepad the master could read would be
+    /// a different thing than the one that was promised.
+    /// </summary>
     private static bool IsAllowedForPlayerNotepad(IAuthorizationSubject user, NotepadAuthContext target)
     {
-        // Player notepad: character owner OR master/assistant can access
-        if (target.GameRoles.HasEditAccess())
-        {
-            return true;
-        }
-
-        // Character owner can access their own notepad
         return target.CharacterOwnerId.HasValue && target.CharacterOwnerId.Value == user.UserId;
     }
 

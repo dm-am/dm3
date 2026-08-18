@@ -24,6 +24,7 @@
           :game="game"
           :counters="true"
           :always-show-counters="true"
+          wait-marker
           prefix="~ "
         />
       </template>
@@ -47,6 +48,7 @@
           :game="game"
           :counters="true"
           :always-show-counters="true"
+          wait-marker
         />
       </template>
       <!-- Separator between owned and playing -->
@@ -64,6 +66,7 @@
           :game="game"
           :counters="true"
           :always-show-counters="true"
+          wait-marker
         />
       </template>
       <!-- Separator between playing and reading -->
@@ -84,6 +87,7 @@
           :game="game"
           :counters="true"
           :always-show-counters="true"
+          wait-marker
         />
       </template>
     </template>

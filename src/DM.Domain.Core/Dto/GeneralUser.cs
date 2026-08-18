@@ -245,6 +245,9 @@ public class GeneralUser : IUser
     /// </summary>
     public bool IsAuthenticated => Role != UserRole.Guest;
 
+    /// <inheritdoc />
+    public bool IsUnderModerationWatch { get; set; }
+
     /// <summary>
     /// Whether the user is still a newbie: fewer game posts than
     /// <see cref="ProbationPolicy.NewbiePostThreshold" />. The predicate every

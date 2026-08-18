@@ -856,6 +856,28 @@ internal sealed partial class DataSeeder
                     _dbContext.Set<Post>().Add(post);
                     result.PostsCreated++;
 
+                    // One post carries attachments, so the stand shows the block
+                    // with something in it. Without this the pipeline exists and
+                    // nothing exercises it: the post block, the moderation list
+                    // and the serving endpoint all come up empty and can only be
+                    // checked by hand.
+                    if (useLargePost)
+                    {
+                        var attachmentBytes = ReadEmbeddedSeedBytes(
+                            "DM.Tools.Seeder.Assets.Seed.diopside.jpg");
+                        var attachment = await SeedAvatarFromBytesAsync(
+                            attachmentBytes,
+                            declaredContentType: "image/jpeg",
+                            sourceFileName: "карта-подземелья.jpg",
+                            type: UploadType.PostAttachment,
+                            uploadId: _guidFactory.Create(),
+                            userId: post.AuthorId,
+                            entityId: post.PostId,
+                            now: post.CreatedUtc);
+                        _dbContext.Set<DM.Infrastructure.Persistence.Entities.Shared.Upload>()
+                            .Add(attachment);
+                    }
+
                     // Add dice rolls for the large Diopside post
                     if (useLargePost)
                     {
@@ -1106,6 +1128,34 @@ internal sealed partial class DataSeeder
                         Content = noteContent,
                         SortOrder = ni,
                         CreatedUtc = now.AddDays(-(playerNotepadEntries.Length - ni)).AddHours(2),
+                        IsRemoved = false
+                    });
+                }
+
+                // What the leads keep about the same character ("Заметки
+                // мастера"). Written by the master onto a character that has a
+                // player, not onto an NPC: the notepad exists for every
+                // character, and the stand has to show that rather than let the
+                // section look like an NPC feature.
+                var characterMasterNotepadEntries = new[]
+                {
+                    ("Что игрок не знает", "Персонаж связан с торговцем у ворот родством - раскрыть, когда группа доберется до города."),
+                    ("Игровые заметки", "Отыгрывает осторожно, любит разведку. Давать больше зацепок через наблюдение, меньше через прямую подсказку."),
+                };
+                for (var ni = 0; ni < characterMasterNotepadEntries.Length; ni++)
+                {
+                    var (noteTitle, noteContent) = characterMasterNotepadEntries[ni];
+                    _dbContext.Set<NotepadEntry>().Add(new NotepadEntry
+                    {
+                        EntryId = _guidFactory.Create(),
+                        NotepadType = NotepadType.CharacterMaster,
+                        ContainerId = game.GameId,
+                        OwnerId = waitingCharacter.CharacterId,
+                        AuthorId = master.UserId,
+                        Title = noteTitle,
+                        Content = noteContent,
+                        SortOrder = ni,
+                        CreatedUtc = now.AddDays(-(characterMasterNotepadEntries.Length - ni)).AddHours(3),
                         IsRemoved = false
                     });
                 }

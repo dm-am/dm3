@@ -19,7 +19,8 @@ public class GameStatusChangeRequest
 public class GamePremoderationChangeRequest
 {
     /// <summary>
-    /// Requested premoderation transition (SendToPremoderation / RemoveFromPremoderation)
+    /// Requested premoderation transition (SetApproved / SetAwaitingEdits by a
+    /// mentor, SubmitForApproval by the master)
     /// </summary>
     public ModulePremoderationTransition Transition { get; set; }
 }

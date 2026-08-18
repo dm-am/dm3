@@ -46,6 +46,12 @@ public class CreateGameEntity
     public ModuleStatus Status { get; set; }
 
     /// <summary>
+    /// Premoderation status the game is born in — Approved for most masters,
+    /// AwaitingEdits for a newbie or a master under moderation watch.
+    /// </summary>
+    public PremoderationStatus PremoderationStatus { get; set; }
+
+    /// <summary>
     /// Visibility of draft content (when Status = Draft)
     /// </summary>
     public DraftVisibility DraftVisibility { get; set; }
@@ -966,15 +972,21 @@ public class CreatePostReviewEntity
 /// </summary>
 /// <param name="PostReviewId">Review identifier</param>
 /// <param name="Sign">Updated sign (null to keep current)</param>
+/// <param name="Text">Updated text, raw BBCode (null to keep current)</param>
 /// <param name="IsRemoved">Updated removed status (null to keep current)</param>
 /// <param name="ModifiedUtc">Modification timestamp</param>
 /// <param name="ModifiedByUserId">User who modified the review</param>
+/// <param name="DeletedUtc">Deletion timestamp</param>
+/// <param name="DeletedByUserId">User who deleted the review</param>
 public record UpdatePostReviewEntity(
     Guid PostReviewId,
     ReviewSign? Sign = null,
+    string? Text = null,
     bool? IsRemoved = null,
     DateTimeOffset? ModifiedUtc = null,
-    Guid? ModifiedByUserId = null);
+    Guid? ModifiedByUserId = null,
+    DateTimeOffset? DeletedUtc = null,
+    Guid? DeletedByUserId = null);
 
 /// <summary>
 /// DTO for creating an attribute schema

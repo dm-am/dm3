@@ -2,10 +2,14 @@
 // Pure types (interfaces, type aliases)
 export type {
   Game,
+  GamePremoderationStatus,
   GameRef,
   GameId,
   GameRecruitment,
   CreateGameInput,
+  UpdateGameInput,
+  UpdateGamePrivacySettingsInput,
+  UpdateGameRecruitmentInput,
   Tag,
   Invitation,
   AttributeSchema,
@@ -20,8 +24,11 @@ export type {
   RoomAccess,
   PostPendency,
   CreateRoomInput,
+  DiceResult,
+  DiceRoll,
   DiceRollInput,
   Post,
+  PostAttachment,
   PostReview,
 } from "./model/types";
 
@@ -58,6 +65,10 @@ export { useGameDisplay } from "./model/useGameDisplay";
 // character's own page.
 export { characterStatusLabel } from "./model/characterStatus";
 
+// The two spellings of a review's sign — the name on the wire and the number
+// the rating is counted in.
+export { reviewSignToNumber, reviewSignName } from "./model/reviewSign";
+
 // Attribute-schema helpers: pure functions over the schema shape declared
 // above, framework-free and shared by every embed site of the editor.
 export {
@@ -87,4 +98,5 @@ export {
   RoomLink,
   CharacterCard,
   CharacterSheetFields,
+  TagSelector,
 } from "./ui";

@@ -110,6 +110,38 @@ internal class GameNotepadService : IGameNotepadService
 
     #endregion
 
+    #region Character Master Notepad
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<NotepadEntry>> GetCharacterMasterEntries(Guid gameId, Guid characterId, CancellationToken ct = default)
+    {
+        await ThrowIfNotAuthorizedAsync(NotepadIntention.Read, NotepadType.CharacterMaster, gameId, characterId, ct);
+        return await _repository.GetEntriesAsync(NotepadType.CharacterMaster, gameId, characterId, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<NotepadEntry> CreateCharacterMasterEntry(Guid gameId, Guid characterId, CreateNotepadEntry createEntry, CancellationToken ct = default)
+    {
+        await ThrowIfNotAuthorizedAsync(NotepadIntention.Create, NotepadType.CharacterMaster, gameId, characterId, ct);
+
+        var internalDto = new CreateNotepadEntryInternal
+        {
+            EntryId = _guidFactory.Create(),
+            NotepadType = NotepadType.CharacterMaster,
+            ContainerId = gameId,
+            OwnerId = characterId,
+            AuthorId = UserId,
+            Title = createEntry.Title,
+            Content = createEntry.Content,
+            SortOrder = 0,
+            CreatedUtc = _dateTimeProvider.Now
+        };
+
+        return await _repository.CreateEntryAsync(internalDto, ct);
+    }
+
+    #endregion
+
     #region Common Operations
 
     /// <inheritdoc />
@@ -121,11 +153,7 @@ internal class GameNotepadService : IGameNotepadService
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.NotepadEntryNotFound);
         }
 
-        // Validate this is a game notepad type
-        if (entry.NotepadType != NotepadType.Master && entry.NotepadType != NotepadType.Player)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
-        }
+        ThrowIfNotAGameNotepad(entry);
 
         await ThrowIfNotAuthorizedForEntryAsync(NotepadIntention.Read, entry, ct);
         return entry;
@@ -140,10 +168,7 @@ internal class GameNotepadService : IGameNotepadService
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.NotepadEntryNotFound);
         }
 
-        if (entry.NotepadType != NotepadType.Master && entry.NotepadType != NotepadType.Player)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
-        }
+        ThrowIfNotAGameNotepad(entry);
 
         await ThrowIfNotAuthorizedForEntryAsync(NotepadIntention.Edit, entry, ct);
 
@@ -168,10 +193,7 @@ internal class GameNotepadService : IGameNotepadService
             return; // Already deleted
         }
 
-        if (entry.NotepadType != NotepadType.Master && entry.NotepadType != NotepadType.Player)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
-        }
+        ThrowIfNotAGameNotepad(entry);
 
         await ThrowIfNotAuthorizedForEntryAsync(NotepadIntention.Delete, entry, ct);
         await _repository.DeleteEntryAsync(entryId, UserId, ct);
@@ -200,8 +222,9 @@ internal class GameNotepadService : IGameNotepadService
         switch (notepadType)
         {
             case NotepadType.Master:
-                var gameMaster = await _gameService.GetAsync(containerId);
-                context.GameRoles = gameMaster.GetRoles(UserId);
+            case NotepadType.CharacterMaster:
+                var gameLeads = await _gameService.GetAsync(containerId);
+                context.GameRoles = gameLeads.GetRoles(UserId);
                 break;
             case NotepadType.Player:
                 var gamePlayer = await _gameService.GetAsync(containerId);
@@ -215,6 +238,21 @@ internal class GameNotepadService : IGameNotepadService
         }
 
         return context;
+    }
+
+    /// <summary>
+    /// The three notepads this service answers for. A notepad entry is one row
+    /// in one table shared with the blog and personal notepads, and the entry
+    /// endpoints take an id and nothing else - so an id belonging to somebody
+    /// else's notepad has to be refused here, before an authorization context
+    /// this resolver cannot build gets built out of it.
+    /// </summary>
+    private static void ThrowIfNotAGameNotepad(NotepadEntry entry)
+    {
+        if (entry.NotepadType is not (NotepadType.Master or NotepadType.Player or NotepadType.CharacterMaster))
+        {
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
+        }
     }
 
     /// <summary>

@@ -64,6 +64,8 @@ const loadingOlder = ref(false);
 const sending = ref(false);
 const error = ref<string | null>(null);
 const notFound = ref(false);
+/** The server refused the room: the viewer is not playing this game. */
+const denied = ref(false);
 
 const hasMoreBefore = computed(() => paging.value?.hasPrev ?? false);
 
@@ -75,7 +77,9 @@ const newMessage = ref("");
 const messagesContainer = ref<HTMLElement | null>(null);
 const editorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 
-const canSend = computed(() => !!user.value);
+// Sending needs the same admission reading does: a viewer the server turned
+// away gets the refusal above, not an editor that fails on submit.
+const canSend = computed(() => !!user.value && !denied.value);
 
 function scrollToBottom() {
   nextTick(() => {
@@ -138,7 +142,12 @@ async function loadInitial() {
   );
   loading.value = false;
   if (err) {
-    error.value = "Не удалось загрузить сообщения";
+    // A chat room is for the people playing: the server admits participants and
+    // leads only (spec 4.2.3.5.3), so a refusal here is the rule working, not a
+    // failure. Saying "не удалось загрузить" to a guest blamed the site for its
+    // own access rule and invited a pointless retry.
+    denied.value = err.status === 401 || err.status === 403;
+    error.value = denied.value ? "" : "Не удалось загрузить сообщения";
     return;
   }
   messages.value = data?.resources ?? [];
@@ -279,6 +288,14 @@ onUnmounted(cleanupObserver);
       >
         <CommentSkeleton v-if="loading" :count="5" />
 
+        <div v-else-if="denied" class="chat-empty-inline">
+          <secondary-text>
+            Чат комнаты доступен участникам игры: игрокам с активным персонажем,
+            мастеру, ассистентам и наставнику.
+          </secondary-text>
+          <LoginPrompt v-if="!user" action="читать чат игры" />
+        </div>
+
         <div v-else-if="error" class="chat-error" role="alert">
           <secondary-text>{{ error }}</secondary-text>
           <button type="button" class="chat-retry" @click="loadInitial">
@@ -346,7 +363,7 @@ onUnmounted(cleanupObserver);
             Отправить
           </button>
         </template>
-        <LoginPrompt v-else action="отправлять сообщения" />
+        <LoginPrompt v-else-if="!denied" action="отправлять сообщения" />
       </div>
     </template>
   </div>

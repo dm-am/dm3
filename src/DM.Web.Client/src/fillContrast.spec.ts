@@ -84,7 +84,7 @@ const FILLS: Fill[] = [
   },
   {
     name: "selected tag chip",
-    file: "features/create-game/ui/TagSelector.vue",
+    file: "entities/game/ui/TagSelector.vue",
     path: [".tag-button", "&.selected"],
     size: "text",
   },

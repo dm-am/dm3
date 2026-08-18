@@ -5,7 +5,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.UsernameChange;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
 using DM.Infrastructure.Persistence.Shared.Users;
+using Npgsql;
 using Microsoft.EntityFrameworkCore;
 using DbUsernameChangeRequest = DM.Infrastructure.Persistence.Entities.Account.UsernameChangeRequest;
 
@@ -22,10 +24,20 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
     }
 
     /// <inheritdoc />
-    public async Task<UsernameChangeRequest?> GetPendingByUserId(Guid userId, CancellationToken ct = default)
+    public async Task<UsernameChangeRequest?> GetActiveByUserId(
+        Guid userId, DateTimeOffset now, CancellationToken ct = default)
     {
         return await _dbContext.UsernameChangeRequests
-            .Where(r => r.UserId == userId && r.Status == UsernameChangeRequestStatus.Pending)
+            // Approved holds that status until the hourly pass moves it, so the
+            // status alone would keep refusing a new request for up to an hour
+            // after the approval link had already died - while the link itself
+            // answered "expired" and offered nothing. The stored moment is what
+            // every other reader of this row trusts, and it is trusted here too.
+            .Where(r => r.UserId == userId &&
+                        (r.Status == UsernameChangeRequestStatus.Pending ||
+                         (r.Status == UsernameChangeRequestStatus.Approved &&
+                          r.ApprovalTokenExpiresUtc.HasValue &&
+                          r.ApprovalTokenExpiresUtc.Value > now)))
             .Select(r => new UsernameChangeRequest
             {
                 RequestId = r.RequestId,
@@ -159,7 +171,19 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
             ResolverComment = request.ResolverComment
         };
         _dbContext.UsernameChangeRequests.Add(entity);
-        await _dbContext.SaveChangesAsync(ct);
+        try
+        {
+            await _dbContext.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        {
+            // The service checks for a request in flight before it writes; this is
+            // the race where two requests sent at once both pass that check. The
+            // partial unique index is what actually holds the rule, and the error
+            // code is translated here so the domain need not know the engine's.
+            _dbContext.ChangeTracker.Clear();
+            throw new DuplicateEntityException("Duplicate username change request", ex);
+        }
     }
 
     /// <inheritdoc />
@@ -239,15 +263,29 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
 
     /// <inheritdoc />
     public Task<int> ExpireApprovalTokens(
-        DateTimeOffset now, string commentSuffix, CancellationToken ct = default) =>
+        DateTimeOffset now, string expiredReason, CancellationToken ct = default) =>
         _dbContext.UsernameChangeRequests
             .TagWith("DM.Account.ExpireUsernameChangeApprovals")
             .Where(r => r.Status == UsernameChangeRequestStatus.Approved &&
                         r.ApprovalTokenExpiresUtc.HasValue &&
                         r.ApprovalTokenExpiresUtc.Value < now)
+            // Expired is what withdraws the approval; the service refuses anything
+            // that is not Approved. The token stays on the row so the page opened
+            // from the letter can still find it and say that it ran out, instead of
+            // finding nothing and calling the link invalid.
+            // Same rule as ResolutionComment.Join, restated as an expression the
+            // provider can translate: no comment means the reason stands alone
+            // rather than after a bar with nothing before it, and the result is
+            // cut to the column length. The cut matters more here than anywhere
+            // else - this is one statement over every lapsed approval, so a
+            // single overlong comment would roll back the whole pass, hourly and
+            // without a sound.
             .ExecuteUpdateAsync(
                 s => s.SetProperty(r => r.Status, UsernameChangeRequestStatus.Expired)
-                      .SetProperty(r => r.ApprovalToken, (Guid?)null)
-                      .SetProperty(r => r.ResolverComment, r => r.ResolverComment + commentSuffix),
+                      .SetProperty(r => r.ResolverComment, r =>
+                          (r.ResolverComment == null || r.ResolverComment == string.Empty
+                              ? expiredReason
+                              : r.ResolverComment + ResolutionComment.Separator + expiredReason)
+                          .Substring(0, ResolutionComment.MaxLength)),
                 ct);
 }

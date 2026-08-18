@@ -196,4 +196,54 @@ public class AgentToolingShould
             "a preview started from here would serve the owner's open tab out of the " +
             "assistant's build, and the browser shows no difference");
     }
+
+    /// <summary>The gate commands of a shell script, in the order it runs them.</summary>
+    /// <remarks>
+    /// Read as commands rather than as lines: the hook writes them at the top
+    /// level, the script hands them to a helper, so the same gate is spelled
+    /// `(cd "$CLIENT" &amp;&amp; npm run lint:ci)` in one file and
+    /// `in_client npm run lint:ci` in the other. What must match is which gates
+    /// run, which is the tail of both spellings.
+    /// </remarks>
+    private static string[] GateCommands(string path)
+    {
+        var interesting = new Regex(
+            @"(npm run [a-z:-]+|npm audit [^\r\n)]+|dotnet (?:format|build|test)[^\r\n)]*|check-vulnerable-packages\.sh|block-dangerous-git\.test\.js|block-new-migrations\.test\.js|lint-edited-file\.test\.js)",
+            RegexOptions.Compiled);
+
+        // Comments are prose and name commands freely: both files warn in words
+        // about running a second dotnet test alongside the gates.
+        var code = string.Join("\n", File.ReadAllLines(path)
+            .Where(line => !line.TrimStart().StartsWith("#")));
+
+        return interesting.Matches(code)
+            .Select(match => match.Value.Trim())
+            // Paths differ between the two files ($ROOT vs "$ROOT"); the gate is
+            // the command, not how the root is spelled.
+            .Select(command => command.Replace("\"$ROOT\"", "$ROOT").Replace("$ROOT/", ""))
+            .Distinct()
+            .ToArray();
+    }
+
+    /// <summary>
+    /// scripts/gates.sh runs the same gates as the pre-push hook.
+    /// </summary>
+    /// <remarks>
+    /// The list lives twice on purpose: the hook must protect a clone that has
+    /// nothing else, and the script must run on an untouched tree. The cost of
+    /// that duplication is drift, and drift here is silent in the worst
+    /// direction: a gate added to the hook and not to the script turns the
+    /// script into a promise it does not keep, and the next push spends twenty
+    /// minutes discovering it.
+    /// </remarks>
+    [Fact]
+    public void MirrorTheHookInTheGatesScript()
+    {
+        var hook = GateCommands(Path.Combine(RepositoryRoot, "scripts", "hooks", "pre-push"));
+        var script = GateCommands(Path.Combine(RepositoryRoot, "scripts", "gates.sh"));
+
+        hook.Should().NotBeEmpty("the hook is the source of the list");
+        script.Should().BeEquivalentTo(hook,
+            "scripts/gates.sh exists to answer before the push what the hook answers during it");
+    }
 }

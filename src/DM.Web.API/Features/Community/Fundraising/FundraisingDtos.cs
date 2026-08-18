@@ -12,6 +12,11 @@ namespace DM.Web.API.Features.Community.Fundraising;
 public class Fundraising
 {
     /// <summary>
+    /// What the money is being collected for
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>
     /// Target amount to collect
     /// </summary>
     public decimal GoalAmount { get; set; }
@@ -32,6 +37,11 @@ public class Fundraising
 /// </summary>
 public class UpdateFundraisingRequest
 {
+    /// <summary>
+    /// What the money is being collected for (1-200 characters)
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+
     /// <summary>
     /// Target amount to collect (must be greater than 0)
     /// </summary>

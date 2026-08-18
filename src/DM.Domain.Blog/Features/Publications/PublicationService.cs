@@ -87,7 +87,20 @@ internal class PublicationService : IPublicationService
     public async Task<Publication> GetPublication(Guid publicationId, CancellationToken ct = default)
     {
         var publication = await _repository.GetPublication(publicationId, ct);
-        if (publication == null)
+
+        // The row is only half the answer: a publication is read inside a blog,
+        // and a blog the reader may not open hides everything in it. The listing
+        // above has always known that: it reads the blog through the gated
+        // GetAsync first, while this read asked the publication alone, so a
+        // published publication in a private-draft blog, or in one still waiting
+        // on premoderation, was handed to anybody holding its id, guest included.
+        // Nothing had to be guessed: the profile widget below hands the id out.
+        //
+        // Absent and hidden answer with one and the same sentence on purpose. A
+        // 403 here would confirm that the publication exists, which is the half
+        // of the leak that closing the read alone does not close.
+        if (publication == null ||
+            !await _blogService.IsVisibleToViewerAsync(publication.BlogId, ct))
         {
             throw new HttpException(HttpStatusCode.NotFound, "Публикация не найдена");
         }
@@ -112,10 +125,23 @@ internal class PublicationService : IPublicationService
         var user = await _userLookupService.GetAsync(username);
 
         var publication = await _repository.GetBestUserPublication(user.UserId, ct);
-        if (publication != null)
+
+        // The widget names one publication and links to it, so the one it names
+        // has to be one the reader could open. The repository filters removals and
+        // drafts, and nothing there can know the blog underneath is a private
+        // draft or is still waiting on premoderation: the rule is about the
+        // reader, not about the row.
+        //
+        // A hidden best is no answer rather than the next best one: walking down
+        // the list would cost a blog read per candidate, and an author whose blogs
+        // are all hidden has nothing to show here in any case.
+        if (publication == null ||
+            !await _blogService.IsVisibleToViewerAsync(publication.BlogId, ct))
         {
-            await FillPublicationUnreadCounters(new[] { publication });
+            return null;
         }
+
+        await FillPublicationUnreadCounters(new[] { publication });
         return publication;
     }
 

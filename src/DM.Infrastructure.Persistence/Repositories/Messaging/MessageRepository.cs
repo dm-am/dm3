@@ -22,18 +22,21 @@ internal class MessageRepository : IMessageRepository
     private readonly IMapper _mapper;
     private readonly ICursorService _cursorService;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
 
     /// <inheritdoc />
     public MessageRepository(
         DmDbContext dbContext,
         IMapper mapper,
         ICursorService cursorService,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        IGuidFactory guidFactory)
     {
         _dbContext = dbContext;
         _mapper = mapper;
         _cursorService = cursorService;
         _dateTimeProvider = dateTimeProvider;
+        _guidFactory = guidFactory;
     }
 
     private IQueryable<DbMessage> ChatMessages(Guid chatId) =>
@@ -317,7 +320,24 @@ internal class MessageRepository : IMessageRepository
             dbMessage.Text = update.Text;
         if (update.IsRemoved.HasValue)
             dbMessage.IsRemoved = update.IsRemoved.Value;
-        // Modification tracking is handled via Edit history, not inline ModifiedUtc
+
+        // Modification tracking is handled via Edit history, not inline
+        // ModifiedUtc, and nothing used to write that history: the table stayed
+        // empty, so every message ever edited looked untouched, and the warning
+        // that asks whether the text changed since it was issued read "no" for
+        // all of them. The tracker decides what counts: a request re-sending the
+        // text the message already holds is not an edit.
+        if (update.EditorUserId != Guid.Empty &&
+            _dbContext.Entry(dbMessage).Property(m => m.Text).IsModified)
+        {
+            _dbContext.MessageEdits.Add(new Entities.Messaging.MessageEdit
+            {
+                MessageEditId = _guidFactory.Create(),
+                MessageId = dbMessage.MessageId,
+                EditorUserId = update.EditorUserId,
+                ModifiedUtc = _dateTimeProvider.Now
+            });
+        }
 
         await _dbContext.SaveChangesAsync();
         return await _dbContext.Messages

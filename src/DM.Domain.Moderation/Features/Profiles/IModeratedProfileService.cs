@@ -24,4 +24,10 @@ public interface IModeratedProfileService
     /// Set user role
     /// </summary>
     Task SetUserRole(string username, UserRole role);
+
+    /// <summary>
+    /// Put the user under moderation watch, or take them off it. While the flag
+    /// is on, every game and blog the user creates starts in premoderation.
+    /// </summary>
+    Task<UserDetails> SetModerationWatch(string username, bool underWatch);
 }

@@ -2,8 +2,8 @@
 /**
  * BlogStatusButtons — the blog status-transition button group. Mirrors
  * GameStatusButtons: reads the current status from the blog-details store,
- * offers the applicable transitions (Start / Close / Reopen), each calling
- * store.transitionStatus. Destructive transitions (Close) go through a
+ * offers the applicable transitions (Start / Freeze / Close / Reopen), each
+ * calling store.transitionStatus. Destructive transitions (Close) go through a
  * ConfirmDialog.
  *
  * Gating (who may change status) is the caller's responsibility — this
@@ -28,7 +28,7 @@ const store = useBlogDetailsStore();
 const { blog } = storeToRefs(store);
 
 const transitions = computed(() =>
-  availableStatusTransitions(blog.value?.status),
+  availableStatusTransitions(blog.value?.status, blog.value?.closedReason),
 );
 
 const pending = ref<BlogStatusTransition | null>(null);

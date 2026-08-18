@@ -47,6 +47,29 @@ public class UserEndorsement
 }
 
 /// <summary>
+/// Whether the caller may write a recommendation about a given user
+/// </summary>
+/// <remarks>
+/// The server's own answer to "may I?", asked before the control that would
+/// send the POST is drawn. It is produced by the same evaluation the POST
+/// refuses by, so a client that draws the control only on
+/// <see cref="CanCreate" /> never offers what the create call would reject.
+/// </remarks>
+public class EndorsementEligibility
+{
+    /// <summary>
+    /// Whether a recommendation about this user may be written now
+    /// </summary>
+    public bool CanCreate { get; set; }
+
+    /// <summary>
+    /// Why not, in the words the reader is shown. Null when
+    /// <see cref="CanCreate" /> is true.
+    /// </summary>
+    public string? Reason { get; set; }
+}
+
+/// <summary>
 /// Request to create a new user endorsement
 /// </summary>
 public class CreateUserEndorsementRequest

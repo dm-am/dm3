@@ -50,6 +50,12 @@ public class ModeratedProfile : UserProfile
     public ViolationSummary Violations { get; set; } = new();
 
     /// <summary>
+    /// Whether moderation is watching what this user creates: while it is on,
+    /// every game and blog they create starts in premoderation.
+    /// </summary>
+    public bool IsUnderModerationWatch { get; set; }
+
+    /// <summary>
     /// What actions the current user can perform.
     /// Computed based on caller's role.
     /// </summary>
@@ -266,6 +272,11 @@ public class ModerationPermissions
     /// Can lift bans (SeniorModerator+)
     /// </summary>
     public bool CanLiftBan { get; set; }
+
+    /// <summary>
+    /// Can put the user under moderation watch and take them off it (Moderator+)
+    /// </summary>
+    public bool CanSetModerationWatch { get; set; }
 }
 
 /// <summary>
@@ -277,6 +288,17 @@ public class ModerateProfile
     /// User-defined extended information (can be cleared by moderator)
     /// </summary>
     public string? Info { get; set; }
+}
+
+/// <summary>
+/// DTO for switching the moderation watch on a user (Moderator+ only)
+/// </summary>
+public class ModerationWatchRequest
+{
+    /// <summary>
+    /// Whether the user is under moderation watch from now on
+    /// </summary>
+    public bool UnderWatch { get; set; }
 }
 
 /// <summary>

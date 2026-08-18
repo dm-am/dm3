@@ -81,6 +81,7 @@ internal class PostRepository : IPostRepository
             .ToArrayAsync();
 
         await EnrichWithCharacterPictures(posts);
+        await EnrichWithAttachments(posts);
         return posts;
     }
 
@@ -104,6 +105,7 @@ internal class PostRepository : IPostRepository
         if (post != null)
         {
             await EnrichWithCharacterPictures(new[] { post });
+            await EnrichWithAttachments(new[] { post });
         }
         return post;
     }
@@ -370,6 +372,7 @@ internal class PostRepository : IPostRepository
         // One batched query (IN(characterIds)) for avatar URLs, instead
         // of a correlated Uploads subquery per row in the main projection.
         await EnrichWithCharacterPictures(posts);
+        await EnrichWithAttachments(posts);
 
         // Batched game hydration — fetch the full GameRef-tier payload
         // for every unique game id on the page and attach it to each
@@ -470,6 +473,64 @@ internal class PostRepository : IPostRepository
         }
     }
 
+    /// <summary>
+    /// Batch-loads the files attached to all posts on the page and fills
+    /// <see cref="Post.Attachments"/>.
+    /// </summary>
+    /// <remarks>
+    /// One IN-query for the page, for the same reason EnrichWithCharacterPictures
+    /// is one: a post may carry several attachments, so an inline collection
+    /// projection would be a correlated subquery per row, and a room lists twenty
+    /// rows at a time.
+    ///
+    /// The object key is not selected. It is the address of the bytes in a bucket
+    /// whose post prefix answers nobody anonymously, and the only reason to have
+    /// it here would be to put it somewhere a reader can see.
+    /// </remarks>
+    private async Task EnrichWithAttachments(IReadOnlyCollection<Post> posts)
+    {
+        if (posts.Count == 0) return;
+
+        var postIds = posts.Select(p => p.Id).Distinct().ToList();
+
+        var rows = await _dbContext.Uploads
+            .Where(u => u.TargetPostId != null
+                && postIds.Contains(u.TargetPostId.Value)
+                && u.Type == UploadType.PostAttachment)
+            .OrderBy(u => u.CreatedUtc)
+            .ThenBy(u => u.UploadId)
+            .Select(u => new
+            {
+                PostId = u.TargetPostId!.Value,
+                Attachment = new PostAttachment
+                {
+                    Id = u.UploadId,
+                    FileName = u.FileName ?? string.Empty,
+                    ContentType = u.ContentType ?? string.Empty,
+                    SizeBytes = u.SizeBytes,
+                    Width = u.Width,
+                    Height = u.Height,
+                    CreatedUtc = u.CreatedUtc,
+                },
+            })
+            .ToListAsync();
+
+        if (rows.Count == 0) return;
+
+        var byPost = rows
+            .GroupBy(x => x.PostId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyCollection<PostAttachment>)
+                g.Select(x => x.Attachment).ToList());
+
+        foreach (var post in posts)
+        {
+            if (byPost.TryGetValue(post.Id, out var attachments))
+            {
+                post.Attachments = attachments;
+            }
+        }
+    }
+
     #endregion
 
     #region Write Operations
@@ -556,10 +617,20 @@ internal class PostRepository : IPostRepository
 
         await _dbContext.SaveChangesAsync();
 
-        return await _dbContext.Posts
+        var updated = await _dbContext.Posts
             .Where(p => p.PostId == updatePost.PostId)
             .ProjectTo<Post>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync();
+
+        // Enriched like both read paths: an edit answers with the post as it now
+        // is, and a post that answers with no files after an edit is a payload
+        // the block would draw empty the moment anything read it back.
+        if (updated != null)
+        {
+            await EnrichWithAttachments(new[] { updated });
+        }
+
+        return updated;
     }
 
     /// <inheritdoc />
@@ -569,6 +640,13 @@ internal class PostRepository : IPostRepository
     /// between them left a deleted post still counted or a live post uncounted —
     /// and QuantityRating feeds the user rating and the stored IsNewbie column,
     /// neither of which anything recomputes.
+    ///
+    /// The post's attachments go with it, in the same transaction: their rows are
+    /// soft-deleted here, which starts the grace period the existing orphan
+    /// sweeper waits out before dropping the objects. Nothing else would ever
+    /// remove them — the sweeper walks soft-deleted upload rows, and a live row
+    /// pointing at a hidden post is not one — so a deleted post used to leave its
+    /// files in the bucket for the life of the bucket.
     /// </remarks>
     public async Task Delete(Guid postId, Guid deletedByUserId)
     {
@@ -599,10 +677,23 @@ internal class PostRepository : IPostRepository
             }
 
             var authorId = post.AuthorId;
+            var now = _dateTimeProvider.Now;
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
-            SoftDelete.Mark(post, deletedByUserId, _dateTimeProvider.Now);
+            SoftDelete.Mark(post, deletedByUserId, now);
             await _dbContext.SaveChangesAsync();
+
+            // The soft-delete filter on Uploads keeps this to the live rows, so a
+            // file the author had already taken off does not get its grace period
+            // restarted. The author of the deletion travels with it for the same
+            // reason it does everywhere else: moderation has to be able to answer
+            // who removed a file.
+            await _dbContext.Uploads
+                .Where(u => u.TargetPostId == postId && u.Type == UploadType.PostAttachment)
+                .ExecuteUpdateAsync(u => u
+                    .SetProperty(x => x.IsRemoved, true)
+                    .SetProperty(x => x.DeletedByUserId, (Guid?)deletedByUserId)
+                    .SetProperty(x => x.DeletedUtc, (DateTimeOffset?)now));
 
             // IgnoreQueryFilters, because the row this has to reach may be soft
             // deleted. The counter was raised when the post was written and has to

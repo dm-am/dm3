@@ -56,7 +56,7 @@ public class ImageProcessingServiceShould
     {
         var input = CreateJpegStream(width: 800, height: 600);
 
-        var result = await _sut.ProcessAsync(input, "image/jpeg");
+        var result = await _sut.ProcessAsync(input, "image/jpeg", UploadType.UserAvatar);
 
         result.Bytes.Should().NotBeEmpty();
         result.ContentType.Should().Be("image/jpeg");
@@ -68,7 +68,7 @@ public class ImageProcessingServiceShould
     {
         var input = CreatePngStream(width: 600, height: 400);
 
-        var result = await _sut.ProcessAsync(input, "image/png");
+        var result = await _sut.ProcessAsync(input, "image/png", UploadType.UserAvatar);
 
         result.ContentType.Should().Be("image/png");
         result.Extension.Should().Be(".png");
@@ -79,7 +79,7 @@ public class ImageProcessingServiceShould
     {
         var input = CreateWebpStream(width: 500, height: 500);
 
-        var result = await _sut.ProcessAsync(input, "image/webp");
+        var result = await _sut.ProcessAsync(input, "image/webp", UploadType.UserAvatar);
 
         result.ContentType.Should().Be("image/webp");
         result.Extension.Should().Be(".webp");
@@ -90,7 +90,7 @@ public class ImageProcessingServiceShould
     {
         var input = CreateJpegStream(width: 2000, height: 1500);
 
-        var result = await _sut.ProcessAsync(input, "image/jpeg");
+        var result = await _sut.ProcessAsync(input, "image/jpeg", UploadType.UserAvatar);
 
         using var image = Image.Load(result.Bytes);
         Math.Max(image.Width, image.Height)
@@ -103,7 +103,7 @@ public class ImageProcessingServiceShould
         // 2:1 aspect ratio — it has to survive the downscale.
         var input = CreateJpegStream(width: 2000, height: 1000);
 
-        var result = await _sut.ProcessAsync(input, "image/jpeg");
+        var result = await _sut.ProcessAsync(input, "image/jpeg", UploadType.UserAvatar);
 
         using var image = Image.Load(result.Bytes);
         var ratio = (double)image.Width / image.Height;
@@ -115,7 +115,7 @@ public class ImageProcessingServiceShould
     {
         var input = CreateJpegStream(width: 200, height: 200);
 
-        var result = await _sut.ProcessAsync(input, "image/jpeg");
+        var result = await _sut.ProcessAsync(input, "image/jpeg", UploadType.UserAvatar);
 
         using var image = Image.Load(result.Bytes);
         image.Width.Should().Be(200);
@@ -133,7 +133,7 @@ public class ImageProcessingServiceShould
     {
         var input = CreateJpegStream(width: 200, height: 150);
 
-        var result = await _sut.ProcessAsync(input, "image/jpeg");
+        var result = await _sut.ProcessAsync(input, "image/jpeg", UploadType.UserAvatar);
 
         using var image = Image.Load(result.Bytes);
         result.Width.Should().Be(image.Width);
@@ -152,7 +152,7 @@ public class ImageProcessingServiceShould
     {
         var input = CreateJpegStream(width: 2000, height: 1000);
 
-        var result = await _sut.ProcessAsync(input, "image/jpeg");
+        var result = await _sut.ProcessAsync(input, "image/jpeg", UploadType.UserAvatar);
 
         using var image = Image.Load(result.Bytes);
         result.Width.Should().Be(image.Width).And
@@ -168,7 +168,7 @@ public class ImageProcessingServiceShould
             width: ImageProcessingService.MinDimension - 1,
             height: ImageProcessingService.MinDimension - 1);
 
-        var act = () => _sut.ProcessAsync(input, "image/jpeg");
+        var act = () => _sut.ProcessAsync(input, "image/jpeg", UploadType.UserAvatar);
 
         await act.Should().ThrowAsync<HttpBadRequestException>();
     }
@@ -178,7 +178,7 @@ public class ImageProcessingServiceShould
     {
         var notAnImage = new MemoryStream(new byte[] { 0x48, 0x65, 0x6C, 0x6C, 0x6F }); // "Hello"
 
-        var act = () => _sut.ProcessAsync(notAnImage, "image/jpeg");
+        var act = () => _sut.ProcessAsync(notAnImage, "image/jpeg", UploadType.UserAvatar);
 
         await act.Should().ThrowAsync<HttpBadRequestException>();
     }
@@ -190,30 +190,128 @@ public class ImageProcessingServiceShould
         var htmlBytes = System.Text.Encoding.UTF8.GetBytes("<!DOCTYPE html><html><body>oops</body></html>");
         var stream = new MemoryStream(htmlBytes);
 
-        var act = () => _sut.ProcessAsync(stream, "image/png");
+        var act = () => _sut.ProcessAsync(stream, "image/png", UploadType.UserAvatar);
 
         await act.Should().ThrowAsync<HttpBadRequestException>();
     }
 
     [Fact]
-    public async Task ProcessAsync_RejectsGif_NotInWhitelist()
+    public async Task ProcessAsync_RejectsGifOnAnAvatar_NotInThatWhitelist()
     {
-        // Mini-GIF (1×1 transparent). The GIF89a header → ImageSharp recognises
-        // it, but our whitelist does not let it through.
-        var gifBytes = new byte[]
-        {
-            0x47, 0x49, 0x46, 0x38, 0x39, 0x61, // GIF89a
-            0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF,
-            0x21, 0xF9, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x2C, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
-            0x02, 0x02, 0x4C, 0x01, 0x00, 0x3B,
-        };
-        var stream = new MemoryStream(gifBytes);
+        // The GIF89a header → ImageSharp recognises it, but the avatar allow-list
+        // does not carry it. An attachment's does; see the pair below.
+        var stream = CreateGifStream(width: 64, height: 64);
 
-        var act = () => _sut.ProcessAsync(stream, "image/gif");
+        var act = () => _sut.ProcessAsync(stream, "image/gif", UploadType.UserAvatar);
 
         await act.Should().ThrowAsync<HttpBadRequestException>();
+    }
+
+    // --- Post attachments: their own formats, no floor, no downscale ---
+
+    /// <summary>
+    /// The whole reason an attachment is not put through the avatar rules: a
+    /// scanned map downscaled to 1024 px stops being readable, and reading it is
+    /// what it was attached for.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_KeepsAPostAttachmentAtItsOwnSize()
+    {
+        var oversized = ImageProcessingDefaults.OriginalMaxDimension * 3;
+        var input = CreateJpegStream(width: oversized, height: oversized / 2);
+
+        var result = await _sut.ProcessAsync(input, "image/jpeg", UploadType.PostAttachment);
+
+        result.Width.Should().Be(oversized);
+        result.Height.Should().Be(oversized / 2);
+    }
+
+    /// <summary>
+    /// The same picture as an avatar, to show that the difference is the type and
+    /// not the picture.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_StillDownscalesAnAvatarOfTheSameSize()
+    {
+        var oversized = ImageProcessingDefaults.OriginalMaxDimension * 3;
+        var input = CreateJpegStream(width: oversized, height: oversized / 2);
+
+        var result = await _sut.ProcessAsync(input, "image/jpeg", UploadType.UserAvatar);
+
+        result.Width.Should().Be(ImageProcessingDefaults.OriginalMaxDimension);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_AcceptsASmallPostAttachment_WithNoDimensionFloor()
+    {
+        var input = CreatePngStream(
+            width: ImageProcessingDefaults.AvatarMinDimension - 1,
+            height: ImageProcessingDefaults.AvatarMinDimension - 1);
+
+        var result = await _sut.ProcessAsync(input, "image/png", UploadType.PostAttachment);
+
+        result.Width.Should().Be(ImageProcessingDefaults.AvatarMinDimension - 1);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_AcceptsGifOnAPostAttachment()
+    {
+        var stream = CreateGifStream(width: 32, height: 32);
+
+        var result = await _sut.ProcessAsync(stream, "image/gif", UploadType.PostAttachment);
+
+        result.ContentType.Should().Be("image/gif");
+        result.Extension.Should().Be(".gif");
+    }
+
+    /// <summary>
+    /// The formats the owner ruled out, each named by the signature a caller would
+    /// actually send. The point is that they are refused by what the bytes are and
+    /// not by what the request calls them.
+    /// </summary>
+    [Theory]
+    [InlineData("%PDF-1.7\n1 0 obj", "application/pdf", "document.pdf")]
+    [InlineData("Just some notes.", "text/plain", "notes.txt")]
+    public async Task ProcessAsync_RejectsDocumentsAsPostAttachments(
+        string content, string declaredContentType, string _)
+    {
+        var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
+
+        var act = () => _sut.ProcessAsync(stream, declaredContentType, UploadType.PostAttachment);
+
+        await act.Should().ThrowAsync<HttpBadRequestException>();
+    }
+
+    /// <summary>
+    /// The case the whole magic-byte pass exists for: a file whose name and
+    /// declared type both say JPEG and whose bytes are a ZIP container — which is
+    /// what a .docx is.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_RejectsAZipContainerCallingItselfAJpeg()
+    {
+        // "PK\x03\x04" — the local file header every zip (and every docx) starts with.
+        var zipBytes = new byte[] { 0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00, 0x08, 0x00 };
+        var stream = new MemoryStream(zipBytes);
+
+        var act = () => _sut.ProcessAsync(stream, "image/jpeg", UploadType.PostAttachment);
+
+        await act.Should().ThrowAsync<HttpBadRequestException>();
+    }
+
+    /// <summary>
+    /// A real PNG renamed and re-declared as a JPEG keeps the extension its bytes
+    /// earn, not the one the request claimed.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_NormalizesAPostAttachmentExtensionFromItsBytes()
+    {
+        var input = CreatePngStream(width: 120, height: 90);
+
+        var result = await _sut.ProcessAsync(input, "image/jpeg", UploadType.PostAttachment);
+
+        result.ContentType.Should().Be("image/png");
+        result.Extension.Should().Be(".png");
     }
 
     [Fact]
@@ -230,7 +328,7 @@ public class ImageProcessingServiceShould
         await image.SaveAsJpegAsync(inputStream);
         inputStream.Position = 0;
 
-        var result = await _sut.ProcessAsync(inputStream, "image/jpeg");
+        var result = await _sut.ProcessAsync(inputStream, "image/jpeg", UploadType.UserAvatar);
 
         using var processed = Image.Load(result.Bytes);
         processed.Metadata.ExifProfile.Should().BeNull();
@@ -243,7 +341,7 @@ public class ImageProcessingServiceShould
         // filename. Anti-extension-spoofing.
         var input = CreatePngStream(width: 400, height: 400);
 
-        var result = await _sut.ProcessAsync(input, "image/png");
+        var result = await _sut.ProcessAsync(input, "image/png", UploadType.UserAvatar);
 
         result.Extension.Should().Be(".png");
     }
@@ -273,6 +371,15 @@ public class ImageProcessingServiceShould
         using var image = new Image<Rgba32>(width, height, new Rgba32(80, 80, 80, 255));
         var ms = new MemoryStream();
         image.SaveAsWebp(ms, new WebpEncoder { Quality = 80 });
+        ms.Position = 0;
+        return ms;
+    }
+
+    private static MemoryStream CreateGifStream(int width, int height)
+    {
+        using var image = new Image<Rgba32>(width, height, new Rgba32(60, 60, 60, 255));
+        var ms = new MemoryStream();
+        image.SaveAsGif(ms, new SixLabors.ImageSharp.Formats.Gif.GifEncoder());
         ms.Position = 0;
         return ms;
     }

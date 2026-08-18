@@ -13,6 +13,7 @@ using BlogDto = DM.Domain.Blog.Features.Blogs.Blog;
 using DM.Domain.Blog.Features.Subscriptions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
@@ -35,6 +36,7 @@ namespace DM.Domain.Blog.Tests.Features.Blogs;
 public class BlogStatusTransitionShould : UnitTestBase
 {
     private readonly Mock<IBlogRepository> _repository;
+    private readonly Mock<IIntentionManager> _intentionManager;
     private readonly Mock<IEventProducer> _eventProducer;
     private readonly BlogService _service;
     private readonly DateTimeOffset _now = new(2026, 7, 14, 12, 0, 0, TimeSpan.Zero);
@@ -51,9 +53,17 @@ public class BlogStatusTransitionShould : UnitTestBase
         var identityProvider = Mock<IIdentityProvider>();
         identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
 
-        var intentionManager = Mock<IIntentionManager>();
-        intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<BlogIntention>()));
-        intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<BlogIntention>(), It.IsAny<BlogDto>()));
+        _intentionManager = Mock<IIntentionManager>();
+        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<BlogIntention>()));
+        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<BlogIntention>(), It.IsAny<BlogDto>()));
+        // Every intention says yes by default, which is the same answer the no-op
+        // ThrowIfForbidden above gives. The visibility gates ask instead of
+        // throwing, so without this the whole machine would be exercised as a
+        // stranger and answer 404 everywhere. The tests that mean to be a stranger
+        // call HideEveryBlogFromTheCaller.
+        _intentionManager
+            .Setup(m => m.IsAllowed(It.IsAny<BlogIntention>(), It.IsAny<BlogDto>()))
+            .Returns(true);
 
         var createBlogValidator = Mock<IValidator<CreateBlog>>();
         var updateBlogValidator = Mock<IValidator<UpdateBlog>>();
@@ -79,7 +89,7 @@ public class BlogStatusTransitionShould : UnitTestBase
             subscriptionService.Object,
             unreadCountersRepository.Object,
             identityProvider.Object,
-            intentionManager.Object,
+            _intentionManager.Object,
             createBlogValidator.Object,
             updateBlogValidator.Object,
             createRubricValidator.Object,
@@ -93,7 +103,9 @@ public class BlogStatusTransitionShould : UnitTestBase
         ModuleStatus status,
         ClosedReason closedReason = ClosedReason.None,
         DateTimeOffset? activatedUtc = null,
-        DateTimeOffset? closedUtc = null)
+        DateTimeOffset? closedUtc = null,
+        DraftVisibility draftVisibility = DraftVisibility.Public,
+        PremoderationStatus premoderationStatus = PremoderationStatus.Approved)
     {
         var blogId = Guid.NewGuid();
         var blog = new BlogDto
@@ -102,7 +114,10 @@ public class BlogStatusTransitionShould : UnitTestBase
             Status = status,
             ClosedReason = closedReason,
             ActivatedUtc = activatedUtc,
-            ClosedUtc = closedUtc
+            ClosedUtc = closedUtc,
+            DraftVisibility = draftVisibility,
+            PremoderationStatus = premoderationStatus,
+            Author = new GeneralUser { UserId = Guid.NewGuid() }
         };
         _repository.Setup(r => r.Get(blogId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(blog);
@@ -110,6 +125,32 @@ public class BlogStatusTransitionShould : UnitTestBase
             .Callback<UpdateBlogEntity, CancellationToken>((update, _) => _capturedUpdate = update)
             .ReturnsAsync(blog);
         return blogId;
+    }
+
+    /// <summary>
+    /// The caller holds no role in this blog: neither of the two view gates opens
+    /// for them, which is what a stranger's read answers.
+    /// </summary>
+    private void HideEveryBlogFromTheCaller() =>
+        _intentionManager
+            .Setup(m => m.IsAllowed(It.IsAny<BlogIntention>(), It.IsAny<BlogDto>()))
+            .Returns(false);
+
+    /// <summary>
+    /// The caller passes one of the two view gates and no other intention.
+    /// </summary>
+    private void OpenOnly(BlogIntention gate)
+    {
+        HideEveryBlogFromTheCaller();
+        _intentionManager
+            .Setup(m => m.IsAllowed(gate, It.IsAny<BlogDto>()))
+            .Returns(true);
+    }
+
+    private async Task<HttpException> RefusedStart(string id)
+    {
+        var act = async () => await _service.ChangeStatusAsync(id, ModuleStatusTransition.Start);
+        return (await act.Should().ThrowAsync<HttpException>()).Which;
     }
 
     #region Start
@@ -346,6 +387,150 @@ public class BlogStatusTransitionShould : UnitTestBase
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
+    }
+
+    #endregion
+
+    #region What the move may read
+
+    /// <summary>
+    /// A blog the caller cannot find anywhere on the site does not exist for them
+    /// here either: the same status and the same message an unclaimed id gets,
+    /// whichever of the two gates is the one that closed.
+    /// </summary>
+    /// <remarks>
+    /// The endpoint is authentication-gated, because its moves belong to the blog
+    /// leads and a lead is normally not moderation. Read without a scope it became
+    /// an oracle over every private draft and every premoderated blog: 404 for "no
+    /// such blog", 400 for "taken, and in the wrong status", 403 for "taken, and
+    /// not yours". The game side never had it - GameService.ChangeStatusAsync
+    /// reads through GetDetailsAsync under the accessibility scope, and a stranger
+    /// is answered 404 before the machine sees the game.
+    /// </remarks>
+    [Theory]
+    [InlineData(DraftVisibility.Private, PremoderationStatus.Approved)]
+    [InlineData(DraftVisibility.Public, PremoderationStatus.AwaitingApproval)]
+    public async Task AnswerOnAHiddenBlogTheWayItAnswersOnNoBlogAtAll(
+        DraftVisibility visibility, PremoderationStatus premoderationStatus)
+    {
+        HideEveryBlogFromTheCaller();
+        var hidden = SetupBlog(ModuleStatus.Draft,
+            draftVisibility: visibility, premoderationStatus: premoderationStatus);
+        var missing = Guid.NewGuid();
+        _repository.Setup(r => r.Get(missing, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((BlogDto?)null);
+
+        var onHidden = await RefusedStart(hidden.ToString());
+        var onMissing = await RefusedStart(missing.ToString());
+
+        onHidden.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        onHidden.StatusCode.Should().Be(onMissing.StatusCode);
+        onHidden.Message.Should().Be(onMissing.Message);
+    }
+
+    /// <summary>
+    /// And the same through the public id, which is the surface a stranger can
+    /// actually probe: five letters are guessable, a GUID is not.
+    /// </summary>
+    [Fact]
+    public async Task AnswerOnAHiddenAliasTheWayItAnswersOnAnUnclaimedOne()
+    {
+        HideEveryBlogFromTheCaller();
+        var hidden = new BlogDto
+        {
+            Id = Guid.NewGuid(),
+            Status = ModuleStatus.Draft,
+            DraftVisibility = DraftVisibility.Private,
+            Author = new GeneralUser { UserId = Guid.NewGuid() }
+        };
+        _repository.Setup(r => r.GetByPublicId("abcde", It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(hidden);
+        _repository.Setup(r => r.GetByPublicId("fghij", It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((BlogDto?)null);
+
+        var onTaken = await RefusedStart("abcde");
+        var onUnclaimed = await RefusedStart("fghij");
+
+        onTaken.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        onTaken.StatusCode.Should().Be(onUnclaimed.StatusCode);
+        onTaken.Message.Should().Be(onUnclaimed.Message);
+    }
+
+    /// <summary>
+    /// The refusal comes before anything else looks at the blog, so neither the
+    /// state machine nor the authorization gate can leak what the 404 withheld.
+    /// Start is legal from Draft and illegal from Active; a stranger is told the
+    /// same thing either way.
+    /// </summary>
+    [Theory]
+    [InlineData(ModuleStatus.Draft)]
+    [InlineData(ModuleStatus.Active)]
+    public async Task RefuseAHiddenBlogBeforeTheStateMachineSeesIt(ModuleStatus status)
+    {
+        HideEveryBlogFromTheCaller();
+        var blogId = SetupBlog(status, draftVisibility: DraftVisibility.Private);
+
+        var refusal = await RefusedStart(blogId.ToString());
+
+        refusal.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        _intentionManager.Verify(
+            m => m.ThrowIfForbidden(It.IsAny<BlogIntention>(), It.IsAny<BlogDto>()), Times.Never);
+        _repository.Verify(
+            r => r.UpdateBlog(It.IsAny<UpdateBlogEntity>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The scope is the reader's ordinary one and nothing invented for this
+    /// endpoint: the same two gates a plain read applies, the private draft and
+    /// the pending verdict.
+    /// </summary>
+    [Fact]
+    public async Task ReadTheBlogUnderTheTwoGatesAnOrdinaryReadApplies()
+    {
+        var blogId = SetupBlog(ModuleStatus.Draft,
+            draftVisibility: DraftVisibility.Private,
+            premoderationStatus: PremoderationStatus.AwaitingApproval);
+
+        await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Start);
+
+        _intentionManager.Verify(
+            m => m.IsAllowed(BlogIntention.ViewDraft, It.IsAny<BlogDto>()), Times.Once);
+        _intentionManager.Verify(
+            m => m.IsAllowed(BlogIntention.ViewPremoderationPending, It.IsAny<BlogDto>()), Times.Once);
+    }
+
+    /// <summary>
+    /// The owner of a private draft nobody else can open still moves it: the gate
+    /// that closes for a stranger is exactly the one that opens for them.
+    /// </summary>
+    [Fact]
+    public async Task LetTheOwnerStartAPrivateDraftNobodyElseCanSee()
+    {
+        OpenOnly(BlogIntention.ViewDraft);
+        var blogId = SetupBlog(ModuleStatus.Draft, draftVisibility: DraftVisibility.Private);
+
+        await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Start);
+
+        _capturedUpdate!.Status.Should().Be(ModuleStatus.Active);
+    }
+
+    /// <summary>
+    /// And whoever may see a blog awaiting a verdict - its leads, its mentor,
+    /// whoever may pass the verdict - reaches the machine and the authorization
+    /// gate, which is where a 403 still belongs.
+    /// </summary>
+    [Fact]
+    public async Task LetWhoeverMaySeeAPremoderatedBlogReachTheStatusMachine()
+    {
+        OpenOnly(BlogIntention.ViewPremoderationPending);
+        var blogId = SetupBlog(ModuleStatus.Draft,
+            premoderationStatus: PremoderationStatus.AwaitingApproval);
+
+        await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Start);
+
+        _capturedUpdate!.Status.Should().Be(ModuleStatus.Active);
+        _intentionManager.Verify(
+            m => m.ThrowIfForbidden(BlogIntention.SetStatusActive, It.IsAny<BlogDto>()), Times.Once);
     }
 
     #endregion

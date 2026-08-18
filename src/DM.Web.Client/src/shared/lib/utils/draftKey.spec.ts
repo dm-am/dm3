@@ -15,6 +15,7 @@ import {
 const EVERY_ENTITY: Record<DraftEntity, true> = {
   topic: true,
   blog: true,
+  publication: true,
   game: true,
   room: true,
   chat: true,

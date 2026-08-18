@@ -25,7 +25,7 @@ interface PanelLink {
 
 // Order and wording follow the doc verbatim.
 const links: PanelLink[] = [
-  { label: "Модерация", to: "/moderation/moderators" },
+  { label: "Модераторы", to: "/moderation/moderators" },
   { label: "Премодерируемые игры", to: "/moderation/games" },
   { label: "Премодерируемые блоги", to: "/moderation/blogs" },
   { label: "Последние баны", to: "/moderation/bans" },
@@ -35,7 +35,7 @@ const links: PanelLink[] = [
   { label: "Нарушители", to: "/moderation/violators" },
   { label: "Поддержка", to: "/moderation/support", adminOnly: true },
   { label: "Жалобы", to: "/moderation/complaints" },
-  { label: "Все загруженное", to: "/moderation/uploads" },
+  { label: "Все загруженные файлы", to: "/moderation/uploads" },
 ];
 
 const { user } = storeToRefs(useAuthStore());

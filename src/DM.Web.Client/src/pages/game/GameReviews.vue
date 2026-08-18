@@ -130,8 +130,7 @@ async function submitReview() {
 <template>
   <div class="game-reviews">
     <LeadText v-once>
-      Рецензии на игру целиком, по одной от участника. Кто может ее написать,
-      решает сервер.
+      Рецензии на игру целиком, по одной от участника.
     </LeadText>
 
     <!-- Error banner — independent of the list: a failed refetch never hides

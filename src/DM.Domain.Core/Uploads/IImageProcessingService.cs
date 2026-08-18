@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -6,16 +7,18 @@ using DM.Domain.Core.Enums;
 namespace DM.Domain.Core.Uploads;
 
 /// <summary>
-/// Pipeline for avatars (UserAvatar, CharacterAvatar):
+/// The one pipeline every uploaded file goes through:
 ///   1) magic-byte format validation (client content-type is not trusted),
-///   2) decompression-bomb protection (pre-decode pixel area check),
-///   3) min/max dimension guards,
+///   2) decompression-bomb protection (pre-decode pixel area check, frames included),
+///   3) dimension guards,
 ///   4) EXIF/IPTC/XMP strip (re-encode metadata-free),
 ///   5) downscale to <see cref="ImageProcessingDefaults.OriginalMaxDimension"/>
-///      if the image is larger (Max-mode, aspect-preserving).
+///      if the type asks for it.
 ///
+/// Steps 3 and 5 differ per upload type — see <see cref="ImageProcessingDefaults"/>.
 /// Returns a single file (source). Thumbnails are generated on-the-fly
-/// via imgproxy at serving time — not pre-generated.
+/// via imgproxy at serving time — not pre-generated, and never for a post
+/// attachment, whose bytes are served by an endpoint that authorizes the caller.
 /// </summary>
 public interface IImageProcessingService
 {
@@ -23,14 +26,26 @@ public interface IImageProcessingService
     bool IsImageType(UploadType type);
 
     /// <summary>
-    /// Read the stream, validate (magic bytes, dimensions, decompression
-    /// bomb), strip EXIF, downscale if &gt;1024 px. Throws
+    /// Read the stream, validate (magic bytes, dimensions, decompression bomb),
+    /// strip EXIF, downscale where the type asks for it. Throws
     /// <see cref="DM.Domain.Core.Exceptions.HttpBadRequestException"/> on any
     /// validation error.
     /// </summary>
+    /// <param name="input">Bytes as the caller sent them.</param>
+    /// <param name="declaredContentType">
+    /// What the client called the file. Recorded on the trace and never trusted:
+    /// the format is decided by the magic bytes.
+    /// </param>
+    /// <param name="type">
+    /// What the file is for. Decides the accepted formats, the dimension floor and
+    /// whether the stored file is downscaled — an avatar is a small square and a
+    /// post attachment is a map somebody has to be able to read.
+    /// </param>
+    /// <param name="ct">Cancellation token.</param>
     Task<ProcessedImage> ProcessAsync(
         Stream input,
         string declaredContentType,
+        UploadType type,
         CancellationToken ct = default);
 }
 
@@ -58,10 +73,39 @@ public sealed record ProcessedImage(
 
 /// <summary>
 /// Publicly accessible pipeline constants — SSOT for docs, tests,
-/// imgproxy presets.
+/// imgproxy presets and the client's file picker.
 /// </summary>
 public static class ImageProcessingDefaults
 {
-    /// <summary>Maximum dimension of the source file after processing.</summary>
+    /// <summary>Maximum dimension of an avatar after processing.</summary>
     public const int OriginalMaxDimension = 1024;
+
+    /// <summary>
+    /// Smallest side an avatar may have. Junk-upload protection for a picture
+    /// shown at a fixed small size; a post attachment has no floor, because a
+    /// legend cut out of a map is a legitimate thing to attach.
+    /// </summary>
+    public const int AvatarMinDimension = 50;
+
+    /// <summary>
+    /// Formats an avatar may be in.
+    /// </summary>
+    public static IReadOnlyCollection<string> AvatarContentTypes { get; } =
+        new[] { "image/jpeg", "image/png", "image/webp" };
+
+    /// <summary>
+    /// Formats a post attachment may be in: pictures only, and only the ones the
+    /// decoder in this pipeline reads.
+    /// </summary>
+    /// <remarks>
+    /// The specification asked for documents as well — pdf, docx, txt. They are
+    /// deliberately not here. Everything on this list is validated by decoding it,
+    /// which is what makes "the extension says jpg" irrelevant; a document format
+    /// has no decode step, so admitting one means a second validation path that
+    /// judges a file by its signature alone and then stores content the site
+    /// serves from its own origin. That is how an upload becomes stored XSS, and
+    /// no attachment use case in the product needs it.
+    /// </remarks>
+    public static IReadOnlyCollection<string> PostAttachmentContentTypes { get; } =
+        new[] { "image/jpeg", "image/png", "image/webp", "image/gif" };
 }

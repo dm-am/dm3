@@ -57,6 +57,22 @@ public class GameRef
     public IEnumerable<GameParticipation> Participation { get; set; } = [];
 
     /// <summary>
+    /// Game waits for a post from the requesting user
+    /// </summary>
+    /// <remarks>
+    /// The same expectations the room list marks with a star, summed up for the
+    /// whole game, so a list of games can show the marker without reading every
+    /// room. False for an anonymous request.
+    /// </remarks>
+    public bool AwaitsViewerTurn { get; set; }
+
+    /// <summary>
+    /// Names of the requesting user's characters the game waits a post for,
+    /// oldest expectation first. Empty unless <see cref="AwaitsViewerTurn" />.
+    /// </summary>
+    public IEnumerable<string> AwaitedCharacterNames { get; set; } = [];
+
+    /// <summary>
     /// Number of subscribers (readers)
     /// </summary>
     public int SubscribersCount { get; set; }

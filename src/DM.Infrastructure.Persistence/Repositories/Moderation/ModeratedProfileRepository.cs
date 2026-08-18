@@ -46,4 +46,19 @@ internal class ModeratedProfileRepository : IModeratedProfileRepository
         userEntity.Role = role;
         await _dbContext.SaveChangesAsync(ct);
     }
+
+    /// <inheritdoc />
+    public async Task SetModerationWatch(string username, bool underWatch, CancellationToken ct = default)
+    {
+        var userEntity = await _dbContext.Users
+            .FirstOrDefaultAsync(u => u.Username.ToLower() == username.ToLower() && !u.IsRemoved, ct);
+
+        if (userEntity == null)
+        {
+            throw new InvalidOperationException($"User '{username}' not found");
+        }
+
+        userEntity.IsUnderModerationWatch = underWatch;
+        await _dbContext.SaveChangesAsync(ct);
+    }
 }

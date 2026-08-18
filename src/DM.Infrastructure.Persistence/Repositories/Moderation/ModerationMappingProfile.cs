@@ -19,10 +19,15 @@ internal class ModerationMappingProfile : Profile
     /// <inheritdoc />
     public ModerationMappingProfile()
     {
-        // Warning mappings
+        // Warning mappings. The two entity facts below are not columns: the
+        // address and the "edited since" mark are resolved per read by
+        // IWarningEntityResolver, because both change without the warning being
+        // touched. Only the snapshot is stored, and it maps by name.
         CreateMap<DbWarning, Warning>()
             .ForMember(d => d.TargetUser, s => s.MapFrom(w => w.TargetUser))
-            .ForMember(d => d.Author, s => s.MapFrom(w => w.Author));
+            .ForMember(d => d.Author, s => s.MapFrom(w => w.Author))
+            .ForMember(d => d.EntityUrl, s => s.Ignore())
+            .ForMember(d => d.EntityEditedAfterWarning, s => s.Ignore());
 
         // Ban mappings
         CreateMap<DbBan, Ban>()

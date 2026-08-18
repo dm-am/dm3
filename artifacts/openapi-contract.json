@@ -44,6 +44,10 @@
     "newPassword",
     "oldPassword"
   ],
+  "DM.Web.API.Features.Account.Credentials.UsernameChangeApprovalInfo": [
+    "currentUsername",
+    "status"
+  ],
   "DM.Web.API.Features.Account.Credentials.UsernameChangeCompletionRequest": [
     "username"
   ],
@@ -54,6 +58,7 @@
     "approvalTokenExpiresUtc",
     "createdUtc",
     "currentUsername",
+    "expiryReason",
     "id",
     "reason",
     "requestedUsername",
@@ -326,6 +331,10 @@
   "DM.Web.API.Features.Community.Endorsements.CreateUserEndorsementRequest": [
     "text"
   ],
+  "DM.Web.API.Features.Community.Endorsements.EndorsementEligibility": [
+    "canCreate",
+    "reason"
+  ],
   "DM.Web.API.Features.Community.Endorsements.UpdateUserEndorsementRequest": [
     "text"
   ],
@@ -340,11 +349,13 @@
   "DM.Web.API.Features.Community.Fundraising.Fundraising": [
     "collectedAmount",
     "goalAmount",
-    "modifiedUtc"
+    "modifiedUtc",
+    "title"
   ],
   "DM.Web.API.Features.Community.Fundraising.UpdateFundraisingRequest": [
     "collectedAmount",
-    "goalAmount"
+    "goalAmount",
+    "title"
   ],
   "DM.Web.API.Features.Community.Polls.CreatePollRequest": [
     "details",
@@ -552,6 +563,7 @@
     "oldUsername"
   ],
   "DM.Web.API.Features.Community.WebsiteTestimonials.CreateWebsiteTestimonialRequest": [
+    "authorUsername",
     "text"
   ],
   "DM.Web.API.Features.Community.WebsiteTestimonials.UpdateWebsiteTestimonialRequest": [
@@ -775,6 +787,8 @@
     "activatedUtc",
     "activeCharacters",
     "assistants",
+    "awaitedCharacterNames",
+    "awaitsViewerTurn",
     "closedReason",
     "closedUtc",
     "createdUtc",
@@ -787,6 +801,7 @@
     "playerCharacters",
     "players",
     "postReviewsCount",
+    "premoderationStatus",
     "publicId",
     "recruitment",
     "schemaId",
@@ -806,6 +821,8 @@
     "activatedUtc",
     "activeCharacters",
     "assistants",
+    "awaitedCharacterNames",
+    "awaitsViewerTurn",
     "characters",
     "closedReason",
     "closedUtc",
@@ -824,6 +841,7 @@
     "playerCharacters",
     "players",
     "postReviewsCount",
+    "premoderationStatus",
     "privacySettings",
     "publicId",
     "readers",
@@ -864,6 +882,8 @@
     "activatedUtc",
     "activeCharacters",
     "assistants",
+    "awaitedCharacterNames",
+    "awaitsViewerTurn",
     "closedReason",
     "gameReviewsCount",
     "id",
@@ -893,6 +913,7 @@
     "description",
     "gamesCount",
     "groupDescription",
+    "groupMaxTagsPerGame",
     "groupSortOrder",
     "groupTitle",
     "id",
@@ -915,6 +936,7 @@
     "recruitment",
     "setting",
     "system",
+    "tags",
     "title"
   ],
   "DM.Web.API.Features.Game.Invitations.GameInvitation": [
@@ -955,6 +977,7 @@
     "rolls"
   ],
   "DM.Web.API.Features.Game.Posts.Post": [
+    "attachments",
     "author",
     "authorGameRole",
     "character",
@@ -967,6 +990,16 @@
     "rating",
     "reviewCount",
     "room"
+  ],
+  "DM.Web.API.Features.Game.Posts.PostAttachment": [
+    "contentType",
+    "createdUtc",
+    "fileName",
+    "height",
+    "id",
+    "sizeBytes",
+    "url",
+    "width"
   ],
   "DM.Web.API.Features.Game.Posts.PostEditInfo": [
     "editor",
@@ -1001,6 +1034,10 @@
     "modifiedUtc",
     "postAuthor",
     "postId",
+    "sign",
+    "text"
+  ],
+  "DM.Web.API.Features.Game.Reviews.UpdatePostReviewRequest": [
     "sign",
     "text"
   ],
@@ -1323,6 +1360,7 @@
     "info",
     "ipAddresses",
     "isNewbie",
+    "isUnderModerationWatch",
     "lastActivityUtc",
     "likesReceived",
     "linkedProfiles",
@@ -1362,11 +1400,15 @@
     "canIssueBan",
     "canIssueWarning",
     "canLiftBan",
+    "canSetModerationWatch",
     "canViewEmail",
     "canViewIpAddresses",
     "canViewLinkedProfiles",
     "canViewLoginHistory",
     "canViewModNotes"
+  ],
+  "DM.Web.API.Features.Moderation.Profiles.ModerationWatchRequest": [
+    "underWatch"
   ],
   "DM.Web.API.Features.Moderation.Profiles.UpdateModeratedProfileNoteRequest": [
     "text"
@@ -1387,6 +1429,7 @@
   ],
   "DM.Web.API.Features.Moderation.Tags.CreateTagGroupRequest": [
     "description",
+    "maxTagsPerGame",
     "sortOrder",
     "title"
   ],
@@ -1409,12 +1452,14 @@
   "DM.Web.API.Features.Moderation.Tags.TagGroup": [
     "description",
     "id",
+    "maxTagsPerGame",
     "sortOrder",
     "tagsCount",
     "title"
   ],
   "DM.Web.API.Features.Moderation.Tags.UpdateTagGroupRequest": [
     "description",
+    "maxTagsPerGame",
     "sortOrder",
     "title"
   ],
@@ -1534,8 +1579,11 @@
   ],
   "DM.Web.API.Features.Moderation.Warnings.Warning": [
     "createdUtc",
+    "entityEditedAfterWarning",
     "entityId",
+    "entitySnapshot",
     "entityType",
+    "entityUrl",
     "id",
     "isActive",
     "moderator",
@@ -1836,6 +1884,9 @@
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Community.Awards.UserAward, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "resource"
   ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Community.Endorsements.EndorsementEligibility, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "resource"
+  ],
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Community.Fundraising.Fundraising, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "resource"
   ],
@@ -1921,6 +1972,9 @@
     "resource"
   ],
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Moderation.Bans.PublicBan, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Moderation.Profiles.ModeratedProfile, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "resource"
   ],
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Moderation.Tickets.Ticket, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
@@ -2158,6 +2212,7 @@
   "DM.Web.API.Shared.Dto.Upload": [
     "confirmedUtc",
     "contentType",
+    "contentUrl",
     "createdUtc",
     "id",
     "originalFileName",

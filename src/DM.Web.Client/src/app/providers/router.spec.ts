@@ -482,6 +482,38 @@ describe("character routes of a game", () => {
 });
 
 /**
+ * The feed of a blog and the publications under it, the same prefix problem one
+ * zone over: "feed/create" is a literal segment competing with "feed/:pubId",
+ * and the page lost to a mistake here is the one the author writes in.
+ *
+ * The publication page itself is what the feed cards, the profile spotlight and
+ * the notification resolver all point at, so its name is load-bearing in three
+ * places that cannot see each other.
+ */
+describe("publication routes of a blog", () => {
+  const CASES: Array<[string, string]> = [
+    ["/blogs/abcde/feed", "blog-feed"],
+    ["/blogs/abcde/feed/create", "blog-publication-create"],
+    ["/blogs/abcde/feed/7f1c", "blog-publication"],
+    ["/blogs/abcde/feed/7f1c/edit", "blog-publication-edit"],
+    ["/publication/7f1c", "publication-redirect"],
+  ];
+
+  it.each(CASES)("resolves %s to %s", (path, name) => {
+    expect(router.resolve(path).name).toBe(name);
+  });
+
+  it("opens the publication page to a guest", () => {
+    expect(router.resolve("/blogs/abcde/feed/7f1c").meta).toMatchObject({
+      blogZone: true,
+    });
+    expect(
+      router.resolve("/blogs/abcde/feed/7f1c").meta.requiresAuth,
+    ).toBeUndefined();
+  });
+});
+
+/**
  * The variants catalog is reachable only in a development build: the route sits
  * inside an import.meta.env.DEV branch that rollup drops along with the dynamic
  * import. The check lives here because, by the FSD rules, the page does not

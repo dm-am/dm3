@@ -28,5 +28,12 @@ internal class UpdateGameValidator : AbstractValidator<UpdateGame>
             RuleFor(g => g.Info)
                 .NotEmpty().WithMessage(ValidationError.Empty)
                 .MinimumLength(200).WithMessage(ValidationError.Short));
+
+        // Who may comment is decided by comparing the stored value against the
+        // named members; an integer outside the enum matches none of them and
+        // the game ends up with an access mode nothing in the product can read.
+        // Null passes — omitted keeps the stored value.
+        RuleFor(g => g.CommentsAccessMode)
+            .IsInEnum().WithMessage(ValidationError.Invalid);
     }
 }

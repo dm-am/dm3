@@ -20,8 +20,19 @@ namespace DM.Domain.Game.Features.PostReviews;
 /// <inheritdoc />
 internal class PostReviewService : IPostReviewService
 {
-    private static readonly TimeSpan EditWindow = TimeSpan.FromDays(1);
+    /// <summary>
+    /// How long the author may correct what they published. The same quarter of
+    /// an hour a game post and a comment give their author (PostIntentionResolver,
+    /// CommentIntentionResolver and the two clients that mirror them): an opinion
+    /// somebody else has already read is not a draft, and the correction window
+    /// is for a typo, not for a change of mind. Deleting is the way out after it
+    /// closes, and it has no window.
+    /// </summary>
+    private static readonly TimeSpan EditWindow = TimeSpan.FromMinutes(15);
+
     private static readonly TimeSpan CooldownPerGame = TimeSpan.FromDays(3);
+
+    private const string ReviewNotFound = "Оценка не найдена";
 
     private readonly IValidator<CreatePostReview> _createValidator;
     private readonly IValidator<UpdatePostReview> _updateValidator;
@@ -87,7 +98,7 @@ internal class PostReviewService : IPostReviewService
         if (createReview.Sign != ReviewSign.Neutral && await IsNewbieAsync(authorId))
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                $"Ставить плюс и минус можно после {ProbationPolicy.NewbiePostThreshold} постов в играх");
+                RefusalMessage.SignedReviewNeedsExperience(ProbationPolicy.NewbiePostThreshold));
         }
 
         // Check if already reviewed this post
@@ -119,16 +130,9 @@ internal class PostReviewService : IPostReviewService
 
         try
         {
-            var result = await _repository.CreateAsync(entity);
-
-            // Update post author's QualityRating based on review sign
-            if (createReview.Sign != ReviewSign.Neutral)
-            {
-                var signValue = (int)createReview.Sign;
-                await _repository.UpdateUserQualityRatingAsync(postInfo.AuthorId, signValue);
-            }
-
-            return result;
+            // The post author's QualityRating moves with the row, in the one call
+            // that writes both. Neutral is zero, so the sign is the delta.
+            return await _repository.CreateAsync(entity, (int)createReview.Sign);
         }
         catch (DuplicateEntityException)
         {
@@ -137,12 +141,45 @@ internal class PostReviewService : IPostReviewService
     }
 
     /// <inheritdoc />
-    public async Task<PostReview> GetAsync(Guid id)
+    public async Task<PostReview> GetAsync(Guid postId, Guid reviewId)
+    {
+        // Through the post, under the same room scope the create path reads it
+        // with. By review identifier alone this answered on posts the caller
+        // cannot open — a private room, a game they are not in — and handed out
+        // the review body, the post author and the game along with it.
+        var postInfo = await _repository.GetPostInfoAsync(postId, _identityProvider.Current.User.UserId);
+        if (postInfo == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.PostNotFound);
+        }
+
+        var review = await GetByIdAsync(reviewId);
+
+        // The route names both. A review of a different post reached through
+        // this post's address is not this post's review, and answering with it
+        // made the post identifier decoration.
+        if (review.PostId != postId)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, ReviewNotFound);
+        }
+
+        return review;
+    }
+
+    /// <summary>
+    /// The review itself, with no scope of its own.
+    /// </summary>
+    /// <remarks>
+    /// For the two paths that carry their own gate: editing asks for the author
+    /// and their window, removal asks for the author or a senior moderator, and
+    /// neither is reached from a route that names the post.
+    /// </remarks>
+    private async Task<PostReview> GetByIdAsync(Guid id)
     {
         var review = await _repository.GetAsync(id);
         if (review == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Оценка не найдена");
+            throw new HttpException(HttpStatusCode.NotFound, ReviewNotFound);
         }
 
         return review;
@@ -184,60 +221,68 @@ internal class PostReviewService : IPostReviewService
     public async Task<PostReview> UpdateAsync(UpdatePostReview updateReview)
     {
         await _updateValidator.ValidateAndThrowAsync(updateReview);
-        var review = await GetAsync(updateReview.ReviewId);
+        var review = await GetByIdAsync(updateReview.ReviewId);
 
         _intentionManager.ThrowIfForbidden(PostReviewIntention.Edit, review);
 
-        // Check 24-hour edit window (admins can edit anytime)
+        // Check the author's edit window (admins can edit anytime)
         var currentUser = _identityProvider.Current.User;
         if (currentUser.Role != UserRole.Admin && !CanEdit(review))
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "Оценку можно править в течение суток после публикации");
+                $"Оценку можно править в течение {EditWindow.TotalMinutes:0} минут после публикации");
         }
 
         // Handle sign change impact on QualityRating
         var oldSign = review.Sign;
         var newSign = updateReview.Sign ?? oldSign;
 
-        if (newSign != oldSign)
+        // The same probation the create path applies. Without it a newbie
+        // published the neutral review the form allows them and then moved it
+        // to a plus or a minus with an edit, which is the whole rule undone.
+        if (newSign != oldSign && newSign != ReviewSign.Neutral &&
+            await IsNewbieAsync(currentUser.UserId))
         {
-            // Revert old sign effect
-            if (oldSign != ReviewSign.Neutral)
-            {
-                await _repository.UpdateUserQualityRatingAsync(review.PostAuthor.UserId, -(int)oldSign);
-            }
-            // Apply new sign effect
-            if (newSign != ReviewSign.Neutral)
-            {
-                await _repository.UpdateUserQualityRatingAsync(review.PostAuthor.UserId, (int)newSign);
-            }
+            throw new HttpException(HttpStatusCode.Forbidden,
+                RefusalMessage.SignedReviewNeedsExperience(ProbationPolicy.NewbiePostThreshold));
         }
 
         var entity = new UpdatePostReviewEntity(
             review.Id,
             Sign: updateReview.Sign,
+            // Same treatment the text gets on the way in: the body renders on
+            // the Comment surface, where [mod] is a green mod block.
+            Text: updateReview.Text == null
+                ? null
+                : ModBlockSanitizer.SanitizeForAuthor(updateReview.Text, currentUser.Role),
             ModifiedUtc: _dateTimeProvider.Now,
             ModifiedByUserId: currentUser.UserId);
 
-        return await _repository.UpdateAsync(entity);
+        // Both signs at once, in the call that writes the row. Neutral is zero,
+        // so an edit that leaves the sign alone owes the counter nothing, and one
+        // that moves it owes the difference — the old sign taken back and the new
+        // one applied, which used to be two commits of their own.
+        return await _repository.UpdateAsync(entity, (int)newSign - (int)oldSign);
     }
 
     /// <inheritdoc />
     public async Task DeleteAsync(Guid id)
     {
-        var review = await GetAsync(id);
+        var review = await GetByIdAsync(id);
         _intentionManager.ThrowIfForbidden(PostReviewIntention.Delete, review);
 
-        // Revert post author's QualityRating when post review is deleted
-        if (review.Sign != ReviewSign.Neutral)
-        {
-            var signValue = (int)review.Sign;
-            await _repository.UpdateUserQualityRatingAsync(review.PostAuthor.UserId, -signValue);
-        }
+        // Who removed it and when: a senior moderator may remove somebody
+        // else's review, and a removal with no hand behind it cannot be
+        // reviewed afterwards.
+        var entity = new UpdatePostReviewEntity(
+            id,
+            IsRemoved: true,
+            DeletedUtc: _dateTimeProvider.Now,
+            DeletedByUserId: _identityProvider.Current.User.UserId);
 
-        var entity = new UpdatePostReviewEntity(id, IsRemoved: true);
-        await _repository.UpdateAsync(entity);
+        // The post author's QualityRating gives back what the review gave it, in
+        // the same write as the removal. Neutral is zero and owes nothing.
+        await _repository.UpdateAsync(entity, -(int)review.Sign);
     }
 
     /// <inheritdoc />

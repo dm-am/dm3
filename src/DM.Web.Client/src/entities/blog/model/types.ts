@@ -18,6 +18,14 @@ export type BlogPremoderationStatus =
   | "AwaitingEdits";
 
 /**
+ * Why a closed blog is closed (mirrors the backend ClosedReason, which one
+ * status machine serves both modules from). Declared here rather than imported
+ * from the game entity, the same way BlogPremoderationStatus is: entities do
+ * not reach into each other.
+ */
+export type BlogClosedReason = "None" | "Finished" | "Frozen";
+
+/**
  * Lightweight blog reference for sidebars and menus.
  * Omits rubrics and other detail-page-only fields.
  * Request with ?projection=ref to get this type.
@@ -31,6 +39,8 @@ export interface BlogRef {
   assistants?: UserRef[];
   /** Blog status (Draft, Active, Closed) */
   status: BlogStatus;
+  /** Why the blog is closed; only carried while the status is Closed. */
+  closedReason?: BlogClosedReason;
   /** When the blog was created */
   createdUtc: string;
   /** When the blog was first activated */
@@ -225,30 +235,34 @@ export interface UpdatePublicationInput {
 // === Blog state-machine transitions (mirror the game enums) ===
 
 /**
- * Requested blog status transition. Mirrors GameStatusTransition; blogs have
- * no Freeze/Finish because ModuleStatus for blogs is Draft/Active/Closed
- * without a closed reason.
+ * Requested blog status transition. One machine serves both modules
+ * (ModuleStatusTransition.cs), so the member names are the game's; Finish is
+ * left out because a blog is not a story that ends.
  *
- * NOTE: the backend endpoint POST v1/blogs/{id}/status does NOT exist yet
- * (games have POST v1/games/{id}/status). The UI dispatches these optimistically
- * and surfaces a toast error until the endpoint lands.
+ * Served by POST v1/blogs/{id}/status (BlogController.PostBlogStatus).
  */
 export enum BlogStatusTransition {
   /** Draft -> Active */
   Start = "Start",
-  /** Active -> Closed */
+  /** Active -> Closed (Frozen) */
+  Freeze = "Freeze",
+  /** Active or Closed+Frozen -> Closed (None) */
   Close = "Close",
-  /** Closed -> Active */
+  /** Closed (any reason) -> Active */
   Reopen = "Reopen",
 }
 
 /**
- * Requested premoderation transition (mentor action).
+ * Requested premoderation transition. Exactly three, and they do not share an
+ * actor: the first two are the moderation verdict (Mentor and above, legal from
+ * any status), the third is the owner asking for that verdict.
  * @see src/DM.Domain.Core/Statuses/ModuleStatusTransition.cs
  */
 export enum BlogPremoderationTransition {
-  /** AwaitingEdits -> AwaitingApproval (take into premoderation) */
-  SendToPremoderation = "SendToPremoderation",
-  /** AwaitingApproval -> Approved (release) */
-  RemoveFromPremoderation = "RemoveFromPremoderation",
+  /** Any status -> Approved (verdict, clears the curator) */
+  SetApproved = "SetApproved",
+  /** Any status -> AwaitingEdits (verdict, records the acting mentor) */
+  SetAwaitingEdits = "SetAwaitingEdits",
+  /** AwaitingEdits -> AwaitingApproval (the owner asks for a verdict) */
+  SubmitForApproval = "SubmitForApproval",
 }

@@ -36,12 +36,27 @@ const props = withDefaults(
     emptyHint: string;
     /** Toast text when the list request fails. */
     loadErrorText: string;
+    /**
+     * Who is looking. The per-entry controls repeat the server's rules for one
+     * entry, which are decided by authorship: an entry is edited by the one who
+     * wrote it and by nobody else, because rewritten by another hand it would
+     * still stand under their name. Null for a viewer with no account, who
+     * writes nowhere.
+     */
+    viewerId: string | null;
+    /**
+     * Whether the viewer leads the container and may therefore remove an entry
+     * somebody else wrote — the game master, the blog owner. Deleting is the
+     * one place where a lead outranks the author; editing is not.
+     */
+    canDeleteOthers?: boolean;
     /** Personal notepad: own page, h1 and page padding. */
     standalone?: boolean;
   }>(),
   {
     accessible: true,
     deniedText: "",
+    canDeleteOthers: false,
     standalone: false,
   },
 );
@@ -67,6 +82,24 @@ const pendingDelete = ref<NotepadEntry | null>(null);
 
 const sortedEntries = computed(() =>
   [...entries.value].sort((a, b) => a.sortOrder - b.sortOrder),
+);
+
+// The two controls over the entry on the right, each the client half of a
+// server rule. Offered on every entry, they earned a 403 the moment a notepad
+// held two authors — the notes of a game are shared by the master and the
+// assistants, and so are the notes kept about a character.
+const canEditSelected = computed(
+  () =>
+    !!selectedEntry.value &&
+    !!props.viewerId &&
+    selectedEntry.value.authorId === props.viewerId,
+);
+
+const canDeleteSelected = computed(
+  () =>
+    !!selectedEntry.value &&
+    !!props.viewerId &&
+    (selectedEntry.value.authorId === props.viewerId || props.canDeleteOthers),
 );
 
 async function fetchEntries() {
@@ -342,14 +375,19 @@ onMounted(fetchEntries);
           <template v-else-if="selectedEntry">
             <div class="content-header">
               <h2>{{ selectedEntry.title }}</h2>
-              <div class="content-actions">
+              <div
+                v-if="canEditSelected || canDeleteSelected"
+                class="content-actions"
+              >
                 <button
+                  v-if="canEditSelected"
                   class="edit-btn"
                   @click="openEditEntryEditor(selectedEntry)"
                 >
                   Редактировать
                 </button>
                 <button
+                  v-if="canDeleteSelected"
                   class="delete-btn"
                   @click="pendingDelete = selectedEntry"
                 >

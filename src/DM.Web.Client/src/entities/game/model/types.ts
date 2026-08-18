@@ -23,6 +23,16 @@ export enum ClosedReason {
   Frozen = "Frozen",
 }
 
+/**
+ * Premoderation status of a game (mirrors backend PremoderationStatus, and the
+ * blog type of the same shape). "Approved" means the game needs no
+ * premoderation and the whole subject is hidden in the UI.
+ */
+export type GamePremoderationStatus =
+  | "Approved"
+  | "AwaitingApproval"
+  | "AwaitingEdits";
+
 export enum DraftVisibility {
   Private = "Private",
   Public = "Public",
@@ -69,6 +79,12 @@ export type Tag = {
   sortOrder: number;
   /** Tag group sort order */
   groupSortOrder: number;
+  /**
+   * How many tags of this tag's group one game may carry. Absent means the
+   * group limits nothing. Kept in the catalog moderation edits, so the picker
+   * reads it from the server instead of holding a copy of the numbers.
+   */
+  groupMaxTagsPerGame?: number | null;
 };
 
 // === Game Settings ===
@@ -129,6 +145,14 @@ export type GameRef = {
   subscriberUsernames?: string[];
   /** Active characters info for [X/Y] tooltip */
   activeCharacters?: ActiveCharacterInfo[];
+  /**
+   * The game waits for a post from the current viewer. Same expectations the
+   * room list marks with a star, summed up per game by the server, so a list of
+   * games shows the marker without reading every room.
+   */
+  awaitsViewerTurn?: boolean;
+  /** Names of the viewer's characters the game waits a post for */
+  awaitedCharacterNames?: string[];
 };
 
 /** Active character info for tooltip */
@@ -204,6 +228,11 @@ export interface Game extends GameRef {
   fullAssistants?: Served<User[]>;
   pendingAssistant: Served<UserRef | null>;
   mentor: Served<UserRef | null>;
+  /**
+   * Premoderation status. Absent from older payloads, so optional: a game that
+   * does not say is treated as needing nothing.
+   */
+  premoderationStatus?: GamePremoderationStatus;
   info: string;
 
   /** Full tags (only for single game details, null for lists) */
@@ -295,6 +324,54 @@ export interface CreateGameInput {
   /** Assistant username */
   assistantUsername?: string;
   privacySettings?: CreateGamePrivacySettingsInput;
+}
+
+// === Game update ===
+
+/**
+ * Editable privacy settings (maps to backend UpdateGamePrivacySettings).
+ */
+export interface UpdateGamePrivacySettingsInput {
+  viewPrivates?: boolean;
+  viewDice?: boolean;
+  viewPostStats?: boolean;
+  commentariesAccess?: CommentariesAccessMode;
+}
+
+/**
+ * Editable recruitment settings (maps to backend UpdateGameRecruitment). The
+ * read-only recruitment facts the response carries — how many characters are
+ * in, when the wave started — are the server's and are not sent back.
+ */
+export interface UpdateGameRecruitmentInput {
+  isOpen?: boolean;
+  pcLimit?: number;
+}
+
+/**
+ * Payload for editing a game (maps to backend UpdateGameRequest).
+ *
+ * Deliberately not `Partial<Game>`: the response DTO carries forty fields the
+ * endpoint does not accept, and typing the patch by it invited the settings
+ * form to send controls the server would silently drop.
+ *
+ * @see src/DM.Web.API/Features/Game/Games/UpdateGameRequest.cs
+ */
+export interface UpdateGameInput {
+  title?: string;
+  /** RPG system name */
+  system?: string;
+  /** Narrative setting */
+  setting?: string;
+  /** Game description (raw BBCode source) */
+  info?: string;
+  /**
+   * Game tag short identifiers, the ones /games/tags serves. The whole set:
+   * omit the field to leave the tags alone, send an empty list to clear them.
+   */
+  tags?: number[];
+  privacySettings?: UpdateGamePrivacySettingsInput;
+  recruitment?: UpdateGameRecruitmentInput;
 }
 
 // === Invitations ===
@@ -581,11 +658,27 @@ export type Room = {
   game?: GameRef;
 };
 
+/** One die of a roll: its value, and whether it exploded or came up critical. */
+export interface DiceResult {
+  value: number;
+  exploded?: boolean;
+  critical?: boolean;
+}
+
+/**
+ * A roll as the server publishes it: how many dice of how many edges, the bonus,
+ * and every die that fell. The total is the sum of the values plus the bonus and
+ * is not sent — it is arithmetic the reader can check against the dice shown.
+ *
+ * This type once claimed `{ dice, result }`, a shape the API never sent, so a
+ * published roll rendered as "dundefined: undefined = NaN".
+ */
 export interface DiceRoll {
-  id: string;
-  dice: number;
-  result: number;
+  rolls: number;
+  edges: number;
   bonus: number;
+  explosion?: number | null;
+  results: DiceResult[];
   comment?: string;
 }
 
@@ -618,7 +711,27 @@ export type Post = {
   diceRolls?: DiceRoll[];
   rating?: number;
   reviewCount?: number;
+  /** Files attached to the post, oldest first. */
+  attachments?: PostAttachment[];
 };
+
+/**
+ * A file attached to a post.
+ *
+ * `url` is an endpoint, not a link into the bucket: the server re-decides who
+ * may have the bytes on every request, so passing the address on gives the
+ * recipient exactly the access they already had.
+ */
+export interface PostAttachment {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  width?: number | null;
+  height?: number | null;
+  url: string;
+  createdUtc: string;
+}
 
 /**
  * Review rating sign/sentiment
@@ -765,12 +878,16 @@ export enum GameStatusTransition {
 }
 
 /**
- * Requested premoderation transition (mentor action).
+ * Requested premoderation transition. Exactly three, and they do not share an
+ * actor: the first two are the moderation verdict (Mentor and above, legal from
+ * any status), the third is the master asking for that verdict.
  * @see src/DM.Domain.Core/Statuses/ModuleStatusTransition.cs
  */
 export enum GamePremoderationTransition {
-  /** AwaitingEdits -> AwaitingApproval (take into premoderation) */
-  SendToPremoderation = "SendToPremoderation",
-  /** AwaitingApproval -> Approved (release) */
-  RemoveFromPremoderation = "RemoveFromPremoderation",
+  /** Any status -> Approved (verdict, clears the curator) */
+  SetApproved = "SetApproved",
+  /** Any status -> AwaitingEdits (verdict, records the acting mentor) */
+  SetAwaitingEdits = "SetAwaitingEdits",
+  /** AwaitingEdits -> AwaitingApproval (the master asks for a verdict) */
+  SubmitForApproval = "SubmitForApproval",
 }

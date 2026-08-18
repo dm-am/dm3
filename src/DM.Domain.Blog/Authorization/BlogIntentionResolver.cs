@@ -99,15 +99,34 @@ internal class BlogIntentionResolver : IIntentionResolver<BlogIntention, BlogDto
                 (target.Status == ModuleStatus.Active || target.Status == ModuleStatus.Closed) &&
                 (isOwner || isAssistant),
 
+            // Premoderation, the author's half: the owner asks a mentor to look at
+            // the blog. Only the owner — an assistant writes in the blog, the
+            // mentor approves its publications, and neither of them decides that
+            // the blog itself is ready to be judged.
+            //
+            // Identity only. Which premoderation status the move is legal from is
+            // the machine's answer (ModulePremoderationPolicy), given before this
+            // gate is asked. The mentor's half is a rank and is answered by the
+            // targetless resolver below.
+            BlogIntention.SubmitForApproval when user.IsAuthenticated =>
+                isOwner,
+
             // Premoderation-pending blogs are hidden like games: only the owner,
-            // assistants, the assigned curator, invited users, and senior
-            // moderation can see them until they are approved
+            // assistants, the assigned curator, invited users, and whoever may
+            // pass the verdict can see them until they are approved.
+            //
+            // The rank is PremoderationAccess and not a comparison of its own.
+            // It used to ask for a senior moderator while the verdict itself is a
+            // site-wide Mentor+ move, so a mentor and a moderator were shown a
+            // moderation queue every entry of which answered 403, and the blog
+            // panel drew them two buttons on a page they could not open. The game
+            // reads by the same rule, so the two modules cannot drift apart.
             BlogIntention.ViewPremoderationPending =>
                 isOwner ||
                 isAssistant ||
                 isMentor ||
                 hasPendingInvitation ||
-                user.Role >= UserRole.SeniorModerator,
+                user.MayJudgePremoderation(),
 
             // Anyone who can view the blog can comment (if comments enabled and not blacklisted)
             // An ordinary ban silences discussion of other people's blogs; the
@@ -135,10 +154,11 @@ internal class BlogIntentionResolverWithoutTarget : IIntentionResolver<BlogInten
             // Any authenticated user can create a blog
             BlogIntention.Create => user.IsAuthenticated,
 
-            // Site-wide Mentor+ gate for premoderation transitions
-            // (state checks live in the service)
+            // Site-wide gate for premoderation transitions (state checks live in
+            // the service). The same rank ViewPremoderationPending reads, so the
+            // right to judge a blog and the right to open it are one rule.
             BlogIntention.SetStatusModeration =>
-                user.IsAuthenticated && user.Role >= UserRole.Mentor,
+                user.MayJudgePremoderation(),
 
             _ => false
         };

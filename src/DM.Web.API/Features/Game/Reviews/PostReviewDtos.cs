@@ -74,3 +74,24 @@ public class CreatePostReviewRequest
     [Required(ErrorMessage = "Введите текст")]
     public string Text { get; set; } = null!;
 }
+
+/// <summary>
+/// Request to update a post review
+/// </summary>
+/// <remarks>
+/// Both fields are optional and omitting one keeps what is stored: the card
+/// edits the sign and the sentence in one place, and a body that had to carry
+/// both would make a corrected typo rewrite the rating as a side effect.
+/// </remarks>
+public class UpdatePostReviewRequest
+{
+    /// <summary>
+    /// New rating sign: Positive, Neutral or Negative. Omit to keep the current one
+    /// </summary>
+    public ReviewSign? Sign { get; set; }
+
+    /// <summary>
+    /// New review text, BBCode supported. Omit to keep the current one
+    /// </summary>
+    public string? Text { get; set; }
+}

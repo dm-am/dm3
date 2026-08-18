@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Extensions;
 using DM.Domain.Game.Features.Games;
@@ -21,11 +22,13 @@ internal class PostReviewRepository : IPostReviewRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IMapper _mapper;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public PostReviewRepository(DmDbContext dbContext, IMapper mapper)
+    public PostReviewRepository(DmDbContext dbContext, IMapper mapper, IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _mapper = mapper;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     // ═══ READ ═══
@@ -100,7 +103,15 @@ internal class PostReviewRepository : IPostReviewRepository
                        !r.IsRemoved);
 
     /// <inheritdoc />
-    public async Task<PostReview> CreateAsync(CreatePostReviewEntity entity)
+    /// <remarks>
+    /// The row and the post author's counter in one transaction. QualityRating is
+    /// a stored column and not a sum over the reviews, so a review written with
+    /// the counter left behind — or a counter moved for a review the unique index
+    /// then refused — is a drift nothing recomputes: the number on the profile and
+    /// the rows it counts have no way left to be reconciled. The strategy wrapper
+    /// is required because the API host configures EnableRetryOnFailure.
+    /// </remarks>
+    public async Task<PostReview> CreateAsync(CreatePostReviewEntity entity, int qualityRatingDelta)
     {
         var dbReview = new DbPostReview
         {
@@ -115,19 +126,40 @@ internal class PostReviewRepository : IPostReviewRepository
             IsRemoved = false
         };
 
-        _dbContext.PostReviews.Add(dbReview);
-        try
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        var attempted = false;
+        await strategy.ExecuteAsync(async () =>
         {
-            await _dbContext.SaveChangesAsync();
-        }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
-        {
-            // The caller pre-checks for an existing post review; this is the race
-            // where two concurrent requests both pass that check. Translated here
-            // so the domain does not have to know the storage engine's error codes.
-            _dbContext.ChangeTracker.Clear();
-            throw new DuplicateEntityException("Duplicate post review", ex);
-        }
+            if (attempted)
+            {
+                // A retry replays this block; the review the failed attempt left
+                // tracked would otherwise be inserted twice or not at all.
+                _dbContext.ChangeTracker.Clear();
+            }
+
+            attempted = true;
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
+            await MoveQualityRating(entity.PostAuthorId, qualityRatingDelta);
+
+            _dbContext.PostReviews.Add(dbReview);
+            try
+            {
+                await _dbContext.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+            {
+                // The caller pre-checks for an existing post review; this is the race
+                // where two concurrent requests both pass that check. Translated here
+                // so the domain does not have to know the storage engine's error codes.
+                // The transaction is not committed, so the counter this attempt moved
+                // goes back with it.
+                _dbContext.ChangeTracker.Clear();
+                throw new DuplicateEntityException("Duplicate post review", ex);
+            }
+
+            await transaction.CommitAsync();
+        });
 
         return await _dbContext.PostReviews
             .TagWith("DM.PostReview.Created")
@@ -137,41 +169,105 @@ internal class PostReviewRepository : IPostReviewRepository
     }
 
     /// <inheritdoc />
-    public async Task<PostReview> UpdateAsync(UpdatePostReviewEntity entity)
+    /// <remarks>
+    /// The same transaction as Create, for the same reason. Both updates this
+    /// method serves owe the post author's counter something — an edit the
+    /// difference between the two signs, a removal the sign taken back — and the
+    /// counter used to be moved by a call of its own that committed before the row
+    /// was written at all. A refusal in the gap left the profile carrying a sign
+    /// the review does not have, with nothing to recompute it from.
+    /// </remarks>
+    public async Task<PostReview> UpdateAsync(UpdatePostReviewEntity entity, int qualityRatingDelta)
     {
-        var dbReview = await _dbContext.PostReviews.FindAsync(entity.PostReviewId);
-        if (dbReview == null)
+        // The strategy wrapper is required because the API host configures
+        // EnableRetryOnFailure.
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        var attempted = false;
+        await strategy.ExecuteAsync(async () =>
         {
-            throw new InvalidOperationException($"Review {entity.PostReviewId} not found");
-        }
+            if (attempted)
+            {
+                // A retry replays this block. SaveChanges leaves the review
+                // Unchanged even when the transaction around it rolls back, so
+                // without the clear the second attempt writes no sign at all and
+                // moves the counter all the same.
+                _dbContext.ChangeTracker.Clear();
+            }
 
-        if (entity.Sign.HasValue)
-            dbReview.Sign = entity.Sign.Value;
-        if (entity.IsRemoved.HasValue)
-            dbReview.IsRemoved = entity.IsRemoved.Value;
-        if (entity.ModifiedUtc.HasValue)
-            dbReview.ModifiedUtc = entity.ModifiedUtc.Value;
-        if (entity.ModifiedByUserId.HasValue)
-            dbReview.ModifiedByUserId = entity.ModifiedByUserId;
+            attempted = true;
 
-        await _dbContext.SaveChangesAsync();
+            // Read inside the block: the clear above drops the tracked review, so
+            // it has to be loaded again. On the first attempt this costs nothing.
+            var dbReview = await _dbContext.PostReviews.FindAsync(entity.PostReviewId);
+            if (dbReview == null)
+            {
+                throw new InvalidOperationException($"Review {entity.PostReviewId} not found");
+            }
 
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
+            // The row carries whose counter this is: the same denormalised column
+            // the reads filter by, rather than a second copy passed in alongside.
+            await MoveQualityRating(dbReview.PostAuthorId, qualityRatingDelta);
+
+            if (entity.Sign.HasValue)
+                dbReview.Sign = entity.Sign.Value;
+            if (entity.Text != null)
+                dbReview.Text = entity.Text;
+            if (entity.IsRemoved == true)
+                // Through the one call that writes the flag and the audit together,
+                // as the endorsement removal does: a review a senior moderator took
+                // down with no hand recorded cannot be reviewed afterwards.
+                SoftDelete.Mark(dbReview, entity.DeletedByUserId, entity.DeletedUtc ?? _dateTimeProvider.Now);
+            else if (entity.IsRemoved == false)
+                dbReview.IsRemoved = false;
+            if (entity.ModifiedUtc.HasValue)
+                dbReview.ModifiedUtc = entity.ModifiedUtc.Value;
+            if (entity.ModifiedByUserId.HasValue)
+                dbReview.ModifiedByUserId = entity.ModifiedByUserId;
+
+            await _dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+        });
+
+        // IgnoreQueryFilters, because one of the updates this method serves is
+        // the removal: the global filter drops soft-deleted rows, so reading the
+        // row back through it throws "Sequence contains no elements" on the way
+        // out of every delete. The caller asked for this row by its identifier
+        // and has just written it, so the filter has nothing to protect here.
         return await _dbContext.PostReviews
+            .IgnoreQueryFilters()
             .TagWith("DM.PostReview.Updated")
             .Where(r => r.PostReviewId == entity.PostReviewId)
             .ProjectTo<PostReview>(_mapper.ConfigurationProvider)
             .FirstAsync();
     }
 
-    /// <inheritdoc />
-    public async Task UpdateUserQualityRatingAsync(Guid userId, int ratingDelta)
+    /// <summary>
+    /// Move the post author's stored quality rating by what a review is worth.
+    /// </summary>
+    /// <remarks>
+    /// Private, and called only from inside the two transactions above: this is
+    /// the write that must not happen on its own.
+    ///
+    /// Set-based rather than read-modify-write, so two raters moving the same
+    /// author's counter at once do not overwrite one another with the value each
+    /// of them read. IgnoreQueryFilters, because the row it has to reach may
+    /// belong to a deactivated account — their reviews are still editable and
+    /// removable by moderation, and under the global filter the update would match
+    /// nothing, report success and leave the counter carrying a sign that is gone.
+    /// </remarks>
+    private async Task MoveQualityRating(Guid postAuthorId, int delta)
     {
-        var user = await _dbContext.Users.FindAsync(userId);
-        if (user != null)
+        if (delta == 0)
         {
-            user.QualityRating += ratingDelta;
-            await _dbContext.SaveChangesAsync();
+            return;
         }
+
+        await _dbContext.Users
+            .IgnoreQueryFilters()
+            .Where(u => u.UserId == postAuthorId)
+            .ExecuteUpdateAsync(u => u.SetProperty(x => x.QualityRating, x => x.QualityRating + delta));
     }
 
     // ═══ ELIGIBILITY ═══

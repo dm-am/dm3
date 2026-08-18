@@ -40,21 +40,39 @@ public enum ModuleStatusTransition
 }
 
 /// <summary>
-/// A requested move on the module premoderation state machine. The endpoints
-/// that accept it are gated Mentor+; a move applied from an incompatible
-/// premoderation status is refused with BadRequest.
+/// A requested move on the module premoderation state machine. There are exactly
+/// three, and they do not share an actor: two of them are the moderation verdict
+/// and belong to a mentor or anybody above one, the third is the author asking
+/// for that verdict.
 /// </summary>
+/// <remarks>
+/// The pair of moves this enum used to name — a mentor taking a module in and
+/// then releasing it — described a machine the module never entered: nothing
+/// wrote a premoderation status at creation, so every module was born approved
+/// and the only way into premoderation was a mentor putting it there by hand.
+/// The rule the three below implement starts the other way round: a newbie's
+/// module is born AwaitingEdits and the author is the one who moves it on.
+/// </remarks>
 public enum ModulePremoderationTransition
 {
     /// <summary>
-    /// Submit for premoderation: AwaitingEdits -> AwaitingApproval
-    /// (assigns the acting mentor as curator)
+    /// Moderation verdict "approved": any status -> Approved (clears the curator,
+    /// the module becomes publicly visible). Legal from every status, because a
+    /// mentor may approve a module they never returned for edits.
     /// </summary>
-    SendToPremoderation = 0,
+    SetApproved = 0,
 
     /// <summary>
-    /// Release from premoderation: AwaitingApproval -> Approved
-    /// (clears the curator, the module becomes publicly visible)
+    /// Moderation verdict "not yet": any status -> AwaitingEdits (records the
+    /// acting mentor as the curator answering for the module). Legal from every
+    /// status, including Approved — a module already published can be pulled back.
     /// </summary>
-    RemoveFromPremoderation = 1
+    SetAwaitingEdits = 1,
+
+    /// <summary>
+    /// The author asks for a verdict: AwaitingEdits -> AwaitingApproval. The only
+    /// move an author has, the only one with a legality condition, and the only
+    /// one that leaves the curator untouched — the author never becomes one.
+    /// </summary>
+    SubmitForApproval = 2
 }

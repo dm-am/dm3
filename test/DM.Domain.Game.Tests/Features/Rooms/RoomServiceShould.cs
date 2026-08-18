@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -386,5 +387,59 @@ public class RoomServiceShould : UnitTestBase
         _repository.Verify(r => r.Delete(roomId, CurrentUserId), Times.Once);
         _unreadCountersRepository.Verify(r => r.DeleteAsync(roomId, UnreadEntryType.Message), Times.Once);
         _producer.Verify(p => p.SendAsync(EventType.DeletedRoom, roomId), Times.Once);
+    }
+
+    /// <summary>
+    /// The rank that opens a premoderated game reaches the storage scope of its
+    /// rooms, and it is the intention that answers it — not a second comparison of
+    /// roles inside the service.
+    /// </summary>
+    /// <remarks>
+    /// Both directions, because the parameter defaults to false: passing it always
+    /// would fill the room list of a game nobody is judging, and never would leave
+    /// the judge the empty list this fixes.
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ScopeTheRoomListByThePremoderationVerdictIntention(bool mayJudge)
+    {
+        var gameId = Guid.NewGuid();
+        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(new GameDto
+        {
+            Id = gameId,
+            Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
+        });
+        _intentionManager.Setup(m => m.IsAllowed(GameIntention.SetStatusModeration)).Returns(mayJudge);
+        _repository
+            .Setup(r => r.GetAllVisible(gameId, CurrentUserId, It.IsAny<bool>()))
+            .ReturnsAsync(Array.Empty<Room>());
+
+        await _service.GetAllAsync(gameId);
+
+        _repository.Verify(r => r.GetAllVisible(gameId, CurrentUserId, mayJudge), Times.Once);
+    }
+
+    /// <summary>
+    /// The same rank on the point read, or the menu would name rooms whose own
+    /// address then answered 404.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ScopeASingleRoomByThePremoderationVerdictIntention(bool mayJudge)
+    {
+        var roomId = Guid.NewGuid();
+        _intentionManager.Setup(m => m.IsAllowed(GameIntention.SetStatusModeration)).Returns(mayJudge);
+        _repository
+            .Setup(r => r.GetAvailable(roomId, CurrentUserId, It.IsAny<bool>()))
+            .ReturnsAsync(new Room { Id = roomId });
+        _unreadCountersRepository
+            .Setup(r => r.SelectByEntitiesAsync(CurrentUserId, UnreadEntryType.Message, It.IsAny<Guid[]>()))
+            .ReturnsAsync(new Dictionary<Guid, int> { [roomId] = 0 });
+
+        await _service.GetAsync(roomId);
+
+        _repository.Verify(r => r.GetAvailable(roomId, CurrentUserId, mayJudge), Times.Once);
     }
 }

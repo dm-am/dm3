@@ -17,13 +17,21 @@ export function notificationLink(
   if (!payload) return null;
 
   switch (notification.eventType) {
+    // What was written about one publication leads to that publication, not to
+    // the blog holding it. Through the resolver route and not straight to
+    // /blogs/{blog}/feed/{pub}: the payload names both in the readable-guid
+    // form, and of the two endpoints behind that address only the publication
+    // one takes it — the blog is looked up by public id or guid and answers a
+    // readable one with 404.
     case NotificationType.NewPublication:
     case NotificationType.LikedPublication:
-    case NotificationType.NewBlogFromSubscribedAuthor:
-      return payload.blogId ? `/blogs/${payload.blogId}` : null;
-
-    case NotificationType.NewBlogComment:
     case NotificationType.NewPublicationComment:
+      return payload.publicationId
+        ? `/publication/${payload.publicationId}`
+        : null;
+
+    case NotificationType.NewBlogFromSubscribedAuthor:
+    case NotificationType.NewBlogComment:
     case NotificationType.LikedBlogComment:
       return payload.blogId ? `/blogs/${payload.blogId}` : null;
 

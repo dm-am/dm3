@@ -193,22 +193,29 @@ public class BlogController : ControllerBase
     /// Change blog premoderation state
     /// </summary>
     /// <remarks>
-    /// Mentor action: `SendToPremoderation` (AwaitingEdits-&gt;AwaitingApproval)
-    /// puts the blog back in the review queue and assigns the acting mentor as
-    /// curator; `RemoveFromPremoderation` (AwaitingApproval-&gt;Approved) releases
-    /// the blog so it becomes publicly visible. Requires Mentor role or above.
+    /// Three moves, and they do not share an actor. Mentor and above:
+    /// `SetApproved` (any state-&gt;Approved) releases the blog so it becomes
+    /// publicly visible and clears the curator; `SetAwaitingEdits` (any
+    /// state-&gt;AwaitingEdits) returns it to the author and records the acting
+    /// mentor as curator. The owner alone: `SubmitForApproval`
+    /// (AwaitingEdits-&gt;AwaitingApproval) asks for a verdict, and is the only
+    /// move with a legal-state condition - the other two are legal from anywhere.
     /// Illegal transitions are rejected with 400.
+    ///
+    /// The endpoint is authentication-gated rather than Mentor-gated, because one
+    /// of its three moves belongs to an owner who is normally neither: the rank is
+    /// checked per move, inside the domain.
     /// </remarks>
     /// <param name="id">Blog public ID (5 letters) or GUID</param>
     /// <param name="request">Requested premoderation transition</param>
     /// <response code="200">Returns the updated blog</response>
     /// <response code="400">The requested transition is illegal for the current premoderation state</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User is not a mentor</response>
+    /// <response code="403">Caller may not make this move on this blog</response>
     /// <response code="404">Blog not found</response>
     [HttpPost("{id}/premoderation", Name = nameof(PostBlogPremoderation))]
     [EnableRateLimiting(RateLimitPolicies.Default)]
-    [RequireRole(UserRole.Mentor)]
+    [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Blog>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -217,9 +224,9 @@ public class BlogController : ControllerBase
     public async Task<IActionResult> PostBlogPremoderation(string id, [FromBody] BlogPremoderationChangeRequest request)
     {
         // Pass the raw id through: the domain resolves the public id via the
-        // repository (ungated) after the Mentor gate. Resolving here through the
-        // read-gated GetByPublicId would hide a premoderation-pending blog from
-        // the non-curator mentor this endpoint exists for.
+        // repository (ungated). Resolving here through the read-gated
+        // GetByPublicId would hide a premoderation-pending blog from the
+        // non-curator mentor this endpoint exists for.
         return Ok(await _apiService.ChangePremoderation(id, request));
     }
 

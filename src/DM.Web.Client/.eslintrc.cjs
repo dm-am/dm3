@@ -107,6 +107,22 @@ module.exports = {
     // primitives (Button, Tooltip, Tabs, Form, Paging, Header, Footer, ...).
     "vue/multi-word-component-names": "off",
 
+    // A leading underscore is the language-wide way to say "bound on purpose,
+    // used on purpose nowhere" - the omit idiom `const { text: _text, ...rest }`
+    // being the common case, where the binding exists so the field does not
+    // travel on with the rest. Without this the only way to write that is a
+    // disable comment above every occurrence, which states the same intent in a
+    // form nothing can check and which hides the next, less innocent one.
+    "@typescript-eslint/no-unused-vars": [
+      "warn",
+      {
+        argsIgnorePattern: "^_",
+        varsIgnorePattern: "^_",
+        caughtErrorsIgnorePattern: "^_",
+        ignoreRestSiblings: true,
+      },
+    ],
+
     // Accessibility, as a rule of the build rather than of a review.
     //
     // Until this block there was nothing: `plugin:vue/vue3-essential` says

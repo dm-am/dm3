@@ -70,6 +70,29 @@ internal class ModeratedProfileService : IModeratedProfileService
     }
 
     /// <inheritdoc />
+    public async Task<UserDetails> SetModerationWatch(string username, bool underWatch)
+    {
+        var user = await _userRepository.GetUserAsync(username);
+        if (user == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(username));
+        }
+
+        _intentionManager.ThrowIfForbidden(ModerationIntention.SetModerationWatch);
+
+        await _moderatedProfileRepository.SetModerationWatch(username, underWatch);
+
+        // Both keys of the same document, as everywhere else here: the profile is
+        // read by name on the page and by identifier from every link to it, and a
+        // stale copy of this particular field decides whether the user's next game
+        // is premoderated.
+        await _cache.InvalidateAsync(CacheKeys.UserDetails(username));
+        await _cache.InvalidateAsync(CacheKeys.UserDetails(user.UserId));
+
+        return await GetProfile(username);
+    }
+
+    /// <inheritdoc />
     public async Task SetUserRole(string username, UserRole role)
     {
         _intentionManager.ThrowIfForbidden(ModerationIntention.SetUserRole);

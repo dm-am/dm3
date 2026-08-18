@@ -109,6 +109,14 @@ public static class RefusalMessage
     /// </summary>
     public const string AlreadyReviewedPost = "Вы уже оценили этот пост";
 
+    /// <summary>
+    /// Probation: below the post threshold a rating may only be neutral. Said
+    /// both when the review is written and when an edit tries to move its sign,
+    /// which is the same rule reached by two doors
+    /// </summary>
+    public static string SignedReviewNeedsExperience(int postThreshold) =>
+        $"Ставить плюс и минус можно после {postThreshold} постов в играх";
+
     // ═══ BLOGS AND FORUM ═══
 
     /// <summary>
@@ -225,6 +233,20 @@ public static class RefusalMessage
     /// </summary>
     public const string UsernameChangeRequestNotFound = "Заявка на смену имени не найдена";
 
+    /// <summary>
+    /// A change is already in flight: the request awaits a moderator. Said by the
+    /// check that reads before the write and by the index that catches the two
+    /// requests which raced past it
+    /// </summary>
+    public const string UsernameChangeAlreadyFiled = "Заявка на смену имени уже отправлена";
+
+    /// <summary>
+    /// A change is already granted and unspent: the name is chosen from the letter,
+    /// not from the settings page
+    /// </summary>
+    public const string UsernameChangeAlreadyApproved =
+        "Заявка уже одобрена: выберите новое имя по ссылке из письма";
+
     // ═══ COMMUNITY CATALOGS ═══
 
     /// <summary>
@@ -298,16 +320,11 @@ public static class RefusalMessage
     public const string UnknownPremoderationTransition = "Недопустимая смена статуса премодерации";
 
     /// <summary>
-    /// Premoderation can only be asked for from some states, and this is not one
+    /// The author may ask for a verdict only while the module is awaiting edits.
+    /// The two moderation verdicts are legal from every status and never say this.
     /// </summary>
-    public static string CannotSubmitForPremoderation(object currentStatus) =>
-        $"Нельзя отправить на премодерацию из статуса \"{currentStatus}\"";
-
-    /// <summary>
-    /// Premoderation can only be withdrawn from while it is pending
-    /// </summary>
-    public static string CannotWithdrawFromPremoderation(object currentStatus) =>
-        $"Нельзя снять с премодерации из статуса \"{currentStatus}\"";
+    public static string CannotSubmitForApproval(object currentStatus) =>
+        $"Нельзя отправить на подтверждение из статуса \"{currentStatus}\"";
 
     // ═══ FORUM ═══
 

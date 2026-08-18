@@ -69,6 +69,35 @@ public class BlogIntentionResolverShould
         _resolver.IsAllowed(user, BlogIntention.ViewDraft, blog).Should().BeTrue();
     }
 
+    /// <summary>
+    /// Asking for a premoderation verdict is the owner's move and nobody else's.
+    /// </summary>
+    /// <remarks>
+    /// Not the assistant's, who writes in the same blog; not the mentor's, who
+    /// approves its publications; not senior moderation's, which may edit the
+    /// blog but does not speak for its author. This is why the move has an
+    /// intention of its own instead of riding on EditSettings, and it is the same
+    /// division the game side draws around its master.
+    /// </remarks>
+    [Fact]
+    public void AllowSubmitForApprovalToTheBlogOwnerAlone()
+    {
+        var blog = CreateBlog(
+            assistants: new[] { new BlogAssistantInfo { UserId = _assistantId } },
+            mentor: new GeneralUser { UserId = _mentorId });
+
+        _resolver.IsAllowed(CreateUser(_ownerId), BlogIntention.SubmitForApproval, blog)
+            .Should().BeTrue();
+        _resolver.IsAllowed(CreateUser(_assistantId), BlogIntention.SubmitForApproval, blog)
+            .Should().BeFalse();
+        _resolver.IsAllowed(CreateUser(_mentorId, UserRole.Mentor), BlogIntention.SubmitForApproval, blog)
+            .Should().BeFalse();
+        _resolver.IsAllowed(CreateUser(_otherUserId, UserRole.SeniorModerator), BlogIntention.SubmitForApproval, blog)
+            .Should().BeFalse();
+        _resolver.IsAllowed(CreateUser(Guid.Empty, UserRole.Guest), BlogIntention.SubmitForApproval, blog)
+            .Should().BeFalse();
+    }
+
     [Fact]
     public void DenyBlacklistedUserToComment()
     {
@@ -489,6 +518,42 @@ public class BlogIntentionResolverShould
 
         _resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeFalse();
     }
+
+    /// <summary>
+    /// Whoever may pass the verdict may open the blog it is pending on. The gate
+    /// used to stop at senior moderation while the verdict itself is a site-wide
+    /// Mentor+ move, so a mentor and a moderator were shown a queue every entry of
+    /// which answered 403, with two verdict buttons drawn on a page they could not
+    /// reach.
+    /// </summary>
+    [Theory]
+    [InlineData(UserRole.Mentor, true)]
+    [InlineData(UserRole.Moderator, true)]
+    [InlineData(UserRole.SeniorModerator, true)]
+    [InlineData(UserRole.Admin, true)]
+    [InlineData(UserRole.RegularUser, false)]
+    public void OpenAPremoderatedBlogToExactlyTheRanksThatMayJudgeIt(UserRole role, bool expected)
+    {
+        var user = CreateUser(_otherUserId, role);
+        var blog = CreateBlog();
+
+        _resolver.IsAllowed(user, BlogIntention.ViewPremoderationPending, blog).Should().Be(expected);
+
+        // The two halves of one right: a reader holding no role in the blog sees
+        // it exactly when they may move it along premoderation.
+        _resolver.IsAllowed(user, BlogIntention.ViewPremoderationPending, blog)
+            .Should().Be(new BlogIntentionResolverWithoutTarget()
+                .IsAllowed(user, BlogIntention.SetStatusModeration));
+    }
+
+    [Fact]
+    public void KeepAPremoderatedBlogShutToAGuest()
+    {
+        var guest = CreateUser(Guid.Empty, UserRole.Guest);
+
+        _resolver.IsAllowed(guest, BlogIntention.ViewPremoderationPending, CreateBlog())
+            .Should().BeFalse();
+    }
 }
 
 public class BlogIntentionResolverWithoutTargetShould
@@ -529,7 +594,7 @@ public class BlogIntentionResolverWithoutTargetShould
     [InlineData(UserRole.Moderator)]
     [InlineData(UserRole.SeniorModerator)]
     [InlineData(UserRole.Admin)]
-    public void AllowMentorAndAboveToMoveABlogThroughPremoderation(UserRole role)
+    public void AllowMentorAndAboveToDeliverAPremoderationVerdict(UserRole role)
     {
         var user = CreateUser(Guid.NewGuid(), role);
 
@@ -539,20 +604,21 @@ public class BlogIntentionResolverWithoutTargetShould
     }
 
     [Fact]
-    public void DenyRegularUserToMoveABlogThroughPremoderation()
+    public void DenyRegularUserAPremoderationVerdict()
     {
         var user = CreateUser(Guid.NewGuid());
 
         // Premoderation is what holds a newbie's blog back until somebody
-        // experienced has looked at it. A user who could release their own blog
-        // would be waving themselves through.
+        // experienced has looked at it. A user who could approve their own blog
+        // would be waving themselves through - which is exactly why the move an
+        // author does have (SubmitForApproval) only asks for a verdict.
         var result = _resolver.IsAllowed(user, BlogIntention.SetStatusModeration);
 
         result.Should().BeFalse();
     }
 
     [Fact]
-    public void DenyGuestToMoveABlogThroughPremoderation()
+    public void DenyGuestAPremoderationVerdict()
     {
         var user = CreateUser(Guid.Empty, UserRole.Guest);
 
@@ -570,6 +636,7 @@ public class BlogIntentionResolverWithoutTargetShould
     [InlineData(BlogIntention.ApprovePublications)]
     [InlineData(BlogIntention.SetStatusActive)]
     [InlineData(BlogIntention.SetStatusClosed)]
+    [InlineData(BlogIntention.SubmitForApproval)]
     public void DenyIntentionsThatNeedABlogWhenAskedWithoutOne(BlogIntention intention)
     {
         var user = CreateUser(Guid.NewGuid(), UserRole.Admin);

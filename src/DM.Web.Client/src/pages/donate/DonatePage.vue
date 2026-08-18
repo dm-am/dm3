@@ -32,6 +32,9 @@ void fetch();
     </p>
 
     <block-title>Сбор средств</block-title>
+    <!-- What the money is for, above the bar: the numbers alone say how far
+         along the collection is and not what it is a collection for. -->
+    <p v-if="fundraising" class="goal-title">{{ fundraising.title }}</p>
     <div
       v-if="loading && !fundraising"
       class="progress-skeleton"
@@ -90,6 +93,10 @@ void fetch();
 
   p
     margin: 0 0 $small
+
+  .goal-title
+    margin-bottom: 0
+    font-weight: bold
 
   a
     color: $link

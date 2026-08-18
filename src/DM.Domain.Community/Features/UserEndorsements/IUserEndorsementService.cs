@@ -18,6 +18,18 @@ public interface IUserEndorsementService
     Task<UserEndorsement> CreateAsync(CreateUserEndorsement createEndorsement);
 
     /// <summary>
+    /// Tell whether the current user may write a recommendation about the
+    /// given user, and why not when they may not
+    /// </summary>
+    /// <remarks>
+    /// Answered by the same evaluation <see cref="CreateAsync"/> refuses by,
+    /// so a client that hides the control on a refusal here hides exactly the
+    /// control the create call would have rejected.
+    /// </remarks>
+    /// <param name="targetUserId">Prospective recipient</param>
+    Task<UserEndorsementEligibility> GetEligibilityAsync(Guid targetUserId);
+
+    /// <summary>
     /// Get single endorsement by ID
     /// </summary>
     /// <param name="id">Endorsement ID</param>

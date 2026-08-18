@@ -91,6 +91,34 @@ internal class GameNotepadApiService : IGameNotepadApiService
         return await CreatePlayerEntry(character.GameId, characterId, request);
     }
 
+    #region Character Master Notepad
+
+    /// <inheritdoc />
+    public async Task<ListEnvelope<NotepadEntryResponse>> GetCharacterMasterNotepadEntries(Guid characterId)
+    {
+        var character = await _characterService.GetAsync(characterId);
+        var entries = await _notepadService.GetCharacterMasterEntries(character.GameId, characterId);
+        return new ListEnvelope<NotepadEntryResponse>(
+            entries.Select(_mapper.Map<NotepadEntryResponse>).ToList());
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<NotepadEntryResponse>> CreateCharacterMasterNotepadEntry(
+        Guid characterId, CreateNotepadEntryRequest request)
+    {
+        var character = await _characterService.GetAsync(characterId);
+        var createEntry = new CreateNotepadEntry
+        {
+            Title = request.Title,
+            Content = request.Content
+        };
+
+        var entry = await _notepadService.CreateCharacterMasterEntry(character.GameId, characterId, createEntry);
+        return new Envelope<NotepadEntryResponse>(_mapper.Map<NotepadEntryResponse>(entry));
+    }
+
+    #endregion
+
     #region Common Operations
 
     /// <inheritdoc />

@@ -167,17 +167,16 @@ internal class BlogService : IBlogService
     public async Task<Blog> GetAsync(Guid blogId, CancellationToken ct = default)
     {
         var blog = await _repository.Get(blogId, ViewerId, ct);
-        if (blog == null)
+
+        // A blog the caller may not open answers exactly as one that is not
+        // there. Refusing it with a 403 instead told a stranger that the
+        // identifier resolves and that what it resolves to is a private draft or
+        // a blog under premoderation — the same oracle the two status endpoints
+        // were closed against, reached here by an ordinary read.
+        if (blog == null || !IsVisibleToViewer(blog))
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
         }
-
-        if (blog.DraftVisibility == DraftVisibility.Private)
-        {
-            _intentionManager.ThrowIfForbidden(BlogIntention.ViewDraft, blog);
-        }
-
-        ThrowIfHiddenByPremoderation(blog);
 
         await FillBlogUnreadCounters(new[] { blog });
         await FillBlogRubricCounters(blog);
@@ -188,17 +187,15 @@ internal class BlogService : IBlogService
     public async Task<Blog> GetByPublicIdAsync(string publicId, CancellationToken ct = default)
     {
         var blog = await _repository.GetByPublicId(publicId, ViewerId, ct);
-        if (blog == null)
+
+        // Same answer as an alias nobody has taken: see GetAsync. This is the
+        // most exposed of the read paths — the alias is five letters, the route
+        // is open to guests, and BlogApiService.ResolveId funnels every
+        // blog-scoped route through it.
+        if (blog == null || !IsVisibleToViewer(blog))
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
         }
-
-        if (blog.DraftVisibility == DraftVisibility.Private)
-        {
-            _intentionManager.ThrowIfForbidden(BlogIntention.ViewDraft, blog);
-        }
-
-        ThrowIfHiddenByPremoderation(blog);
 
         await FillBlogUnreadCounters(new[] { blog });
         await FillBlogRubricCounters(blog);
@@ -209,17 +206,15 @@ internal class BlogService : IBlogService
     public async Task<Blog> GetByOwnerUsernameAsync(string username, CancellationToken ct = default)
     {
         var blog = await _repository.GetByOwnerUsernameAsync(username, ViewerId, ct);
-        if (blog == null)
+
+        // Same answer as a user who keeps no blog, down to the wording: see
+        // GetAsync. The message names the owner because that is what the caller
+        // asked for, and both branches use it, so the body cannot tell the two
+        // cases apart.
+        if (blog == null || !IsVisibleToViewer(blog))
         {
             throw new HttpException(HttpStatusCode.NotFound, $"Блог пользователя {username} не найден");
         }
-
-        if (blog.DraftVisibility == DraftVisibility.Private)
-        {
-            _intentionManager.ThrowIfForbidden(BlogIntention.ViewDraft, blog);
-        }
-
-        ThrowIfHiddenByPremoderation(blog);
 
         await FillBlogUnreadCounters(new[] { blog });
         await FillBlogRubricCounters(blog);
@@ -236,6 +231,13 @@ internal class BlogService : IBlogService
         }
 
         return blog;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> IsVisibleToViewerAsync(Guid blogId, CancellationToken ct = default)
+    {
+        var blog = await _repository.Get(blogId, ViewerId, ct);
+        return blog != null && IsVisibleToViewer(blog);
     }
 
     /// <inheritdoc />
@@ -273,6 +275,11 @@ internal class BlogService : IBlogService
             // Blog descriptions render on the Comment surface where [mod] is a
             // green mod block; strip it when authored by a non-moderator.
             Description = ModBlockSanitizer.SanitizeForAuthor(createBlog.Description, user.Role),
+            // Whether the blog is premoderated is decided by who is creating it,
+            // by the same rule a game is decided by. The blog side never wrote
+            // this field at all, so the column took its default, which is
+            // Approved, and premoderation applied to nobody.
+            PremoderationStatus = ModulePremoderationPolicy.InitialStatus(user),
             DraftVisibility = createBlog.DraftVisibility,
             CommentsEnabled = createBlog.CommentsEnabled,
             CreatedUtc = _dateTimeProvider.Now
@@ -547,25 +554,53 @@ internal class BlogService : IBlogService
     public async Task<Blog> ChangePremoderationAsync(
         string id, ModulePremoderationTransition transition, CancellationToken ct = default)
     {
-        // Site-wide Mentor+ gate (parameterless intention). The per-blog read
-        // path hides premoderation-pending blogs from non-curators, so resolve
-        // the id and fetch via the repository directly rather than the
-        // read-gated GetAsync / GetByPublicIdAsync — otherwise the very blog
-        // this endpoint exists to moderate would be hidden from the mentor.
-        _intentionManager.ThrowIfForbidden(BlogIntention.SetStatusModeration);
+        // Two moves belong to moderation and one to the owner, so there is no
+        // single gate for the endpoint. The moderation pair is a rank, asked
+        // before anything is read, so a stranger probing aliases is refused
+        // without learning whether the alias resolves. The owner's move is a fact
+        // about the blog and is asked once the blog is in hand.
+        //
+        // Either way the fetch goes through the repository directly rather than
+        // the read-gated GetAsync / GetByPublicIdAsync: that path hides a
+        // premoderation-pending blog from everyone but its own people, which
+        // includes the mentor who is meant to judge it.
+        var isAuthorMove = transition == ModulePremoderationTransition.SubmitForApproval;
+        if (!isAuthorMove)
+        {
+            _intentionManager.ThrowIfForbidden(BlogIntention.SetStatusModeration);
+        }
 
         var blog = Guid.TryParse(id, out var guid)
             ? await _repository.Get(guid, ViewerId, ct)
             : await _repository.GetByPublicId(id, ViewerId, ct);
-        if (blog == null)
+
+        // Which scope the row is then read under is the difference between the
+        // two kinds of move, exactly as on the game side. The verdict is passed
+        // on blogs nobody outside them may open, so the judge reads past
+        // visibility - and pays the mentor rank for it above. The owner's move is
+        // not a rank, so it reads under the ordinary viewer scope: a blog the
+        // caller cannot see anywhere on the site does not exist for them here
+        // either. Without this arm the endpoint - authentication-gated, because
+        // the owner is normally neither mentor nor moderator - told anybody
+        // probing five-letter aliases whether the alias resolves and, through the
+        // state machine below, which premoderation status it resolved to.
+        if (blog == null || (isAuthorMove && !IsVisibleToViewer(blog)))
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
         }
 
         var blogId = blog.Id;
         var currentUserId = _identityProvider.Current.User.UserId;
+
+        // Legality first and authorization second, as in ChangeStatusAsync: a move
+        // the machine does not allow is a 400 whether or not the caller could have
+        // made a legal one.
         var change = ModulePremoderationPolicy.Resolve(
             transition, blog.PremoderationStatus, currentUserId);
+        if (isAuthorMove)
+        {
+            _intentionManager.ThrowIfForbidden(BlogIntention.SubmitForApproval, blog);
+        }
 
         var update = new UpdateBlogEntity
         {
@@ -573,7 +608,7 @@ internal class BlogService : IBlogService
             UpdatedUtc = _dateTimeProvider.Now,
             PremoderationStatus = change.Status,
             MentorId = change.MentorId,
-            SetMentorId = true
+            SetMentorId = change.SetMentorId
         };
 
         var result = await _repository.UpdateBlog(update, ct);
@@ -586,16 +621,31 @@ internal class BlogService : IBlogService
     public async Task<Blog> ChangeStatusAsync(
         string id, ModuleStatusTransition transition, CancellationToken ct = default)
     {
-        // The endpoint is authentication-gated; resolve the id via the ungated
-        // repository lookup (mirroring ChangePremoderationAsync) so the owner
-        // of a premoderation-pending or private-draft blog can still operate
-        // on it. The per-transition intention checks below produce the 403,
-        // and legality is checked BEFORE authorization so an illegal move on
-        // an accessible blog is a clean 400.
+        // Every move here belongs to the blog's own leads, so unlike
+        // ChangePremoderationAsync there is no rank to ask before the read and the
+        // whole endpoint is one kind of move. The fetch goes through the
+        // repository directly rather than the read-gated GetAsync /
+        // GetByPublicIdAsync: those refuse a blog the caller may not open with a
+        // 403, and 403 on this endpoint is exactly the leak.
         var blog = Guid.TryParse(id, out var guid)
             ? await _repository.Get(guid, ViewerId, ct)
             : await _repository.GetByPublicId(id, ViewerId, ct);
-        if (blog == null)
+
+        // The row is then read under the ordinary viewer scope, as the owner's
+        // move in ChangePremoderationAsync is: a blog the caller cannot see
+        // anywhere on the site does not exist for them here either. Without this
+        // arm the endpoint - authentication-gated, because a lead is normally
+        // neither mentor nor moderator - was an oracle over every private draft
+        // and every premoderated blog: 404 for an unclaimed alias, and from the
+        // state machine and the gate below a 400 or a 403 for a taken one, which
+        // told a stranger both that the alias resolves and which status it sits
+        // in. The game side never had it - GameService.ChangeStatusAsync reads
+        // through GetDetailsAsync under the accessibility scope, so a stranger is
+        // answered 404 before the machine sees the game.
+        //
+        // Nobody loses a move to this: both status intentions want an owner or an
+        // assistant, and an owner and an assistant pass both view gates.
+        if (blog == null || !IsVisibleToViewer(blog))
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
         }
@@ -623,6 +673,9 @@ internal class BlogService : IBlogService
                 HttpStatusCode.BadRequest, RefusalMessage.UnknownStatusTransition)
         };
 
+        // Legality first and authorization second, as on the game side: an
+        // illegal move on a blog the caller can see is answered 400 whether or
+        // not they could have made a legal one.
         var change = ModuleStatusPolicy.Resolve(
             transition,
             new ModuleLifecycle(blog.Status, blog.ClosedReason, blog.ActivatedUtc, blog.ClosedUtc),
@@ -648,17 +701,31 @@ internal class BlogService : IBlogService
     // ═══ PRIVATE HELPERS ═══
 
     /// <summary>
-    /// Premoderation-pending blogs are hidden from regular readers just like
-    /// games: only the owner, assistants, the assigned curator, invited users,
-    /// and senior moderation can open them until they are approved.
+    /// Whether the reader may see the blog at all: the private-draft gate and the
+    /// premoderation gate, asked rather than thrown.
     /// </summary>
-    private void ThrowIfHiddenByPremoderation(Blog blog)
-    {
-        if (blog.PremoderationStatus != PremoderationStatus.Approved)
-        {
-            _intentionManager.ThrowIfForbidden(BlogIntention.ViewPremoderationPending, blog);
-        }
-    }
+    /// <remarks>
+    /// Every refusal on a blog the caller cannot see is a 404 and not a 403,
+    /// because the difference between "no such blog" and "not yours" is itself
+    /// the leak: the alias is five letters, so a stranger can walk the space. The
+    /// game side gets this for free from GameAccessibilityFilters, which drops
+    /// the row inside the query; a blog is read unfiltered and decides here.
+    ///
+    /// The one statement of the rule. The three single-blog reads ask it, the two
+    /// status transitions ask it, and everything living inside a blog asks it
+    /// through <see cref="IsVisibleToViewerAsync" />. A second copy would be a
+    /// second answer to who may open a blog, and the copies would drift — as they
+    /// did while the reads threw a 403 and the transitions answered 404.
+    ///
+    /// It decides visibility only. An action the caller may not perform on a blog
+    /// they can see is still refused with a 403 by the intention guarding that
+    /// action, which is what a 403 is for.
+    /// </remarks>
+    private bool IsVisibleToViewer(Blog blog) =>
+        (blog.DraftVisibility != DraftVisibility.Private ||
+         _intentionManager.IsAllowed(BlogIntention.ViewDraft, blog)) &&
+        (blog.PremoderationStatus == PremoderationStatus.Approved ||
+         _intentionManager.IsAllowed(BlogIntention.ViewPremoderationPending, blog));
 
     private async Task FillBlogUnreadCounters(Blog[] blogs)
     {

@@ -110,7 +110,8 @@ internal class GameService : IGameService
         _logger.LogDebug("Creating game. Title={Title}", createGame.Title);
 
         await _creationValidator.ValidateAndAuthorize(createGame);
-        var userId = _identityProvider.Current.User.UserId;
+        var author = _identityProvider.Current.User;
+        var userId = author.UserId;
 
         // The master picks tags by short id — the alias the tag list serves and
         // the game filters take. The link table keys on the tags' own
@@ -136,6 +137,11 @@ internal class GameService : IGameService
             NarrativeSetting = createGame.NarrativeSetting,
             Info = createGame.Info,
             Status = createGame.Draft ? ModuleStatus.Draft : ModuleStatus.Active,
+            // Whether the game is premoderated is decided by who is creating it,
+            // by the same rule a blog is decided by. Until this line existed the
+            // column took its default, which is Approved, and premoderation
+            // applied to nobody.
+            PremoderationStatus = ModulePremoderationPolicy.InitialStatus(author),
             DraftVisibility = createGame.DraftVisibility,
             ActivatedUtc = createGame.Draft ? null : now,
             HideDiceResult = createGame.HideDiceResult,
@@ -341,10 +347,23 @@ internal class GameService : IGameService
         return (games, pagingDataAuth.Result);
     }
 
+    /// <summary>
+    /// Whether the reader may pass a premoderation verdict, and so has to be able
+    /// to open the module the verdict is pending on.
+    /// </summary>
+    /// <remarks>
+    /// The intention itself, not a second reading of the rank: the storage scope
+    /// cannot ask the resolver, so the answer is taken here and handed down. One
+    /// right, one rule — GameIntention.Read admits the same reader on the way
+    /// back, or the row would be fetched only to be refused.
+    /// </remarks>
+    private bool MayJudgePremoderation =>
+        _intentionManager.IsAllowed(GameIntention.SetStatusModeration);
+
     public async Task<Game> GetAsync(Guid gameId)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
-        var game = await _repository.GetGame(gameId, currentUserId);
+        var game = await _repository.GetGame(gameId, currentUserId, MayJudgePremoderation);
         if (game == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
@@ -363,7 +382,7 @@ internal class GameService : IGameService
     public async Task<Guid> ResolveIdByPublicIdAsync(string publicId)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
-        var gameId = await _repository.FindGameIdByPublicId(publicId, currentUserId);
+        var gameId = await _repository.FindGameIdByPublicId(publicId, currentUserId, MayJudgePremoderation);
 
         // Same answer as the aggregate read gives for an id that addresses
         // nothing visible, so a caller cannot tell which path it took.
@@ -373,7 +392,7 @@ internal class GameService : IGameService
     public async Task<Game> GetByPublicIdAsync(string publicId)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
-        var game = await _repository.GetGameByPublicId(publicId, currentUserId);
+        var game = await _repository.GetGameByPublicId(publicId, currentUserId, MayJudgePremoderation);
         if (game == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
@@ -392,7 +411,7 @@ internal class GameService : IGameService
     public async Task<GameDetails> GetDetailsAsync(Guid gameId)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
-        var game = await _repository.GetGameDetails(gameId, currentUserId);
+        var game = await _repository.GetGameDetails(gameId, currentUserId, MayJudgePremoderation);
         if (game == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
@@ -417,7 +436,7 @@ internal class GameService : IGameService
     public async Task<GameDetails> GetDetailsByPublicIdAsync(string publicId)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
-        var game = await _repository.GetGameDetailsByPublicId(publicId, currentUserId);
+        var game = await _repository.GetGameDetailsByPublicId(publicId, currentUserId, MayJudgePremoderation);
         if (game == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
@@ -484,6 +503,19 @@ internal class GameService : IGameService
             invokedEvents.Add(EventType.GameRecruitmentOpened);
         }
 
+        // Same translation the creation form goes through: the caller names tags
+        // by short id, the link table keys on the tags' own identifiers, and an
+        // id the catalog does not know is dropped rather than refused. Null
+        // stays null all the way to the repository — that is how the update
+        // says "the master did not touch the tags", which an empty list, the
+        // way to clear them all, must not be confused with.
+        //
+        // The null arm is also what keeps the per-group tag limits off a game
+        // whose tags nobody touched; see ResolveTagIds for why that matters.
+        var tagIds = updateGame.Tags is null
+            ? null
+            : await _dataResolver.ResolveTagIds(updateGame.Tags);
+
         var updateEntity = new UpdateGameEntity
         {
             GameId = updateGame.GameId,
@@ -498,7 +530,7 @@ internal class GameService : IGameService
             ShowPrivateMessages = updateGame.ShowPrivateMessages,
             HidePostStats = updateGame.HidePostStats,
             CommentsAccessMode = updateGame.CommentsAccessMode,
-            TagIds = updateGame.Tags,
+            TagIds = tagIds,
             UpdatedUtc = _dateTimeProvider.Now
         };
 
@@ -564,35 +596,67 @@ internal class GameService : IGameService
 
     public async Task<GameDetails> ChangePremoderationAsync(string id, ModulePremoderationTransition transition)
     {
-        // Site-wide Mentor+ gate (parameterless intention): the role decides who
-        // may move a game through premoderation, not the per-game read gate. The
-        // fetch goes straight to the repository, which takes either id form and
-        // skips the schema, subscriber and unread-counter reads GetDetailsAsync
-        // adds and this write never uses. Admission is the same either way: the
-        // repository applies the accessibility scope, so a mentor who is not the
-        // assigned curator is refused here exactly as on the read path.
-        _intentionManager.ThrowIfForbidden(GameIntention.SetStatusModeration);
+        // Two moves belong to moderation and one to the master, so there is no
+        // single gate for the endpoint. The moderation pair is a rank, asked
+        // before anything is read: a stranger probing five-letter aliases has to
+        // be refused without learning whether the alias resolves. The master's
+        // move is a fact about the game and is asked once the game is in hand.
+        var isAuthorMove = transition == ModulePremoderationTransition.SubmitForApproval;
+        if (!isAuthorMove)
+        {
+            _intentionManager.ThrowIfForbidden(GameIntention.SetStatusModeration);
+        }
 
         var currentUserId = _identityProvider.Current.User.UserId;
-        var game = Guid.TryParse(id, out var guid)
-            ? await _repository.GetGameDetails(guid, currentUserId)
-            : await _repository.GetGameDetailsByPublicId(id, currentUserId);
+
+        // The fetch goes straight to the repository, which takes either id form
+        // and skips the schema, subscriber and unread-counter reads
+        // GetDetailsAsync adds and this write never uses.
+        //
+        // Which scope it uses is the difference between the two kinds of move. A
+        // master always sees their own game, so the author's move reads through
+        // the ordinary accessibility scope and a stranger gets a 404 out of it. A
+        // mentor does not: the scope hands out a premoderated game only to its
+        // leads, its invitees and its assigned curator, and under this rule a
+        // module in AwaitingEdits has no curator yet — that is the state every
+        // newbie's game is created in. Read through the ordinary scope, the queue
+        // would answer 404 on exactly the games it exists to judge.
+        var parsed = Guid.TryParse(id, out var guid);
+        var game = isAuthorMove
+            ? parsed
+                // The author's move reads as the author and not as a judge, even
+                // when the author happens to hold the rank: submitting is a fact
+                // about the game, so the scope has to answer the master's
+                // question and not the mentor's.
+                ? await _repository.GetGameDetails(guid, currentUserId, mayJudgePremoderation: false)
+                : await _repository.GetGameDetailsByPublicId(id, currentUserId, mayJudgePremoderation: false)
+            : parsed
+                ? await _repository.GetGameDetailsForModeration(guid, currentUserId)
+                : await _repository.GetGameDetailsByPublicIdForModeration(id, currentUserId);
         if (game == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
         }
 
         var gameId = game.Id;
+
+        // Legality first and authorization second, as in ChangeStatusAsync: a move
+        // the machine does not allow is a 400 whether or not the caller could have
+        // made a legal one.
         var change = ModulePremoderationPolicy.Resolve(
             transition, game.PremoderationStatus, currentUserId);
+        if (isAuthorMove)
+        {
+            _intentionManager.ThrowIfForbidden(GameIntention.SubmitForApproval, game);
+        }
 
         var update = new UpdateGameEntity
         {
             GameId = gameId,
             UpdatedUtc = _dateTimeProvider.Now,
-            PremoderationStatus = change.Status,
             MentorId = change.MentorId,
-            SetMentorId = true
+            SetMentorId = change.SetMentorId,
+            PremoderationStatus = change.Status
         };
 
         var result = await _repository.Update(update);

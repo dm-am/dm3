@@ -9,6 +9,10 @@ internal class UpdateFundraisingGoalValidator : AbstractValidator<UpdateFundrais
     /// <inheritdoc />
     public UpdateFundraisingGoalValidator()
     {
+        RuleFor(g => g.Title)
+            .NotEmpty().WithMessage(ValidationError.Empty)
+            .MaximumLength(200).WithMessage(ValidationError.Long);
+
         RuleFor(g => g.GoalAmount)
             .GreaterThan(0).WithMessage(ValidationError.MustBePositive);
 

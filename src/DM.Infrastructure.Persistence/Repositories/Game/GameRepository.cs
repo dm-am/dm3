@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
@@ -175,8 +176,9 @@ internal class GameRepository : IGameRepository
     /// <param name="games">Games to hydrate</param>
     /// <param name="userId">
     /// The user the read is on behalf of. Only <see cref="GameDto.IsViewerSubscriber" />
-    /// depends on it; every other field here is the same for all viewers.
-    /// <see cref="Guid.Empty" /> for an anonymous read.
+    /// and the turn marker (<see cref="GameDto.AwaitsViewerTurn" /> with its
+    /// character names) depend on it; every other field here is the same for all
+    /// viewers. <see cref="Guid.Empty" /> for an anonymous read.
     /// </param>
     /// <param name="ct">Cancellation token</param>
     private async Task EnrichGamesAsync<T>(
@@ -373,6 +375,64 @@ internal class GameRepository : IGameRepository
             game.GameReviewsCount = gameReviewCounts.GetValueOrDefault(game.Id, 0);
             game.PostReviewsCount = postReviewCounts.GetValueOrDefault(game.Id, 0);
             game.ActiveCharacters = activeCharactersMap.GetValueOrDefault(game.Id, []);
+        }
+
+        await FillTurnMarkersAsync(games, gameIds, userId, ct);
+    }
+
+    /// <summary>
+    /// Populate the turn marker — whether the game waits for a post from this
+    /// viewer, and for which of his characters.
+    /// </summary>
+    /// <remarks>
+    /// The room list has always carried the expectations of a game and the
+    /// sidebar draws its star from them, but a list of games carries no rooms, so
+    /// the panel that shows a player his games could not say which of them was
+    /// waiting for him without fetching every room of every one. The same
+    /// selection, asked of the pendencies table instead: one statement for the
+    /// whole page, and a row only for this viewer, so the anonymous read skips it
+    /// entirely.
+    /// </remarks>
+    private async Task FillTurnMarkersAsync<T>(
+        IReadOnlyList<T> games,
+        HashSet<Guid> gameIds,
+        Guid userId,
+        CancellationToken ct) where T : GameDto
+    {
+        if (userId == Guid.Empty)
+        {
+            foreach (var game in games)
+            {
+                game.AwaitsViewerTurn = false;
+                game.AwaitedCharacterNames = [];
+            }
+
+            return;
+        }
+
+        var awaited = await _dbContext.PostPendencies
+            .AsNoTracking()
+            .Where(p => p.WaitingForUserId == userId &&
+                        p.FulfilledUtc == null &&
+                        // A removed room is off the room list, so the expectation
+                        // inside it is off every screen that reads one.
+                        !p.Room.IsRemoved &&
+                        gameIds.Contains(p.Room.GameId))
+            .Where(PostPendencyFilters.Genuine)
+            .OrderBy(p => p.CreatedUtc)
+            .ThenBy(p => p.PendencyId)
+            .Select(p => new { p.Room.GameId, CharacterName = p.Character.Name })
+            .ToListAsync(ct);
+
+        var awaitedByGame = awaited
+            .GroupBy(p => p.GameId)
+            .ToDictionary(g => g.Key, g => g.Select(p => p.CharacterName).Distinct().ToList());
+
+        foreach (var game in games)
+        {
+            var names = awaitedByGame.GetValueOrDefault(game.Id, []);
+            game.AwaitedCharacterNames = names;
+            game.AwaitsViewerTurn = names.Count > 0;
         }
     }
 
@@ -763,16 +823,59 @@ internal class GameRepository : IGameRepository
         return counts.ToDictionary(x => x.GameId, x => x.Count);
     }
 
-    public async Task<GameDetails?> GetGameDetails(Guid gameId, Guid userId, CancellationToken ct = default)
+    public Task<GameDetails?> GetGameDetails(
+        Guid gameId, Guid userId, bool mayJudgePremoderation, CancellationToken ct = default) =>
+        LoadGameDetails(g => g.GameId == gameId, userId, moderationScope: false, mayJudgePremoderation, ct);
+
+    /// <inheritdoc />
+    public Task<GameDetails?> GetGameDetailsForModeration(
+        Guid gameId, Guid viewerId, CancellationToken ct = default) =>
+        LoadGameDetails(g => g.GameId == gameId, viewerId,
+            moderationScope: true, mayJudgePremoderation: true, ct);
+
+    /// <inheritdoc />
+    public Task<GameDetails?> GetGameDetailsByPublicIdForModeration(
+        string publicId, Guid viewerId, CancellationToken ct = default) =>
+        LoadGameDetails(g => g.PublicId == publicId, viewerId,
+            moderationScope: true, mayJudgePremoderation: true, ct);
+
+    /// <summary>
+    /// The one body behind every single-game details read: by identifier, by
+    /// alias, and the premoderation pair that skips the accessibility scope.
+    /// </summary>
+    /// <param name="addressing">Which game — by identifier or by public alias.</param>
+    /// <param name="viewerId">Reader the projection and the enrichment answer for.</param>
+    /// <param name="moderationScope">
+    /// Drop the accessibility filter entirely. Only the premoderation endpoint
+    /// passes true, and only behind its Mentor+ gate: the two verdict moves are
+    /// legal from every status, so the game they are passed on may be an approved
+    /// private draft, which the rank arm of the scope deliberately does not open.
+    /// </param>
+    /// <param name="mayJudgePremoderation">
+    /// Whether the viewer holds the rank that passes premoderation verdicts. Adds
+    /// the games awaiting one to the ordinary scope, and nothing else. Ignored
+    /// when <paramref name="moderationScope" /> already dropped the filter.
+    /// </param>
+    /// <param name="ct">Cancellation token.</param>
+    private async Task<GameDetails?> LoadGameDetails(
+        Expression<Func<DbGame, bool>> addressing,
+        Guid viewerId,
+        bool moderationScope,
+        bool mayJudgePremoderation,
+        CancellationToken ct)
     {
         // GameDetails projects several independent collections (Tags,
         // Assistants, FullAssistants, Characters, BlackList). A single query
         // LEFT-JOINs them into a cartesian product that can exhaust memory
         // (BufferedDataReader OOM); AsSplitQuery loads each collection with
         // its own query instead.
-        var game = await _dbContext.Games
-            .Where(GameAccessibilityFilters.GameAvailable(userId))
-            .Where(g => g.GameId == gameId)
+        var games = _dbContext.Games.AsQueryable();
+        games = moderationScope
+            ? games.Where(g => !g.IsRemoved)
+            : games.Where(GameAccessibilityFilters.GameAvailable(viewerId, mayJudgePremoderation));
+
+        var game = await games
+            .Where(addressing)
             .ProjectTo<GameDetails>(_mapper.ConfigurationProvider)
             .AsSplitQuery()
             .FirstOrDefaultAsync(ct);
@@ -785,16 +888,17 @@ internal class GameRepository : IGameRepository
             // counts, etc. Previously these were silently empty on the
             // details path, which is why game tooltips on featured
             // posts showed no characters.
-            await EnrichGamesAsync(new[] { game }, userId, ct);
+            await EnrichGamesAsync(new[] { game }, viewerId, ct);
             await EnrichGameDetailsAsync(game, ct);
         }
         return game;
     }
 
-    public async Task<GameDto?> GetGame(Guid gameId, Guid userId, CancellationToken ct = default)
+    public async Task<GameDto?> GetGame(
+        Guid gameId, Guid userId, bool mayJudgePremoderation, CancellationToken ct = default)
     {
         var game = await _dbContext.Games
-            .Where(GameAccessibilityFilters.GameAvailable(userId))
+            .Where(GameAccessibilityFilters.GameAvailable(userId, mayJudgePremoderation))
             .Where(g => g.GameId == gameId)
             // GameDto's three collections (GameTags/Assistants/BlackList) would
             // otherwise multiply into a cartesian product on a single query.
@@ -818,7 +922,8 @@ internal class GameRepository : IGameRepository
         return game;
     }
 
-    public Task<Guid?> FindGameIdByPublicId(string publicId, Guid userId, CancellationToken ct = default)
+    public Task<Guid?> FindGameIdByPublicId(
+        string publicId, Guid userId, bool mayJudgePremoderation, CancellationToken ct = default)
     {
         // Same visibility filter as the aggregate read, so the set of public ids
         // that resolve is identical — but one scalar column instead of a game,
@@ -826,16 +931,17 @@ internal class GameRepository : IGameRepository
         // callers of this throw away.
         return _dbContext.Games
             .TagWith("DM.Game.FindIdByPublicId")
-            .Where(GameAccessibilityFilters.GameAvailable(userId))
+            .Where(GameAccessibilityFilters.GameAvailable(userId, mayJudgePremoderation))
             .Where(g => g.PublicId == publicId)
             .Select(g => (Guid?)g.GameId)
             .FirstOrDefaultAsync(ct);
     }
 
-    public async Task<GameDto?> GetGameByPublicId(string publicId, Guid userId, CancellationToken ct = default)
+    public async Task<GameDto?> GetGameByPublicId(
+        string publicId, Guid userId, bool mayJudgePremoderation, CancellationToken ct = default)
     {
         var game = await _dbContext.Games
-            .Where(GameAccessibilityFilters.GameAvailable(userId))
+            .Where(GameAccessibilityFilters.GameAvailable(userId, mayJudgePremoderation))
             .Where(g => g.PublicId == publicId)
             // See GetGame: AsSplitQuery avoids the multi-collection cartesian.
             .ProjectTo<GameDto>(_mapper.ConfigurationProvider)
@@ -858,24 +964,9 @@ internal class GameRepository : IGameRepository
         return game;
     }
 
-    public async Task<GameDetails?> GetGameDetailsByPublicId(string publicId, Guid userId, CancellationToken ct = default)
-    {
-        // See GetGameDetails: AsSplitQuery avoids the multi-collection
-        // cartesian product that OOMs the single-query reader.
-        var game = await _dbContext.Games
-            .Where(GameAccessibilityFilters.GameAvailable(userId))
-            .Where(g => g.PublicId == publicId)
-            .ProjectTo<GameDetails>(_mapper.ConfigurationProvider)
-            .AsSplitQuery()
-            .FirstOrDefaultAsync(ct);
-
-        if (game is not null)
-        {
-            await EnrichGamesAsync(new[] { game }, userId, ct);
-            await EnrichGameDetailsAsync(game, ct);
-        }
-        return game;
-    }
+    public Task<GameDetails?> GetGameDetailsByPublicId(
+        string publicId, Guid userId, bool mayJudgePremoderation, CancellationToken ct = default) =>
+        LoadGameDetails(g => g.PublicId == publicId, userId, moderationScope: false, mayJudgePremoderation, ct);
 
     public async Task<IEnumerable<GameTag>> GetTags(CancellationToken ct = default)
     {
@@ -891,6 +982,7 @@ internal class GameRepository : IGameRepository
                 GroupTitle = t.TagGroup.Title,
                 GroupDescription = t.TagGroup.Description,
                 GroupSortOrder = t.TagGroup.SortOrder,
+                GroupMaxTagsPerGame = t.TagGroup.MaxTagsPerGame,
                 SortOrder = t.SortOrder,
                 GamesCount = t.GameTags.Count(gt => gt.Game.Status == ModuleStatus.Active)
             })
@@ -929,6 +1021,7 @@ internal class GameRepository : IGameRepository
             GameId = game.GameId,
             CreatedUtc = game.CreatedUtc,
             Status = game.Status,
+            PremoderationStatus = game.PremoderationStatus,
             DraftVisibility = game.DraftVisibility,
             ActivatedUtc = game.ActivatedUtc,
             MasterId = game.MasterId,
@@ -1067,8 +1160,11 @@ internal class GameRepository : IGameRepository
         if (updateGame.ClearRecruitmentStartedUtc)
             game.RecruitmentStartedUtc = null;
 
-        // Update tags if provided
-        if (updateGame.TagIds != null && updateGame.TagIds.Any())
+        // Update tags if provided. Null and empty are not the same answer: null
+        // is the update saying nothing about tags, an empty list is the master
+        // taking them all off, and the `.Any()` this once also carried made the
+        // second one unsayable.
+        if (updateGame.TagIds != null)
         {
             // The difference, not a wholesale replacement: deleting a row and
             // inserting another one for the same pair in a single SaveChanges puts two
@@ -1105,14 +1201,67 @@ internal class GameRepository : IGameRepository
             .FirstAsync(ct);
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// The attachments of every post in the game go with it. Hiding the game hides
+    /// the posts and with them the only endpoint that would ever serve those
+    /// files, so leaving the rows live would leave objects in the bucket that
+    /// nothing reads and nothing collects — the orphan sweeper walks soft-deleted
+    /// upload rows, and a live row pointing into a removed game is not one.
+    ///
+    /// Both writes in one transaction, because the second is what turns a hidden
+    /// game into files that will actually be destroyed, and a failure between them
+    /// leaves the promise half kept with nothing to notice it.
+    /// </remarks>
     public async Task Delete(Guid gameId, Guid deletedByUserId, CancellationToken ct = default)
     {
         var game = await _dbContext.Games.FindAsync([gameId], ct);
-        if (game != null)
+        if (game == null)
         {
-            SoftDelete.Mark(game, deletedByUserId, _dateTimeProvider.Now);
-            await _dbContext.SaveChangesAsync(ct);
+            return;
         }
+
+        var now = _dateTimeProvider.Now;
+
+        // The strategy wrapper is required because the API host configures
+        // EnableRetryOnFailure.
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        var attempted = false;
+        await strategy.ExecuteAsync(async () =>
+        {
+            if (attempted)
+            {
+                // A retry replays this block; SaveChanges leaves the game
+                // Unchanged even when the transaction around it rolls back, so
+                // without the clear the second attempt writes no soft-delete.
+                _dbContext.ChangeTracker.Clear();
+                game = await _dbContext.Games.FindAsync([gameId], ct);
+                if (game == null)
+                {
+                    return;
+                }
+            }
+
+            attempted = true;
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
+
+            SoftDelete.Mark(game, deletedByUserId, now);
+            await _dbContext.SaveChangesAsync(ct);
+
+            // Live rows only, by the global soft-delete filter: a file already
+            // taken off a post keeps the grace period it started with.
+            await _dbContext.Uploads
+                .Where(u => u.Type == UploadType.PostAttachment &&
+                            u.TargetPostId != null &&
+                            _dbContext.Posts.Any(p =>
+                                p.PostId == u.TargetPostId!.Value && p.Room.GameId == gameId))
+                .ExecuteUpdateAsync(u => u
+                    .SetProperty(x => x.IsRemoved, true)
+                    .SetProperty(x => x.DeletedByUserId, (Guid?)deletedByUserId)
+                    .SetProperty(x => x.DeletedUtc, (DateTimeOffset?)now), ct);
+
+            await transaction.CommitAsync(ct);
+        });
     }
 
     #endregion

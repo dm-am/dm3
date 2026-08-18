@@ -54,31 +54,12 @@ internal class UserEndorsementService : IUserEndorsementService
         var authorId = _identityProvider.Current.User.UserId;
         var targetUserId = createEndorsement.TargetUserId;
 
-        // Newbies cannot create user endorsements
-        if (await IsNewbieAsync(authorId))
+        // The same evaluation the client asked beforehand, so the offer and
+        // the answer to accepting it cannot disagree.
+        var eligibility = await EvaluateEligibilityAsync(authorId, targetUserId);
+        if (!eligibility.CanCreate)
         {
-            throw new HttpException(HttpStatusCode.Forbidden,
-                $"Чтобы рекомендовать других, нужно не меньше {ProbationPolicy.NewbiePostThreshold} постов в играх");
-        }
-
-        // Can't endorse yourself
-        if (authorId == targetUserId)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя рекомендовать самого себя");
-        }
-
-        // Check if users have played together
-        var havePlayedTogether = await HavePlayedTogetherAsync(authorId, targetUserId);
-        if (!havePlayedTogether)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden,
-                "Рекомендовать можно только тех, с кем вы играли в одной игре");
-        }
-
-        // Check if already endorsed
-        if (await ExistsAsync(authorId, targetUserId))
-        {
-            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyEndorsedUser);
+            throw new HttpException(eligibility.Status, eligibility.Reason!);
         }
 
         var entity = new CreateUserEndorsementEntity
@@ -98,6 +79,61 @@ internal class UserEndorsementService : IUserEndorsementService
         {
             throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyEndorsedUser);
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<UserEndorsementEligibility> GetEligibilityAsync(Guid targetUserId)
+    {
+        // A guest is refused rather than thrown at: the question "may I?" has
+        // an answer for anonymous readers, and it is "sign in first".
+        if (!_intentionManager.IsAllowed(UserEndorsementIntention.Create))
+        {
+            return UserEndorsementEligibility.Refused(
+                RefusalMessage.AuthenticationRequired, HttpStatusCode.Unauthorized);
+        }
+
+        return await EvaluateEligibilityAsync(_identityProvider.Current.User.UserId, targetUserId);
+    }
+
+    /// <summary>
+    /// The rules of writing a recommendation, in one place: who is refused and
+    /// with what sentence. Both the create call and the eligibility question
+    /// go through here — two copies of this list would drift, and the client
+    /// would offer a control the server refuses.
+    /// </summary>
+    /// <remarks>
+    /// Authentication is not checked here; the two callers gate it their own
+    /// way (a throw on create, a refusal on the query).
+    /// </remarks>
+    private async Task<UserEndorsementEligibility> EvaluateEligibilityAsync(Guid authorId, Guid targetUserId)
+    {
+        // Cheapest and most specific first: a self-recommendation is refused
+        // for being one, not for whatever else the author happens to be.
+        if (authorId == targetUserId)
+        {
+            return UserEndorsementEligibility.Refused("Нельзя рекомендовать самого себя");
+        }
+
+        if (await IsNewbieAsync(authorId))
+        {
+            return UserEndorsementEligibility.Refused(
+                $"Чтобы рекомендовать других, нужно не меньше {ProbationPolicy.NewbiePostThreshold} постов в играх");
+        }
+
+        if (!await HavePlayedTogetherAsync(authorId, targetUserId))
+        {
+            return UserEndorsementEligibility.Refused(
+                "Рекомендовать можно только тех, с кем вы играли в одной игре");
+        }
+
+        // One recommendation per author-recipient pair.
+        if (await ExistsAsync(authorId, targetUserId))
+        {
+            return UserEndorsementEligibility.Refused(
+                RefusalMessage.AlreadyEndorsedUser, HttpStatusCode.Conflict);
+        }
+
+        return UserEndorsementEligibility.Allowed;
     }
 
     /// <inheritdoc />

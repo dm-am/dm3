@@ -96,6 +96,20 @@ export default new (class ModerationApi {
     return Api.get<ModeratedProfile>(`moderation/users/${username}/profile`);
   }
 
+  /**
+   * Switch the moderation watch on a user, or clear it (Moderator+).
+   * PATCH v1/moderation/users/{username}/moderation-watch — answers with the
+   * rebuilt moderated profile in an envelope, so the caller needs no second
+   * read. The bare profile of getModeratedProfile above is the older shape and
+   * stays that way; a new endpoint does not join the legacy list.
+   */
+  public setModerationWatch(username: Username, underWatch: boolean) {
+    return Api.patch<Envelope<ModeratedProfile>>(
+      `moderation/users/${username}/moderation-watch`,
+      { underWatch },
+    );
+  }
+
   // ==================== Moderation Team ====================
 
   /**
@@ -291,6 +305,16 @@ export type Warning = {
   moderator?: UserRef;
   entityId?: string;
   entityType?: string;
+  /**
+   * The offending text as it stood at the moment the warning was issued.
+   * Taken by the server, never rewritten: it outlives both an edit and a
+   * deletion of the content it was taken from.
+   */
+  entitySnapshot?: string | null;
+  /** Site-relative address of the offending content, when it has one. */
+  entityUrl?: string | null;
+  /** The content was edited after the warning — the snapshot is no longer what stands there. */
+  entityEditedAfterWarning?: boolean;
   points: number;
   reason: string;
   createdUtc: string;

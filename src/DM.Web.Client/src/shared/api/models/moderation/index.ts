@@ -49,6 +49,8 @@ export type ModerationPermissions = {
   canIssueWarning: boolean;
   canIssueBan: boolean;
   canLiftBan: boolean;
+  /** Can switch the moderation watch on this user (Moderator+). */
+  canSetModerationWatch: boolean;
 };
 
 /**
@@ -82,5 +84,12 @@ export type ModeratedProfile = {
   linkedProfiles: LinkedProfile[];
   moderatorNotes: ModNote[];
   violations: ViolationSummary;
+  /**
+   * Moderation is watching what this user creates: while it is on, every game
+   * and blog they start begins in premoderation, the way a newbie's does.
+   * Set and cleared by hand, unlike the violators list, which is recomputed
+   * from active warnings and bans and lapses when they expire.
+   */
+  isUnderModerationWatch: boolean;
   permissions: ModerationPermissions;
 };

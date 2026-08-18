@@ -33,6 +33,17 @@
         >Все блоги</router-link
       >
     </li>
+    <!--
+      Pairs with "Создать игру" in OwnedGames. BlogIntention.Create admits any
+      authenticated user, and this block only mounts for one (LeftSidebar's
+      v-if), so the row promises exactly what the server grants.
+    -->
+    <li>
+      <span class="muted" aria-hidden="true">- </span>
+      <router-link class="forward" :to="{ name: 'create-blog' }"
+        >Создать блог</router-link
+      >
+    </li>
   </SidebarBlock>
 </template>
 

@@ -108,7 +108,11 @@ useFetchData(
         :key="publication.id"
         class="feed-item"
       >
-        <PublicationCard :publication="publication" truncatable />
+        <PublicationCard
+          :publication="publication"
+          :blog-id="blogId"
+          truncatable
+        />
         <div v-if="canManage" class="feed-item-actions">
           <router-link
             :to="{

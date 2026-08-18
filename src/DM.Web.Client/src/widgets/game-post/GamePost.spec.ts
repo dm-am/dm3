@@ -175,3 +175,53 @@ describe("GamePost review permalinks", () => {
     expect(gameApi.getPostReviews).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * A published roll used to render as "dundefined: undefined +7 = NaN": the
+ * client type claimed `{ dice, result }`, a shape the API has never sent. What
+ * it does send is how many dice of how many edges fell, every die that fell,
+ * and the bonus; the total is arithmetic over those, not a field.
+ */
+describe("GamePost dice rolls", () => {
+  const withRolls = (rolls: unknown[]) =>
+    ({ ...post, diceRolls: rolls }) as unknown as Post;
+
+  it("names the throw and sums it, for a single die", async () => {
+    const wrapper = await render(
+      "/",
+      withRolls([
+        {
+          rolls: 1,
+          edges: 20,
+          bonus: 7,
+          results: [{ value: 18 }],
+          comment: "Восприятие",
+        },
+      ]),
+    );
+
+    const line = wrapper.find(".dice-roll").text();
+    expect(line).toContain("1d20: 18 +7");
+    expect(line).toContain("= 25");
+    expect(line).not.toContain("undefined");
+    expect(line).not.toContain("NaN");
+  });
+
+  it("shows every die of a multi-dice throw", async () => {
+    const wrapper = await render(
+      "/",
+      withRolls([
+        {
+          rolls: 3,
+          edges: 6,
+          bonus: 0,
+          results: [4, 2, 6].map((value) => ({ value })),
+        },
+      ]),
+    );
+
+    const line = wrapper.find(".dice-roll").text();
+    expect(line).toContain("3d6: 4 2 6");
+    expect(line).toContain("= 12");
+  });
+});

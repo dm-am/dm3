@@ -81,6 +81,36 @@ internal class ObjectStorage : IObjectStorage
     }
 
     /// <inheritdoc />
+    public async Task<StoredObject?> OpenReadAsync(string key, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _s3.GetObjectAsync(new GetObjectRequest
+            {
+                BucketName = _cdn.BucketName,
+                Key = key,
+            }, cancellationToken);
+
+            // ResponseStream keeps the response alive; handing it over means the
+            // caller disposes it. Length is what the store reports, not what the
+            // upload row remembers: the row is a copy and this is the object.
+            return new StoredObject(
+                response.ResponseStream,
+                response.Headers.ContentType ?? "application/octet-stream",
+                response.ContentLength >= 0 ? response.ContentLength : null);
+        }
+        catch (AmazonS3Exception ex) when (ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden)
+        {
+            // A key the bucket does not hold, or one this account may not read.
+            // Both are "there are no bytes here" to a caller that has already
+            // decided the request is allowed, and neither is worth an exception
+            // travelling up through a controller that would answer 404 anyway.
+            _logger.LogWarning(ex, "[Object storage] Object {Key} is not readable", key);
+            return null;
+        }
+    }
+
+    /// <inheritdoc />
     public string BuildPublicUrl(string key) =>
         new UriBuilder(new Uri(_cdn.PublicUrl))
         {

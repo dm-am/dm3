@@ -34,6 +34,30 @@ public interface IUploadRepository
     Task<StoredUpload?> GetAsync(Guid uploadId);
 
     /// <summary>
+    /// Key of the object in the bucket, or null when no live row carries that
+    /// identifier.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not a field of <see cref="StoredUpload"/>: that record is what
+    /// the API answers with, and the key is the one thing about a file that must
+    /// never leave the server. Asking for it is a separate, named act, so a
+    /// projection that grows a field cannot carry it out by accident.
+    /// </remarks>
+    /// <param name="uploadId">Upload identifier.</param>
+    Task<string?> GetObjectKeyAsync(Guid uploadId);
+
+    /// <summary>
+    /// How many live files are attached to the post.
+    /// </summary>
+    /// <remarks>
+    /// Its own question rather than a filter on the listing: the listing pages and
+    /// projects rows for a screen, and this is a limit check on a write path that
+    /// needs one number.
+    /// </remarks>
+    /// <param name="postId">Post identifier.</param>
+    Task<int> CountPostAttachmentsAsync(Guid postId);
+
+    /// <summary>
     /// Hide the upload from the site and start the grace period after which the
     /// background sweeper drops the object from the bucket.
     /// </summary>

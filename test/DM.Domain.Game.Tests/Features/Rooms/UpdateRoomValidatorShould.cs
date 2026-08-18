@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Rooms;
 using DM.Testing;
@@ -35,6 +36,29 @@ public class UpdateRoomValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void FailWhenAnEnumFieldIsNotInEnum(bool onType)
+    {
+        var input = new UpdateRoom
+        {
+            RoomId = Guid.NewGuid(),
+            Type = onType ? (RoomType)30000 : null,
+            AccessType = onType ? null : (RoomAccessType)30000
+        };
+
+        var result = validator.TestValidate(input);
+        if (onType)
+        {
+            result.ShouldHaveValidationErrorFor(r => r.Type).WithErrorMessage(ValidationError.Invalid);
+        }
+        else
+        {
+            result.ShouldHaveValidationErrorFor(r => r.AccessType).WithErrorMessage(ValidationError.Invalid);
+        }
     }
 
     [Fact]

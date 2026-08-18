@@ -41,6 +41,11 @@ public class Tag
     public int GroupSortOrder { get; set; }
 
     /// <summary>
+    /// How many tags of this category one game may carry; null means no limit
+    /// </summary>
+    public int? GroupMaxTagsPerGame { get; set; }
+
+    /// <summary>
     /// Number of active games with this tag
     /// </summary>
     public int GamesCount { get; set; }

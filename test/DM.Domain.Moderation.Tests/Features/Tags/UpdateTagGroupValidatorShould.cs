@@ -97,4 +97,39 @@ public class UpdateTagGroupValidatorShould : UnitTestBase
         result.ShouldHaveValidationErrorFor(g => g.SortOrder)
             .WithErrorMessage(ValidationError.Invalid);
     }
+
+    /// <summary>
+    /// Clearing the number is how a group stops limiting anything, so an absent
+    /// value has to survive the update path as well as the creation one.
+    /// </summary>
+    [Fact]
+    public void PassWhenMaxTagsPerGameIsAbsent()
+    {
+        var input = new UpdateTagGroup
+        {
+            Id = Guid.NewGuid(),
+            Title = "Genres",
+            MaxTagsPerGame = null
+        };
+
+        var result = validator.TestValidate(input);
+        result.ShouldNotHaveValidationErrorFor(g => g.MaxTagsPerGame);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void FailWhenMaxTagsPerGameIsBelowOne(int limit)
+    {
+        var input = new UpdateTagGroup
+        {
+            Id = Guid.NewGuid(),
+            Title = "Genres",
+            MaxTagsPerGame = limit
+        };
+
+        var result = validator.TestValidate(input);
+        result.ShouldHaveValidationErrorFor(g => g.MaxTagsPerGame)
+            .WithErrorMessage(ValidationError.Invalid);
+    }
 }

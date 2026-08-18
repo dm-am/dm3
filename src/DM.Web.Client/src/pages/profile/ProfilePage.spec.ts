@@ -42,6 +42,8 @@ interface Prop {
   value?: { content: string };
   /** DIRECTIVE only. */
   exp?: { content: string };
+  /** DIRECTIVE only: the bound name, e.g. `permissions` in `:permissions`. */
+  arg?: { content: string };
 }
 
 /** The slice of the template AST this walk reads; the rest is ignored. */
@@ -132,6 +134,29 @@ describe("ProfilePage tab panels", () => {
       "ProfileTopicsList",
       "ProfileSubscribersSection",
     ]);
+  });
+
+  // The moderation watch decides the premoderation status of every game and
+  // blog this user creates next, and the profile's moderation panel is the only
+  // surface that carries both the flag and the permission to change it. The
+  // block gates itself on that permission, so the page hands it the whole
+  // permission set rather than deciding for it.
+  it("carries the moderation watch inside the moderation panel", () => {
+    const body = elements(root).find((n) => className(n) === "mod-body");
+    if (!body) throw new Error("the moderation panel body (.mod-body) is gone");
+
+    const watch = (body.children ?? []).find(
+      (c) => c.type === ELEMENT && c.tag === "ModerationWatch",
+    );
+    expect(
+      watch,
+      "ModerationWatch is not in the moderation panel",
+    ).toBeTruthy();
+
+    const bound = (watch?.props ?? [])
+      .filter((p) => p.type === DIRECTIVE && p.name === "bind")
+      .map((p) => p.arg?.content);
+    expect(bound).toEqual(["under-watch", "permissions", "target-username"]);
   });
 
   it("heads no section with the name of the tab it sits in", () => {

@@ -94,6 +94,15 @@ public class ExpressionIndexInitializer : IHostedService
         new("IX_Users_Username_Lower",
             """CREATE UNIQUE INDEX IF NOT EXISTS "IX_Users_Username_Lower" ON "Users" (lower("Username"))""",
             """CREATE UNIQUE INDEX "IX_Users_Username_Lower" ON public."Users" USING btree (lower(("Username")::text))"""),
+        // One name change request may await a moderator per account. The service
+        // reads before it writes, and two requests sent at once both read nothing:
+        // the queue would then hold two rows for one asking, and approving both
+        // renames the account twice. Only Pending is constrained - an approval
+        // stops being in flight when its link runs out rather than when a status
+        // changes, and no index predicate can be written against the clock.
+        new("IX_UsernameChangeRequests_UserId_Pending",
+            """CREATE UNIQUE INDEX IF NOT EXISTS "IX_UsernameChangeRequests_UserId_Pending" ON "UsernameChangeRequests" ("UserId") WHERE "Status" = 0""",
+            """CREATE UNIQUE INDEX "IX_UsernameChangeRequests_UserId_Pending" ON public."UsernameChangeRequests" USING btree ("UserId") WHERE ("Status" = 0)"""),
     ];
 
     /// <inheritdoc />

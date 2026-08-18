@@ -42,6 +42,20 @@ public class UpdateRoomAccessValidatorShould : UnitTestBase
     }
 
     [Fact]
+    public void FailWhenPolicyIsNotInEnum()
+    {
+        var input = new UpdateRoomAccess
+        {
+            AccessId = Guid.NewGuid(),
+            Policy = (RoomAccessPolicy)30000
+        };
+
+        var result = validator.TestValidate(input);
+        result.ShouldHaveValidationErrorFor(c => c.Policy)
+            .WithErrorMessage(ValidationError.Invalid);
+    }
+
+    [Fact]
     public void FailWhenPolicyIsNoAccess()
     {
         var input = new UpdateRoomAccess

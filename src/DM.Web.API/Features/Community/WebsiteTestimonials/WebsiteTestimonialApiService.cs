@@ -42,6 +42,7 @@ internal class WebsiteTestimonialApiService : IWebsiteTestimonialApiService
     {
         var createTestimonial = new CreateWebsiteTestimonial
         {
+            AuthorUsername = request.AuthorUsername,
             Text = request.Text
         };
         var testimonial = await _testimonialService.CreateAsync(createTestimonial);

@@ -45,6 +45,25 @@ public class Warning
     public string Reason { get; set; } = "";
 
     /// <summary>
+    /// The offending text as it stood when the warning was issued. Null when the
+    /// warning names no content. Written once and never rewritten, so it survives
+    /// both an edit and a deletion of the content it was taken from.
+    /// </summary>
+    public string? EntitySnapshot { get; set; }
+
+    /// <summary>
+    /// Site-relative address of the offending content. Null when the content is
+    /// gone or has no page a moderator could open.
+    /// </summary>
+    public string? EntityUrl { get; set; }
+
+    /// <summary>
+    /// Whether the offending content was edited after the warning was issued —
+    /// the snapshot and what stands there now are then different texts
+    /// </summary>
+    public bool EntityEditedAfterWarning { get; set; }
+
+    /// <summary>
     /// Creation timestamp (UTC)
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }

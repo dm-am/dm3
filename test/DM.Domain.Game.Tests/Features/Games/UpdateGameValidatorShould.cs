@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Games;
 using DM.Testing;
@@ -28,6 +29,20 @@ public class UpdateGameValidatorShould : UnitTestBase
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Fact]
+    public async Task FailWhenCommentsAccessModeIsNotInEnum()
+    {
+        var input = new UpdateGame
+        {
+            GameId = Guid.NewGuid(),
+            CommentsAccessMode = (CommentsAccessMode)30000
+        };
+
+        var result = await validator.TestValidateAsync(input);
+        result.ShouldHaveValidationErrorFor(x => x.CommentsAccessMode)
+            .WithErrorMessage(ValidationError.Invalid);
     }
 
     [Fact]

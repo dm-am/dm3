@@ -165,14 +165,21 @@ public class CredentialsController : ControllerBase
     /// </summary>
     /// <remarks>
     /// After moderator approves the request, user receives a token.
-    /// Use this endpoint to check if the token is valid and get request details.
+    /// Use this endpoint before showing the form.
+    ///
+    /// Statuses:
+    /// - `ready`: approval stands, the name can be chosen now
+    /// - `expired`: the window for using the approval has closed
+    /// - `used`: the name was already changed through this link
+    ///
+    /// A token no request was ever issued for is a 404, which is the fourth answer.
     /// </remarks>
     /// <param name="token">Approval token from the notification link, in the X-Dm-Account-Token header</param>
-    /// <response code="200">Token valid, ready to choose username</response>
-    /// <response code="404">Token missing, malformed, invalid or expired</response>
+    /// <response code="200">Token state</response>
+    /// <response code="404">Token missing, malformed or unknown</response>
     [HttpGet("username-change/approval", Name = nameof(GetUsernameChangeApproval))]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(UsernameChangeResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(UsernameChangeApprovalInfo), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUsernameChangeApproval(
         [FromHeader(Name = TokenHeaders.Account)] string? token)
@@ -194,13 +201,15 @@ public class CredentialsController : ControllerBase
     /// <param name="token">Approval token from the notification link, in the X-Dm-Account-Token header</param>
     /// <param name="request">New username to use</param>
     /// <response code="200">Username changed successfully</response>
-    /// <response code="400">Invalid username or username not available</response>
-    /// <response code="404">Token missing, malformed, invalid or expired</response>
+    /// <response code="400">Invalid username</response>
+    /// <response code="404">Token missing, malformed, unknown or expired</response>
+    /// <response code="409">Name taken since the approval, or the link already spent</response>
     [HttpPost("username-change/complete", Name = nameof(CompleteUsernameChange))]
     [AllowAnonymous]
     [ProducesResponseType(typeof(UsernameChangeResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CompleteUsernameChange(
         [FromHeader(Name = TokenHeaders.Account)] string? token,
         [FromBody] UsernameChangeCompletionRequest request) =>

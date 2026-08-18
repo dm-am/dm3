@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
@@ -93,6 +94,55 @@ public class UploadController : ControllerBase
     }
 
     /// <summary>
+    /// Get the file itself
+    /// </summary>
+    /// <remarks>
+    /// The only way the bytes of a file on a closed prefix ever reach a browser.
+    /// The bucket answers anonymous reads on the avatar prefixes alone, and no
+    /// signed or direct address is ever handed out for the rest — a link that
+    /// works because it is known is a pass to whoever comes to hold it, and would
+    /// take an attachment out of the private room it belongs to for good.
+    ///
+    /// So the right is decided here, per request: the owner of the file and
+    /// Moderator+ always, and otherwise whoever may see the entity the file hangs
+    /// on — for a post attachment, whoever may read the post, which is the same
+    /// rule and the same query that decides whether the post is visible at all.
+    /// Nothing to sign in with is a valid state: an attachment in an open room of
+    /// a public game is public, and one in a closed room is 404 to everybody else,
+    /// signed in or not.
+    ///
+    /// The response is a download: Content-Disposition attachment and nosniff, so
+    /// a file served from the site's own origin cannot be talked into executing
+    /// there, and private caching only, so no shared cache keeps a copy of
+    /// something whose audience was decided per caller.
+    /// </remarks>
+    /// <param name="id">Upload identifier</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <response code="200">File content</response>
+    /// <response code="404">No such file, or the caller may not have it</response>
+    [HttpGet("{id:guid}/content", Name = nameof(GetUploadContent))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetUploadContent(Guid id, CancellationToken ct)
+    {
+        var content = await _uploadApiService.GetUploadContent(id, ct);
+
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        // Private, because who may read this was decided for this caller and not
+        // for the address. A shared cache holding the answer would serve it to the
+        // next person who asks for the same URL.
+        Response.Headers.CacheControl = "private, max-age=300";
+        if (content.Length.HasValue)
+        {
+            Response.ContentLength = content.Length.Value;
+        }
+
+        // Attachment, never inline: the file is served from the site's own origin,
+        // and a document rendered there runs with the site's privileges.
+        return File(content.Content, content.ContentType, content.FileName);
+    }
+
+    /// <summary>
     /// Delete upload (soft-delete; S3 cleanup is done by the background GC)
     /// </summary>
     /// <param name="id">Upload identifier</param>
@@ -116,12 +166,16 @@ public class UploadController : ControllerBase
     /// Upload file with server-side processing
     /// </summary>
     /// <remarks>
-    /// Multipart/form-data upload. For images (UserAvatar, CharacterAvatar):
-    /// magic-byte validation, EXIF/IPTC/XMP strip, downscale to 1024 px, a single
-    /// S3 PUT of the source file. Thumbnail variants are produced on-the-fly at
-    /// serving time and are not stored.
+    /// Multipart/form-data upload. Magic-byte validation and EXIF/IPTC/XMP strip
+    /// for every type, then a single S3 PUT of the source file. Thumbnail variants
+    /// are produced on-the-fly at serving time and are not stored.
     ///
-    /// Allowed formats: JPEG, PNG, WebP. Maximum 10 MB.
+    /// Avatars (UserAvatar, CharacterAvatar): JPEG, PNG, WebP, at least 50 px on
+    /// each side, downscaled to 1024 px, maximum 10 MB.
+    ///
+    /// Post attachments: JPEG, PNG, WebP, GIF, stored at their own size with no
+    /// floor, maximum 5 MB, at most three per post, and only by the post's own
+    /// author. Documents are not accepted — see ImageProcessingDefaults for why.
     /// </remarks>
     /// <param name="file">File (multipart/form-data)</param>
     /// <param name="type">Upload type/purpose</param>

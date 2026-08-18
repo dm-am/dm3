@@ -12,5 +12,8 @@ internal class CreateBlogValidator : AbstractValidator<CreateBlog>
         RuleFor(x => x.Title)
             .NotEmpty().WithMessage(ValidationError.Empty)
             .MaximumLength(200).WithMessage(ValidationError.Long);
+
+        RuleFor(x => x.DraftVisibility)
+            .IsInEnum().WithMessage(ValidationError.Invalid);
     }
 }

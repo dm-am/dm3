@@ -20,6 +20,7 @@ internal class WarningService : IWarningService
     private readonly IValidator<CreateWarning> _createValidator;
     private readonly IWarningRepository _warningRepository;
     private readonly IBanRepository _banRepository;
+    private readonly IWarningEntityResolver _entityResolver;
     private readonly IUserLookupService _userLookupService;
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
@@ -31,6 +32,7 @@ internal class WarningService : IWarningService
         IValidator<CreateWarning> createValidator,
         IWarningRepository warningRepository,
         IBanRepository banRepository,
+        IWarningEntityResolver entityResolver,
         IUserLookupService userLookupService,
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
@@ -40,6 +42,7 @@ internal class WarningService : IWarningService
         _createValidator = createValidator;
         _warningRepository = warningRepository;
         _banRepository = banRepository;
+        _entityResolver = entityResolver;
         _userLookupService = userLookupService;
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
@@ -72,16 +75,18 @@ internal class WarningService : IWarningService
             throw new HttpException(HttpStatusCode.Forbidden, "Список предупреждений доступен модераторам");
         }
 
-        if (!string.IsNullOrEmpty(username))
-        {
-            return await GetUserWarnings(username, ct);
-        }
-
         // The unfiltered list used to be an empty one with a note that the
         // repository method was missing: behind a Moderator+ gate and a 200, a
         // moderator opening the page saw what a website without violations looks
         // like.
-        return await _warningRepository.GetAllWarnings(ct);
+        var warnings = string.IsNullOrEmpty(username)
+            ? await _warningRepository.GetAllWarnings(ct)
+            : await GetUserWarnings(username, ct);
+
+        // Only the moderation list gets the address and the "edited since" mark:
+        // the public profile view is trimmed to points and dates, so paying for
+        // these queries there would buy nothing anyone is allowed to see.
+        return await DescribeEntities(warnings, ct);
     }
 
     /// <inheritdoc />
@@ -97,16 +102,41 @@ internal class WarningService : IWarningService
 
         var targetUser = await _userLookupService.GetAsync(createWarning.Username);
 
+        var entityId = createWarning.EntityId ?? Guid.Empty;
+        var entityType = ParseEntityType(createWarning.EntityType);
+
+        // Game content is outside moderation, so no warning names a post: no
+        // screen offers the button and the resolver refuses to copy one. Saying
+        // so out loud, because the quiet version stored a warning that pointed at
+        // a game post and carried no evidence at all.
+        if (entityType == WarningEntityType.Post)
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                ["entityType"] = "Игровой контент модерации не подлежит"
+            });
+        }
+
+        // The evidence is taken here, before anything else can change it. A
+        // warning points at content its author is free to edit afterwards, and no
+        // edit history on the site keeps the previous text, so a warning that
+        // stored only the reference lost what it was given for the moment the
+        // author rewrote the sentence.
+        var snapshot = entityId == Guid.Empty
+            ? null
+            : await _entityResolver.CaptureSnapshot(entityType, entityId, ct);
+
         var entity = new CreateWarningEntity
         {
             WarningId = _guidFactory.Create(),
             TargetUserId = targetUser.UserId,
             AuthorId = currentUser.UserId,
-            EntityId = createWarning.EntityId ?? Guid.Empty,
-            EntityType = ParseEntityType(createWarning.EntityType),
+            EntityId = entityId,
+            EntityType = entityType,
             // 0 points = verbal warning: recorded, but adds nothing to the sum
             Points = Math.Clamp(createWarning.Points, 0, 6),
             Text = createWarning.Reason,
+            EntitySnapshot = snapshot,
             CreatedUtc = _dateTimeProvider.Now
         };
 
@@ -116,7 +146,52 @@ internal class WarningService : IWarningService
         // all: no screen interrupts them, and points accumulate towards a ban in
         // silence. Sent after the write so the generator finds the warning.
         await _eventProducer.SendAsync(EventType.WarningIssued, warning.WarningId);
-        return warning;
+        return (await DescribeEntities([warning], ct)).Single();
+    }
+
+    /// <summary>
+    /// Fill in what is true about the offending object right now: where it is,
+    /// and whether it was edited after the warning was issued.
+    /// </summary>
+    /// <remarks>
+    /// Derived rather than stored, and derived for the whole page in one pass:
+    /// an address changes when the object moves, and "edited since" changes every
+    /// time the author touches it, so a column holding either would be a copy
+    /// that goes stale without anything writing to it.
+    /// </remarks>
+    private async Task<IEnumerable<Warning>> DescribeEntities(
+        IEnumerable<Warning> warnings, CancellationToken ct)
+    {
+        var list = warnings as IReadOnlyList<Warning> ?? warnings.ToList();
+        var requests = list
+            .Where(w => w.EntityId != Guid.Empty && w.EntityType != WarningEntityType.Unknown)
+            .Select(w => new WarningEntityRequest
+            {
+                WarningId = w.WarningId,
+                EntityId = w.EntityId,
+                EntityType = w.EntityType,
+                IssuedUtc = w.CreatedUtc
+            })
+            .ToList();
+
+        if (requests.Count == 0)
+        {
+            return list;
+        }
+
+        var states = await _entityResolver.ResolveStates(requests, ct);
+        foreach (var warning in list)
+        {
+            if (!states.TryGetValue(warning.WarningId, out var state))
+            {
+                continue;
+            }
+
+            warning.EntityUrl = state.Url;
+            warning.EntityEditedAfterWarning = state.EditedAfterWarning;
+        }
+
+        return list;
     }
 
     /// <inheritdoc />

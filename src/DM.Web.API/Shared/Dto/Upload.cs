@@ -52,6 +52,19 @@ public class Upload
     /// </summary>
     public string? Url { get; set; }
 
+    /// <summary>
+    /// Address of the endpoint that serves the file's bytes to whoever is allowed
+    /// to see them.
+    /// </summary>
+    /// <remarks>
+    /// Present for every upload, including the ones with no public
+    /// <see cref="Url"/> — which is what a moderation screen showing a file from a
+    /// closed prefix has to render from. It is not a link that grants anything:
+    /// the endpoint behind it re-decides on every request, so passing it on gives
+    /// the recipient exactly the access they already had.
+    /// </remarks>
+    public string ContentUrl { get; set; } = string.Empty;
+
     /// <summary>Creation timestamp (UTC).</summary>
     public DateTimeOffset CreatedUtc { get; set; }
 

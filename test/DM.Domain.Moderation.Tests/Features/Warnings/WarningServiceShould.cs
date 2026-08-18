@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading;
@@ -23,6 +24,7 @@ public class WarningServiceShould : UnitTestBase
 {
     private readonly Mock<IWarningRepository> _warningRepository;
     private readonly Mock<IBanRepository> _banRepository;
+    private readonly Mock<IWarningEntityResolver> _entityResolver;
     private readonly Mock<IUserLookupService> _userLookupService;
     private readonly Mock<IIdentityProvider> _identityProvider;
     private readonly Mock<IGuidFactory> _guidFactory;
@@ -38,6 +40,7 @@ public class WarningServiceShould : UnitTestBase
     {
         _warningRepository = Mock<IWarningRepository>();
         _banRepository = Mock<IBanRepository>();
+        _entityResolver = Mock<IWarningEntityResolver>();
         _userLookupService = Mock<IUserLookupService>();
         _identityProvider = Mock<IIdentityProvider>();
         _guidFactory = Mock<IGuidFactory>();
@@ -52,11 +55,18 @@ public class WarningServiceShould : UnitTestBase
         _identityProvider.Setup(p => p.Current).Returns(moderatorIdentity);
         _dateTimeProvider.Setup(d => d.Now).Returns(_now);
         _guidFactory.Setup(g => g.Create()).Returns(_warningId);
+        // Default: nothing is known about any offending object. Tests that care
+        // about the evidence override this.
+        _entityResolver
+            .Setup(r => r.ResolveStates(
+                It.IsAny<IReadOnlyCollection<WarningEntityRequest>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<Guid, WarningEntityState>());
 
         _service = new WarningService(
             new CreateWarningValidator(),
             _warningRepository.Object,
             _banRepository.Object,
+            _entityResolver.Object,
             _userLookupService.Object,
             _identityProvider.Object,
             _guidFactory.Object,
@@ -163,7 +173,7 @@ public class WarningServiceShould : UnitTestBase
         {
             Username = "Target",
             EntityId = entityId,
-            EntityType = "Post",
+            EntityType = "Topic",
             Reason = "Spam",
             Points = 2
         };
@@ -175,10 +185,46 @@ public class WarningServiceShould : UnitTestBase
         capturedEntity.TargetUserId.Should().Be(_targetUserId);
         capturedEntity.AuthorId.Should().Be(_moderatorUserId);
         capturedEntity.EntityId.Should().Be(entityId);
-        capturedEntity.EntityType.Should().Be(WarningEntityType.Post);
+        capturedEntity.EntityType.Should().Be(WarningEntityType.Topic);
         capturedEntity.Text.Should().Be("Spam");
         capturedEntity.Points.Should().Be(2);
         capturedEntity.CreatedUtc.Should().Be(_now);
+    }
+
+    /// <summary>
+    /// Game content is outside moderation, so a warning cannot name a game post.
+    /// </summary>
+    /// <remarks>
+    /// The type used to be accepted and stored. The resolver has never been able
+    /// to snapshot a post or address one, so what got written was a warning
+    /// pointing at game content with no evidence behind it and no link — a
+    /// verdict on something moderation does not judge, which the moderator only
+    /// found out about by looking at the empty row afterwards.
+    /// </remarks>
+    [Fact]
+    public async Task RefuseAWarningOnGameContent()
+    {
+        _userLookupService.Setup(s => s.GetAsync("Target"))
+            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+
+        var act = () => _service.CreateWarning(new CreateWarning
+        {
+            Username = "Target",
+            EntityId = Guid.NewGuid(),
+            EntityType = "Post",
+            Reason = "Оскорбление в игровом посте",
+            Points = 2
+        });
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.BadRequest);
+
+        _warningRepository.Verify(
+            r => r.Create(It.IsAny<CreateWarningEntity>(), It.IsAny<CancellationToken>()), Times.Never);
+        _entityResolver.Verify(
+            r => r.CaptureSnapshot(
+                It.IsAny<WarningEntityType>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Fact]
@@ -388,5 +434,137 @@ public class WarningServiceShould : UnitTestBase
         var result = (await _service.GetAllWarnings()).ToList();
 
         result.Should().ContainSingle(w => w.WarningId == _warningId);
+    }
+
+    /// <summary>
+    /// The offending text is copied onto the warning as it is being issued.
+    /// </summary>
+    /// <remarks>
+    /// The warning used to keep a reference and nothing else, and the author may
+    /// edit the referenced content afterwards — no edit history on the site keeps
+    /// the previous text, so the evidence for a warning could be erased by the
+    /// person it was issued to. Taken here, before the write, from the same
+    /// source the moderator was reading.
+    /// </remarks>
+    [Fact]
+    public async Task TakeASnapshotOfTheOffendingTextWhenIssuingTheWarning()
+    {
+        var entityId = Guid.NewGuid();
+        _userLookupService.Setup(s => s.GetAsync("Target"))
+            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _entityResolver
+            .Setup(r => r.CaptureSnapshot(WarningEntityType.Comment, entityId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("Оскорбление, за которое выносится предупреждение");
+
+        CreateWarningEntity? captured = null;
+        _warningRepository.Setup(r => r.Create(It.IsAny<CreateWarningEntity>(), It.IsAny<CancellationToken>()))
+            .Callback<CreateWarningEntity, CancellationToken>((e, _) => captured = e)
+            .ReturnsAsync(new Warning());
+
+        await _service.CreateWarning(new CreateWarning
+        {
+            Username = "Target",
+            EntityId = entityId,
+            EntityType = "Comment",
+            Reason = "Оскорбление",
+            Points = 2
+        });
+
+        captured.Should().NotBeNull();
+        captured!.EntitySnapshot.Should().Be("Оскорбление, за которое выносится предупреждение");
+    }
+
+    /// <summary>
+    /// A warning issued from the profile block names no content, so there is
+    /// nothing to snapshot and nothing to ask the resolver about.
+    /// </summary>
+    [Fact]
+    public async Task TakeNoSnapshotWhenTheWarningNamesNoContent()
+    {
+        _userLookupService.Setup(s => s.GetAsync("Target"))
+            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+
+        CreateWarningEntity? captured = null;
+        _warningRepository.Setup(r => r.Create(It.IsAny<CreateWarningEntity>(), It.IsAny<CancellationToken>()))
+            .Callback<CreateWarningEntity, CancellationToken>((e, _) => captured = e)
+            .ReturnsAsync(new Warning());
+
+        await _service.CreateWarning(new CreateWarning
+        {
+            Username = "Target",
+            Reason = "Общее замечание",
+            Points = 1
+        });
+
+        captured.Should().NotBeNull();
+        captured!.EntitySnapshot.Should().BeNull();
+        _entityResolver.Verify(
+            r => r.CaptureSnapshot(
+                It.IsAny<WarningEntityType>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// The moderation list carries the address of the offending object and the
+    /// mark that it was edited after the warning — both read per request, neither
+    /// stored on the warning.
+    /// </summary>
+    [Fact]
+    public async Task DescribeTheOffendingObjectOnTheModerationList()
+    {
+        var entityId = Guid.NewGuid();
+        _warningRepository.Setup(r => r.GetAllWarnings(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new Warning
+                {
+                    WarningId = _warningId,
+                    EntityId = entityId,
+                    EntityType = WarningEntityType.Topic,
+                    CreatedUtc = _now,
+                    EntitySnapshot = "Исходный текст"
+                }
+            ]);
+        _entityResolver
+            .Setup(r => r.ResolveStates(
+                It.IsAny<IReadOnlyCollection<WarningEntityRequest>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<Guid, WarningEntityState>
+            {
+                [_warningId] = new() { Url = "/forum/flood/12", EditedAfterWarning = true }
+            });
+
+        var warning = (await _service.GetAllWarnings()).Single();
+
+        warning.EntitySnapshot.Should().Be("Исходный текст");
+        warning.EntityUrl.Should().Be("/forum/flood/12");
+        warning.EntityEditedAfterWarning.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// The public profile view is trimmed to points and dates, so the evidence
+    /// queries are not run for it — neither their cost nor their answers belong
+    /// on a page a stranger can open.
+    /// </summary>
+    [Fact]
+    public async Task NotDescribeTheOffendingObjectForThePublicProfileView()
+    {
+        _userLookupService.Setup(s => s.GetAsync("Target"))
+            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _warningRepository.Setup(r => r.GetUserWarnings(_targetUserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new Warning
+                {
+                    WarningId = _warningId,
+                    EntityId = Guid.NewGuid(),
+                    EntityType = WarningEntityType.Comment,
+                    CreatedUtc = _now
+                }
+            ]);
+
+        await _service.GetUserWarnings("Target");
+
+        _entityResolver.Verify(
+            r => r.ResolveStates(
+                It.IsAny<IReadOnlyCollection<WarningEntityRequest>>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 }

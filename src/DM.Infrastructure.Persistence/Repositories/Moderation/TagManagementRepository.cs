@@ -37,6 +37,7 @@ internal class TagManagementRepository : ITagManagementRepository
                 Title = g.Title,
                 Description = g.Description,
                 SortOrder = g.SortOrder,
+                MaxTagsPerGame = g.MaxTagsPerGame,
                 TagsCount = g.Tags.Count
             })
             .ToArrayAsync(ct);
@@ -53,6 +54,7 @@ internal class TagManagementRepository : ITagManagementRepository
                 Title = g.Title,
                 Description = g.Description,
                 SortOrder = g.SortOrder,
+                MaxTagsPerGame = g.MaxTagsPerGame,
                 TagsCount = g.Tags.Count
             })
             .FirstOrDefaultAsync(ct);
@@ -77,7 +79,8 @@ internal class TagManagementRepository : ITagManagementRepository
             TagGroupId = _guidFactory.Create(),
             Title = createGroup.Title,
             Description = createGroup.Description,
-            SortOrder = createGroup.SortOrder
+            SortOrder = createGroup.SortOrder,
+            MaxTagsPerGame = createGroup.MaxTagsPerGame
         };
 
         _dbContext.TagGroups.Add(group);
@@ -98,6 +101,7 @@ internal class TagManagementRepository : ITagManagementRepository
         group.Title = updateGroup.Title;
         group.Description = updateGroup.Description;
         group.SortOrder = updateGroup.SortOrder;
+        group.MaxTagsPerGame = updateGroup.MaxTagsPerGame;
 
         await _dbContext.SaveChangesAsync(ct);
 

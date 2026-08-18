@@ -97,6 +97,22 @@ export function setSessionExpiredHandler(handler: () => void): void {
 const apiHost = import.meta.env.VITE_API_HOST ?? "http://localhost:5000"; // Config - use ?? to allow empty string
 
 /**
+ * Absolute address of a path the API answers on.
+ *
+ * For the few payload fields that are addresses rather than data — an upload's
+ * content endpoint, a post attachment — the server sends the path it routes and
+ * leaves the origin alone: it is reached at one origin per deployment, behind a
+ * proxy that would make any host name the server composed for itself wrong. The
+ * client is where the origin is known, and this is the one place that knows it.
+ *
+ * Behind the edge the two are the same origin and the host part is empty, so the
+ * result is the path unchanged.
+ */
+export function apiUrl(path: string): string {
+  return `${apiHost}${path}`;
+}
+
+/**
  * A failed response as a problem document, whatever the server actually sent.
  *
  * The middleware answers every error it handles with one, but not every error

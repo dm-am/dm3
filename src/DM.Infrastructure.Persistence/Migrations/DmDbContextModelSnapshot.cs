@@ -214,6 +214,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsRemoved")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsUnderModerationWatch")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTimeOffset?>("LastActivityUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -283,6 +286,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             Gender = 0,
                             IsNewbie = false,
                             IsRemoved = false,
+                            IsUnderModerationWatch = false,
                             PasswordHash = "",
                             PasswordHashVersion = 0,
                             QualityRating = 0,
@@ -1727,6 +1731,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("ModifiedUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<Guid?>("UpdatedByUserId")
                         .HasColumnType("uuid");
 
@@ -1742,7 +1751,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                             FundraisingGoalId = new Guid("00000000-0000-0000-0005-000000000001"),
                             CollectedAmount = 17000m,
                             GoalAmount = 50000m,
-                            ModifiedUtc = new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                            ModifiedUtc = new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Title = "Хостинг и домен на год"
                         });
                 });
 
@@ -3366,6 +3376,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("EntityId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("EntitySnapshot")
+                        .HasColumnType("text");
+
                     b.Property<int>("EntityType")
                         .HasColumnType("integer");
 
@@ -4066,7 +4079,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000035"),
                             Description = "Посты раз в несколько дней",
                             ShortId = 53,
-                            SortOrder = 0,
+                            SortOrder = 1,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000005"),
                             Title = "Неторопливый"
                         },
@@ -4075,7 +4088,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000036"),
                             Description = "Несколько постов в день",
                             ShortId = 54,
-                            SortOrder = 1,
+                            SortOrder = 0,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000005"),
                             Title = "Скоростной"
                         },
@@ -4093,7 +4106,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000037"),
                             Description = "Нецензурная лексика запрещена",
                             ShortId = 55,
-                            SortOrder = 0,
+                            SortOrder = 1,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000006"),
                             Title = "Без мата"
                         },
@@ -4102,7 +4115,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000038"),
                             Description = "Минимум жестокости и крови",
                             ShortId = 56,
-                            SortOrder = 1,
+                            SortOrder = 2,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000006"),
                             Title = "Без насилия"
                         },
@@ -4111,7 +4124,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000039"),
                             Description = "Повышенные требования к грамотности",
                             ShortId = 57,
-                            SortOrder = 2,
+                            SortOrder = 0,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000006"),
                             Title = "Grammar Nazi"
                         },
@@ -4165,7 +4178,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000040"),
                             Description = "Чернуха, максимально шокирующий и отталкивающий контент без ограничений",
                             ShortId = 64,
-                            SortOrder = 1,
+                            SortOrder = 2,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000008"),
                             Title = "Шок-контент"
                         },
@@ -4174,7 +4187,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000041"),
                             Description = "Игра затрагивает спорные или чувствительные социальные темы",
                             ShortId = 65,
-                            SortOrder = 2,
+                            SortOrder = 1,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000008"),
                             Title = "Острые темы"
                         });
@@ -4188,6 +4201,9 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Description")
                         .HasColumnType("text");
+
+                    b.Property<int?>("MaxTagsPerGame")
+                        .HasColumnType("integer");
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer");
@@ -4205,6 +4221,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Description = "Ролевая система или набор правил, по которым ведется игра",
+                            MaxTagsPerGame = 2,
                             SortOrder = 0,
                             Title = "Система"
                         },
@@ -4212,6 +4229,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000002"),
                             Description = "Жанр и сеттинг игрового мира",
+                            MaxTagsPerGame = 3,
                             SortOrder = 1,
                             Title = "Жанр"
                         },
@@ -4219,6 +4237,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000003"),
                             Description = "Тип игрового процесса и взаимодействия между участниками",
+                            MaxTagsPerGame = 2,
                             SortOrder = 2,
                             Title = "Формат игры"
                         },
@@ -4226,6 +4245,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000004"),
                             Description = "Стиль и объем игровых постов",
+                            MaxTagsPerGame = 1,
                             SortOrder = 3,
                             Title = "Формат постов"
                         },
@@ -4233,6 +4253,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         {
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000005"),
                             Description = "Ожидаемая скорость игры и частота постов",
+                            MaxTagsPerGame = 1,
                             SortOrder = 4,
                             Title = "Темп"
                         },
@@ -5588,7 +5609,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Game.Posts.Post", null)
                         .WithMany()
                         .HasForeignKey("TargetPostId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", null)
                         .WithMany()

@@ -20,8 +20,17 @@ export interface Upload {
   contentType: string;
   sizeBytes: number;
   status: "Pending" | "Confirmed" | "Failed";
-  /** Source file URL (≤1024 px, EXIF stripped). */
+  /**
+   * Public source file URL. Only avatars and character portraits have one — the
+   * bucket answers anonymous reads on those prefixes and nowhere else.
+   */
   url?: string;
+  /**
+   * Endpoint serving the file's bytes, present for every upload. The server
+   * decides the caller's right on each request, so this is what a file with no
+   * public `url` is shown and downloaded from.
+   */
+  contentUrl: string;
   createdUtc: string;
   confirmedUtc?: string;
 }

@@ -6,6 +6,8 @@ export type ModerationTagGroup = {
   title: string;
   description?: string;
   sortOrder: number;
+  /** How many tags of the group one game may carry; absent means no limit. */
+  maxTagsPerGame?: number | null;
   tagsCount: number;
 };
 
@@ -24,12 +26,14 @@ export type CreateTagGroupRequest = {
   title: string;
   description?: string;
   sortOrder: number;
+  maxTagsPerGame?: number | null;
 };
 
 export type UpdateTagGroupRequest = {
   title: string;
   description?: string;
   sortOrder: number;
+  maxTagsPerGame?: number | null;
 };
 
 export type CreateTagRequest = {

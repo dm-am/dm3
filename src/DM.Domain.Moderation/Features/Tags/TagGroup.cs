@@ -28,6 +28,11 @@ public class TagGroup
     public int SortOrder { get; set; }
 
     /// <summary>
+    /// How many tags of this group one game may carry; null means no limit
+    /// </summary>
+    public int? MaxTagsPerGame { get; set; }
+
+    /// <summary>
     /// Number of tags in this group
     /// </summary>
     public int TagsCount { get; set; }

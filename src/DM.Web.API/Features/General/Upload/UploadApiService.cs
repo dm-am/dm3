@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Amazon.S3;
 using DM.Domain.Core.Abstractions;
@@ -121,6 +122,69 @@ internal class UploadApiService : IUploadApiService
     }
 
     /// <inheritdoc />
+    public async Task<UploadContent> GetUploadContent(Guid id, CancellationToken ct = default)
+    {
+        var upload = await _uploadRepository.GetAsync(id);
+
+        if (upload == null)
+        {
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.UploadNotFound);
+        }
+
+        // Two ways to be entitled to the bytes, and the file's own rule is asked
+        // first because it is the cheap one: the owner looking at their own file,
+        // and Moderator+ looking at anybody's — the same pair that opens the
+        // record itself and the same pair the moderation screen for uploaded files
+        // is built on. A file the site must be able to act on is one the site must
+        // be able to look at, and no game's privacy is a reason to moderate blind.
+        if (!_intentionManager.IsAllowed(UploadIntention.View, upload))
+        {
+            // Otherwise the entity the file hangs on decides, by whatever rule
+            // makes that entity visible. For a post that is the room it is in.
+            //
+            // Whatever it refuses with is replaced by the one refusal this
+            // endpoint has. The authorizer speaks about the target - "Пост не
+            // найден" - and that names both what the file hangs on and that a
+            // live row exists at all, which is the difference this endpoint is
+            // built not to expose. Status alone is not enough: the message
+            // travels in the body of the answer.
+            try
+            {
+                await AuthorizeReadAsync(upload);
+            }
+            catch (HttpException)
+            {
+                throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.UploadNotFound);
+            }
+        }
+
+        // Read after the decision, never before: a store lookup for a caller with
+        // no right to the answer is work an outsider gets to spend.
+        var objectKey = await _uploadRepository.GetObjectKeyAsync(id);
+        var stored = objectKey == null
+            ? null
+            : await _objectStorage.OpenReadAsync(objectKey, ct);
+
+        if (stored == null)
+        {
+            // A row whose object is gone. The sweeper destroys objects a whole
+            // grace period after the row is hidden, so this is a bucket that lost
+            // a file rather than an ordinary race — and to the caller it is still
+            // just a file that is not there.
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.UploadNotFound);
+        }
+
+        return new UploadContent(
+            stored.Content,
+            // The row's content type, not the store's: the row records what the
+            // magic-byte validation decided, which is the only claim about this
+            // file anybody checked.
+            string.IsNullOrEmpty(upload.ContentType) ? stored.ContentType : upload.ContentType,
+            stored.Length,
+            upload.FileName);
+    }
+
+    /// <inheritdoc />
     public async Task DeleteUpload(Guid id)
     {
         var userId = _identityProvider.Current.User.UserId;
@@ -131,8 +195,17 @@ internal class UploadApiService : IUploadApiService
             throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.UploadNotFound);
         }
 
-        // Owner self-service; deleting others' files is a moderation action (Moderator+).
-        _intentionManager.ThrowIfForbidden(UploadIntention.Delete, upload);
+        // Owner self-service; deleting others' files is a moderation action
+        // (Moderator+). Beyond those two, whoever may edit the entity the file
+        // hangs on may take it off: an attachment is part of what a post says, so
+        // the master and the assistants who may edit that post may remove it,
+        // which the file's own ownership rule does not cover — they did not
+        // upload it and are not moderators of the site.
+        if (!_intentionManager.IsAllowed(UploadIntention.Delete, upload) &&
+            !await MayDetachAsync(upload))
+        {
+            _intentionManager.ThrowIfForbidden(UploadIntention.Delete, upload);
+        }
 
         await _uploadRepository.SoftDeleteAsync(id, userId, _dateTimeProvider.Now);
     }
@@ -224,11 +297,18 @@ internal class UploadApiService : IUploadApiService
 
         // Check the size upfront (before magic bytes). A cheap check
         // against a DoS vector — do not let 10+ MB into the buffer / processing.
-        if (file.Length > MaxUploadSizeBytes)
+        //
+        // Per type, because the ceiling on the controller is one number for the
+        // request and this is the product rule for the file. An attachment is
+        // capped lower and stored at its own dimensions, so its bytes are the only
+        // bound on what a room accumulates; an avatar is downscaled to 1024 px and
+        // its input size only decides how much work the pipeline does.
+        var maxSizeBytes = MaxSizeFor(type);
+        if (file.Length > maxSizeBytes)
         {
             throw new HttpBadRequestException(new Dictionary<string, string>
             {
-                ["file"] = $"Максимальный размер: {MaxUploadSizeBytes / (1024 * 1024)} МБ",
+                ["file"] = $"Максимальный размер: {maxSizeBytes / (1024 * 1024)} МБ",
             });
         }
 
@@ -255,13 +335,25 @@ internal class UploadApiService : IUploadApiService
         RequireTarget(type, effectiveTarget);
         await AuthorizeTargetAsync(type, effectiveTarget!.Value);
 
+        // 1a. How many files this target already carries. Checked here, on the
+        //     upload, and not when the post is written: the post and its files
+        //     arrive as separate requests, and the post exists first. Ahead of
+        //     processing for the same reason the authorization is.
+        //
+        //     A race between two simultaneous uploads can put a fourth file on a
+        //     post. Nothing in the schema forbids it and the cost of it happening
+        //     is one extra picture, which is not worth a unique index over a
+        //     counted set.
+        await EnsureTargetHasRoomAsync(type, effectiveTarget.Value);
+
         // 2. Buffer + validate + process (in-memory; magic-byte, EXIF strip,
-        //    decompression-bomb guard, downscale to 1024 px). A single file —
-        //    thumbnails are generated on-the-fly via imgproxy at serving time.
+        //    decompression-bomb guard, downscale where the type asks for it). A
+        //    single file — avatar thumbnails are generated on-the-fly via imgproxy
+        //    at serving time, and an attachment has none at all.
         ProcessedImage processed;
         await using (var fileStream = file.OpenReadStream())
         {
-            processed = await _imageProcessingService.ProcessAsync(fileStream, file.ContentType);
+            processed = await _imageProcessingService.ProcessAsync(fileStream, file.ContentType, type);
         }
 
         // 3. Generate the object key (the extension is NORMALIZED from the validated
@@ -349,6 +441,40 @@ internal class UploadApiService : IUploadApiService
     }
 
     /// <summary>
+    /// The largest file this upload type accepts.
+    /// </summary>
+    private static long MaxSizeFor(UploadType type) => type switch
+    {
+        UploadType.PostAttachment => UploadPolicy.MaxPostAttachmentSizeBytes,
+        _ => MaxUploadSizeBytes,
+    };
+
+    /// <summary>
+    /// Refuses an upload the target has no room for.
+    /// </summary>
+    /// <remarks>
+    /// Only the multi-slot type has a count to check. A character portrait is
+    /// single by construction — the insert retires the previous row — and an
+    /// avatar the same, so neither has a number to be over.
+    /// </remarks>
+    private async Task EnsureTargetHasRoomAsync(UploadType type, Guid target)
+    {
+        if (type != UploadType.PostAttachment)
+        {
+            return;
+        }
+
+        var attached = await _uploadRepository.CountPostAttachmentsAsync(target);
+        if (attached >= UploadPolicy.MaxPostAttachments)
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                ["file"] = $"К посту можно приложить не больше {UploadPolicy.MaxPostAttachments} файлов",
+            });
+        }
+    }
+
+    /// <summary>
     /// Refuses an upload whose target the caller has no right to.
     /// </summary>
     /// <remarks>
@@ -364,6 +490,43 @@ internal class UploadApiService : IUploadApiService
     /// </remarks>
     private async Task AuthorizeTargetAsync(UploadType type, Guid target)
     {
+        await AuthorizerFor(type).EnsureAllowedAsync(target);
+    }
+
+    /// <summary>
+    /// Refuses a read of a file whose target the caller cannot see.
+    /// </summary>
+    private async Task AuthorizeReadAsync(StoredUpload upload)
+    {
+        if (upload.TargetId == null)
+        {
+            // The CHECK constraint makes this unreachable: every type names a
+            // target and a row without one cannot be written. Refuse rather than
+            // dereference, so a row that got there another way stays closed.
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.UploadNotFound);
+        }
+
+        await AuthorizerFor(upload.Type).EnsureReadAllowedAsync(upload.TargetId.Value);
+    }
+
+    /// <summary>
+    /// Whether the entity the file hangs on grants the caller the right to take
+    /// it off.
+    /// </summary>
+    private async Task<bool> MayDetachAsync(StoredUpload upload) =>
+        upload.TargetId != null &&
+        await AuthorizerFor(upload.Type).MayDetachAsync(upload.TargetId.Value);
+
+    /// <summary>
+    /// The module's rule for this upload type.
+    /// </summary>
+    /// <remarks>
+    /// Fails closed: a type with no authorizer throws rather than being treated as
+    /// unrestricted, so adding one to the enum without a rule breaks every path
+    /// through it instead of opening them.
+    /// </remarks>
+    private IUploadTargetAuthorizer AuthorizerFor(UploadType type)
+    {
         var authorizer = _targetAuthorizers.FirstOrDefault(a => a.Type == type);
         if (authorizer == null)
         {
@@ -371,7 +534,7 @@ internal class UploadApiService : IUploadApiService
                 $"No upload target authorizer for {type}");
         }
 
-        await authorizer.EnsureAllowedAsync(target);
+        return authorizer;
     }
 
     private static string SanitizeFileName(string? originalName, string normalizedExtension)
@@ -457,6 +620,10 @@ internal class UploadApiService : IUploadApiService
             SizeBytes = upload.SizeBytes,
             Status = upload.Status,
             Url = upload.Url,
+            // Always, including for the types with no public Url: it is the only
+            // address a closed-prefix file has, and the endpoint behind it decides
+            // the caller's right on every request rather than trusting the link.
+            ContentUrl = UploadContentRoute.For(upload.Id),
             CreatedUtc = upload.CreatedUtc,
             ConfirmedUtc = upload.ConfirmedUtc,
         };

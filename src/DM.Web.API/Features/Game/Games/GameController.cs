@@ -177,22 +177,29 @@ public class GameController : ControllerBase
     /// Change game premoderation state
     /// </summary>
     /// <remarks>
-    /// Mentor action: `SendToPremoderation` (AwaitingEdits-&gt;AwaitingApproval)
-    /// puts the game back in the review queue and assigns the acting mentor as
-    /// curator; `RemoveFromPremoderation` (AwaitingApproval-&gt;Approved) releases
-    /// the game so it becomes publicly visible. Requires Mentor role or above.
+    /// Three moves, and they do not share an actor. Mentor and above:
+    /// `SetApproved` (any state-&gt;Approved) releases the game so it becomes
+    /// publicly visible and clears the curator; `SetAwaitingEdits` (any
+    /// state-&gt;AwaitingEdits) returns it to the author and records the acting
+    /// mentor as curator. The master alone: `SubmitForApproval`
+    /// (AwaitingEdits-&gt;AwaitingApproval) asks for a verdict, and is the only
+    /// move with a legal-state condition - the other two are legal from anywhere.
     /// Illegal transitions are rejected with 400.
+    ///
+    /// The endpoint is authentication-gated rather than Mentor-gated, because one
+    /// of its three moves belongs to a master who is normally neither: the rank is
+    /// checked per move, inside the domain.
     /// </remarks>
     /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <param name="request">Requested premoderation transition</param>
     /// <response code="200">Returns the updated game details</response>
     /// <response code="400">The requested transition is illegal for the current premoderation state</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User is not a mentor</response>
+    /// <response code="403">Caller may not make this move on this game</response>
     /// <response code="404">Game not found</response>
     [HttpPost("{id}/premoderation", Name = nameof(PostGamePremoderation))]
     [EnableRateLimiting(RateLimitPolicies.Default)]
-    [RequireRole(UserRole.Mentor)]
+    [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<GameDetails>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -202,8 +209,7 @@ public class GameController : ControllerBase
     {
         // Pass the raw id through: the domain takes either id form and reads the
         // game in one query, where the neighbouring actions resolve the public id
-        // first. Both paths apply the same accessibility scope, so this is one
-        // query saved, not a wider door.
+        // first. Which scope that read uses is decided there, per move.
         return Ok(await _gameApiService.ChangePremoderation(id, request));
     }
 

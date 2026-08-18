@@ -20,6 +20,7 @@ import type {
   GameRef,
   GameUser,
   CreateGameInput,
+  UpdateGameInput,
   AttributeSchema,
   Tag,
   Character,
@@ -345,8 +346,13 @@ class GameApi {
     return Api.get<ListEnvelope<Post>>(`rooms/${roomId}/posts`, queryParams);
   }
 
+  /**
+   * One post (GET v1/posts/{id}), enveloped like every other single-resource
+   * answer. It was typed as a bare Post while the wire carried
+   * `{ resource: ... }`, which nothing noticed while nobody read the body.
+   */
   public getPost(postId: string) {
-    return Api.get<Post>(`posts/${postId}`);
+    return Api.get<Envelope<Post>>(`posts/${postId}`);
   }
 
   /**
@@ -364,8 +370,16 @@ class GameApi {
     );
   }
 
+  /**
+   * Create a post (POST v1/rooms/{id}/posts).
+   *
+   * Enveloped, like every other single-resource answer in this API — it was
+   * typed as a bare Post while the wire carried `{ resource: ... }`, so the one
+   * caller that needed the new post's id would have read undefined off it. The
+   * id is what the attachment upload names as its target.
+   */
   public createPost(roomId: string, post: CreatePostInput) {
-    return Api.post<Post>(`rooms/${roomId}/posts`, post);
+    return Api.post<Envelope<Post>>(`rooms/${roomId}/posts`, post);
   }
 
   /**
@@ -406,6 +420,42 @@ class GameApi {
       `posts/${postId}/reviews`,
       queryParams,
     );
+  }
+
+  /**
+   * Fetch one review's source for the editor. The listing carries the display
+   * rendering — server-built HTML — and seeding an editor from it would save
+   * markup back as text; the AuthorEdit audience is the author's own view of
+   * what they wrote, the same one the post and comment editors ask for.
+   */
+  public getPostReviewForEdit(postId: string, reviewId: string) {
+    return Api.get<Envelope<PostReview>>(
+      `posts/${postId}/reviews/${reviewId}`,
+      undefined,
+      RENDER_AUDIENCE.AuthorEdit,
+    );
+  }
+
+  /**
+   * Edit a review (PATCH v1/posts/{postId}/reviews/{reviewId}). The backend
+   * gates it to the author inside a 15-minute window
+   * (PostReviewIntention.Edit + PostReviewService); PostReviewItem mirrors both
+   * halves of that check on the button. Fields left out keep their value.
+   */
+  public updatePostReview(
+    postId: string,
+    reviewId: string,
+    patch: { sign?: number; text?: string },
+  ) {
+    return Api.patch<Envelope<PostReview>>(
+      `posts/${postId}/reviews/${reviewId}`,
+      patch,
+    );
+  }
+
+  /** Soft-delete a review (author any time, or senior moderator+). */
+  public deletePostReview(postId: string, reviewId: string) {
+    return Api.delete(`posts/${postId}/reviews/${reviewId}`);
   }
 
   // Game comments
@@ -638,7 +688,7 @@ class GameApi {
     return Api.delete(`chat-rooms/${id}/messages/unread`);
   }
 
-  // === Game master notepad (GameNotepadController) ===
+  // === Notepad of the game itself, "Заметки игры" (GameNotepadController) ===
 
   public getNotepad(gameId: string) {
     return Api.get<ListEnvelope<NotepadEntry>>(`games/${gameId}/notepad`);
@@ -661,6 +711,76 @@ class GameApi {
 
   public deleteNote(gameId: string, entryId: string) {
     return Api.delete(`games/${gameId}/notepad/${entryId}`);
+  }
+
+  // === The two notepads of a character (CharacterController) ===
+  //
+  // Same shape, opposite audiences, and that is why they are two addresses and
+  // not one with a flag: "Заметки игрока" under /notepad belong to the player
+  // who owns the character and are the one notepad of a game its master cannot
+  // open; "Заметки мастера" under /master-notepad belong to the master and the
+  // assistants and are closed to that player. Every character has both.
+
+  public getCharacterNotepad(characterId: string) {
+    return Api.get<ListEnvelope<NotepadEntry>>(
+      `characters/${characterId}/notepad`,
+    );
+  }
+
+  public createCharacterNote(
+    characterId: string,
+    input: CreateNotepadEntryRequest,
+  ) {
+    return Api.post<Envelope<NotepadEntry>>(
+      `characters/${characterId}/notepad`,
+      input,
+    );
+  }
+
+  public updateCharacterNote(
+    characterId: string,
+    entryId: string,
+    input: UpdateNotepadEntryRequest,
+  ) {
+    return Api.patch<Envelope<NotepadEntry>>(
+      `characters/${characterId}/notepad/${entryId}`,
+      input,
+    );
+  }
+
+  public deleteCharacterNote(characterId: string, entryId: string) {
+    return Api.delete(`characters/${characterId}/notepad/${entryId}`);
+  }
+
+  public getCharacterMasterNotepad(characterId: string) {
+    return Api.get<ListEnvelope<NotepadEntry>>(
+      `characters/${characterId}/master-notepad`,
+    );
+  }
+
+  public createCharacterMasterNote(
+    characterId: string,
+    input: CreateNotepadEntryRequest,
+  ) {
+    return Api.post<Envelope<NotepadEntry>>(
+      `characters/${characterId}/master-notepad`,
+      input,
+    );
+  }
+
+  public updateCharacterMasterNote(
+    characterId: string,
+    entryId: string,
+    input: UpdateNotepadEntryRequest,
+  ) {
+    return Api.patch<Envelope<NotepadEntry>>(
+      `characters/${characterId}/master-notepad/${entryId}`,
+      input,
+    );
+  }
+
+  public deleteCharacterMasterNote(characterId: string, entryId: string) {
+    return Api.delete(`characters/${characterId}/master-notepad/${entryId}`);
   }
 
   // === Game blacklist ===
@@ -733,7 +853,7 @@ class GameApi {
 
   // === Game mutations ===
 
-  public updateGame(id: string, patch: Partial<Game>) {
+  public updateGame(id: string, patch: UpdateGameInput) {
     return Api.patch<Envelope<Game>>(`games/${id}/details`, patch);
   }
 
@@ -741,6 +861,11 @@ class GameApi {
     return Api.post<Envelope<Game>>(`games/${id}/status`, { transition });
   }
 
+  /**
+   * Premoderation transition (POST v1/games/{id}/premoderation). The endpoint
+   * is authentication-gated and checks the rank per move: SetApproved and
+   * SetAwaitingEdits are Mentor+, SubmitForApproval belongs to the master alone.
+   */
   public changePremoderation(
     id: string,
     transition: GamePremoderationTransition,

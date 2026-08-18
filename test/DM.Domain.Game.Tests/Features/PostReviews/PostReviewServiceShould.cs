@@ -51,6 +51,12 @@ public class PostReviewServiceShould : UnitTestBase
         _repository = Mock<IPostReviewRepository>();
 
         _currentUserId = Guid.NewGuid();
+
+        // Past probation by default. Zero is the newbie answer, and every case
+        // about a newbie says so for itself; leaving it as the default made the
+        // probation rule fire in cases that are not about it at all.
+        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
+
         _identityProvider = Mock<IIdentityProvider>();
         _identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
@@ -169,7 +175,7 @@ public class PostReviewServiceShould : UnitTestBase
         _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(50); // Newbie
         _repository.Setup(r => r.ExistsAsync(_currentUserId, postId)).ReturnsAsync(false);
         _repository.Setup(r => r.HasRecentReviewInGameAsync(_currentUserId, gameId, It.IsAny<DateTimeOffset>())).ReturnsAsync(false);
-        _repository.Setup(r => r.CreateAsync(It.IsAny<CreatePostReviewEntity>())).ReturnsAsync(expectedReview);
+        _repository.Setup(r => r.CreateAsync(It.IsAny<CreatePostReviewEntity>(), It.IsAny<int>())).ReturnsAsync(expectedReview);
 
         var result = await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Neutral });
 
@@ -233,6 +239,17 @@ public class PostReviewServiceShould : UnitTestBase
         _repository.Verify(r => r.GetPostInfoAsync(postId, _currentUserId), Times.Once);
     }
 
+    /// <summary>
+    /// The counter the post author is owed rides on the call that writes the
+    /// review, and is not a write of its own.
+    /// </summary>
+    /// <remarks>
+    /// QualityRating is stored and not summed: two writes meant two commits, and
+    /// a refusal between them left the profile carrying a review that does not
+    /// exist with nothing to recompute it from. The repository takes the delta as
+    /// an argument now, so the pair cannot come apart above it — what it does with
+    /// them is asserted against Postgres in PostReviewRepositoryShould.
+    /// </remarks>
     [Fact]
     public async Task UpdateUserQualityRatingOnPositiveReview()
     {
@@ -244,7 +261,8 @@ public class PostReviewServiceShould : UnitTestBase
 
         await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
 
-        _repository.Verify(r => r.UpdateUserQualityRatingAsync(postAuthorId, 1), Times.Once);
+        _repository.Verify(r => r.CreateAsync(
+            It.Is<CreatePostReviewEntity>(e => e.PostAuthorId == postAuthorId), 1), Times.Once);
     }
 
     [Fact]
@@ -258,7 +276,8 @@ public class PostReviewServiceShould : UnitTestBase
 
         await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Negative });
 
-        _repository.Verify(r => r.UpdateUserQualityRatingAsync(postAuthorId, -1), Times.Once);
+        _repository.Verify(r => r.CreateAsync(
+            It.Is<CreatePostReviewEntity>(e => e.PostAuthorId == postAuthorId), -1), Times.Once);
     }
 
     [Fact]
@@ -272,7 +291,7 @@ public class PostReviewServiceShould : UnitTestBase
 
         await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Neutral });
 
-        _repository.Verify(r => r.UpdateUserQualityRatingAsync(It.IsAny<Guid>(), It.IsAny<int>()), Times.Never);
+        _repository.Verify(r => r.CreateAsync(It.IsAny<CreatePostReviewEntity>(), 0), Times.Once);
     }
 
     #endregion
@@ -282,10 +301,12 @@ public class PostReviewServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowNotFoundWhenReviewDoesNotExist()
     {
+        var postId = Guid.NewGuid();
         var reviewId = Guid.NewGuid();
+        ReachablePost(postId);
         _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync((PostReview?)null);
 
-        var act = async () => await _service.GetAsync(reviewId);
+        var act = async () => await _service.GetAsync(postId, reviewId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
@@ -294,14 +315,61 @@ public class PostReviewServiceShould : UnitTestBase
     [Fact]
     public async Task ReturnReviewWhenExists()
     {
+        var postId = Guid.NewGuid();
         var reviewId = Guid.NewGuid();
-        var review = new PostReview { Id = reviewId };
+        var review = new PostReview { Id = reviewId, PostId = postId };
+        ReachablePost(postId);
         _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
 
-        var result = await _service.GetAsync(reviewId);
+        var result = await _service.GetAsync(postId, reviewId);
 
         result.Should().Be(review);
     }
+
+    /// <summary>
+    /// A review is only as readable as the post it is about.
+    /// </summary>
+    /// <remarks>
+    /// The read used to go by review identifier alone, while the create path
+    /// next to it scopes its post read by room access. So the body of a review
+    /// on a post in a private room — and with it the post author and the game —
+    /// came back to anybody holding the identifier.
+    /// </remarks>
+    [Fact]
+    public async Task RefuseAReviewOfAPostTheReaderCannotOpen()
+    {
+        var postId = Guid.NewGuid();
+        var reviewId = Guid.NewGuid();
+        _repository.Setup(r => r.GetPostInfoAsync(postId, _currentUserId)).ReturnsAsync((PostInfo?)null);
+
+        var act = async () => await _service.GetAsync(postId, reviewId);
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.NotFound);
+        _repository.Verify(r => r.GetAsync(reviewId), Times.Never);
+    }
+
+    /// <summary>
+    /// The route names a post and a review, and the two have to agree.
+    /// </summary>
+    [Fact]
+    public async Task RefuseAReviewThatBelongsToAnotherPost()
+    {
+        var postId = Guid.NewGuid();
+        var reviewId = Guid.NewGuid();
+        ReachablePost(postId);
+        _repository.Setup(r => r.GetAsync(reviewId))
+            .ReturnsAsync(new PostReview { Id = reviewId, PostId = Guid.NewGuid() });
+
+        var act = async () => await _service.GetAsync(postId, reviewId);
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.NotFound);
+    }
+
+    private void ReachablePost(Guid postId) =>
+        _repository.Setup(r => r.GetPostInfoAsync(postId, _currentUserId))
+            .ReturnsAsync(new PostInfo { AuthorId = Guid.NewGuid(), GameId = Guid.NewGuid() });
 
     #endregion
 
@@ -320,7 +388,7 @@ public class PostReviewServiceShould : UnitTestBase
             CreatedUtc = DateTimeOffset.UtcNow
         };
         _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>())).ReturnsAsync(review);
+        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>())).ReturnsAsync(review);
 
         await _service.UpdateAsync(new UpdatePostReview { ReviewId = reviewId, Sign = ReviewSign.Positive });
 
@@ -337,7 +405,7 @@ public class PostReviewServiceShould : UnitTestBase
             Author = new GeneralUser { UserId = _currentUserId },
             PostAuthor = new GeneralUser { UserId = Guid.NewGuid() },
             Sign = ReviewSign.Neutral,
-            CreatedUtc = DateTimeOffset.UtcNow.AddDays(-2) // Past edit window
+            CreatedUtc = DateTimeOffset.UtcNow.AddMinutes(-16) // Past edit window
         };
         _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
 
@@ -345,6 +413,122 @@ public class PostReviewServiceShould : UnitTestBase
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+    }
+
+    /// <summary>
+    /// The whole point of the edit: a review is a sign and the sentence under
+    /// it, and both reach storage.
+    /// </summary>
+    [Fact]
+    public async Task SaveTheEditedTextWithTheSign()
+    {
+        var reviewId = Guid.NewGuid();
+        var review = EditableReview(reviewId);
+        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
+        UpdatePostReviewEntity? written = null;
+        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()))
+            .Callback<UpdatePostReviewEntity, int>((e, _) => written = e)
+            .ReturnsAsync(review);
+
+        await _service.UpdateAsync(new UpdatePostReview
+        {
+            ReviewId = reviewId,
+            Sign = ReviewSign.Negative,
+            Text = "Перечитал и передумал"
+        });
+
+        written.Should().NotBeNull();
+        written!.Sign.Should().Be(ReviewSign.Negative);
+        written.Text.Should().Be("Перечитал и передумал");
+        written.ModifiedByUserId.Should().Be(_currentUserId);
+    }
+
+    /// <summary>
+    /// An omitted field keeps what is stored: correcting a typo must not reset
+    /// the rating, and re-picking the sign must not blank the sentence.
+    /// </summary>
+    [Fact]
+    public async Task LeaveTheTextAloneWhenTheRequestDoesNotCarryIt()
+    {
+        var reviewId = Guid.NewGuid();
+        var review = EditableReview(reviewId);
+        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
+        UpdatePostReviewEntity? written = null;
+        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()))
+            .Callback<UpdatePostReviewEntity, int>((e, _) => written = e)
+            .ReturnsAsync(review);
+
+        await _service.UpdateAsync(new UpdatePostReview { ReviewId = reviewId, Sign = ReviewSign.Positive });
+
+        written.Should().NotBeNull();
+        written!.Text.Should().BeNull();
+    }
+
+    /// <summary>
+    /// The body renders on the Comment surface, where [mod] is a green
+    /// moderator block. The create path unwraps it for an author below
+    /// Moderator; an edit that did not would be the way around that rule.
+    /// </summary>
+    [Fact]
+    public async Task UnwrapAModBlockAnOrdinaryAuthorPutInTheEditedText()
+    {
+        var reviewId = Guid.NewGuid();
+        var review = EditableReview(reviewId);
+        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
+        UpdatePostReviewEntity? written = null;
+        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()))
+            .Callback<UpdatePostReviewEntity, int>((e, _) => written = e)
+            .ReturnsAsync(review);
+
+        await _service.UpdateAsync(new UpdatePostReview
+        {
+            ReviewId = reviewId,
+            Text = "[mod]Предупреждение[/mod]"
+        });
+
+        written!.Text.Should().Be("Предупреждение");
+    }
+
+    /// <summary>
+    /// Probation holds on the way out as well: a newbie publishes the neutral
+    /// review the form allows them, and an edit is not a second door to a plus.
+    /// </summary>
+    [Fact]
+    public async Task ThrowForbiddenWhenANewbieMovesTheirReviewOffNeutral()
+    {
+        var reviewId = Guid.NewGuid();
+        var review = EditableReview(reviewId, ReviewSign.Neutral);
+        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
+        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(10);
+
+        var act = async () => await _service.UpdateAsync(
+            new UpdatePostReview { ReviewId = reviewId, Sign = ReviewSign.Positive });
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+        _repository.Verify(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The same newbie may still fix the wording of what they wrote.
+    /// </summary>
+    [Fact]
+    public async Task LetANewbieEditTheTextOfTheirNeutralReview()
+    {
+        var reviewId = Guid.NewGuid();
+        var review = EditableReview(reviewId, ReviewSign.Neutral);
+        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
+        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(10);
+        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>())).ReturnsAsync(review);
+
+        await _service.UpdateAsync(new UpdatePostReview
+        {
+            ReviewId = reviewId,
+            Sign = ReviewSign.Neutral,
+            Text = "Поправил опечатку"
+        });
+
+        _repository.Verify(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()), Times.Once);
     }
 
     [Fact]
@@ -361,15 +545,34 @@ public class PostReviewServiceShould : UnitTestBase
             CreatedUtc = DateTimeOffset.UtcNow
         };
         _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>())).ReturnsAsync(review);
+        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>())).ReturnsAsync(review);
 
         await _service.UpdateAsync(new UpdatePostReview { ReviewId = reviewId, Sign = ReviewSign.Negative });
 
-        // When changing from Positive (+1) to Negative (-1):
-        // 1. Revert old sign: -1 (undo +1)
-        // 2. Apply new sign: -1 (apply -1)
-        // Both calls pass -1, so we verify it's called exactly twice with -1
-        _repository.Verify(r => r.UpdateUserQualityRatingAsync(postAuthorId, -1), Times.Exactly(2));
+        // Positive (+1) to Negative (-1) is worth -2 to the post author: the old
+        // sign taken back and the new one applied. One number, on the call that
+        // writes the sign — the two deltas used to be two commits of their own,
+        // both before the row they belong to was written.
+        _repository.Verify(r => r.UpdateAsync(
+            It.Is<UpdatePostReviewEntity>(e => e.Sign == ReviewSign.Negative), -2), Times.Once);
+        _repository.Verify(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()), Times.Once);
+    }
+
+    /// <summary>
+    /// An edit that leaves the sign where it is owes the counter nothing.
+    /// </summary>
+    [Fact]
+    public async Task MoveNoQualityRatingWhenOnlyTheTextChanges()
+    {
+        var reviewId = Guid.NewGuid();
+        var review = EditableReview(reviewId);
+        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
+        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()))
+            .ReturnsAsync(review);
+
+        await _service.UpdateAsync(new UpdatePostReview { ReviewId = reviewId, Text = "Поправил опечатку" });
+
+        _repository.Verify(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), 0), Times.Once);
     }
 
     #endregion
@@ -389,7 +592,7 @@ public class PostReviewServiceShould : UnitTestBase
             Sign = ReviewSign.Neutral
         };
         _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>())).ReturnsAsync(review);
+        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>())).ReturnsAsync(review);
 
         await _service.DeleteAsync(reviewId);
 
@@ -409,11 +612,93 @@ public class PostReviewServiceShould : UnitTestBase
             Sign = ReviewSign.Positive
         };
         _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>())).ReturnsAsync(review);
+        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>())).ReturnsAsync(review);
 
         await _service.DeleteAsync(reviewId);
 
-        _repository.Verify(r => r.UpdateUserQualityRatingAsync(postAuthorId, -1), Times.Once);
+        // On the removal itself, so the counter and the flag land together
+        _repository.Verify(r => r.UpdateAsync(
+            It.Is<UpdatePostReviewEntity>(e => e.IsRemoved == true), -1), Times.Once);
+        _repository.Verify(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()), Times.Once);
+    }
+
+    /// <summary>
+    /// A neutral review took nothing from the post author, so removing it gives
+    /// nothing back.
+    /// </summary>
+    [Fact]
+    public async Task MoveNoQualityRatingWhenRemovingANeutralReview()
+    {
+        var reviewId = Guid.NewGuid();
+        var review = new PostReview
+        {
+            Id = reviewId,
+            Author = new GeneralUser { UserId = _currentUserId },
+            PostAuthor = new GeneralUser { UserId = Guid.NewGuid() },
+            Sign = ReviewSign.Neutral
+        };
+        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
+        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()))
+            .ReturnsAsync(review);
+
+        await _service.DeleteAsync(reviewId);
+
+        _repository.Verify(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), 0), Times.Once);
+    }
+
+    /// <summary>
+    /// A senior moderator may remove somebody else's review, so the removal has
+    /// to say whose hand it was and when. Written with the flag, in one call.
+    /// </summary>
+    [Fact]
+    public async Task RecordWhoRemovedTheReviewAndWhen()
+    {
+        var reviewId = Guid.NewGuid();
+        var review = new PostReview
+        {
+            Id = reviewId,
+            Author = new GeneralUser { UserId = Guid.NewGuid() },
+            PostAuthor = new GeneralUser { UserId = Guid.NewGuid() },
+            Sign = ReviewSign.Negative
+        };
+        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
+        UpdatePostReviewEntity? written = null;
+        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()))
+            .Callback<UpdatePostReviewEntity, int>((e, _) => written = e)
+            .ReturnsAsync(review);
+
+        await _service.DeleteAsync(reviewId);
+
+        written.Should().NotBeNull();
+        written!.IsRemoved.Should().BeTrue();
+        written.DeletedByUserId.Should().Be(_currentUserId);
+        written.DeletedUtc.Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// No window on the author's own delete — the way out after the correction
+    /// window has closed, as with a post and a comment.
+    /// </summary>
+    [Fact]
+    public async Task LetTheAuthorDeleteLongAfterTheEditWindowClosed()
+    {
+        var reviewId = Guid.NewGuid();
+        var postAuthorId = Guid.NewGuid();
+        var review = new PostReview
+        {
+            Id = reviewId,
+            Author = new GeneralUser { UserId = _currentUserId },
+            PostAuthor = new GeneralUser { UserId = postAuthorId },
+            Sign = ReviewSign.Positive,
+            CreatedUtc = DateTimeOffset.UtcNow.AddDays(-30)
+        };
+        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
+        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>())).ReturnsAsync(review);
+
+        await _service.DeleteAsync(reviewId);
+
+        _repository.Verify(r => r.UpdateAsync(
+            It.Is<UpdatePostReviewEntity>(e => e.IsRemoved == true), -1), Times.Once);
     }
 
     #endregion
@@ -423,7 +708,7 @@ public class PostReviewServiceShould : UnitTestBase
     [Fact]
     public void ReturnTrueWhenWithinEditWindow()
     {
-        var review = new PostReview { CreatedUtc = DateTimeOffset.UtcNow.AddHours(-12) };
+        var review = new PostReview { CreatedUtc = DateTimeOffset.UtcNow.AddMinutes(-5) };
 
         var result = _service.CanEdit(review);
 
@@ -433,7 +718,9 @@ public class PostReviewServiceShould : UnitTestBase
     [Fact]
     public void ReturnFalseWhenOutsideEditWindow()
     {
-        var review = new PostReview { CreatedUtc = DateTimeOffset.UtcNow.AddDays(-2) };
+        // The window is the quarter of an hour a post and a comment give their
+        // author, not the day the sibling review entities used to give this one.
+        var review = new PostReview { CreatedUtc = DateTimeOffset.UtcNow.AddMinutes(-16) };
 
         var result = _service.CanEdit(review);
 
@@ -441,6 +728,19 @@ public class PostReviewServiceShould : UnitTestBase
     }
 
     #endregion
+
+    /// <summary>
+    /// A review of the current user, published just now, so the edit window is
+    /// open and the only thing under test is what the update itself does.
+    /// </summary>
+    private PostReview EditableReview(Guid reviewId, ReviewSign sign = ReviewSign.Positive) => new()
+    {
+        Id = reviewId,
+        Author = new GeneralUser { UserId = _currentUserId },
+        PostAuthor = new GeneralUser { UserId = Guid.NewGuid() },
+        Sign = sign,
+        CreatedUtc = DateTimeOffset.UtcNow
+    };
 
     private void SetupSuccessfulCreate(Guid postId, Guid postAuthorId, Guid gameId, ReviewSign sign = ReviewSign.Positive)
     {
@@ -457,6 +757,6 @@ public class PostReviewServiceShould : UnitTestBase
         _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
         _repository.Setup(r => r.ExistsAsync(_currentUserId, postId)).ReturnsAsync(false);
         _repository.Setup(r => r.HasRecentReviewInGameAsync(_currentUserId, gameId, It.IsAny<DateTimeOffset>())).ReturnsAsync(false);
-        _repository.Setup(r => r.CreateAsync(It.IsAny<CreatePostReviewEntity>())).ReturnsAsync(expectedReview);
+        _repository.Setup(r => r.CreateAsync(It.IsAny<CreatePostReviewEntity>(), It.IsAny<int>())).ReturnsAsync(expectedReview);
     }
 }

@@ -8,8 +8,19 @@
 /**
  * Which notepad an entry belongs to. Serialised by name — the API registers a
  * string enum converter globally, so the wire carries "Master", not 2.
+ *
+ * Three of the five hang off a game and the on-screen names do not repeat the
+ * wire ones: "Master" is the notepad of the game itself ("Заметки игры"),
+ * "Player" a character's own notes kept by its owner ("Заметки игрока"), and
+ * "CharacterMaster" the notes the game leads keep about that same character
+ * ("Заметки мастера").
  */
-export type NotepadType = "Player" | "Master" | "Blog" | "User";
+export type NotepadType =
+  | "Player"
+  | "Master"
+  | "CharacterMaster"
+  | "Blog"
+  | "User";
 
 export interface NotepadEntry {
   id: string;

@@ -6,6 +6,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Posts;
 using DM.Infrastructure.Persistence.Entities.Game.Links;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
 using DbGameTag = DM.Infrastructure.Persistence.Entities.Shared.Tag;
 using DbRoom = DM.Infrastructure.Persistence.Entities.Game.Posts.Room;
@@ -48,19 +49,11 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.Id, s => s.MapFrom(r => r.RoomId))
             .ForMember(d => d.RoomNumber, s => s.MapFrom(r => r.RoomNumber))
             .ForMember(d => d.Accesses, s => s.MapFrom(r => r.RoomAccesses))
-            .ForMember(d => d.Pendencies, s => s.MapFrom(r => r.PostPendencies
-                .Where(p =>
-                    p.WaitingForUserId != null &&
-                    (
-                        p.Room.Game.MasterId == p.CreatedById ||
-                        p.Room.Game.Assistants.Any(a => a.UserId == p.CreatedById) ||
-                        p.Room.RoomAccesses.Any(a => a.Character != null && a.Character.AuthorId == p.CreatedById)
-                    ) &&
-                    (
-                        p.Room.Game.MasterId == p.WaitingForUserId ||
-                        p.Room.Game.Assistants.Any(a => a.UserId == p.WaitingForUserId) ||
-                        p.Room.RoomAccesses.Any(a => a.Character != null && a.Character.AuthorId == p.WaitingForUserId)
-                    ))))
+            // The selection lives in PostPendencyFilters because the participation
+            // list asks the same question of the pendencies table directly, and a
+            // second copy of the rule would let a game claim a turn is awaited
+            // that the room behind it does not show.
+            .ForMember(d => d.Pendencies, s => s.MapFrom(PostPendencyFilters.OfRoom))
             .ForMember(d => d.TotalPostsCount, s => s.MapFrom(r => r.Posts
                 .Count(p => !p.IsRemoved)))
             .ForMember(d => d.UnreadPostsCount, opt => opt.Ignore())
@@ -148,6 +141,11 @@ internal class GameMappingProfile : Profile
                 p.Reviews.Count(r => !r.IsRemoved)))
             .ForMember(d => d.AuthorGameRole, opt => opt.Ignore())
             .ForMember(d => d.DiceRolls, opt => opt.Ignore())
+            // Filled by a batched read after the page is materialised, the way
+            // character portraits are. A post may carry several files, so an
+            // inline projection would be a correlated subquery per row, and a
+            // room lists twenty rows at a time.
+            .ForMember(d => d.Attachments, opt => opt.Ignore())
             .ForMember(d => d.Room, opt => opt.Ignore());
 
         CreateMap<DbPostEdit, DtoPostEdit>()
@@ -243,6 +241,8 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.PendingPlayerInvitedUserIds, s => s.Ignore()) // Populated via batch query in repository
             .ForMember(d => d.BlacklistedUsers, s => s.MapFrom(g => g.BlackList))
             .ForMember(d => d.Pendencies, opt => opt.Ignore())
+            .ForMember(d => d.AwaitsViewerTurn, opt => opt.Ignore()) // Viewer-scoped, set in repository
+            .ForMember(d => d.AwaitedCharacterNames, opt => opt.Ignore()) // Viewer-scoped, set in repository
             .ForMember(d => d.UnreadPostsCount, opt => opt.Ignore())
             .ForMember(d => d.UnreadCommentsCount, opt => opt.Ignore())
             .ForMember(d => d.UnreadCharactersCount, opt => opt.Ignore())
@@ -284,6 +284,7 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.GroupTitle, s => s.MapFrom(g => g.TagGroup.Title))
             .ForMember(d => d.GroupDescription, s => s.MapFrom(g => g.TagGroup.Description))
             .ForMember(d => d.GroupSortOrder, s => s.MapFrom(g => g.TagGroup.SortOrder))
+            .ForMember(d => d.GroupMaxTagsPerGame, s => s.MapFrom(g => g.TagGroup.MaxTagsPerGame))
             .ForMember(d => d.Description, s => s.MapFrom(g => g.Description))
             .ForMember(d => d.GamesCount, opt => opt.Ignore()); // Computed at runtime
     }

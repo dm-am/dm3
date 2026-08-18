@@ -107,6 +107,208 @@ public class GameAccessibilityFiltersShould
         Listed(ClosedRoom(game, hidden: true), Master).Should().BeTrue();
     }
 
+    /// <summary>
+    /// The rank that passes premoderation verdicts opens the games awaiting one,
+    /// and its arm answers by the premoderation status alone — the same set
+    /// PremoderationAccess.IsPending names, over every module state.
+    /// </summary>
+    /// <remarks>
+    /// The row has to leave the query for the reader before any gate can be asked
+    /// about it. Without this arm a game in AwaitingEdits — the status every
+    /// newbie's game is created in, with no curator recorded — answered 404 to the
+    /// mentor, the moderator and everybody above them, so the moderation queue
+    /// linked to nothing.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(ModuleStates))]
+    public void ListTheGameToAJudgeExactlyWhenItAwaitsAPremoderationVerdict(
+        ModuleStatus status, PremoderationStatus premoderationStatus, DraftVisibility draftVisibility)
+    {
+        var games = new[] { Game(status, premoderationStatus, draftVisibility) }.AsQueryable();
+
+        var listed = games.Any(GameAccessibilityFilters.GameAvailable(
+            Stranger, mayJudgePremoderation: true));
+
+        listed.Should().Be(
+            PremoderationAccess.IsPending(premoderationStatus) ||
+            ModuleVisibility.IsPubliclyVisible(status, premoderationStatus, draftVisibility));
+    }
+
+    /// <summary>
+    /// A private draft is hidden by its author's choice and not by premoderation,
+    /// so the rank does not reach it. Named on its own rather than left to the
+    /// theory above, because this is the case an arm keyed on "hidden" instead of
+    /// on the premoderation status would get wrong.
+    /// </summary>
+    [Fact]
+    public void KeepAPrivateDraftShutToAJudge()
+    {
+        var draft = new[]
+        {
+            Game(ModuleStatus.Draft, PremoderationStatus.Approved, DraftVisibility.Private)
+        }.AsQueryable();
+
+        draft.Any(GameAccessibilityFilters.GameAvailable(Stranger, mayJudgePremoderation: true))
+            .Should().BeFalse();
+    }
+
+    /// <summary>
+    /// A removed game is gone for everybody, whatever it was awaiting when it
+    /// went: the soft-delete flag guards the whole filter and no arm reopens it.
+    /// </summary>
+    [Theory]
+    [InlineData(PremoderationStatus.AwaitingEdits)]
+    [InlineData(PremoderationStatus.AwaitingApproval)]
+    [InlineData(PremoderationStatus.Approved)]
+    public void KeepARemovedGameShutToAJudge(PremoderationStatus premoderationStatus)
+    {
+        var game = Game(ModuleStatus.Active, premoderationStatus, DraftVisibility.Public);
+        game.IsRemoved = true;
+
+        new[] { game }.AsQueryable()
+            .Any(GameAccessibilityFilters.GameAvailable(Stranger, mayJudgePremoderation: true))
+            .Should().BeFalse();
+    }
+
+    /// <summary>
+    /// The rank is not the default: a reader who does not hold it reads exactly as
+    /// before, and the list paths that pass nothing keep answering the public rule
+    /// alone.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ModuleStates))]
+    public void AnswerTheSameWithoutTheRankAsWithTheParameterOmitted(
+        ModuleStatus status, PremoderationStatus premoderationStatus, DraftVisibility draftVisibility)
+    {
+        var games = new[] { Game(status, premoderationStatus, draftVisibility) }.AsQueryable();
+
+        games.Any(GameAccessibilityFilters.GameAvailable(Stranger, mayJudgePremoderation: false))
+            .Should().Be(games.Any(GameAccessibilityFilters.GameAvailable(Stranger)));
+    }
+
+    /// <summary>
+    /// The rooms answer the rank the same way the game does: whoever may pass the
+    /// verdict opens the rooms of the games awaiting one, by the premoderation
+    /// status alone and over every module state.
+    /// </summary>
+    /// <remarks>
+    /// The two filters are one promise. The game arm alone handed the judge a game
+    /// whose room list came back empty — nothing to read, nothing to judge — because
+    /// the rooms were still scoped by the public rule.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(ModuleStates))]
+    public void OpenTheRoomToAJudgeExactlyWhenItsGameAwaitsAPremoderationVerdict(
+        ModuleStatus status, PremoderationStatus premoderationStatus, DraftVisibility draftVisibility)
+    {
+        var rooms = new[] { Room(Game(status, premoderationStatus, draftVisibility)) }.AsQueryable();
+
+        var available = rooms.Any(GameAccessibilityFilters.RoomAvailable(
+            Stranger, mayJudgePremoderation: true));
+
+        available.Should().Be(
+            PremoderationAccess.IsPending(premoderationStatus) ||
+            ModuleVisibility.IsPubliclyVisible(status, premoderationStatus, draftVisibility));
+    }
+
+    /// <summary>
+    /// The same over the listing question: the menu of a game awaiting a verdict
+    /// names its rooms to the judge, and the two asks the room list makes agree.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ModuleStates))]
+    public void ListTheRoomToAJudgeExactlyWhenItsGameAwaitsAPremoderationVerdict(
+        ModuleStatus status, PremoderationStatus premoderationStatus, DraftVisibility draftVisibility)
+    {
+        var rooms = new[] { Room(Game(status, premoderationStatus, draftVisibility)) }.AsQueryable();
+
+        var listed = rooms.Any(GameAccessibilityFilters.RoomAvailable(
+            Stranger, listingOnly: true, mayJudgePremoderation: true));
+
+        listed.Should().Be(
+            PremoderationAccess.IsPending(premoderationStatus) ||
+            ModuleVisibility.IsPubliclyVisible(status, premoderationStatus, draftVisibility));
+    }
+
+    /// <summary>
+    /// A private draft is its author's own concealment and not premoderation's, so
+    /// its rooms stay shut to the rank exactly as the game does.
+    /// </summary>
+    [Fact]
+    public void KeepTheRoomsOfAPrivateDraftShutToAJudge()
+    {
+        var rooms = new[]
+        {
+            Room(Game(ModuleStatus.Draft, PremoderationStatus.Approved, DraftVisibility.Private))
+        }.AsQueryable();
+
+        rooms.Any(GameAccessibilityFilters.RoomAvailable(Stranger, mayJudgePremoderation: true))
+            .Should().BeFalse();
+    }
+
+    /// <summary>
+    /// A removed game takes its rooms with it, and a removed room stays removed
+    /// inside a game still awaiting a verdict: both flags guard the whole filter
+    /// and the rank reopens neither.
+    /// </summary>
+    [Theory]
+    [InlineData(PremoderationStatus.AwaitingEdits)]
+    [InlineData(PremoderationStatus.AwaitingApproval)]
+    [InlineData(PremoderationStatus.Approved)]
+    public void KeepRemovedRoomsShutToAJudge(PremoderationStatus premoderationStatus)
+    {
+        var removedGame = Game(ModuleStatus.Active, premoderationStatus, DraftVisibility.Public);
+        removedGame.IsRemoved = true;
+
+        var removedRoom = Room(Game(ModuleStatus.Active, premoderationStatus, DraftVisibility.Public));
+        removedRoom.IsRemoved = true;
+
+        new[] { Room(removedGame) }.AsQueryable()
+            .Any(GameAccessibilityFilters.RoomAvailable(Stranger, mayJudgePremoderation: true))
+            .Should().BeFalse();
+        new[] { removedRoom }.AsQueryable()
+            .Any(GameAccessibilityFilters.RoomAvailable(Stranger, mayJudgePremoderation: true))
+            .Should().BeFalse();
+    }
+
+    /// <summary>
+    /// The rank answers for the game and not for the room: a closed room the judge
+    /// holds no grant to is named to them and stays shut, the way it is for every
+    /// other reader of the game.
+    /// </summary>
+    [Fact]
+    public void KeepAClosedRoomOfAJudgedGameNamedButShut()
+    {
+        var game = Game(ModuleStatus.Active, PremoderationStatus.AwaitingApproval, DraftVisibility.Public);
+        var room = ClosedRoom(game, hidden: false);
+
+        new[] { room }.AsQueryable()
+            .Any(GameAccessibilityFilters.RoomAvailable(
+                Stranger, listingOnly: true, mayJudgePremoderation: true))
+            .Should().BeTrue();
+        new[] { room }.AsQueryable()
+            .Any(GameAccessibilityFilters.RoomAvailable(Stranger, mayJudgePremoderation: true))
+            .Should().BeFalse();
+    }
+
+    /// <summary>
+    /// The rank is not the default for the rooms either: every read that passes
+    /// nothing — the pulse, search, first-unread — answers exactly as before.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ModuleStates))]
+    public void AnswerTheSameForRoomsWithoutTheRankAsWithTheParameterOmitted(
+        ModuleStatus status, PremoderationStatus premoderationStatus, DraftVisibility draftVisibility)
+    {
+        var rooms = new[] { Room(Game(status, premoderationStatus, draftVisibility)) }.AsQueryable();
+
+        rooms.Any(GameAccessibilityFilters.RoomAvailable(Stranger, mayJudgePremoderation: false))
+            .Should().Be(rooms.Any(GameAccessibilityFilters.RoomAvailable(Stranger)));
+        rooms.Any(GameAccessibilityFilters.RoomAvailable(
+                Stranger, listingOnly: true, mayJudgePremoderation: false))
+            .Should().Be(rooms.Any(GameAccessibilityFilters.RoomAvailable(Stranger, listingOnly: true)));
+    }
+
     [Fact]
     public void ListAPublicGameForTheUserItsOwnerBlacklisted()
     {

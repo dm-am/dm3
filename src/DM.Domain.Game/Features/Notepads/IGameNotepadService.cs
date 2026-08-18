@@ -7,19 +7,21 @@ using DM.Domain.Core.Notepads;
 namespace DM.Domain.Game.Features.Notepads;
 
 /// <summary>
-/// Service for managing game notepads (master and player/character)
+/// Service for the three notepads of a game: the notepad of the game itself
+/// ("Заметки игры"), a character's own notes ("Заметки игрока") and the notes
+/// its leads keep about that character ("Заметки мастера")
 /// </summary>
 public interface IGameNotepadService
 {
     #region Master Notepad
 
     /// <summary>
-    /// Get master notepad entries for a game
+    /// Get the entries of the game's own notepad. Master and assistants
     /// </summary>
     Task<IEnumerable<NotepadEntry>> GetMasterEntries(Guid gameId, CancellationToken ct = default);
 
     /// <summary>
-    /// Create entry in master notepad
+    /// Create entry in the game's own notepad
     /// </summary>
     Task<NotepadEntry> CreateMasterEntry(Guid gameId, CreateNotepadEntry createEntry, CancellationToken ct = default);
 
@@ -28,14 +30,30 @@ public interface IGameNotepadService
     #region Player/Character Notepad
 
     /// <summary>
-    /// Get player notepad entries for a character
+    /// Get a character's own notepad entries. The owner of the character and
+    /// nobody else, the game leads included
     /// </summary>
     Task<IEnumerable<NotepadEntry>> GetPlayerEntries(Guid gameId, Guid characterId, CancellationToken ct = default);
 
     /// <summary>
-    /// Create entry in player notepad
+    /// Create entry in a character's own notepad
     /// </summary>
     Task<NotepadEntry> CreatePlayerEntry(Guid gameId, Guid characterId, CreateNotepadEntry createEntry, CancellationToken ct = default);
+
+    #endregion
+
+    #region Character Master Notepad
+
+    /// <summary>
+    /// Get the notes the game leads keep about a character. Master and
+    /// assistants; every character has such a notepad, not only an NPC
+    /// </summary>
+    Task<IEnumerable<NotepadEntry>> GetCharacterMasterEntries(Guid gameId, Guid characterId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Create entry in the notes the game leads keep about a character
+    /// </summary>
+    Task<NotepadEntry> CreateCharacterMasterEntry(Guid gameId, Guid characterId, CreateNotepadEntry createEntry, CancellationToken ct = default);
 
     #endregion
 

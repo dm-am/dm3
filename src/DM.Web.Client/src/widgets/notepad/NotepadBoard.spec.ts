@@ -45,6 +45,9 @@ const mountBoard = (adapter: NotepadAdapter, props = {}) =>
     props: {
       adapter,
       title: "Блокнот",
+      // "u" is who wrote every fixture entry, so the default board is the
+      // ordinary case: a viewer reading their own notes.
+      viewerId: "u",
       emptyText: "Нет записей в блокноте",
       emptyHint: "Создайте первую запись.",
       loadErrorText: "Не удалось загрузить блокнот",
@@ -229,5 +232,58 @@ describe("NotepadBoard", () => {
     await flushPromises();
 
     expect(wrapper.find(".notepad-layout").exists()).toBe(false);
+  });
+
+  /**
+   * The board offered "Редактировать" and "Удалить" on every entry it showed,
+   * while the API grants the first to the author alone and the second to the
+   * author and the lead of the container. Reading somebody else's entry in a
+   * shared notepad — the notes of a game, the notes kept about a character,
+   * the notes of a blog — both buttons were there and both answered 403.
+   */
+  describe("the controls over one entry repeat the server's rules", () => {
+    const openSomebodyElses = async (props = {}) => {
+      const wrapper = mountBoard(
+        adapterOf([entry({ authorId: "somebody-else" })]),
+        props,
+      );
+      await flushPromises();
+      await wrapper.find(".entry-item").trigger("click");
+      return wrapper;
+    };
+
+    it("offers both controls on an entry the viewer wrote", async () => {
+      const wrapper = mountBoard(adapterOf([entry({ authorId: "u" })]));
+      await flushPromises();
+      await wrapper.find(".entry-item").trigger("click");
+
+      expect(wrapper.find(".edit-btn").exists()).toBe(true);
+      expect(wrapper.find(".delete-btn").exists()).toBe(true);
+    });
+
+    it("offers neither on somebody else's entry", async () => {
+      const wrapper = await openSomebodyElses();
+
+      // The entry itself still reads — a shared notepad is shared.
+      expect(wrapper.find(".content-body").text()).toBe("Текст");
+      expect(wrapper.find(".edit-btn").exists()).toBe(false);
+      expect(wrapper.find(".delete-btn").exists()).toBe(false);
+    });
+
+    it("lets the lead of the container delete somebody else's entry but not edit it", async () => {
+      const wrapper = await openSomebodyElses({ canDeleteOthers: true });
+
+      // Removing an entry is the lead's right; rewriting one that would still
+      // stand under its author's name is nobody's.
+      expect(wrapper.find(".delete-btn").exists()).toBe(true);
+      expect(wrapper.find(".edit-btn").exists()).toBe(false);
+    });
+
+    it("offers nothing to a viewer with no account", async () => {
+      const wrapper = await openSomebodyElses({ viewerId: null });
+
+      expect(wrapper.find(".edit-btn").exists()).toBe(false);
+      expect(wrapper.find(".delete-btn").exists()).toBe(false);
+    });
   });
 });

@@ -202,6 +202,7 @@ public class DmDbContext : DbContext
             entity.HasData(new FundraisingGoal
             {
                 FundraisingGoalId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Хостинг и домен на год",
                 GoalAmount = 50000m,
                 CollectedAmount = 17000m,
                 ModifiedUtc = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero)
@@ -689,41 +690,50 @@ public class DmDbContext : DbContext
         // duplicates and code outside migrations can reference a record by a
         // predictable id.
 
+        // MaxTagsPerGame is left out of a group that limits nothing: the column is
+        // nullable and null is the absence of a limit, not a value forgotten. The
+        // groups that carry one are the ones where a game answering "both" says
+        // less than a game answering one thing.
         modelBuilder.Entity<TagGroup>().HasData(
             new TagGroup
             {
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "Система",
                 Description = "Ролевая система или набор правил, по которым ведется игра",
-                SortOrder = 0
+                SortOrder = 0,
+                MaxTagsPerGame = 2
             },
             new TagGroup
             {
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000002"),
                 Title = "Жанр",
                 Description = "Жанр и сеттинг игрового мира",
-                SortOrder = 1
+                SortOrder = 1,
+                MaxTagsPerGame = 3
             },
             new TagGroup
             {
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000003"),
                 Title = "Формат игры",
                 Description = "Тип игрового процесса и взаимодействия между участниками",
-                SortOrder = 2
+                SortOrder = 2,
+                MaxTagsPerGame = 2
             },
             new TagGroup
             {
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000004"),
                 Title = "Формат постов",
                 Description = "Стиль и объем игровых постов",
-                SortOrder = 3
+                SortOrder = 3,
+                MaxTagsPerGame = 1
             },
             new TagGroup
             {
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000005"),
                 Title = "Темп",
                 Description = "Ожидаемая скорость игры и частота постов",
-                SortOrder = 4
+                SortOrder = 4,
+                MaxTagsPerGame = 1
             },
             new TagGroup
             {
@@ -1223,7 +1233,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000005"),
                 Title = "Неторопливый",
                 Description = "Посты раз в несколько дней",
-                SortOrder = 0
+                SortOrder = 1
             },
             new Tag
             {
@@ -1232,7 +1242,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000005"),
                 Title = "Скоростной",
                 Description = "Несколько постов в день",
-                SortOrder = 1
+                SortOrder = 0
             },
             new Tag
             {
@@ -1250,7 +1260,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000006"),
                 Title = "Без мата",
                 Description = "Нецензурная лексика запрещена",
-                SortOrder = 0
+                SortOrder = 1
             },
             new Tag
             {
@@ -1259,7 +1269,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000006"),
                 Title = "Без насилия",
                 Description = "Минимум жестокости и крови",
-                SortOrder = 1
+                SortOrder = 2
             },
             new Tag
             {
@@ -1268,7 +1278,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000006"),
                 Title = "Grammar Nazi",
                 Description = "Повышенные требования к грамотности",
-                SortOrder = 2
+                SortOrder = 0
             },
             new Tag
             {
@@ -1322,7 +1332,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000008"),
                 Title = "Шок-контент",
                 Description = "Чернуха, максимально шокирующий и отталкивающий контент без ограничений",
-                SortOrder = 1
+                SortOrder = 2
             },
             new Tag
             {
@@ -1331,7 +1341,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000008"),
                 Title = "Острые темы",
                 Description = "Игра затрагивает спорные или чувствительные социальные темы",
-                SortOrder = 2
+                SortOrder = 1
             });
 
         modelBuilder.Entity<Board>().HasData(
@@ -2435,10 +2445,17 @@ public class DmDbContext : DbContext
                 .OnDelete(DeleteBehavior.SetNull)
                 .IsRequired(false);
 
+            // Cascade, not SetNull. The CHECK below requires a PostAttachment row
+            // to name a post, so clearing the column on a hard delete produces a
+            // row the constraint refuses: the delete fails, and the transaction
+            // that carried it fails with it. Unreachable today — posts are only
+            // ever soft-deleted, and the attachment rows are soft-deleted with
+            // them — but a schema that contradicts itself is a trap waiting for
+            // the first caller who does reach it.
             entity.HasOne<DM.Infrastructure.Persistence.Entities.Game.Posts.Post>()
                 .WithMany()
                 .HasForeignKey(u => u.TargetPostId)
-                .OnDelete(DeleteBehavior.SetNull)
+                .OnDelete(DeleteBehavior.Cascade)
                 .IsRequired(false);
 
             entity.HasIndex(u => u.TargetUserId)

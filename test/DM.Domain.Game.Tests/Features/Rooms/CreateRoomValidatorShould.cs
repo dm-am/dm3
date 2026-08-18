@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Rooms;
 using DM.Testing;
@@ -22,6 +23,22 @@ public class CreateRoomValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Fact]
+    public void FailWhenEnumFieldsAreNotInEnum()
+    {
+        var input = new CreateRoom
+        {
+            GameId = Guid.NewGuid(),
+            Title = "Tavern",
+            Type = (RoomType)30000,
+            AccessType = (RoomAccessType)30000
+        };
+
+        var result = validator.TestValidate(input);
+        result.ShouldHaveValidationErrorFor(c => c.Type).WithErrorMessage(ValidationError.Invalid);
+        result.ShouldHaveValidationErrorFor(c => c.AccessType).WithErrorMessage(ValidationError.Invalid);
     }
 
     [Fact]

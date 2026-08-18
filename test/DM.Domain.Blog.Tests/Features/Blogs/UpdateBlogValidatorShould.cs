@@ -33,6 +33,31 @@ public class UpdateBlogValidatorShould : UnitTestBase
     }
 
     [Fact]
+    public void FailWhenDraftVisibilityIsNotInEnum()
+    {
+        var input = new UpdateBlog
+        {
+            BlogId = Guid.NewGuid(),
+            DraftVisibility = (DraftVisibility)30000
+        };
+        var result = validator.TestValidate(input);
+        result.ShouldHaveValidationErrorFor(x => x.DraftVisibility)
+            .WithErrorMessage(ValidationError.Invalid);
+    }
+
+    [Fact]
+    public void PassWhenDraftVisibilityIsOmitted()
+    {
+        var input = new UpdateBlog
+        {
+            BlogId = Guid.NewGuid(),
+            DraftVisibility = null
+        };
+        var result = validator.TestValidate(input);
+        result.ShouldNotHaveValidationErrorFor(x => x.DraftVisibility);
+    }
+
+    [Fact]
     public void FailWhenBlogIdIsEmpty()
     {
         var input = new UpdateBlog { BlogId = Guid.Empty };

@@ -82,12 +82,16 @@ internal class CredentialsApiService : ICredentialsApiService
     }
 
     /// <inheritdoc />
-    public async Task<UsernameChangeResponse?> GetUsernameChangeApprovalAsync(Guid token)
+    public async Task<UsernameChangeApprovalInfo?> GetUsernameChangeApprovalAsync(Guid token)
     {
-        var result = await _usernameChangeService.GetByApprovalTokenAsync(token);
-        return result != null
-            ? _mapper.Map<UsernameChangeResponse>(result)
-            : null;
+        var result = await _usernameChangeService.GetApprovalInfoAsync(token);
+        return result == null
+            ? null
+            : new UsernameChangeApprovalInfo
+            {
+                Status = result.Status,
+                CurrentUsername = result.CurrentUsername
+            };
     }
 
     /// <inheritdoc />

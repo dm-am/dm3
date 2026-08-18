@@ -51,4 +51,20 @@ internal class CharacterAvatarUploadAuthorizer : IUploadTargetAuthorizer
 
         _intentionManager.ThrowIfForbidden(CharacterIntention.Edit, character);
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// A portrait is served from a prefix the bucket answers to anybody, and is
+    /// shown beside its character wherever the character is named. Withholding the
+    /// bytes here would withhold nothing the public address does not give.
+    /// </remarks>
+    public Task EnsureReadAllowedAsync(Guid targetId) => Task.CompletedTask;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Whoever may edit the character may replace its portrait, and replacement is
+    /// what retires the previous row — a portrait is never taken off and left
+    /// absent. So no right beyond the file's owner and Moderator+ is granted here.
+    /// </remarks>
+    public Task<bool> MayDetachAsync(Guid targetId) => Task.FromResult(false);
 }

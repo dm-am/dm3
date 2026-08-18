@@ -4,9 +4,11 @@ using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Posts;
 using DM.Infrastructure.Core.Parsing;
 using DM.Web.API.Features.Game.Games;
+using DM.Web.API.Features.General.Upload;
 using DM.Web.API.Shared.BbRendering;
 using ApiRoom = DM.Web.API.Features.Game.Rooms.Room;
 using DomainPost = DM.Domain.Game.Features.Games.Post;
+using DomainPostAttachment = DM.Domain.Game.Features.Games.PostAttachment;
 using DomainPostEdit = DM.Domain.Game.Features.Posts.PostEdit;
 using DomainDiceRoll = DM.Domain.Game.Features.Posts.DiceRoll;
 using DomainDiceRollResult = DM.Domain.Game.Features.Posts.DiceRollResult;
@@ -59,6 +61,12 @@ internal class PostMappingProfile : Profile
                         GameId = src.GameId
                     };
             });
+
+        // Attachment mapping. Only the address is composed here; every other
+        // field travels as it is. The domain model carries no object key at all,
+        // so there is nothing to remember to leave out.
+        CreateMap<DomainPostAttachment, PostAttachment>()
+            .ForMember(d => d.Url, opt => opt.MapFrom(s => UploadContentRoute.For(s.Id)));
 
         // PostEdit mapping
         CreateMap<DomainPostEdit, PostEditInfo>();

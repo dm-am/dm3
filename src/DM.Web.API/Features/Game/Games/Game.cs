@@ -85,6 +85,14 @@ public class Game : GameRef
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
+    /// Premoderation status. The blog payload has always carried it; the game
+    /// payload carried only the curator, so the master of a game returned for
+    /// edits had no way to learn that it was — and the move that asks for a
+    /// verdict is theirs to make.
+    /// </summary>
+    public PremoderationStatus PremoderationStatus { get; set; }
+
+    /// <summary>
     /// Responsible for premoderation (lightweight reference)
     /// </summary>
     public UserRef? Mentor { get; set; }

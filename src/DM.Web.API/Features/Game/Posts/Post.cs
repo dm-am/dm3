@@ -71,6 +71,64 @@ public class Post
     /// Number of reviews
     /// </summary>
     public int ReviewCount { get; set; }
+
+    /// <summary>
+    /// Files attached to the post, oldest first
+    /// </summary>
+    public IEnumerable<PostAttachment> Attachments { get; set; } = [];
+}
+
+/// <summary>
+/// DTO model for a file attached to a post
+/// </summary>
+/// <remarks>
+/// Deliberately without the key of the object in the bucket and without any
+/// address the store would answer directly. The bytes come from
+/// <see cref="Url"/>, an endpoint that decides the caller's right on every
+/// request; a direct or signed address would work for whoever came to hold it,
+/// for as long as it exists, which is not what "visible to this room" means.
+/// </remarks>
+public class PostAttachment
+{
+    /// <summary>
+    /// Attachment identifier
+    /// </summary>
+    public Guid Id { get; set; }
+
+    /// <summary>
+    /// File name for display
+    /// </summary>
+    public string FileName { get; set; } = null!;
+
+    /// <summary>
+    /// MIME content type of the stored file
+    /// </summary>
+    public string ContentType { get; set; } = null!;
+
+    /// <summary>
+    /// File size in bytes
+    /// </summary>
+    public long SizeBytes { get; set; }
+
+    /// <summary>
+    /// Intrinsic width in pixels, or null when unknown
+    /// </summary>
+    public int? Width { get; set; }
+
+    /// <summary>
+    /// Intrinsic height in pixels, or null when unknown
+    /// </summary>
+    public int? Height { get; set; }
+
+    /// <summary>
+    /// Address the file is served from (authorized on every request)
+    /// </summary>
+    public string Url { get; set; } = null!;
+
+    /// <summary>
+    /// Moment the file was attached
+    /// </summary>
+    public DateTimeOffset CreatedUtc { get; set; }
 }
 
 /// <summary>

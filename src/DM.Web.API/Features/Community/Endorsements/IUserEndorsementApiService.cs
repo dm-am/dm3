@@ -24,6 +24,12 @@ public interface IUserEndorsementApiService
     Task<ListEnvelope<UserEndorsement>> GetWritten(string username, UserEndorsementsQuery query);
 
     /// <summary>
+    /// Ask whether the caller may write a recommendation about this user
+    /// </summary>
+    /// <param name="username">Prospective recipient's username</param>
+    Task<Envelope<EndorsementEligibility>> GetEligibility(string username);
+
+    /// <summary>
     /// Get a single endorsement
     /// </summary>
     /// <param name="id">Endorsement identifier</param>

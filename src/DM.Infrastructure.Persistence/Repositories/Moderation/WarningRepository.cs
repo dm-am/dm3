@@ -66,6 +66,7 @@ internal class WarningRepository : IWarningRepository
             EntityType = entity.EntityType,
             Points = entity.Points,
             Text = entity.Text,
+            EntitySnapshot = entity.EntitySnapshot,
             CreatedUtc = entity.CreatedUtc,
             IsRemoved = false
         };

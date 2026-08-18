@@ -71,6 +71,16 @@ internal class UploadRepository : IUploadRepository
     }
 
     /// <inheritdoc />
+    public Task<string?> GetObjectKeyAsync(Guid uploadId) => _dbContext.Uploads
+        .Where(u => u.UploadId == uploadId)
+        .Select(u => (string?)u.ObjectKey)
+        .FirstOrDefaultAsync();
+
+    /// <inheritdoc />
+    public Task<int> CountPostAttachmentsAsync(Guid postId) => _dbContext.Uploads
+        .CountAsync(u => u.TargetPostId == postId && u.Type == UploadType.PostAttachment);
+
+    /// <inheritdoc />
     public async Task SoftDeleteAsync(Guid uploadId, Guid? deletedByUserId, DateTimeOffset deletedUtc)
     {
         var upload = await _dbContext.Uploads.FirstOrDefaultAsync(u => u.UploadId == uploadId);

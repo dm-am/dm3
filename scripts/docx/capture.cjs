@@ -168,6 +168,7 @@ async function firstHref(page, url, selector) {
     ["09-warnings", "/warnings"],
     ["10-privacy", "/privacy"],
     ["11-agreement", "/agreement"],
+    ["90-donate", "/donate"],
     ["12-support", "/support"],
     ["13-complaint", "/complaint"],
     ["14-support-track", "/support/track/demo-token"],

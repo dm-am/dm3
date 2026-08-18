@@ -11,11 +11,17 @@
  * publication, blog feed) keep rendering PublicationCard and TopicCard
  * stays purely a forum concern.
  *
- * Graceful degradation instead of fake data: the title and the comments
- * count stay plain text, because there is nothing to link them to — the
- * router has no publication page (only blog, blog-feed, publication
- * create/edit and blog-comments), so a link would go nowhere. The
- * moderator warn action is not wired either.
+ * The title and the comments count lead to the publication's own page
+ * (`blog-publication`), which is also where the counter's discussion lives.
+ * They used to be plain text because the router had no such route and a link
+ * would have gone nowhere; the card is rendered on that page too, and there
+ * it says `standalone` — the shell heading already names the publication, so
+ * the card draws no title of its own and no link back to the page it is on.
+ * The blog is addressed by whatever the owner of the card knows: the feed
+ * passes the id from its own URL so the readable public id survives, and
+ * everyone else falls back to the guid the publication carries.
+ *
+ * The moderator warn action is not wired.
  *
  * Liking is owned HERE rather than by the consumers, which is where it
  * differs from TopicView and CommentItem: those emit up because a store
@@ -41,13 +47,43 @@ const props = withDefaults(
     publication: Publication;
     /** Enable content truncation (for embedded/spotlight contexts). */
     truncatable?: boolean;
+    /**
+     * The card IS the publication page. The page's own heading names the
+     * publication, so the card renders no title and links nowhere: a title
+     * repeated under the heading is a second name for one text, and a
+     * self-link is a link to the page the reader is already on.
+     */
+    standalone?: boolean;
+    /**
+     * How to address the blog in the link. The feed hands over the id standing
+     * in its own URL, so the readable public id survives the hop and the zone
+     * shell sees no change of blog to reload. A card with no better answer
+     * falls back to the guid the publication carries: both open the blog.
+     */
+    blogId?: string;
   }>(),
   {
     truncatable: false,
+    standalone: false,
+    blogId: undefined,
   },
 );
 
 const { user: currentUser } = storeToRefs(useAuthStore());
+
+// Where the title and the comments counter lead. Null on the page of the
+// publication itself, which is the same rule the topic card follows there.
+const publicationRoute = computed(() =>
+  props.standalone
+    ? null
+    : {
+        name: "blog-publication",
+        params: {
+          id: props.blogId ?? props.publication.blogId,
+          pubId: props.publication.id,
+        },
+      },
+);
 
 const likes = ref<Publication["likes"]>([...props.publication.likes]);
 watch(
@@ -106,7 +142,9 @@ async function toggleLike() {
   <!-- publishedUtc is the moment readers care about; createdUtc is the
        draft-creation fallback for data published before the field existed. -->
   <TopicCard
-    :title="publication.title"
+    :title="standalone ? undefined : publication.title"
+    :title-to="publicationRoute"
+    :comments-to="publicationRoute"
     :content-html="publication.content"
     :author="publication.author"
     :created-utc="publication.publishedUtc ?? publication.createdUtc"

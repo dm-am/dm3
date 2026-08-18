@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using DM.Domain.Core.Configuration;
+using DM.Infrastructure.Persistence.Entities.Game.Posts;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -161,6 +163,162 @@ public class UserEndorsementControllerShould : IntegrationTestBase
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// The post that makes SecondUser and TestUser "players of the same game":
+    /// TestUser already has one in TestRoom, this is the other half of the
+    /// pair. Removed again by <see cref="RevokeEndorsementEligibility" />.
+    /// </summary>
+    private static readonly Guid EligibilityPostId = Guid.Parse("00000000-0000-0000-0000-0000000000e5");
+
+    /// <summary>
+    /// Put the author past every gate of the create endpoint that is not the
+    /// rule under test: out of probation, and with a post in the room where
+    /// the recipient already has one.
+    /// </summary>
+    /// <returns>The author's previous post counter, to put back afterwards.</returns>
+    private async Task<int> GrantEndorsementEligibility()
+    {
+        await using var db = DatabaseFixture.CreateDbContext();
+        var author = await db.Users.SingleAsync(u => u.UserId == TestConstants.SecondUserId);
+        var previousRating = author.QuantityRating;
+        author.QuantityRating = ProbationPolicy.NewbiePostThreshold;
+
+        if (!await db.Set<Post>().AnyAsync(p => p.PostId == EligibilityPostId))
+        {
+            db.Set<Post>().Add(new Post
+            {
+                PostId = EligibilityPostId,
+                RoomId = TestConstants.TestRoomId,
+                CharacterId = TestConstants.SecondCharacterId,
+                AuthorId = TestConstants.SecondUserId,
+                CreatedUtc = DateTimeOffset.UtcNow.AddHours(-11),
+                GameText = "Второй игрок отвечает в той же комнате",
+                MetagameText = null,
+                PrivateAddresseeSnapshotJson = "{}",
+                IsRemoved = false
+            });
+        }
+
+        await db.SaveChangesAsync();
+        return previousRating;
+    }
+
+    private async Task RevokeEndorsementEligibility(int previousRating)
+    {
+        await using var db = DatabaseFixture.CreateDbContext();
+        await db.Set<Post>().Where(p => p.PostId == EligibilityPostId).ExecuteDeleteAsync();
+        var author = await db.Users.SingleAsync(u => u.UserId == TestConstants.SecondUserId);
+        author.QuantityRating = previousRating;
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task<(bool CanCreate, string? Reason)> ReadEligibility(HttpResponseMessage response)
+    {
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        // Enveloped, like every other single-resource read: the answer is under
+        // "resource" and not at the root. Asserted by reading it that way rather
+        // than by a separate shape test, so a body that loses the envelope fails
+        // every assertion this helper feeds.
+        var resource = doc.RootElement.GetProperty("resource");
+        var canCreate = resource.GetProperty("canCreate").GetBoolean();
+        var reason = resource.TryGetProperty("reason", out var r) ? r.GetString() : null;
+        return (canCreate, reason);
+    }
+
+    /// <summary>
+    /// The question the write form asks before it draws itself. A guest is
+    /// answered, not refused with 401: "may I?" has an answer for anonymous
+    /// readers too, and it is what the form prints instead of the field.
+    /// </summary>
+    [Fact]
+    public async Task GetEligibility_ForGuest_AnswersNoWithSignInSentence()
+    {
+        var response = await Client.GetAsync(
+            $"/v1/users/{TestConstants.TestUserLogin}/endorsements/eligibility");
+
+        var (canCreate, reason) = await ReadEligibility(response);
+        canCreate.Should().BeFalse();
+        reason.Should().Be("Требуется авторизация");
+    }
+
+    [Fact]
+    public async Task GetEligibility_ForYourself_AnswersNoWithTheSelfRule()
+    {
+        var request = CreateAuthenticatedRequest(HttpMethod.Get,
+            $"/v1/users/{TestConstants.TestUserLogin}/endorsements/eligibility");
+
+        var (canCreate, reason) = await ReadEligibility(await Client.SendAsync(request));
+
+        canCreate.Should().BeFalse();
+        reason.Should().Be("Нельзя рекомендовать самого себя");
+    }
+
+    /// <summary>
+    /// The whole path the reader walks: the site asks whether the control may
+    /// be drawn, draws it, the POST is accepted, the recommendation is on the
+    /// recipient's received page — and asking again now says no, because a
+    /// pair may have only one.
+    /// </summary>
+    [Fact]
+    public async Task PostUserEndorsement_ShowsUpInRecipientsListAndClosesThePair()
+    {
+        var previousRating = await GrantEndorsementEligibility();
+        const string text = "Держит темп и не бросает сцену на полуслове";
+        Guid? createdId = null;
+        var eligibilityUrl = $"/v1/users/{TestConstants.TestUserLogin}/endorsements/eligibility";
+        var author = CustomWebApplicationFactory.CreateSecondUser();
+
+        try
+        {
+            // The right: every rule of the create endpoint is satisfied
+            var before = await ReadEligibility(
+                await Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Get, eligibilityUrl, author)));
+            before.CanCreate.Should().BeTrue();
+            before.Reason.Should().BeNull();
+
+            // Writing it
+            var post = CreateAuthenticatedRequest(HttpMethod.Post,
+                $"/v1/users/{TestConstants.TestUserLogin}/endorsements", author);
+            post.Content = JsonContent.Create(new { text });
+            var created = await Client.SendAsync(post);
+            created.StatusCode.Should().Be(HttpStatusCode.Created);
+            using (var doc = JsonDocument.Parse(await created.Content.ReadAsStringAsync()))
+            {
+                createdId = doc.RootElement.GetProperty("id").GetGuid();
+            }
+
+            // Where the reader is sent afterwards: the recipient's received page
+            var list = await Client.GetAsync($"/v1/users/{TestConstants.TestUserLogin}/endorsements");
+            list.StatusCode.Should().Be(HttpStatusCode.OK);
+            using (var doc = JsonDocument.Parse(await list.Content.ReadAsStringAsync()))
+            {
+                var row = doc.RootElement.GetProperty("resources").EnumerateArray()
+                    .Single(e => e.GetProperty("id").GetGuid() == createdId);
+                row.GetProperty("text").GetString().Should().Be(text);
+                row.GetProperty("author").GetProperty("username").GetString()
+                    .Should().Be(TestConstants.SecondUserLogin);
+            }
+
+            // One per pair: the same question now answers no, and the POST
+            // agrees with that answer
+            var after = await ReadEligibility(
+                await Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Get, eligibilityUrl, author)));
+            after.CanCreate.Should().BeFalse();
+            after.Reason.Should().Be("Вы уже рекомендовали этого пользователя");
+
+            var repeat = CreateAuthenticatedRequest(HttpMethod.Post,
+                $"/v1/users/{TestConstants.TestUserLogin}/endorsements", author);
+            repeat.Content = JsonContent.Create(new { text = "Вторая рекомендация той же паре" });
+            (await Client.SendAsync(repeat)).StatusCode.Should().Be(HttpStatusCode.Conflict);
+        }
+        finally
+        {
+            if (createdId.HasValue) await RemoveEndorsements(createdId.Value);
+            await RevokeEndorsementEligibility(previousRating);
+        }
     }
 
     [Fact]

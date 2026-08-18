@@ -101,6 +101,14 @@ public class User : IUser, IRemovable
     public bool IsNewbie { get; private set; }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// A plain stored column and not a computed one, which is the whole point:
+    /// the column beside it is derived from a counter and moves on its own, while
+    /// this one only ever changes because a moderator changed it.
+    /// </remarks>
+    public bool IsUnderModerationWatch { get; set; }
+
+    /// <inheritdoc />
     public bool IsRemoved { get; set; }
 
     /// <summary>

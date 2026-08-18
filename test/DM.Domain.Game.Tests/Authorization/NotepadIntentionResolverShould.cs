@@ -9,9 +9,12 @@ using Xunit;
 namespace DM.Domain.Game.Tests.Authorization;
 
 /// <summary>
-/// Gates the game notepads. The master notepad holds what the game master is
-/// keeping from the table — plot the players have not reached yet — so a wrong
-/// allow here does not merely leak data, it spoils the game.
+/// Gates the three notepads of a game. Two of them hold what somebody is
+/// keeping from the rest of the table: the notepad of the game and the notes
+/// its leads keep about a character hold plot the players have not reached
+/// yet, so a wrong allow there does not merely leak data, it spoils the game.
+/// The third runs the other way — a player's own notes are closed to the
+/// master, and a wrong allow there breaks the promise the notepad is made of.
 /// </summary>
 public class NotepadIntentionResolverShould : UnitTestBase
 {
@@ -109,12 +112,26 @@ public class NotepadIntentionResolverShould : UnitTestBase
     [Theory]
     [InlineData(GameRole.Master)]
     [InlineData(GameRole.Assistant)]
-    public void LetTheGameLeadsIntoAPlayerNotepad(GameRole role)
+    [InlineData(GameRole.Mentor)]
+    public void KeepAPlayerNotepadShutToTheGameLeads(GameRole role)
     {
         var user = Create.User(MasterId).WithRole(UserRole.RegularUser).Please();
         var notepad = Notepad(NotepadType.Player, PlayerId, role);
 
-        resolver.IsAllowed(user, NotepadIntention.Read, notepad).Should().BeTrue();
+        // The one notepad of a game its master cannot open. Running the game is
+        // not a key to what a player writes for themselves about their own
+        // character; the notes the leads keep about that character are a
+        // notepad of their own, further down.
+        resolver.IsAllowed(user, NotepadIntention.Read, notepad).Should().BeFalse();
+    }
+
+    [Fact]
+    public void KeepAPlayerNotepadShutToAVisitorWithNoRoleInTheGame()
+    {
+        var user = Create.User(StrangerId).WithRole(UserRole.Guest).Please();
+        var notepad = Notepad(NotepadType.Player, PlayerId);
+
+        resolver.IsAllowed(user, NotepadIntention.Read, notepad).Should().BeFalse();
     }
 
     [Fact]
@@ -125,6 +142,81 @@ public class NotepadIntentionResolverShould : UnitTestBase
 
         // An unresolved owner must fail closed rather than match whoever asks.
         resolver.IsAllowed(user, NotepadIntention.Read, notepad).Should().BeFalse();
+    }
+
+    #endregion
+
+    #region Character master notepad
+
+    [Theory]
+    [InlineData(GameRole.Master)]
+    [InlineData(GameRole.Assistant)]
+    public void OpenTheNotesKeptAboutACharacterToTheGameLeads(GameRole role)
+    {
+        var user = Create.User(MasterId).WithRole(UserRole.RegularUser).Please();
+
+        // The owner of the character is named in the context and is beside the
+        // point here: this notepad is answered by the game role alone, which is
+        // what makes it exist for every character and not only for an NPC.
+        var notepad = Notepad(NotepadType.CharacterMaster, PlayerId, role);
+
+        resolver.IsAllowed(user, NotepadIntention.Read, notepad).Should().BeTrue();
+    }
+
+    [Fact]
+    public void KeepTheNotesKeptAboutACharacterShutToThePlayerWhoOwnsIt()
+    {
+        var user = Create.User(PlayerId).WithRole(UserRole.RegularUser).Please();
+        var notepad = Notepad(NotepadType.CharacterMaster, PlayerId, GameRole.Player);
+
+        // Owning the character is what this notepad is about, not a right to
+        // read it - the mirror image of the player notepad above.
+        resolver.IsAllowed(user, NotepadIntention.Read, notepad).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(GameRole.Player)]
+    [InlineData(GameRole.Reader)]
+    [InlineData(GameRole.Applicant)]
+    [InlineData(GameRole.Mentor)]
+    [InlineData(GameRole.None)]
+    public void KeepTheNotesKeptAboutACharacterShutToEveryoneElseInTheGame(GameRole role)
+    {
+        var user = Create.User(StrangerId).WithRole(UserRole.RegularUser).Please();
+
+        resolver.IsAllowed(user, NotepadIntention.Read, Notepad(NotepadType.CharacterMaster, PlayerId, role))
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void KeepTheNotesKeptAboutACharacterShutToAVisitorWithNoRoleInTheGame()
+    {
+        var user = Create.User(StrangerId).WithRole(UserRole.Guest).Please();
+
+        resolver.IsAllowed(user, NotepadIntention.Read, Notepad(NotepadType.CharacterMaster, PlayerId))
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void KeepTheNotesKeptAboutACharacterShutToSiteAdministration()
+    {
+        var user = Create.User(StrangerId).WithRole(UserRole.Admin).Please();
+
+        resolver.IsAllowed(user, NotepadIntention.Read, Notepad(NotepadType.CharacterMaster, PlayerId))
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void LetTheGameMasterDeleteAnAssistantsNoteAboutACharacter()
+    {
+        var user = Create.User(MasterId).WithRole(UserRole.RegularUser).Please();
+        var entry = Entry(StrangerId, NotepadType.CharacterMaster, PlayerId, GameRole.Master);
+
+        // The same split the notepad of the game has: the master answers for
+        // what the notepads hold and may remove any entry, but rewriting an
+        // entry that would still stand under its author's name is nobody's.
+        resolver.IsAllowed(user, NotepadIntention.Delete, entry).Should().BeTrue();
+        resolver.IsAllowed(user, NotepadIntention.Edit, entry).Should().BeFalse();
     }
 
     #endregion
@@ -176,7 +268,7 @@ public class NotepadIntentionResolverShould : UnitTestBase
     public void NotLetTheGameMasterEditAnEntryTheyDidNotWrite()
     {
         var user = Create.User(MasterId).WithRole(UserRole.RegularUser).Please();
-        var entry = Entry(PlayerId, NotepadType.Player, PlayerId, GameRole.Master);
+        var entry = Entry(StrangerId, NotepadType.Master, null, GameRole.Master);
 
         // Reading it and removing it stay open to the master. Rewriting another
         // person's note, which then still stands under their name, does not.

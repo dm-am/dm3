@@ -41,12 +41,26 @@ public interface IGameRepository
     /// <summary>
     /// Get game details
     /// </summary>
-    Task<GameDetails?> GetGameDetails(Guid gameId, Guid userId, CancellationToken ct = default);
+    /// <inheritdoc cref="GetGame" path="/param[@name='mayJudgePremoderation']" />
+    Task<GameDetails?> GetGameDetails(
+        Guid gameId, Guid userId, bool mayJudgePremoderation, CancellationToken ct = default);
 
     /// <summary>
     /// Get game
     /// </summary>
-    Task<Game?> GetGame(Guid gameId, Guid userId, CancellationToken ct = default);
+    /// <param name="gameId">Game identifier</param>
+    /// <param name="userId">Reader the visibility scope answers for</param>
+    /// <param name="mayJudgePremoderation">
+    /// Whether that reader holds the rank that passes premoderation verdicts. The
+    /// scope hands a premoderated game to its leads, its invitees and its assigned
+    /// curator, and a game in AwaitingEdits has no curator recorded — so without
+    /// this the moderation queue links to a 404 on the very games it lists. Asked
+    /// of the intention in the service and handed down; opens games awaiting a
+    /// verdict and nothing else.
+    /// </param>
+    /// <param name="ct">Cancellation token</param>
+    Task<Game?> GetGame(
+        Guid gameId, Guid userId, bool mayJudgePremoderation, CancellationToken ct = default);
 
     /// <summary>
     /// Identifier of the game a public id addresses, or null when it addresses
@@ -57,17 +71,41 @@ public interface IGameRepository
     /// accepts either address form and then goes on to do something with the
     /// game. Applies the same visibility filter as the aggregate read.
     /// </remarks>
-    Task<Guid?> FindGameIdByPublicId(string publicId, Guid userId, CancellationToken ct = default);
+    /// <inheritdoc cref="GetGame" path="/param[@name='mayJudgePremoderation']" />
+    Task<Guid?> FindGameIdByPublicId(
+        string publicId, Guid userId, bool mayJudgePremoderation, CancellationToken ct = default);
 
     /// <summary>
     /// Get game by public ID
     /// </summary>
-    Task<Game?> GetGameByPublicId(string publicId, Guid userId, CancellationToken ct = default);
+    /// <inheritdoc cref="GetGame" path="/param[@name='mayJudgePremoderation']" />
+    Task<Game?> GetGameByPublicId(
+        string publicId, Guid userId, bool mayJudgePremoderation, CancellationToken ct = default);
 
     /// <summary>
     /// Get game details by public ID
     /// </summary>
-    Task<GameDetails?> GetGameDetailsByPublicId(string publicId, Guid userId, CancellationToken ct = default);
+    /// <inheritdoc cref="GetGame" path="/param[@name='mayJudgePremoderation']" />
+    Task<GameDetails?> GetGameDetailsByPublicId(
+        string publicId, Guid userId, bool mayJudgePremoderation, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get game details for a premoderation verdict, ignoring the accessibility
+    /// scope.
+    /// </summary>
+    /// <remarks>
+    /// The scope hands a premoderated game to its leads, its invitees and its
+    /// assigned curator, and to nobody else — which is right for reading and wrong
+    /// for judging: a game in AwaitingEdits has no curator yet, so no mentor could
+    /// open the very game the queue lists. Reachable only behind the Mentor+ gate
+    /// on the premoderation endpoint; the viewer is still passed, because the
+    /// enrichment below is written from that reader's point of view.
+    /// </remarks>
+    Task<GameDetails?> GetGameDetailsForModeration(Guid gameId, Guid viewerId, CancellationToken ct = default);
+
+    /// <inheritdoc cref="GetGameDetailsForModeration" />
+    Task<GameDetails?> GetGameDetailsByPublicIdForModeration(
+        string publicId, Guid viewerId, CancellationToken ct = default);
 
     /// <summary>
     /// Get all tags

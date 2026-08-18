@@ -5,6 +5,13 @@
  * Warning block composition per doc 4.2.2.21: type ("Предупреждение
  * (N баллов)" / "Устное предупреждение (0 баллов)"), reason,
  * "от {Имя}, dd.MM.yyyy HH:mm", delete button (Moderator+).
+ *
+ * The evidence block below the reason is the snapshot the server took when the
+ * warning was issued. Nothing here reads the offending object: the warning used
+ * to point at it and nothing else, and the author is free to edit or delete it,
+ * so the page showed a reference to a text that no longer existed. Its address
+ * and the "edited since" mark come from the same response, resolved server-side
+ * per read.
  */
 import { computed, onMounted, ref } from "vue";
 import { moderationApi, type Warning } from "@/entities/moderation";
@@ -104,6 +111,27 @@ const isEmpty = computed(() => !loading.value && warnings.value.length === 0);
 
         <p class="warning-reason">{{ warning.reason }}</p>
 
+        <!-- Evidence. The warning names content its author may edit or delete
+             afterwards, so what the moderator saw is kept on the warning itself
+             (server-side snapshot). The link beside it leads to the object as it
+             stands now; when the two are known to differ, the mark below says
+             so. Shown verbatim, tags and all: this is the source that was
+             written, not a rendering of it. -->
+        <div v-if="warning.entitySnapshot" class="warning-evidence">
+          <SecondaryText>Текст на момент выдачи</SecondaryText>
+          <p class="warning-evidence_text">{{ warning.entitySnapshot }}</p>
+          <p
+            v-if="warning.entityEditedAfterWarning"
+            class="warning-evidence_edited"
+          >
+            Объект изменен после выдачи предупреждения
+          </p>
+        </div>
+
+        <p v-if="warning.entityUrl" class="warning-object">
+          <router-link :to="warning.entityUrl">Перейти к объекту</router-link>
+        </p>
+
         <div class="warning-meta">
           <template v-if="warning.moderator">
             от
@@ -176,6 +204,26 @@ const isEmpty = computed(() => !loading.value && warnings.value.length === 0);
 .warning-reason
   margin: 0 0 $small
   overflow-wrap: anywhere
+
+.warning-evidence
+  margin: 0 0 $small
+  padding: $small
+  border-left: 2px solid $border
+  background-color: $overlay-subtle
+
+.warning-evidence_text
+  // The snapshot is source text: its own line breaks are part of the evidence.
+  margin: $minor 0 0
+  white-space: pre-wrap
+  overflow-wrap: anywhere
+
+.warning-evidence_edited
+  margin: $minor 0 0
+  color: $accent-red
+  font-size: $secondary-font-size
+
+.warning-object
+  margin: 0 0 $small
 
 .warning-meta
   display: flex

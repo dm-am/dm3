@@ -17,12 +17,22 @@ public interface IRoomRepository
     /// they may open it (Room.CanView). A private room they have no access to
     /// comes back by name, so the menu can show it closed.
     /// </summary>
-    Task<IEnumerable<Room>> GetAllVisible(Guid gameId, Guid userId);
+    /// <param name="gameId">Game whose rooms are listed.</param>
+    /// <param name="userId">Reader.</param>
+    /// <param name="mayJudgePremoderation">
+    /// Whether the reader holds the rank that passes premoderation verdicts,
+    /// asked of the intention by the caller and handed down, because the storage
+    /// scope cannot ask it. Adds the rooms of the games awaiting a verdict and
+    /// nothing else: a judge who is handed the game and an empty room list has
+    /// nothing to judge.
+    /// </param>
+    Task<IEnumerable<Room>> GetAllVisible(Guid gameId, Guid userId, bool mayJudgePremoderation);
 
     /// <summary>
     /// Get single available room
     /// </summary>
-    Task<Room?> GetAvailable(Guid roomId, Guid userId);
+    /// <inheritdoc cref="GetAllVisible" path="/param[@name='mayJudgePremoderation']" />
+    Task<Room?> GetAvailable(Guid roomId, Guid userId, bool mayJudgePremoderation);
 
     /// <summary>
     /// Get room for update

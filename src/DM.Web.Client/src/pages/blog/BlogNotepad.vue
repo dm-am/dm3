@@ -14,7 +14,7 @@ import { LoginPrompt } from "@/features/auth";
 
 const route = useRoute();
 const blogStore = useBlogDetailsStore();
-const { canUseNotepad } = storeToRefs(blogStore);
+const { canUseNotepad, isOwner } = storeToRefs(blogStore);
 const { user } = storeToRefs(useAuthStore());
 
 // Notepad endpoints accept the public id (they are publicId-tolerant), so the
@@ -36,6 +36,8 @@ const adapter: NotepadAdapter = {
     v-else
     :adapter="adapter"
     :accessible="canUseNotepad"
+    :viewer-id="user?.id ?? null"
+    :can-delete-others="isOwner"
     title="Заметки блога"
     denied-text="Заметки доступны только мастеру блога и ассистентам"
     empty-text="Заметок пока нет"

@@ -17,8 +17,14 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { defineComponent, h, watchEffect } from "vue";
 import { flushPromises, mount, RouterLinkStub } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { gameApi, type Character, type Game } from "@/entities/game";
+import {
+  gameApi,
+  GameParticipation,
+  type Character,
+  type Game,
+} from "@/entities/game";
 import { useGameDetailsStore } from "@/entities/game";
+import { useAuthStore } from "@/entities/user";
 import GameCharacter from "./GameCharacter.vue";
 import { provideZoneSection } from "@/shared/lib/composables/useZoneSection";
 
@@ -39,20 +45,28 @@ const SHEET: Character = {
   isPlayerLeft: false,
   isPlayerExiled: false,
   isNpc: false,
-  author: { username: "gamer", role: "Player" },
+  author: { id: "player-1", username: "gamer", role: "Player" },
   totalPostsCount: 17,
   attributes: [{ id: "spec-1", title: "Раса", value: "Полурослик" }],
 } as unknown as Character;
 
-function render() {
+/**
+ * @param participation how the viewer takes part in the game
+ * @param viewerId who is looking; null for a visitor with no account
+ */
+function render({
+  participation = [] as GameParticipation[],
+  viewerId = null as string | null,
+} = {}) {
   const pinia = createPinia();
   setActivePinia(pinia);
+  useAuthStore().user = viewerId ? ({ id: viewerId } as never) : null;
   const store = useGameDetailsStore();
   store.game = {
     id: "the-game-guid",
     publicId: "the-game",
     title: "Хроники Амбера",
-    participation: [],
+    participation,
     schema: {
       id: "schema-1",
       title: "Лист",
@@ -147,6 +161,121 @@ describe("GameCharacter", () => {
     expect(back[0].props("to")).toEqual({
       name: "game-characters",
       params: { id: "the-game" },
+    });
+  });
+
+  /**
+   * The two notepads under the sheet. They are the same widget with opposite
+   * audiences, so the only thing worth pinning is who gets to see which — and
+   * the section has to be absent rather than refused: a heading reading "the
+   * notes the master keeps about you", greyed out, tells the player what it
+   * was meant to hide.
+   *
+   * Every case asserts both ways round. A gate that shows the right section is
+   * half a gate if it shows the other one too, and both mistakes are one
+   * mistyped `||` away from each other.
+   */
+  describe("notepads", () => {
+    const PLAYER_NOTES = "Заметки игрока";
+    const MASTER_NOTES = "Заметки мастера";
+
+    async function sections(options?: Parameters<typeof render>[0]) {
+      vi.spyOn(gameApi, "getCharacter").mockResolvedValue({
+        data: { resource: SHEET },
+      } as never);
+      vi.spyOn(gameApi, "getCharacterNotepad").mockResolvedValue({
+        data: { resources: [] },
+      } as never);
+      vi.spyOn(gameApi, "getCharacterMasterNotepad").mockResolvedValue({
+        data: { resources: [] },
+      } as never);
+
+      const { wrapper } = render(options);
+      await flushPromises();
+      return wrapper.text();
+    }
+
+    it("shows the player their own notes and not the ones kept about them", async () => {
+      const text = await sections({
+        participation: [GameParticipation.Player],
+        viewerId: "player-1",
+      });
+
+      expect(text).toContain(PLAYER_NOTES);
+      expect(text).not.toContain(MASTER_NOTES);
+    });
+
+    it("shows the master the notes kept about the character and not the player's", async () => {
+      const text = await sections({
+        participation: [GameParticipation.Owner],
+        viewerId: "master-1",
+      });
+
+      // The one notepad of a game its master cannot open.
+      expect(text).toContain(MASTER_NOTES);
+      expect(text).not.toContain(PLAYER_NOTES);
+    });
+
+    it("gives an assistant the same as the master", async () => {
+      const text = await sections({
+        participation: [GameParticipation.Authority],
+        viewerId: "assistant-1",
+      });
+
+      expect(text).toContain(MASTER_NOTES);
+      expect(text).not.toContain(PLAYER_NOTES);
+    });
+
+    it("gives the curating mentor neither", async () => {
+      // HasEditAccess is master and assistant; curating a game is not leading
+      // it, and the API refuses a mentor both notepads.
+      const text = await sections({
+        participation: [GameParticipation.Moderator],
+        viewerId: "mentor-1",
+      });
+
+      expect(text).not.toContain(MASTER_NOTES);
+      expect(text).not.toContain(PLAYER_NOTES);
+    });
+
+    it("gives another player in the game neither", async () => {
+      const text = await sections({
+        participation: [GameParticipation.Player],
+        viewerId: "player-2",
+      });
+
+      expect(text).not.toContain(PLAYER_NOTES);
+      expect(text).not.toContain(MASTER_NOTES);
+    });
+
+    it("gives a visitor without an account neither", async () => {
+      const text = await sections();
+
+      expect(text).not.toContain(PLAYER_NOTES);
+      expect(text).not.toContain(MASTER_NOTES);
+    });
+
+    it("asks for neither notepad it does not show", async () => {
+      vi.spyOn(gameApi, "getCharacter").mockResolvedValue({
+        data: { resource: SHEET },
+      } as never);
+      const playerNotes = vi
+        .spyOn(gameApi, "getCharacterNotepad")
+        .mockResolvedValue({ data: { resources: [] } } as never);
+      const masterNotes = vi
+        .spyOn(gameApi, "getCharacterMasterNotepad")
+        .mockResolvedValue({ data: { resources: [] } } as never);
+
+      render({
+        participation: [GameParticipation.Player],
+        viewerId: "player-2",
+      });
+      await flushPromises();
+
+      // A hidden section that still fetches would earn a pair of 403s per
+      // visit and put the answer into the network tab regardless.
+      expect(playerNotes).not.toHaveBeenCalled();
+      expect(masterNotes).not.toHaveBeenCalled();
     });
   });
 });

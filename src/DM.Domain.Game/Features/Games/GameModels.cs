@@ -38,6 +38,11 @@ public class GameTag
     public int GroupSortOrder { get; set; }
 
     /// <summary>
+    /// How many tags of this tag's group one game may carry; null means no limit
+    /// </summary>
+    public int? GroupMaxTagsPerGame { get; set; }
+
+    /// <summary>
     /// Tag title
     /// </summary>
     public string Title { get; set; } = null!;
@@ -322,6 +327,26 @@ public class Game
     /// Game post pendencies
     /// </summary>
     public IEnumerable<PostPendency> Pendencies { get; set; } = [];
+
+    /// <summary>
+    /// Whether the game is waiting for a post from the user this game was read
+    /// for.
+    /// </summary>
+    /// <remarks>
+    /// Viewer-scoped, like <see cref="IsViewerSubscriber" /> and the unread
+    /// counters: the repository fills it for the user id the read was issued
+    /// with, and it means nothing about anybody else. Same expectations the room
+    /// list draws its star from, so a game marked here has a room marked inside
+    /// it. Always false for an anonymous read — nobody is awaited from a
+    /// stranger.
+    /// </remarks>
+    public bool AwaitsViewerTurn { get; set; }
+
+    /// <summary>
+    /// Names of that viewer's characters the game is waiting a post for, oldest
+    /// expectation first. Empty whenever <see cref="AwaitsViewerTurn" /> is false.
+    /// </summary>
+    public IEnumerable<string> AwaitedCharacterNames { get; set; } = [];
 
     /// <summary>
     /// Game title
@@ -993,6 +1018,52 @@ public class Post
     /// ["guid", "guid", ...], ... }</c>.
     /// </summary>
     public string PrivateAddresseeSnapshotJson { get; set; } = "{}";
+
+    /// <summary>
+    /// Files attached to the post, oldest first.
+    /// </summary>
+    /// <remarks>
+    /// Filled by a batched read after the page of posts is materialised, the way
+    /// character portraits are: an attachment lives in its own table, and a
+    /// correlated subquery per post is what a room of twenty posts cannot afford.
+    /// </remarks>
+    public IReadOnlyCollection<PostAttachment> Attachments { get; set; } = [];
+}
+
+/// <summary>
+/// A file attached to a post, as a reader of the post sees it.
+/// </summary>
+/// <remarks>
+/// Carries no object key and no address. The bytes are served by an endpoint that
+/// authorizes the caller on every request, and the identifier is all it needs;
+/// anything resembling a direct link would be a pass to whoever came to hold it,
+/// which is the one thing a closed room's attachment must not have.
+/// </remarks>
+public class PostAttachment
+{
+    /// <summary>Upload identifier — what the content endpoint is asked for.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>Display file name.</summary>
+    public string FileName { get; set; } = null!;
+
+    /// <summary>MIME content type of the stored file.</summary>
+    public string ContentType { get; set; } = null!;
+
+    /// <summary>File size in bytes.</summary>
+    public long SizeBytes { get; set; }
+
+    /// <summary>
+    /// Intrinsic width in pixels, so a page can reserve the box the picture will
+    /// occupy before the browser has decoded it. Null when unknown.
+    /// </summary>
+    public int? Width { get; set; }
+
+    /// <summary>Intrinsic height in pixels; travels with <see cref="Width"/>.</summary>
+    public int? Height { get; set; }
+
+    /// <summary>Moment the file was attached (UTC).</summary>
+    public DateTimeOffset CreatedUtc { get; set; }
 }
 
 /// <summary>

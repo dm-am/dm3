@@ -95,11 +95,26 @@ internal class RoomService : IRoomService
 
     #region Read
 
+    /// <summary>
+    /// Whether the reader may pass a premoderation verdict, and so has to be able
+    /// to open the rooms of the game the verdict is pending on.
+    /// </summary>
+    /// <remarks>
+    /// The same property GameService keeps, read from the same intention: the game
+    /// and its rooms are one page, and a rank that opens the game but not its room
+    /// list hands the judge nothing to judge. The intention rather than a second
+    /// comparison of roles — PremoderationAccess owns that rank, and a copy of it
+    /// here would be the third place it could drift.
+    /// </remarks>
+    private bool MayJudgePremoderation =>
+        _intentionManager.IsAllowed(GameIntention.SetStatusModeration);
+
     public async Task<IEnumerable<Room>> GetAllAsync(Guid gameId)
     {
         await _gameService.GetAsync(gameId);
         var currentUserId = _identityProvider.Current.User.UserId;
-        var rooms = (await _repository.GetAllVisible(gameId, currentUserId)).ToArray();
+        var rooms = (await _repository.GetAllVisible(
+            gameId, currentUserId, MayJudgePremoderation)).ToArray();
 
         await _unreadCountersRepository.FillEntityCounters(rooms, currentUserId,
             r => r.Id, r => r.UnreadPostsCount);
@@ -121,7 +136,7 @@ internal class RoomService : IRoomService
     public async Task<Room> GetAsync(Guid roomId)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
-        var room = await _repository.GetAvailable(roomId, currentUserId);
+        var room = await _repository.GetAvailable(roomId, currentUserId, MayJudgePremoderation);
         if (room == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomNotFound);

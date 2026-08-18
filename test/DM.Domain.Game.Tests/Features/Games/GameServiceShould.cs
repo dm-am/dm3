@@ -35,6 +35,7 @@ namespace DM.Domain.Game.Tests.Features.Games;
 public class GameServiceShould : UnitTestBase
 {
     private readonly Mock<IIntentionManager> _intentionManager;
+    private readonly Mock<IGameCreationDataResolver> _dataResolver;
     private readonly Mock<IGameRepository> _repository;
     private Mock<IUnreadCountersRepository> _unreadCountersRepository = null!;
     private readonly Mock<IEventProducer> _producer;
@@ -44,6 +45,7 @@ public class GameServiceShould : UnitTestBase
     private readonly Mock<ICache> _cache;
     private readonly GameService _service;
     private readonly Guid _currentUserId;
+    private readonly DM.Domain.Core.Identity.AuthenticatedUser _author;
 
     public GameServiceShould()
     {
@@ -59,8 +61,8 @@ public class GameServiceShould : UnitTestBase
         creationValidator.Setup(v => v.ValidateAndAuthorize(It.IsAny<CreateGame>()))
             .Returns(Task.CompletedTask);
 
-        var dataResolver = Mock<IGameCreationDataResolver>();
-        dataResolver.Setup(r => r.ResolveTagIds(It.IsAny<IEnumerable<int>?>()))
+        _dataResolver = Mock<IGameCreationDataResolver>();
+        _dataResolver.Setup(r => r.ResolveTagIds(It.IsAny<IEnumerable<int>?>()))
             .ReturnsAsync(Array.Empty<Guid>());
 
         _intentionManager = Mock<IIntentionManager>();
@@ -77,7 +79,12 @@ public class GameServiceShould : UnitTestBase
 
         _currentUserId = Guid.NewGuid();
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
+        // An established master by default: past the newbie threshold and not
+        // watched. The creation-status test moves those two fields and no others.
+        var identity = Identities.User(_currentUserId, UserRole.RegularUser);
+        _author = identity.User;
+        _author.QuantityRating = DM.Domain.Core.Configuration.ProbationPolicy.NewbiePostThreshold;
+        _identityProvider.Setup(p => p.Current).Returns(identity);
 
         var userBlacklistChecker = Mock<DM.Domain.Core.Blacklists.IUserBlacklistChecker>();
         userBlacklistChecker.Setup(c => c.GetBlockedUserIdsAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
@@ -119,7 +126,7 @@ public class GameServiceShould : UnitTestBase
             gamesQueryValidator.Object,
             updateGameValidator.Object,
             creationValidator.Object,
-            dataResolver.Object,
+            _dataResolver.Object,
             _intentionManager.Object,
             schemaService.Object,
             _repository.Object,
@@ -137,6 +144,41 @@ public class GameServiceShould : UnitTestBase
             _producer.Object,
             _cache.Object,
             logger.Object);
+    }
+
+    /// <summary>
+    /// The premoderation status a game is born in, over all four combinations of
+    /// the two things that hold an author back.
+    /// </summary>
+    /// <remarks>
+    /// Nothing wrote this field before, so every game on the site was created
+    /// Approved and premoderation applied to nobody. The rule itself lives in
+    /// ModulePremoderationPolicy and is shared with the blog; what is proved here
+    /// is that the creation path asks it.
+    /// </remarks>
+    [Theory]
+    [InlineData(false, false, PremoderationStatus.Approved)]
+    [InlineData(true, false, PremoderationStatus.AwaitingEdits)]
+    [InlineData(false, true, PremoderationStatus.AwaitingEdits)]
+    [InlineData(true, true, PremoderationStatus.AwaitingEdits)]
+    public async Task CreateAGameInTheStatusItsMasterEarns(
+        bool newbie, bool underWatch, PremoderationStatus expected)
+    {
+        _author.QuantityRating = newbie ? 0 : DM.Domain.Core.Configuration.ProbationPolicy.NewbiePostThreshold;
+        _author.IsUnderModerationWatch = underWatch;
+
+        var gameId = Guid.NewGuid();
+        var roomId = Guid.NewGuid();
+        _guidFactory.SetupSequence(g => g.Create()).Returns(gameId).Returns(roomId);
+        CreateGameEntity? captured = null;
+        _repository.Setup(r => r.Create(
+                It.IsAny<CreateGameEntity>(), It.IsAny<CreateRoomEntity>(), It.IsAny<CancellationToken>()))
+            .Callback<CreateGameEntity, CreateRoomEntity, CancellationToken>((entity, _, _) => captured = entity)
+            .ReturnsAsync(new GameDetails { Id = gameId, Rooms = new[] { new Room { Id = roomId } } });
+
+        await _service.CreateAsync(new CreateGame { Title = "Test Game" });
+
+        captured!.PremoderationStatus.Should().Be(expected);
     }
 
     [Fact]
@@ -216,7 +258,7 @@ public class GameServiceShould : UnitTestBase
     public async Task ThrowNotFoundWhenGameDoesNotExist()
     {
         var gameId = Guid.NewGuid();
-        _repository.Setup(r => r.GetGame(gameId, _currentUserId, It.IsAny<CancellationToken>())).ReturnsAsync((GameDto?)null);
+        _repository.Setup(r => r.GetGame(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync((GameDto?)null);
 
         var act = async () => await _service.GetAsync(gameId);
 
@@ -233,7 +275,7 @@ public class GameServiceShould : UnitTestBase
             Id = gameId,
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
         };
-        _repository.Setup(r => r.GetGame(gameId, _currentUserId, It.IsAny<CancellationToken>())).ReturnsAsync(game);
+        _repository.Setup(r => r.GetGame(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
 
         var result = await _service.GetAsync(gameId);
 
@@ -247,7 +289,7 @@ public class GameServiceShould : UnitTestBase
         var gameId = Guid.NewGuid();
         var updateGame = new UpdateGame { GameId = gameId, Title = "Updated Game" };
         var game = new GameDetails { Id = gameId, Recruitment = new GameRecruitment() };
-        _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<CancellationToken>())).ReturnsAsync(game);
+        _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
         _repository.Setup(r => r.Update(It.IsAny<UpdateGameEntity>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
 
         var result = await _service.UpdateAsync(updateGame);
@@ -265,6 +307,82 @@ public class GameServiceShould : UnitTestBase
             It.Is<IEnumerable<EventType>>(e => e.SequenceEqual(new[] { EventType.ChangedGame })), gameId), Times.Once);
     }
 
+    /// <summary>
+    /// Tags are editable after creation, and the settings page is where they are
+    /// edited. The wire carries short identifiers — what the tag list serves and
+    /// what the game filters take — so the update goes through the same catalog
+    /// translation the creation form does; the link table keys on the tags' own
+    /// identifiers and nothing else may reach it.
+    /// </summary>
+    [Fact]
+    public async Task TranslateTagShortIdsOnUpdateBeforeWritingThem()
+    {
+        var gameId = Guid.NewGuid();
+        var fantasy = Guid.NewGuid();
+        var slowPaced = Guid.NewGuid();
+        var game = new GameDetails { Id = gameId, Recruitment = new GameRecruitment() };
+        _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
+        _repository.Setup(r => r.Update(It.IsAny<UpdateGameEntity>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
+        _dataResolver.Setup(r => r.ResolveTagIds(It.Is<IEnumerable<int>?>(ids => ids != null && ids.SequenceEqual(new[] { 3, 7 }))))
+            .ReturnsAsync(new[] { fantasy, slowPaced });
+
+        await _service.UpdateAsync(new UpdateGame { GameId = gameId, Tags = new[] { 3, 7 } });
+
+        _repository.Verify(r => r.Update(
+            It.Is<UpdateGameEntity>(e => e.TagIds != null && e.TagIds.SequenceEqual(new[] { fantasy, slowPaced })),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Null and empty are two different answers, and the repository writes them
+    /// differently: an update that says nothing about tags must leave them
+    /// standing, while an empty list is the master taking every tag off. Saving
+    /// the title alone would otherwise strip the game of its tags.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TellTagsLeftAloneApartFromTagsClearedOnUpdate(bool clearing)
+    {
+        var gameId = Guid.NewGuid();
+        var game = new GameDetails { Id = gameId, Recruitment = new GameRecruitment() };
+        _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
+        _repository.Setup(r => r.Update(It.IsAny<UpdateGameEntity>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
+
+        await _service.UpdateAsync(new UpdateGame
+        {
+            GameId = gameId,
+            Title = "Updated Game",
+            Tags = clearing ? Array.Empty<int>() : null
+        });
+
+        _repository.Verify(r => r.Update(
+            It.Is<UpdateGameEntity>(e => clearing ? e.TagIds != null && !e.TagIds.Any() : e.TagIds == null),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Tags answer to the same gate as the rest of the information form, so a
+    /// stranger cannot retag someone else's game: the refusal arrives before
+    /// anything is written, and nothing reaches the repository.
+    /// </summary>
+    [Fact]
+    public async Task RefuseATagChangeFromSomeoneWhoMayNotEditTheSettings()
+    {
+        var gameId = Guid.NewGuid();
+        var game = new GameDetails { Id = gameId, Recruitment = new GameRecruitment() };
+        _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
+        _intentionManager
+            .Setup(m => m.ThrowIfForbidden(GameIntention.EditSettings, game))
+            .Throws(new HttpException(HttpStatusCode.Forbidden, "Недостаточно прав"));
+
+        var act = async () => await _service.UpdateAsync(new UpdateGame { GameId = gameId, Tags = new[] { 3 } });
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+        _repository.Verify(r => r.Update(It.IsAny<UpdateGameEntity>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     [Fact]
     public async Task AuthorizeDeleteAndAnnounceIt()
     {
@@ -275,7 +393,7 @@ public class GameServiceShould : UnitTestBase
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
             Recruitment = new GameRecruitment()
         };
-        _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<CancellationToken>())).ReturnsAsync(game);
+        _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
         _repository.Setup(r => r.Delete(gameId, _currentUserId, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(gameId);

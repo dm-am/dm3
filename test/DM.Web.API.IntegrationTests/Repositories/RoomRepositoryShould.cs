@@ -80,7 +80,7 @@ public class RoomRepositoryShould : IntegrationTestBase
 
         // Archiving hides a room from the room list, not from its own URL: the
         // history stays readable to whoever could read it before.
-        var room = await repository.GetAvailable(roomId, masterId);
+        var room = await repository.GetAvailable(roomId, masterId, mayJudgePremoderation: false);
 
         room.Should().NotBeNull();
         room!.IsArchived.Should().BeTrue();

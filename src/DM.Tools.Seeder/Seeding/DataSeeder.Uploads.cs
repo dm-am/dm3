@@ -72,7 +72,7 @@ internal sealed partial class DataSeeder
         ProcessedImage processed;
         await using (var input = new MemoryStream(imageBytes, writable: false))
         {
-            processed = await _imageProcessing.ProcessAsync(input, declaredContentType);
+            processed = await _imageProcessing.ProcessAsync(input, declaredContentType, type);
         }
 
         // The third copy of the same list, and the one that disagreed: a type
@@ -100,7 +100,13 @@ internal sealed partial class DataSeeder
             Width = processed.Width,
             Height = processed.Height,
             ObjectKey = objectKey,
-            FilePath = BuildPublicUrl(objectKey),
+            // Only for the prefixes the bucket answers anonymously, the same rule
+            // the upload endpoint applies. A public address stored for a closed
+            // prefix is a link that returns 403 and a seed that disagrees with
+            // every row the site writes itself.
+            FilePath = UploadFolder.AnonymouslyReadable.Contains(type)
+                ? BuildPublicUrl(objectKey)
+                : null,
             FileName = sourceFileName,
             IsRemoved = false,
         };

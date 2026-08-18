@@ -169,6 +169,13 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         containerBuilder.RegisterInstance(new DmMongoClient(mongoSettings, mongoUrl))
             .AsSelf()
             .AsImplementedInterfaces();
+
+        // The bucket, as a dictionary. This callback runs after every module, so
+        // the registration here is the default the host resolves — see
+        // InMemoryObjectStorage for why S3 is the one dependency not containerised.
+        containerBuilder.RegisterType<InMemoryObjectStorage>()
+            .As<DM.Domain.Core.Uploads.IObjectStorage>()
+            .SingleInstance();
     }
 
     /// <summary>

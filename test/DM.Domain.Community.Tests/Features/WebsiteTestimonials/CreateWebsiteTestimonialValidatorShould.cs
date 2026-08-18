@@ -15,6 +15,7 @@ public class CreateWebsiteTestimonialValidatorShould : UnitTestBase
     {
         var input = new CreateWebsiteTestimonial
         {
+            AuthorUsername = "Solohin",
             Text = "Great place for text roleplay"
         };
 
@@ -22,11 +23,31 @@ public class CreateWebsiteTestimonialValidatorShould : UnitTestBase
         result.ShouldNotHaveAnyValidationErrors();
     }
 
+    /// <summary>
+    /// A testimonial is posted on behalf of a named participant. Missing, the
+    /// name is a malformed request - not an instruction to sign the entry with
+    /// whoever submitted it.
+    /// </summary>
+    [Fact]
+    public void FailWhenAuthorIsNotNamed()
+    {
+        var input = new CreateWebsiteTestimonial
+        {
+            AuthorUsername = "",
+            Text = "Great place for text roleplay"
+        };
+
+        var result = validator.TestValidate(input);
+        result.ShouldHaveValidationErrorFor(x => x.AuthorUsername)
+            .WithErrorMessage(ValidationError.Empty);
+    }
+
     [Fact]
     public void FailWhenTextIsEmpty()
     {
         var input = new CreateWebsiteTestimonial
         {
+            AuthorUsername = "Solohin",
             Text = ""
         };
 
@@ -40,6 +61,7 @@ public class CreateWebsiteTestimonialValidatorShould : UnitTestBase
     {
         var input = new CreateWebsiteTestimonial
         {
+            AuthorUsername = "Solohin",
             Text = new string('a', 10001)
         };
 
@@ -53,6 +75,7 @@ public class CreateWebsiteTestimonialValidatorShould : UnitTestBase
     {
         var input = new CreateWebsiteTestimonial
         {
+            AuthorUsername = "Solohin",
             Text = new string('a', 10000)
         };
 

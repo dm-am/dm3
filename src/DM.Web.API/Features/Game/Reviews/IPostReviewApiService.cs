@@ -28,10 +28,11 @@ public interface IPostReviewApiService
     Task<ListEnvelope<PostReviewDto>> GetList(Guid postId, PagingQuery query);
 
     /// <summary>
-    /// Get a single post review
+    /// Get a single review of a named post
     /// </summary>
+    /// <param name="postId">Post the review belongs to</param>
     /// <param name="reviewId">Review identifier</param>
-    Task<Envelope<PostReviewDto>> Get(Guid reviewId);
+    Task<Envelope<PostReviewDto>> Get(Guid postId, Guid reviewId);
 
     /// <summary>
     /// Create a review for a post
@@ -39,4 +40,17 @@ public interface IPostReviewApiService
     /// <param name="postId">Post identifier</param>
     /// <param name="request">Review data</param>
     Task<Envelope<PostReviewDto>> Create(Guid postId, CreatePostReviewRequest request);
+
+    /// <summary>
+    /// Update a post review the caller authored
+    /// </summary>
+    /// <param name="reviewId">Review identifier</param>
+    /// <param name="request">Fields to change</param>
+    Task<Envelope<PostReviewDto>> Update(Guid reviewId, UpdatePostReviewRequest request);
+
+    /// <summary>
+    /// Delete a post review: its author, or a senior moderator
+    /// </summary>
+    /// <param name="reviewId">Review identifier</param>
+    Task Delete(Guid reviewId);
 }

@@ -42,6 +42,7 @@ import { ProfileSkeleton } from "@/shared/ui/Skeleton";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { BlockTitle, PageTitle } from "@/shared/ui/Layout";
 
+import { useEndorsementEligibility } from "./useEndorsementEligibility";
 import ProfilePictureUpload from "./ProfilePictureUpload.vue";
 import ProfileAbout from "./ProfileAbout.vue";
 import ProfilePersonalInfo from "./ProfilePersonalInfo.vue";
@@ -58,6 +59,7 @@ import ModerationIpInfo from "./moderation/ModerationIpInfo.vue";
 import ModerationLinkedProfiles from "./moderation/ModerationLinkedProfiles.vue";
 import ModerationNotes from "./moderation/ModerationNotes.vue";
 import ModerationViolations from "./moderation/ModerationViolations.vue";
+import ModerationWatch from "./moderation/ModerationWatch.vue";
 import { BlockUserDialog } from "@/features/block-user";
 import {
   ErrorPage,
@@ -98,7 +100,37 @@ async function loadProfile(name: Username) {
   // map turns anything without a page of its own into the same "не найдено",
   // so this page reads the same as it did with its own copy.
   if (error) errorCode.value = errorCodeForStatus(error.status);
+  else await loadEndorsementEligibility(name);
 }
+
+/**
+ * Whether the viewer may write a recommendation about this profile's owner —
+ * the server's answer, not a guess assembled here. See
+ * useEndorsementEligibility: the create endpoint has five conditions and only
+ * two of them are knowable on the client, so the question is asked.
+ */
+const {
+  canCreate: canEndorse,
+  ask: askEndorsementEligibility,
+  clear: clearEndorsementEligibility,
+} = useEndorsementEligibility();
+
+async function loadEndorsementEligibility(name: Username) {
+  // The two conditions the page can answer by itself, so a guest browsing
+  // profiles and an owner reading their own cost no extra request. Both are
+  // refusals on the server too, so skipping the question never widens what is
+  // offered.
+  if (!currentUser.value || currentUser.value.username === name) {
+    clearEndorsementEligibility();
+    return;
+  }
+  await askEndorsementEligibility(name);
+}
+
+const writeEndorsementLink = computed(() => ({
+  name: "write-endorsement" as const,
+  params: { username: usernameParam.value },
+}));
 
 useFetchData(
   () => loadProfile(usernameParam.value as Username),
@@ -469,7 +501,11 @@ const modSummary = computed(() => {
   const linked = p.linkedProfiles?.length ?? 0;
   const notes = p.moderatorNotes?.length ?? 0;
   const v = (p.violations?.totalWarnings ?? 0) + (p.violations?.totalBans ?? 0);
-  return `IP: ${ips}, Связанные: ${linked}, Заметки: ${notes}, Нарушений: ${v}`;
+  const counts = `IP: ${ips}, Связанные: ${linked}, Заметки: ${notes}, Нарушений: ${v}`;
+  // The watch is a state, not a count, and it changes what happens to
+  // everything this user creates next — so it is said in the collapsed line
+  // rather than only inside the panel, and only when it is on.
+  return p.isUnderModerationWatch ? `${counts}, под наблюдением` : counts;
 });
 
 const DEFAULT_TAB: ProfileTab = "about";
@@ -804,6 +840,15 @@ watch(usernameParam, async () => {
             >
               <Button>Написать сообщение</Button>
             </router-link>
+            <!-- Offered only where the server says the POST would be
+                 accepted: canEndorse is its answer, asked on load. -->
+            <router-link
+              v-if="canEndorse"
+              :to="writeEndorsementLink"
+              class="action-link"
+            >
+              <Button>Написать рекомендацию</Button>
+            </router-link>
             <UserSubscribeButton :user-id="user.id" :username="user.username" />
             <Button
               v-if="isBlocked"
@@ -871,6 +916,12 @@ watch(usernameParam, async () => {
           />
           <ModerationViolations
             :violations="moderatedProfile.violations"
+            :permissions="moderatedProfile.permissions"
+            :target-username="usernameParam"
+            @updated="refreshModeration"
+          />
+          <ModerationWatch
+            :under-watch="moderatedProfile.isUnderModerationWatch"
             :permissions="moderatedProfile.permissions"
             :target-username="usernameParam"
             @updated="refreshModeration"

@@ -61,6 +61,18 @@ internal class UserEndorsementApiService : IUserEndorsementApiService
     }
 
     /// <inheritdoc />
+    public async Task<Envelope<EndorsementEligibility>> GetEligibility(string username)
+    {
+        var user = await _userLookupService.GetAsync(username);
+        var eligibility = await _endorsementService.GetEligibilityAsync(user.UserId);
+        return new Envelope<EndorsementEligibility>(new EndorsementEligibility
+        {
+            CanCreate = eligibility.CanCreate,
+            Reason = eligibility.Reason
+        });
+    }
+
+    /// <inheritdoc />
     public async Task<UserEndorsement> Get(Guid id)
     {
         var endorsement = await _endorsementService.GetAsync(id);

@@ -22,18 +22,24 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import type { WebsiteTestimonial } from "@/shared/api/models/community";
 
-const { mockGetTestimonials, mockDeleteTestimonial, mockCreateTestimonial } =
-  vi.hoisted(() => ({
-    mockGetTestimonials: vi.fn(),
-    mockDeleteTestimonial: vi.fn(),
-    mockCreateTestimonial: vi.fn(),
-  }));
+const {
+  mockGetTestimonials,
+  mockDeleteTestimonial,
+  mockCreateTestimonial,
+  mockUpdateTestimonial,
+} = vi.hoisted(() => ({
+  mockGetTestimonials: vi.fn(),
+  mockDeleteTestimonial: vi.fn(),
+  mockCreateTestimonial: vi.fn(),
+  mockUpdateTestimonial: vi.fn(),
+}));
 
 vi.mock("../api", () => ({
   testimonialApi: {
     getTestimonials: mockGetTestimonials,
     deleteTestimonial: mockDeleteTestimonial,
     createTestimonial: mockCreateTestimonial,
+    updateTestimonial: mockUpdateTestimonial,
   },
 }));
 
@@ -144,7 +150,7 @@ describe("useTestimonialStore", () => {
     const store = useTestimonialStore();
 
     await store.fetchTestimonials({ number: 1 });
-    await store.createTestimonial("Спасибо за сайт");
+    await store.createTestimonial("Solohin", "Спасибо за сайт");
     await store.fetchTestimonials({ number: 1 });
 
     expect(mockGetTestimonials).toHaveBeenCalledTimes(2);
@@ -152,5 +158,92 @@ describe("useTestimonialStore", () => {
       "t-1",
       "t-9",
     ]);
+  });
+
+  /**
+   * A testimonial is posted on behalf of a participant the moderator names, so
+   * the name has to reach the request. It used to be absent from the whole
+   * call, and the server signed the entry with whoever was logged in.
+   */
+  it("signs a new testimonial with the participant it was told about", async () => {
+    mockGetTestimonials.mockResolvedValue(page("t-1"));
+    mockCreateTestimonial.mockResolvedValue({
+      data: { resource: entry("t-9") },
+      error: null,
+    });
+    const store = useTestimonialStore();
+
+    await store.fetchTestimonials({ number: 1 });
+    await store.createTestimonial("Solohin", "Спасибо за сайт");
+
+    expect(mockCreateTestimonial).toHaveBeenCalledWith({
+      authorUsername: "Solohin",
+      text: "Спасибо за сайт",
+    });
+    // The endpoint answers with an envelope; the head of the list must be the
+    // testimonial, not the envelope around it.
+    expect(store.testimonials?.resources[0]).toEqual(entry("t-9"));
+  });
+
+  it("puts the saved text in place of the row it edited", async () => {
+    mockGetTestimonials.mockResolvedValue(page("t-1", "t-2"));
+    mockUpdateTestimonial.mockResolvedValue({
+      data: {
+        resource: { ...entry("t-2"), text: "Переписанный отзыв" },
+      },
+      error: null,
+    });
+    const store = useTestimonialStore();
+
+    await store.fetchTestimonials({ number: 1 });
+    await store.updateTestimonial("t-2" as never, "Переписанный отзыв");
+
+    expect(mockUpdateTestimonial).toHaveBeenCalledWith("t-2", {
+      text: "Переписанный отзыв",
+    });
+    expect(store.testimonials?.resources.map((r) => r.text)).toEqual([
+      "Отзыв t-1",
+      "Переписанный отзыв",
+    ]);
+  });
+
+  it("drops every cached page when one is edited", async () => {
+    mockGetTestimonials
+      .mockResolvedValueOnce(page("t-1"))
+      .mockResolvedValueOnce(page("t-2"))
+      .mockResolvedValueOnce(page("t-2"));
+    mockUpdateTestimonial.mockResolvedValue({
+      data: { resource: entry("t-1") },
+      error: null,
+    });
+    const store = useTestimonialStore();
+
+    await store.fetchTestimonials({ number: 1 });
+    await store.fetchTestimonials({ number: 2 });
+    await store.updateTestimonial("t-1" as never, "Переписанный отзыв");
+
+    // Page two was read before the edit; served from the cache it would show
+    // the text that no longer exists.
+    await store.fetchTestimonials({ number: 2 });
+
+    expect(mockGetTestimonials).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps the row untouched when the server refuses the edit", async () => {
+    mockGetTestimonials.mockResolvedValue(page("t-1"));
+    mockUpdateTestimonial.mockResolvedValue({
+      data: null,
+      error: { status: 403, title: "Недостаточно прав" },
+    });
+    const store = useTestimonialStore();
+
+    await store.fetchTestimonials({ number: 1 });
+    const { error } = await store.updateTestimonial(
+      "t-1" as never,
+      "Переписанный отзыв",
+    );
+
+    expect(error).not.toBeNull();
+    expect(store.testimonials?.resources[0].text).toBe("Отзыв t-1");
   });
 });

@@ -164,17 +164,20 @@ export default new (class {
   }
 
   /**
-   * Blog status transition (Start / Close / Reopen), mirroring
-   * POST games/{id}/status. BACKEND GAP: POST v1/blogs/{id}/status does not
-   * exist yet — until it lands this call returns an error and the UI shows
-   * a toast. Kept as the single wired point so the buttons light up the day
-   * the endpoint is added.
+   * Blog status transition (Start / Freeze / Close / Reopen), mirroring
+   * POST games/{id}/status. Both endpoints run the one status machine
+   * (ModuleStatusPolicy); the blog half is gated by BlogIntention
+   * .SetStatusActive / .SetStatusClosed — owner or assistant.
    */
   public transitionStatus(id: string, transition: BlogStatusTransition) {
     return Api.post<Envelope<Blog>>(`blogs/${id}/status`, { transition });
   }
 
-  /** Mentor+ premoderation transition (POST v1/blogs/{id}/premoderation). */
+  /**
+   * Premoderation transition (POST v1/blogs/{id}/premoderation). The endpoint
+   * is authentication-gated and checks the rank per move: SetApproved and
+   * SetAwaitingEdits are Mentor+, SubmitForApproval belongs to the owner alone.
+   */
   public changePremoderation(
     id: string,
     transition: BlogPremoderationTransition,
@@ -283,11 +286,15 @@ export default new (class {
   }
 
   // === Publication comments (PublicationCommentController) ===
+  // The publication discussion runs the same section as the blog one, so it
+  // reads the same query (search, authors, period, sort) and owns the same
+  // single-comment mutations. It used to send paging alone, which is why the
+  // publication page had no filter bar to send anything else from.
 
-  public getPublicationComments(publicationId: string, paging?: PagingQuery) {
+  public getPublicationComments(publicationId: string, query?: CommentsQuery) {
     return Api.get<ListEnvelope<Comment>>(
       `publications/${publicationId}/comments`,
-      toSkipTake(paging),
+      toCommentsQueryParams(query),
     );
   }
 
@@ -296,6 +303,35 @@ export default new (class {
     comment: { text: string },
   ) {
     return Api.post<Comment>(`publications/${publicationId}/comments`, comment);
+  }
+
+  public updatePublicationComment(id: string, comment: { text: string }) {
+    return Api.patch<Envelope<Comment>>(`publications/comments/${id}`, comment);
+  }
+
+  public deletePublicationComment(id: string) {
+    return Api.delete(`publications/comments/${id}`);
+  }
+
+  /**
+   * Raw BBCode source of a publication comment for the editor (the AuthorEdit
+   * audience round-trips [private]/[mod] for its author), twin of
+   * getBlogCommentForEdit.
+   */
+  public getPublicationCommentForEdit(id: string) {
+    return Api.get<Envelope<Comment>>(
+      `publications/comments/${id}`,
+      undefined,
+      RENDER_AUDIENCE.AuthorEdit,
+    );
+  }
+
+  public likePublicationComment(id: string) {
+    return Api.post<Envelope<User>>(`publications/comments/${id}/likes`);
+  }
+
+  public unlikePublicationComment(id: string) {
+    return Api.delete(`publications/comments/${id}/likes`);
   }
 
   // === Readers / subscription (BlogReaderController) ===

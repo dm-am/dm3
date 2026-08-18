@@ -1,4 +1,8 @@
-import type { ListEnvelope, PagingQuery } from "@/shared/api/models/common";
+import type {
+  Envelope,
+  ListEnvelope,
+  PagingQuery,
+} from "@/shared/api/models/common";
 import type {
   User,
   UserProfile,
@@ -7,6 +11,7 @@ import type {
   UserProfileNote,
   UserEndorsement,
   UserEndorsementId,
+  EndorsementEligibility,
   CreateUserEndorsementRequest,
   UpdateUserEndorsementRequest,
 } from "@/shared/api/models/community";
@@ -200,12 +205,36 @@ export default new (class UserApi {
     );
   }
 
-  /** Create endorsement for a user */
+  /**
+   * Ask the server whether the viewer may recommend this user.
+   *
+   * The whole rule set of the create endpoint, evaluated in advance: the
+   * "Написать рекомендацию" control is drawn on `canCreate` and on nothing
+   * else, so the site never offers what the POST would refuse. A guest is
+   * answered 200 with canCreate=false rather than 401.
+   */
+  public getEndorsementEligibility(username: Username) {
+    return Api.get<Envelope<EndorsementEligibility>>(
+      `users/${username}/endorsements/eligibility`,
+    );
+  }
+
+  /**
+   * Create endorsement for a user.
+   *
+   * `ownsRefusal`: the sole caller is the write form, and a refusal there
+   * belongs under the field next to the text it refused, not in a toast that
+   * outlives the page.
+   */
   public createUserEndorsement(
     username: Username,
     request: CreateUserEndorsementRequest,
   ) {
-    return Api.post<UserEndorsement>(`users/${username}/endorsements`, request);
+    return Api.post<UserEndorsement>(
+      `users/${username}/endorsements`,
+      request,
+      { ownsRefusal: true },
+    );
   }
 
   /** Update an existing endorsement */

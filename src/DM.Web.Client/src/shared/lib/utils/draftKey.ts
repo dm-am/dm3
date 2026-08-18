@@ -18,7 +18,13 @@
  */
 
 /** A subject there are many of, told apart by its identifier. */
-export type DraftEntity = "topic" | "blog" | "game" | "room" | "chat";
+export type DraftEntity =
+  | "topic"
+  | "blog"
+  | "publication"
+  | "game"
+  | "room"
+  | "chat";
 
 /**
  * Subjects there is exactly one of, so there is nothing to tell apart: the

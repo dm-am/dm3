@@ -110,11 +110,6 @@ const CLIENT_ONLY: Record<string, string[]> = {
  * the server has started sending.
  */
 const UNSERVED: Record<string, string[]> = {
-  // A roll on the wire is `rolls` dice of `edges` sides with a `results`
-  // array; the mirror describes one die and one number, and the post renders
-  // "dundefined: undefined = NaN".
-  DiceRoll: ["id", "dice", "result"],
-
   // `settings` is published by no user schema at all — preferences are their
   // own endpoint — so theme and page size fall back to their defaults for
   // everyone. `birthdayDate` is `birthday` on the wire and an object there,

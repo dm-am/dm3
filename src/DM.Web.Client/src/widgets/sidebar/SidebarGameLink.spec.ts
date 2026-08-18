@@ -64,7 +64,12 @@ const createMockRecruitment = (): GameRecruitment => ({
 });
 
 const createMockGame = (
-  overrides: Partial<{ id: string; title: string }> = {},
+  overrides: Partial<{
+    id: string;
+    title: string;
+    awaitsViewerTurn: boolean;
+    awaitedCharacterNames: string[];
+  }> = {},
 ): GameRef => ({
   id: asServed((overrides.id ?? "game-1") as GameId),
   publicId: asServed("abcde"),
@@ -79,7 +84,25 @@ const createMockGame = (
   unreadCommentsCount: asServed(0),
   gameReviewsCount: asServed(0),
   postReviewsCount: asServed(0),
+  awaitsViewerTurn: overrides.awaitsViewerTurn,
+  awaitedCharacterNames: overrides.awaitedCharacterNames,
 });
+
+// Renders the tooltip text into the DOM so the star's hover copy is assertable;
+// the global stub above drops it.
+const textTooltipStub = {
+  template: '<span class="tooltip" :data-text="text"><slot /></span>',
+  props: ["text"],
+};
+
+function starTooltipText(
+  wrapper: ReturnType<typeof mount>,
+): string | undefined {
+  return wrapper
+    .findAll(".tooltip")
+    .find((tooltip) => tooltip.find(".star").exists())
+    ?.attributes("data-text");
+}
 
 describe("SidebarGameLink", () => {
   beforeEach(() => {
@@ -221,6 +244,72 @@ describe("SidebarGameLink", () => {
       const counters = wrapper.find(".counters");
       expect(counters.findAll(".tooltip").length).toBe(0);
       expect(counters.findAll(".router-link").length).toBe(2);
+    });
+  });
+
+  // ============================================================================
+  // WAIT MARKER
+  // ============================================================================
+
+  // The star repeats what the server said and nothing else: the row must not
+  // promise a turn the game does not claim, and the lists that are not the
+  // reader's own games must not draw obligations at all.
+  describe("Wait Marker", () => {
+    it("draws the star when the game awaits the viewer", () => {
+      const wrapper = mount(SidebarGameLink, {
+        props: {
+          game: createMockGame({
+            awaitsViewerTurn: true,
+            awaitedCharacterNames: ["Гром", "Искра"],
+          }),
+          counters: false,
+          waitMarker: true,
+        },
+        global: { stubs: { Tooltip: textTooltipStub } },
+      });
+
+      expect(wrapper.find(".star").exists()).toBe(true);
+      expect(wrapper.find(".star").attributes("aria-label")).toBe(
+        "Ожидается ваш ход",
+      );
+      expect(starTooltipText(wrapper)).toBe("Вашего хода ждут: Гром, Искра");
+    });
+
+    it("draws no star when the game awaits somebody else", () => {
+      const wrapper = mount(SidebarGameLink, {
+        props: {
+          game: createMockGame({
+            awaitsViewerTurn: false,
+            awaitedCharacterNames: [],
+          }),
+          counters: false,
+          waitMarker: true,
+        },
+      });
+
+      expect(wrapper.find(".star").exists()).toBe(false);
+    });
+
+    it("draws no star when the server says nothing about turns", () => {
+      const wrapper = mount(SidebarGameLink, {
+        props: { game: createMockGame(), counters: false, waitMarker: true },
+      });
+
+      expect(wrapper.find(".star").exists()).toBe(false);
+    });
+
+    it("draws no star without the wait-marker prop", () => {
+      const wrapper = mount(SidebarGameLink, {
+        props: {
+          game: createMockGame({
+            awaitsViewerTurn: true,
+            awaitedCharacterNames: ["Гром"],
+          }),
+          counters: false,
+        },
+      });
+
+      expect(wrapper.find(".star").exists()).toBe(false);
     });
   });
 

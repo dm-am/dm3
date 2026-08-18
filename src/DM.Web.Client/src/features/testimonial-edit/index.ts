@@ -1,0 +1,1 @@
+export { TestimonialEditable } from "./ui";

@@ -38,12 +38,14 @@ public interface IBlogService
     Task<IEnumerable<Blog>> GetUserBlogs(string username, CancellationToken ct = default);
 
     /// <summary>
-    /// Get blog by ID
+    /// Get blog by ID. A blog the reader may not see answers the same as one
+    /// that is not there: 404, same body.
     /// </summary>
     Task<Blog> GetAsync(Guid blogId, CancellationToken ct = default);
 
     /// <summary>
-    /// Get blog by public ID (5-letter URL identifier)
+    /// Get blog by public ID (5-letter URL identifier). Answers on a blog the
+    /// reader may not see exactly as on an alias nobody has taken.
     /// </summary>
     Task<Blog> GetByPublicIdAsync(string publicId, CancellationToken ct = default);
 
@@ -53,7 +55,25 @@ public interface IBlogService
     Task<Blog> GetBlogAsync(Guid blogId, CancellationToken ct = default);
 
     /// <summary>
-    /// Get blog by owner username (personal blog)
+    /// Whether the reader the current request is on behalf of may see the blog at
+    /// all: the private-draft gate and the premoderation gate that
+    /// <see cref="GetAsync" /> throws on, asked instead of thrown. A blog that is
+    /// not there answers the same as one the reader may not open.
+    /// </summary>
+    /// <remarks>
+    /// For the callers whose refusal has to be a 404 and not a 403, because on a
+    /// blog the caller can find nowhere else on the site the difference between
+    /// "no such blog" and "not yours" is itself the leak. What lives inside a blog
+    /// asks it about its parent: a publication row on its own cannot tell whether
+    /// it is readable, and the id of one is handed out by the profile widget.
+    /// </remarks>
+    /// <param name="blogId">Blog identifier</param>
+    /// <param name="ct">Cancellation token</param>
+    Task<bool> IsVisibleToViewerAsync(Guid blogId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Get blog by owner username (personal blog). Answers on a blog the reader
+    /// may not see exactly as on a user who keeps none.
     /// </summary>
     Task<Blog> GetByOwnerUsernameAsync(string username, CancellationToken ct = default);
 

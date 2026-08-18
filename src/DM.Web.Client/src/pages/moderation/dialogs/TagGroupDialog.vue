@@ -26,11 +26,29 @@ const emit = defineEmits<{
 const title = ref(props.group?.title ?? "");
 const description = ref(props.group?.description ?? "");
 const sortOrder = ref(props.group?.sortOrder ?? props.defaultSortOrder);
+// Held as text, not as a number: the field is optional, and an empty number
+// input is not zero - it is "this group limits nothing", which the API spells
+// as null.
+const maxTagsPerGame = ref(
+  props.group?.maxTagsPerGame != null ? String(props.group.maxTagsPerGame) : "",
+);
 
 const saving = ref(false);
 const error = ref<string | null>(null);
 
-const canSubmit = computed(() => title.value.trim().length > 0);
+const maxTagsPerGameValue = computed<number | null>(() => {
+  const raw = maxTagsPerGame.value.trim();
+  if (raw === "") return null;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) ? parsed : null;
+});
+
+const canSubmit = computed(
+  () =>
+    title.value.trim().length > 0 &&
+    (maxTagsPerGame.value.trim() === "" ||
+      (maxTagsPerGameValue.value !== null && maxTagsPerGameValue.value >= 1)),
+);
 
 async function submit() {
   if (!canSubmit.value || saving.value) return;
@@ -42,12 +60,14 @@ async function submit() {
         title: title.value,
         description: description.value || undefined,
         sortOrder: sortOrder.value,
+        maxTagsPerGame: maxTagsPerGameValue.value,
       });
     } else {
       await gameTagApi.createTagGroup({
         title: title.value,
         description: description.value || undefined,
         sortOrder: sortOrder.value,
+        maxTagsPerGame: maxTagsPerGameValue.value,
       });
     }
     emit("success");
@@ -96,6 +116,16 @@ async function submit() {
           type="number"
           min="0"
         />
+      </FormField>
+
+      <FormField label="Максимум тегов в игре" name="tag-group-max" optional>
+        <input
+          id="tag-group-max"
+          v-model="maxTagsPerGame"
+          type="number"
+          min="1"
+        />
+        <template #hint>Пусто - выбор не ограничен</template>
       </FormField>
     </Form>
   </Dialog>

@@ -71,4 +71,29 @@ public class CreateTagGroupValidatorShould : UnitTestBase
         result.ShouldHaveValidationErrorFor(g => g.SortOrder)
             .WithErrorMessage(ValidationError.Invalid);
     }
+
+    /// <summary>
+    /// A group with no number set limits nothing, and that is what an empty
+    /// field means. Zero would mean a group no game can take a tag from.
+    /// </summary>
+    [Fact]
+    public void PassWhenMaxTagsPerGameIsAbsent()
+    {
+        var input = new CreateTagGroup { Title = "Genres", MaxTagsPerGame = null };
+
+        var result = validator.TestValidate(input);
+        result.ShouldNotHaveValidationErrorFor(g => g.MaxTagsPerGame);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void FailWhenMaxTagsPerGameIsBelowOne(int limit)
+    {
+        var input = new CreateTagGroup { Title = "Genres", MaxTagsPerGame = limit };
+
+        var result = validator.TestValidate(input);
+        result.ShouldHaveValidationErrorFor(g => g.MaxTagsPerGame)
+            .WithErrorMessage(ValidationError.Invalid);
+    }
 }

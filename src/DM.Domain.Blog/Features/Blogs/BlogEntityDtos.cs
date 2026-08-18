@@ -29,6 +29,12 @@ public class CreateBlogEntity
     public string? Description { get; set; }
 
     /// <summary>
+    /// Premoderation status the blog is born in — Approved for most authors,
+    /// AwaitingEdits for a newbie or an author under moderation watch.
+    /// </summary>
+    public PremoderationStatus PremoderationStatus { get; set; }
+
+    /// <summary>
     /// Draft visibility
     /// </summary>
     public DraftVisibility DraftVisibility { get; set; }

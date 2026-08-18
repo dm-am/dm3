@@ -85,12 +85,18 @@ internal static class NotificationLink
     /// </remarks>
     private static Destination? DestinationOf(EventType eventType) => eventType switch
     {
-        // The blog. A publication has no page of its own — it is read in the feed of
-        // the blog carrying it — so everything written in a blog leads to the blog.
+        // A publication. It has a page of its own now, so what is written about one
+        // publication leads there rather than to the whole feed. The address is the
+        // resolver route and not /blogs/{blog}/feed/{pub}: the metadata names both in
+        // the readable-guid form, which the publication endpoint takes and the blog
+        // endpoint does not.
         EventType.NewPublication or EventType.ChangedPublication or
         EventType.LikedPublication or EventType.LikedPublicationComment or
+        EventType.NewPublicationComment
+            => new Destination("PublicationId", "/publication/{id}"),
+
+        // The blog. What is written about the blog itself leads to the blog.
         EventType.NewBlogComment or EventType.LikedBlogComment or
-        EventType.NewPublicationComment or
         EventType.BlogInvitationCreated or
         EventType.StatusBlogActive or EventType.StatusBlogClosed or
         EventType.StatusBlogFrozen or EventType.StatusBlogFinished or

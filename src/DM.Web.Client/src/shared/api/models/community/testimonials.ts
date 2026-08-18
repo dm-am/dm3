@@ -36,6 +36,12 @@ export type WebsiteTestimonial = {
  * Request to create a new website testimonial
  */
 export type CreateWebsiteTestimonialRequest = {
+  /**
+   * Username of the participant the testimonial is signed by. Senior
+   * moderation submits the entry on their behalf, so the author is named
+   * rather than taken from the session.
+   */
+  authorUsername: string;
   /** Testimonial text content (10-1000 characters, plain text, positive only) */
   text: string;
 };

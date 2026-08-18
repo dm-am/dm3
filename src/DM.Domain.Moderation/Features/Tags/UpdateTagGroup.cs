@@ -26,4 +26,9 @@ public class UpdateTagGroup
     /// Sort order (lower values appear first)
     /// </summary>
     public int SortOrder { get; set; }
+
+    /// <summary>
+    /// How many tags of this group one game may carry; null means no limit
+    /// </summary>
+    public int? MaxTagsPerGame { get; set; }
 }

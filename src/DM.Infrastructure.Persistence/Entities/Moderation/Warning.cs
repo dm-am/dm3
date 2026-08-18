@@ -46,6 +46,20 @@ public class Warning : IAdministrated, IRemovable
     public string Text { get; set; } = null!;
 
     /// <summary>
+    /// Copy of the offending text, taken when the warning was issued. Null when
+    /// the warning names no entity, or when the entity kind carries no text the
+    /// moderation area reads.
+    /// </summary>
+    /// <remarks>
+    /// The warning used to point at the entity and nothing else, and the author
+    /// may edit that entity afterwards: the sentence the warning was given for
+    /// disappeared, and no edit history on the site keeps the previous text. This
+    /// column is the evidence — written once at issue time and never rewritten,
+    /// so it also outlives the deletion of the entity it was taken from.
+    /// </remarks>
+    public string? EntitySnapshot { get; set; }
+
+    /// <summary>
     /// Warning points based on the violation
     /// </summary>
     public int Points { get; set; }

@@ -45,7 +45,7 @@ public class GameRepositoryShould : IntegrationTestBase
 
         var (gameId, masterId, subscribers) = await SeedGameWithSubscribersAsync(dbContext);
 
-        var game = await repository.GetGame(gameId, masterId);
+        var game = await repository.GetGame(gameId, masterId, mayJudgePremoderation: false);
 
         game.Should().NotBeNull();
         game!.SubscribersCount.Should().Be(SubscriberCount,
@@ -75,9 +75,9 @@ public class GameRepositoryShould : IntegrationTestBase
         var subscriberId = subscribers[0].UserId;
         var (strangerId, _) = await AddUserAsync(dbContext, "stranger", DateTimeOffset.UtcNow);
 
-        var asSubscriber = (await repository.GetGame(gameId, subscriberId))!;
-        var asStranger = (await repository.GetGame(gameId, strangerId))!;
-        var asMaster = (await repository.GetGame(gameId, masterId))!;
+        var asSubscriber = (await repository.GetGame(gameId, subscriberId, mayJudgePremoderation: false))!;
+        var asStranger = (await repository.GetGame(gameId, strangerId, mayJudgePremoderation: false))!;
+        var asMaster = (await repository.GetGame(gameId, masterId, mayJudgePremoderation: false))!;
 
         asSubscriber.GetRoles(subscriberId).Should().Contain(GameRole.Reader);
         asStranger.GetRoles(strangerId).Should().BeEmpty();

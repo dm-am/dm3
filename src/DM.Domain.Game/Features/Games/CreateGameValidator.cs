@@ -30,6 +30,9 @@ internal class CreateGameValidator : AbstractValidator<CreateGame>
             .NotEmpty().WithMessage(ValidationError.Empty)
             .MinimumLength(GameFieldLimits.InfoMinLength).WithMessage(ValidationError.Short);
 
+        RuleFor(g => g.CommentsAccessMode)
+            .IsInEnum().WithMessage(ValidationError.Invalid);
+
         When(g => !string.IsNullOrEmpty(g.AssistantUsername), () =>
             RuleFor(g => g.AssistantUsername)
                 .MustAsync(userLookupService.UsernameExistsAsync).WithMessage(ValidationError.Invalid));

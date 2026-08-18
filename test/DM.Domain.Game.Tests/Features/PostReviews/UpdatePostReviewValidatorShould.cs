@@ -38,6 +38,20 @@ public class UpdatePostReviewValidatorShould : UnitTestBase
     }
 
     [Fact]
+    public void FailWhenSignIsNotInEnum()
+    {
+        var input = new UpdatePostReview
+        {
+            ReviewId = Guid.NewGuid(),
+            Sign = (ReviewSign)30000
+        };
+
+        var result = validator.TestValidate(input);
+        result.ShouldHaveValidationErrorFor(r => r.Sign)
+            .WithErrorMessage("Оценка указана неверно");
+    }
+
+    [Fact]
     public void FailWhenReviewIdIsEmpty()
     {
         var input = new UpdatePostReview

@@ -118,7 +118,7 @@ public class UploadDimensionsShould : UnitTestBase
     {
         var imageProcessing = Mock<IImageProcessingService>();
         imageProcessing
-            .Setup(s => s.ProcessAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.ProcessAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<UploadType>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ProcessedImage(new byte[] { 1, 2, 3 }, "image/png", ".png", width, height));
         return imageProcessing;
     }
@@ -168,5 +168,9 @@ public class UploadDimensionsShould : UnitTestBase
         public UploadType Type { get; }
 
         public Task EnsureAllowedAsync(Guid targetId) => Task.CompletedTask;
+
+        public Task EnsureReadAllowedAsync(Guid targetId) => Task.CompletedTask;
+
+        public Task<bool> MayDetachAsync(Guid targetId) => Task.FromResult(true);
     }
 }

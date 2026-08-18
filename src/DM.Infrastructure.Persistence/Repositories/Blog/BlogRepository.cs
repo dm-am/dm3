@@ -516,6 +516,7 @@ internal class BlogRepository : IBlogRepository
             AuthorId = entity.OwnerId,
             Title = entity.Title,
             Description = entity.Description ?? "",
+            PremoderationStatus = entity.PremoderationStatus,
             DraftVisibility = entity.DraftVisibility,
             CommentsEnabled = entity.CommentsEnabled,
             CreatedUtc = entity.CreatedUtc,

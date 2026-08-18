@@ -10,6 +10,7 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Moderation.Features.Profiles;
 using DM.Domain.Personal.Features.ProfileNotes;
 using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Shared.Dto;
 using ApiUserIpInfo = DM.Web.API.Features.Moderation.Profiles.UserIpInfo;
 using ApiLinkedProfile = DM.Web.API.Features.Moderation.Profiles.LinkedProfile;
 using ServiceUserIpInfo = DM.Domain.Account.Features.Authentication.UserIpInfo;
@@ -129,7 +130,8 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
             CanCreateModNote = true,
             CanIssueWarning = true,
             CanIssueBan = isSeniorMod,
-            CanLiftBan = isSeniorMod
+            CanLiftBan = isSeniorMod,
+            CanSetModerationWatch = true // Controller already requires Moderator+
         };
 
         return profile;
@@ -140,6 +142,20 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
     {
         var updatedUser = await _moderatedProfileService.ModerateProfile(username, profile.Info ?? string.Empty);
         return _mapper.Map<UserProfile>(updatedUser);
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<ModeratedProfile>> SetModerationWatch(string username, bool underWatch)
+    {
+        await _moderatedProfileService.SetModerationWatch(username, underWatch);
+        // Re-read through the aggregate so the answer carries the same payload the
+        // page was rendered from, permissions included, instead of a bare profile
+        // the caller would have to merge by hand.
+        //
+        // Enveloped, unlike the two bare-bodied endpoints beside it: those are on
+        // the inherited legacy list, which only ever shrinks, and a new endpoint
+        // added to it would be new debt written down as history.
+        return new Envelope<ModeratedProfile>(await GetModeratedProfile(username));
     }
 
     /// <inheritdoc />

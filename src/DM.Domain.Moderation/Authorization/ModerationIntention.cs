@@ -44,6 +44,11 @@ public enum ModerationIntention
     ModerateUserProfile,
 
     /// <summary>
+    /// Put a user under moderation watch, or take them off it
+    /// </summary>
+    SetModerationWatch,
+
+    /// <summary>
     /// Manage tags (create, edit, delete)
     /// </summary>
     ManageTags

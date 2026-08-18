@@ -62,9 +62,9 @@ internal class PostReviewApiService : IPostReviewApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<PostReviewDto>> Get(Guid reviewId)
+    public async Task<Envelope<PostReviewDto>> Get(Guid postId, Guid reviewId)
     {
-        var review = await _postReviewService.GetAsync(reviewId);
+        var review = await _postReviewService.GetAsync(postId, reviewId);
         return new Envelope<PostReviewDto>(_mapper.Map<PostReviewDto>(review));
     }
 
@@ -80,4 +80,20 @@ internal class PostReviewApiService : IPostReviewApiService
         var review = await _postReviewService.CreateAsync(createReview);
         return new Envelope<PostReviewDto>(_mapper.Map<PostReviewDto>(review));
     }
+
+    /// <inheritdoc />
+    public async Task<Envelope<PostReviewDto>> Update(Guid reviewId, UpdatePostReviewRequest request)
+    {
+        var updateReview = new UpdatePostReview
+        {
+            ReviewId = reviewId,
+            Sign = request.Sign,
+            Text = request.Text
+        };
+        var review = await _postReviewService.UpdateAsync(updateReview);
+        return new Envelope<PostReviewDto>(_mapper.Map<PostReviewDto>(review));
+    }
+
+    /// <inheritdoc />
+    public Task Delete(Guid reviewId) => _postReviewService.DeleteAsync(reviewId);
 }

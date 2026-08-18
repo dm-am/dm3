@@ -12,6 +12,7 @@ import type {
   PasswordResetTokenInfo,
   SessionInfo,
   UsernameChangeRequest,
+  UsernameChangeApprovalInfo,
   CreateUsernameChangeRequest,
   NotificationPreferences,
   UpdateNotificationPreferences,
@@ -204,6 +205,31 @@ export default new (class AccountApi {
    */
   public createUsernameChangeRequest(request: CreateUsernameChangeRequest) {
     return Api.post<UsernameChangeRequest>("account/username-change", request);
+  }
+
+  /**
+   * State of the approval token from the letter, before the form is shown.
+   * 404 means no request was ever issued for it.
+   */
+  public getUsernameChangeApproval(token: string) {
+    return Api.get<UsernameChangeApprovalInfo>(
+      "account/username-change/approval",
+      undefined,
+      undefined,
+      { headers: { [X_DM_ACCOUNT_TOKEN]: token } },
+    );
+  }
+
+  /**
+   * Take the approved change with the chosen name.
+   * 409 when the name went to someone else while the approval waited.
+   */
+  public completeUsernameChange(token: string, username: string) {
+    return Api.post<UsernameChangeRequest>(
+      "account/username-change/complete",
+      { username },
+      { headers: { [X_DM_ACCOUNT_TOKEN]: token } },
+    );
   }
 
   // ========== Notification Preferences ==========

@@ -16,6 +16,13 @@
  * No lifecycle action lives here. Accepting an application, exiling, marking a
  * character dead and deleting an NPC are one screen of their own, and
  * CharacterManageLink is the same way in that the roster uses.
+ *
+ * Two notepads hang under the sheet and neither is shown to anybody who could
+ * not read it on the server. "Заметки игрока" belong to the player who owns
+ * the character and are the one notepad of a game its master cannot open;
+ * "Заметки мастера" belong to the master and the assistants and are closed to
+ * that player. The section is absent rather than refused, because a section
+ * captioned "the notes the master keeps about you" would say plenty on its own.
  */
 import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
@@ -27,19 +34,21 @@ import {
   useGameDetailsStore,
   type Character,
 } from "@/entities/game";
-import { UserLink } from "@/entities/user";
+import { UserLink, useAuthStore } from "@/entities/user";
 import { CharacterForm } from "@/features/edit-character";
 import { CharacterManageLink } from "@/features/game-actions";
 import { AvatarImg } from "@/shared/ui/AvatarImg";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { SvgIcon } from "@/shared/ui/Icon";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import { NotepadBoard, type NotepadAdapter } from "@/widgets/notepad";
 import { useZoneSection } from "@/shared/lib/composables/useZoneSection";
 import { describeFailure } from "@/shared/lib/errors";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
-const { game } = storeToRefs(gameStore);
+const { game, isMaster, isAssistant } = storeToRefs(gameStore);
+const { user } = storeToRefs(useAuthStore());
 
 const character = ref<Character | null>(null);
 const loading = ref(false);
@@ -67,6 +76,41 @@ const rosterLink = computed(() => ({
   name: "game-characters",
   params: { id: game.value?.publicId || gameId.value },
 }));
+
+// The two notepad gates, each the client half of a server rule.
+//
+// "Заметки игрока": the owner of the character and nobody else — the game
+// leads included, which is what separates this notepad from every other one in
+// a game (NotepadIntentionResolver, Player). An NPC has no owner, so it has no
+// player notes at all.
+const ownsCharacter = computed(
+  () =>
+    !!user.value &&
+    !!character.value?.author &&
+    character.value.author.id === user.value.id,
+);
+
+// "Заметки мастера": master and assistants, the two HasEditAccess admits. The
+// curating mentor is not one of them. Kept for every character rather than for
+// NPCs alone — the notes are about the character, not about who moves it.
+const leadsTheGame = computed(() => isMaster.value || isAssistant.value);
+
+const playerNotesAdapter: NotepadAdapter = {
+  list: () => gameApi.getCharacterNotepad(characterId.value),
+  create: (input) => gameApi.createCharacterNote(characterId.value, input),
+  update: (id, input) =>
+    gameApi.updateCharacterNote(characterId.value, id, input),
+  remove: (id) => gameApi.deleteCharacterNote(characterId.value, id),
+};
+
+const masterNotesAdapter: NotepadAdapter = {
+  list: () => gameApi.getCharacterMasterNotepad(characterId.value),
+  create: (input) =>
+    gameApi.createCharacterMasterNote(characterId.value, input),
+  update: (id, input) =>
+    gameApi.updateCharacterMasterNote(characterId.value, id, input),
+  remove: (id) => gameApi.deleteCharacterMasterNote(characterId.value, id),
+};
 
 const LOAD_FAILURE = "Не удалось загрузить персонажа";
 
@@ -151,6 +195,29 @@ watch(characterId, () => load(), { immediate: true });
       </div>
 
       <CharacterForm mode="view" :schema="schema" :character="character" />
+
+      <section v-if="ownsCharacter" class="character-notepad">
+        <NotepadBoard
+          :adapter="playerNotesAdapter"
+          :viewer-id="user?.id ?? null"
+          title="Заметки игрока"
+          empty-text="Нет записей в заметках игрока"
+          empty-hint="Записи видите только вы: ни мастер, ни другие игроки их не читают."
+          load-error-text="Не удалось загрузить заметки игрока"
+        />
+      </section>
+
+      <section v-if="leadsTheGame" class="character-notepad">
+        <NotepadBoard
+          :adapter="masterNotesAdapter"
+          :viewer-id="user?.id ?? null"
+          :can-delete-others="isMaster"
+          title="Заметки мастера"
+          empty-text="Нет записей в заметках мастера"
+          empty-hint="Записи о персонаже видят только мастер и ассистенты игры."
+          load-error-text="Не удалось загрузить заметки мастера"
+        />
+      </section>
     </template>
   </div>
 </template>
@@ -187,6 +254,11 @@ watch(characterId, () => load(), { immediate: true });
 .character-meta
   flex: 1
   min-width: 0
+
+// The notepads sit under the sheet, separated from it and from each other the
+// way the sheet's own blocks are.
+.character-notepad
+  margin-top: $big
 
 .meta-line
   display: block

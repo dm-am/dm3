@@ -21,6 +21,12 @@ internal class ModerationIntentionResolver : IIntentionResolver<ModerationIntent
             // Admin only actions
             ModerationIntention.SetUserRole => user.Role >= UserRole.Admin,
 
+            // Moderation watch (Moderator+): the same rank that keeps the
+            // violators list and issues warnings, because the flag is the manual
+            // half of the same job — editing the profile text is a different one
+            // and stays a rank higher.
+            ModerationIntention.SetModerationWatch => user.Role >= UserRole.Moderator,
+
             // Moderate user profile (SeniorModerator+)
             ModerationIntention.ModerateUserProfile => user.Role >= UserRole.SeniorModerator,
 

@@ -183,12 +183,17 @@ public class CharacterController : ControllerBase
     #region Character Notepad
 
     /// <summary>
-    /// Get player notepad entries for a character
+    /// Get player notepad entries for a character ("Заметки игрока")
     /// </summary>
+    /// <remarks>
+    /// The one notepad of a game its master cannot open: what a player writes
+    /// about their own character is theirs alone. The notes the leads keep
+    /// about the same character are a separate notepad, under master-notepad.
+    /// </remarks>
     /// <param name="id">Character identifier</param>
     /// <response code="200">List of notepad entries</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User must own the character or be master/assistant</response>
+    /// <response code="403">User must own the character</response>
     /// <response code="404">Character not found</response>
     [HttpGet("{id}/notepad", Name = nameof(GetCharacterNotepad))]
     [AuthenticationRequired]
@@ -206,7 +211,7 @@ public class CharacterController : ControllerBase
     /// <param name="request">Entry creation request</param>
     /// <response code="201">Entry created</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User must own the character or be master/assistant</response>
+    /// <response code="403">User must own the character</response>
     /// <response code="404">Character not found</response>
     [HttpPost("{id}/notepad", Name = nameof(CreateCharacterNotepadEntry))]
     [AuthenticationRequired]
@@ -227,7 +232,7 @@ public class CharacterController : ControllerBase
     /// <param name="entryId">Entry identifier</param>
     /// <response code="200">Entry details</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User must own the character or be master/assistant</response>
+    /// <response code="403">User must own the character</response>
     /// <response code="404">Entry not found</response>
     [HttpGet("{id}/notepad/{entryId:guid}", Name = nameof(GetCharacterNotepadEntry))]
     [AuthenticationRequired]
@@ -273,6 +278,113 @@ public class CharacterController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteCharacterNotepadEntry(Guid id, Guid entryId)
+    {
+        await _notepadApiService.DeleteEntry(entryId);
+        return NoContent();
+    }
+
+    #endregion
+
+    #region Character Master Notepad
+
+    /// <summary>
+    /// Get the notes the game leads keep about a character ("Заметки мастера")
+    /// </summary>
+    /// <remarks>
+    /// A separate notepad from the character's own notes above, with the
+    /// opposite audience: the master and the assistants, never the player who
+    /// owns the character. Every character has one, an NPC and a played
+    /// character alike.
+    /// </remarks>
+    /// <param name="id">Character identifier</param>
+    /// <response code="200">List of notepad entries</response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="403">User must be master or assistant of the game</response>
+    /// <response code="404">Character not found</response>
+    [HttpGet("{id}/master-notepad", Name = nameof(GetCharacterMasterNotepad))]
+    [AuthenticationRequired]
+    [ProducesResponseType(typeof(ListEnvelope<NotepadEntryResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCharacterMasterNotepad(Guid id) =>
+        Ok(await _notepadApiService.GetCharacterMasterNotepadEntries(id));
+
+    /// <summary>
+    /// Create entry in the notes the game leads keep about a character
+    /// </summary>
+    /// <param name="id">Character identifier</param>
+    /// <param name="request">Entry creation request</param>
+    /// <response code="201">Entry created</response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="403">User must be master or assistant of the game</response>
+    /// <response code="404">Character not found</response>
+    [HttpPost("{id}/master-notepad", Name = nameof(CreateCharacterMasterNotepadEntry))]
+    [AuthenticationRequired]
+    [ProducesResponseType(typeof(Envelope<NotepadEntryResponse>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CreateCharacterMasterNotepadEntry(Guid id, [FromBody] CreateNotepadEntryRequest request)
+    {
+        var result = await _notepadApiService.CreateCharacterMasterNotepadEntry(id, request);
+        return CreatedAtRoute(nameof(GetCharacterMasterNotepadEntry), new { id, entryId = result.Resource.Id }, result);
+    }
+
+    /// <summary>
+    /// Get one entry of the notes the game leads keep about a character
+    /// </summary>
+    /// <param name="id">Character identifier</param>
+    /// <param name="entryId">Entry identifier</param>
+    /// <response code="200">Entry details</response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="403">User must be master or assistant of the game</response>
+    /// <response code="404">Entry not found</response>
+    [HttpGet("{id}/master-notepad/{entryId:guid}", Name = nameof(GetCharacterMasterNotepadEntry))]
+    [AuthenticationRequired]
+    [ProducesResponseType(typeof(Envelope<NotepadEntryResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCharacterMasterNotepadEntry(Guid id, Guid entryId) =>
+        Ok(await _notepadApiService.GetEntry(entryId));
+
+    /// <summary>
+    /// Update an entry of the notes the game leads keep about a character
+    /// </summary>
+    /// <param name="id">Character identifier</param>
+    /// <param name="entryId">Entry identifier</param>
+    /// <param name="request">Update request</param>
+    /// <response code="200">Entry updated</response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="403">Only the author of the entry may edit it</response>
+    /// <response code="404">Entry not found</response>
+    [HttpPatch("{id}/master-notepad/{entryId:guid}", Name = nameof(UpdateCharacterMasterNotepadEntry))]
+    [AuthenticationRequired]
+    [ProducesResponseType(typeof(Envelope<NotepadEntryResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateCharacterMasterNotepadEntry(
+        Guid id, Guid entryId, [FromBody] UpdateNotepadEntryRequest request) =>
+        Ok(await _notepadApiService.UpdateEntry(entryId, request));
+
+    /// <summary>
+    /// Delete an entry of the notes the game leads keep about a character
+    /// </summary>
+    /// <param name="id">Character identifier</param>
+    /// <param name="entryId">Entry identifier</param>
+    /// <response code="204">Entry deleted</response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="403">Only the author of the entry or the game master may delete it</response>
+    /// <response code="404">Entry not found</response>
+    [HttpDelete("{id}/master-notepad/{entryId:guid}", Name = nameof(DeleteCharacterMasterNotepadEntry))]
+    [AuthenticationRequired]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteCharacterMasterNotepadEntry(Guid id, Guid entryId)
     {
         await _notepadApiService.DeleteEntry(entryId);
         return NoContent();

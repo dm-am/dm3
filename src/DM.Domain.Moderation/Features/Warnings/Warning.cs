@@ -53,6 +53,24 @@ public class Warning
     /// Whether the warning has been removed
     /// </summary>
     public bool IsRemoved { get; set; }
+
+    /// <summary>
+    /// Copy of the offending text, taken when the warning was issued
+    /// </summary>
+    public string? EntitySnapshot { get; set; }
+
+    /// <summary>
+    /// Site-relative address of the offending object, null when it cannot be
+    /// addressed. Derived on read, never stored.
+    /// </summary>
+    public string? EntityUrl { get; set; }
+
+    /// <summary>
+    /// Whether the offending object was edited after the warning was issued, so
+    /// the snapshot and what stands there now are not the same text. Derived on
+    /// read from the edit history of the object's kind.
+    /// </summary>
+    public bool EntityEditedAfterWarning { get; set; }
 }
 
 /// <summary>
@@ -94,6 +112,11 @@ public class CreateWarningEntity
     /// Warning text
     /// </summary>
     public string Text { get; set; } = "";
+
+    /// <summary>
+    /// Copy of the offending text as it stood when the warning was issued
+    /// </summary>
+    public string? EntitySnapshot { get; set; }
 
     /// <summary>
     /// Creation timestamp

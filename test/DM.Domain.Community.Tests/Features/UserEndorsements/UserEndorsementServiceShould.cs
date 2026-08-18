@@ -150,6 +150,134 @@ public class UserEndorsementServiceShould : UnitTestBase
 
     #endregion
 
+    #region Eligibility Tests
+
+    // The write form asks this before it draws anything, so every answer here
+    // is a control the site does or does not offer. The refusal sentences are
+    // asserted verbatim: they are what the reader is shown instead of the form.
+
+    [Fact]
+    public async Task AllowEligibilityWhenEveryRuleIsSatisfied()
+    {
+        var targetUserId = Guid.NewGuid();
+        AllowCreateIntention();
+        SetupSuccessfulCreate(targetUserId);
+
+        var eligibility = await _service.GetEligibilityAsync(targetUserId);
+
+        eligibility.CanCreate.Should().BeTrue();
+        eligibility.Reason.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task RefuseEligibilityForGuest()
+    {
+        // IsAllowed is false by default on the mock — the anonymous case.
+        var eligibility = await _service.GetEligibilityAsync(Guid.NewGuid());
+
+        eligibility.CanCreate.Should().BeFalse();
+        eligibility.Reason.Should().Be(RefusalMessage.AuthenticationRequired);
+        eligibility.Status.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task RefuseEligibilityForYourself()
+    {
+        AllowCreateIntention();
+
+        var eligibility = await _service.GetEligibilityAsync(_currentUserId);
+
+        eligibility.CanCreate.Should().BeFalse();
+        eligibility.Reason.Should().Be("Нельзя рекомендовать самого себя");
+        eligibility.Status.Should().Be(HttpStatusCode.Forbidden);
+        // The refusal is free: a self-recommendation is not worth a query.
+        _repository.Verify(r => r.GetUserPostCountAsync(It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RefuseEligibilityForNewbie()
+    {
+        var targetUserId = Guid.NewGuid();
+        AllowCreateIntention();
+        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId))
+            .ReturnsAsync(ProbationPolicy.NewbiePostThreshold - 1);
+
+        var eligibility = await _service.GetEligibilityAsync(targetUserId);
+
+        eligibility.CanCreate.Should().BeFalse();
+        eligibility.Reason.Should().Contain(ProbationPolicy.NewbiePostThreshold.ToString());
+    }
+
+    [Fact]
+    public async Task RefuseEligibilityWhenUsersHaveNotPlayedTogether()
+    {
+        var targetUserId = Guid.NewGuid();
+        AllowCreateIntention();
+        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
+        _repository.Setup(r => r.HavePlayedTogetherAsync(_currentUserId, targetUserId)).ReturnsAsync(false);
+
+        var eligibility = await _service.GetEligibilityAsync(targetUserId);
+
+        eligibility.CanCreate.Should().BeFalse();
+        eligibility.Reason.Should().Be("Рекомендовать можно только тех, с кем вы играли в одной игре");
+    }
+
+    [Fact]
+    public async Task RefuseEligibilityWhenPairAlreadyHasOne()
+    {
+        var targetUserId = Guid.NewGuid();
+        AllowCreateIntention();
+        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
+        _repository.Setup(r => r.HavePlayedTogetherAsync(_currentUserId, targetUserId)).ReturnsAsync(true);
+        _repository.Setup(r => r.ExistsAsync(_currentUserId, targetUserId)).ReturnsAsync(true);
+
+        var eligibility = await _service.GetEligibilityAsync(targetUserId);
+
+        eligibility.CanCreate.Should().BeFalse();
+        eligibility.Reason.Should().Be(RefusalMessage.AlreadyEndorsedUser);
+        eligibility.Status.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    /// <summary>
+    /// The whole point of the shared evaluation: whatever the query refuses
+    /// with is what the create call refuses with, word for word and status for
+    /// status. Two copies of the rule list would drift, and a client drawing
+    /// its control on the query would then offer a rejected POST.
+    /// </summary>
+    [Theory]
+    [InlineData(true, false, false)]   // newbie
+    [InlineData(false, false, false)]  // never played together
+    [InlineData(false, true, true)]    // pair already has one
+    public async Task RefuseCreateWithTheSentenceTheEligibilityQueryGave(
+        bool isNewbie, bool havePlayedTogether, bool alreadyExists)
+    {
+        var targetUserId = Guid.NewGuid();
+        AllowCreateIntention();
+        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId))
+            .ReturnsAsync(isNewbie ? ProbationPolicy.NewbiePostThreshold - 1 : 200);
+        _repository.Setup(r => r.HavePlayedTogetherAsync(_currentUserId, targetUserId))
+            .ReturnsAsync(havePlayedTogether);
+        _repository.Setup(r => r.ExistsAsync(_currentUserId, targetUserId)).ReturnsAsync(alreadyExists);
+
+        var eligibility = await _service.GetEligibilityAsync(targetUserId);
+        var act = async () => await _service.CreateAsync(
+            new CreateUserEndorsement { TargetUserId = targetUserId, Text = "Great player!" });
+
+        eligibility.CanCreate.Should().BeFalse();
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.Message == eligibility.Reason && e.StatusCode == eligibility.Status);
+        _repository.Verify(r => r.CreateAsync(It.IsAny<CreateUserEndorsementEntity>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The intention resolver admits Create to anyone signed in, so the mock
+    /// stands in for that and the eligibility rules are what is under test.
+    /// </summary>
+    private void AllowCreateIntention() =>
+        _intentionManager.Setup(m => m.IsAllowed(UserEndorsementIntention.Create)).Returns(true);
+
+    #endregion
+
     #region Get Tests
 
     [Fact]
