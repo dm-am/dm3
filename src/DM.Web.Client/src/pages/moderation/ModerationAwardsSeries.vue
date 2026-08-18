@@ -26,12 +26,25 @@ import { UserLink } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { describeFailure, notifyFailure } from "@/shared/lib/errors";
 import { useRoleGate } from "./lib/useRoleGate";
+import { sectionRole } from "./lib/sections";
 
-const { hasAccess, deniedText } = useRoleGate("SeniorModerator");
+// A sub-page of the awards tab, so it wears that tab's row.
+const { hasAccess, deniedText } = useRoleGate(sectionRole("moderation-awards"));
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
-const { series, awardTypes, load, reload } = useContestSeries();
+const {
+  adminSeries: series,
+  awardTypes,
+  load: loadPublic,
+  loadAdmin,
+  reload,
+} = useContestSeries();
+
+// The page needs both slices: the series itself from the admin catalog (a
+// hidden series must still open to be restored), the grant dropdown from
+// the public one (a hidden award type must not be offered for granting).
+const load = () => Promise.all([loadPublic(), loadAdmin()]);
 
 const seriesId = computed(() => String(route.params.id));
 const current = computed<ContestSeries | null>(

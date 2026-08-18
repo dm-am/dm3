@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Dto;
-using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.PostReviews;
@@ -38,9 +37,8 @@ internal class PostReviewRepository : IPostReviewRepository
         .CountAsync();
 
     /// <inheritdoc />
-    public async Task<IEnumerable<PostReview>> GetAsync(Guid postId, PagingData paging)
-    {
-        var reviews = await _dbContext.PostReviews
+    public async Task<IEnumerable<PostReview>> GetAsync(Guid postId, PagingData paging) =>
+        await _dbContext.PostReviews
             .TagWith("DM.PostReview.GetByPost")
             .Where(r => r.PostId == postId && !r.IsRemoved)
             .OrderByDescending(r => r.CreatedUtc)
@@ -48,26 +46,12 @@ internal class PostReviewRepository : IPostReviewRepository
             .ProjectTo<PostReview>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
 
-        await FillLikesAsync(reviews);
-        return reviews;
-    }
-
     /// <inheritdoc />
-    public async Task<PostReview?> GetAsync(Guid id)
-    {
-        var review = await _dbContext.PostReviews
-            .TagWith("DM.PostReview.GetById")
-            .Where(r => !r.IsRemoved && r.PostReviewId == id)
-            .ProjectTo<PostReview>(_mapper.ConfigurationProvider)
-            .FirstOrDefaultAsync();
-
-        if (review != null)
-        {
-            await FillLikesAsync(new[] { review });
-        }
-
-        return review;
-    }
+    public Task<PostReview?> GetAsync(Guid id) => _dbContext.PostReviews
+        .TagWith("DM.PostReview.GetById")
+        .Where(r => !r.IsRemoved && r.PostReviewId == id)
+        .ProjectTo<PostReview>(_mapper.ConfigurationProvider)
+        .FirstOrDefaultAsync();
 
     /// <inheritdoc />
     public Task<PostReview?> GetByAuthorAsync(Guid postId, Guid authorId) => _dbContext.PostReviews
@@ -99,14 +83,11 @@ internal class PostReviewRepository : IPostReviewRepository
 
         query = ApplyFilter(query, filter);
 
-        var reviews = await query
+        return await query
             .OrderByDescending(r => r.CreatedUtc)
             .Page(paging)
             .ProjectTo<PostReview>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
-
-        await FillLikesAsync(reviews);
-        return reviews;
     }
 
     // ═══ WRITE ═══
@@ -239,66 +220,6 @@ internal class PostReviewRepository : IPostReviewRepository
         .FirstOrDefaultAsync();
 
     // ═══ PRIVATE ═══
-
-    /// <summary>
-    /// Fills <see cref="PostReview.Likes"/> for a page of reviews.
-    /// </summary>
-    /// <remarks>
-    /// Likes are polymorphic (EntityType + EntityId), so no navigation points at
-    /// them and the mapping profile leaves the collection empty. Two batched
-    /// lookups per page fill it — the like rows, then their authors — instead of
-    /// a correlated subquery per row (PERFORMANCE.md → "Avoid inline
-    /// aggregations"), which is the shape TopicRepository already uses for its
-    /// like counts.
-    /// </remarks>
-    private async Task FillLikesAsync(IReadOnlyCollection<PostReview> reviews)
-    {
-        if (reviews.Count == 0)
-        {
-            return;
-        }
-
-        // List<Guid>, not Guid[]: EF Core's translator has a Guid[] edge case on
-        // the ReadOnlySpan<Guid> interpreter path (see TopicRepository).
-        var reviewIds = reviews.Select(r => r.Id).ToList();
-        var likes = await _dbContext.Likes
-            .TagWith("DM.PostReview.Likes")
-            .AsNoTracking()
-            .Where(l => !l.IsRemoved &&
-                        l.EntityType == LikeEntityType.PostReview &&
-                        reviewIds.Contains(l.EntityId))
-            .Select(l => new { l.EntityId, l.UserId })
-            .ToListAsync();
-
-        if (likes.Count == 0)
-        {
-            return;
-        }
-
-        var likerIds = likes.Select(l => l.UserId).Distinct().ToList();
-        var likers = await _dbContext.Users
-            .TagWith("DM.PostReview.Likers")
-            .AsNoTracking()
-            .Where(u => likerIds.Contains(u.UserId))
-            .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
-            .ToDictionaryAsync(u => u.UserId);
-
-        var byReview = likes
-            .GroupBy(l => l.EntityId)
-            .ToDictionary(
-                g => g.Key,
-                g => g.Where(l => likers.ContainsKey(l.UserId))
-                    .Select(l => likers[l.UserId])
-                    .ToArray());
-
-        foreach (var review in reviews)
-        {
-            if (byReview.TryGetValue(review.Id, out var users))
-            {
-                review.Likes = users;
-            }
-        }
-    }
 
     private IQueryable<DbPostReview> ApplyFilter(IQueryable<DbPostReview> query, PostReviewFilter? filter)
     {

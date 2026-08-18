@@ -10,12 +10,10 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import type {
-  Comment,
   GeneralError,
   PagingInfo,
   User,
 } from "@/shared/api/models/common";
-import { markRemoved } from "@/shared/api/models/common";
 import type {
   Blog,
   BlogPremoderationTransition,
@@ -25,7 +23,6 @@ import type {
   Publication,
 } from "./types";
 import blogApi from "../api/blogApi";
-import { type CommentsQuery } from "@/shared/api";
 // The envelope reader is a pure function over a payload shape, so it comes from
 // its own module instead of the transport barrel: this store talks to blogApi
 // and not to the HTTP client, and pulling a helper through the barrel made it
@@ -33,6 +30,7 @@ import { type CommentsQuery } from "@/shared/api";
 import { unwrapResource } from "@/shared/api/envelope";
 import { useAuthStore } from "@/shared/stores";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import { createCommentSection } from "@/shared/lib/composables/createCommentSection";
 import { requestNotSent } from "@/shared/lib/errors";
 // One edge, and it points this way on purpose: deleting a blog has to drop the
 // list caches. The list store must not import this one back — that is what put
@@ -68,12 +66,29 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
   const publicationsLoading = ref(false);
   const publicationsError = ref<string | null>(null);
 
-  // Discussion comments data. The failure is a flag and not a sentence: the
-  // discussion section spells one wording for a failed load, wherever it fails.
-  const comments = ref<Comment[]>([]);
-  const commentsPaging = ref<PagingInfo | null>(null);
-  const commentsLoading = ref(false);
-  const commentsError = ref(false);
+  // Discussion comments: state, guarded loader and single-comment mutations
+  // come from the shared section factory — the game details store runs the
+  // same code against its own endpoints. The username getter is a closure on
+  // purpose: currentUsername is declared below and read at unlike time.
+  const {
+    comments,
+    commentsPaging,
+    commentsLoading,
+    commentsError,
+    commentsGuard,
+    loadComments,
+    updateComment,
+    deleteComment,
+    likeComment,
+    unlikeComment,
+  } = createCommentSection({
+    getComments: (blogId, query) => blogApi.getBlogComments(blogId, query),
+    updateComment: (id, comment) => blogApi.updateBlogComment(id, comment),
+    deleteComment: (id) => blogApi.deleteBlogComment(id),
+    likeComment: (id) => blogApi.likeBlogComment(id),
+    unlikeComment: (id) => blogApi.unlikeBlogComment(id),
+    currentUsername: () => currentUsername.value,
+  });
 
   // Blacklist data
   const blacklist = ref<User[]>([]);
@@ -97,7 +112,6 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
   // would otherwise win simply by landing last.
   const blogGuard = createRequestGuard();
   const publicationsGuard = createRequestGuard();
-  const commentsGuard = createRequestGuard();
   const blacklistGuard = createRequestGuard();
   const usersGuard = createRequestGuard();
   const readersGuard = createRequestGuard();
@@ -219,92 +233,6 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     }
 
     publicationsLoading.value = false;
-  }
-
-  // Load discussion comments. Filter, sort and page all come from the URL
-  // through the discussion section; this forwards the query it is handed.
-  async function loadComments(
-    blogId: string,
-    query: CommentsQuery = {},
-  ): Promise<void> {
-    const requestId = commentsGuard.next();
-    commentsLoading.value = true;
-    commentsError.value = false;
-
-    const { data, error } = await blogApi.getBlogComments(blogId, query);
-
-    // Stale continuation — the newer request owns the visible state.
-    if (!commentsGuard.isCurrent(requestId)) return;
-
-    if (error) {
-      commentsError.value = true;
-      comments.value = [];
-      commentsPaging.value = null;
-    } else if (data) {
-      comments.value = data.resources;
-      commentsPaging.value = data.paging ?? null;
-    }
-
-    commentsLoading.value = false;
-  }
-
-  // --- Single discussion-comment mutations (edit / delete / likes) ---
-  // Mirror the forum boardsStore idiom: in-place list patches from the server
-  // response, no full reload, and nothing patched when the server refused —
-  // the error goes up to the page instead.
-
-  async function updateComment(id: string, text: string) {
-    const { data, error } = await blogApi.updateBlogComment(id, { text });
-    if (!error) {
-      const updated = unwrapResource<Comment>(data);
-      if (updated) {
-        const index = comments.value.findIndex((c) => c.id === id);
-        if (index !== -1) comments.value[index] = updated;
-      }
-    }
-    return { error };
-  }
-
-  async function deleteComment(id: string) {
-    const { error } = await blogApi.deleteBlogComment(id);
-    if (!error) {
-      const index = comments.value.findIndex((c) => c.id === id);
-      if (index !== -1) {
-        comments.value[index] = markRemoved(comments.value[index]);
-      }
-    }
-    return { error };
-  }
-
-  async function likeComment(id: string) {
-    const { data } = await blogApi.likeBlogComment(id);
-    const liker = unwrapResource<User>(data);
-    if (liker) {
-      const index = comments.value.findIndex((c) => c.id === id);
-      if (index !== -1) {
-        const comment = comments.value[index];
-        comments.value[index] = {
-          ...comment,
-          likes: [...(comment.likes ?? []), liker] as Comment["likes"],
-        };
-      }
-    }
-  }
-
-  async function unlikeComment(id: string) {
-    const { error } = await blogApi.unlikeBlogComment(id);
-    if (error) return;
-    const index = comments.value.findIndex((c) => c.id === id);
-    if (index === -1) return;
-    const comment = comments.value[index];
-    if (comment.likes && currentUsername.value) {
-      comments.value[index] = {
-        ...comment,
-        likes: comment.likes.filter(
-          (u) => u.username !== currentUsername.value,
-        ) as Comment["likes"],
-      };
-    }
   }
 
   // Load blacklist

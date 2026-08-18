@@ -97,26 +97,14 @@ html.theme_Light {
   /* Search highlight - marker pen effect (preserves text color) */
   --search-highlight-bg: rgba(255, 176, 32, 0.38);
 
-  /* Toast notifications - semantic colors with guaranteed contrast */
-  --toast-success-bg: #2e7d32;
-  --toast-success-text: #fff;
-  --toast-success-border: #1b5e20;
-  --toast-error-bg: #c62828;
-  --toast-error-text: #fff;
-  --toast-error-border: #b71c1c;
-  --toast-warning-bg: #f9a825;
-  --toast-warning-text: #1a1a1a;
-  --toast-warning-border: #f57f17;
-  --toast-info-bg: #1565c0;
-  --toast-info-text: #fff;
-  --toast-info-border: #0d47a1;
-
   /* Tier badges (awards/achievements) - metals are not theme-dependent, same in both themes */
   --award-gold: #d4af37;
   --award-silver: #c0c0c0;
   --award-bronze: #cd7f32;
   --achievement-platinum: #7fcfd4;
-  --award-diamond: var(--achievement-platinum); /* diamond award tier = achievement platinum */
+  --award-diamond: var(
+    --achievement-platinum
+  ); /* diamond award tier = achievement platinum */
   /* Заливка плашки тира. Металл красит сам глиф, а не фон под ним: контраст
      симметричен, поэтому AA держится на всех четырех металлах (бронза 4.57,
      платина 8.06), а черного текста на золоте не остается. От страницы плашку
@@ -209,26 +197,14 @@ html.theme_Dark {
   /* Search highlight - marker pen effect (brighter for dark backgrounds) */
   --search-highlight-bg: rgba(255, 193, 7, 0.32);
 
-  /* Toast notifications - dark theme: slightly lighter backgrounds for better visibility */
-  --toast-success-bg: #388e3c;
-  --toast-success-text: #fff;
-  --toast-success-border: #2e7d32;
-  --toast-error-bg: #d32f2f;
-  --toast-error-text: #fff;
-  --toast-error-border: #c62828;
-  --toast-warning-bg: #fbc02d;
-  --toast-warning-text: #1a1a1a;
-  --toast-warning-border: #f9a825;
-  --toast-info-bg: #1976d2;
-  --toast-info-text: #fff;
-  --toast-info-border: #1565c0;
-
   /* Tier badges (awards/achievements) - metals are not theme-dependent, same in both themes */
   --award-gold: #d4af37;
   --award-silver: #c0c0c0;
   --award-bronze: #cd7f32;
   --achievement-platinum: #7fcfd4;
-  --award-diamond: var(--achievement-platinum); /* diamond award tier = achievement platinum */
+  --award-diamond: var(
+    --achievement-platinum
+  ); /* diamond award tier = achievement platinum */
   /* Заливка плашки тира. Металл красит сам глиф, а не фон под ним: контраст
      симметричен, поэтому AA держится на всех четырех металлах (бронза 4.57,
      платина 8.06), а черного текста на золоте не остается. От страницы плашку

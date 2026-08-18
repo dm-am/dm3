@@ -246,11 +246,4 @@ internal class MessagingApiService : IMessagingApiService
     /// <inheritdoc />
     public Task MarkGlobalChatAsReadAsync() =>
         MarkAsReadAsync(WellKnownChats.GlobalChatId);
-
-    /// <inheritdoc />
-    public async Task<int> GetGlobalChatUnreadCountAsync()
-    {
-        var chat = await _chatService.GetAsync(WellKnownChats.GlobalChatId);
-        return chat.UnreadMessagesCount;
-    }
 }

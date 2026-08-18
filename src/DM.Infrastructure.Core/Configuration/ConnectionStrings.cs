@@ -21,11 +21,6 @@ public class ConnectionStrings
     public string Cache { get; set; } = null!;
 
     /// <summary>
-    /// Message queue connection string
-    /// </summary>
-    public string MessageQueue { get; set; } = null!;
-
-    /// <summary>
     /// Logging storage connection string
     /// </summary>
     public string Logs { get; set; } = null!;

@@ -4,6 +4,12 @@
  * to invite a player or a reader and to cancel a pending invitation. Backed by
  * the invitation gameApi; the list is held locally (not part of the shared
  * game store).
+ *
+ * Reading the list and writing it part company on the server: the read asks
+ * GameIntention.EditSettings (the leads, the curating mentor and senior
+ * moderation), while invite and cancel ask InvitePlayer / InviteReader /
+ * CancelInvitation — the game roles alone. `canManage` carries that narrower
+ * set, and the host page is the one that computes it.
  */
 import { computed, onMounted, ref } from "vue";
 import { storeToRefs } from "pinia";
@@ -17,6 +23,11 @@ import { RemoveButton } from "@/shared/ui/RemoveButton";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { notifyFailure } from "@/shared/lib/errors";
+
+defineProps<{
+  /** Whether the viewer may send and cancel invitations. */
+  canManage: boolean;
+}>();
 
 const store = useGameDetailsStore();
 const { game } = storeToRefs(store);
@@ -92,12 +103,14 @@ async function cancel(invitation: Invitation) {
       <li v-for="inv in invitations" :key="inv.id" class="inv-item">
         <UserLink :user="inv.invitedUser" />
         <span class="inv-type">{{ typeLabels[inv.type] ?? inv.type }}</span>
-        <RemoveButton @click="cancel(inv)">Отменить</RemoveButton>
+        <RemoveButton v-if="canManage" @click="cancel(inv)">
+          Отменить
+        </RemoveButton>
       </li>
     </ul>
     <SecondaryText v-else-if="!loading">Активных приглашений нет</SecondaryText>
 
-    <div class="invite-row">
+    <div v-if="canManage" class="invite-row">
       <UserAutocomplete v-model="username" placeholder="Имя пользователя" />
       <Select
         :model-value="kind"

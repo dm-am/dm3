@@ -188,30 +188,36 @@ const router = createRouter({
             params: { username: to.params.username },
           }),
         },
+        // The six list subpages of a profile share one component: the route
+        // name doubles as the `subpage` prop, and ProfileSubpage picks the
+        // header copy and the list from its config by that key.
         {
           name: "received-reviews",
           path: "/users/:username/received-reviews",
           meta: { dynamicTitle: true },
-          component: () => import("@/pages/profile/ReceivedReviewsPage.vue"),
+          component: () => import("@/pages/profile/ProfileSubpage.vue"),
+          props: { subpage: "received-reviews" },
         },
         {
           name: "given-reviews",
           path: "/users/:username/given-reviews",
           meta: { dynamicTitle: true },
-          component: () => import("@/pages/profile/GivenReviewsPage.vue"),
+          component: () => import("@/pages/profile/ProfileSubpage.vue"),
+          props: { subpage: "given-reviews" },
         },
         {
           name: "received-endorsements",
           path: "/users/:username/received-endorsements",
           meta: { dynamicTitle: true },
-          component: () =>
-            import("@/pages/profile/ReceivedEndorsementsPage.vue"),
+          component: () => import("@/pages/profile/ProfileSubpage.vue"),
+          props: { subpage: "received-endorsements" },
         },
         {
           name: "given-endorsements",
           path: "/users/:username/given-endorsements",
           meta: { dynamicTitle: true },
-          component: () => import("@/pages/profile/GivenEndorsementsPage.vue"),
+          component: () => import("@/pages/profile/ProfileSubpage.vue"),
+          props: { subpage: "given-endorsements" },
         },
         // Reviews of whole games, not of posts: received-reviews /
         // given-reviews above are the post ones, and the two pairs are
@@ -220,14 +226,15 @@ const router = createRouter({
           name: "received-game-reviews",
           path: "/users/:username/received-game-reviews",
           meta: { dynamicTitle: true },
-          component: () =>
-            import("@/pages/profile/ReceivedGameReviewsPage.vue"),
+          component: () => import("@/pages/profile/ProfileSubpage.vue"),
+          props: { subpage: "received-game-reviews" },
         },
         {
           name: "given-game-reviews",
           path: "/users/:username/given-game-reviews",
           meta: { dynamicTitle: true },
-          component: () => import("@/pages/profile/GivenGameReviewsPage.vue"),
+          component: () => import("@/pages/profile/ProfileSubpage.vue"),
+          props: { subpage: "given-game-reviews" },
         },
         {
           name: "profile-uploads",
@@ -300,7 +307,8 @@ const router = createRouter({
         {
           name: "create-blog",
           path: "/blogs/create",
-          meta: { requiresAuth: true, title: "Новый блог" },
+          // No requiresAuth: the page renders its own login invitation for guests
+          meta: { title: "Новый блог" },
           component: () => import("@/pages/create-blog/CreateBlogPage.vue"),
         },
         {
@@ -708,6 +716,12 @@ const router = createRouter({
           path: "/support/track/:token",
           meta: { title: "Статус обращения" },
           component: () => import("@/pages/support/TicketTrackPage.vue"),
+        },
+        {
+          name: "donate",
+          path: "/donate",
+          meta: { title: "Помочь проекту" },
+          component: () => import("@/pages/donate/DonatePage.vue"),
         },
         {
           name: "pulse",

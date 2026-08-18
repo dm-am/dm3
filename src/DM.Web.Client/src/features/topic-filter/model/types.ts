@@ -2,11 +2,7 @@
 // TYPES FOR TOPICS FILTER
 // =============================================================================
 
-import type {
-  SortOption,
-  AuthorDateFilterState,
-  AuthorDateSearchParams,
-} from "@/shared/lib/filters";
+import type { SortOption } from "@/shared/lib/filters";
 
 /**
  * Sort options for topics list.
@@ -43,12 +39,6 @@ export const SORT_OPTIONS: readonly SortOption[] = [
 ] as const;
 
 export type SortByValue = (typeof SORT_OPTIONS)[number]["value"];
-
-/** Filter state stored in URL. The shape is declared once, in shared. */
-export type TopicsFilterState = AuthorDateFilterState<SortByValue>;
-
-/** API search parameters for topics. */
-export type TopicsSearchParams = AuthorDateSearchParams;
 
 /**
  * Default filter state for comparison

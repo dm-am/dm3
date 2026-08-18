@@ -30,7 +30,7 @@ public class DeploymentConfigurationShould
 {
     private const string BaseCompose = "docker-compose.yml";
     private const string PreviewCompose = "docker-compose.preview.yml";
-    private const string MirrorCompose = "docker-compose.mirror.yml";
+    private const string PopCompose = "docker-compose.pop.yml";
     private const string NginxConfiguration = "nginx/nginx.conf";
     private const string EdgeLocations = "nginx/edge-locations.conf";
 
@@ -555,7 +555,7 @@ public class DeploymentConfigurationShould
     [Fact]
     public void GiveThePointOfPresenceATemplateWithNoRealSecretInIt()
     {
-        var template = Path.Combine(DockerDirectory, ".env.mirror.example");
+        var template = Path.Combine(DockerDirectory, ".env.pop.example");
         File.Exists(template).Should().BeTrue(
             "the guides copy this file, and without it they name the one that holds every password");
 
@@ -589,10 +589,10 @@ public class DeploymentConfigurationShould
             line.Should().NotBe(real, $"{required} must not be the value the repository publishes");
         }
 
-        foreach (var guide in new[] { "MIRRORING.md", "DEPLOYMENT.md" })
+        foreach (var guide in new[] { "POINT_OF_PRESENCE.md", "DEPLOYMENT.md" })
         {
             var text = File.ReadAllText(Path.Combine(RepositoryRoot, "docs", "guides", guide));
-            text.Should().NotContain("cp .env.example .env.mirror",
+            text.Should().NotContain("cp .env.example .env.pop",
                 $"{guide} would put every password of the installation on the point of presence");
         }
     }
@@ -1241,7 +1241,7 @@ public class DeploymentConfigurationShould
 
         // The point of presence carries no application, and a list inherited from the
         // main stand would name a container that does not exist there.
-        var pointOfPresence = ServiceBlock(Read(MirrorCompose), "nginx");
+        var pointOfPresence = ServiceBlock(Read(PopCompose), "nginx");
         var api = Regex.Match(Read(BaseCompose), @"^  dmapi:\n(?:.*\n)*?\s*container_name:\s*'([\w-]+)'",
             RegexOptions.Multiline);
 
@@ -1453,26 +1453,26 @@ public class DeploymentConfigurationShould
     [Fact]
     public void RunNoApplicationOnTheSecondDoor()
     {
-        var overlay = Read(MirrorCompose);
+        var overlay = Read(PopCompose);
         overlay.Should().MatchRegex(@"depends_on: !(reset|override)",
             "compose starts the dependencies of a named service, and the edge declared one on the API");
         overlay.Should().Contain("pop.conf.template",
             "the door has its own edge configuration: its upstream is across the network, " +
             "and the shared one points at a container that does not run here");
 
-        var documents = new[] { "MIRRORING.md", "DEPLOYMENT.md" }
+        var documents = new[] { "POINT_OF_PRESENCE.md", "DEPLOYMENT.md" }
             .Select(name => File.ReadAllText(
                 Path.Combine(RepositoryRoot, "docs", "guides", name)));
 
         var commands = documents
             .SelectMany(document => document.Split('\n'))
-            .Where(line => line.Contains("--env-file .env.mirror", StringComparison.Ordinal))
+            .Where(line => line.Contains("--env-file .env.pop", StringComparison.Ordinal))
             .ToList();
 
         commands.Should().NotBeEmpty("the guides still document how the door is started");
         foreach (var command in commands)
         {
-            command.Should().Contain(MirrorCompose,
+            command.Should().Contain(PopCompose,
                 "the base file alone starts every store the door has no business running");
             command.Should().Contain(PreviewCompose,
                 "the edge and the frontend live in the overlay");
@@ -1520,7 +1520,7 @@ public class DeploymentConfigurationShould
         Regex.Matches(door, @"proxy_pass\s+http://dmapi")
             .Should().BeEmpty("the API does not run here");
 
-        Read(MirrorCompose).Should().Contain("NGINX_ENVSUBST_FILTER",
+        Read(PopCompose).Should().Contain("NGINX_ENVSUBST_FILTER",
             "without a filter the substitution eats $host and $scheme, which belong to nginx");
     }
 

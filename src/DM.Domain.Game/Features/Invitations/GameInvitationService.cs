@@ -256,7 +256,11 @@ internal class GameInvitationService : IGameInvitationService
     public async Task<IEnumerable<GameInvitation>> GetPendingInvitations(Guid gameId, CancellationToken ct = default)
     {
         var game = await GetGameOrThrow(gameId);
-        _intentionManager.ThrowIfForbidden(GameIntention.Edit, game);
+        // The list is a panel of the settings page, so it follows the page:
+        // EditSettings, same as the blog side. Reading who was invited is not
+        // managing the roster — creating and revoking invitations stay on the
+        // lead-only InvitePlayer / InviteReader / CancelInvitation.
+        _intentionManager.ThrowIfForbidden(GameIntention.EditSettings, game);
         return await _repository.GetPendingInvitations(gameId, ct);
     }
 

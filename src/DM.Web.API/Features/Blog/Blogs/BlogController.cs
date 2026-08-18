@@ -7,6 +7,8 @@ using DM.Web.API.Shared.Dto;
 using DM.Web.API.Swagger;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Blog.Blogs;
 
@@ -96,6 +98,7 @@ public class BlogController : ControllerBase
     /// <response code="400">Invalid request</response>
     /// <response code="401">User must be authenticated</response>
     [HttpPost(Name = nameof(PostBlog))]
+    [EnableRateLimiting(RateLimitPolicies.Default)]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Blog>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -117,6 +120,7 @@ public class BlogController : ControllerBase
     /// <response code="403">User is not authorized to update this blog</response>
     /// <response code="404">Blog not found</response>
     [HttpPatch("{id}", Name = nameof(PatchBlog))]
+    [EnableRateLimiting(RateLimitPolicies.Default)]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Blog>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -138,6 +142,7 @@ public class BlogController : ControllerBase
     /// <response code="403">User is not authorized to delete this blog</response>
     /// <response code="404">Blog not found</response>
     [HttpDelete("{id}", Name = nameof(DeleteBlog))]
+    [EnableRateLimiting(RateLimitPolicies.Default)]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -168,6 +173,7 @@ public class BlogController : ControllerBase
     /// <response code="403">User is not authorized to change the status of this blog</response>
     /// <response code="404">Blog not found</response>
     [HttpPost("{id}/status", Name = nameof(PostBlogStatus))]
+    [EnableRateLimiting(RateLimitPolicies.Default)]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Blog>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -201,6 +207,7 @@ public class BlogController : ControllerBase
     /// <response code="403">User is not a mentor</response>
     /// <response code="404">Blog not found</response>
     [HttpPost("{id}/premoderation", Name = nameof(PostBlogPremoderation))]
+    [EnableRateLimiting(RateLimitPolicies.Default)]
     [RequireRole(UserRole.Mentor)]
     [ProducesResponseType(typeof(Envelope<Blog>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -227,6 +234,7 @@ public class BlogController : ControllerBase
     /// <response code="403">User is not authorized</response>
     /// <response code="404">Blog not found</response>
     [HttpPost("{id}/rubrics", Name = nameof(PostRubric))]
+    [EnableRateLimiting(RateLimitPolicies.Default)]
     [AuthenticationRequired]
     // 201 without Location. A rubric has no address of its own, and
     // API_DESIGN.md answers exactly that case: the header is left off rather
@@ -258,6 +266,7 @@ public class BlogController : ControllerBase
     /// <response code="403">User is not authorized</response>
     /// <response code="404">Rubric not found</response>
     [HttpPatch("{id}/rubrics/{rubricId:guid}", Name = nameof(PatchRubric))]
+    [EnableRateLimiting(RateLimitPolicies.Default)]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<Rubric>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -290,6 +299,7 @@ public class BlogController : ControllerBase
     /// <response code="403">User is not authorized</response>
     /// <response code="404">Blog not found</response>
     [HttpPut("{id}/rubrics/order", Name = nameof(PutRubricsOrder))]
+    [EnableRateLimiting(RateLimitPolicies.Default)]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(ListEnvelope<Rubric>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -312,6 +322,7 @@ public class BlogController : ControllerBase
     /// <response code="403">User is not authorized</response>
     /// <response code="404">Rubric not found</response>
     [HttpDelete("{id}/rubrics/{rubricId:guid}", Name = nameof(DeleteRubric))]
+    [EnableRateLimiting(RateLimitPolicies.Default)]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]

@@ -306,8 +306,7 @@ internal class GameInvitationRepository : IGameInvitationRepository
         return (tokenDto, info);
     }
 
-    /// <inheritdoc />
-    public async Task<GameInvitationToken> CreateInvitation(CreateGameInvitationEntity entity, CancellationToken ct = default)
+    private async Task<GameInvitationToken> CreateInvitation(CreateGameInvitationEntity entity, CancellationToken ct = default)
     {
         var token = new Token
         {

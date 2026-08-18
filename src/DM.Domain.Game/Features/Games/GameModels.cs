@@ -849,35 +849,9 @@ public class Character
 public class CharacterShortInfo : CharacterShort
 {
     /// <summary>
-    /// Last post info
-    /// </summary>
-    public LastPost? LastPost { get; set; }
-
-    /// <summary>
     /// Total posts count
     /// </summary>
     public int PostsCount { get; set; }
-}
-
-/// <summary>
-/// Last post info
-/// </summary>
-public class LastPost
-{
-    /// <summary>
-    /// Post identifier
-    /// </summary>
-    public Guid Id { get; set; }
-
-    /// <summary>
-    /// Room identifier
-    /// </summary>
-    public Guid RoomId { get; set; }
-
-    /// <summary>
-    /// Created timestamp
-    /// </summary>
-    public DateTimeOffset CreatedUtc { get; set; }
 }
 
 /// <summary>
@@ -1364,27 +1338,6 @@ public class RoomOrderInfo
     /// Order number
     /// </summary>
     public double OrderNumber { get; set; }
-}
-
-/// <summary>
-/// Room neighbours for reordering
-/// </summary>
-public class RoomNeighbours
-{
-    /// <summary>
-    /// Previous room
-    /// </summary>
-    public RoomOrderInfo? Previous { get; set; }
-
-    /// <summary>
-    /// Current room
-    /// </summary>
-    public RoomOrderInfo Current { get; set; } = null!;
-
-    /// <summary>
-    /// Next room
-    /// </summary>
-    public RoomOrderInfo? Next { get; set; }
 }
 
 /// <summary>

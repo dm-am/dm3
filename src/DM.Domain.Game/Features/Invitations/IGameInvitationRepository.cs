@@ -48,11 +48,6 @@ public interface IGameInvitationRepository
     Task<(GameInvitationToken? Token, GameInvitation? Info)> GetInvitation(Guid tokenId, CancellationToken ct = default);
 
     /// <summary>
-    /// Create invitation
-    /// </summary>
-    Task<GameInvitationToken> CreateInvitation(CreateGameInvitationEntity entity, CancellationToken ct = default);
-
-    /// <summary>
     /// Invalidate existing and create new invitation
     /// </summary>
     Task<GameInvitationToken> InvalidateAndCreateInvitation(CreateGameInvitationEntity entity, CancellationToken ct = default);

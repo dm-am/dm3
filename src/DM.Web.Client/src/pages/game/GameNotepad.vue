@@ -8,11 +8,14 @@ import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore, gameApi } from "@/entities/game";
+import { useAuthStore } from "@/entities/user";
 import { NotepadBoard, type NotepadAdapter } from "@/widgets/notepad";
+import { LoginPrompt } from "@/features/auth";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
 const { isMaster, isAssistant, isMentor } = storeToRefs(gameStore);
+const { user } = storeToRefs(useAuthStore());
 
 // Notepad endpoints accept the public id (they are publicId-tolerant), so the
 // raw route param is enough — no need to wait for the game GUID to resolve.
@@ -32,7 +35,10 @@ const adapter: NotepadAdapter = {
 </script>
 
 <template>
+  <LoginPrompt v-if="!user" action="видеть блокнот мастера" />
+
   <NotepadBoard
+    v-else
     :adapter="adapter"
     :accessible="canAccess"
     title="Блокнот мастера"

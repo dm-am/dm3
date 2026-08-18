@@ -299,7 +299,9 @@ internal class BlogService : IBlogService
         await _updateBlogValidator.ValidateAndThrowAsync(updateBlog, ct);
 
         var blog = await GetAsync(updateBlog.BlogId, ct);
-        _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
+        // The settings page save: open to the blog leads (owner + assistants),
+        // not just the owner. Owner-only operations stay on Edit.
+        _intentionManager.ThrowIfForbidden(BlogIntention.EditSettings, blog);
 
         var entity = new UpdateBlogEntity
         {

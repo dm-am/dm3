@@ -26,8 +26,19 @@ internal static class RateLimitingExtensions
     /// <summary>Every limiter here counts within the same window.</summary>
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(1);
 
-    /// <summary>Requests one address may make across the whole API per window.</summary>
-    private const int GlobalPermitLimit = 100;
+    /// <summary>
+    /// Requests one address may make across the whole API per window.
+    /// </summary>
+    /// <remarks>
+    /// A backstop against scraping and floods, not the protection of any
+    /// costly path — those have their own policies below. The number is sized
+    /// for an address that is not one person: carrier-grade NAT puts whole
+    /// neighbourhoods behind one IPv4, and the audience this site serves is
+    /// exactly the audience behind it. At 100 a single SPA cold load
+    /// (a dozen calls) times a handful of concurrent readers on one address
+    /// answered 429 to all of them at once.
+    /// </remarks>
+    private const int GlobalPermitLimit = 300;
 
     /// <summary>What a limiter counts separately.</summary>
     internal enum Partition

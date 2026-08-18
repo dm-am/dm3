@@ -4,6 +4,7 @@ import type { LocationQuery } from "vue-router";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { createFilterDispatcher } from "@/shared/lib/composables/createFilterDispatcher";
 import {
+  applySortAction,
   parseDateFromUrl,
   dateToApiStart,
   dateToApiEnd,
@@ -140,19 +141,9 @@ function reducer(
       newState.registeredToUtc = action.toUtc;
       return newState;
 
-    case "SET_SORT": {
-      newState.sortBy = action.sortBy;
-      if (action.sortOrder) {
-        newState.sortOrder = action.sortOrder;
-      } else {
-        const option = SORT_OPTIONS.find((o) => o.value === action.sortBy);
-        newState.sortOrder = option?.defaultDirection || "asc";
-      }
-      return newState;
-    }
-
+    case "SET_SORT":
     case "TOGGLE_SORT_ORDER":
-      newState.sortOrder = newState.sortOrder === "asc" ? "desc" : "asc";
+      applySortAction(newState, action, SORT_OPTIONS, "asc");
       return newState;
 
     case "CLEAR_FILTERS":

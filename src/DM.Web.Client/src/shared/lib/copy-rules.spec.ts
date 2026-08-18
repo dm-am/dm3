@@ -41,7 +41,11 @@
  * A middle dot outside a literal is not copy and is not this test's business.
  * Inside one it is copy until proven otherwise, and the tree holds none.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+// A whole-tree AST scan legitimately outruns the 5s default when the suite
+// saturates every core, which is what a coverage run does.
+vi.setConfig({ testTimeout: 30_000 });
 import { readFileSync, readdirSync, statSync } from "fs";
 import { dirname, join, relative, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -184,6 +188,19 @@ function collectFiles(dir: string, out: string[] = []): string[] {
   return out;
 }
 
+/**
+ * The walk reads the whole source tree, and eight assertions below want it. One
+ * walk per assertion made this file the slowest in the suite and pushed it past
+ * even a raised timeout on a busy machine; the tree cannot change mid-run, so
+ * the walk happens once and every assertion reads the same list.
+ */
+let treeCache: string[] | undefined;
+
+function sourceFiles(): string[] {
+  treeCache ??= collectFiles(CLIENT_SRC);
+  return treeCache;
+}
+
 /** Path as a failure message spells it: relative, forward slashes. */
 function where(file: string): string {
   return relative(CLIENT_SRC, file).split("\\").join("/");
@@ -235,7 +252,7 @@ function sfcParts(
 }
 
 function offendersIn(file: string, needle: string): string[] {
-  const raw = readFileSync(file, "utf8");
+  const raw = rawOf(file);
   // Cheap reject: almost no file contains the needle at all.
   if (!raw.includes(needle)) return [];
 
@@ -264,14 +281,40 @@ function offendersIn(file: string, needle: string): string[] {
  * one. A phrase then survives a re-wrap by the formatter, while two strings
  * that merely sit next to each other still cannot spell one between them.
  */
+/**
+ * Parsing is the expensive half: every .ts goes through the TypeScript AST and
+ * every .vue through the SFC compiler. Eight assertions ask the same files for
+ * the same copy, so the parse happens once per file and the result is reused.
+ * Keyed by path, which is identity enough here: the tree is read-only for the
+ * length of the run.
+ */
+const copyCache = new Map<string, string[]>();
+
+/** Source of a file, read once, for the same reason. */
+const rawCache = new Map<string, string>();
+
+function rawOf(file: string): string {
+  let raw = rawCache.get(file);
+  if (raw === undefined) {
+    raw = readFileSync(file, "utf8");
+    rawCache.set(file, raw);
+  }
+  return raw;
+}
+
 function copyOf(file: string, raw: string): string[] {
+  const cached = copyCache.get(file);
+  if (cached) return cached;
+
   const parts = file.endsWith(".ts")
     ? stringLiterals(raw, file)
     : (() => {
         const { template, scripts } = sfcParts(raw, file);
         return [template, ...scripts.flatMap((s) => stringLiterals(s, file))];
       })();
-  return parts.map((part) => part.replace(/\s+/g, " "));
+  const copy = parts.map((part) => part.replace(/\s+/g, " "));
+  copyCache.set(file, copy);
+  return copy;
 }
 
 /**
@@ -461,20 +504,20 @@ const EMOJI_PRESENTATION = /\p{Emoji_Presentation}|\uFE0F/u;
 
 describe("interface copy", () => {
   it("never uses the middle dot in a user-visible string", () => {
-    const offenders = collectFiles(CLIENT_SRC).flatMap((file) =>
+    const offenders = sourceFiles().flatMap((file) =>
       offendersIn(file, MIDDOT),
     );
     expect(offenders).toEqual([]);
   });
 
   it("never brings back a wording the owner replaced", () => {
-    const files = collectFiles(CLIENT_SRC);
+    const files = sourceFiles();
     const offenders: string[] = [];
 
     for (const { text, instead } of RETIRED_COPY) {
       const probe = probeOf(text);
       for (const file of files) {
-        const raw = readFileSync(file, "utf8");
+        const raw = rawOf(file);
         if (!raw.includes(probe)) continue;
         if (copyOf(file, raw).some((part) => part.includes(text))) {
           offenders.push(`${where(file)}: "${text}" — use ${instead}`);
@@ -495,8 +538,8 @@ describe("interface copy", () => {
 
   it("draws an icon with an icon and not with an emoji", () => {
     const offenders: string[] = [];
-    for (const file of collectFiles(CLIENT_SRC)) {
-      for (const part of copyOf(file, readFileSync(file, "utf8"))) {
+    for (const file of sourceFiles()) {
+      for (const part of copyOf(file, rawOf(file))) {
         // Iterating a string yields code points, so a surrogate pair arrives
         // whole — which is the only way the pictograph planes are reachable.
         for (const character of part) {
@@ -512,14 +555,14 @@ describe("interface copy", () => {
   });
 
   it("never spells the letter with the two dots", () => {
-    const offenders = collectFiles(CLIENT_SRC).flatMap((file) =>
+    const offenders = sourceFiles().flatMap((file) =>
       E_WITH_DOTS.flatMap((letter) => offendersIn(file, letter)),
     );
     expect(offenders).toEqual([]);
   });
 
   it("keeps the typographic quotes at the motto", () => {
-    const offenders = collectFiles(CLIENT_SRC)
+    const offenders = sourceFiles()
       .filter((file) => !(where(file) in GUILLEMETS_ALLOWED))
       .flatMap((file) => GUILLEMETS.flatMap((mark) => offendersIn(file, mark)));
     expect(offenders).toEqual([]);
@@ -527,8 +570,8 @@ describe("interface copy", () => {
 
   it("spends the em dash only where the budget says", () => {
     const counted: Record<string, number> = {};
-    for (const file of collectFiles(CLIENT_SRC)) {
-      const raw = readFileSync(file, "utf8");
+    for (const file of sourceFiles()) {
+      const raw = rawOf(file);
       if (!raw.includes(EM_DASH)) continue;
       const count = emDashCount(file, raw);
       if (count) counted[where(file)] = count;
@@ -546,9 +589,9 @@ describe("interface copy", () => {
   it("calls the forum entity a топик", () => {
     const offenders: string[] = [];
     let scanned = 0;
-    for (const file of collectFiles(CLIENT_SRC)) {
+    for (const file of sourceFiles()) {
       scanned++;
-      const raw = readFileSync(file, "utf8");
+      const raw = rawOf(file);
       if (copyOf(file, raw).some(callsTheEntityATema)) {
         offenders.push(`${where(file)}: the forum entity is a "топик"`);
       }
@@ -563,10 +606,10 @@ describe("interface copy", () => {
     ["empty table", NOTHING_TO_SHOW, EMPTY_SPELLED],
   ])("writes the %s wording in one place", (_what, token, spelled) => {
     const offenders: string[] = [];
-    for (const file of collectFiles(CLIENT_SRC)) {
+    for (const file of sourceFiles()) {
       const rel = where(file);
       if (TOKEN_ALLOWED.has(rel)) continue;
-      const raw = readFileSync(file, "utf8");
+      const raw = rawOf(file);
       if (!raw.includes(token)) continue;
       if (copyOf(file, raw).some((part) => spelled.test(part))) {
         offenders.push(`${rel}: spells the wording instead of importing it`);

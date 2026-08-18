@@ -27,7 +27,7 @@ public class SiteAddressConfigurationShould
     {
         Site.BrowserOrigins().Should().BeEquivalentTo(
             DM.Domain.Core.Site.SiteAddresses.Hosts.Select(host => $"https://{host}"),
-            "the addresses of the site are one declaration, and the mirror is one of them");
+            "the addresses of the site are one declaration, and the second door is one of them");
     }
 
     [Fact]

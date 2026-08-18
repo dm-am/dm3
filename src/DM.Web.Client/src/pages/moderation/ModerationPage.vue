@@ -1,17 +1,30 @@
+<script setup lang="ts">
+// The admin tab strip. Tabs come from lib/sections — the table the pages under
+// them gate themselves with — filtered by the viewer's role, so the strip
+// never offers a tab whose page would answer with a refusal.
+import { computed } from "vue";
+import { storeToRefs } from "pinia";
+import { useAuthStore } from "@/shared/stores";
+import { MODERATION_SECTIONS } from "./lib/sections";
+import { hasRequiredRole } from "./lib/useRoleGate";
+
+const { user } = storeToRefs(useAuthStore());
+
+const sections = computed(() =>
+  MODERATION_SECTIONS.filter((section) =>
+    hasRequiredRole(user.value, section.role),
+  ),
+);
+</script>
+
 <template>
   <page-title v-once>Модерация</page-title>
-  <nav class="moderation-nav" v-once>
-    <router-link :to="{ name: 'moderation' }">Обзор</router-link>
-    <router-link :to="{ name: 'moderation-username-changes' }"
-      >Запросы на смену имени пользователя</router-link
-    >
-    <router-link :to="{ name: 'moderation-tags' }">Теги игр</router-link>
-    <router-link :to="{ name: 'moderation-awards' }">Награды</router-link>
-    <router-link :to="{ name: 'moderation-achievements' }"
-      >Достижения</router-link
-    >
-    <router-link :to="{ name: 'moderation-fundraising' }"
-      >Сбор средств</router-link
+  <nav v-if="sections.length" class="moderation-nav">
+    <router-link
+      v-for="section in sections"
+      :key="section.name"
+      :to="{ name: section.name }"
+      >{{ section.label }}</router-link
     >
   </nav>
   <router-view />

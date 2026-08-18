@@ -1,46 +1,31 @@
 <script setup lang="ts">
 /**
- * ProfileGameReviewsList — the shared game-reviews list with pagination. Used
- * by both pages: "Полученные рецензии на игры" and "Написанные рецензии на
- * игры".
+ * ProfileGameReviewsList — the game-reviews flavor of
+ * `ProfileTestimonialsFrame`. Used by both pages: "Полученные рецензии на
+ * игры" and "Написанные рецензии на игры".
  *
- * Differences between the modes:
+ * What is local here:
  *  - endpoint: `getUserGameReviews` (received) vs `getWrittenUserGameReviews`
  *    (written);
- *  - the route name for Paging links (the `routeName` prop);
- *  - the row title: in "received" the author varies and leads the line, in
- *    "written" the author is the profile owner on every row and the game
- *    leads instead.
- * Everything else is shared, the fetch and the pagination included.
- *
- * Why not the endorsements card: a recommendation is plain text in a speech
- * bubble, a game review is BBCode the server renders. The row is therefore the
- * same collapsed accordion the game's own "Рецензии" tab already uses, so a
- * review reads identically wherever it is met.
- *
- * Architecture:
- *  - `useFetchData` listens to route.query (+ username/mode via a closure)
- *    and re-runs the fetch.
- *  - Server-side pagination — paging info comes from the ListEnvelope.
+ *  - the card: `GameReviewCard`, which sits in the same speech bubble as a
+ *    recommendation — the text is visible at once instead of hiding behind an
+ *    accordion row, and the authorship is links rather than a comma-joined
+ *    string;
+ *  - the texts, including the "written" relabel of the "Автор" sort option to
+ *    "Игра": every review there is authored by the profile owner, so sorting
+ *    by author is meaningless, and the backend already sorts this scope by the
+ *    other side of the pair (GameReviewRepository.ApplySort). Only the label,
+ *    the hint and the search placeholder change; the value sent stays
+ *    "author".
+ * Everything else — filter, fetch, states, paging — is the frame. The footer
+ * names BOTH sides of the pair in both modes, the way the recommendation
+ * lists do.
  */
-import { ref, computed, watch, type Ref } from "vue";
-import { useRoute } from "vue-router";
-import { userApi } from "@/entities/user";
+import { computed } from "vue";
+import { userApi, type GameReviewsQuery } from "@/entities/user";
+import { GameReviewCard } from "@/entities/game";
 import type { Username } from "@/shared/api/models/community";
-import type { GameReview } from "@/shared/api/models/game/reviews";
-import type { ListEnvelope } from "@/shared/api/models/common";
-import { ContentText } from "@/shared/ui/Content";
-import PagingWithSeparators from "@/shared/ui/Paging/PagingWithSeparators.vue";
-import { SecondaryText } from "@/shared/ui/Layout";
-import { ErrorState } from "@/shared/ui/ErrorState";
-import { ExpandableListSkeleton } from "@/shared/ui/Skeleton";
-import {
-  ExpandableList,
-  type ExpandableItem,
-} from "@/shared/ui/ExpandableList";
-import { useFetchData } from "@/shared/lib/composables/useFetchData";
-import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
-import { formatDateFull } from "@/shared/lib/utils/datetime";
+import ProfileTestimonialsFrame from "./ProfileTestimonialsFrame.vue";
 
 const props = defineProps<{
   username: string;
@@ -56,91 +41,14 @@ const props = defineProps<{
   routeName: "received-game-reviews" | "given-game-reviews";
 }>();
 
-const route = useRoute();
-
-const envelope: Ref<ListEnvelope<GameReview> | null> = ref(null);
-
-// Keeps any already-shown items on a failure (stale-while-revalidate); the
-// ErrorState banner renders independently above the list — see template — so
-// the previous message is not cleared until the next answer lands.
-const {
-  loading,
-  error: loadError,
-  clearError,
-  run,
-} = useGuardedRequest({ message: "Не удалось загрузить рецензии" });
-
-// Username/mode change (navigating between "received" and "written" pages, or
-// to another profile) must drop the previous list immediately.
-watch(
-  () => `${props.username}:${props.mode}`,
-  () => {
-    envelope.value = null;
-    clearError();
-  },
-);
-
-const page = computed(() => {
-  const number = route.query.number;
-  return number ? parseInt(String(number), 10) : 1;
-});
-
-function fetch() {
-  // Do not detach the method — both calls go through
-  // `this.buildGameReviewParams(q)`, and a detached `const fn =
-  // userApi.getX` loses `this` and crashes with a TypeError.
-  const params = { number: page.value };
-  return run(
-    () =>
-      props.mode === "received"
-        ? userApi.getUserGameReviews(props.username as Username, params)
-        : userApi.getWrittenUserGameReviews(props.username as Username, params),
-    (data) => {
-      envelope.value = data;
-    },
-  );
+// Do not detach the methods — both calls go through
+// `this.buildListParams(q)`, and a detached `const fn = userApi.getX` loses
+// `this` and crashes with a TypeError.
+function fetchPage(q: GameReviewsQuery) {
+  return props.mode === "received"
+    ? userApi.getUserGameReviews(props.username as Username, q)
+    : userApi.getWrittenUserGameReviews(props.username as Username, q);
 }
-
-useFetchData(
-  () => fetch(),
-  [
-    {
-      // The URL is the single source of truth for paging: route.query changed
-      // → refetch. Username/mode come in via the props closure so they are
-      // covered too (mode switches received/written without changing
-      // route.query, hence explicitly part of the key).
-      param: () =>
-        JSON.stringify({ q: route.query, u: props.username, m: props.mode }),
-      callback: () => fetch(),
-    },
-  ],
-);
-
-/**
- * Row headings. The game leads in "written" mode, where the author is the
- * profile owner on every row and naming him again says nothing; the author
- * leads in "received", where he is what differs between rows. Parts joined by
- * a comma, because the em dash is out of interface copy.
- */
-const items = computed<(ExpandableItem & { review: GameReview })[]>(() =>
-  (envelope.value?.resources ?? []).map((review) => {
-    const game = review.gameTitle ?? "Игра без названия";
-    const date = formatDateFull(review.createdUtc);
-    return {
-      id: review.id,
-      title:
-        props.mode === "written"
-          ? `${game}, ${date}`
-          : `${review.author?.username ?? "Аноним"}, ${game}, ${date}`,
-      review,
-    };
-  }),
-);
-
-const paging = computed(() => envelope.value?.paging ?? null);
-const isEmpty = computed(
-  () => envelope.value !== null && items.value.length === 0,
-);
 
 const emptyText = computed(() =>
   props.mode === "received"
@@ -148,85 +56,33 @@ const emptyText = computed(() =>
     : "Пользователь пока не писал рецензий на игры",
 );
 
-const pagingTo = computed(() => ({
-  name: props.routeName,
-  params: { username: props.username },
-}));
+const authorSortOverride = computed(() =>
+  props.mode === "written"
+    ? { label: "Игра", hint: "По названию игры" }
+    : undefined,
+);
 
-// Paging scrolls the reviews block (top paging + rows) back into view instead
-// of the page top.
-const listRef = ref<HTMLElement | null>(null);
-function pagingAnchor(): HTMLElement | null {
-  return listRef.value;
-}
+const searchPlaceholder = computed(() =>
+  props.mode === "written"
+    ? "Поиск по тексту или игре"
+    : "Поиск по тексту, автору или игре",
+);
 </script>
 
 <template>
-  <div class="user-game-reviews-list">
-    <!-- Error banner — independent of the list, matches /pulse: never hides
-         already-loaded items on a failed refetch. 404-vs-failure distinction
-         (does this profile exist at all) is resolved one level up by
-         useProfileSubpageUser; this ErrorState is purely for "the request to
-         load reviews failed". -->
-    <ErrorState
-      v-if="loadError"
-      class="error-banner"
-      :message="loadError"
-      :retry="fetch"
-    />
-
-    <ExpandableListSkeleton v-if="loading && !envelope" />
-
-    <SecondaryText v-else-if="isEmpty">
-      {{ emptyText }}
-    </SecondaryText>
-
-    <div v-else-if="items.length" ref="listRef" class="list">
-      <PagingWithSeparators
-        v-if="paging"
-        :paging="paging"
-        :to="pagingTo"
-        :use-query="true"
-        :scroll-anchor="pagingAnchor"
-      />
-
-      <ExpandableList :items="items" :allow-multiple="true">
-        <template #content="{ item }">
-          <div class="review-text">
-            <ContentText :html="item.review.text" />
-          </div>
-        </template>
-      </ExpandableList>
-
-      <PagingWithSeparators
-        v-if="paging"
-        :paging="paging"
-        :to="pagingTo"
-        :use-query="true"
-        :scroll-anchor="pagingAnchor"
-      />
-    </div>
-  </div>
+  <ProfileTestimonialsFrame
+    :username="username"
+    :mode="mode"
+    :route-name="routeName"
+    error-message="Не удалось загрузить рецензии"
+    :empty-text="emptyText"
+    empty-filtered-text="Рецензий по заданным фильтрам не найдено"
+    :author-sort-override="authorSortOverride"
+    :search-placeholder="searchPlaceholder"
+    :fetch-page="fetchPage"
+  >
+    <template #item="{ item, searchQuery }">
+      <GameReviewCard :review="item" :search-query="searchQuery" />
+    </template>
+  </ProfileTestimonialsFrame>
 </template>
-
-<style scoped lang="sass">
-.user-game-reviews-list
-  display: flex
-  flex-direction: column
-  gap: $small
-
-.error-banner
-  margin-bottom: $medium
-
-// Paging blocks sit $medium from the review rows; the rows carry their own
-// separators inside ExpandableList.
-.list
-  display: flex
-  flex-direction: column
-  gap: $medium
-  margin-top: $medium
-
-// Line-height comes from the global .bbcode-content (SSOT) on ContentText.
-.review-text
-  color: $text
-</style>

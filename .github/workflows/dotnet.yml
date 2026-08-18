@@ -546,7 +546,7 @@ jobs:
       run: |
         docker compose --env-file /dev/null -f docker-compose.yml config --quiet
         docker compose --env-file /dev/null -f docker-compose.yml -f docker-compose.preview.yml config --quiet
-        docker compose --env-file /dev/null -f docker-compose.yml -f docker-compose.preview.yml -f docker-compose.mirror.yml config --quiet
+        docker compose --env-file /dev/null -f docker-compose.yml -f docker-compose.preview.yml -f docker-compose.pop.yml config --quiet
 
     - name: Every build context the overlay names must exist
       working-directory: docker

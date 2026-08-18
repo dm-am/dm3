@@ -17,6 +17,7 @@ import { computed, type ComputedRef } from "vue";
 import { useRoute, useRouter, type LocationQuery } from "vue-router";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { createFilterDispatcher } from "@/shared/lib/composables/createFilterDispatcher";
+import { applySortAction } from "./applySortAction";
 import type {
   BaseFilterState,
   BaseSearchParams,
@@ -161,21 +162,9 @@ export function createAuthorDateFilter<TSortBy extends string = string>(
         newState.createdToUtc = action.to;
         return newState;
 
-      case "SET_SORT": {
-        newState.sortBy = action.sortBy;
-        if (action.sortOrder) {
-          newState.sortOrder = action.sortOrder;
-        } else {
-          const option = config.sortOptions.find(
-            (o) => o.value === action.sortBy,
-          );
-          newState.sortOrder = option?.defaultDirection || "desc";
-        }
-        return newState;
-      }
-
+      case "SET_SORT":
       case "TOGGLE_SORT_ORDER":
-        newState.sortOrder = newState.sortOrder === "asc" ? "desc" : "asc";
+        applySortAction(newState, action, config.sortOptions);
         return newState;
 
       case "CLEAR_FILTERS":

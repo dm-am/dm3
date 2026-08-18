@@ -10,6 +10,7 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Extensions;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.GameReviews;
+using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 using DbGameReview = DM.Infrastructure.Persistence.Entities.Game.GameReview;
 
@@ -82,8 +83,7 @@ internal class GameReviewRepository : IGameReviewRepository
 
         query = ApplyFilter(query, filter);
 
-        return await query
-            .OrderByDescending(r => r.CreatedUtc)
+        return await ApplySort(query, filter)
             .Page(paging)
             .ProjectTo<GameReview>(_mapper.ConfigurationProvider)
             .ToArrayAsync();
@@ -204,6 +204,55 @@ internal class GameReviewRepository : IGameReviewRepository
                 .Any(g => g.GameId == r.GameId && g.MasterId == filter.GmId.Value && !g.IsRemoved));
         }
 
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            // ILIKE over the text, the author's name and the game's title at
+            // once — three SQL conditions joined by OR, the shape the
+            // endorsement list already uses. This is "find where X is
+            // mentioned", not three separate search buckets.
+            var pattern = LikePatterns.Contains(filter.Search.Trim());
+            query = query.Where(r =>
+                EF.Functions.ILike(r.Text, pattern) ||
+                EF.Functions.ILike(r.Author.Username, pattern) ||
+                EF.Functions.ILike(r.Game.Title, pattern));
+        }
+
         return query;
+    }
+
+    /// <summary>
+    /// List sorting. Supported fields are kept in step with the FE sort
+    /// options ("created", "author") — a new option on the client without a
+    /// matching case here silently falls into the default order, so the SSOT
+    /// is this switch. For reviews WRITTEN by a user (AuthorId is fixed by the
+    /// filter) "author" means the other side of the pair, and that is the
+    /// game's title. Secondary keys make the order deterministic when primary
+    /// values are equal.
+    /// </summary>
+    private static IOrderedQueryable<DbGameReview> ApplySort(
+        IQueryable<DbGameReview> query, GameReviewFilter? filter)
+    {
+        var sortBy = (filter?.SortBy ?? "created").ToLowerInvariant();
+        var desc = string.IsNullOrEmpty(filter?.SortOrder) ||
+                   filter.SortOrder.Equals("desc", StringComparison.OrdinalIgnoreCase);
+
+        if (sortBy == "author")
+        {
+            var byGame = filter?.AuthorId != null;
+            var ordered = (byGame, desc) switch
+            {
+                (true, true) => query.OrderByDescending(r => r.Game.Title),
+                (true, false) => query.OrderBy(r => r.Game.Title),
+                (false, true) => query.OrderByDescending(r => r.Author.Username),
+                (false, false) => query.OrderBy(r => r.Author.Username),
+            };
+            return desc
+                ? ordered.ThenByDescending(r => r.CreatedUtc).ThenByDescending(r => r.GameReviewId)
+                : ordered.ThenBy(r => r.CreatedUtc).ThenBy(r => r.GameReviewId);
+        }
+
+        return desc
+            ? query.OrderByDescending(r => r.CreatedUtc).ThenByDescending(r => r.GameReviewId)
+            : query.OrderBy(r => r.CreatedUtc).ThenBy(r => r.GameReviewId);
     }
 }

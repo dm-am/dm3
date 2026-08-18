@@ -1,45 +1,16 @@
-import { ref, onUnmounted } from "vue";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { ONLINE_THRESHOLD_MS } from "@/shared/lib/constants/user";
+import { useNowTimestamp } from "@/shared/lib/composables/useNowTimestamp";
 import type { User, UserRef } from "./types";
 import { UserRole } from "./types";
-
-// Cached timestamp for isOnline() optimization
-// Refreshed every minute to avoid creating Date objects per-row
-const nowTimestamp = ref(Date.now());
-let intervalId: ReturnType<typeof setInterval> | null = null;
-let instanceCount = 0;
-
-function startTimestampRefresh() {
-  if (intervalId === null) {
-    intervalId = setInterval(() => {
-      nowTimestamp.value = Date.now();
-    }, 60_000); // Refresh every minute
-  }
-  instanceCount++;
-}
-
-function stopTimestampRefresh() {
-  instanceCount--;
-  if (instanceCount <= 0 && intervalId !== null) {
-    clearInterval(intervalId);
-    intervalId = null;
-    instanceCount = 0;
-  }
-}
 
 /**
  * Unified composable for user display logic
  * Single source of truth for tooltips and formatted info
  */
 export function useUserDisplay() {
-  // Start timestamp refresh when composable is used
-  startTimestampRefresh();
-
-  // Stop when component unmounts
-  onUnmounted(() => {
-    stopTimestampRefresh();
-  });
+  // Cached timestamp for isOnline(); shared single timer, see useNowTimestamp
+  const nowTimestamp = useNowTimestamp();
 
   /**
    * Check if user is online (last activity within the shared online threshold).

@@ -37,17 +37,34 @@ internal class GameReviewApiService : IGameReviewApiService
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<GameReviewDto>> GetReceivedByUser(string username, PagingQuery query)
+    public async Task<ListEnvelope<GameReviewDto>> GetReceivedByUser(string username, UserGameReviewsQuery query)
     {
         var user = await _userLookupService.GetAsync(username);
-        return await GetFiltered(query, new GameReviewFilter { GmId = user.UserId });
+        return await GetFiltered(query, Filter(query, f => f.GmId = user.UserId));
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<GameReviewDto>> GetWrittenByUser(string username, PagingQuery query)
+    public async Task<ListEnvelope<GameReviewDto>> GetWrittenByUser(string username, UserGameReviewsQuery query)
     {
         var user = await _userLookupService.GetAsync(username);
-        return await GetFiltered(query, new GameReviewFilter { AuthorId = user.UserId });
+        return await GetFiltered(query, Filter(query, f => f.AuthorId = user.UserId));
+    }
+
+    /// <summary>
+    /// Search and sorting come from the query as they are; the caller adds
+    /// the one field that says WHOSE reviews these are. Written out here so
+    /// the two listings cannot drift apart on what they forward.
+    /// </summary>
+    private static GameReviewFilter Filter(UserGameReviewsQuery query, Action<GameReviewFilter> scope)
+    {
+        var filter = new GameReviewFilter
+        {
+            Search = query.Search,
+            SortBy = query.SortBy,
+            SortOrder = query.SortOrder
+        };
+        scope(filter);
+        return filter;
     }
 
     private async Task<ListEnvelope<GameReviewDto>> GetFiltered(PagingQuery query, GameReviewFilter filter)

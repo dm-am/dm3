@@ -86,15 +86,6 @@ internal class SubscriptionRepository : ISubscriptionRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Subscription>> GetByTargetAsync(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default)
-    {
-        return await _dbContext.Subscriptions
-            .Where(s => s.TargetType == targetType && s.TargetId == targetId)
-            .ProjectTo<Subscription>(_mapper.ConfigurationProvider)
-            .ToListAsync(ct);
-    }
-
-    /// <inheritdoc />
     public async Task<IEnumerable<Subscription>> GetByTargetWithSettingsAsync(SubscriptionTargetType targetType, Guid targetId, SubscriptionSettings requiredSettings, CancellationToken ct = default)
     {
         return await _dbContext.Subscriptions

@@ -1,8 +1,6 @@
 using System;
-using System.Collections.Generic;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Likes;
 
 namespace DM.Domain.Game.Features.PostReviews;
 
@@ -14,9 +12,8 @@ namespace DM.Domain.Game.Features.PostReviews;
 /// Any sentiment text is allowed.
 /// Has Sign (+1/0/-1) for rating impact.
 /// One review per author-post pair.
-/// SUPPORTS LIKES (only entity with likes in the review system).
 /// </remarks>
-public class PostReview : ILikable
+public class PostReview
 {
     /// <summary>
     /// Review identifier
@@ -62,18 +59,4 @@ public class PostReview : ILikable
     /// Rating impact sign (+1, 0, -1)
     /// </summary>
     public ReviewSign Sign { get; set; }
-
-    #region ILikable Implementation
-
-    /// <summary>
-    /// Type of likable entity
-    /// </summary>
-    public LikeEntityType LikeEntityType => LikeEntityType.PostReview;
-
-    /// <summary>
-    /// Users who liked this review
-    /// </summary>
-    public IEnumerable<GeneralUser> Likes { get; set; } = Array.Empty<GeneralUser>();
-
-    #endregion
 }

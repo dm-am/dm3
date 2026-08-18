@@ -1,6 +1,5 @@
 using System;
 using DM.Domain.Core.Dto;
-using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.Abstractions;
 
@@ -9,22 +8,6 @@ namespace DM.Domain.Core.Abstractions;
 /// </summary>
 public interface ICursorService
 {
-    /// <summary>
-    /// Encode cursor data into opaque string
-    /// </summary>
-    /// <param name="entityId">Entity ID</param>
-    /// <param name="timestampUtc">Timestamp (UTC)</param>
-    /// <param name="direction">Pagination direction</param>
-    /// <returns>Opaque cursor string (base64 encoded)</returns>
-    string Encode(Guid entityId, DateTimeOffset timestampUtc, CursorDirection direction);
-
-    /// <summary>
-    /// Decode opaque cursor string into cursor data
-    /// </summary>
-    /// <param name="cursor">Opaque cursor string</param>
-    /// <returns>Decoded cursor data, or null if invalid</returns>
-    CursorData? Decode(string cursor);
-
     /// <summary>
     /// Try to decode cursor string
     /// </summary>

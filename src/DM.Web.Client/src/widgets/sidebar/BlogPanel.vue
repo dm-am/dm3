@@ -20,7 +20,12 @@
 //   "Управление блогом" — owner/assistant get the edit items (settings,
 //     create publication, status buttons); the blog mentor ("наставник")
 //     gets the management header and the notepad for oversight, but not the
-//     edit items (mirrors GamePanel, and the backend BlogNotepadService gate).
+//     edit items (the backend BlogNotepadService gate).
+//     The settings row deliberately does NOT widen the way GamePanel's did:
+//     BlogIntention.EditSettings is owner + assistants + senior moderation and
+//     leaves the blog mentor out, because unlike the game curator he only
+//     approves publications. Senior moderation is admitted by the intention
+//     and still gets no row — staff powers are not interface copy.
 //   "Действия с блогом" — any authenticated user except the owner
 //     (subscribe toggle, via features/blog-actions).
 //   "Модерация блога" — premoderation is Mentor+ (global),

@@ -23,22 +23,31 @@ const AUDIENCE: Record<RequiredRole, string> = {
   Admin: "администраторам",
 };
 
+/**
+ * The role check itself, shared with the admin tab strip (ModerationPage),
+ * which filters its tabs by the same answer the pages under them give.
+ */
+export function hasRequiredRole(
+  user: Parameters<typeof userIsModerator>[0],
+  required: RequiredRole,
+): boolean {
+  switch (required) {
+    case "Admin":
+      return userIsAdmin(user);
+    case "SeniorModerator":
+      return userIsSeniorModerator(user);
+    default:
+      return userIsModerator(user);
+  }
+}
+
 export function useRoleGate(required: RequiredRole = "Moderator") {
   const { user } = storeToRefs(useAuthStore());
 
   /** What a viewer without the role reads instead of the page. */
   const deniedText = `Страница доступна только ${AUDIENCE[required]}`;
 
-  const hasAccess = computed(() => {
-    switch (required) {
-      case "Admin":
-        return userIsAdmin(user.value);
-      case "SeniorModerator":
-        return userIsSeniorModerator(user.value);
-      default:
-        return userIsModerator(user.value);
-    }
-  });
+  const hasAccess = computed(() => hasRequiredRole(user.value, required));
 
   const isModerator = computed(() => userIsModerator(user.value));
   const isSeniorModerator = computed(() => userIsSeniorModerator(user.value));

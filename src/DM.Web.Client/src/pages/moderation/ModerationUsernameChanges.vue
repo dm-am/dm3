@@ -14,8 +14,11 @@ import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import UsernameChangeRejectDialog from "./dialogs/UsernameChangeRejectDialog.vue";
 import { useRoleGate } from "./lib/useRoleGate";
+import { sectionRole } from "./lib/sections";
 
-const { hasAccess, deniedText } = useRoleGate("SeniorModerator");
+const { hasAccess, deniedText } = useRoleGate(
+  sectionRole("moderation-username-changes"),
+);
 const toast = useToast();
 const requests = ref<UsernameChangeRequest[]>([]);
 const loading = ref(false);

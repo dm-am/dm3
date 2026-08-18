@@ -68,15 +68,6 @@ export type GeneralError = {
   traceId: string;
 };
 
-export enum ValidationErrorCode {
-  Empty = "Empty",
-  Short = "Short",
-  Long = "Long",
-  Taken = "Taken",
-  NotFound = "NotFound",
-  Invalid = "Invalid",
-}
-
 /**
  * A 400 with field-level detail. "errors" is what
  * ProblemDetailsFactory.CreateValidationProblemDetails writes, and it is the

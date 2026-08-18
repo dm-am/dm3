@@ -11,6 +11,7 @@
         <PackageReference Include="AspNetCore.HealthChecks.Rabbitmq" />
         <PackageReference Include="AspNetCore.HealthChecks.UI.Client" />
         <PackageReference Include="Autofac.Extensions.DependencyInjection" />
+        <PackageReference Include="BouncyCastle.Cryptography" />
         <PackageReference Include="Jamq.Client.Rabbit.DependencyInjection" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

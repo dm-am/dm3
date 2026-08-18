@@ -29,6 +29,14 @@ internal class BlogIntentionResolver : IIntentionResolver<BlogIntention, BlogDto
             BlogIntention.Edit =>
                 isOwner || user.Role >= UserRole.Admin,
 
+            // Settings editing is broader than owner-level Edit: the settings
+            // page belongs to the blog leads (owner + assistants), mirroring
+            // GameIntention.EditSettings. The mentor is deliberately absent:
+            // unlike the game curator, who helps a newbie shape the game itself,
+            // the blog mentor only approves publications.
+            BlogIntention.EditSettings =>
+                isOwner || isAssistant || user.Role >= UserRole.SeniorModerator,
+
             // Owner or senior moderator+ can delete
             BlogIntention.Delete =>
                 isOwner || user.Role >= UserRole.SeniorModerator,
@@ -63,9 +71,11 @@ internal class BlogIntentionResolver : IIntentionResolver<BlogIntention, BlogDto
             BlogIntention.CancelInvitation =>
                 isOwner,
 
-            // Owner can manage blacklist
-            BlogIntention.ManageBlacklist =>
-                isOwner,
+            // The blog blacklist is not here on purpose. It answers to Edit —
+            // owner or administration, on the read as much as on the write —
+            // and a second intention describing the same surface differently
+            // (this one said "owner alone") is a gate nobody enforces and a
+            // reader's wrong answer about who may run the list.
 
             // Mentors can approve/reject publications
             BlogIntention.ApprovePublications =>

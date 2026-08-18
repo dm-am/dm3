@@ -27,6 +27,6 @@ internal static class RateLimitPolicies
     /// <summary>Expensive reads: chat availability, full-text search.</summary>
     public const string Sliding = "sliding";
 
-    /// <summary>Ordinary authenticated writes: preferences, subscriptions, invitations.</summary>
+    /// <summary>Ordinary authenticated writes: preferences, subscriptions, invitations, notepads, game and blog management.</summary>
     public const string Default = "default";
 }

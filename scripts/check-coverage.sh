@@ -53,7 +53,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RESULTS="${1:-$REPO_ROOT/TestResults}"
 
 # The same path, spelled so a native program can resolve it. Under Git Bash every
-# path built above is an MSYS one (/d/Code Projects/dm3/...) and ReportGenerator
+# path built above is an MSYS one (/d/Projects/Web/dm3/...) and ReportGenerator
 # is a Windows binary, so MSYS rewrites such an argument on its way out - unless
 # the argument carries a wildcard, and then it hands it over untouched. That is
 # the shape of the -reports argument below, which therefore reached the tool as

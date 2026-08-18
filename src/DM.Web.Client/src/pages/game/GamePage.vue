@@ -3,10 +3,11 @@
 // sub-page. Status, system, setting, master and assistants live in the info
 // table (GameDetails), not duplicated in a header strip. All per-game
 // navigation and actions live in the left-sidebar GamePanel.
-import { computed, onUnmounted } from "vue";
+import { computed, onUnmounted, watch } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
+import { useAuthStore } from "@/entities/user";
 import {
   ErrorPage,
   errorCodeForStatus,
@@ -88,6 +89,21 @@ async function load(id: string) {
   if (!ok) return;
   await gameStore.loadRooms(id);
 }
+
+// Participation is a server field: the roles arrive with the game itself,
+// computed for whoever held the session at fetch time. The blog shell derives
+// its roles on the client and revives in place when the login dialog closes;
+// here the same login — and a logout — kept drawing the previous identity's
+// pages until a full reload: a signed-in master stayed refused, a signed-out
+// one kept the management UI. Every sub-page reads the store this refetch
+// writes, so the shell is the one place to watch. The username and not the
+// user object: updateUser also rewrites settings, and those must not refetch
+// the zone.
+const { user } = storeToRefs(useAuthStore());
+watch(
+  () => user.value?.username ?? null,
+  () => load(gameId.value),
+);
 
 useFetchData(
   () => load(gameId.value),

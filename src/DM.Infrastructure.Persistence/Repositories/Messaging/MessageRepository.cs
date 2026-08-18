@@ -163,8 +163,10 @@ internal class MessageRepository : IMessageRepository
         return CreateCursorResult(result, hasPrev: hasPrev, hasNext: hasMore);
     }
 
-    /// <inheritdoc />
-    public async Task<CursorResult<Message>> GetAround(Guid chatId, Guid messageId, int limit, CancellationToken ct = default)
+    /// <summary>
+    /// Get messages around a specific message
+    /// </summary>
+    private async Task<CursorResult<Message>> GetAround(Guid chatId, Guid messageId, int limit, CancellationToken ct = default)
     {
         var referenceMessage = await ChatMessageAnchor(chatId, messageId, ct);
 
@@ -212,8 +214,10 @@ internal class MessageRepository : IMessageRepository
         return CreateCursorResult(result.ToArray(), hasPrev, hasNext);
     }
 
-    /// <inheritdoc />
-    public async Task<CursorResult<Message>> GetNearTimestamp(Guid chatId, DateTimeOffset timestampUtc, int limit, CancellationToken ct = default)
+    /// <summary>
+    /// Get messages near a specific timestamp
+    /// </summary>
+    private async Task<CursorResult<Message>> GetNearTimestamp(Guid chatId, DateTimeOffset timestampUtc, int limit, CancellationToken ct = default)
     {
         // Find the first message on or after the timestamp. The tie-break makes the
         // anchor deterministic: ordered by timestamp alone, the same request could

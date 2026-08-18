@@ -39,7 +39,7 @@ docker/nginx/acme/*
 
 # Docker environment secrets
 docker/.env
-docker/.env.mirror
+docker/.env.pop
 
 # Claude Code: the agent configuration is part of the project, so it is
 # versioned. Two hooks refuse the commands that lose work (git checkout, reset
@@ -100,3 +100,7 @@ src/DM.Web.Client/playwright-report/
 src/DM.Web.Client/blob-report/
 
 src/DM.Web.Client/e2e/.auth/
+
+# Word lock files (open document markers)
+~$*.docx
+scripts/docx/shots/

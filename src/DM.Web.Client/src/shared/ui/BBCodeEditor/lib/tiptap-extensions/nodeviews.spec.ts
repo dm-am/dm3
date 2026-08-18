@@ -17,7 +17,15 @@
  *     + .bb-collapse > .bb-collapse-clip > .nsfw-spoiler (content + .nsfw-overlay)
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  type Mock,
+} from "vitest";
 import { mount } from "@vue/test-utils";
 import { h, defineComponent } from "vue";
 import SpoilerView from "./SpoilerView.vue";
@@ -102,7 +110,7 @@ function createMockProps(
 }
 
 describe("SpoilerView", () => {
-  let updateAttributesMock: ReturnType<typeof vi.fn>;
+  let updateAttributesMock: Mock;
 
   beforeEach(() => {
     updateAttributesMock = vi.fn();
@@ -273,7 +281,7 @@ describe("SpoilerView", () => {
 });
 
 describe("NsfwView", () => {
-  let updateAttributesMock: ReturnType<typeof vi.fn>;
+  let updateAttributesMock: Mock;
 
   beforeEach(() => {
     updateAttributesMock = vi.fn();

@@ -149,7 +149,7 @@ public class BlogServiceShould : UnitTestBase
 
         await _service.Update(updateBlog);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(BlogIntention.Edit, blog), Times.Once);
+        _intentionManager.Verify(m => m.ThrowIfForbidden(BlogIntention.EditSettings, blog), Times.Once);
     }
 
     [Fact]

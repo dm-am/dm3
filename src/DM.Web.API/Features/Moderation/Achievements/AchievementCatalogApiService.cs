@@ -24,6 +24,22 @@ internal class AchievementCatalogApiService : IAchievementCatalogApiService
     }
 
     /// <inheritdoc />
+    public async Task<ListEnvelope<AchievementCategory>> GetCategories()
+    {
+        var categories = await _achievementService.GetCategoriesAsync(includeInactive: true);
+        return new ListEnvelope<AchievementCategory>(
+            _mapper.Map<System.Collections.Generic.IEnumerable<AchievementCategory>>(categories));
+    }
+
+    /// <inheritdoc />
+    public async Task<ListEnvelope<AchievementType>> GetTypes()
+    {
+        var types = await _achievementService.GetTypesAsync(includeInactive: true);
+        return new ListEnvelope<AchievementType>(
+            _mapper.Map<System.Collections.Generic.IEnumerable<AchievementType>>(types));
+    }
+
+    /// <inheritdoc />
     public async Task<Envelope<AchievementCategory>> UpdateCategory(
         Guid id, UpdateAchievementCategoryRequest request)
     {

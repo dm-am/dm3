@@ -30,26 +30,6 @@ public interface IMessageRepository
     /// <returns>Cursor result with messages and pagination info</returns>
     Task<CursorResult<Message>> GetWithCursor(Guid chatId, CursorQuery query, CancellationToken ct = default);
 
-    /// <summary>
-    /// Get messages around a specific message
-    /// </summary>
-    /// <param name="chatId">Chat identifier</param>
-    /// <param name="messageId">Reference message identifier</param>
-    /// <param name="limit">Total number of messages to fetch</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>Cursor result with messages centered around the reference</returns>
-    Task<CursorResult<Message>> GetAround(Guid chatId, Guid messageId, int limit, CancellationToken ct = default);
-
-    /// <summary>
-    /// Get messages near a specific timestamp
-    /// </summary>
-    /// <param name="chatId">Chat identifier</param>
-    /// <param name="timestampUtc">Reference timestamp (UTC)</param>
-    /// <param name="limit">Total number of messages to fetch</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>Cursor result with messages near the timestamp</returns>
-    Task<CursorResult<Message>> GetNearTimestamp(Guid chatId, DateTimeOffset timestampUtc, int limit, CancellationToken ct = default);
-
     // ═══ WRITE ═══
 
     /// <summary>

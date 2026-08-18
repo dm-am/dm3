@@ -193,9 +193,4 @@ public interface IBlogRepository
     /// Remove an assistant from a blog by username
     /// </summary>
     Task<bool> RemoveAssistantByUsername(Guid blogId, string username, CancellationToken ct = default);
-
-    /// <summary>
-    /// Check if user is a subscriber (reader)
-    /// </summary>
-    Task<bool> IsSubscriber(Guid blogId, Guid userId, CancellationToken ct = default);
 }

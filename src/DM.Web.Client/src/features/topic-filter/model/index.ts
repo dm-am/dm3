@@ -1,11 +1,2 @@
-export {
-  useTopicsFilter,
-  type TopicsFilterComposable,
-} from "./useTopicsFilter";
-export {
-  SORT_OPTIONS,
-  DEFAULT_SORT,
-  type TopicsFilterState,
-  type TopicsSearchParams,
-  type SortByValue,
-} from "./types";
+export { useTopicsFilter } from "./useTopicsFilter";
+export { SORT_OPTIONS, DEFAULT_SORT, type SortByValue } from "./types";

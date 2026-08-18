@@ -6,6 +6,8 @@ using DM.Web.API.Features.Personal.Notepads;
 using DM.Web.API.Features.Blog.Blogs;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Blog.Notepads;
 
@@ -20,6 +22,7 @@ namespace DM.Web.API.Features.Blog.Notepads;
 [ApiExplorerSettings(GroupName = "Blog")]
 [Tags("Blog Notepads")]
 [AuthenticationRequired]
+[EnableRateLimiting(RateLimitPolicies.Default)]
 public class BlogNotepadController : ControllerBase
 {
     private readonly IBlogNotepadApiService _notepadApiService;

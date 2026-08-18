@@ -178,22 +178,23 @@ sudo certbot renew --dry-run                # продление отрабат�
 Второй публичный адрес сайта обслуживает не второй экземпляр приложения, а
 обратный прокси: он отдает фронтенд со своего диска и передает наверх запросы к
 API. Секретов на нем нет, к хранилищам он не подключается. Зачем это нужно, чем
-не является и какие требования предъявляет к машине — [MIRRORING.md](./MIRRORING.md).
+не является и какие требования предъявляет к машине — [POINT_OF_PRESENCE.md](./POINT_OF_PRESENCE.md).
 
 Отсюда для развертывания следуют три вещи. У точки присутствия свой шаблон окружения,
-`docker/.env.mirror.example`: в нем нет ни одного настоящего пароля хранилищ и нет ключа
+`docker/.env.pop.example`: в нем нет ни одного настоящего пароля хранилищ и нет ключа
 шифрования, потому что без кода приложения они ей не нужны, а лишний секрет на машине в
 чужой юрисдикции обесценивает всю схему. Копировать сюда `.env.example` нельзя — тот
 везет на нее все пароли из репозитория. Команда
 называет сервисы поименно, иначе профиль поднимет весь набор по умолчанию вместе
-с хранилищами и миграцией, нацеленной на основную базу. Nginx берет тот же
-конфиг, но без `auth_basic` и с включенным HTTPS.
+с хранилищами и миграцией, нацеленной на основную базу. У nginx точки присутствия
+собственный конфиг края (`docker/nginx/pop.conf.template`): внешний upstream,
+кэш статики и медиа, без `auth_basic`, с обязательным HTTPS.
 
 ```bash
 cd docker
-cp .env.mirror.example .env.mirror
-# Заполнить: публичный адрес точки присутствия и адрес API основного сервера
-docker compose --env-file .env.mirror -f docker-compose.yml -f docker-compose.preview.yml -f docker-compose.mirror.yml --profile mirror up -d nginx dmfront watchtower
+cp .env.pop.example .env.pop
+# Заполнить: POP_UPSTREAM (origin основного сервера) и POP_UPSTREAM_HOST (имя для Host/SNI)
+docker compose --env-file .env.pop -f docker-compose.yml -f docker-compose.preview.yml -f docker-compose.pop.yml --profile pop up -d nginx dmfront watchtower
 ```
 
 Обновляется точка присутствия так же, как основной стенд: watchtower тянет новый образ
@@ -214,7 +215,7 @@ docker compose --env-file .env.mirror -f docker-compose.yml -f docker-compose.pr
 | imgproxy (transform layer) | `DM_ImageProxyConfiguration__Endpoint/Key/Salt/SourceUrlPrefix` |
 | Email | `DM_EmailConfiguration__*` |
 
-**Production:** `docker/.env` создает `docker/scripts/init-env.sh server` — копирует пример, генерирует крипто-ключ и все секреты (`POSTGRES_PASSWORD`, `RABBITMQ_DEFAULT_PASS`, `MINIO_ROOT_PASSWORD`, `MONGO_*_PASSWORD`, `MINIO_APP_PASSWORD`, `MINIO_IMGPROXY_PASSWORD`, `IMGPROXY_KEY`, `IMGPROXY_SALT`, `GF_SECURITY_ADMIN_PASSWORD`), ставит `ASPNETCORE_ENVIRONMENT=Production` и пинит `IMAGE_TAG`. Копия `.env.example` руками оставляет пароли из репозитория и пустой ключ, на котором compose останавливается до старта контейнеров.
+**Production:** `docker/.env` создает `docker/scripts/init-env.sh server` — копирует пример, генерирует крипто-ключ и все секреты (`POSTGRES_PASSWORD`, `DM_APP_PASSWORD`, `DM_EXPORTER_PASSWORD`, `RABBITMQ_DEFAULT_PASS`, `MINIO_ROOT_PASSWORD`, `MONGO_*_PASSWORD`, `MINIO_APP_PASSWORD`, `MINIO_IMGPROXY_PASSWORD`, `IMGPROXY_KEY`, `IMGPROXY_SALT`, `GF_SECURITY_ADMIN_PASSWORD`), ставит `ASPNETCORE_ENVIRONMENT=Production` и пинит `IMAGE_TAG`. Копия `.env.example` руками оставляет пароли из репозитория и пустой ключ, на котором compose останавливается до старта контейнеров.
 
 ---
 
@@ -237,7 +238,7 @@ docker compose --env-file .env.mirror -f docker-compose.yml -f docker-compose.pr
 
 ## Масштабирование
 
-**Вертикальное:** `deploy.resources.limits` (cpus, memory) — настроено для всех сервисов.
+**Вертикальное:** `deploy.resources.limits` (cpus, memory) — настроено у долгоживущих сервисов; разовые контейнеры (`migration`, `seeder`), `dmfront` и `watchtower` лимитов не имеют.
 
 **Горизонтальное — API в одном экземпляре, и это ограничение, а не недоделка.**
 Внутри процесса API живут периодические задания (чистки, дайджесты, напоминания),

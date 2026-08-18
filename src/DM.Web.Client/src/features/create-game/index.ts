@@ -1,1 +1,1 @@
-export { CreateGameForm, TagSelector, AssistantSelector } from "./ui";
+export { CreateGameForm } from "./ui";

@@ -83,9 +83,6 @@ internal class GlobalChatEventService : IGlobalChatEventService
     public Task<GlobalChatEvent?> GetActiveEventAsync() => _repository.GetActiveEvent();
 
     /// <inheritdoc />
-    public Task<IEnumerable<GlobalChatEvent>> GetUpcomingEventsAsync() => _repository.GetUpcomingEvents();
-
-    /// <inheritdoc />
     public Task<IEnumerable<GlobalChatEvent>> GetAllAsync() =>
         _repository.GetByStatus(GlobalChatEventStatus.Live, GlobalChatEventStatus.Scheduled);
 
@@ -175,10 +172,6 @@ internal class GlobalChatEventService : IGlobalChatEventService
     }
 
     // ═══ PARTICIPANTS ═══
-
-    /// <inheritdoc />
-    public Task<IEnumerable<GlobalChatEventParticipant>> GetParticipantsAsync(Guid eventId) =>
-        _repository.GetParticipants(eventId);
 
     /// <inheritdoc />
     public async Task<GlobalChatEventParticipant> JoinAsync(Guid eventId, CancellationToken ct = default)

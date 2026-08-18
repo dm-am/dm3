@@ -6,6 +6,8 @@ using DM.Web.API.Features.Personal.Notepads;
 using DM.Web.API.Features.Game.Games;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Game.Notepads;
 
@@ -21,6 +23,7 @@ namespace DM.Web.API.Features.Game.Notepads;
 [ApiExplorerSettings(GroupName = "Game")]
 [Tags("Game Notepads")]
 [AuthenticationRequired]
+[EnableRateLimiting(RateLimitPolicies.Default)]
 public class GameNotepadController : ControllerBase
 {
     private readonly IGameNotepadApiService _notepadApiService;

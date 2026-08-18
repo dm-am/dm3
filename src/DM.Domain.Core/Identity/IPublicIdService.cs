@@ -15,14 +15,6 @@ public interface IPublicIdService
     string Encode(int serialNumber);
 
     /// <summary>
-    /// Decodes a public ID back to its serial number.
-    /// </summary>
-    /// <param name="publicId">The public ID to decode</param>
-    /// <returns>The original serial number</returns>
-    /// <exception cref="ArgumentException">If publicId is invalid</exception>
-    int Decode(string publicId);
-
-    /// <summary>
     /// Validates that a string is a valid public ID format.
     /// </summary>
     /// <param name="publicId">The string to validate</param>

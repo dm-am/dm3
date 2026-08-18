@@ -51,11 +51,25 @@ dotnet test
 dotnet test test/DM.Domain.Forum.Tests
 
 # С фильтром
-dotnet test --filter "TopicCreatingService"
+dotnet test --filter "TopicService"
 
 # С отчетом
 dotnet test --logger "trx;LogFileName=results.trx"
 ```
+
+**Прогон в один поток.** Integration-тесты поднимают контейнеры и работают
+против общей базы, поэтому два одновременных `dotnet test` в одном рабочем
+дереве бьются за нее и валят друг друга сотнями отказов подряд. Отказ выглядит
+как настоящий: тесты падают массово и в разных контроллерах. Прежде чем искать
+дефект в коде после такого прогона, убедиться, что второго процесса не было, и
+повторить прогон в одиночку. Это же правило действует для агентов: параллельные
+задачи бэкенда разводятся по времени, а не по проектам.
+
+То же и с фронтендом, но по другой причине: юнит-тесты падают по таймаутам,
+когда машина занята чем-то тяжелым. Push запускает хук, а хук — все гейты
+разом, поэтому пуш во время идущего прогона тестов дает горсть отказов на
+ровном месте. Пушить с незанятой машины; получив отказ, сначала повторить
+прогон в тишине и только потом читать его как дефект.
 
 ### Frontend
 
@@ -108,15 +122,15 @@ PollVotingShould.RefuseASecondOptionToTheSameVoter
 ### Пример теста
 
 ```csharp
-public class TopicCreatingServiceShould : UnitTestBase
+public class TopicServiceShould : UnitTestBase
 {
     private readonly Mock<ITopicRepository> _repository;
-    private readonly TopicCreatingService _service;
+    private readonly TopicService _service;
 
-    public TopicCreatingServiceShould()
+    public TopicServiceShould()
     {
         _repository = Mock<ITopicRepository>();
-        _service = new TopicCreatingService(_repository.Object);
+        _service = new TopicService(_repository.Object);
     }
 
     [Fact]

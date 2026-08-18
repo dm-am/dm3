@@ -2735,7 +2735,7 @@ public class DmDbContext : DbContext
     public DbSet<GameReview> GameReviews { get; set; }
 
     /// <summary>
-    /// post reviews (reviews of posts with ratings and likes)
+    /// post reviews (reviews of posts with ratings)
     /// </summary>
     public DbSet<PostReview> PostReviews { get; set; }
 

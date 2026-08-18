@@ -15,8 +15,7 @@ public class CursorService : ICursorService
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    /// <inheritdoc />
-    public string Encode(Guid entityId, DateTimeOffset timestampUtc, CursorDirection direction)
+    private string Encode(Guid entityId, DateTimeOffset timestampUtc, CursorDirection direction)
     {
         var data = new CursorData
         {
@@ -30,8 +29,7 @@ public class CursorService : ICursorService
         return Convert.ToBase64String(bytes);
     }
 
-    /// <inheritdoc />
-    public CursorData? Decode(string cursor)
+    private CursorData? Decode(string cursor)
     {
         if (string.IsNullOrWhiteSpace(cursor))
         {

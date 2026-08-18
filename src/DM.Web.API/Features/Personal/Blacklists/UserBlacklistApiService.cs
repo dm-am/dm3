@@ -3,7 +3,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using DM.Domain.Personal.Features.Blacklists;
-using DM.Domain.Personal.Features.Profiles;
 using DM.Domain.Core.Dto;
 using DM.Web.API.Shared.Dto;
 using DM.Domain.Core.Enums;
@@ -14,17 +13,14 @@ namespace DM.Web.API.Features.Personal.Blacklists;
 internal class UserBlacklistApiService : IUserBlacklistApiService
 {
     private readonly IUserBlacklistService _blacklistService;
-    private readonly IUserService _userService;
     private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public UserBlacklistApiService(
         IUserBlacklistService blacklistService,
-        IUserService userService,
         IMapper mapper)
     {
         _blacklistService = blacklistService;
-        _userService = userService;
         _mapper = mapper;
     }
 
@@ -75,12 +71,5 @@ internal class UserBlacklistApiService : IUserBlacklistApiService
     {
         var dto = new OperateUserBlacklistLink { Username = username };
         await _blacklistService.Unblock(dto);
-    }
-
-    /// <inheritdoc />
-    public async Task<bool> CanMessage(string username)
-    {
-        var targetUser = await _userService.GetAsync(username);
-        return await _blacklistService.CanSendMessage(targetUser.UserId);
     }
 }

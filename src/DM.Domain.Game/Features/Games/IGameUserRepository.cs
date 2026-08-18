@@ -10,25 +10,6 @@ namespace DM.Domain.Game.Features.Games;
 /// </summary>
 public interface IGameUserRepository
 {
-    #region Players
-
-    /// <summary>
-    /// Get all players in a game
-    /// </summary>
-    Task<IEnumerable<GeneralUser>> GetPlayers(Guid gameId);
-
-    /// <summary>
-    /// Check if user is a player in game
-    /// </summary>
-    Task<bool> IsPlayer(Guid gameId, string username);
-
-    /// <summary>
-    /// Exile player from game
-    /// </summary>
-    Task<IEnumerable<Guid>> ExilePlayer(Guid gameId, string username);
-
-    #endregion
-
     #region Assistants
 
     /// <summary>

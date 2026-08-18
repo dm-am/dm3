@@ -45,12 +45,35 @@
 |------------|--------------|
 | `DM_CryptoConfiguration__KeyBase64` | `openssl rand -base64 32`. Одно значение на все экземпляры приложения: им шифруются одноразовые ссылки из писем, а письмо, выданное под одним адресом сайта, открывают по другому, и расшифровать токен обязана принимающая сторона. `dm.ps1` генерирует локальный ключ сам |
 | `MONGO_ROOT_PASSWORD`, `MONGO_PASSWORD` | Задать в `docker/.env`. Меняются только вместе с пересозданием тома Mongo |
+| `IMGPROXY_KEY`, `IMGPROXY_SALT` | `openssl rand -hex 32`, генерирует `init-env.sh` в `docker/.env`. Вся секция `ImageProxyConfiguration` (imgproxy endpoint + URL signing, [UPLOADS.md](../architecture/UPLOADS.md)) приходит в API только переменными `DM_ImageProxyConfiguration__*` из `docker-compose.yml`, в `appsettings.json` ее нет |
 
 **Настройки развертывания, а не кода:**
 
 | Переменная | Что задает |
 |------------|-----------|
-| `DM_SessionCookieConfiguration__Domain` | Область куки сессии. Пусто — кука остается на выдавшем ее хосте, и это дефолт для локальной разработки и стенда. Регистрируемый домен — вход становится общим для всех его хостов, поэтому заполнять его можно только когда все они принадлежат этому приложению ([MIRRORING.md](../guides/MIRRORING.md)) |
+| `DM_SessionCookieConfiguration__Domain` | Область куки сессии. Пусто — кука остается на выдавшем ее хосте, и это дефолт для локальной разработки и стенда. Регистрируемый домен — вход становится общим для всех его хостов, поэтому заполнять его можно только когда все они принадлежат этому приложению ([POINT_OF_PRESENCE.md](../guides/POINT_OF_PRESENCE.md)) |
+
+**Боты уведомлений (секция `BotConfiguration`):**
+
+Задаются в `docker/.env` и доходят до контейнеров одноименными переменными:
+якорь `x-workload-env` в `docker-compose.yml` пробрасывает явный список, и
+переменная вне его до API не дойдет. Пустое значение оставляет функцию
+выключенной.
+
+| Переменная | Что задает |
+|------------|-----------|
+| `DM_BotConfiguration__TelegramBotToken` | Токен бота от @BotFather, им отправляются уведомления |
+| `DM_BotConfiguration__TelegramWebhookSecret` | Секрет входящего вебхука. Регистрируется вместе с адресом: `setWebhook?url=https://<сайт>/v1/webhooks/telegram&secret_token=<секрет>`, Telegram присылает его в заголовке каждого вызова. Не задан — вебхук отвечает `404` |
+| `DM_BotConfiguration__DiscordBotToken` | Токен бота из Discord Developer Portal, им отправляются уведомления |
+| `DM_BotConfiguration__DiscordPublicKey` | Public Key приложения (hex) со страницы General Information в Discord Developer Portal. Им проверяется подпись Ed25519 каждой интеракции. Не задан — вебхук отвечает `404` |
+
+Входящая точка Discord — `https://<сайт>/v1/webhooks/discord`. Этот адрес
+вписывается в поле Interactions Endpoint URL приложения в Discord Developer
+Portal, и при сохранении Discord проверяет его: присылает PING и запросы с
+намеренно испорченной подписью, ожидая `200` и `401` соответственно.
+Slash-команда `/connect` регистрируется один раз на приложение:
+`PUT https://discord.com/api/v10/applications/{appId}/commands` со списком из
+одной команды `connect` и обязательной строковой опцией `code` (type 3).
 
 ### Frontend
 
@@ -65,7 +88,7 @@
 | Нужно | Документ |
 |-------|----------|
 | Запустить локально | [LOCAL_SETUP.md](../guides/LOCAL_SETUP.md) |
-| Поднять точку присутствия | [MIRRORING.md](../guides/MIRRORING.md) |
+| Поднять точку присутствия | [POINT_OF_PRESENCE.md](../guides/POINT_OF_PRESENCE.md) |
 | Деплой на VPS | [DEPLOYMENT.md](../guides/DEPLOYMENT.md) |
 | Параметры аутентификации | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
 
@@ -79,7 +102,6 @@
 | `PasswordPolicyConfiguration` | Требования к паролям | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
 | `TokenConfiguration` | Сроки жизни токенов | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
 | `CdnConfiguration` | MinIO/S3 source storage | [UPLOADS.md](../architecture/UPLOADS.md) |
-| `ImageProxyConfiguration` | imgproxy endpoint + URL signing | [UPLOADS.md](../architecture/UPLOADS.md) |
 
 ---
 

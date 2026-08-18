@@ -27,11 +27,6 @@ public interface ISubscriptionRepository
     Task<Subscription?> GetAsync(Guid subscriptionId, CancellationToken ct = default);
 
     /// <summary>
-    /// Get subscriptions for a specific target
-    /// </summary>
-    Task<IEnumerable<Subscription>> GetByTargetAsync(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default);
-
-    /// <summary>
     /// Get subscriptions for a specific target with specific settings
     /// </summary>
     Task<IEnumerable<Subscription>> GetByTargetWithSettingsAsync(SubscriptionTargetType targetType, Guid targetId, SubscriptionSettings requiredSettings, CancellationToken ct = default);

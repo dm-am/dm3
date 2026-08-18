@@ -127,7 +127,7 @@ const sortOptions = [
   {
     value: "reviewcount",
     label: "По количеству оценок",
-    hint: "По числу отзывов",
+    hint: "По числу оценок",
     defaultDirection: "desc" as const,
   },
 ];

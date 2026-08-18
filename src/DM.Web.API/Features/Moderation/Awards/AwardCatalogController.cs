@@ -39,6 +39,34 @@ public class AwardCatalogController : ControllerBase
 
     // ---- AwardType ----
 
+    /// <summary>The full award type catalog, deactivated types included.</summary>
+    /// <remarks>
+    /// The public <c>v1/award-types</c> serves active records only, which is
+    /// right for every consumer but this page: a deactivated type must stay
+    /// on the admin list, or its restore control has nothing to render on.
+    /// No response cache: the admin edits this list and rereads it at once.
+    /// </remarks>
+    /// <response code="200">List of catalog records, inactive included.</response>
+    /// <response code="401">Not authenticated.</response>
+    /// <response code="403">Insufficient permissions.</response>
+    [HttpGet("award-types", Name = nameof(GetModerationAwardTypes))]
+    [ProducesResponseType(typeof(ListEnvelope<AwardType>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetModerationAwardTypes() =>
+        Ok(await _awardCatalogApiService.GetTypes());
+
+    /// <summary>All contest series, hidden included.</summary>
+    /// <response code="200">List of series, inactive included.</response>
+    /// <response code="401">Not authenticated.</response>
+    /// <response code="403">Insufficient permissions.</response>
+    [HttpGet("contest-series", Name = nameof(GetModerationContestSeries))]
+    [ProducesResponseType(typeof(ListEnvelope<ContestSeries>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetModerationContestSeries() =>
+        Ok(await _awardCatalogApiService.GetSeries());
+
     /// <summary>Create a new award type in the catalog.</summary>
     /// <response code="201">Created.</response>
     /// <response code="400">Unknown icon or invalid data.</response>

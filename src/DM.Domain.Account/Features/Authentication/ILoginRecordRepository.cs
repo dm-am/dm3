@@ -52,12 +52,4 @@ public interface ILoginRecordRepository
     /// Count the login records of a user
     /// </summary>
     Task<int> CountLoginHistory(Guid userId);
-
-    /// <summary>
-    /// Check if user has previously logged in from this IP address
-    /// </summary>
-    /// <param name="userId">User identifier</param>
-    /// <param name="ipAddress">IP address to check</param>
-    /// <returns>True if this IP was used for successful login before</returns>
-    Task<bool> HasLoginFromIp(Guid userId, string ipAddress);
 }

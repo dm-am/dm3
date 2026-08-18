@@ -21,7 +21,7 @@ volumes:
   prometheusdata:
 
 # Переменные с дефолтами для локальной разработки.
-# Точка присутствия свой набор переопределяет в .env.mirror — секретов там нет.
+# Точка присутствия свой набор переопределяет в .env.pop — секретов там нет.
 x-workload-env: &workload-env
   # === ASP.NET Core ===
   # Production unless explicitly overridden. Development is what maps Swagger UI
@@ -116,6 +116,17 @@ x-workload-env: &workload-env
   # и вход на каждом адресе свой. Регистрируемый домен — один вход на все
   # адреса; включать только когда каждый хост этого домена принадлежит нам.
   DM_SessionCookieConfiguration__Domain: ${SESSION_COOKIE_DOMAIN:-}
+
+  # === Боты уведомлений ===
+  # Optional on purpose: empty is the shipped default, it keeps both webhooks
+  # closed (404) and bot notifications off. Forwarded by name because this
+  # anchor is an explicit list — a variable set in docker/.env but absent here
+  # never reaches a container. The API answers the webhooks, the notification
+  # worker sends through the bot tokens, and both take the anchor whole.
+  DM_BotConfiguration__TelegramBotToken: ${DM_BotConfiguration__TelegramBotToken:-}
+  DM_BotConfiguration__TelegramWebhookSecret: ${DM_BotConfiguration__TelegramWebhookSecret:-}
+  DM_BotConfiguration__DiscordBotToken: ${DM_BotConfiguration__DiscordBotToken:-}
+  DM_BotConfiguration__DiscordPublicKey: ${DM_BotConfiguration__DiscordPublicKey:-}
 
   # === Адреса сайта ===
   # PublicUrl — адрес, которым это развертывание называет само себя: из него
@@ -753,7 +764,7 @@ services:
   # --- Infrastructure: Auto-update ---
 
   # Started by the profile setup-server.sh and dm3.service pass, and by the
-  # mirror command for a mirror. Nothing passed a profile before, so the service
+  # pop command on a point of presence. Nothing passed a profile before, so the service
   # the guides call the update mechanism was declared and never run. It restarts
   # only containers carrying the watchtower label, and the one-shot migration
   # deliberately has none: a release that changes the schema is a restart of the
@@ -770,4 +781,4 @@ services:
     restart: unless-stopped
     profiles:
       - production
-      - mirror
+      - pop

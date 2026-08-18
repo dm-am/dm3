@@ -11,6 +11,12 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.Personal;
 
+/// <summary>
+/// The Discord handler speaks the official interactions contract: PING is
+/// answered with PONG, a slash command with a type 4 interaction response,
+/// and the /connect reply is ephemeral — a linking code is the invoker's
+/// business and nobody else's.
+/// </summary>
 public class DiscordWebhookHandlerShould : UnitTestBase
 {
     private readonly Mock<IBotLinkService> _botLinkService;
@@ -34,6 +40,22 @@ public class DiscordWebhookHandlerShould : UnitTestBase
         return document.RootElement.Clone();
     }
 
+    /// <summary>
+    /// The response as Discord will read it. Serialized through the property
+    /// name attributes the DTOs pin, so a rename that breaks the wire contract
+    /// breaks this too.
+    /// </summary>
+    private static JsonElement AsWireJson(object response) =>
+        JsonSerializer.SerializeToElement(response);
+
+    private const string ConnectInGuild = """
+        {
+            "type": 2,
+            "data": {"name": "connect", "options": [{"name": "code", "type": 3, "value": "ABC123"}]},
+            "member": {"user": {"id": "9876543210"}}
+        }
+        """;
+
     [Fact]
     public void HaveDiscordBotType()
     {
@@ -41,46 +63,105 @@ public class DiscordWebhookHandlerShould : UnitTestBase
     }
 
     [Fact]
-    public async Task VerifyAndLinkOnConnectCommand()
+    public async Task AnswerPongToPing()
     {
-        var payload = Payload("""{"content": "/connect ABC123", "author": {"id": "9876543210"}}""");
+        var response = await _handler.HandleAsync(Payload("""{"type": 1}"""));
 
-        await _handler.HandleAsync(payload);
-
-        _botLinkService.Verify(s => s.VerifyAndLink("ABC123", "discord", "9876543210", It.IsAny<CancellationToken>()), Times.Once);
+        response.Should().NotBeNull();
+        var json = AsWireJson(response!);
+        json.GetProperty("type").GetInt32().Should().Be(1);
+        json.TryGetProperty("data", out _).Should().BeFalse(
+            "PONG carries no data, and a null one would be noise in the contract");
     }
 
     [Fact]
-    public async Task AcceptNumericAuthorId()
+    public async Task VerifyAndLinkOnConnectCommandFromAGuild()
     {
-        var payload = Payload("""{"content": "/connect ABC123", "author": {"id": 9876543210}}""");
-
-        await _handler.HandleAsync(payload);
+        var response = await _handler.HandleAsync(Payload(ConnectInGuild));
 
         _botLinkService.Verify(s => s.VerifyAndLink("ABC123", "discord", "9876543210", It.IsAny<CancellationToken>()), Times.Once);
+
+        var json = AsWireJson(response!);
+        json.GetProperty("type").GetInt32().Should().Be(4);
+        json.GetProperty("data").GetProperty("flags").GetInt32().Should().Be(64,
+            "the reply is ephemeral: only the invoker sees the result of their own code");
+        json.GetProperty("data").GetProperty("content").GetString().Should().Contain("CurrentUser");
     }
 
     [Fact]
-    public async Task IgnorePayloadWithoutAuthor()
+    public async Task VerifyAndLinkOnConnectCommandFromADirectMessage()
     {
-        var payload = Payload("""{"content": "/connect ABC123"}""");
+        var payload = Payload("""
+            {
+                "type": 2,
+                "data": {"name": "connect", "options": [{"name": "code", "type": 3, "value": "ABC123"}]},
+                "user": {"id": "1112223334"}
+            }
+            """);
 
         await _handler.HandleAsync(payload);
+
+        _botLinkService.Verify(s => s.VerifyAndLink("ABC123", "discord", "1112223334", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task AnswerEphemeralRefusalWhenTheCodeDoesNotVerify()
+    {
+        _botLinkService
+            .Setup(s => s.VerifyAndLink(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BotLinkResult { Success = false, Error = "Invalid or expired code" });
+
+        var response = await _handler.HandleAsync(Payload(ConnectInGuild));
+
+        var json = AsWireJson(response!);
+        json.GetProperty("type").GetInt32().Should().Be(4,
+            "every slash command gets an interaction response, refusals included");
+        json.GetProperty("data").GetProperty("flags").GetInt32().Should().Be(64);
+    }
+
+    [Fact]
+    public async Task AnswerAnUnknownCommandWithoutLinking()
+    {
+        var payload = Payload("""
+            {
+                "type": 2,
+                "data": {"name": "weather"},
+                "member": {"user": {"id": "9876543210"}}
+            }
+            """);
+
+        var response = await _handler.HandleAsync(payload);
 
         _botLinkService.Verify(
             s => s.VerifyAndLink(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
+        AsWireJson(response!).GetProperty("type").GetInt32().Should().Be(4,
+            "an unanswered command shows the invoker a failure in Discord's wording");
     }
 
     [Fact]
-    public async Task NotLinkOnUnrelatedText()
+    public async Task NotLinkAConnectCommandWithoutAnInvoker()
     {
-        var payload = Payload("""{"content": "hello there", "author": {"id": "9876543210"}}""");
+        var payload = Payload("""
+            {
+                "type": 2,
+                "data": {"name": "connect", "options": [{"name": "code", "type": 3, "value": "ABC123"}]}
+            }
+            """);
 
-        await _handler.HandleAsync(payload);
+        var response = await _handler.HandleAsync(payload);
 
         _botLinkService.Verify(
             s => s.VerifyAndLink(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
+        AsWireJson(response!).GetProperty("type").GetInt32().Should().Be(4);
+    }
+
+    [Fact]
+    public async Task IgnoreInteractionTypesTheApplicationNeverRegisters()
+    {
+        var response = await _handler.HandleAsync(Payload("""{"type": 3, "data": {"custom_id": "x"}}"""));
+
+        response.Should().BeNull("only PING and slash commands can arrive for this application");
     }
 }

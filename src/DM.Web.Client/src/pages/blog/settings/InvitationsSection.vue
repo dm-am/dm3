@@ -5,6 +5,11 @@
  * live in RolesSection (mirrors the game split: staff invites with roles,
  * audience invites here). Backed by the invitation blogApi; the list is held
  * locally (not part of the shared blog store).
+ *
+ * Three intentions meet here, so the host page passes two flags rather than
+ * one: the list read asks BlogIntention.EditSettings (owner, assistants,
+ * senior moderation), inviting a reader asks InviteReader (owner and
+ * assistants), and cancelling asks CancelInvitation (the owner alone).
  */
 import { computed, onMounted, ref } from "vue";
 import { storeToRefs } from "pinia";
@@ -18,6 +23,13 @@ import { RemoveButton } from "@/shared/ui/RemoveButton";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { notifyFailure } from "@/shared/lib/errors";
+
+defineProps<{
+  /** Whether the viewer may invite a reader. */
+  canInvite: boolean;
+  /** Whether the viewer may cancel a pending invitation. */
+  canCancel: boolean;
+}>();
 
 const store = useBlogDetailsStore();
 const { blog } = storeToRefs(store);
@@ -81,12 +93,14 @@ async function cancel(invitation: BlogInvitation) {
       <li v-for="inv in invitations" :key="inv.id" class="inv-item">
         <UserLink :user="inv.invitedUser" />
         <span class="inv-type">{{ typeLabels[inv.type] ?? inv.type }}</span>
-        <RemoveButton @click="cancel(inv)">Отменить</RemoveButton>
+        <RemoveButton v-if="canCancel" @click="cancel(inv)">
+          Отменить
+        </RemoveButton>
       </li>
     </ul>
     <SecondaryText v-else-if="!loading">Активных приглашений нет</SecondaryText>
 
-    <div class="invite-row">
+    <div v-if="canInvite" class="invite-row">
       <UserAutocomplete v-model="username" placeholder="Имя пользователя" />
       <Button
         type="button"

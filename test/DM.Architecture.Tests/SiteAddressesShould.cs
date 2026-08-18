@@ -47,7 +47,7 @@ public class SiteAddressesShould
             .ToList();
 
         client.Should().HaveCountGreaterOrEqualTo(2,
-            "the walk has to find the declaration, and a list of one is a site with no mirror");
+            "the walk has to find the declaration, and a list of one is a site with a single door");
         client.Should().BeEquivalentTo(DM.Domain.Core.Site.SiteAddresses.Hosts,
             "the server names these addresses in every letter and the client draws them in " +
             "the footer, and the two lists have no way of noticing they disagree");

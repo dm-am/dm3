@@ -22,8 +22,8 @@
       </li>
       <li>
         Dungeon Master &ndash; некоммерческий проект.<br />
-        <router-link :to="{ name: 'support' }">Помогите нам</router-link> хотя
-        бы не испортить его!
+        <router-link :to="{ name: 'donate' }">Помогите нам</router-link> хотя бы
+        не испортить его!
       </li>
       <li v-if="isAdmin" class="admin-edit">
         <router-link

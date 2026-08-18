@@ -12,7 +12,7 @@
 |-----------|------------|
 | **Pattern** | BFF (Backend-For-Frontend) |
 | **Токен** | HttpOnly cookie `dm_session` |
-| **Область куки** | Настройка развертывания: пусто — хост, выдавший куку; регистрируемый домен — общий вход на всех его хостах ([MIRRORING.md](../guides/MIRRORING.md)) |
+| **Область куки** | Настройка развертывания: пусто — хост, выдавший куку; регистрируемый домен — общий вход на всех его хостах ([POINT_OF_PRESENCE.md](../guides/POINT_OF_PRESENCE.md)) |
 | **Шифрование** | AES-256-GCM |
 | **Хеширование** | Argon2id (см. [SECURITY.md](../conventions/SECURITY.md)) |
 | **CSRF защита** | SameSite=Lax + CSRF middleware |
@@ -22,23 +22,19 @@
 
 ## Архитектура
 
-```
-Browser (Vue.js)
-    │
-    │ Cookie: dm_session (HttpOnly)
-    ▼
-DM.Web.API
-    │
-    ├─► Middleware аутентификации
-    │   └─► Расшифровка токена → userId, sessionId
-    │
-    └─► Сервис аутентификации
-        └─► Валидация сессии и пользователя
-              │
-    ┌─────────┴─────────┐
-    ▼                   ▼
-PostgreSQL          MongoDB
-(Users)             (Sessions)
+```mermaid
+flowchart TB
+    br["Browser<br/>Vue 3"]
+    api["DM.Web.API"]
+    mw["Middleware аутентификации<br/>расшифровка токена в userId и sessionId"]
+    svc["Сервис аутентификации<br/>валидация сессии и пользователя"]
+    pg[("PostgreSQL<br/>пользователи")]
+    mongo[("MongoDB<br/>сессии")]
+
+    br -->|"Cookie: dm_session, HttpOnly"| api
+    api --> mw --> svc
+    svc --> pg
+    svc --> mongo
 ```
 
 ---
@@ -47,11 +43,13 @@ PostgreSQL          MongoDB
 
 ### Flow: Email → Имя пользователя
 
-```
-1. Регистрация email + пароля       → PendingRegistration (с хешем секрета)
-2. Email со ссылкой активации        → страница выбора Login
-3. Просмотр активации по токену      → форма выбора Login
-4. Подтверждение активации + login   → Создать User, auto-login
+```mermaid
+flowchart TB
+    s1["Регистрация: почта и пароль<br/>PendingRegistration с хешем секрета"]
+    s2["Письмо со ссылкой активации"]
+    s3["Переход по токену<br/>форма выбора имени"]
+    s4["Подтверждение активации и имени<br/>создание User, вход сразу"]
+    s1 --> s2 --> s3 --> s4
 ```
 
 ### Защита от сквоттинга

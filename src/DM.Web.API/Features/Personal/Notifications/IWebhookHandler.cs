@@ -14,7 +14,11 @@ public interface IWebhookHandler
     string BotType { get; }
 
     /// <summary>
-    /// Handle incoming webhook payload
+    /// Handle incoming webhook payload.
+    /// Returns the body of the 200 the provider expects back, or null when the
+    /// 200 carries no body. Telegram reads nothing from the response; Discord
+    /// reads the interaction response from it, and that response is the reply
+    /// the invoking user sees.
     /// </summary>
-    Task HandleAsync(JsonElement payload);
+    Task<object?> HandleAsync(JsonElement payload);
 }

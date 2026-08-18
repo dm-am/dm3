@@ -86,7 +86,10 @@ public enum GameIntention
     RemoveUser = 20,
 
     /// <summary>
-    /// Edit game settings / embedded attribute schema (master, assistant or mentor)
+    /// Edit the game settings page: the information form and the invitations it
+    /// lists (master, assistant, the curating mentor or senior moderation).
+    /// Wider than <see cref="Edit" />, which the roster, the rooms and the
+    /// blacklist keep.
     /// </summary>
     EditSettings = 21
 }

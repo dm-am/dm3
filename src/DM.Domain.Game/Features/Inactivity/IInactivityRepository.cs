@@ -74,9 +74,4 @@ public interface IInactivityRepository
     /// Close a frozen game (set ClosedReason=None)
     /// </summary>
     Task CloseGame(Guid gameId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Get game title by ID (for notification messages)
-    /// </summary>
-    Task<string?> GetGameTitle(Guid gameId, CancellationToken ct = default);
 }

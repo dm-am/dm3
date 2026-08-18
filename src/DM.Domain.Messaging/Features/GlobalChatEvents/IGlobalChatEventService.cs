@@ -37,12 +37,6 @@ public interface IGlobalChatEventService
     Task<GlobalChatEvent?> GetActiveEventAsync();
 
     /// <summary>
-    /// Get upcoming (Scheduled) events
-    /// </summary>
-    /// <returns>List of scheduled events</returns>
-    Task<IEnumerable<GlobalChatEvent>> GetUpcomingEventsAsync();
-
-    /// <summary>
     /// Get all non-ended events (Live + Scheduled)
     /// </summary>
     /// <returns>List of events</returns>
@@ -86,13 +80,6 @@ public interface IGlobalChatEventService
     Task<GlobalChatEvent> EndAsync(Guid eventId, CancellationToken ct = default);
 
     // ═══ PARTICIPANTS ═══
-
-    /// <summary>
-    /// Get participants of an event
-    /// </summary>
-    /// <param name="eventId">Event identifier</param>
-    /// <returns>List of participants</returns>
-    Task<IEnumerable<GlobalChatEventParticipant>> GetParticipantsAsync(Guid eventId);
 
     /// <summary>
     /// Join an open event (self-service for users)

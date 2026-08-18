@@ -26,6 +26,15 @@ export default defineConfig({
     environment: "jsdom",
     root: "src/",
     globals: true,
+    // Four dozen specs are convention gates that walk the whole source tree and
+    // read every file; under vitest 4 they run past the 5s default whenever the
+    // machine is busy, and the push hook makes it busy by design (it runs the
+    // backend gates first). A timeout does not decide whether a gate is
+    // satisfied, only how long it may take, so this raises the ceiling for all
+    // of them instead of sprinkling per-file overrides that the next gate
+    // forgets. Kept well under the per-file 30s the heaviest scans declare, so
+    // a genuinely hung test still fails fast.
+    testTimeout: 15_000,
     coverage: {
       provider: "v8",
       reporter: ["text", "html", "json-summary"],
@@ -48,24 +57,31 @@ export default defineConfig({
         //
         // The denominator is the whole source tree (include: **/*.{ts,vue}), so
         // one uncovered 500-line component costs about 0.6 points of lines.
-        // Branches reads high because files with no tests contribute few branch
-        // counters — lines and statements are the load-bearing numbers here.
         //
-        // Measured on a full run of the suite (156 spec files, 1712 tests):
-        // 33.78% lines and statements, 36.4% functions, 74.44% branches. The
-        // measurement is written down for the same reason as in
-        // scripts/check-coverage.sh: without it nobody can tell a ratchet that
-        // was just raised from one that has stood still since the first audit —
-        // which is what these numbers had done, sitting at roughly half of what
-        // the suite actually covered and failing on nothing.
+        // Measured on a full run of the suite (178 spec files, 1834 tests) on
+        // vitest 4 / @vitest/coverage-v8 4: 32.67% lines, 31.83% statements,
+        // 25.77% functions, 24.69% branches. The measurement is written down
+        // for the same reason as in scripts/check-coverage.sh: without it
+        // nobody can tell a ratchet that was just raised from one that has
+        // stood still since the first audit — which is what these numbers had
+        // done, sitting at roughly half of what the suite actually covered and
+        // failing on nothing.
+        //
+        // The vitest 2 baseline (33.78% lines and statements, 36.4% functions,
+        // 74.44% branches) is not comparable: coverage-v8 4 remaps through the
+        // AST, and files no test loads now contribute every one of their
+        // function and branch counters to the denominator instead of almost
+        // none. Same suite, same sources — a different instrument. Branches no
+        // longer reads high for the old artifact of a reason, so all four
+        // numbers now carry weight.
         //
         // The gap to the measurement is the backend's, 1.3 to 1.8 points: below
         // it the gate stops catching a real loss, above it a single large
         // untested component turns CI red.
-        lines: 32,
-        functions: 35,
-        branches: 73,
-        statements: 32,
+        lines: 31,
+        functions: 24,
+        branches: 23,
+        statements: 30,
       },
     },
   },
@@ -85,33 +101,39 @@ export default defineConfig({
   build: {
     // Dependencies that change on their own schedule, split out of the app
     // chunk so a release of the app does not invalidate their cache entry.
+    // Rolldown (vite 8) dropped the object form of manualChunks; these are
+    // the same three chunks expressed as codeSplitting groups, matched by
+    // package path instead of by entry module list.
     rollupOptions: {
       output: {
-        manualChunks: {
-          // The framework itself: changes a few times a year, is on every
-          // address, and is the largest thing a returning reader never
-          // re-downloads.
-          "vue-vendor": ["vue", "vue-router", "pinia"],
-          // The engine behind BBCodeEditor, in a chunk of its own rather than
-          // in vendor. Not because few views need it: two dozen do (forum,
-          // blogs, games, profile, moderation, support - anywhere text is
-          // composed). Because the views that only READ text do not, and at
-          // 361 KB raw it is the largest thing a reader can avoid downloading.
-          // @tiptap/pm is left out: that package has a structure of its own.
-          tiptap: [
-            "@tiptap/vue-3",
-            "@tiptap/starter-kit",
-            "@tiptap/extension-link",
-            "@tiptap/extension-image",
-            "@tiptap/extension-underline",
-            "@tiptap/extension-placeholder",
-            "@tiptap/extension-code-block",
-            "@tiptap/extension-bubble-menu",
+        codeSplitting: {
+          groups: [
+            // The framework itself: changes a few times a year, is on every
+            // address, and is the largest thing a returning reader never
+            // re-downloads. @vue/* are the runtime packages vue re-exports.
+            {
+              name: "vue-vendor",
+              test: /node_modules[\\/](vue|@vue|vue-router|pinia)[\\/]/,
+            },
+            // The engine behind BBCodeEditor, in a chunk of its own rather
+            // than in vendor. Not because few views need it: two dozen do
+            // (forum, blogs, games, profile, moderation, support - anywhere
+            // text is composed). Because the views that only READ text do
+            // not, and at 361 KB raw it is the largest thing a reader can
+            // avoid downloading. @tiptap/pm is left out: that package has a
+            // structure of its own.
+            {
+              name: "tiptap",
+              test: /node_modules[\\/]@tiptap[\\/](?!pm[\\/])/,
+            },
+            // The realtime transport: the chat, the global chat and the
+            // notification bell need it, a reader who opens none of them
+            // does not.
+            {
+              name: "signalr",
+              test: /node_modules[\\/]@microsoft[\\/]signalr[\\/]/,
+            },
           ],
-          // The realtime transport: the chat, the global chat and the
-          // notification bell need it, a reader who opens none of them does
-          // not.
-          signalr: ["@microsoft/signalr"],
         },
       },
     },

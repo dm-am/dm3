@@ -63,6 +63,7 @@ git config core.hooksPath scripts/hooks
 | [UI_STANDARDS](./docs/conventions/UI_STANDARDS.md) | "Какие правила верстки, токенов, диалогов?" |
 | [URL_STRUCTURE](./docs/conventions/URL_STRUCTURE.md) | "Как устроены адреса страниц?" |
 | [PERFORMANCE](./docs/conventions/PERFORMANCE.md) | "Какие правила оптимизации? Что нельзя делать?" |
+| [PROCESS](./docs/conventions/PROCESS.md) | "Как устроена работа над изменением? Что должно случиться до готовности?" |
 
 ### guides/ — Как делать
 
@@ -71,7 +72,7 @@ git config core.hooksPath scripts/hooks
 | [LOCAL_SETUP](./docs/guides/LOCAL_SETUP.md) | "Как запустить проект локально?" |
 | [TESTING](./docs/guides/TESTING.md) | "Как запускать тесты? Какие паттерны?" |
 | [DEPLOYMENT](./docs/guides/DEPLOYMENT.md) | "Как развернуть на сервере?" |
-| [MIRRORING](./docs/guides/MIRRORING.md) | "Зачем сайту второй адрес? Как поднять точку присутствия?" |
+| [POINT_OF_PRESENCE](./docs/guides/POINT_OF_PRESENCE.md) | "Зачем сайту второй адрес? Как поднять точку присутствия?" |
 | [MONITORING](./docs/guides/MONITORING.md) | "Где смотреть логи? Как настроить алерты?" |
 
 ### Живые документы проекта

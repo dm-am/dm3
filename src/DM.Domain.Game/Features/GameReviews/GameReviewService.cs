@@ -202,7 +202,12 @@ internal class GameReviewService : IGameReviewService
     public Task<bool> ExistsAsync(Guid authorId, Guid gameId) =>
         _repository.ExistsAsync(authorId, gameId);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Check if user can review a game (has at least one post in it)
+    /// </summary>
+    /// <param name="userId">User ID</param>
+    /// <param name="gameId">Game ID</param>
+    /// <returns>True if user can review the game</returns>
     public Task<bool> CanReviewAsync(Guid userId, Guid gameId) =>
         _repository.CanReviewGameAsync(userId, gameId);
 

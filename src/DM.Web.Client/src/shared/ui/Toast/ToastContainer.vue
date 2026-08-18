@@ -45,47 +45,58 @@ const { toasts, dismiss, pause, resume } = useToast();
 <style scoped lang="sass">
 @import "@/assets/styles/ZIndex"
 
+// Pinned to the bottom-right corner, and so is the ScrollNav rail — which
+// sits on $z-sticky, two tiers below the toast. A toast used to land on top
+// of the scroll buttons and the settings one, hiding the controls a reader
+// reaches for while the message is still on screen. Stepping aside by the
+// width of the rail plus a gap keeps both usable; the rail measures its own
+// $medium from the edge.
 .toast-container
   position: fixed
   bottom: $medium
-  right: $medium
+  right: $medium + $scroll-nav-width + $small
   z-index: $z-toast
   display: flex
   flex-direction: column
   gap: $small
   max-width: 400px
 
+// A panel like every other panel on the site: the surface of the theme, the
+// ink of the theme, and a rule down the left edge in the accent that says
+// which kind of message this is. It used to be twelve hand-picked Material
+// colours - a saturated fill with white letters that appeared nowhere else
+// on the page and did not belong to either palette. The frame is what keeps
+// the panel off whatever it floats over; the shadow alone is not an edge.
 .toast-item
   position: relative
   display: flex
   align-items: center
   justify-content: space-between
   padding: $small $medium
+  border: 1px solid $border
   border-radius: $border-radius
   font-size: $secondary-font-size
+  color: $text
   box-shadow: 0 2px 8px $shadow-color
   min-width: 250px
   overflow: hidden
 
+// The left rule comes after the frame above and overrides that one edge.
 .toast-success
-  background-color: var(--toast-success-bg)
-  color: var(--toast-success-text)
-  border-left: 3px solid var(--toast-success-border)
+  background-color: $bg-highlight-green
+  border-left: 3px solid $accent-green
 
 .toast-error
-  background-color: var(--toast-error-bg)
-  color: var(--toast-error-text)
-  border-left: 3px solid var(--toast-error-border)
+  background-color: $bg-highlight-red
+  border-left: 3px solid $accent-red
 
 .toast-info
-  background-color: var(--toast-info-bg)
-  color: var(--toast-info-text)
-  border-left: 3px solid var(--toast-info-border)
+  background-color: $bg-highlight-blue
+  border-left: 3px solid $link
 
 .toast-warning
-  background-color: var(--toast-warning-bg)
-  color: var(--toast-warning-text)
-  border-left: 3px solid var(--toast-warning-border)
+  background-color: $bg-highlight-yellow
+  border-left: 3px solid $accent-yellow
 
 .toast-message
   flex: 1

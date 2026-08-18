@@ -5,6 +5,8 @@ using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Game.Games;
 
@@ -105,6 +107,7 @@ public class GameController : ControllerBase
     /// <response code="403">User is not authorized to create a game</response>
     /// <response code="404">Game not found</response>
     [HttpPost(Name = nameof(PostGame))]
+    [EnableRateLimiting(RateLimitPolicies.Default)]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<GameDetails>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -126,6 +129,7 @@ public class GameController : ControllerBase
     /// <response code="403">User is not allowed to remove the game</response>
     /// <response code="404">Game not found</response>
     [HttpDelete("{id}", Name = nameof(DeleteGame))]
+    [EnableRateLimiting(RateLimitPolicies.Default)]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -156,6 +160,7 @@ public class GameController : ControllerBase
     /// <response code="403">User is not authorized to change the status of this game</response>
     /// <response code="404">Game not found</response>
     [HttpPost("{id}/status", Name = nameof(PostGameStatus))]
+    [EnableRateLimiting(RateLimitPolicies.Default)]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<GameDetails>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -186,6 +191,7 @@ public class GameController : ControllerBase
     /// <response code="403">User is not a mentor</response>
     /// <response code="404">Game not found</response>
     [HttpPost("{id}/premoderation", Name = nameof(PostGamePremoderation))]
+    [EnableRateLimiting(RateLimitPolicies.Default)]
     [RequireRole(UserRole.Mentor)]
     [ProducesResponseType(typeof(Envelope<GameDetails>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -214,6 +220,7 @@ public class GameController : ControllerBase
     /// <response code="403">User is not an administrator</response>
     /// <response code="404">Game not found</response>
     [HttpPost("{id}/reset-recruitment-date", Name = nameof(PostResetRecruitmentDate))]
+    [EnableRateLimiting(RateLimitPolicies.Default)]
     [RequireRole(UserRole.Admin)]
     [ProducesResponseType(typeof(Envelope<GameDetails>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -252,6 +259,7 @@ public class GameController : ControllerBase
     /// <response code="403">User is not authorized to change some properties of this game</response>
     /// <response code="404">Game not found</response>
     [HttpPatch("{id}/details", Name = nameof(PatchGameDetails))]
+    [EnableRateLimiting(RateLimitPolicies.Default)]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<GameDetails>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]

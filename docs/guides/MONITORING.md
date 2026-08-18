@@ -6,10 +6,15 @@
 
 ## Обзор стека
 
-```
-Serilog ────────► Loki (:3100) ──────┐
-OpenTelemetry ──► Jaeger (:16686)    ├──► Grafana (:3000)
-/metrics ───────► Prometheus (:9090) ┘
+```mermaid
+flowchart LR
+    serilog["Serilog<br/>логи"] --> loki["Loki :3100"]
+    otel["OpenTelemetry<br/>трассы"] --> jaeger["Jaeger :16686"]
+    metrics["/metrics<br/>метрики"] --> prom["Prometheus :9090"]
+    loki --> grafana["Grafana :3000"]
+    jaeger --> grafana
+    prom --> grafana
+    prom --> alerts["Alertmanager"]
 ```
 
 ---
@@ -126,9 +131,12 @@ Grafana → Explore → датасорс Loki. Отдельного UI у лог
 ### Scrape targets
 
 **Источник истины:** [`docker/prometheus.yml`](../../docker/prometheus.yml).
-Имя job обязано совпадать с `container_name` из compose: при расхождении target
-просто отсутствует, а алерт на `up == 0` молчит — именно поэтому рядом стоит
-`ConsumerScrapeTargetMissing` на `absent()`.
+Хост в `targets` обязан совпадать с `container_name` из compose: при расхождении
+target остается в списке, но дает `up == 0`, и это ловят алерты вида
+`ConsumerDown`. Имя job обязано совпадать с job-селекторами правил алертов и
+панелей: у переименованной или удаленной job серии `up` нет вовсе, алерт на
+`up == 0` молчит, и именно этот случай закрывает `ConsumerScrapeTargetMissing`
+на `absent()`.
 
 ### Где смотреть
 
@@ -283,8 +291,10 @@ Dashboards настроены автоматически (auto-provisioned).
    отсутствие — инцидент, и заметить отсутствие может только тот, кто ждал
    прихода.
 
-На 80 порту у края остаются три вещи: собственная проба, челлендж центра
-сертификации и редирект на домен. Все остальное отвечает по https.
+На 80 порту у доменного имени остаются три вещи: собственная проба, челлендж
+центра сертификации и редирект на домен; все остальное для домена отвечает по
+https. По голому IP дефолтный сервер края продолжает отвечать по http, как и до
+выпуска сертификата: это намеренно и описано в [DEPLOYMENT.md](./DEPLOYMENT.md).
 
 ---
 

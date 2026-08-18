@@ -5,8 +5,11 @@
  * - Title bar: single PageTitle-height bar ("Личный кабинет: username")
  * - Avatar: 220px wide, square (the width of `.avatar-wrapper` in
  *   ProfilePage.vue; the height is a guess, see the rule)
- * - Stat lines: 7 short bars stacked vertically (registration, rating,
- *   given reviews, posts written, last activity, 2 endorsement lines)
+ * - Stat lines: 9 short bars in three groups — five base ones (registration,
+ *   rating, given reviews, posts written, last activity), the endorsement
+ *   pair, and the game-review pair. The loaded page draws exactly these three
+ *   groups (ProfilePage.vue), and a skeleton short of the last one let the
+ *   block grow by two rows the moment the data arrived.
  *
  * Flat — no card background, no border-radius, same as the loaded page
  * (ProfilePage's `.profile-page` has no card chrome either).
@@ -25,6 +28,10 @@
         <div class="skeleton-stat" />
         <div class="skeleton-stat" />
         <div class="skeleton-stat" />
+        <div class="skeleton-stat" />
+        <div class="skeleton-stat" />
+      </div>
+      <div class="skeleton-stats">
         <div class="skeleton-stat" />
         <div class="skeleton-stat" />
       </div>

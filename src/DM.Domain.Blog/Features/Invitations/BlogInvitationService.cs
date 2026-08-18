@@ -231,7 +231,10 @@ internal class BlogInvitationService : IBlogInvitationService
     public async Task<IEnumerable<BlogInvitation>> GetPendingInvitations(Guid blogId)
     {
         var blog = await _blogService.GetBlogAsync(blogId);
-        _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
+        // The invitations list feeds the settings page, and assistants can
+        // invite readers, so the read follows EditSettings — the same shape the
+        // game side takes, where GetPendingInvitations demands EditSettings too.
+        _intentionManager.ThrowIfForbidden(BlogIntention.EditSettings, blog);
 
         return await _repository.GetPendingInvitations(blogId);
     }

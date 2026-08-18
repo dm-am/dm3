@@ -78,12 +78,6 @@ public interface IChatService
     Task<Chat> GetOrCreateDirectAsync(string username);
 
     /// <summary>
-    /// Count all unread chats
-    /// </summary>
-    /// <returns>Unread count</returns>
-    Task<int> GetTotalUnreadCountAsync();
-
-    /// <summary>
     /// Mark all chat messages as read
     /// </summary>
     /// <param name="chatId">Chat identifier</param>

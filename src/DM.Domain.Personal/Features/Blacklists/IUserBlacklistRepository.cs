@@ -29,11 +29,6 @@ public interface IUserBlacklistRepository : IUserBlacklistChecker
     Task<BlacklistEntry?> Find(Guid ownerId, Guid blockedUserId, CancellationToken ct = default);
 
     /// <summary>
-    /// Check if either user has blocked the other (bidirectional check)
-    /// </summary>
-    Task<bool> HasBlockRelationship(Guid userId1, Guid userId2, CancellationToken ct = default);
-
-    /// <summary>
     /// Create blacklist entry
     /// </summary>
     Task<BlacklistEntry> Create(CreateBlacklistEntryEntity entry, CancellationToken ct = default);

@@ -17,6 +17,8 @@ export {
   personalApi,
   blacklistApi,
   type UpdateProfilePayload,
+  type GameReviewsQuery,
+  type EndorsementsQuery,
 } from "./api";
 
 // UI Components

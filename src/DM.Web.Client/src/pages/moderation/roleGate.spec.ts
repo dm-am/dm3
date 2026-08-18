@@ -9,9 +9,11 @@
  * names a failure that did not happen — the data would have loaded, the viewer
  * is simply not allowed.
  *
- * ModerationOverview is out of the second check: it renders no data of its own,
- * only the question which section to open, and every section answers for
- * itself. ModerationPage is the shell around them.
+ * ModerationPage is out of the checks: it is the shell around the pages, and
+ * its tab strip filters itself from the same table the pages gate themselves
+ * with (lib/sections.ts). ModerationOverview is in: it renders no data, but an
+ * authenticated non-moderator opening /moderation directly must still read a
+ * refusal rather than an invitation to pick a section.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "fs";
@@ -21,10 +23,7 @@ import { fileURLToPath } from "url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SENTENCE = "Страница доступна только";
 const SENTENCE_OWNER = "lib/useRoleGate.ts";
-const NOT_A_GATED_PAGE = new Set([
-  "ModerationPage.vue",
-  "ModerationOverview.vue",
-]);
+const NOT_A_GATED_PAGE = new Set(["ModerationPage.vue"]);
 
 function collectFiles(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {

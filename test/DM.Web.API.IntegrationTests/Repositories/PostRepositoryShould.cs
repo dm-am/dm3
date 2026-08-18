@@ -446,6 +446,51 @@ public class PostRepositoryShould : IntegrationTestBase
         afterEdit.Should().NotContainKey("Анна");
     }
 
+    [Fact]
+    public async Task CarryTheRatingAndTheReviewCountOfAPostReadThroughItsRoom()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var context = await AddGameWithRoomAsync(dbContext);
+        var postId = await AddRatedPostAsync(
+            dbContext, context, positiveReviews: 3, negativeReviews: 1, removedReviews: 1);
+
+        // A guest, because that is the reader the room page failed for.
+        var posts = await repository.Get(
+            context.RoomId,
+            new PagingData(new PagingQuery { Skip = 0, Take = 10 }, 10, 1),
+            Guid.Empty);
+
+        var post = posts.Single(x => x.Id == postId);
+        // Both numbers used to come back at zero here while the same post read
+        // through the rated path carried them, so the room page — the page where
+        // reviews are written — showed every post at +0 and would not open them.
+        post.Rating.Should().Be(2, "the rating is the sum of the signs: +1 +1 +1 -1");
+        post.ReviewCount.Should().Be(4, "the removed review counts for neither");
+    }
+
+    [Fact]
+    public async Task CarryTheRatingAndTheReviewCountOfASinglePostRead()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var context = await AddGameWithRoomAsync(dbContext);
+        var postId = await AddRatedPostAsync(
+            dbContext, context, positiveReviews: 3, negativeReviews: 1, removedReviews: 1);
+
+        // The point read goes through the same map, and answers the post a
+        // permalink names.
+        var post = await repository.Get(postId, Guid.Empty);
+
+        post.Should().NotBeNull();
+        post!.Rating.Should().Be(2);
+        post.ReviewCount.Should().Be(4);
+    }
+
     /// <summary>The stored snapshot of a post, read past the change tracker.</summary>
     private static Task<string> ReadSnapshotAsync(DmDbContext dbContext, Guid postId) =>
         dbContext.Posts
@@ -584,12 +629,16 @@ public class PostRepositoryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A post authored by a character, with a set of positive reviews. The
-    /// post's rating is the sum of the review sign values.
+    /// A post authored by a character, with a set of reviews. The post's rating
+    /// is the sum of the sign values of the reviews that are not removed, and
+    /// its review count is how many of those there are — which is why the
+    /// helper can add negative and removed ones: a rating that is only ever a
+    /// count of positives is a number two different rules agree on by accident.
     /// </summary>
     private static async Task<Guid> AddRatedPostAsync(
         DmDbContext dbContext, GameContext context, int positiveReviews,
-        DateTimeOffset? reviewTime = null, DateTimeOffset? postCreatedUtc = null)
+        DateTimeOffset? reviewTime = null, DateTimeOffset? postCreatedUtc = null,
+        int negativeReviews = 0, int removedReviews = 0)
     {
         var characterId = Guid.NewGuid();
         var postId = Guid.NewGuid();
@@ -619,7 +668,8 @@ public class PostRepositoryShould : IntegrationTestBase
         // one person's clicks. The InMemory provider had no such index, so the
         // version of this test that ran there built every rating out of rows the
         // database would have refused.
-        for (var i = 0; i < positiveReviews; i++)
+        var written = 0;
+        void AddReview(short sign, bool isRemoved)
         {
             var reviewerId = Guid.NewGuid();
             dbContext.Users.Add(new DbUser
@@ -637,10 +687,17 @@ public class PostRepositoryShould : IntegrationTestBase
                 AuthorId = reviewerId,
                 PostAuthorId = context.UserId,
                 GameId = context.GameId,
-                SignValue = 1,
-                CreatedUtc = baseTime.AddSeconds(i),
+                SignValue = sign,
+                IsRemoved = isRemoved,
+                CreatedUtc = baseTime.AddSeconds(written++),
             });
         }
+
+        for (var i = 0; i < positiveReviews; i++) AddReview(1, isRemoved: false);
+        for (var i = 0; i < negativeReviews; i++) AddReview(-1, isRemoved: false);
+        // A removed review is in neither number, and it is the only way to tell
+        // a filtered sum from an unfiltered one.
+        for (var i = 0; i < removedReviews; i++) AddReview(1, isRemoved: true);
 
         await dbContext.SaveChangesAsync();
         return postId;

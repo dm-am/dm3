@@ -12,9 +12,15 @@ import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import { GameIcon } from "@/shared/ui/Icon";
 import AwardTypeEditDialog from "./dialogs/AwardTypeEditDialog.vue";
 import { useRoleGate } from "./lib/useRoleGate";
+import { sectionRole } from "./lib/sections";
 
-const { hasAccess, deniedText } = useRoleGate("SeniorModerator");
-const { awardTypes, load, reload } = useContestSeries();
+// A sub-page of the awards tab, so it wears that tab's row.
+const { hasAccess, deniedText } = useRoleGate(sectionRole("moderation-awards"));
+const {
+  adminAwardTypes: awardTypes,
+  loadAdmin: load,
+  reload,
+} = useContestSeries();
 
 onMounted(() => load());
 

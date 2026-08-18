@@ -52,7 +52,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 | Notification Consumer | 5002 | — |
 | Email Consumer | 5003 | — |
 | PostgreSQL | 5432 | из `docker/.env` |
-| MongoDB | 27017 | — |
+| MongoDB | 27017 | из `docker/.env` |
 | RabbitMQ | 5672, 15672 | из `docker/.env` |
 | MinIO | 9000, 9001 | из `docker/.env` |
 | imgproxy | 8080 | HMAC key/salt из `docker/.env` |
@@ -72,7 +72,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 
 ### Справочные данные (автоматически)
 
-При запуске API EF Core применяет миграции, которые создают:
+При подъеме стека разовый контейнер `migration` применяет миграции, которые создают:
 - **Доски форума** — 11 разделов
 - **Теги игр** — 65 тегов в 8 группах
 
@@ -85,7 +85,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 
 **Требования:** API запущен (порт 5000).
 
-Сид — отдельный консольный инструмент, а не эндпоинт: он пишет напрямую в Postgres, Mongo и объектное хранилище, поэтому по сети он недоступен вовсе. Скрипт запускает его разовым контейнером под compose-профилем `tools`, который не поднимается обычным `docker compose up`. API при этом должен быть запущен: бакет для загрузок создает его инициализатор хранилища.
+Сид — отдельный консольный инструмент, а не эндпоинт: он пишет напрямую в Postgres, Mongo и объектное хранилище, поэтому по сети он недоступен вовсе. Скрипт запускает его разовым контейнером под compose-профилем `tools`, который не поднимается обычным `docker compose up`. API при этом должен быть запущен: скрипт проверяет `/_health` и после сида перезапускает API, чтобы он пересчитал стартовые проекции; бакет для загрузок создает контейнер `minio-init`.
 
 **Тестовые аккаунты (пароль: `Test123!`):**
 
@@ -221,7 +221,6 @@ dotnet ef migrations add InitialCreate -p src/DM.Infrastructure.Persistence -s s
 | `PasswordPolicyConfiguration` | Требования к паролям (8+ символов) | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
 | `TokenConfiguration` | Срок жизни токенов (активация, сброс пароля) | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
 | `CdnConfiguration` | MinIO/S3 для source-файлов | [UPLOADS.md](../architecture/UPLOADS.md) |
-| `ImageProxyConfiguration` | imgproxy endpoint + HMAC key/salt для signed transform URL's | [UPLOADS.md](../architecture/UPLOADS.md) |
 
 ### Frontend
 

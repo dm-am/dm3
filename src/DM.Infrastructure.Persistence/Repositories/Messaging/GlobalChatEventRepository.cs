@@ -51,14 +51,6 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GlobalChatEvent>> GetUpcomingEvents() =>
-        await _dbContext.GlobalChatEvents
-            .Where(e => e.Status == GlobalChatEventStatus.Scheduled)
-            .OrderBy(e => e.StartsUtc)
-            .ProjectTo<GlobalChatEvent>(_mapper.ConfigurationProvider)
-            .ToArrayAsync().ConfigureAwait(false);
-
-    /// <inheritdoc />
     public Task<bool> HasActiveEvent() => _dbContext.GlobalChatEvents
         .AnyAsync(e => e.Status == GlobalChatEventStatus.Live);
 
@@ -188,14 +180,6 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
     }
 
     // ═══ PARTICIPANTS ═══
-
-    /// <inheritdoc />
-    public async Task<IEnumerable<GlobalChatEventParticipant>> GetParticipants(Guid eventId) =>
-        await _dbContext.GlobalChatEventParticipants
-            .Where(p => p.GlobalChatEventId == eventId)
-            .OrderBy(p => p.JoinedUtc)
-            .ProjectTo<GlobalChatEventParticipant>(_mapper.ConfigurationProvider)
-            .ToArrayAsync().ConfigureAwait(false);
 
     /// <inheritdoc />
     public async Task<GlobalChatEventParticipant> AddParticipant(

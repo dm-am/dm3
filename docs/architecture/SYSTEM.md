@@ -10,49 +10,67 @@
 
 **Зачем:** Изоляция модулей — изменения в Game не ломают Blog. Простота — один деплой, одна БД. Изоляция кончается на доменных модулях: схема общая, чтения через границу модуля внутри Persistence допущены сознательно, поэтому выделение модуля в отдельный сервис означает разделение схемы, а не перенос кода.
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         MODULAR MONOLITH                                │
-│                                                                         │
-│  Account  Personal  Community  Moderation  Messaging  Game  Blog  Forum │
-│     │        │          │          │           │        │    │      │   │
-│     └────────┴──────────┴──────────┴───────────┴────────┴────┴──────┘   │
-│                                 │                                       │
-│                    ┌────────────▼────────────┐                          │
-│                    │     Domain Events       │                          │
-│                    │      (RabbitMQ)         │                          │
-│                    └─────────────────────────┘                          │
-└─────────────────────────────────────────────────────────────────────────┘
+Один деплой, одна схема базы; говорят модули между собой событиями:
+
+```mermaid
+flowchart TB
+    subgraph modules["Доменные модули"]
+        direction LR
+        Account
+        Personal
+        Community
+        Moderation
+        Messaging
+        Game
+        Blog
+        Forum
+    end
+    modules -->|"события, а не вызовы соседа"| bus["Domain Events<br/>RabbitMQ"]
 ```
 
 ### Clean Architecture
 
 **Зачем:** Testability — Domain тестируется без БД/HTTP. Flexibility — можно заменить PostgreSQL без изменения бизнес-логики. Четкие границы ответственности.
 
+Стрелка означает ссылку проекта: откуда она выходит, тот и зависит.
+Слой зависит только от слоев ниже; фронтенд в схему не входит, он
+разговаривает с API только по HTTP и нарисован в топологии рантайма.
+
+```mermaid
+flowchart TB
+    subgraph entry["Точки входа"]
+        direction LR
+        wmail["Workers.Mail"]
+        api["Web.API"]
+        wnotify["Workers.<br/>NotificationDispatcher"]
+    end
+    subgraph infra["Инфраструктура"]
+        direction LR
+        mail["Mail"]
+        messaging["Messaging"]
+        persistence["Persistence"]
+        icore["Infrastructure.Core"]
+    end
+    domain["DM.Domain.* — восемь модулей:<br/>Account, Personal, Community, Moderation,<br/>Messaging, Game, Blog, Forum"]
+    core["DM.Domain.Core<br/>интерфейсы, DTO, enum, исключения"]
+
+    entry --> infra
+    api --> domain
+    wnotify --> domain
+    persistence --> domain
+    infra --> core
+    domain --> core
+
+    classDef leaf fill:transparent,stroke-dasharray: 4 3
+    class core leaf
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        Entry Points                                     │
-│  DM.Web.API          DM.Workers.*           DM.Web.Client               │
-│  (ASP.NET Core)      (Jamq / RabbitMQ)      (Vue 3)                     │
-└───────────────────────────┬─────────────────────────────────────────────┘
-                            │
-┌───────────────────────────▼─────────────────────────────────────────────┐
-│                        Infrastructure                                   │
-│  Persistence, Mail, Messaging, Core                                     │
-│  Реализации интерфейсов из Domain плюс свои, над внешними библиотеками. │
-└───────────────────────────┬─────────────────────────────────────────────┘
-                            │
-┌───────────────────────────▼─────────────────────────────────────────────┐
-│                        Domain (Business Logic)                          │
-│  Account, Personal, Community, Moderation, Messaging, Game, Blog, Forum │
-│  Unified Services + Repository Interfaces                               │
-└───────────────────────────┬─────────────────────────────────────────────┘
-                            │
-┌───────────────────────────▼─────────────────────────────────────────────┐
-│                        Domain.Core (Shared Kernel)                      │
-│  Интерфейсы, DTO, Enums, Exceptions. Никакой бизнес-логики.             │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+
+Внутри инфраструктуры зависимости идут в одну сторону: Mail ссылается на
+Messaging, Persistence и Messaging — на Infrastructure.Core. Точный граф —
+в csproj, схема держит только направление между слоями.
+
+У `Domain.Core` ссылок нет вообще, и это то, что держит всю схему: он —
+лист графа, и любая новая ссылка из него разворачивает направление.
 
 **Ключевое правило:** Бизнес-интерфейсы объявляет Domain. Infrastructure объявляет только свои — обертки над внешними библиотеками. Формулировка правила и его граница — в [PATTERNS.md](../conventions/PATTERNS.md), там же архитектурный тест, который его проверяет.
 
@@ -100,41 +118,36 @@ await _notificationService.CreateAsync(...); // ЗАПРЕЩЕНО
 
 ## Компоненты системы
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        ПОЛЬЗОВАТЕЛЬ                             │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     FRONTEND (Vue 3)                            │
-│                     http://localhost:5173                       │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │ HTTP запросы
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      BACKEND API                                │
-│                   http://localhost:5000                         │
-└────────┬──────────────┬──────────────┬─────────────┬────────────┘
-         │              │              │             │             │
-         ▼              ▼              ▼             ▼             ▼
-┌──────────────┐ ┌────────────┐ ┌───────────┐ ┌───────────┐ ┌──────────────┐
-│ PostgreSQL   │ │  MongoDB   │ │ RabbitMQ  │ │  MinIO    │ │  imgproxy    │
-│ (основные    │ │ (счетчики, │ │ (очередь  │ │ (source-  │ │ (on-the-fly  │
-│  данные)     │ │  сессии)   │ │  событий) │ │  файлы)   │ │  resize+fmt) │
-└──────────────┘ └────────────┘ └─────┬─────┘ └───────────┘ └──────────────┘
-                                      │
-                     ┌────────────────┴────────────────┐
-                     │                                 │
-                     ▼                                 ▼
-            ┌──────────────────┐              ┌──────────────────┐
-            │ NotificationDisp │              │ Mail Worker      │
-            └──────────────────┘              └────────┬─────────┘
-                                                       │
-                                                       ▼
-                                              ┌──────────────────┐
-                                              │     MailHog      │
-                                              └──────────────────┘
+```mermaid
+flowchart TB
+    user(["Читатель"])
+    imgproxy["imgproxy<br/>ресайз на лету"]
+    client["Frontend<br/>Vue 3"]
+    pop["Точка присутствия<br/>обратный прокси"]
+    api["Backend API<br/>ASP.NET Core + SignalR"]
+    minio[("MinIO<br/>исходные файлы")]
+    pg[("PostgreSQL<br/>основные данные")]
+    rmq{{"RabbitMQ"}}
+    mongo[("MongoDB<br/>уведомления,<br/>счетчики, сессии")]
+    wmail["Mail Worker"]
+    wnotify["Notification<br/>Dispatcher"]
+    smtp["SMTP<br/>MailHog на стенде"]
+
+    user --> imgproxy
+    user --> client
+    user --> pop
+    imgproxy --> minio
+    client --> api
+    pop --> api
+    api -.->|"SignalR"| client
+    api --> minio
+    api --> pg
+    api --> rmq
+    api --> mongo
+    rmq --> wmail
+    rmq <-->|"события /<br/>RealtimeNotification"| wnotify
+    wnotify --> mongo
+    wmail --> smtp
 ```
 
 ### Слои backend
@@ -178,8 +191,14 @@ Workers подписываются на события и обрабатываю
 
 ## Система уведомлений
 
-```
-Event → NotificationConsumer → NotificationGenerator → MongoDB → SignalR → Frontend
+```mermaid
+flowchart LR
+    ev["Событие из очереди"] --> gen["NotificationGenerator"]
+    gen -->|"сказать пользователю"| mongo[("MongoDB<br/>список уведомлений")]
+    mongo --> mail["письмо / бот<br/>по подписке"]
+    mongo --> push["SignalR"]
+    gen -->|"лишь обновить бейдж"| push
+    push --> fe["Frontend"]
 ```
 
 Шаг с хранением обязателен не для каждого события. Уведомление, которое
@@ -195,7 +214,7 @@ Event → NotificationConsumer → NotificationGenerator → MongoDB → SignalR
 Сайт доступен по нескольким адресам, но экземпляр приложения один. Дополнительный
 адрес обслуживает обратный прокси: фронтенд он отдает со своего диска, запросы к
 API передает наверх, состояния не хранит и к базам не подключается. Копией сайта
-такой адрес не является и отказоустойчивости не дает — [MIRRORING.md](../guides/MIRRORING.md).
+такой адрес не является и отказоустойчивости не дает — [POINT_OF_PRESENCE.md](../guides/POINT_OF_PRESENCE.md).
 
 Вход общий для всех адресов, потому что все они хосты одного регистрируемого
 домена и область куки сессии задана на этот домен.

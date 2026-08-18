@@ -102,6 +102,33 @@ public class GameInvitationServiceShould : UnitTestBase
         _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.InvitePlayer, game), Times.Once);
     }
 
+    /// <summary>
+    /// The pending list is a panel of the settings page, so it follows the page
+    /// rather than the roster: EditSettings admits the curating mentor, while
+    /// InvitePlayer and CancelInvitation above keep the leads' own gates. Read
+    /// and write parting company here is the point — the mentor sees who was
+    /// invited and cannot invite or revoke.
+    /// </summary>
+    [Fact]
+    public async Task AuthorizePendingInvitationsReadWithTheSettingsIntention()
+    {
+        var gameId = Guid.NewGuid();
+        var game = new GameDto
+        {
+            Id = gameId,
+            Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
+            BlacklistedUsers = Array.Empty<BlacklistedUser>()
+        };
+        _gameRepository.Setup(r => r.GetGame(gameId, _currentUserId, It.IsAny<CancellationToken>())).ReturnsAsync(game);
+        _repository.Setup(r => r.GetPendingInvitations(gameId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<GameInvitation>());
+
+        await _service.GetPendingInvitations(gameId);
+
+        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.EditSettings, game), Times.Once);
+        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.Edit, game), Times.Never);
+    }
+
     [Fact]
     public async Task PublishEventWhenInvitingPlayer()
     {

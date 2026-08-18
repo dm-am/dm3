@@ -251,13 +251,16 @@ watch(messageLayout, () => {
 .settings-btn
   margin-top: $small
 
-// The hit box comes from the mixin rather than from these 24 pixels. At this
+// The hit box comes from the mixin rather than from the glyph box. At this
 // size the floor and the box coincide, so nothing moves on screen, but the
 // number stops being this file's own opinion about how small a target may get.
 // The mixin resets border and background, so the frame and the fill that make
 // this control look like a button come after it.
+//
+// The width is the shared $scroll-nav-width, because the rail is a landmark
+// other fixed corners measure against (ToastContainer).
 .scroll-nav-btn
-  +icon-button(24px)
+  +icon-button($scroll-nav-width)
 
   // Wrapped in "&" because the mixin ends with a nested rule, and a plain
   // declaration after one is what Sass is changing the meaning of. Moving them

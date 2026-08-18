@@ -119,15 +119,16 @@ describe("GameReviews", () => {
     expect(wrapper.findComponent(ErrorState).exists()).toBe(true);
   });
 
-  it("names a row with a comma, not the dash the owner barred", async () => {
+  it("draws a review as the shared bubble card, without naming the game", async () => {
+    // The card is the one a recommendation uses. `showGame: false` because
+    // every row here is about the game the reader is already on — the same
+    // reason the site testimonials gallery names no recipient.
     const wrapper = await render({ username: "reader" }, [review("critic")]);
 
-    const list = wrapper.findComponent({ name: "ExpandableList" });
-    const items = list.props("items") as { title: string }[];
-    expect(items).toHaveLength(1);
-    expect(items[0].title).toContain("critic, ");
-    // U+2014 EM DASH, spelled by code point so this file stays clean itself.
-    expect(items[0].title).not.toContain("—");
+    const cards = wrapper.findAllComponents({ name: "GameReviewCard" });
+    expect(cards).toHaveLength(1);
+    expect(cards[0].props("review")).toMatchObject({ id: "review-of-critic" });
+    expect(cards[0].props("showGame")).toBe(false);
   });
 
   it("keeps the form off the screen for a reader who already reviewed", async () => {

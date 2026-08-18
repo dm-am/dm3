@@ -18,11 +18,6 @@ public interface IUserRepository : IUserReadRepository
     /// </summary>
     Task<UserDetails?> GetUserDetailsByEmail(string email);
 
-    /// <summary>
-    /// Get count of post reviews given by user
-    /// </summary>
-    Task<int> GetPostReviewsGivenCount(Guid userId);
-
     // ═══ WRITE ═══
 
     /// <summary>

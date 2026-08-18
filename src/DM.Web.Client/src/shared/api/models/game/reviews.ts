@@ -37,28 +37,11 @@ export type GameReview = {
 };
 
 /**
- * Request to create a game review
- */
-export type CreateGameReviewRequest = {
-  /** Review text (10-10000 characters, BBCode supported) */
-  text: string;
-};
-
-/**
- * Request to update a game review
- */
-export type UpdateGameReviewRequest = {
-  /** Updated review text (BBCode supported) */
-  text?: string;
-};
-
-/**
  * post review types
  * @module shared/api/models/game/reviews
  *
  * PostReviews ("оценка поста") are ratings with required text for individual posts.
  * - BBCode supported
- * - Likes support (ONLY for PostReviews)
  * - One review per post per user
  * - Has rating sign (Positive, Neutral, Negative)
  *
@@ -103,24 +86,4 @@ export type PostReview = {
   createdUtc: Served<string>;
   /** Last modification timestamp (UTC) */
   modifiedUtc?: Served<string>;
-  /** Users who liked this review */
-  likes: Served<User[]>;
-};
-
-/**
- * Request to create a post review
- */
-export type CreatePostReviewRequest = {
-  /** Rating sign (required): Positive, Neutral, or Negative */
-  sign: ReviewSign;
-  /** Review text (required, BBCode supported) */
-  text: string;
-};
-
-/**
- * Request to update a post review
- */
-export type UpdatePostReviewRequest = {
-  /** Updated rating sign */
-  sign?: ReviewSign;
 };

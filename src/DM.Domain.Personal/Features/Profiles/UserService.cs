@@ -23,7 +23,6 @@ internal class UserService : IUserService
 {
     private readonly IIdentityProvider _identityProvider;
     private readonly IUserRepository _repository;
-    private readonly IUsernameHistoryReader _usernameHistoryReader;
     private readonly IIntentionManager _intentionManager;
     private readonly ICache _cache;
     private readonly IValidator<UpdateUser> _validator;
@@ -35,7 +34,6 @@ internal class UserService : IUserService
     public UserService(
         IIdentityProvider identityProvider,
         IUserRepository repository,
-        IUsernameHistoryReader usernameHistoryReader,
         IIntentionManager intentionManager,
         ICache cache,
         IValidator<UpdateUser> validator,
@@ -45,7 +43,6 @@ internal class UserService : IUserService
     {
         _identityProvider = identityProvider;
         _repository = repository;
-        _usernameHistoryReader = usernameHistoryReader;
         _intentionManager = intentionManager;
         _cache = cache;
         _validator = validator;
@@ -108,18 +105,6 @@ internal class UserService : IUserService
     }
 
     /// <inheritdoc />
-    public async Task<GeneralUser> GetCurrentAsync()
-    {
-        var identity = _identityProvider.Current;
-        if (!identity.User.IsAuthenticated)
-        {
-            throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
-        }
-
-        return await GetAsync(identity.User.UserId);
-    }
-
-    /// <inheritdoc />
     public async Task<UserDetails> GetDetailsAsync(string username)
     {
         var normalizedUsername = username.ToLowerInvariant();
@@ -151,10 +136,6 @@ internal class UserService : IUserService
 
         return user;
     }
-
-    /// <inheritdoc />
-    public Task<IReadOnlyCollection<UsernameHistoryEntry>> GetUsernameHistoryAsync(Guid userId) =>
-        _usernameHistoryReader.GetByUserIdAsync(userId);
 
     /// <inheritdoc />
     public async Task<UserDetails> UpdateAsync(UpdateUser updateUser)

@@ -124,13 +124,4 @@ internal class InactivityRepository : IInactivityRepository
                 .SetProperty(x => x.ClosedReason, ClosedReason.None)
                 .SetProperty(x => x.ClosureWarningUtc, (DateTimeOffset?)null), ct);
     }
-
-    /// <inheritdoc />
-    public async Task<string?> GetGameTitle(Guid gameId, CancellationToken ct = default)
-    {
-        return await _dbContext.Games
-            .Where(g => g.GameId == gameId)
-            .Select(g => g.Title)
-            .FirstOrDefaultAsync(ct);
-    }
 }

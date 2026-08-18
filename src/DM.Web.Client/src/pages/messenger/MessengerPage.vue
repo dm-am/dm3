@@ -1,29 +1,21 @@
 <script setup lang="ts">
+// No guest branch: the /messenger subtree is requiresAuth, so the router is
+// the one mechanism that turns a guest away (guardAuthenticated).
 import { storeToRefs } from "pinia";
-import { useAuthStore } from "@/entities/user";
 import { useMessagingStore } from "@/entities/message";
-import { LoginPrompt } from "@/features/auth";
 
-const { user } = storeToRefs(useAuthStore());
 const messagingStore = useMessagingStore();
 const { totalUnreadCount } = storeToRefs(messagingStore);
 </script>
 
 <template>
-  <template v-if="user">
-    <page-title>
-      Личные сообщения
-      <span v-if="totalUnreadCount > 0" class="unread-badge">
-        {{ totalUnreadCount }}
-      </span>
-    </page-title>
-    <router-view />
-  </template>
-
-  <template v-else>
-    <page-title>Личные сообщения</page-title>
-    <LoginPrompt action="читать личные сообщения" />
-  </template>
+  <page-title>
+    Личные сообщения
+    <span v-if="totalUnreadCount > 0" class="unread-badge">
+      {{ totalUnreadCount }}
+    </span>
+  </page-title>
+  <router-view />
 </template>
 
 <style scoped lang="sass">

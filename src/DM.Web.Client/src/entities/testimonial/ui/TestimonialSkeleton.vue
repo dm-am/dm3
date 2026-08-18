@@ -50,8 +50,9 @@ withDefaults(
   gap: $medium
 
 // Skeleton bubbles mirror the collapsed testimonial bubble shape
-// (same padding/radius/min-height as the real .testimonial-text,
-// see entities/testimonial TestimonialCard.vue).
+// (same padding/radius/min-height as the real .bubble, see
+// shared/ui/SpeechBubble). It stands in for a recommendation and for a
+// game review alike — both are drawn by that one bubble.
 .skeleton-bubble
   display: flex
   flex-direction: column

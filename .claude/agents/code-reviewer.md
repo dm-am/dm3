@@ -94,3 +94,24 @@ Reference: [SECURITY.md](../../docs/conventions/SECURITY.md) and [AUTHORIZATION.
 - **APPROVE:** No CRITICAL or HIGH issues
 - **WARNING:** HIGH issues present, no CRITICAL
 - **BLOCK:** CRITICAL issues present
+
+## Relation to the review skill
+
+This agent is the subject-matter half of a review: what to look for in THIS
+codebase. The process half — fresh-agent requirement, reading order, proof
+review, the Must/Should/Could finding format with a confidence score — comes
+from `.claude/skills/review/SKILL.md`. See docs/conventions/PROCESS.md.
+
+When a review runs through that skill, BOTH the finding format and the verdict
+come from the skill's vocabulary, and the two vocabularies map as follows.
+APPROVE/WARNING/BLOCK above apply only to standalone runs of this agent.
+
+- CRITICAL → Must fix; HIGH → Should fix; either present → `Request changes`.
+- MEDIUM → Could fix. LOW is not reported through the skill at all — the skill
+  forbids style-preference findings.
+- A HIGH item that is purely conventional (empty XML doc tag, missing
+  `[ProducesResponseType]`) with no behavior, security, or data risk is
+  reported as Could fix, matching the skill's approve standard.
+- The skill's `Blocked` is NOT this agent's BLOCK: it means "a risk nobody
+  qualified could verify", not "critical findings present". Never translate
+  CRITICAL findings into `Blocked`.

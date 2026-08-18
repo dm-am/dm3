@@ -175,9 +175,4 @@ public interface IMessagingApiService
     /// Mark global chat messages as read
     /// </summary>
     Task MarkGlobalChatAsReadAsync();
-
-    /// <summary>
-    /// Get total unread message count in global chat
-    /// </summary>
-    Task<int> GetGlobalChatUnreadCountAsync();
 }

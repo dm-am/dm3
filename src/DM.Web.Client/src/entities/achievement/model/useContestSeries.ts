@@ -15,6 +15,13 @@ const series: Ref<ContestSeries[] | null> = ref(null);
 const loading = ref(false);
 let pending: Promise<void> | null = null;
 
+// The admin slice: same catalogs WITH inactive records. Kept apart from the
+// public refs above so the profile never renders a hidden series, while the
+// admin list always has something to hang its "Вернуть" button on.
+const adminAwardTypes: Ref<AwardType[] | null> = ref(null);
+const adminSeries: Ref<ContestSeries[] | null> = ref(null);
+let adminPending: Promise<void> | null = null;
+
 export function useContestSeries() {
   /**
    * @param fresh Ask the origin rather than either cache. The catalogue answers
@@ -41,12 +48,53 @@ export function useContestSeries() {
     return pending;
   }
 
+  /** The admin catalogs, inactive included. Lazy like load(). */
+  async function loadAdmin(): Promise<void> {
+    if (adminAwardTypes.value !== null && adminSeries.value !== null) return;
+    if (adminPending !== null) return adminPending;
+    adminPending = (async () => {
+      loading.value = true;
+      try {
+        const [a, s] = await Promise.all([
+          achievementApi.getModerationAwardTypes(),
+          achievementApi.getModerationContestSeries(),
+        ]);
+        adminAwardTypes.value = a.data?.resources ?? [];
+        adminSeries.value = s.data?.resources ?? [];
+      } finally {
+        loading.value = false;
+        adminPending = null;
+      }
+    })();
+    return adminPending;
+  }
+
+  /**
+   * After an admin edit both slices are stale: the profile must see the
+   * change and the admin list must keep showing the hidden record. The
+   * admin slice reloads only if something ever loaded it.
+   */
   async function reload(): Promise<void> {
     awardTypes.value = null;
     series.value = null;
     pending = null;
-    return load(true);
+    const wasAdmin =
+      adminAwardTypes.value !== null || adminSeries.value !== null;
+    adminAwardTypes.value = null;
+    adminSeries.value = null;
+    adminPending = null;
+    await load(true);
+    if (wasAdmin) await loadAdmin();
   }
 
-  return { awardTypes, series, loading, load, reload };
+  return {
+    awardTypes,
+    series,
+    adminAwardTypes,
+    adminSeries,
+    loading,
+    load,
+    loadAdmin,
+    reload,
+  };
 }

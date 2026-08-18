@@ -6,6 +6,20 @@
 
 **Один source-файл per upload + on-the-fly transforms через [imgproxy](https://imgproxy.net/).**
 
+```mermaid
+flowchart LR
+    up["Клиент<br/>файл"] --> api["API<br/>magic bytes, EXIF strip,<br/>даунскейл до 1024px"]
+    api -->|"1: объект"| s3[("MinIO")]
+    api -->|"2: строка"| pg[("PostgreSQL")]
+    view["Браузер<br/>smallUrl / mediumUrl"] --> proxy["imgproxy<br/>ресайз, формат по Accept"]
+    proxy --> s3
+    view2["Браузер<br/>originalUrl"] --> s3
+```
+
+Порядок записи в схеме — тот самый инвариант из
+[DATA_STORAGE.md](../conventions/DATA_STORAGE.md): сначала объект, потом
+строка о нем; упавшая запись теряет то, чего никто не видел.
+
 - Бэк хранит ровно один файл per upload (≤1024 px, EXIF-stripped, в формате uploader'а).
 - Thumbnail-варианты генерируются по требованию.
 - Format negotiation (AVIF / WebP / JPEG) — через `Accept` header.

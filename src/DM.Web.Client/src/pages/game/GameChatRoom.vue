@@ -113,11 +113,14 @@ async function loadInitial() {
   paging.value = null;
 
   await ensureRooms();
-  // Not found means the list is in and the room is not in it. The shell loads
-  // the same list, and the store keeps only the newest request: a page that
-  // decides on its own await sees an empty list whenever the shell's request
-  // arrived second, and says the room does not exist while it is on the screen
-  // behind the message.
+  // Not found means the list is in and the room is not in it. That used to be
+  // a guess: the shell loads the same list, and two requests for it left one
+  // answer discarded, so a page that awaited the losing one saw an empty list
+  // and said the room does not exist while it was on the screen behind the
+  // message. loadRooms now hands both callers the same request, so the await
+  // above really does mean the list is in. The roomsLoading branch below stays
+  // as the floor for the case this page cannot see — a reset between the two,
+  // which drops the answer on purpose.
   if (!chatRoomId.value) {
     if (roomsLoading.value) {
       loading.value = false;

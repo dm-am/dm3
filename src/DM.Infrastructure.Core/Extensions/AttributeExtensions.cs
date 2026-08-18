@@ -36,7 +36,7 @@ public static class AttributeExtensions
     /// <typeparam name="TStruct"></typeparam>
     /// <typeparam name="TAttr"></typeparam>
     /// <returns>Array of attribute instances</returns>
-    public static TAttr[] GetAllAttributes<TStruct, TAttr>(this TStruct structValue)
+    private static TAttr[] GetAllAttributes<TStruct, TAttr>(this TStruct structValue)
         where TStruct : struct
         where TAttr : Attribute
     {

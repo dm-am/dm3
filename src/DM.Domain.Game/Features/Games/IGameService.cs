@@ -71,12 +71,6 @@ public interface IGameService
     /// <param name="publicId">Public identifier</param>
     Task<GameDetails> GetDetailsByPublicIdAsync(string publicId);
 
-    /// <summary>
-    /// Get games by IDs (for subscribed games)
-    /// </summary>
-    /// <param name="gameIds">Game identifiers</param>
-    Task<IEnumerable<Game>> GetSubscribedAsync(IEnumerable<Guid> gameIds);
-
     #endregion
 
     #region Update

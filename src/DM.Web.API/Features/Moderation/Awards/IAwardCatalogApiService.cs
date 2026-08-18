@@ -11,6 +11,21 @@ namespace DM.Web.API.Features.Moderation.Awards;
 public interface IAwardCatalogApiService
 {
     /// <summary>
+    /// Get the full award type catalog, inactive included
+    /// </summary>
+    /// <remarks>
+    /// The public catalog serves active records only, so a deactivated type
+    /// vanished from the admin page together with its "restore" button. The
+    /// admin list is the one place a hidden record must stay visible.
+    /// </remarks>
+    Task<ListEnvelope<AwardType>> GetTypes();
+
+    /// <summary>
+    /// Get all contest series, inactive included
+    /// </summary>
+    Task<ListEnvelope<ContestSeries>> GetSeries();
+
+    /// <summary>
     /// Create a new award type
     /// </summary>
     Task<Envelope<AwardType>> CreateType(CreateAwardTypeRequest request);

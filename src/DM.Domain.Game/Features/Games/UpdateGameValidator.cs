@@ -1,5 +1,4 @@
 using DM.Domain.Core.Exceptions;
-using DM.Domain.Core.Users;
 using FluentValidation;
 
 namespace DM.Domain.Game.Features.Games;
@@ -8,8 +7,7 @@ namespace DM.Domain.Game.Features.Games;
 internal class UpdateGameValidator : AbstractValidator<UpdateGame>
 {
     /// <inheritdoc />
-    public UpdateGameValidator(
-        IUserLookupService userLookupService)
+    public UpdateGameValidator()
     {
         When(g => g.Title != default, () =>
             RuleFor(g => g.Title)
@@ -30,9 +28,5 @@ internal class UpdateGameValidator : AbstractValidator<UpdateGame>
             RuleFor(g => g.Info)
                 .NotEmpty().WithMessage(ValidationError.Empty)
                 .MinimumLength(200).WithMessage(ValidationError.Short));
-
-        When(g => g.AssistantUsername != default, () =>
-            RuleFor(g => g.AssistantUsername)
-                .MustAsync(userLookupService.UsernameExistsAsync).WithMessage(ValidationError.Invalid));
     }
 }

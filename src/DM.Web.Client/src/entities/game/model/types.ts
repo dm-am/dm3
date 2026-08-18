@@ -634,7 +634,6 @@ export enum ReviewSign {
  * post review ("оценка поста")
  * Rating with optional comment for a post
  * - BBCode supported (optional)
- * - Likes support (ONLY for PostReviews)
  * - One review per post per user
  */
 export interface PostReview {
@@ -647,7 +646,6 @@ export interface PostReview {
   sign: ReviewSign;
   createdUtc: string;
   modifiedUtc?: string;
-  likes: UserRef[];
 }
 
 // === Unread Results ===
@@ -680,42 +678,6 @@ export interface FirstUnreadCommentResult {
   totalUnreadCount: number;
   /** Whether there are unread comments (or any comments for anonymous users) */
   hasUnread: boolean;
-}
-
-// === Chat rooms (message-based rooms for OOC player communication) ===
-
-/** Access grant on a chat room (character or reader) */
-export interface ChatRoomAccess {
-  id: string;
-  user?: UserRef | null;
-  character?: Character | null;
-}
-
-/**
- * Chat room in a game. Unlike post rooms, its content is a message stream
- * paginated with a cursor (see gameApi.getChatMessages).
- */
-export interface ChatRoom {
-  id: string;
-  /** Linked chat identifier used for the message stream */
-  chatId?: string | null;
-  gameId: string;
-  title: string;
-  /** Display order number */
-  orderNumber: number;
-  /** Number of unread messages for the current user */
-  unreadCount: number;
-  accesses: ChatRoomAccess[];
-}
-
-/** Payload for creating a chat room */
-export interface CreateChatRoomInput {
-  title: string;
-}
-
-/** Payload for updating a chat room */
-export interface UpdateChatRoomInput {
-  title?: string;
 }
 
 // === Game master notepad ===

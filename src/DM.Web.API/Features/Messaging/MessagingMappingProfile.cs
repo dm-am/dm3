@@ -38,8 +38,9 @@ internal class MessagingMappingProfile : Profile
                 // request to permission-filtered Display. getMessageForEdit
                 // (GET messages/{id}) sends X-Dm-Audience: author_edit for both
                 // global chat and direct/group messages. The GlobalChatMessage
-                // and DirectMessage surfaces allow neither [mod] nor [private],
-                // so this is round-trip integrity rather than a leak vector.
+                // surface allows [mod] (public on read, so the author_edit
+                // round-trip is not a leak vector) and no [private]; the
+                // DirectMessage surface allows neither tag.
                 if (dest.Text is not null)
                     dest.Text.Context = new RenderContextEnvelope
                     {

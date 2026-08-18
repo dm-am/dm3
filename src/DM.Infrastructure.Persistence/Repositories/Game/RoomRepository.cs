@@ -70,15 +70,6 @@ internal class RoomRepository : IRoomRepository
             .FirstOrDefaultAsync()!;
     }
 
-    public Task<Room?> GetByGameAndNumber(Guid gameId, int roomNumber, Guid userId)
-    {
-        return _dbContext.Rooms
-            .Where(r => r.GameId == gameId && r.RoomNumber == roomNumber)
-            .Where(GameAccessibilityFilters.RoomAvailable(userId))
-            .ProjectTo<Room>(_mapper.ConfigurationProvider)
-            .FirstOrDefaultAsync()!;
-    }
-
     public Task<RoomToUpdate?> GetForUpdate(Guid roomId, Guid userId)
     {
         return _dbContext.Rooms
@@ -86,23 +77,6 @@ internal class RoomRepository : IRoomRepository
             .Where(GameAccessibilityFilters.RoomAvailable(userId))
             .ProjectTo<RoomToUpdate>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync()!;
-    }
-
-    public Task<RoomNeighbours> GetNeighbours(Guid roomId)
-    {
-        return _dbContext.Rooms
-            .Where(r => r.RoomId == roomId)
-            .ProjectTo<RoomNeighbours>(_mapper.ConfigurationProvider)
-            .FirstAsync();
-    }
-
-    public Task<RoomOrderInfo?> GetFirstRoomInfo(Guid gameId)
-    {
-        return _dbContext.Rooms
-            .Where(r => !r.IsRemoved && r.GameId == gameId)
-            .OrderBy(r => r.OrderNumber)
-            .ProjectTo<RoomOrderInfo>(_mapper.ConfigurationProvider)
-            .FirstOrDefaultAsync();
     }
 
     public Task<RoomOrderInfo?> GetLastRoomInfo(Guid gameId)

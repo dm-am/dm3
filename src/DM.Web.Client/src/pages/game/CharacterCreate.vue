@@ -5,9 +5,8 @@
  * CharacterForm (features/edit-character) to gameApi.createCharacter via the
  * form's own submit; on success it routes to the game's character list.
  *
- * The NPC surface is the same form gated only by the `?npc` query flag; NPC
- * authoring is master/assistant-only, enforced by the panel link and the
- * backend.
+ * The NPC surface is the same form gated by the `?npc` query flag and the
+ * in-page lead check below; the backend enforces the same rule.
  */
 import { computed, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -23,10 +22,27 @@ const route = useRoute();
 const router = useRouter();
 const toast = useToast();
 const store = useGameDetailsStore();
-const { game } = storeToRefs(store);
+const { game, isMaster, isAssistant } = storeToRefs(store);
 
 const gameId = computed(() => route.params.id as string);
 const isNpc = computed(() => route.query.npc != null);
+
+// NPC authoring is lead-only. The server does not refuse the request — it
+// quietly creates a plain character instead (CharacterService drops the flag
+// for anyone below master/assistant) — so the page refuses up front rather
+// than let the form promise an NPC it would not make.
+const canAuthorNpc = computed(() => isMaster.value || isAssistant.value);
+
+// Ordinary applications need the game active and its recruitment open
+// (GameIntention.CreateCharacter). A pending player invitation bypasses closed
+// recruitment, and that flag never reaches the client, so this stays a notice
+// over the form rather than a refusal: an invited player must get through, and
+// everyone else learns here what the server will answer.
+const recruitmentClosed = computed(
+  () =>
+    game.value != null &&
+    !(game.value.status === "Active" && game.value.recruitment?.isOpen),
+);
 
 // The backend character id is a GUID; the game's own id (not publicId) is
 // what the create endpoint binds. Fall back to the route param before resolve.
@@ -55,17 +71,26 @@ function onCancel() {
 
 <template>
   <div class="character-create">
-    <secondary-text v-if="!isNpc" class="intro">
-      Заполните анкету персонажа. После отправки мастер рассмотрит заявку.
+    <secondary-text v-if="isNpc && !canAuthorNpc">
+      Создание NPC доступно мастеру и ассистентам.
     </secondary-text>
 
-    <CharacterForm
-      :schema="schema"
-      :game-id="gameGuid"
-      :is-npc="isNpc"
-      @saved="onSaved"
-      @cancel="onCancel"
-    />
+    <template v-else>
+      <secondary-text v-if="!isNpc && recruitmentClosed" class="intro">
+        Набор игроков закрыт: без приглашения мастера заявка не будет принята.
+      </secondary-text>
+      <secondary-text v-else-if="!isNpc" class="intro">
+        Заполните анкету персонажа. После отправки мастер рассмотрит заявку.
+      </secondary-text>
+
+      <CharacterForm
+        :schema="schema"
+        :game-id="gameGuid"
+        :is-npc="isNpc"
+        @saved="onSaved"
+        @cancel="onCancel"
+      />
+    </template>
   </div>
 </template>
 

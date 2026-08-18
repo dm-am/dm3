@@ -16,7 +16,6 @@ namespace DM.Infrastructure.Persistence.Entities.Game;
 /// Any sentiment text is allowed.
 /// Has Sign (+1/0/-1) for rating impact.
 /// One review per author-post pair.
-/// SUPPORTS LIKES (only entity with likes in the review system).
 /// </remarks>
 [Table("PostReviews")]
 public class PostReview : ISoftDeletable

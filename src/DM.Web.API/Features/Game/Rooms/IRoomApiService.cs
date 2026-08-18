@@ -1,6 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Game.Rooms;
@@ -16,14 +15,6 @@ public interface IRoomApiService
     /// <param name="gameId">Game identifier</param>
     /// <returns>List envelope containing all game rooms</returns>
     Task<ListEnvelope<Room>> GetAll(Guid gameId);
-
-    /// <summary>
-    /// Get list of game rooms filtered by type
-    /// </summary>
-    /// <param name="gameId">Game identifier</param>
-    /// <param name="roomType">Room type filter</param>
-    /// <returns>List envelope containing rooms of specified type</returns>
-    Task<ListEnvelope<Room>> GetByType(Guid gameId, RoomType roomType);
 
     /// <summary>
     /// Get single room

@@ -10,7 +10,7 @@ import {
 } from "vue";
 import dayjs from "dayjs";
 import { htmlToBbcode } from "@/shared/lib/utils/bbcode";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute, type RouteLocationRaw } from "vue-router";
 import { storeToRefs } from "pinia";
 import type { Post, PostReview } from "@/entities/game";
 import { gameApi, GameLink, PostReviewItem, RoomLink } from "@/entities/game";
@@ -33,7 +33,6 @@ import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { scrollBlockIntoView } from "@/shared/lib/scroll";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { notifyFailure } from "@/shared/lib/errors";
-import { permalinkOrigin } from "@/shared/config/site";
 
 const props = withDefaults(
   defineProps<{
@@ -286,7 +285,6 @@ const hasNavigation = computed(
 const gameId = computed(() => props.post?.room?.game?.publicId);
 const roomNumber = computed(() => props.post?.room?.roomNumber);
 
-const router = useRouter();
 const route = useRoute();
 
 // The post's own address, built once here and handed to everything that needs
@@ -305,12 +303,6 @@ const postRoute = computed(() =>
     : null,
 );
 
-const postPermalink = computed(() =>
-  postRoute.value
-    ? permalinkOrigin() + router.resolve(postRoute.value).href
-    : permalinkOrigin() + window.location.pathname + postAnchor.value,
-);
-
 /**
  * The address of one review: the post's address plus `?review={id}`. A review
  * has no page of its own, and the block it lives in is collapsed and unfetched
@@ -318,8 +310,8 @@ const postPermalink = computed(() =>
  * post with the review still out of sight. The parameter is read back below:
  * it opens the block and marks the review it names.
  */
-function reviewPermalink(reviewId: string): string {
-  const target = postRoute.value
+function reviewRoute(reviewId: string): RouteLocationRaw {
+  return postRoute.value
     ? { ...postRoute.value, query: { review: reviewId } }
     : {
         // The room page itself: `post.room` is not sent there, and the current
@@ -329,7 +321,6 @@ function reviewPermalink(reviewId: string): string {
         query: { ...route.query, review: reviewId },
         hash: postAnchor.value,
       };
-  return permalinkOrigin() + router.resolve(target).href;
 }
 
 /**
@@ -395,10 +386,6 @@ onUnmounted(() => {
 });
 
 // Truncation is delegated to <TruncatedContent> in the template.
-
-function copyAnchorLink() {
-  navigator.clipboard.writeText(postPermalink.value);
-}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Author / moderator lifecycle: edit + soft-delete (doc 4.2.2.12)
@@ -531,7 +518,7 @@ async function loadReviews() {
   });
   reviewsLoading.value = false;
   if (error) {
-    reviewsError.value = "Не удалось загрузить отзывы";
+    reviewsError.value = "Не удалось загрузить оценки";
     return;
   }
   reviews.value = data?.resources ?? [];
@@ -593,7 +580,7 @@ async function submitReview() {
       if (status === 409) {
         notifyFailure(error, "Вы уже оценили этот пост");
       } else if (status !== 403 && status !== 429) {
-        toast.error("Не удалось отправить отзыв");
+        toast.error("Не удалось отправить оценку");
       }
     }
   } finally {
@@ -688,7 +675,7 @@ async function submitReview() {
                   :class="ratingColorClass"
                   :aria-expanded="showReviews"
                   :aria-controls="reviewsCollapseId"
-                  :aria-label="`Рейтинг ${ratingText}, показать отзывы`"
+                  :aria-label="`Рейтинг ${ratingText}, показать оценки`"
                   @click="toggleReviews"
                 >
                   <b>{{ ratingText }}</b></button
@@ -803,13 +790,14 @@ async function submitReview() {
               symbols.returnArrow
             }}</router-link>
           </Tooltip>
-          <a
-            v-else-if="number"
-            class="post-number"
-            :href="postAnchor"
-            @click.prevent="copyAnchorLink"
-            >{{ number }}</a
-          >
+          <!-- The span is the flex child, not the Tooltip: Tooltip renders a
+               trigger and a teleport, so a class on it lands nowhere, and the
+               flex box needs something of the number's own size to measure. -->
+          <span v-else-if="number" class="post-number-tip">
+            <Tooltip text="Перейти к посту">
+              <a class="post-number" :href="postAnchor">{{ number }}</a>
+            </Tooltip>
+          </span>
         </div>
       </template>
     </div>
@@ -849,7 +837,7 @@ async function submitReview() {
             :key="review.id"
             :review="review"
             :number="i + 1"
-            :permalink="reviewPermalink(review.id)"
+            :to="reviewRoute(review.id)"
             :highlight="isReviewHighlighted(review)"
           />
           <!-- Review form (eligible logged-in users) -->
@@ -895,8 +883,8 @@ async function submitReview() {
               <textarea
                 v-model="newReviewText"
                 class="review-input"
-                placeholder="Текст отзыва..."
-                aria-label="Текст отзыва"
+                placeholder="Текст оценки..."
+                aria-label="Текст оценки"
                 rows="2"
               ></textarea>
               <SecondaryText v-if="!canPickSignedReview" class="review-hint">
@@ -1119,6 +1107,13 @@ button.rating-value
   justify-content: flex-end
   padding-right: 7px
 
+// A flex child blockifies and takes a line box of whatever font-size it
+// inherits — 16px from the card, while the number inside is 12. Sizing this
+// wrapper with its content keeps the footer the height it was when the number
+// sat in the row bare, without a tooltip around it.
+.post-number-tip
+  font-size: $tertiary-font-size
+
 .post-number
   color: $text-muted
   font-size: $tertiary-font-size
@@ -1149,11 +1144,15 @@ button.rating-value
 .reviews-overflow
   overflow: hidden
 
+// Bullet indent follows the old site (ModuleBestPosts), where the list sits on
+// the browser's default 40px padding and the reviews are clearly set off from
+// the post's edge. It used to be a hand-picked 25px, off the spacing scale,
+// and the bullets nearly touched the text beside them.
 .reviews-section
   list-style: disc
   margin: 0
   padding-top: $small
-  padding-left: 25px
+  padding-left: $big + $small
 
 // Loading / error line shown while reviews are fetched — aligned
 // with the reviews list content

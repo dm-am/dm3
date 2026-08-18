@@ -1,13 +1,4 @@
-import type {
-  Id,
-  Served,
-  Username,
-  TopicId,
-  BoardId,
-  GameId,
-  BlogId,
-  PublicationId,
-} from "../common";
+import type { Id, Served } from "../common";
 
 /**
  * The event a notification is about, spelled the way the server spells it.
@@ -35,7 +26,6 @@ export enum NotificationType {
 
   // Community
   UserAvatarChanged = "UserAvatarChanged",
-  UserMentioned = "UserMentioned",
 
   // Blog
   NewPublication = "NewPublication",
@@ -96,85 +86,6 @@ export interface SignalRNotification {
 
 /** Notification handler callback type */
 export type NotificationHandler = (notification: SignalRNotification) => void;
-
-export type NewCharacterData = {
-  authorUsername: Served<Username>;
-  gameTitle: Served<string>;
-  gameId: Served<GameId>;
-};
-
-export type TopicLikedData = {
-  authorUsername: Served<Username>;
-  topicTitle: Served<string>;
-  topicId: Served<TopicId>;
-};
-
-// Subscription notification payloads
-export type NewGameFromSubscribedAuthorData = {
-  gameId: Served<GameId>;
-  gameTitle: Served<string>;
-  authorUsername: Served<Username>;
-};
-
-export type NewBlogFromSubscribedAuthorData = {
-  blogId: Served<BlogId>;
-  blogTitle: Served<string>;
-  authorUsername: Served<Username>;
-};
-
-export type NewTopicFromSubscribedAuthorData = {
-  topicId: Served<TopicId>;
-  topicTitle: Served<string>;
-  boardId: Served<BoardId>;
-  boardTitle: Served<string>;
-  authorUsername: Served<Username>;
-};
-
-export type NewPostInSubscribedGameData = {
-  postId: Served<string>;
-  gameId: Served<GameId>;
-  gameTitle: Served<string>;
-  roomTitle: Served<string>;
-  authorUsername: Served<Username>;
-  characterName: Served<string | null>;
-};
-
-export type NewCommentInSubscribedTopicData = {
-  commentId: Served<string>;
-  topicId: Served<TopicId>;
-  topicTitle: Served<string>;
-  authorUsername: Served<Username>;
-};
-
-export type UserMentionedData = {
-  entityId: Served<string>;
-  entityType: Served<string>;
-  authorUsername: Served<Username>;
-  contextTitle: Served<string>;
-};
-
-// Blog invitation notification payload
-export type BlogInvitationData = {
-  blogId: Served<BlogId>;
-  blogTitle: Served<string>;
-  inviterUsername: Served<Username>;
-  role: Served<string>;
-};
-
-// Liked content notification payloads
-export type PublicationLikedData = {
-  likerUsername: Served<Username>;
-  publicationId: Served<PublicationId>;
-  publicationTitle: Served<string>;
-  blogId: Served<BlogId>;
-  blogTitle: Served<string>;
-};
-
-export type ForumCommentLikedData = {
-  likerUsername: Served<Username>;
-  topicId: Served<TopicId>;
-  topicTitle: Served<string>;
-};
 
 // Notification count
 export type NotificationCount = {

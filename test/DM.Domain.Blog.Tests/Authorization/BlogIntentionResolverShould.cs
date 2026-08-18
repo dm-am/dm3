@@ -113,6 +113,77 @@ public class BlogIntentionResolverShould
     }
 
     [Fact]
+    public void AllowOwnerToEditSettings()
+    {
+        var user = CreateUser(_ownerId);
+        var blog = CreateBlog();
+
+        var result = _resolver.IsAllowed(user, BlogIntention.EditSettings, blog);
+
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AllowAssistantToEditSettings()
+    {
+        var user = CreateUser(_assistantId);
+        var blog = CreateBlog(assistants: new[]
+        {
+            new BlogAssistantInfo { UserId = _assistantId, JoinedUtc = DateTimeOffset.UtcNow }
+        });
+
+        // The settings page belongs to the blog leads, and assistants are leads
+        var result = _resolver.IsAllowed(user, BlogIntention.EditSettings, blog);
+
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DenyMentorToEditSettings()
+    {
+        var user = CreateUser(_mentorId, UserRole.Mentor);
+        var blog = CreateBlog(mentor: new GeneralUser { UserId = _mentorId });
+
+        // Unlike the game curator, the blog mentor only approves publications
+        var result = _resolver.IsAllowed(user, BlogIntention.EditSettings, blog);
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public void DenyRegularUserToEditSettings()
+    {
+        var user = CreateUser(_otherUserId);
+        var blog = CreateBlog();
+
+        var result = _resolver.IsAllowed(user, BlogIntention.EditSettings, blog);
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public void AllowSeniorModeratorToEditSettings()
+    {
+        var user = CreateUser(_otherUserId, UserRole.SeniorModerator);
+        var blog = CreateBlog();
+
+        var result = _resolver.IsAllowed(user, BlogIntention.EditSettings, blog);
+
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DenyModeratorToEditSettings()
+    {
+        var user = CreateUser(_otherUserId, UserRole.Moderator);
+        var blog = CreateBlog();
+
+        var result = _resolver.IsAllowed(user, BlogIntention.EditSettings, blog);
+
+        result.Should().BeFalse();
+    }
+
+    [Fact]
     public void AllowOwnerToDelete()
     {
         var user = CreateUser(_ownerId);
@@ -492,6 +563,7 @@ public class BlogIntentionResolverWithoutTargetShould
 
     [Theory]
     [InlineData(BlogIntention.Edit)]
+    [InlineData(BlogIntention.EditSettings)]
     [InlineData(BlogIntention.Delete)]
     [InlineData(BlogIntention.ViewDraft)]
     [InlineData(BlogIntention.CreatePublication)]

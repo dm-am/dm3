@@ -1,12 +1,9 @@
 using System;
-using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Exceptions;
-using DM.Domain.Core.Users;
 using DM.Domain.Game.Features.Games;
 using DM.Testing;
 using FluentValidation.TestHelper;
-using Moq;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Games;
@@ -14,12 +11,10 @@ namespace DM.Domain.Game.Tests.Features.Games;
 public class UpdateGameValidatorShould : UnitTestBase
 {
     private readonly UpdateGameValidator validator;
-    private readonly IUserLookupService userLookupService;
 
     public UpdateGameValidatorShould()
     {
-        userLookupService = Mock<IUserLookupService>().Object;
-        validator = new UpdateGameValidator(userLookupService);
+        validator = new UpdateGameValidator();
     }
 
     [Fact]
@@ -131,24 +126,6 @@ public class UpdateGameValidatorShould : UnitTestBase
         var result = await validator.TestValidateAsync(input);
         result.ShouldHaveValidationErrorFor(x => x.Info)
             .WithErrorMessage(ValidationError.Short);
-    }
-
-    [Fact]
-    public async Task FailWhenAssistantUsernameDoesNotExist()
-    {
-        Mock<IUserLookupService>()
-            .Setup(s => s.UsernameExistsAsync("nonexistent", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
-
-        var input = new UpdateGame
-        {
-            GameId = Guid.NewGuid(),
-            AssistantUsername = "nonexistent"
-        };
-
-        var result = await validator.TestValidateAsync(input);
-        result.ShouldHaveValidationErrorFor(x => x.AssistantUsername)
-            .WithErrorMessage(ValidationError.Invalid);
     }
 
     [Fact]

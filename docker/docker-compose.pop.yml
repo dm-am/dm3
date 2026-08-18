@@ -1,0 +1,63 @@
+# Точка присутствия: свой край и свой фронтенд, приложение остается на основном
+# сервере.
+#
+# Оверлей поверх пары docker-compose.yml + docker-compose.preview.yml.
+#
+# Профиль набор сервисов не сужает, а расширяет, поэтому "--profile pop up -d"
+# на одном базовом файле поднимал на точке присутствия семнадцать сервисов: локальные
+# Postgres, Mongo и MinIO, контейнер миграции, который выполнил бы Migrate()
+# против основной базы, и ни одного nginx, потому что край живет только в
+# оверлее. Отсюда два правила ниже.
+#
+# Первое: команда называет сервисы поименно.
+# Второе: этот файл снимает зависимости у тех, кого она называет. Compose
+# поднимает все, от чего зависит названный сервис, а nginx и dmfront в
+# docker-compose.preview.yml зависят от dmapi — то есть от второго экземпляра
+# приложения, ради отказа от которого схема и выбрана.
+#
+# Полная команда — в docs/guides/POINT_OF_PRESENCE.md.
+
+services:
+  nginx:
+    # Из двух зависимостей остается одна: фронтенд, который стоит рядом.
+    # Приложения на точке присутствия нет.
+    #
+    # То же и в списке для updater-а, поэтому !override, а не надежда на слияние:
+    # правило слияния списков labels между тремя файлами зависит от реализации
+    # compose, а ссылка на контейнер, которого на точке присутствия нет, в лучшем
+    # случае игнорируется молча.
+    labels: !override
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "com.centurylinklabs.watchtower.depends-on=dm-front"
+    depends_on: !override
+      dmfront:
+        condition: service_started
+    # Свой конфиг вместо общего: у точки присутствия другой upstream и есть кэш.
+    # Монтируется как шаблон, потому что адрес основного сервера приходит
+    # переменной, а nginx подстановкой переменных сам не занимается — это
+    # делает envsubst из образа при старте.
+    # Точка присутствия публикует и 443: TLS на ней обязателен, потому что основной сайт
+    # отдает HSTS с includeSubDomains, и браузер постоянного посетителя сам
+    # перепишет http-адрес точки присутствия в https.
+    ports: !override
+      - '80:80'
+      - '443:443'
+    volumes: !override
+      - ./nginx/pop.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ${POP_SSL_DIR:-/etc/letsencrypt}:/etc/nginx/ssl:ro
+      - ./nginx/acme:/var/www/certbot:ro
+      - pop-media-cache:/var/cache/nginx/media
+    environment:
+      POP_UPSTREAM: ${POP_UPSTREAM:?адрес основного сервера, например https://dm.am}
+      POP_UPSTREAM_HOST: ${POP_UPSTREAM_HOST:?имя основного сервера, например dm.am}
+      # Подставляются только переменные точки присутствия. Без фильтра envsubst съел бы
+      # $host и $scheme, которые принадлежат nginx, а не окружению.
+      NGINX_ENVSUBST_FILTER: '^POP_'
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:80/pop-health || exit 1']
+
+  dmfront:
+    depends_on: !reset null
+
+volumes:
+  pop-media-cache:

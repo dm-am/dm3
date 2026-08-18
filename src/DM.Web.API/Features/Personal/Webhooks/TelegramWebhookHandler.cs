@@ -40,15 +40,15 @@ internal class TelegramWebhookHandler : IWebhookHandler
     public string BotType => "telegram";
 
     /// <inheritdoc />
-    public async Task HandleAsync(JsonElement payload)
+    public async Task<object?> HandleAsync(JsonElement payload)
     {
-        if (!payload.TryGetProperty("message", out var message)) return;
-        if (!message.TryGetProperty("text", out var textElement)) return;
-        if (!message.TryGetProperty("chat", out var chat)) return;
-        if (!chat.TryGetProperty("id", out var chatId)) return;
+        if (!payload.TryGetProperty("message", out var message)) return null;
+        if (!message.TryGetProperty("text", out var textElement)) return null;
+        if (!message.TryGetProperty("chat", out var chat)) return null;
+        if (!chat.TryGetProperty("id", out var chatId)) return null;
 
         var text = textElement.GetString();
-        if (string.IsNullOrEmpty(text)) return;
+        if (string.IsNullOrEmpty(text)) return null;
 
         var chatIdStr = chatId.GetRawText();
 
@@ -62,5 +62,7 @@ internal class TelegramWebhookHandler : IWebhookHandler
         {
             _logger.LogInformation("Telegram /start from chat {ChatId}", chatIdStr);
         }
+
+        return null;
     }
 }

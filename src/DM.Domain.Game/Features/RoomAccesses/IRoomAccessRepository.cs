@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using DM.Domain.Game.Features.Games;
 
@@ -11,16 +10,6 @@ namespace DM.Domain.Game.Features.RoomAccesses;
 public interface IRoomAccessRepository
 {
     #region Read
-
-    /// <summary>
-    /// Get all accesses for a game
-    /// </summary>
-    Task<IEnumerable<RoomAccess>> GetGameAccesses(Guid gameId, Guid userId);
-
-    /// <summary>
-    /// Get all accesses for a room
-    /// </summary>
-    Task<IEnumerable<RoomAccess>> GetRoomAccesses(Guid roomId, Guid userId);
 
     /// <summary>
     /// Get single access

@@ -17,8 +17,9 @@ import { pluralize } from "@/shared/lib/utils/pluralize";
 import TagGroupDialog from "./dialogs/TagGroupDialog.vue";
 import TagDialog from "./dialogs/TagDialog.vue";
 import { useRoleGate } from "./lib/useRoleGate";
+import { sectionRole } from "./lib/sections";
 
-const { hasAccess, deniedText } = useRoleGate("SeniorModerator");
+const { hasAccess, deniedText } = useRoleGate(sectionRole("moderation-tags"));
 const toast = useToast();
 const gamesStore = useGamesStore();
 

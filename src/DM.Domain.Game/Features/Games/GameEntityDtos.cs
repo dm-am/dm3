@@ -879,6 +879,24 @@ public class GameReviewFilter
     /// Filter by games where user is GM
     /// </summary>
     public Guid? GmId { get; set; }
+
+    /// <summary>
+    /// Substring search (case-insensitive) over the review text, author name
+    /// and game title. Empty = no search.
+    /// </summary>
+    public string? Search { get; set; }
+
+    /// <summary>
+    /// Sort field: <c>created</c> (by date) or <c>author</c> (alphabetically
+    /// by the other side of the pair: for reviews received — the author, for
+    /// reviews written — the game). Default — created.
+    /// </summary>
+    public string? SortBy { get; set; }
+
+    /// <summary>
+    /// Sort direction: <c>asc</c> or <c>desc</c>. Default — desc.
+    /// </summary>
+    public string? SortOrder { get; set; }
 }
 
 /// <summary>

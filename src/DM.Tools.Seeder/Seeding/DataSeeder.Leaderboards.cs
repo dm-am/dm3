@@ -412,16 +412,6 @@ internal sealed partial class DataSeeder
             AddLikesForEntity(message.MessageId, LikeEntityType.Message, message.UserId);
         }
 
-        // 5. Likes for post reviews (only entity that supports likes)
-        var ratedPostReviews = await _dbContext.PostReviews
-            .Where(r => !r.IsRemoved)
-            .Select(r => new { r.PostReviewId, r.AuthorId })
-            .ToListAsync();
-        foreach (var review in ratedPostReviews)
-        {
-            AddLikesForEntity(review.PostReviewId, LikeEntityType.PostReview, review.AuthorId);
-        }
-
         await _dbContext.SaveChangesAsync();
 
         result.LikesCreated = likesCreated;

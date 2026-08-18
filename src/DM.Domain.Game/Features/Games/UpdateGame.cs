@@ -50,11 +50,6 @@ public class UpdateGame
     public string Info { get; set; } = null!;
 
     /// <summary>
-    /// Game assistant username
-    /// </summary>
-    public string AssistantUsername { get; set; } = null!;
-
-    /// <summary>
     /// Only GM and post author can see dice roll result
     /// </summary>
     public bool? HideDiceResult { get; set; }

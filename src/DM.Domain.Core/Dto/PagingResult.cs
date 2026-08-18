@@ -8,11 +8,6 @@ namespace DM.Domain.Core.Dto;
 public class PagingResult
 {
     /// <summary>
-    /// Total pages of certain size across the filtered entities
-    /// </summary>
-    public int TotalPagesCount { get; private set; }
-
-    /// <summary>
     /// Total entities count of certain type across the filtered entities
     /// </summary>
     public int TotalEntitiesCount { get; private set; }
@@ -28,11 +23,6 @@ public class PagingResult
     public int PageSize { get; private set; }
 
     /// <summary>
-    /// Selected entity number
-    /// </summary>
-    public int EntityNumber { get; private set; }
-
-    /// <summary>
     /// Create paging data
     /// </summary>
     /// <param name="totalEntitiesCount">Total entities count</param>
@@ -43,11 +33,9 @@ public class PagingResult
     {
         return new PagingResult
         {
-            TotalPagesCount = (int)Math.Ceiling((decimal)totalEntitiesCount / pageSize),
             TotalEntitiesCount = totalEntitiesCount,
             CurrentPage = Math.Max(1, (int)Math.Ceiling((decimal)entityNumber / pageSize)),
-            PageSize = pageSize,
-            EntityNumber = Math.Min(Math.Max(1, entityNumber), totalEntitiesCount)
+            PageSize = pageSize
         };
     }
 
@@ -56,10 +44,8 @@ public class PagingResult
     /// </summary>
     public static PagingResult Empty(int pageSize) => new()
     {
-        TotalPagesCount = 0,
         TotalEntitiesCount = 0,
         CurrentPage = 1,
-        PageSize = pageSize,
-        EntityNumber = 0
+        PageSize = pageSize
     };
 }

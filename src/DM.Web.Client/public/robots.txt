@@ -7,4 +7,10 @@ Disallow: /subscriptions
 Disallow: /notepad
 Disallow: /messenger
 Disallow: /moderation
+Disallow: /games/create
+Disallow: /game/*/settings
+Disallow: /game/*/notes
+Disallow: /blogs/create
+Disallow: /blogs/*/settings
+Disallow: /blogs/*/notes
 Disallow: /error/

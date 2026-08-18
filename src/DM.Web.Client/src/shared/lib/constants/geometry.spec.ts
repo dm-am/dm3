@@ -20,7 +20,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
-import { GRID_STEP, TINY, SMALL, MEDIUM } from "./geometry";
+import { GRID_STEP, TINY, SMALL } from "./geometry";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // shared/lib/constants -> src
@@ -68,12 +68,10 @@ describe("the spacing scale JavaScript positions popovers with", () => {
       "grid-step": GRID_STEP,
       tiny: TINY,
       small: SMALL,
-      medium: MEDIUM,
     }).toEqual({
       "grid-step": sassStep("grid-step"),
       tiny: sassStep("tiny"),
       small: sassStep("small"),
-      medium: sassStep("medium"),
     });
   });
 });

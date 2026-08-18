@@ -1,6 +1,5 @@
 using DM.Domain.Game.Features.Games;
 using System;
-using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
@@ -90,12 +89,6 @@ internal class RoomAccessService : IRoomAccessService
     #endregion
 
     #region Read
-
-    public Task<IEnumerable<RoomAccess>> GetGameAccessesAsync(Guid gameId) =>
-        _repository.GetGameAccesses(gameId, _identityProvider.Current.User.UserId);
-
-    public Task<IEnumerable<RoomAccess>> GetRoomAccessesAsync(Guid roomId) =>
-        _repository.GetRoomAccesses(roomId, _identityProvider.Current.User.UserId);
 
     public async Task<RoomAccess> GetAsync(Guid accessId)
     {

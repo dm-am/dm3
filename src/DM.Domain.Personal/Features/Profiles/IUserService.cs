@@ -26,11 +26,6 @@ public interface IUserService : IUserLookupService
         UserSort sort = UserSort.Name);
 
     /// <summary>
-    /// Get current authenticated user
-    /// </summary>
-    Task<GeneralUser> GetCurrentAsync();
-
-    /// <summary>
     /// Get user details by username
     /// </summary>
     Task<Core.Users.UserDetails> GetDetailsAsync(string username);
@@ -39,11 +34,6 @@ public interface IUserService : IUserLookupService
     /// Get user details by ID
     /// </summary>
     Task<Core.Users.UserDetails> GetDetailsAsync(Guid userId);
-
-    /// <summary>
-    /// Get username history for a user
-    /// </summary>
-    Task<IReadOnlyCollection<UsernameHistoryEntry>> GetUsernameHistoryAsync(Guid userId);
 
     /// <summary>
     /// Update user details

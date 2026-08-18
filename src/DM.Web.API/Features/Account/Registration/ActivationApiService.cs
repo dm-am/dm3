@@ -34,7 +34,7 @@ internal class ActivationApiService : IActivationApiService
     {
         var result = await _activationService.GetPendingInfo(token);
 
-        if (result == null || result.Status == "not_found")
+        if (result == null)
         {
             return null;
         }

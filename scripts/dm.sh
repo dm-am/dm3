@@ -99,8 +99,9 @@ run_seed() {
     # The seeder is a console tool, not an HTTP endpoint: it writes straight to
     # Postgres, Mongo and the object storage, so it must not be reachable over
     # the network. It runs under the "tools" compose profile, which never starts
-    # with a plain "docker compose up". The API still has to be up, because the
-    # upload bucket is created by its storage initializer.
+    # with a plain "docker compose up". The API still has to be up: seeding
+    # itself does not need it, but the restart at the end of this function does.
+    # The upload bucket is created by the minio-init container, not by the API.
     #
     # The liveness endpoint, the one the container healthcheck and CI already
     # ask, rather than a product route: this used to be pinned to /v1/boards,

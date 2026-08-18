@@ -1,5 +1,4 @@
 using AutoMapper;
-using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.PostReviews;
 using DbPostReview = DM.Infrastructure.Persistence.Entities.Game.PostReview;
 
@@ -12,7 +11,7 @@ internal class PostReviewMappingProfile : Profile
 {
     public PostReviewMappingProfile()
     {
-        // DbPostReview -> PostReview (domain DTO with likes)
+        // DbPostReview -> PostReview (domain DTO)
         CreateMap<DbPostReview, PostReview>()
             .ForMember(d => d.Id, s => s.MapFrom(r => r.PostReviewId))
             .ForMember(d => d.Author, s => s.MapFrom(r => r.Author))
@@ -22,12 +21,6 @@ internal class PostReviewMappingProfile : Profile
             .ForMember(d => d.CreatedUtc, s => s.MapFrom(r => r.CreatedUtc))
             .ForMember(d => d.ModifiedUtc, s => s.MapFrom(r => r.ModifiedUtc))
             .ForMember(d => d.Text, s => s.MapFrom(r => r.Text))
-            .ForMember(d => d.Sign, s => s.MapFrom(r => r.Sign))
-            .ForMember(d => d.LikeEntityType, s => s.MapFrom(r => LikeEntityType.PostReview))
-            // Likes are polymorphic (EntityType + EntityId), so there is no
-            // navigation to project through. PostReviewRepository fills the
-            // collection in a batched second pass on every read path; the
-            // "like repository" this comment used to promise never existed.
-            .ForMember(d => d.Likes, opt => opt.Ignore());
+            .ForMember(d => d.Sign, s => s.MapFrom(r => r.Sign));
     }
 }

@@ -19,6 +19,12 @@ const types: Ref<AchievementType[] | null> = ref(null);
 const loading = ref(false);
 let pending: Promise<void> | null = null;
 
+// The admin slice: categories and tiers WITH inactive records, so a
+// deactivated category stays on the admin page and can be restored.
+const adminCategories: Ref<AchievementCategory[] | null> = ref(null);
+const adminTypes: Ref<AchievementType[] | null> = ref(null);
+let adminPending: Promise<void> | null = null;
+
 export function useAchievementCatalog() {
   /**
    * @param fresh Ask the origin rather than either cache. The catalogue answers
@@ -45,12 +51,49 @@ export function useAchievementCatalog() {
     return pending;
   }
 
+  /** The admin catalog, inactive included. Lazy like load(). */
+  async function loadAdmin(): Promise<void> {
+    if (adminCategories.value !== null && adminTypes.value !== null) return;
+    if (adminPending !== null) return adminPending;
+    adminPending = (async () => {
+      loading.value = true;
+      try {
+        const [c, t] = await Promise.all([
+          achievementApi.getModerationAchievementCategories(),
+          achievementApi.getModerationAchievementTypes(),
+        ]);
+        adminCategories.value = c.data?.resources ?? [];
+        adminTypes.value = t.data?.resources ?? [];
+      } finally {
+        loading.value = false;
+        adminPending = null;
+      }
+    })();
+    return adminPending;
+  }
+
+  /** Both slices go stale on an admin edit; see useContestSeries.reload. */
   async function reload(): Promise<void> {
     categories.value = null;
     types.value = null;
     pending = null;
-    return load(true);
+    const wasAdmin =
+      adminCategories.value !== null || adminTypes.value !== null;
+    adminCategories.value = null;
+    adminTypes.value = null;
+    adminPending = null;
+    await load(true);
+    if (wasAdmin) await loadAdmin();
   }
 
-  return { categories, types, loading, load, reload };
+  return {
+    categories,
+    types,
+    adminCategories,
+    adminTypes,
+    loading,
+    load,
+    loadAdmin,
+    reload,
+  };
 }

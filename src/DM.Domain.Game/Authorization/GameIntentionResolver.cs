@@ -58,7 +58,16 @@ internal class GameIntentionResolver :
 
             GameIntention.Edit when user.IsAuthenticated => userIsSeniorModerator ||
                                                             roles.HasEditAccess(),
-            // Settings / embedded schema editing is broader than lead-only Edit: mentors may edit too
+            // The settings page is broader than lead-only Edit: the curating
+            // mentor is on it, because helping a newbie shape the game is what
+            // the curator is for. It governs the information form and the
+            // invitations list the page shows, and nothing else — rooms, the
+            // blacklist and the roster answer to Edit and to their own narrower
+            // intentions, so a curator helps set the game up without gaining its
+            // bans or its cast.
+            //
+            // The rank arm is the same one Edit has: a senior moderator already
+            // edits the game, so the page cannot be narrower for them.
             GameIntention.EditSettings when user.IsAuthenticated => userIsSeniorModerator ||
                                                                     roles.HasEditAccess() ||
                                                                     roles.Contains(GameRole.Mentor),

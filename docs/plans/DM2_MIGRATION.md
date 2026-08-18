@@ -321,7 +321,7 @@ DELETE FROM "Tags" WHERE "Title" = 'Донабор';
 | Game.Status | Blog.Status |
 | Room | Rubric |
 | Post | Publication |
-| Post.GameText + Post.MetagameText | Publication.Text |
+| Post.Text + Post.Comment | Publication.Content |
 | GameAssistant | BlogAssistant |
 | GameBlacklist | BlogBlacklist |
 | Comment (Game) | Comment (Blog) |
@@ -341,14 +341,14 @@ DELETE FROM "Tags" WHERE "Title" = 'Донабор';
 
 | DM2 | DM3 | Описание |
 |-----|-----|----------|
-| `Text` | `Text` (Game Text) | Игровой текст поста |
-| `Comment` | `Comment` (Metagame Text) | Метаигровой комментарий (OOC) |
+| `Text` | `GameText` | Игровой текст поста |
+| `Comment` | `MetagameText` | Метаигровой комментарий (OOC) |
 
 ### MasterMessage → игровой текст
 
 В DM2 у постов есть поле `MasterMessage` — приватное сообщение мастеру.
 
-В DM3 это поле удалено, а приватный блок живет только в игровом тексте поста: на поверхности метаигрового комментария `[private]` не проходит валидацию при сохранении и вырезается при рендере, то есть перенесенный туда текст пропал бы без следа у всех, включая мастера. Поэтому содержимое добавляется в конец `Text` (Game Text):
+В DM3 это поле удалено, а приватный блок живет только в игровом тексте поста: на поверхности метаигрового комментария `[private]` тегом не является и печатается буквально, то есть перенесенный туда текст сохранился бы без ошибок и опубликовался бы всем читателям вместе со скобками, приват мастеру стал бы публичным. Поэтому содержимое добавляется в конец `GameText`:
 
 ```
 [существующий Text]
@@ -397,11 +397,10 @@ DELETE FROM "Tags" WHERE "Title" = 'Донабор';
 
 | DM2 (Game) | DM3 (Personal Notepad) |
 |------------|------------------------|
-| Game.Title | Notepad.Title (без "Блокнот") |
-| Game.Info | Notepad.Description |
-| Game.MasterId | Notepad.OwnerId |
+| Game.MasterId | NotepadEntry.OwnerId |
+| Game.Title, Game.Info | Отбрасываются: сущности-контейнера Notepad в DM3 нет, личный блокнот состоит из записей NotepadType.User без общего заголовка и описания |
 | Room | Отбрасывается: записи всех комнат сливаются в один блокнот |
-| Post | NotepadEntry |
+| Post | NotepadEntry (NotepadType.User, Title, Content) |
 
 ### Checklist
 
@@ -434,6 +433,6 @@ DELETE FROM "Tags" WHERE "Title" = 'Донабор';
 - [ ] Удалить тег "Блог"
 
 ### Посты
-- [ ] Мигрировать MasterMessage в конец `Text` внутри `[private]` без атрибута
+- [ ] Мигрировать MasterMessage в конец `GameText` внутри `[private]` без атрибута
 - [ ] Протестировать отображение привата в постах
 - [ ] Удалить поле MasterMessage из схемы

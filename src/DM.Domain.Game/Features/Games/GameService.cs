@@ -439,25 +439,6 @@ internal class GameService : IGameService
         return game;
     }
 
-    public async Task<IEnumerable<Game>> GetSubscribedAsync(IEnumerable<Guid> gameIds)
-    {
-        var currentUserId = _identityProvider.Current.User.UserId;
-        var gameIdList = gameIds.ToArray();
-        if (gameIdList.Length == 0)
-        {
-            return Array.Empty<Game>();
-        }
-
-        var games = (await _repository.GetByIds(gameIdList, currentUserId, currentUserId)).ToArray();
-        if (games.Length > 0)
-        {
-            await _unreadCountersRepository.FillEntityCounters(games, currentUserId,
-                g => g.Id, g => g.UnreadCommentsCount);
-        }
-
-        return games;
-    }
-
     #endregion
 
     #region Update
@@ -466,35 +447,19 @@ internal class GameService : IGameService
     {
         await _updateGameValidator.ValidateAndThrowAsync(updateGame);
         var game = await GetDetailsAsync(updateGame.GameId);
-        _intentionManager.ThrowIfForbidden(GameIntention.Edit, game);
-
-        if (updateGame.AssistantUsername != default)
-        {
-            var isExistingAssistant = game.Assistants
-                .Any(a => a.Username.Equals(updateGame.AssistantUsername, StringComparison.InvariantCultureIgnoreCase));
-            var isPendingAssistant = game.PendingAssistant?.Username
-                .Equals(updateGame.AssistantUsername, StringComparison.InvariantCultureIgnoreCase) == true;
-
-            if (!isExistingAssistant && !isPendingAssistant)
-            {
-                try
-                {
-                    await _invitationService.InviteAssistant(game.Id, updateGame.AssistantUsername);
-                }
-                catch (Exception exception)
-                {
-                    // The two expected reasons — no such user, or one the game has
-                    // blacklisted — are why the invitation does not fail the update.
-                    // The exception is logged whole because this catches every kind,
-                    // including a store that is down, and the same swallow with no
-                    // record left nothing to look at afterwards. Same shape as
-                    // CreateAsync, which invites the assistant the same way.
-                    _logger.LogWarning(exception,
-                        "Failed to invite assistant {Username} for game {GameId}",
-                        updateGame.AssistantUsername, game.Id);
-                }
-            }
-        }
+        // The settings page save, and nothing but it: this method writes the
+        // information form — title, system, setting, recruitment, privacy,
+        // tags — which is what the curator is here to help set up. Rooms, the
+        // blacklist and the roster keep the lead-only Edit in their own
+        // services, so one gate covers everything written here.
+        //
+        // The roster used to be the exception: an AssistantUsername field rode
+        // in on the update and invited an assistant as a side effect of saving
+        // settings. It is gone, field and all. It had been unreachable over
+        // HTTP ever since UpdateGameRequest started naming its editable fields
+        // and stopped naming that one, and the roster has its own door anyway:
+        // GameInvitationService.InviteAssistant, master-only.
+        _intentionManager.ThrowIfForbidden(GameIntention.EditSettings, game);
 
         var invokedEvents = new List<EventType> { EventType.ChangedGame };
 

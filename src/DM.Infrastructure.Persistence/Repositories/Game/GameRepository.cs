@@ -734,22 +734,6 @@ internal class GameRepository : IGameRepository
             .ToDictionary(g => g.Key, g => g.Select(r => r.RoomId));
     }
 
-    public async Task<IEnumerable<PostPendency>> GetPostPendencies(IEnumerable<Guid> gameIds, Guid userId, CancellationToken ct = default)
-    {
-        var gameIdArray = gameIds.ToArray();
-
-        var roomIds = await _dbContext.Rooms
-            .Where(GameAccessibilityFilters.RoomAvailable(userId))
-            .Where(r => gameIdArray.Contains(r.GameId))
-            .Select(r => r.RoomId)
-            .ToArrayAsync(ct);
-
-        return await _dbContext.PostPendencies
-            .Where(p => roomIds.Contains(p.RoomId))
-            .ProjectTo<PostPendency>(_mapper.ConfigurationProvider)
-            .ToArrayAsync(ct);
-    }
-
     public async Task<IDictionary<Guid, int>> GetTotalPostCounts(IEnumerable<Guid> gameIds, CancellationToken ct = default)
     {
         var gameIdList = gameIds.ToList();

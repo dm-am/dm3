@@ -1,9 +1,12 @@
 <script setup lang="ts">
 /**
- * RolesSection — manage blog staff. Owner and assistant may invite an
- * assistant; only the owner may remove an assistant (removeAssistant).
- * Mirrors the game RolesSection; blogs expose no per-blog mentor field on
- * the DTO, so there is no mentor row here.
+ * RolesSection — manage blog staff. The two operations answer to different
+ * intentions: BlogIntention.InviteAssistant is the owner's alone, while
+ * removal (BlogService.RemoveAssistant) asks BlogIntention.Edit, which the
+ * owner and administration hold. The host page computes both and passes them
+ * in; everyone else the settings page admits reads the roster without
+ * controls. Mirrors the game RolesSection; blogs expose no per-blog mentor
+ * field on the DTO, so there is no mentor row here.
  */
 import { computed, ref } from "vue";
 import { storeToRefs } from "pinia";
@@ -18,8 +21,15 @@ import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { notifyFailure } from "@/shared/lib/errors";
 
+defineProps<{
+  /** Whether the viewer may invite an assistant. */
+  canInvite: boolean;
+  /** Whether the viewer may remove an assistant. */
+  canRemove: boolean;
+}>();
+
 const store = useBlogDetailsStore();
-const { blog, isOwner } = storeToRefs(store);
+const { blog } = storeToRefs(store);
 const toast = useToast();
 
 const assistants = computed(() => blog.value?.assistants ?? []);
@@ -70,7 +80,7 @@ async function confirmRemove() {
         <li v-for="a in assistants" :key="a.id" class="staff-item">
           <UserLink :user="a" />
           <RemoveButton
-            v-if="isOwner"
+            v-if="canRemove"
             @click="pendingRemove = { username: a.username }"
           >
             Удалить
@@ -79,7 +89,7 @@ async function confirmRemove() {
       </ul>
       <SecondaryText v-else>Ассистентов нет</SecondaryText>
 
-      <div class="invite-row">
+      <div v-if="canInvite" class="invite-row">
         <UserAutocomplete
           v-model="inviteUsername"
           placeholder="Имя пользователя"

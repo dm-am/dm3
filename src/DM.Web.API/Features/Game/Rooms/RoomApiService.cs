@@ -2,7 +2,6 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
-using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Rooms;
 using DM.Web.API.Shared.Dto;
 using CreateRoom = DM.Domain.Game.Features.Rooms.CreateRoom;
@@ -30,14 +29,6 @@ internal class RoomApiService : IRoomApiService
     {
         var rooms = await _roomService.GetAllAsync(gameId);
         return new ListEnvelope<Room>(rooms.Select(_mapper.Map<Room>));
-    }
-
-    /// <inheritdoc />
-    public async Task<ListEnvelope<Room>> GetByType(Guid gameId, RoomType roomType)
-    {
-        var rooms = await _roomService.GetAllAsync(gameId);
-        var filtered = rooms.Where(r => r.Type == roomType);
-        return new ListEnvelope<Room>(filtered.Select(_mapper.Map<Room>));
     }
 
     /// <inheritdoc />

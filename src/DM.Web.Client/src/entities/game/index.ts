@@ -82,6 +82,7 @@ export type { ModerationTagGroup, ModerationTag } from "./api";
 export {
   GameStatusBadge,
   PostReviewItem,
+  GameReviewCard,
   GameLink,
   RoomLink,
   CharacterCard,

@@ -19,20 +19,6 @@ public class BotConfiguration
     public string? TelegramBotToken { get; set; }
 
     /// <summary>
-    /// Discord channel ID reserved for moderation notifications (optional).
-    /// Nothing reads it yet: no sender addresses a moderation channel, so
-    /// setting it changes nothing until that path is built.
-    /// </summary>
-    public ulong? ModerationDiscordChannelId { get; set; }
-
-    /// <summary>
-    /// Telegram chat ID reserved for moderation notifications (optional).
-    /// Nothing reads it yet: no sender addresses a moderation chat, so
-    /// setting it changes nothing until that path is built.
-    /// </summary>
-    public long? ModerationTelegramChatId { get; set; }
-
-    /// <summary>
     /// Secret for Telegram webhook URL validation.
     /// Sent by Telegram in X-Telegram-Bot-Api-Secret-Token when the webhook is
     /// registered with secret_token; the URL is /v1/webhooks/telegram.
@@ -42,10 +28,12 @@ public class BotConfiguration
     public string? TelegramWebhookSecret { get; set; }
 
     /// <summary>
-    /// Secret for Discord webhook URL validation.
-    /// Expected in X-Dm-Webhook-Secret; the URL is /v1/webhooks/discord.
+    /// Public key of the Discord application, hex from Discord Developer Portal.
+    /// Discord signs every interaction with the matching private key
+    /// (X-Signature-Ed25519 over timestamp + raw body); the URL is
+    /// /v1/webhooks/discord, registered as the Interactions Endpoint URL.
     /// If not set, the webhook is closed: it answers 404 rather than accepting
-    /// anything, because an unset secret is the shipped default.
+    /// anything, because an unset key is the shipped default.
     /// </summary>
-    public string? DiscordWebhookSecret { get; set; }
+    public string? DiscordPublicKey { get; set; }
 }

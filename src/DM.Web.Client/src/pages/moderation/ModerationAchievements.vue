@@ -22,9 +22,17 @@ import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import AchievementCategoryDialog from "./dialogs/AchievementCategoryDialog.vue";
 import AchievementTierDialog from "./dialogs/AchievementTierDialog.vue";
 import { useRoleGate } from "./lib/useRoleGate";
+import { sectionRole } from "./lib/sections";
 
-const { hasAccess, deniedText } = useRoleGate("SeniorModerator");
-const { categories, types, load, reload } = useAchievementCatalog();
+const { hasAccess, deniedText } = useRoleGate(
+  sectionRole("moderation-achievements"),
+);
+const {
+  adminCategories: categories,
+  adminTypes: types,
+  loadAdmin: load,
+  reload,
+} = useAchievementCatalog();
 
 onMounted(() => load());
 

@@ -1,9 +1,13 @@
 <script setup lang="ts">
 /**
- * RolesSection — manage game staff. Master and assistant may invite an
- * assistant; only the master may remove an assistant (removeAssistant). The
- * mentor (premoderation curator, a global role) is shown read-only — there is
- * no per-game mentor-assignment endpoint.
+ * RolesSection — manage game staff. Both staff operations are the master's
+ * alone: GameIntention.InviteAssistant and GameIntention.RemoveUser ask for
+ * GameRole.Master and admit nobody else, not even a senior moderator. The host
+ * page computes that one flag and passes it in; everyone else the settings page
+ * admits reads the roster without controls, which is what the roster costs —
+ * a plain GameIntention.Read on the game the page already loaded. The mentor
+ * (premoderation curator) is shown read-only in either case — there is no
+ * per-game mentor-assignment endpoint.
  */
 import { computed, ref } from "vue";
 import { storeToRefs } from "pinia";
@@ -18,8 +22,13 @@ import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { notifyFailure } from "@/shared/lib/errors";
 
+defineProps<{
+  /** Whether the viewer may invite and remove assistants (the master alone). */
+  canManageRoles: boolean;
+}>();
+
 const store = useGameDetailsStore();
-const { game, isMaster } = storeToRefs(store);
+const { game } = storeToRefs(store);
 const toast = useToast();
 
 const assistants = computed(() => game.value?.fullAssistants ?? []);
@@ -72,7 +81,7 @@ async function confirmRemove() {
         <li v-for="a in assistants" :key="a.id" class="staff-item">
           <UserLink :user="a" />
           <RemoveButton
-            v-if="isMaster"
+            v-if="canManageRoles"
             @click="pendingRemove = { username: a.username }"
           >
             Удалить
@@ -85,7 +94,7 @@ async function confirmRemove() {
         Ожидает подтверждения: <UserLink :user="pendingAssistant" />
       </SecondaryText>
 
-      <div class="invite-row">
+      <div v-if="canManageRoles" class="invite-row">
         <UserAutocomplete
           v-model="inviteUsername"
           placeholder="Имя пользователя"

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
@@ -28,30 +27,6 @@ internal class RoomAccessRepository : IRoomAccessRepository
     }
 
     #region Read
-
-    /// <inheritdoc />
-    public async Task<IEnumerable<RoomAccess>> GetGameAccesses(Guid gameId, Guid userId)
-    {
-        return await _dbContext.Rooms
-            .TagWith("DM.RoomAccess.GetGameAccesses")
-            .Where(GameAccessibilityFilters.RoomAvailable(userId))
-            .Where(r => r.GameId == gameId)
-            .SelectMany(r => r.RoomAccesses)
-            .ProjectTo<RoomAccess>(_mapper.ConfigurationProvider)
-            .ToArrayAsync();
-    }
-
-    /// <inheritdoc />
-    public async Task<IEnumerable<RoomAccess>> GetRoomAccesses(Guid roomId, Guid userId)
-    {
-        return await _dbContext.Rooms
-            .TagWith("DM.RoomAccess.GetRoomAccesses")
-            .Where(GameAccessibilityFilters.RoomAvailable(userId))
-            .Where(r => r.RoomId == roomId)
-            .SelectMany(r => r.RoomAccesses)
-            .ProjectTo<RoomAccess>(_mapper.ConfigurationProvider)
-            .ToArrayAsync();
-    }
 
     /// <inheritdoc />
     /// <remarks>

@@ -296,12 +296,6 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     }
 
     /// <inheritdoc />
-    public Task<int> GetPostReviewsGivenCount(Guid userId) =>
-        _dmDbContext.PostReviews
-            .Where(r => r.AuthorId == userId && !r.IsRemoved)
-            .CountAsync();
-
-    /// <inheritdoc />
     public async Task<IEnumerable<GeneralUser>> GetUsersAsync(IEnumerable<Guid> userIds)
     {
         var idsList = userIds.ToList();
@@ -697,8 +691,10 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     /// <remarks>
     /// Split out of the profile enrichment because the list was paying for all of it —
     /// twenty-odd aggregates for a page of fifty, of which the table renders four.
-    /// Reviews, bans, drops, likes, subscribers and username history are profile
-    /// content and are fetched by the profile.
+    /// Post reviews, bans, drops, likes, subscribers and username history are
+    /// profile content and are fetched by the profile. Game reviews received is
+    /// the one review counter the list DOES carry: the community table renders
+    /// it as a column.
     /// </remarks>
     private async Task PopulateListCounts(IEnumerable<GeneralUser> users)
     {
@@ -753,7 +749,19 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
             .Select(g => new StatusCountItem(g.Key.UserId, g.Key.Status, g.Count()))
             .ToListAsync();
 
+        // Game reviews received: the community table grew a "Рецензии" column,
+        // and this is the only populator the paged /users list goes through.
+        // The predicate is the same one PopulatePostReviewCounts uses for the
+        // profile counter — the number in the table and the length of the list
+        // it links to have to be answers to one question.
+        var gameReviewsReceivedCounts = await _dmDbContext.GameReviews
+            .Where(r => !r.IsRemoved && !r.Game.IsRemoved && userIds.Contains(r.Game.MasterId))
+            .GroupBy(r => r.Game.MasterId)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToListAsync();
+
         var endorsementsReceivedDict = endorsementsReceivedCounts.ToDictionary(x => x.UserId, x => x.Count);
+        var gameReviewsReceivedDict = gameReviewsReceivedCounts.ToDictionary(x => x.UserId, x => x.Count);
 
         // Build status breakdown dictionaries
         var gamesHostingByStatusDict = BuildStatusBreakdownDict(gamesMasterByStatus, gamesAssistantByStatus);
@@ -763,6 +771,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         foreach (var user in usersList)
         {
             user.EndorsementsReceivedCount = endorsementsReceivedDict.TryGetValue(user.UserId, out var er) ? er : 0;
+            user.GameReviewsReceivedCount = gameReviewsReceivedDict.TryGetValue(user.UserId, out var grr) ? grr : 0;
 
             // Games hosting = sum from status breakdown
             user.GamesHostingByStatus = gamesHostingByStatusDict.TryGetValue(user.UserId, out var gh) ? gh : null;

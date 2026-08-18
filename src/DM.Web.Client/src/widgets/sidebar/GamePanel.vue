@@ -18,9 +18,10 @@
 // wire, so those rows show the totals it does send.
 //
 // Role gates (never a single blanket "moderator" gate):
-//   "Управление игрой" — the header shows for Master/Assistant/Mentor, but
-//     the edit items ("Настройки", "Создать NPC", status buttons) are
-//     Master/Assistant only; "Блокнот мастера" is Master/Assistant/Mentor.
+//   "Управление игрой" — the header shows for Master/Assistant/Mentor.
+//     "Настройки" and "Блокнот мастера" are Master/Assistant/Mentor; the
+//     rest of the edit items ("Создать NPC", "Редактировать NPC", the status
+//     buttons) are Master/Assistant only.
 //   "Действия с игрой" — any authenticated user except the master
 //     (subscribe / apply-to-join, via features/game-actions).
 //   "Модерация игры" — premoderation is Mentor+ (global),
@@ -67,10 +68,17 @@ const {
   canManage,
 } = storeToRefs(store);
 
-// Master/assistant may edit the game (settings, NPCs, status). The game
-// mentor ("Наставник" — helper to a novice master) gets the management header
-// and the notepad for oversight, but not the edit items.
+// Master/assistant may run the game itself: NPCs and the status transitions.
+// The game mentor ("Наставник" — helper to a novice master) is not one of them.
 const canEdit = computed(() => isMaster.value || isAssistant.value);
+
+// The settings page is wider than that, and the link has to match it or the
+// audience it was widened for reaches the page only by typing the URL:
+// GameIntention.EditSettings admits the curating mentor, because helping a
+// newbie shape the game is what the curator is for. Senior moderation is
+// admitted by the same intention and still gets no row here — staff powers are
+// not interface copy, and "Модерация игры" below is where they live.
+const canEditSettings = computed(() => canManage.value);
 
 // The game notepad is shared master/assistant/mentor scratch space (GLOSSARY:
 // MasterNotepad) — hidden from players and readers.
@@ -320,17 +328,17 @@ async function confirmMod() {
         ><SidebarCounter :value="game.postReviewsCount" />
       </li>
 
-      <!-- "Управление игрой" section (Master / Assistant edit items) -->
-      <template v-if="canEdit || canUseNotepad">
+      <!-- "Управление игрой" section: settings and the notepad for the leads
+           and the curating mentor, the rest for the leads alone. -->
+      <template v-if="canEditSettings || canEdit || canUseNotepad">
         <SidebarSectionTitle>Управление игрой</SidebarSectionTitle>
+        <li v-if="canEditSettings" class="link">
+          <span class="muted" aria-hidden="true">- </span>
+          <router-link :to="{ name: 'game-settings', params: { id: publicId } }"
+            >Настройки</router-link
+          >
+        </li>
         <template v-if="canEdit">
-          <li class="link">
-            <span class="muted" aria-hidden="true">- </span>
-            <router-link
-              :to="{ name: 'game-settings', params: { id: publicId } }"
-              >Настройки</router-link
-            >
-          </li>
           <li class="link">
             <span class="muted" aria-hidden="true">- </span>
             <router-link

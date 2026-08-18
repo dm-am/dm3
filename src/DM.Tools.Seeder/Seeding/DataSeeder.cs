@@ -236,6 +236,16 @@ internal sealed partial class DataSeeder
         await CreateLikes(users, result);
 
         // ═══════════════════════════════════════════════════════════════════
+        // 9a. SPREAD POST REVIEWS ACROSS GAMES
+        // The organic review pass clusters in the finished showcase game and
+        // the current week; this pass rates a few posts in most games, months
+        // deep, so the ratings pulse and the per-game review pages have
+        // history. Runs before leaderboard coverage, which then measures its
+        // windows over these rows and only tops up what is still missing.
+        // ═══════════════════════════════════════════════════════════════════
+        await SpreadPostReviews(users, now, result);
+
+        // ═══════════════════════════════════════════════════════════════════
         // 9b. ENSURE A FULL LEADERBOARD TOP-10 FOR THE CURRENT MONTH
         // The statistics page defaults to the current-month period; the organic
         // seed leaves the by-rating boards (reviews cluster in one finished

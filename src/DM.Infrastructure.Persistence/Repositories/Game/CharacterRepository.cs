@@ -113,7 +113,7 @@ internal class CharacterRepository : ICharacterRepository
             .FirstOrDefaultAsync<CharacterToUpdate?>();
     }
 
-    public async Task<IDictionary<Guid, Guid>> GetAttributeIds(Guid characterId)
+    private async Task<IDictionary<Guid, Guid>> GetAttributeIds(Guid characterId)
     {
         return await _dbContext.CharacterAttributes
             .Where(a => a.CharacterId == characterId)

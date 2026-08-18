@@ -56,46 +56,53 @@ const columns: Column[] = [
   {
     key: "username",
     label: "Имя пользователя",
-    width: "22%",
+    width: "20%",
     align: "left",
   },
   {
     key: "activity",
     label: "Активность",
-    width: "13%",
+    width: "12%",
     align: "center",
   },
   {
     key: "rating",
     label: "Рейтинг",
-    width: "13%",
+    width: "11%",
     align: "center",
   },
   {
     key: "reviews",
     label: "Рекомендации",
-    width: "16%",
+    width: "14%",
+    align: "center",
+    hideOnMobile: true,
+  },
+  {
+    key: "gameReviews",
+    label: "Рецензии",
+    width: "12%",
     align: "center",
     hideOnMobile: true,
   },
   {
     key: "games",
     label: "Игры",
-    width: "11%",
+    width: "9%",
     align: "center",
     hideOnMobile: true,
   },
   {
     key: "blogs",
     label: "Блоги",
-    width: "10%",
+    width: "9%",
     align: "center",
     hideOnMobile: true,
   },
   {
     key: "registered",
     label: "Регистрация",
-    width: "15%",
+    width: "13%",
     align: "center",
     hideOnMobile: true,
   },
@@ -276,6 +283,21 @@ function buildBlogsTooltip(row: {
           class="stats-value"
           :aria-label="`Рекомендаций: ${row.endorsementsReceived ?? 0}`"
           >{{ row.endorsementsReceived ?? 0 }}</router-link
+        >
+      </template>
+
+      <!-- Game reviews received — the counter's second entry point. Until now
+           it existed only as two StatLine rows on the profile, so a reader
+           browsing the community had no way to see who is reviewed at all. -->
+      <template #cell-gameReviews="{ row }">
+        <router-link
+          :to="{
+            name: 'received-game-reviews',
+            params: { username: row.username },
+          }"
+          class="stats-value"
+          :aria-label="`Рецензий: ${row.gameReviewsReceived ?? 0}`"
+          >{{ row.gameReviewsReceived ?? 0 }}</router-link
         >
       </template>
 

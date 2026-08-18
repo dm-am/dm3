@@ -33,6 +33,14 @@ $sidebar-width: 330px
 $header-row-height: 55px
 // NOTE: $header-height and $footer-height defined in Layout.sass (grid-based)
 
+/// Width of the floating control rail pinned to the bottom-right corner
+/// (ScrollNav). Its buttons are <button>, which the browser lays out as
+/// border-box, so the frame is inside this number. It lives here and not in
+/// the component because the toasts pin themselves to the same corner: they
+/// step aside by exactly this much, and a rail that grew without telling them
+/// would go back under the stack.
+$scroll-nav-width: 24px
+
 $border-radius: $small
 $bubble-radius: 20px // testimonial speech bubble
 

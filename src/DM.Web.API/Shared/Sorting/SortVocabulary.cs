@@ -8,6 +8,7 @@ using DM.Domain.Community.Features.WebsiteTestimonials;
 using DM.Domain.Forum.Features.Comments;
 using DM.Domain.Game.Features.Comments;
 using DM.Domain.Game.Features.Posts;
+using DM.Web.API.Features.Game.Reviews;
 using DM.Web.API.Features.Blog.Blogs;
 using DM.Web.API.Features.Community.Endorsements;
 using DM.Web.API.Features.Community.Polls;
@@ -67,6 +68,11 @@ public static class SortVocabulary
             // GET /v1/users/{username}/endorsements and .../written-endorsements
             // — UserEndorsementRepository.ApplySort
             [typeof(UserEndorsementsQuery)] = ["created", "author"],
+            // GET /v1/users/{username}/game-reviews and .../written-game-reviews
+            // — GameReviewRepository.ApplySort, where "author" means the other side
+            // of the pair: the review author for reviews received, the game title
+            // for reviews written
+            [typeof(UserGameReviewsQuery)] = ["created", "author"],
             // GET /v1/testimonials — WebsiteTestimonialRepository.ApplySorting
             [typeof(WebsiteTestimonialsQuery)] = ["created", "author"],
             // GET /v1/topics and GET /v1/boards/{id}/topics — TopicRepository

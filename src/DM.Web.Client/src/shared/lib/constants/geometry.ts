@@ -28,9 +28,6 @@ export const TINY = GRID_STEP / 2;
 /** `$small` — the margin a floating layer keeps from the viewport edge. */
 export const SMALL = 2 * GRID_STEP;
 
-/** `$medium`. */
-export const MEDIUM = 4 * GRID_STEP;
-
 /**
  * Distance from a dropdown-shaped popover to the control that opened it. The
  * date picker and the filter dropdowns sit at the same offset, which is what

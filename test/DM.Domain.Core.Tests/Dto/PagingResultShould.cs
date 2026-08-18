@@ -5,8 +5,8 @@ using Xunit;
 namespace DM.Domain.Core.Tests.Dto;
 
 /// <summary>
-/// Paging arithmetic: how many pages a total splits into, which page an entity
-/// number falls on, and the floor under that page.
+/// Paging arithmetic: which page an entity number falls on, and the floor
+/// under that page.
 /// </summary>
 /// <remarks>
 /// No mock factory base class, and these tests need none: the type under test is
@@ -17,17 +17,6 @@ namespace DM.Domain.Core.Tests.Dto;
 /// </remarks>
 public class PagingResultShould
 {
-    [Theory]
-    [InlineData(1000, 10, 100)]
-    [InlineData(1001, 10, 101)]
-    [InlineData(999, 10, 100)]
-    [InlineData(0, 10, 0)]
-    public void CalculateTotalPagesCountOfGivenSize(int totalEntitiesCount, int pageSize, int expectedPagesCount)
-    {
-        var actual = PagingResult.Create(totalEntitiesCount, 1, pageSize);
-        actual.TotalPagesCount.Should().Be(expectedPagesCount);
-    }
-
     [Theory]
     [InlineData(1, 10, 1)]
     [InlineData(10, 10, 1)]

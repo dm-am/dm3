@@ -30,6 +30,18 @@ Surface — это класс эквивалентности набора тег
 
 Два жестких правила связывают тип DTO-поля с клиентским sink'ом:
 
+```mermaid
+flowchart TB
+    f{"Поле с текстом<br/>пользователя"}
+    f -->|"prose: посты, описания,<br/>комментарии"| bb["Подтип BbText<br/>сервер рендерит и экранирует"]
+    bb --> vh["v-html<br/>только server-rendered HTML"]
+    f -->|"plain: заголовки, имена,<br/>причины, заметки"| esc["Интерполяция {{ }}<br/>или экранирующий highlight"]
+    f -.->|"plain-строка в v-html"| xss["stored XSS — баг"]
+
+    classDef bad fill:transparent,stroke-dasharray: 4 3
+    class xss bad
+```
+
 1. **Prose → BbText → `v-html`.** Любое пользовательское prose-поле, показываемое другим пользователям, **обязано** нестись подтипом `BbText` (`PostBbText` / `CommonBbText` / `InfoBbText`), чтобы сервер отрендерил и заэкранировал его через `BbParserProvider`. Клиентский `v-html` sink принимает **только** server-rendered HTML от `BbText` — либо экранированный `highlightMatch()`. Plain-string prose-поле, долетающее до `v-html`, — это баг stored XSS.
 2. **Plain → `{{ }}`.** Поля, которые по замыслу plain-text (заголовки, имена, тестимониалы, эндорсменты, причины модерации/предупреждений, приватные заметки), рендерятся текстовой интерполяцией `{{ }}` или через экранирующий highlight-путь — никогда не сырой строкой в `v-html`.
 

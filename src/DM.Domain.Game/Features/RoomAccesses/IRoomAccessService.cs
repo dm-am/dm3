@@ -1,6 +1,5 @@
 using DM.Domain.Game.Features.Games;
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 
 
@@ -22,18 +21,6 @@ public interface IRoomAccessService
     #endregion
 
     #region Read
-
-    /// <summary>
-    /// Get all game accesses
-    /// </summary>
-    /// <param name="gameId">Game identifier</param>
-    Task<IEnumerable<RoomAccess>> GetGameAccessesAsync(Guid gameId);
-
-    /// <summary>
-    /// Get all room accesses
-    /// </summary>
-    /// <param name="roomId">Room identifier</param>
-    Task<IEnumerable<RoomAccess>> GetRoomAccessesAsync(Guid roomId);
 
     /// <summary>
     /// Get existing access

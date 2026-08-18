@@ -1,10 +1,8 @@
 // Global chat message models - re-exported from unified messaging module
 // Note: GlobalChatMessage is now just an alias for Message
 
-import type { Message, MessageEdit } from "@/shared/api/models/common";
+import type { Message } from "@/shared/api/models/common";
 
-export type GlobalChatMessageId = string;
-export type GlobalChatMessageEdit = MessageEdit;
 export type GlobalChatMessage = Message;
 
 // Event types live in shared/api/models (FSD: shared must not import

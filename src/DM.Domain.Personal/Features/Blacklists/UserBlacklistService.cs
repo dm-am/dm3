@@ -123,13 +123,6 @@ internal class UserBlacklistService : IUserBlacklistService
     }
 
     /// <inheritdoc />
-    public async Task<bool> CanSendMessage(Guid targetUserId, CancellationToken ct = default)
-    {
-        var status = await GetBlockStatus(targetUserId, ct);
-        return status.CanCommunicate;
-    }
-
-    /// <inheritdoc />
     public async Task<BlockStatus> GetBlockStatus(Guid targetUserId, CancellationToken ct = default)
     {
         var userId = _identityProvider.Current.User.UserId;

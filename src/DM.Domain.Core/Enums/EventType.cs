@@ -81,18 +81,6 @@ public enum EventType
     // ========================================
 
     /// <summary>
-    /// User role has been changed by administration
-    /// </summary>
-    [EventRoutingKey("community.user.role.changed")]
-    RoleChanged = 21,
-
-    /// <summary>
-    /// User is no longer a newbie (passed probation period)
-    /// </summary>
-    [EventRoutingKey("community.user.newbie.graduated")]
-    NoLongerNewbie = 23,
-
-    /// <summary>
     /// User avatar has been changed (upload or reset).
     /// Transient UI hint — payload includes user ID and new
     /// picture URLs so that open tabs can live-update
@@ -116,12 +104,6 @@ public enum EventType
     /// </summary>
     [EventRoutingKey("community.testimonial.website.created")]
     NewWebsiteTestimonial = 32,
-
-    /// <summary>
-    /// Review has been liked
-    /// </summary>
-    [EventRoutingKey("community.review.liked")]
-    LikedReview = 35,
 
     // ========================================
     // Blog events (41-59)
@@ -279,12 +261,6 @@ public enum EventType
     [EventRoutingKey("subscription.game.post.created")]
     NewPostInSubscribedGame = 74,
 
-    /// <summary>
-    /// User was mentioned in a comment or message
-    /// </summary>
-    [EventRoutingKey("community.mention.created")]
-    UserMentioned = 75,
-
     // Slot 76 was NewPublicationFromSubscribedAuthor — removed; per-publication
     // notifications are no longer part of the user-subscription contract.
     // Subscribers now receive a single NewBlogFromSubscribedAuthor signal
@@ -366,12 +342,6 @@ public enum EventType
     /// </summary>
     [EventRoutingKey("security.email.changed")]
     EmailChanged = 92,
-
-    /// <summary>
-    /// Password reset was requested
-    /// </summary>
-    [EventRoutingKey("security.password.reset.requested")]
-    PasswordResetRequested = 93,
 
     /// <summary>
     /// User session was terminated
@@ -531,12 +501,6 @@ public enum EventType
     /// </summary>
     [EventRoutingKey("game.status.draft")]
     StatusGameDraft = 322,
-
-    /// <summary>
-    /// Game is released
-    /// </summary>
-    [EventRoutingKey("game.status.requirement")]
-    StatusGameRequirement = 323,
 
     /// <summary>
     /// Game has started

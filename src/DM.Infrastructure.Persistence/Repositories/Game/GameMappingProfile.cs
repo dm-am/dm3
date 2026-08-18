@@ -77,11 +77,6 @@ internal class GameMappingProfile : Profile
         CreateMap<DbRoom, RoomOrderInfo>()
             .ForMember(d => d.Id, s => s.MapFrom(r => r.RoomId));
 
-        CreateMap<DbRoom, RoomNeighbours>()
-            .ForMember(d => d.Current, s => s.MapFrom(r => r))
-            .ForMember(d => d.Previous, s => s.MapFrom(r => r.PreviousRoom))
-            .ForMember(d => d.Next, s => s.MapFrom(r => r.NextRoom));
-
         CreateMap<DbRoomAccess, DtoRoomAccess>()
             .ForMember(d => d.Id, s => s.MapFrom(l => l.AccessId))
             .ForMember(d => d.TargetType, s => s.MapFrom(l =>
@@ -131,19 +126,32 @@ internal class GameMappingProfile : Profile
             // mapping profile parses it into a Dictionary at render time.
             .ForMember(d => d.PrivateAddresseeSnapshotJson, s => s.MapFrom(p => p.PrivateAddresseeSnapshotJson))
             .ForMember(d => d.Edits, s => s.MapFrom(p => p.Edits.OrderByDescending(e => e.ModifiedUtc)))
-            .ForMember(d => d.Rating, opt => opt.Ignore())
-            .ForMember(d => d.ReviewCount, opt => opt.Ignore())
+            // The rating and the number of reviews are derived, not stored, and
+            // they were left out of this map entirely. The rated reads (Pulse,
+            // the home-page widgets) compute them in a projection of their own,
+            // so a post there carried its score — while the same post read
+            // through a room came back at zero. On the room page, the page where
+            // reviews are written and read, every post said "Рейтинг: +0" and
+            // its reviews could not be opened at all.
+            //
+            // Defined here rather than in each reader: four reads project through
+            // this map, and a rule about what a post's rating IS belongs to the
+            // map, not to four copies of it. Two correlated subqueries per row,
+            // the same shape GetRated already runs; ProjectTo keeps them inside
+            // the one query, so paging is untouched.
+            //
+            // Sum over an empty set is NULL in SQL, hence the nullable cast and
+            // the coalesce; Count answers 0 on its own.
+            .ForMember(d => d.Rating, s => s.MapFrom(p =>
+                p.Reviews.Where(r => !r.IsRemoved).Sum(r => (int?)r.SignValue) ?? 0))
+            .ForMember(d => d.ReviewCount, s => s.MapFrom(p =>
+                p.Reviews.Count(r => !r.IsRemoved)))
             .ForMember(d => d.AuthorGameRole, opt => opt.Ignore())
             .ForMember(d => d.DiceRolls, opt => opt.Ignore())
             .ForMember(d => d.Room, opt => opt.Ignore());
 
         CreateMap<DbPostEdit, DtoPostEdit>()
             .ForMember(d => d.Id, s => s.MapFrom(e => e.PostEditId));
-
-        CreateMap<DbPost, LastPost>()
-            .ForMember(d => d.Id, s => s.MapFrom(p => p.PostId))
-            .ForMember(d => d.CreatedUtc, s => s.MapFrom(p => p.CreatedUtc))
-            .ForMember(d => d.RoomId, s => s.MapFrom(p => p.RoomId));
     }
 
     private void ConfigureCharacterMappings()
@@ -186,9 +194,6 @@ internal class GameMappingProfile : Profile
             .ForMember(d => d.Picture, opt => opt.Ignore());
 
         CreateMap<DbCharacter, CharacterShortInfo>()
-            .ForMember(d => d.LastPost, s => s.MapFrom(c => c.Posts
-                .OrderByDescending(p => p.CreatedUtc)
-                .FirstOrDefault()))
             .ForMember(d => d.PostsCount, s => s.MapFrom(c => c.Posts.Count()));
     }
 

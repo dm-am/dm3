@@ -161,7 +161,6 @@ internal class GameMappingProfile : Profile
         CreateMap<UpdateGameRequest, DtoUpdateGame>()
             .ForMember(g => g.SystemName, s => s.MapFrom(g => g.System))
             .ForMember(g => g.NarrativeSetting, s => s.MapFrom(g => g.Setting))
-            .ForMember(g => g.AssistantUsername, opt => opt.Ignore())
             .ForMember(g => g.HideDiceResult, s => s.MapFrom(g => g.PrivacySettings != null ? !g.PrivacySettings.ViewDice : null))
             .ForMember(g => g.ShowPrivateMessages, s => s.MapFrom(g => g.PrivacySettings != null ? g.PrivacySettings.ViewPrivates : null))
             .ForMember(g => g.HidePostStats, s => s.MapFrom(g => g.PrivacySettings != null ? !g.PrivacySettings.ViewPostStats : null))

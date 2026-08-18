@@ -58,11 +58,6 @@ public interface ICharacterRepository
     Task<CharacterToUpdate?> GetForUpdate(Guid characterId);
 
     /// <summary>
-    /// Get character attribute IDs
-    /// </summary>
-    Task<IDictionary<Guid, Guid>> GetAttributeIds(Guid characterId);
-
-    /// <summary>
     /// Check if user has other active characters in game
     /// </summary>
     Task<bool> HasOtherActiveCharacters(Guid gameId, Guid userId, Guid excludeCharacterId);

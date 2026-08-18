@@ -1,31 +1,7 @@
-import { ref, onUnmounted } from "vue";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
+import { useNowTimestamp } from "@/shared/lib/composables/useNowTimestamp";
 import { useAuthStore } from "@/shared/stores";
 import type { Blog, BlogRef } from "./types";
-
-// Cached timestamp for isNew() optimization
-// Refreshed every minute to avoid creating Date objects per-row
-const nowTimestamp = ref(Date.now());
-let intervalId: ReturnType<typeof setInterval> | null = null;
-let instanceCount = 0;
-
-function startTimestampRefresh() {
-  if (intervalId === null) {
-    intervalId = setInterval(() => {
-      nowTimestamp.value = Date.now();
-    }, 60_000); // Refresh every minute
-  }
-  instanceCount++;
-}
-
-function stopTimestampRefresh() {
-  instanceCount--;
-  if (instanceCount <= 0 && intervalId !== null) {
-    clearInterval(intervalId);
-    intervalId = null;
-    instanceCount = 0;
-  }
-}
 
 /**
  * Auth state for counter tooltip wording. Resolved lazily (only when a
@@ -49,13 +25,8 @@ function isViewerAuthenticated(): boolean {
  * Single source of truth for tooltips, counters, and formatted info
  */
 export function useBlogDisplay() {
-  // Start timestamp refresh when composable is used
-  startTimestampRefresh();
-
-  // Stop when component unmounts
-  onUnmounted(() => {
-    stopTimestampRefresh();
-  });
+  // Cached timestamp for isNew(); shared single timer, see useNowTimestamp
+  const nowTimestamp = useNowTimestamp();
 
   /**
    * Build status tooltip with multiple dates based on status (per GLOSSARY.md):

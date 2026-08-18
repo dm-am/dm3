@@ -47,7 +47,12 @@ public class PublicIdService : IPublicIdService
         return result.ToString();
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Decodes a public ID back to its serial number.
+    /// </summary>
+    /// <param name="publicId">The public ID to decode</param>
+    /// <returns>The original serial number</returns>
+    /// <exception cref="ArgumentException">If publicId is invalid</exception>
     public int Decode(string publicId)
     {
         if (!IsValid(publicId))

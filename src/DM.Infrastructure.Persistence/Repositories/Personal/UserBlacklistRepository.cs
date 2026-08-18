@@ -61,15 +61,6 @@ internal class UserBlacklistRepository : IUserBlacklistRepository
     }
 
     /// <inheritdoc />
-    public async Task<bool> HasBlockRelationship(Guid userId1, Guid userId2, CancellationToken ct = default)
-    {
-        return await _dbContext.UserBlacklists
-            .AnyAsync(b =>
-                (b.OwnerId == userId1 && b.BlockedUserId == userId2) ||
-                (b.OwnerId == userId2 && b.BlockedUserId == userId1), ct);
-    }
-
-    /// <inheritdoc />
     public async Task<BlacklistEntry> Create(CreateBlacklistEntryEntity entry, CancellationToken ct = default)
     {
         var entity = new UserBlacklist

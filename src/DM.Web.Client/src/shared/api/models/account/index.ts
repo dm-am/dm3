@@ -55,36 +55,11 @@ export type LoginResponse = {
 };
 
 /**
- * Request to initiate password reset flow
- */
-export type ResetPasswordRequest = {
-  username: string;
-  email: string;
-};
-
-/**
- * Request to change password (either with old password or reset token)
- * Note: user identity is taken from session (oldPassword flow) or token (reset flow)
- */
-export type ChangePasswordRequest = {
-  oldPassword?: string;
-  newPassword: string;
-  token?: string; // For reset flow (GUID)
-};
-
-/**
  * Request to change email address
  * Note: user identity is taken from authenticated session
  */
 export type ChangeEmailRequest = {
   password: string;
-  email: string;
-};
-
-/**
- * Request to resend activation email
- */
-export type ResendActivationRequest = {
   email: string;
 };
 

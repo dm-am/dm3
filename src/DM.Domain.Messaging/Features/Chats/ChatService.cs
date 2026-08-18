@@ -189,13 +189,6 @@ internal class ChatService : IChatService
     }
 
     /// <inheritdoc />
-    public async Task<int> GetTotalUnreadCountAsync()
-    {
-        var userId = _identityProvider.Current.User.UserId;
-        return (await _unreadCountersRepository.SelectByParentsAsync(userId, UnreadEntryType.Message, userId))[userId];
-    }
-
-    /// <inheritdoc />
     public async Task MarkAsReadAsync(Guid chatId)
     {
         var chat = await _repository.GetForUpdate(chatId);

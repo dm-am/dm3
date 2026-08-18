@@ -21,15 +21,14 @@ import type {
 import { GameParticipation } from "./types";
 import type {
   PagingInfo,
-  Comment,
   User,
   GeneralError,
 } from "@/shared/api/models/common";
-import { markRemoved } from "@/shared/api/models/common";
 import gameApi from "../api/gameApi";
-import { unwrapResource, type CommentsQuery } from "@/shared/api";
+import { unwrapResource } from "@/shared/api";
 import { useAuthStore } from "@/shared/stores";
 import { usePaging } from "@/shared/lib/composables/usePaging";
+import { createCommentSection } from "@/shared/lib/composables/createCommentSection";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 import { requestNotSent } from "@/shared/lib/errors";
 // One edge, and it points this way on purpose: deleting a game has to drop the
@@ -77,12 +76,28 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   const charactersLoading = ref(false);
   const charactersError = ref<string | null>(null);
 
-  // Comments data. The failure is a flag and not a sentence: the discussion
-  // section spells one wording for a failed load, wherever it fails.
-  const comments = ref<Comment[]>([]);
-  const commentsPaging = ref<PagingInfo | null>(null);
-  const commentsLoading = ref(false);
-  const commentsError = ref(false);
+  // Discussion comments: state, guarded loader and single-comment mutations
+  // come from the shared section factory — the blog details store runs the
+  // same code against its own endpoints.
+  const {
+    comments,
+    commentsPaging,
+    commentsLoading,
+    commentsError,
+    commentsGuard,
+    loadComments,
+    updateComment,
+    deleteComment,
+    likeComment,
+    unlikeComment,
+  } = createCommentSection({
+    getComments: (gameId, query) => gameApi.getGameComments(gameId, query),
+    updateComment: (id, comment) => gameApi.updateGameComment(id, comment),
+    deleteComment: (id) => gameApi.deleteGameComment(id),
+    likeComment: (id) => gameApi.likeGameComment(id),
+    unlikeComment: (id) => gameApi.unlikeGameComment(id),
+    currentUsername: () => useAuthStore().user?.username,
+  });
 
   // Blacklist data
   const blacklist = ref<User[]>([]);
@@ -104,7 +119,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   const roomsGuard = createRequestGuard();
   const postsGuard = createRequestGuard();
   const charactersGuard = createRequestGuard();
-  const commentsGuard = createRequestGuard();
   const blacklistGuard = createRequestGuard();
   const usersGuard = createRequestGuard();
   const detailGuards = [
@@ -215,8 +229,39 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     return { ok: true };
   }
 
+  /**
+   * The rooms request currently on the wire, kept so a second caller joins it
+   * instead of starting its own.
+   *
+   * Two loaders want the list on one mount: the game shell preloads it for
+   * navigation, and a room page resolves its own room number against it. Each
+   * fired a request, and the guard below then threw one of the two answers
+   * away — whichever lost owned an awaiter, and that awaiter woke up to an
+   * empty list and reported the room as missing. A cold load of a room showed
+   * "Комната №N не найдена" and never asked for the posts at all.
+   *
+   * Keyed by game id: a join is only ever a join to the same list. It is not
+   * a cache — the entry lives exactly as long as the request, so a refresh
+   * after a post or a room edit still goes to the server.
+   */
+  let roomsInFlight: { gameId: string; promise: Promise<void> } | null = null;
+
   // Load rooms
   async function loadRooms(gameId: string): Promise<void> {
+    if (roomsInFlight?.gameId === gameId) return roomsInFlight.promise;
+
+    const promise = fetchRooms(gameId);
+    roomsInFlight = { gameId, promise };
+    try {
+      await promise;
+    } finally {
+      // Only the owner clears it, and only if a newer request has not
+      // already taken the slot.
+      if (roomsInFlight?.promise === promise) roomsInFlight = null;
+    }
+  }
+
+  async function fetchRooms(gameId: string): Promise<void> {
     const requestId = roomsGuard.next();
     roomsLoading.value = true;
     roomsError.value = null;
@@ -278,6 +323,13 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   ): Promise<void> {
     const requestId = postsGuard.next();
 
+    // The wait starts here, not in loadPosts below: resolving the room number
+    // can take a request of its own, and until then the page read "В этой
+    // комнате пока нет постов" — an answer, and the wrong one, while the
+    // question was still open.
+    postsLoading.value = true;
+    postsError.value = null;
+
     // Deep links (first-unread redirects, direct URLs) land here before the
     // rooms list is in the store - resolve it first
     if (!rooms.value.length) {
@@ -285,8 +337,21 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     }
 
     // The room in the URL changed while the rooms list was on the wire: the
-    // newer call resolves against its own room number, not this one.
+    // newer call resolves against its own room number, not this one. The
+    // loading flag belongs to that newer call now, so it is left alone.
     if (!postsGuard.isCurrent(requestId)) return;
+
+    // The list itself failed to load: saying the room does not exist would
+    // blame the address for a network failure. Report the load error and let
+    // retry re-ask; not-found is reserved for a list that answered.
+    if (!rooms.value.length && roomsError.value) {
+      postsError.value = roomsError.value;
+      posts.value = [];
+      postsPaging.value = null;
+      currentRoom.value = null;
+      postsLoading.value = false;
+      return;
+    }
 
     // Find the room by number
     const room = rooms.value.find((r) => r.roomNumber === roomNumber);
@@ -295,6 +360,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
       posts.value = [];
       postsPaging.value = null;
       currentRoom.value = null;
+      postsLoading.value = false;
       return;
     }
 
@@ -320,93 +386,6 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     }
 
     charactersLoading.value = false;
-  }
-
-  // Load comments. Filter, sort and page all come from the URL through the
-  // discussion section; this forwards the query it is handed.
-  async function loadComments(
-    gameId: string,
-    query: CommentsQuery = {},
-  ): Promise<void> {
-    const requestId = commentsGuard.next();
-    commentsLoading.value = true;
-    commentsError.value = false;
-
-    const { data, error } = await gameApi.getGameComments(gameId, query);
-
-    // Stale continuation — the newer request owns the visible state.
-    if (!commentsGuard.isCurrent(requestId)) return;
-
-    if (error) {
-      commentsError.value = true;
-      comments.value = [];
-      commentsPaging.value = null;
-    } else if (data) {
-      comments.value = data.resources;
-      commentsPaging.value = data.paging ?? null;
-    }
-
-    commentsLoading.value = false;
-  }
-
-  // --- Single comment mutations (edit / delete / likes) ---
-  // Mirror the forum boardsStore idiom: in-place list patches from the server
-  // response, no full reload, and nothing patched when the server refused —
-  // the error goes up to the page instead.
-
-  async function updateComment(id: string, text: string) {
-    const { data, error } = await gameApi.updateGameComment(id, { text });
-    if (!error) {
-      const updated = unwrapResource<Comment>(data);
-      if (updated) {
-        const index = comments.value.findIndex((c) => c.id === id);
-        if (index !== -1) comments.value[index] = updated;
-      }
-    }
-    return { error };
-  }
-
-  async function deleteComment(id: string) {
-    const { error } = await gameApi.deleteGameComment(id);
-    if (!error) {
-      const index = comments.value.findIndex((c) => c.id === id);
-      if (index !== -1) {
-        comments.value[index] = markRemoved(comments.value[index]);
-      }
-    }
-    return { error };
-  }
-
-  async function likeComment(id: string) {
-    const { data } = await gameApi.likeGameComment(id);
-    const liker = unwrapResource<User>(data);
-    if (liker) {
-      const index = comments.value.findIndex((c) => c.id === id);
-      if (index !== -1) {
-        const comment = comments.value[index];
-        comments.value[index] = {
-          ...comment,
-          likes: [...(comment.likes ?? []), liker] as Comment["likes"],
-        };
-      }
-    }
-  }
-
-  async function unlikeComment(id: string) {
-    const { error } = await gameApi.unlikeGameComment(id);
-    if (error) return;
-    const index = comments.value.findIndex((c) => c.id === id);
-    if (index === -1) return;
-    const comment = comments.value[index];
-    const username = useAuthStore().user?.username;
-    if (comment.likes && username) {
-      comments.value[index] = {
-        ...comment,
-        likes: comment.likes.filter(
-          (u) => u.username !== username,
-        ) as Comment["likes"],
-      };
-    }
   }
 
   // Load blacklist
@@ -521,8 +500,11 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   function reset(): void {
     // Replies still on the wire belong to the game being left. GamePage wipes
     // the store on an id change and on unmount, so without bumping every token
-    // the late reply repopulates what was just cleared.
+    // the late reply repopulates what was just cleared. The rooms request in
+    // flight is one of those replies: its answer is about to be discarded, so
+    // a later caller must start its own instead of joining it.
     detailGuards.forEach((guard) => guard.next());
+    roomsInFlight = null;
 
     game.value = null;
     gameLoading.value = false;

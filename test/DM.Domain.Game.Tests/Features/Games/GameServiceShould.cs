@@ -253,7 +253,13 @@ public class GameServiceShould : UnitTestBase
         var result = await _service.UpdateAsync(updateGame);
 
         result.Should().BeSameAs(game);
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.Edit, game), Times.Once);
+        // The information form of the settings page, so EditSettings and not the
+        // lead-only Edit: this is the line the curating mentor passes. Asserting
+        // that Edit is never asked keeps the two from being quietly reunited —
+        // an extra Edit check here would shut the mentor out again while this
+        // test stayed green on the EditSettings half alone.
+        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.EditSettings, game), Times.Once);
+        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.Edit, game), Times.Never);
         // An edit that changes no status announces exactly the one event
         _producer.Verify(p => p.SendAsync(
             It.Is<IEnumerable<EventType>>(e => e.SequenceEqual(new[] { EventType.ChangedGame })), gameId), Times.Once);

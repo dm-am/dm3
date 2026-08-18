@@ -1,6 +1,7 @@
 <template>
   <nav aria-label="Опросы, игры, блоги и контакты">
     <ul class="blocks">
+      <SiteAddresses />
       <ActivePolls />
       <PopularGames />
       <PopularBlogs />
@@ -16,7 +17,11 @@
 <script setup lang="ts">
 import { defineAsyncComponent } from "vue";
 
-// Critical above-fold components - load synchronously
+// Critical above-fold components - load synchronously.
+// SiteAddresses leads the column, so deferring it would land it a frame later
+// and push everything under it down after the page has been read. It is a
+// handful of static markup and costs the bundle nothing worth saving.
+import SiteAddresses from "./SiteAddresses.vue";
 import ActivePolls from "./ActivePolls.vue";
 import PopularGames from "./PopularGames.vue";
 

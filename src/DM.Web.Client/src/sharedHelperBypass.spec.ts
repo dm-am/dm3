@@ -30,7 +30,11 @@
  * files are skipped, because a test names the wrong shape in order to assert on
  * it.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+// A whole-tree AST scan legitimately outruns the 5s default when the suite
+// saturates every core, which is what a coverage run does.
+vi.setConfig({ testTimeout: 30_000 });
 import { readdirSync, readFileSync, statSync } from "fs";
 import { dirname, join, relative } from "path";
 import { fileURLToPath } from "url";

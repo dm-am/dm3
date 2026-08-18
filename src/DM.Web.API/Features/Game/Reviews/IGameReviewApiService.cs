@@ -21,15 +21,15 @@ public interface IGameReviewApiService
     /// Get game reviews received by a user: reviews of the games they master
     /// </summary>
     /// <param name="username">Game master's username</param>
-    /// <param name="query">Paging parameters</param>
-    Task<ListEnvelope<GameReviewDto>> GetReceivedByUser(string username, PagingQuery query);
+    /// <param name="query">Paging, search and sorting</param>
+    Task<ListEnvelope<GameReviewDto>> GetReceivedByUser(string username, UserGameReviewsQuery query);
 
     /// <summary>
     /// Get game reviews written by a user
     /// </summary>
     /// <param name="username">Review author's username</param>
-    /// <param name="query">Paging parameters</param>
-    Task<ListEnvelope<GameReviewDto>> GetWrittenByUser(string username, PagingQuery query);
+    /// <param name="query">Paging, search and sorting</param>
+    Task<ListEnvelope<GameReviewDto>> GetWrittenByUser(string username, UserGameReviewsQuery query);
 
     /// <summary>
     /// Get a single game review

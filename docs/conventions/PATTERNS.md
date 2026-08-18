@@ -310,14 +310,13 @@ DTOs организованы в иерархию наследования с т
 
 ### Правила
 
-**1. Counts + Details:** Counts (`playersCount`) присутствуют на **ВСЕХ** уровнях. Arrays (`players[]`) **ДОБАВЛЯЮТСЯ**, не заменяют counts.
+**1. Counts + Details:** Counts (`subscribersCount`) присутствуют на **ВСЕХ** уровнях. Arrays (`players[]`) **ДОБАВЛЯЮТСЯ**, не заменяют counts.
 
 ```csharp
 // GameRef — сайдбар (counts only)
 {
   "id": "...",
   "title": "...",
-  "playersCount": 5,
   "subscribersCount": 12
 }
 
@@ -325,10 +324,8 @@ DTOs организованы в иерархию наследования с т
 {
   "id": "...",
   "title": "...",
-  "playersCount": 5,
   "subscribersCount": 12,
-  "players": [{ "id": "...", "username": "..." }],  // ДОБАВЛЯЕТСЯ
-  "readers": [...]
+  "players": [{ "id": "...", "username": "..." }]  // ДОБАВЛЯЕТСЯ
 }
 ```
 
@@ -356,16 +353,21 @@ export interface User extends UserRef { ... }
 ```csharp
 public class Game : GameRef
 {
-    // Inherited: PlayersCount, SubscribersCount (always present)
+    // Inherited: SubscribersCount (always present)
 
     // Expanded (nullable - populated when requested)
     public IEnumerable<UserRef>? Players { get; set; }
-    public IEnumerable<UserRef>? Readers { get; set; }
+}
+
+// Details-уровень несет полный набор без запроса — поле не nullable
+public class GameDetails : Game
+{
+    public IEnumerable<UserRef> Readers { get; set; } = [];
 }
 ```
 
 **4. UserRef vs User:**
-- В Ref/основном типе — `UserRef` (lightweight: id, username, lastActivityUtc)
+- В Ref/основном типе — `UserRef` (lightweight: id, username, lastActivityUtc, role, isNewbie)
 - В Details — `User` где нужна полная информация
 
 ### API
@@ -373,7 +375,8 @@ public class Game : GameRef
 ```
 GET /games?projection=ref   → GameRef[]   (сайдбары)
 GET /games                  → Game[]      (таблицы)
-GET /games/{id}             → GameDetails (страница)
+GET /games/{id}             → Game
+GET /games/{id}/details     → GameDetails (страница)
 
 GET /blogs?projection=ref   → BlogRef[]
 GET /blogs                  → Blog[]

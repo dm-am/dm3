@@ -11,6 +11,20 @@ namespace DM.Web.API.Features.Moderation.Achievements;
 public interface IAchievementCatalogApiService
 {
     /// <summary>
+    /// Get all achievement categories, inactive included
+    /// </summary>
+    /// <remarks>
+    /// The public catalog serves active categories only; the admin page must
+    /// keep a deactivated category visible so it can be restored.
+    /// </remarks>
+    Task<ListEnvelope<AchievementCategory>> GetCategories();
+
+    /// <summary>
+    /// Get all achievement tiers, tiers of inactive categories included
+    /// </summary>
+    Task<ListEnvelope<AchievementType>> GetTypes();
+
+    /// <summary>
     /// Partially update an achievement category
     /// </summary>
     /// <param name="id">Category identifier</param>

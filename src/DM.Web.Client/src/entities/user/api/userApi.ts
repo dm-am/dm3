@@ -15,6 +15,30 @@ import type { GameReview } from "@/shared/api/models/game/reviews";
 import { Api } from "@/shared/api";
 
 /**
+ * Paging plus search and sorting of one user's game reviews — mirrors the
+ * server's UserGameReviewsQuery. `sortBy: "author"` means the other side of
+ * the pair, which is the author for reviews received and the game for reviews
+ * written; the server resolves that from the same filter it already has.
+ */
+export type GameReviewsQuery = PagingQuery & {
+  search?: string;
+  sortBy?: "created" | "author";
+  sortOrder?: "asc" | "desc";
+};
+
+/**
+ * Paging plus search and sorting of one user's endorsements — the same
+ * vocabulary as GameReviewsQuery. `sortBy: "author"` again means the other
+ * side of the pair: the author for endorsements received and the recipient for
+ * endorsements written (see UserEndorsementFilter on the server).
+ */
+export type EndorsementsQuery = PagingQuery & {
+  search?: string;
+  sortBy?: "created" | "author";
+  sortOrder?: "asc" | "desc";
+};
+
+/**
  * The user directory and everything hanging off a public profile: the user
  * record itself, past usernames, the viewer's private note about them,
  * endorsements written about or by them, and game reviews written by them or
@@ -110,56 +134,38 @@ export default new (class UserApi {
   }
 
   /** Get endorsements written about a user (they are the recipient). */
-  public getUserEndorsements(
-    username: Username,
-    q?: PagingQuery & {
-      search?: string;
-      sortBy?: "created" | "author";
-      sortOrder?: "asc" | "desc";
-    },
-  ) {
+  public getUserEndorsements(username: Username, q?: EndorsementsQuery) {
     return Api.get<ListEnvelope<UserEndorsement>>(
       `users/${username}/endorsements`,
-      this.buildEndorsementParams(q),
+      this.buildListParams(q, 20),
     );
   }
 
   /** Get endorsements written BY a user (they are the author). */
-  public getWrittenUserEndorsements(
-    username: Username,
-    q?: PagingQuery & {
-      search?: string;
-      sortBy?: "created" | "author";
-      sortOrder?: "asc" | "desc";
-    },
-  ) {
+  public getWrittenUserEndorsements(username: Username, q?: EndorsementsQuery) {
     return Api.get<ListEnvelope<UserEndorsement>>(
       `users/${username}/written-endorsements`,
-      this.buildEndorsementParams(q),
+      this.buildListParams(q, 20),
     );
   }
 
   /**
-   * One builder for the query string of both endorsement endpoints
-   * (received / given) — when a new param is added on the BE,
-   * only one place changes.
+   * One builder for the query string of the endorsement and game-review list
+   * endpoints — when a new param is added on the BE, only one place changes.
+   * The endpoints differ only in their default page size.
    *
-   * The page number becomes skip/take here, exactly as in
-   * buildGameReviewParams. It used to be forwarded as `number`, which
-   * UserEndorsementsQuery does not bind: an unknown query parameter is ignored
-   * rather than refused, so every page of the profile's endorsement list
+   * The page number becomes skip/take here. It used to be forwarded as
+   * `number`, which the server queries do not bind: an unknown query parameter
+   * is ignored rather than refused, so every page of the profile's lists
    * answered with page one while the pager and the address bar said otherwise.
    */
-  private buildEndorsementParams(
-    q?: PagingQuery & {
-      search?: string;
-      sortBy?: "created" | "author";
-      sortOrder?: "asc" | "desc";
-    },
+  private buildListParams(
+    q: GameReviewsQuery | EndorsementsQuery | undefined,
+    defaultTake: number,
   ) {
     const params: Record<string, string | number | undefined> = {};
     if (!q) return params;
-    const pageSize = q.take ?? 20;
+    const pageSize = q.take ?? defaultTake;
     params.take = pageSize;
     if (q.number && q.number > 1) {
       params.skip = (q.number - 1) * pageSize;
@@ -179,36 +185,19 @@ export default new (class UserApi {
    * and lives under /v1/posts; these are reviews of whole games, and the
    * profile shows the two as separate counters.
    */
-  public getUserGameReviews(username: Username, q?: PagingQuery) {
+  public getUserGameReviews(username: Username, q?: GameReviewsQuery) {
     return Api.get<ListEnvelope<GameReview>>(
       `users/${username}/game-reviews`,
-      this.buildGameReviewParams(q),
+      this.buildListParams(q, 10),
     );
   }
 
   /** Get game reviews written BY a user (they are the author). */
-  public getWrittenUserGameReviews(username: Username, q?: PagingQuery) {
+  public getWrittenUserGameReviews(username: Username, q?: GameReviewsQuery) {
     return Api.get<ListEnvelope<GameReview>>(
       `users/${username}/written-game-reviews`,
-      this.buildGameReviewParams(q),
+      this.buildListParams(q, 10),
     );
-  }
-
-  /**
-   * One builder for the query string of both game-review endpoints. The
-   * endpoints take skip/take only, so a 1-indexed `number` is converted here,
-   * exactly as gameApi does for the game-scoped listing.
-   */
-  private buildGameReviewParams(q?: PagingQuery) {
-    const params: Record<string, number | undefined> = {};
-    const pageSize = q?.take ?? 20;
-    params.take = pageSize;
-    if (q?.number && q.number > 1) {
-      params.skip = (q.number - 1) * pageSize;
-    } else if (q?.skip) {
-      params.skip = q.skip;
-    }
-    return params;
   }
 
   /** Create endorsement for a user */

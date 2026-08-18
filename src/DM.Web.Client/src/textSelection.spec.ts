@@ -32,6 +32,10 @@ const CLIENT_SRC = dirname(fileURLToPath(import.meta.url));
 const ALLOWED: Record<string, string> = {
   "shared/ui/DashSeparator/DashSeparator.vue":
     "draws the horizontal dash rule, where the glyphs are a line and not text",
+  "widgets/sidebar/SiteAddresses.vue":
+    "the RU mark is an icon spelled in letters: its twin is an <svg>, which " +
+    "no selection can take, and letters that could made the two rows of one " +
+    "list select and copy differently (owner, 2026-08-18)",
 };
 
 const SKIP_DIRS = new Set(["node_modules", "dist", "coverage"]);

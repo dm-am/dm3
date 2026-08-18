@@ -58,8 +58,8 @@ public enum AchievementMetric
     /// <summary>
     /// Total number of "likes" the user received on their
     /// content: topics, publications, comments, chat messages. Game
-    /// posts (rated via PostReviews) and PostReviews themselves are not
-    /// included — posts have their own "Рейтинг" chain.
+    /// posts are not included — they have their own "Рейтинг" chain,
+    /// counted through PostReviews.
     /// Soft-deleted likes and deleted content are excluded.
     /// </summary>
     LikesReceived = 13,

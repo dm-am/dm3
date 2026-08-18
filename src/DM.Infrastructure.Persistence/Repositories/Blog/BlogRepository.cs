@@ -732,12 +732,6 @@ internal class BlogRepository : IBlogRepository
         return true;
     }
 
-    /// <inheritdoc />
-    public Task<bool> IsSubscriber(Guid blogId, Guid userId, CancellationToken ct = default) =>
-        _dbContext.Subscriptions.AnyAsync(
-            s => s.TargetType == SubscriptionTargetType.Blog && s.TargetId == blogId && s.SubscriberId == userId,
-            ct);
-
     // ═══ HELPERS ═══
 
     /// <summary>

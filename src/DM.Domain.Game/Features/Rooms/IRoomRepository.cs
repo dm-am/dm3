@@ -25,24 +25,9 @@ public interface IRoomRepository
     Task<Room?> GetAvailable(Guid roomId, Guid userId);
 
     /// <summary>
-    /// Get single available room by game ID and room number
-    /// </summary>
-    Task<Room?> GetByGameAndNumber(Guid gameId, int roomNumber, Guid userId);
-
-    /// <summary>
     /// Get room for update
     /// </summary>
     Task<RoomToUpdate?> GetForUpdate(Guid roomId, Guid userId);
-
-    /// <summary>
-    /// Get room neighbours for reordering
-    /// </summary>
-    Task<RoomNeighbours> GetNeighbours(Guid roomId);
-
-    /// <summary>
-    /// Get first room info for a game
-    /// </summary>
-    Task<RoomOrderInfo?> GetFirstRoomInfo(Guid gameId);
 
     /// <summary>
     /// Get last room info for a game

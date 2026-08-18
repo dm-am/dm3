@@ -35,11 +35,4 @@ public interface IUserBlacklistApiService
     /// Unblock a user
     /// </summary>
     Task UnblockUser(string username);
-
-    /// <summary>
-    /// Check if current user can send message to another user
-    /// </summary>
-    /// <param name="username">Target username</param>
-    /// <returns>True if messaging is allowed</returns>
-    Task<bool> CanMessage(string username);
 }

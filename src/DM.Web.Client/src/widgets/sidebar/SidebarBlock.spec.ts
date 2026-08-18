@@ -33,6 +33,11 @@ describe("SidebarBlock", () => {
   });
 
   afterEach(() => {
+    // Since vitest 4, restoreAllMocks touches only vi.spyOn spies, so a
+    // mockReturnValue left on the vi.fn-based localStorage mock would leak
+    // into the next test. resetAllMocks puts the original implementations
+    // back.
+    vi.resetAllMocks();
     vi.restoreAllMocks();
   });
 

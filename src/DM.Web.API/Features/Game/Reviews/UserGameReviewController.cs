@@ -43,13 +43,13 @@ public class UserGameReviewController : ControllerBase
     /// listed here.
     /// </remarks>
     /// <param name="username">Game master's username.</param>
-    /// <param name="q">Paging.</param>
+    /// <param name="q">Paging, search and sorting.</param>
     /// <response code="200">List of game reviews.</response>
     /// <response code="404">User not found.</response>
     [HttpGet(Name = nameof(GetUserGameReviews))]
     [ProducesResponseType(typeof(ListEnvelope<GameReviewDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetUserGameReviews(string username, [FromQuery] PagingQuery q) =>
+    public async Task<IActionResult> GetUserGameReviews(string username, [FromQuery] UserGameReviewsQuery q) =>
         Ok(await _gameReviewApiService.GetReceivedByUser(username, q));
 
     /// <summary>
@@ -60,12 +60,12 @@ public class UserGameReviewController : ControllerBase
     /// game-reviews; the same paging parameters.
     /// </remarks>
     /// <param name="username">Review author's username.</param>
-    /// <param name="q">Paging.</param>
+    /// <param name="q">Paging, search and sorting.</param>
     /// <response code="200">List of game reviews written by the user.</response>
     /// <response code="404">User not found.</response>
     [HttpGet("/v1/users/{username}/written-game-reviews", Name = nameof(GetWrittenUserGameReviews))]
     [ProducesResponseType(typeof(ListEnvelope<GameReviewDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetWrittenUserGameReviews(string username, [FromQuery] PagingQuery q) =>
+    public async Task<IActionResult> GetWrittenUserGameReviews(string username, [FromQuery] UserGameReviewsQuery q) =>
         Ok(await _gameReviewApiService.GetWrittenByUser(username, q));
 }

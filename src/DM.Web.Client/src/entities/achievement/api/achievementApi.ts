@@ -148,6 +148,29 @@ export default new (class AchievementApi {
     return Api.post<AwardTypeEnvelope>("moderation/award-types", body);
   }
 
+  /**
+   * Full catalogs for the admin pages, inactive records included. The
+   * public catalogs serve active records only, so a hidden entry vanished
+   * from the very list that carries its restore button.
+   */
+  public getModerationAwardTypes() {
+    return Api.get<AwardTypesResponse>("moderation/award-types");
+  }
+
+  public getModerationContestSeries() {
+    return Api.get<ContestSeriesResponse>("moderation/contest-series");
+  }
+
+  public getModerationAchievementCategories() {
+    return Api.get<AchievementCategoriesResponse>(
+      "moderation/achievement-categories",
+    );
+  }
+
+  public getModerationAchievementTypes() {
+    return Api.get<AchievementTypesResponse>("moderation/achievement-types");
+  }
+
   public updateAwardType(id: string, body: UpdateAwardTypeRequest) {
     return Api.patch<AwardTypeEnvelope>(`moderation/award-types/${id}`, body);
   }

@@ -110,102 +110,47 @@ internal class BlogInvitationRepository : IBlogInvitationRepository
     /// <inheritdoc />
     public async Task<BlogInvitation?> GetInvitation(Guid tokenId, CancellationToken ct = default)
     {
-        var data = await _dbContext.Tokens
-            .TagWith("DM.BlogInvitation.GetInvitation")
-            .Where(t => !t.IsRemoved && t.TokenId == tokenId)
-            .Join(_dbContext.Blogs,
-                t => t.EntityId,
-                b => b.BlogId,
-                (t, b) => new { Token = t, Blog = b })
-            .Join(_dbContext.Users,
-                tb => tb.Token.UserId,
-                u => u.UserId,
-                (tb, u) => new { tb.Token, tb.Blog, InvitedUser = u })
-            .Select(tbu => new
-            {
-                tbu.Token.TokenId,
-                tbu.Blog.BlogId,
-                BlogTitle = tbu.Blog.Title,
-                InvitedUserId = tbu.InvitedUser.UserId,
-                InvitedUsername = tbu.InvitedUser.Username,
-                InviterUserId = tbu.Token.CreatorId ?? tbu.Blog.AuthorId,
-                InviterUsername = tbu.Token.Creator != null
-                    ? tbu.Token.Creator.Username
-                    : _dbContext.Users.Where(u => u.UserId == tbu.Blog.AuthorId).Select(u => u.Username).FirstOrDefault(),
-                tbu.Token.Type,
-                tbu.Token.CreatedUtc
-            })
+        var data = await ProjectInvitations(_dbContext.Tokens
+                .TagWith("DM.BlogInvitation.GetInvitation")
+                .Where(t => !t.IsRemoved && t.TokenId == tokenId))
             .FirstOrDefaultAsync(ct);
 
-        if (data == null) return null;
-
-        return new BlogInvitation
-        {
-            TokenId = data.TokenId,
-            BlogId = data.BlogId,
-            BlogTitle = data.BlogTitle,
-            InvitedUser = new GeneralUser { UserId = data.InvitedUserId, Username = data.InvitedUsername },
-            InvitedBy = new GeneralUser { UserId = data.InviterUserId, Username = data.InviterUsername ?? "" },
-            TargetRole = data.Type == TokenType.BlogAssistantInvitation ? BlogRole.Assistant : BlogRole.Reader,
-            CreatedUtc = data.CreatedUtc,
-            ExpiresUtc = data.CreatedUtc.AddDays(InvitationPolicy.ExpirationDays)
-        };
+        return data == null ? null : ToBlogInvitation(data);
     }
 
     /// <inheritdoc />
     public async Task<IEnumerable<BlogInvitation>> GetPendingInvitations(Guid blogId, CancellationToken ct = default)
     {
-        var data = await _dbContext.Tokens
-            .TagWith("DM.BlogInvitation.GetPendingInvitations")
-            .Where(t => !t.IsRemoved &&
-                        t.EntityId == blogId &&
-                        (t.Type == TokenType.BlogAssistantInvitation || t.Type == TokenType.BlogReaderInvitation))
-            .Join(_dbContext.Blogs,
-                t => t.EntityId,
-                b => b.BlogId,
-                (t, b) => new { Token = t, Blog = b })
-            .Join(_dbContext.Users,
-                tb => tb.Token.UserId,
-                u => u.UserId,
-                (tb, u) => new { tb.Token, tb.Blog, InvitedUser = u })
-            .Select(tbu => new
-            {
-                tbu.Token.TokenId,
-                tbu.Blog.BlogId,
-                BlogTitle = tbu.Blog.Title,
-                InvitedUserId = tbu.InvitedUser.UserId,
-                InvitedUsername = tbu.InvitedUser.Username,
-                InviterUserId = tbu.Token.CreatorId ?? tbu.Blog.AuthorId,
-                InviterUsername = tbu.Token.Creator != null
-                    ? tbu.Token.Creator.Username
-                    : _dbContext.Users.Where(u => u.UserId == tbu.Blog.AuthorId).Select(u => u.Username).FirstOrDefault(),
-                tbu.Token.Type,
-                tbu.Token.CreatedUtc
-            })
+        var data = await ProjectInvitations(_dbContext.Tokens
+                .TagWith("DM.BlogInvitation.GetPendingInvitations")
+                .Where(t => !t.IsRemoved &&
+                            t.EntityId == blogId &&
+                            (t.Type == TokenType.BlogAssistantInvitation || t.Type == TokenType.BlogReaderInvitation)))
             .OrderByDescending(d => d.CreatedUtc)
             .ToArrayAsync(ct);
 
-        return data.Select(d => new BlogInvitation
-        {
-            TokenId = d.TokenId,
-            BlogId = d.BlogId,
-            BlogTitle = d.BlogTitle,
-            InvitedUser = new GeneralUser { UserId = d.InvitedUserId, Username = d.InvitedUsername },
-            InvitedBy = new GeneralUser { UserId = d.InviterUserId, Username = d.InviterUsername ?? "" },
-            TargetRole = d.Type == TokenType.BlogAssistantInvitation ? BlogRole.Assistant : BlogRole.Reader,
-            CreatedUtc = d.CreatedUtc,
-            ExpiresUtc = d.CreatedUtc.AddDays(InvitationPolicy.ExpirationDays)
-        });
+        return data.Select(ToBlogInvitation);
     }
 
     /// <inheritdoc />
     public async Task<IEnumerable<BlogInvitation>> GetUserPendingInvitations(Guid userId, CancellationToken ct = default)
     {
-        var data = await _dbContext.Tokens
-            .TagWith("DM.BlogInvitation.GetUserPendingInvitations")
-            .Where(t => !t.IsRemoved &&
-                        t.UserId == userId &&
-                        (t.Type == TokenType.BlogAssistantInvitation || t.Type == TokenType.BlogReaderInvitation))
+        var data = await ProjectInvitations(_dbContext.Tokens
+                .TagWith("DM.BlogInvitation.GetUserPendingInvitations")
+                .Where(t => !t.IsRemoved &&
+                            t.UserId == userId &&
+                            (t.Type == TokenType.BlogAssistantInvitation || t.Type == TokenType.BlogReaderInvitation)))
+            .OrderByDescending(d => d.CreatedUtc)
+            .ToArrayAsync(ct);
+
+        return data.Select(ToBlogInvitation);
+    }
+
+    // Kept as explicit inner joins (not Token.Blog/User navigations): missing
+    // blog or user rows must drop the token, and the inviter fallback is the
+    // blog author looked up by a subquery rather than a join.
+    private IQueryable<InvitationData> ProjectInvitations(IQueryable<Token> tokens) =>
+        tokens
             .Join(_dbContext.Blogs,
                 t => t.EntityId,
                 b => b.BlogId,
@@ -214,10 +159,10 @@ internal class BlogInvitationRepository : IBlogInvitationRepository
                 tb => tb.Token.UserId,
                 u => u.UserId,
                 (tb, u) => new { tb.Token, tb.Blog, InvitedUser = u })
-            .Select(tbu => new
+            .Select(tbu => new InvitationData
             {
-                tbu.Token.TokenId,
-                tbu.Blog.BlogId,
+                TokenId = tbu.Token.TokenId,
+                BlogId = tbu.Blog.BlogId,
                 BlogTitle = tbu.Blog.Title,
                 InvitedUserId = tbu.InvitedUser.UserId,
                 InvitedUsername = tbu.InvitedUser.Username,
@@ -225,22 +170,32 @@ internal class BlogInvitationRepository : IBlogInvitationRepository
                 InviterUsername = tbu.Token.Creator != null
                     ? tbu.Token.Creator.Username
                     : _dbContext.Users.Where(u => u.UserId == tbu.Blog.AuthorId).Select(u => u.Username).FirstOrDefault(),
-                tbu.Token.Type,
-                tbu.Token.CreatedUtc
-            })
-            .OrderByDescending(d => d.CreatedUtc)
-            .ToArrayAsync(ct);
+                Type = tbu.Token.Type,
+                CreatedUtc = tbu.Token.CreatedUtc
+            });
 
-        return data.Select(d => new BlogInvitation
-        {
-            TokenId = d.TokenId,
-            BlogId = d.BlogId,
-            BlogTitle = d.BlogTitle,
-            InvitedUser = new GeneralUser { UserId = d.InvitedUserId, Username = d.InvitedUsername },
-            InvitedBy = new GeneralUser { UserId = d.InviterUserId, Username = d.InviterUsername ?? "" },
-            TargetRole = d.Type == TokenType.BlogAssistantInvitation ? BlogRole.Assistant : BlogRole.Reader,
-            CreatedUtc = d.CreatedUtc,
-            ExpiresUtc = d.CreatedUtc.AddDays(InvitationPolicy.ExpirationDays)
-        });
+    private static BlogInvitation ToBlogInvitation(InvitationData data) => new()
+    {
+        TokenId = data.TokenId,
+        BlogId = data.BlogId,
+        BlogTitle = data.BlogTitle,
+        InvitedUser = new GeneralUser { UserId = data.InvitedUserId, Username = data.InvitedUsername },
+        InvitedBy = new GeneralUser { UserId = data.InviterUserId, Username = data.InviterUsername ?? "" },
+        TargetRole = data.Type == TokenType.BlogAssistantInvitation ? BlogRole.Assistant : BlogRole.Reader,
+        CreatedUtc = data.CreatedUtc,
+        ExpiresUtc = data.CreatedUtc.AddDays(InvitationPolicy.ExpirationDays)
+    };
+
+    private sealed class InvitationData
+    {
+        public Guid TokenId { get; init; }
+        public Guid BlogId { get; init; }
+        public string BlogTitle { get; init; } = "";
+        public Guid InvitedUserId { get; init; }
+        public string InvitedUsername { get; init; } = "";
+        public Guid InviterUserId { get; init; }
+        public string? InviterUsername { get; init; }
+        public TokenType Type { get; init; }
+        public DateTimeOffset CreatedUtc { get; init; }
     }
 }

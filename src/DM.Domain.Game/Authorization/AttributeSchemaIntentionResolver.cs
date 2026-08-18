@@ -11,6 +11,16 @@ internal class AttributeSchemaIntentionResolver : IIntentionResolver<AttributeSc
     public bool IsAllowed(IAuthorizationSubject user, AttributeSchemaIntention intention, AttributeSchema target) =>
         intention switch
         {
+            // Authorship, not game role, and deliberately so. The settings page
+            // shows the schema editor next to the information form, which made
+            // it look like the schema belongs to the game and should follow
+            // GameIntention.EditSettings. It does not: a schema is its own
+            // resource with its own author, PATCH names it by id and carries no
+            // game, and a Public one is referenced by any number of games at
+            // once. Delegating to the game intention would let the mentor of a
+            // single game rewrite a schema every other game is built on, with
+            // its author holding no say. Widening this needs a game-scoped
+            // schema first, not a wider arm here.
             AttributeSchemaIntention.Edit => target.Author?.UserId == user.UserId,
             AttributeSchemaIntention.Delete => target.Author?.UserId == user.UserId,
 

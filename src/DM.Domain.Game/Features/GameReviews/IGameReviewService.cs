@@ -71,14 +71,6 @@ public interface IGameReviewService
     Task<bool> ExistsAsync(Guid authorId, Guid gameId);
 
     /// <summary>
-    /// Check if user can review a game (has at least one post in it)
-    /// </summary>
-    /// <param name="userId">User ID</param>
-    /// <param name="gameId">Game ID</param>
-    /// <returns>True if user can review the game</returns>
-    Task<bool> CanReviewAsync(Guid userId, Guid gameId);
-
-    /// <summary>
     /// Check if review can be edited (within 24 hours of creation)
     /// </summary>
     /// <param name="review">Review to check</param>

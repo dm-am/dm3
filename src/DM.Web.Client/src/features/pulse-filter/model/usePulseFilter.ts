@@ -3,6 +3,7 @@ import { useRoute, useRouter } from "vue-router";
 import type { LocationQuery } from "vue-router";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { createFilterDispatcher } from "@/shared/lib/composables/createFilterDispatcher";
+import { isValidDate } from "@/shared/lib/filters/utils";
 import type { PulseSearchParams } from "@/entities/game";
 
 // =============================================================================
@@ -150,14 +151,6 @@ const validSortByValues = new Set<string>([
   "reviewcount",
 ]);
 
-// Strict "YYYY-MM-DD" — invalid date params from a hand-edited URL are
-// ignored instead of producing an Invalid Date downstream
-const dateFormatRegex = /^\d{4}-\d{2}-\d{2}$/;
-
-function isValidDateParam(value: string): boolean {
-  return dateFormatRegex.test(value) && !isNaN(Date.parse(value));
-}
-
 function parseQueryToState(query: LocationQuery): PulseFilterState {
   const state = createDefaultState();
 
@@ -203,14 +196,14 @@ function parseQueryToState(query: LocationQuery): PulseFilterState {
 
   if (query.createdFrom) {
     const createdFrom = String(query.createdFrom);
-    if (isValidDateParam(createdFrom)) {
+    if (isValidDate(createdFrom)) {
       state.createdFrom = createdFrom;
     }
   }
 
   if (query.createdTo) {
     const createdTo = String(query.createdTo);
-    if (isValidDateParam(createdTo)) {
+    if (isValidDate(createdTo)) {
       state.createdTo = createdTo;
     }
   }

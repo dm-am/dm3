@@ -11,7 +11,7 @@ public enum BlogIntention
     Create,
 
     /// <summary>
-    /// Edit blog settings
+    /// Owner-level blog editing (assistant removal, blacklist management)
     /// </summary>
     Edit,
 
@@ -51,11 +51,6 @@ public enum BlogIntention
     CancelInvitation,
 
     /// <summary>
-    /// Manage blacklist
-    /// </summary>
-    ManageBlacklist,
-
-    /// <summary>
     /// Approve or reject publications (for mentors)
     /// </summary>
     ApprovePublications,
@@ -88,5 +83,10 @@ public enum BlogIntention
     /// <summary>
     /// Close the blog (close / freeze / finish)
     /// </summary>
-    SetStatusClosed
+    SetStatusClosed,
+
+    /// <summary>
+    /// Edit blog settings (owner or assistant)
+    /// </summary>
+    EditSettings
 }

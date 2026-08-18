@@ -3,7 +3,11 @@ import { useRoute, useRouter } from "vue-router";
 import type { LocationQuery } from "vue-router";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { createFilterDispatcher } from "@/shared/lib/composables/createFilterDispatcher";
-import { parseSortDirection, validateSortField } from "@/shared/lib/filters";
+import {
+  applySortAction,
+  parseSortDirection,
+  validateSortField,
+} from "@/shared/lib/filters";
 import type {
   PollSortBy,
   PollStatus,
@@ -97,19 +101,9 @@ function reducer(
       newState.endsToUtc = action.date;
       return newState;
 
-    case "SET_SORT": {
-      newState.sortBy = action.sortBy;
-      if (action.sortOrder) {
-        newState.sortOrder = action.sortOrder;
-      } else {
-        const option = SORT_OPTIONS.find((o) => o.value === action.sortBy);
-        newState.sortOrder = option?.defaultDirection || "desc";
-      }
-      return newState;
-    }
-
+    case "SET_SORT":
     case "TOGGLE_SORT_ORDER":
-      newState.sortOrder = newState.sortOrder === "asc" ? "desc" : "asc";
+      applySortAction(newState, action, SORT_OPTIONS);
       return newState;
 
     case "CLEAR_FILTERS":

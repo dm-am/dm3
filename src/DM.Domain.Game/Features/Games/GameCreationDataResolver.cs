@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Game.Features.Games;
-using DM.Domain.Core.Users;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.AttributeSchemas;
 
@@ -14,18 +13,15 @@ namespace DM.Domain.Game.Features.Games;
 internal class GameCreationDataResolver : IGameCreationDataResolver
 {
     private readonly IGameRepository _gameRepository;
-    private readonly IUserLookupService _userLookupService;
     private readonly IAttributeSchemaRepository _schemaRepository;
     private readonly IIntentionManager _intentionManager;
 
     public GameCreationDataResolver(
         IGameRepository gameRepository,
-        IUserLookupService userLookupService,
         IAttributeSchemaRepository schemaRepository,
         IIntentionManager intentionManager)
     {
         _gameRepository = gameRepository;
-        _userLookupService = userLookupService;
         _schemaRepository = schemaRepository;
         _intentionManager = intentionManager;
     }
@@ -43,12 +39,6 @@ internal class GameCreationDataResolver : IGameCreationDataResolver
         // the same tag twice would otherwise become two rows in the link table.
         var tags = await _gameRepository.GetTags();
         return tags.Where(t => requested.Contains(t.ShortId)).Select(t => t.Id).ToList();
-    }
-
-    /// <inheritdoc />
-    public Task<(bool exists, Guid userId)> FindAssistantIdAsync(string username)
-    {
-        return _userLookupService.FindUserIdAsync(username);
     }
 
     /// <inheritdoc />

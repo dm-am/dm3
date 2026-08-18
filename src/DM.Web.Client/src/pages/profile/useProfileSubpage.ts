@@ -1,4 +1,10 @@
-import { computed, type ComputedRef, type Ref } from "vue";
+import {
+  computed,
+  toValue,
+  type ComputedRef,
+  type MaybeRefOrGetter,
+  type Ref,
+} from "vue";
 import { useRoute } from "vue-router";
 import {
   joinTitleSegments,
@@ -17,9 +23,11 @@ import { useProfileSubpageUser } from "./useProfileSubpageUser";
  * that differ only in direction (given/received) were the closest of the page
  * pairs in the tree — a change to the shared part had to be made twice, with
  * nothing to say the second place existed. The label is the only thing they
- * disagreed on, so it is the only argument.
+ * disagreed on, so it is the only argument. It accepts a getter because the
+ * list subpages share one route component: navigating between two of them
+ * swaps the label without a remount.
  */
-export function useProfileSubpage(label: string): {
+export function useProfileSubpage(label: MaybeRefOrGetter<string>): {
   /** Username exactly as the URL spells it: for API calls and route params */
   username: ComputedRef<string>;
   /** Canonical-case username once loaded, for the heading and the title */
@@ -45,7 +53,7 @@ export function useProfileSubpage(label: string): {
   useDocumentTitle(() =>
     notFound.value
       ? getErrorConfig(404).title
-      : joinTitleSegments(canonicalUsername.value, label),
+      : joinTitleSegments(canonicalUsername.value, toValue(label)),
   );
 
   return { username, canonicalUsername, notFound, profileLink };

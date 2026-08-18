@@ -19,6 +19,7 @@ import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import GamePanel from "./GamePanel.vue";
 import {
+  GameParticipation,
   useGameDetailsStore,
   type Character,
   type Game,
@@ -32,6 +33,8 @@ const stubs = {
   },
   Tooltip: { template: "<span><slot /></span>", props: ["text"] },
   ConfirmDialog: true,
+  GameStatusButtons: true,
+  GameJoinActions: true,
 };
 
 const game = {
@@ -65,9 +68,9 @@ const rooms = [
   },
 ] as unknown as Room[];
 
-function mountPanel() {
+function mountPanel(participation: GameParticipation[] = []) {
   const store = useGameDetailsStore();
-  store.game = game;
+  store.game = { ...game, participation } as unknown as Game;
   store.rooms = rooms;
   // A non-empty slice keeps the mount off the network: the panel loads
   // characters only when it holds none.
@@ -121,5 +124,37 @@ describe("GamePanel", () => {
 
   it("keeps archived rooms behind the spoiler", () => {
     expect(mountPanel().text()).not.toContain("Пролог");
+  });
+
+  // GameIntention.EditSettings admits the curating mentor, so the menu has to
+  // carry the link: without it the page is reachable only by typing the URL,
+  // and the audience the intention was widened for never sees it.
+  it("gives the curating mentor the settings link and the notepad", () => {
+    const menu = rows(mountPanel([GameParticipation.Moderator]));
+
+    expect(menu).toContain("- Настройки");
+    expect(menu).toContain("- Блокнот мастера");
+  });
+
+  it("keeps the game's own edit items away from the curating mentor", () => {
+    // The settings link rides EditSettings; NPCs and the status strip are the leads'.
+    expect(rows(mountPanel([GameParticipation.Moderator]))).not.toContain(
+      "- Создать NPC",
+    );
+  });
+
+  it("keeps the management block away from a plain player", () => {
+    const menu = rows(mountPanel([GameParticipation.Player]));
+
+    expect(menu).not.toContain("- Настройки");
+    expect(menu).not.toContain("- Блокнот мастера");
+  });
+
+  it("keeps every edit item for the master", () => {
+    const menu = rows(mountPanel([GameParticipation.Owner]));
+
+    expect(menu).toContain("- Настройки");
+    expect(menu).toContain("- Создать NPC");
+    expect(menu).toContain("- Блокнот мастера");
   });
 });

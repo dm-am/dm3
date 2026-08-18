@@ -161,18 +161,4 @@ internal class LoginRecordRepository : ILoginRecordRepository
             IsSuccessful = r.IsSuccessful
         }).ToList();
     }
-
-    /// <inheritdoc />
-    public async Task<bool> HasLoginFromIp(Guid userId, string ipAddress)
-    {
-        // Check for any successful login from this IP in the last 90 days
-        var cutoff = _dateTimeProvider.Now.AddDays(-90);
-
-        return await _dbContext.UserLoginRecords
-            .TagWith("DM.LoginRecord.HasLoginFromIp")
-            .AnyAsync(r => r.UserId == userId
-                           && r.IpAddress == ipAddress
-                           && r.IsSuccessful
-                           && r.LoginUtc >= cutoff);
-    }
 }

@@ -29,11 +29,6 @@ public interface IGameRepository
     Task<IDictionary<Guid, IEnumerable<Guid>>> GetAvailableRoomIds(IEnumerable<Guid> gameIds, Guid userId, CancellationToken ct = default);
 
     /// <summary>
-    /// Get post pendencies for games
-    /// </summary>
-    Task<IEnumerable<PostPendency>> GetPostPendencies(IEnumerable<Guid> gameIds, Guid userId, CancellationToken ct = default);
-
-    /// <summary>
     /// Get total post counts for games
     /// </summary>
     Task<IDictionary<Guid, int>> GetTotalPostCounts(IEnumerable<Guid> gameIds, CancellationToken ct = default);

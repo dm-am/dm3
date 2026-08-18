@@ -3,8 +3,11 @@ import { ref, onMounted } from "vue";
 import { fundraisingApi } from "@/entities/fundraising";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useRoleGate } from "./lib/useRoleGate";
+import { sectionRole } from "./lib/sections";
 
-const { hasAccess, deniedText } = useRoleGate("Admin");
+const { hasAccess, deniedText } = useRoleGate(
+  sectionRole("moderation-fundraising"),
+);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
 const saving = ref(false);

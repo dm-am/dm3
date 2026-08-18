@@ -1,6 +1,7 @@
 /**
  * Site-wide facts. SSOT for values that appear in multiple places.
  */
+import type { IconName } from "@/shared/lib/utils/icons";
 
 /**
  * The year Dungeon Master was founded. Lower bound for period pickers
@@ -15,6 +16,20 @@ export interface SiteAddress {
   name: string;
   /** Host, exactly as a visitor would type it. */
   host: string;
+  /**
+   * The mark drawn before the name in the sidebar block: an icon of the set,
+   * or a short label where no honest icon exists.
+   *
+   * Not an emoji, which is what stood here first (the pair the old settings
+   * bubble used): an emoji is a glyph of whatever font the visitor's system
+   * ships, so the mark looked different on every platform, and the copy gate
+   * (copy-rules.spec.ts) rightly refuses emoji in interface copy. The globe
+   * icon is that same Windows glyph extracted into the registry, so on the
+   * owner's reference platform nothing changed visually; a country has no
+   * icon and no monochrome flag worth drawing, so it is named by its letters,
+   * which is what Windows rendered in place of the flag emoji anyway.
+   */
+  mark: { icon: IconName } | { label: string };
 }
 
 /**
@@ -30,25 +45,35 @@ export interface SiteAddress {
  * of that trade.
  */
 export const SITE_ADDRESSES: SiteAddress[] = [
-  { name: "Основной адрес сайта", host: "dm.am" },
-  { name: "Зеркало сайта в России", host: "ru.l.dm.am" },
+  { name: "Основной сервер", host: "dm.am", mark: { icon: "globe" } },
+  { name: "Прокси в России", host: "ru.l.dm.am", mark: { label: "RU" } },
 ];
 
 /**
- * The addresses other than the one being read.
+ * The address being read.
  *
  * A host the list does not know counts as the first address, and every
- * development and preview stand is such a host. The line is then drawn there
+ * development and preview stand is such a host. The lines are then drawn there
  * too, in the words a visitor reads on the site itself, which is the only way
  * the developer sees the thing he is changing. The two real addresses answer
- * exactly as before: each names the other.
+ * exactly as before: each recognises itself.
+ *
+ * One rule in one place: both the block that lists every address and the
+ * failure toast that names the other one ask here which is which.
  */
+export function currentSiteAddress(
+  host: string = window.location.host,
+): SiteAddress {
+  return (
+    SITE_ADDRESSES.find((address) => address.host === host) ?? SITE_ADDRESSES[0]
+  );
+}
+
+/** The addresses other than the one being read. */
 export function otherSiteAddresses(
   host: string = window.location.host,
 ): SiteAddress[] {
-  const here =
-    SITE_ADDRESSES.find((address) => address.host === host) ??
-    SITE_ADDRESSES[0];
+  const here = currentSiteAddress(host);
   return SITE_ADDRESSES.filter((address) => address !== here);
 }
 

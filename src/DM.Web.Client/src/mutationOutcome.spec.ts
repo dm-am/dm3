@@ -22,7 +22,11 @@
  * Method names rather than modules: the same call is made on an api object
  * inside a store and on the store inside a page, and both halves were broken.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+// A whole-tree AST scan legitimately outruns the 5s default when the suite
+// saturates every core, which is what a coverage run does.
+vi.setConfig({ testTimeout: 30_000 });
 import { readdirSync, readFileSync, statSync } from "fs";
 import { dirname, join, relative } from "path";
 import { fileURLToPath } from "url";

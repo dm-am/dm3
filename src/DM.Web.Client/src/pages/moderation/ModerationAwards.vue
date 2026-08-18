@@ -18,9 +18,15 @@ import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 import ContestSeriesCreateDialog from "./dialogs/ContestSeriesCreateDialog.vue";
 import { useRoleGate } from "./lib/useRoleGate";
+import { sectionRole } from "./lib/sections";
 
-const { hasAccess, deniedText } = useRoleGate("SeniorModerator");
-const { series, loading, load, reload } = useContestSeries();
+const { hasAccess, deniedText } = useRoleGate(sectionRole("moderation-awards"));
+const {
+  adminSeries: series,
+  loading,
+  loadAdmin: load,
+  reload,
+} = useContestSeries();
 
 onMounted(() => load());
 

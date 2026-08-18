@@ -47,11 +47,6 @@ public interface IUserBlacklistService
     Task<bool> IsBlocked(string username, CancellationToken ct = default);
 
     /// <summary>
-    /// Check if current user can send message to another user
-    /// </summary>
-    Task<bool> CanSendMessage(Guid targetUserId, CancellationToken ct = default);
-
-    /// <summary>
     /// Get detailed block status between current user and target user
     /// </summary>
     Task<BlockStatus> GetBlockStatus(Guid targetUserId, CancellationToken ct = default);

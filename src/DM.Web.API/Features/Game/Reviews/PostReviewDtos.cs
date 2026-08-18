@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Features.Community.Users;
@@ -56,11 +55,6 @@ public class PostReviewDto
     /// Last modification timestamp (UTC)
     /// </summary>
     public DateTimeOffset? ModifiedUtc { get; set; }
-
-    /// <summary>
-    /// Users who liked this review
-    /// </summary>
-    public IEnumerable<User> Likes { get; set; } = [];
 }
 
 /// <summary>

@@ -14,7 +14,7 @@
         :key="routeBlogId"
         :blog-id="routeBlogId"
       />
-      <ModerationPanel v-else-if="isModerationRoute" />
+      <ModerationPanel v-else-if="showModerationPanel" />
       <!-- Mentor panel (doc 4.2.1.6) — site-wide for Mentor+ users; the
            panel itself decides visibility (hidden until data confirms a
            non-empty curated list), so it mounts for any authed user. -->
@@ -37,7 +37,7 @@ import OwnedGames from "./OwnedGames.vue";
 import OwnedBlogs from "./OwnedBlogs.vue";
 import RecruitingGames from "./RecruitingGames.vue";
 import ActiveGames from "./ActiveGames.vue";
-import { useAuthStore } from "@/entities/user";
+import { useAuthStore, userIsModerator } from "@/entities/user";
 
 // Below-fold: lazy-loaded to reduce initial bundle
 const FinishedGames = defineAsyncComponent(() => import("./FinishedGames.vue"));
@@ -69,8 +69,14 @@ const routeBlogId = computed(() =>
   isBlogRoute.value ? (route.params.id as string) : "",
 );
 
-// Moderation zone (/moderation/*) — pure navigation panel, no params.
+// Moderation zone (/moderation/*) — pure navigation panel, no params. Hidden
+// below Moderator: the zone's addresses admit any authenticated viewer (the
+// pages refuse in-page), and a panel of staff links none of which would open
+// is not navigation.
 const isModerationRoute = computed(() => route.meta.moderationZone === true);
+const showModerationPanel = computed(
+  () => isModerationRoute.value && userIsModerator(userStore.user),
+);
 </script>
 
 <style scoped lang="sass">

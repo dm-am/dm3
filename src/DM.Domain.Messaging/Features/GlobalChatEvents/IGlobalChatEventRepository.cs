@@ -34,12 +34,6 @@ public interface IGlobalChatEventRepository
     Task<GlobalChatEvent?> GetActiveEvent();
 
     /// <summary>
-    /// Get upcoming (Scheduled) events
-    /// </summary>
-    /// <returns>List of scheduled events ordered by start date</returns>
-    Task<IEnumerable<GlobalChatEvent>> GetUpcomingEvents();
-
-    /// <summary>
     /// Check if there is an active (Live) event
     /// </summary>
     /// <returns>True if there is an active event</returns>
@@ -100,13 +94,6 @@ public interface IGlobalChatEventRepository
         CancellationToken ct = default);
 
     // ═══ PARTICIPANTS ═══
-
-    /// <summary>
-    /// Get participants of an event
-    /// </summary>
-    /// <param name="eventId">Event identifier</param>
-    /// <returns>List of participants</returns>
-    Task<IEnumerable<GlobalChatEventParticipant>> GetParticipants(Guid eventId);
 
     /// <summary>
     /// Add participant to event

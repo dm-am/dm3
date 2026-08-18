@@ -410,7 +410,7 @@ function pagingAnchor(): HTMLElement | null {
             params: { id: row.publicId || row.id },
           }"
           class="review-link"
-          :aria-label="`Рецензии: ${row.gameReviewsCount ?? 0}`"
+          :aria-label="`Рецензий: ${row.gameReviewsCount ?? 0}`"
           >{{ row.gameReviewsCount ?? 0 }}</router-link
         >
       </template>

@@ -26,6 +26,20 @@ internal class AwardCatalogApiService : IAwardCatalogApiService
     }
 
     /// <inheritdoc />
+    public async Task<ListEnvelope<AwardType>> GetTypes()
+    {
+        var types = await _awardService.GetTypesAsync(includeInactive: true);
+        return new ListEnvelope<AwardType>(_mapper.Map<IEnumerable<AwardType>>(types));
+    }
+
+    /// <inheritdoc />
+    public async Task<ListEnvelope<ContestSeries>> GetSeries()
+    {
+        var series = await _awardService.GetSeriesAsync(includeInactive: true);
+        return new ListEnvelope<ContestSeries>(_mapper.Map<IEnumerable<ContestSeries>>(series));
+    }
+
+    /// <inheritdoc />
     public async Task<Envelope<AwardType>> CreateType(CreateAwardTypeRequest request)
     {
         var domain = _mapper.Map<DomainCreateAwardType>(request);

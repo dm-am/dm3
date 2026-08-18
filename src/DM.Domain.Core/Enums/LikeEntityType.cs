@@ -34,9 +34,4 @@ public enum LikeEntityType
     /// Game post
     /// </summary>
     Post = 5,
-
-    /// <summary>
-    /// post review (review of a game post with rating)
-    /// </summary>
-    PostReview = 6
 }

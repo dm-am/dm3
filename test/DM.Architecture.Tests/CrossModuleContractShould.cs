@@ -88,7 +88,7 @@ public class CrossModuleContractShould
     /// </summary>
     /// <remarks>
     /// Property accessors are skipped. Some of these contracts are DTO shapes
-    /// (ILikable is the like counter six DTOs carry) and a settable property on
+    /// (ILikable is the like counter four DTOs carry) and a settable property on
     /// one is not a module being told to do something.
     /// </remarks>
     private static bool IsCommand(MethodInfo method) =>

@@ -35,6 +35,33 @@ public class AchievementCatalogController : ControllerBase
         _achievementCatalogApiService = achievementCatalogApiService;
     }
 
+    /// <summary>The full category catalog, deactivated categories included.</summary>
+    /// <remarks>
+    /// The public <c>v1/achievement-categories</c> serves active records only:
+    /// right for the profile, wrong for this page, where a deactivated
+    /// category must stay visible to be restored. No response cache.
+    /// </remarks>
+    /// <response code="200">List of categories, inactive included.</response>
+    /// <response code="401">Not authenticated.</response>
+    /// <response code="403">Insufficient permissions.</response>
+    [HttpGet("achievement-categories", Name = nameof(GetModerationAchievementCategories))]
+    [ProducesResponseType(typeof(ListEnvelope<AchievementCategory>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetModerationAchievementCategories() =>
+        Ok(await _achievementCatalogApiService.GetCategories());
+
+    /// <summary>All achievement tiers, tiers of inactive categories included.</summary>
+    /// <response code="200">List of tiers.</response>
+    /// <response code="401">Not authenticated.</response>
+    /// <response code="403">Insufficient permissions.</response>
+    [HttpGet("achievement-types", Name = nameof(GetModerationAchievementTypes))]
+    [ProducesResponseType(typeof(ListEnvelope<AchievementType>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetModerationAchievementTypes() =>
+        Ok(await _achievementCatalogApiService.GetTypes());
+
     /// <summary>
     /// Partially update an achievement category (Title/Description/IconName/SortOrder/IsActive).
     /// </summary>
