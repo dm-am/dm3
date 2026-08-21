@@ -10,6 +10,7 @@
     "test:unit": "vitest --environment jsdom --root src/",
     "test:coverage": "vitest run --coverage --environment jsdom --root src/",
     "test:e2e": "playwright test",
+    "test:e2e:fast": "playwright test --project=chromium",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
     "build-only": "vite build",

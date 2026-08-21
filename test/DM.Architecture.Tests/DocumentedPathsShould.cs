@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using FluentAssertions;
 using Xunit;
@@ -43,6 +44,26 @@ public class DocumentedPathsShould
         @"(?:^|[^\w./\\-])((?:docker|src|test|docs|\.claude)/[\w./-]+\.(?:yml|yaml|json|cs|ts|tsx|vue|sass|scss|css|md|props|sh|js|cjs|service|Dockerfile))(?![\w])",
         RegexOptions.Compiled);
 
+    /// <summary>
+    /// Paths the repository deliberately never carries, and which the guides
+    /// still have to name because that is where the reader has to put something.
+    /// </summary>
+    /// <remarks>
+    /// Local settings are per-developer and gitignored by design, so a check
+    /// demanding the file exist is demanding something the repository refuses to
+    /// provide. It passed on a working machine, where the file is there, and
+    /// failed in CI on a fresh clone - the gate reporting on the checkout rather
+    /// than on the documentation.
+    ///
+    /// Written out one by one rather than as "anything gitignored": the point is
+    /// that each of these was decided, and a rule that forgives every ignored
+    /// path forgives the next stale reference to a deleted file too.
+    /// </remarks>
+    private static readonly string[] NeverTracked =
+    [
+        ".claude/settings.local.json",
+    ];
+
     private static DirectoryInfo RepositoryRoot => DM.Testing.RepositoryLayout.RootDirectory;
 
     [Fact]
@@ -62,6 +83,8 @@ public class DocumentedPathsShould
             foreach (Match match in RepositoryPath.Matches(File.ReadAllText(document)))
             {
                 var reference = match.Groups[1].Value;
+                if (NeverTracked.Contains(reference)) continue;
+
                 references++;
 
                 var target = Path.Combine(

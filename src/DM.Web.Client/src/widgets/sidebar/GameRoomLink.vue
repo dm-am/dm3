@@ -61,7 +61,7 @@ const starLabel = computed(
       .join(", ")}`,
 );
 
-const STAR = "★";
+const STAR = "*";
 </script>
 
 <template>

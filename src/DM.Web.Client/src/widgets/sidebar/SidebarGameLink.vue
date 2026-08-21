@@ -4,7 +4,7 @@
 // sidebar-specific affordances around it:
 //   - "- " prefix
 //   - hover-activated unread counters "(posts/comments)"
-//   - red "★" wait marker with the "Вашего хода ждут: ..." tooltip, for the
+//   - red "*" wait marker with the "Вашего хода ждут: ..." tooltip, for the
 //     lists that show the viewer his own games (wait-marker prop)
 //
 // The green "new game" highlight is delegated to the primitive via the
@@ -59,7 +59,7 @@ const commentsTooltip = computed(() =>
 );
 
 // Wait marker glyph, mirrored from GameRoomLink and the mentor panel.
-const STAR = "★";
+const STAR = "*";
 
 // Whether a turn is awaited is the server's answer, given by the same selection
 // the room list draws its star from: the row cannot promise a star the room

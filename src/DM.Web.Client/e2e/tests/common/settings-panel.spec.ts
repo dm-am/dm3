@@ -28,7 +28,11 @@ async function openSettings(page: import("@playwright/test").Page) {
   await page.evaluate(() => document.fonts.ready);
 
   await page.getByRole("button", { name: "Настройки сайта" }).click();
-  const bubble = page.locator(".bubble-content");
+  // Scoped to the panel that owns it. The class is shared with SpeechBubble,
+  // which the same pages also draw, so an unscoped locator matched two elements
+  // and the strict-mode violation read as a broken panel rather than as an
+  // under-specified test.
+  const bubble = page.locator(".scroll-nav .bubble-content");
   await expect(bubble).toBeVisible();
   return bubble;
 }

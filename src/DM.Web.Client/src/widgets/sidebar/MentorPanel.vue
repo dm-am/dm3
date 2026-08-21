@@ -16,7 +16,7 @@
  *   (activatedUtc ?? createdUtc desc — GameRef carries no createdUtc, so
  *   the server default is the closest match to the doc's "created desc").
  *   Rows mirror the sidebar GameLink idiom: "- " prefix, title with hover
- *   tooltip, always-visible "(N/A)" unread counters, red "★" wait marker
+ *   tooltip, always-visible "(N/A)" unread counters, red "*" wait marker
  *   with the "Вашего хода ждут: ..." tooltip (aggregated from room
  *   pendencies, same source GameRoomLink uses).
  *
@@ -49,7 +49,7 @@ import { CounterPair } from "@/shared/ui/CounterPair";
 import { Tooltip } from "@/shared/ui/Tooltip";
 
 // Wait marker glyph, mirrored from GameRoomLink.
-const STAR = "★";
+const STAR = "*";
 
 // Safety caps for the per-item detail requests (mentor lists are short;
 // the caps only guard against pathological data).

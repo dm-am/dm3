@@ -133,8 +133,8 @@ describe("GameRoomLink", () => {
   it("stars a room that waits for the viewer, rightmost in the row", () => {
     signedInAs("player");
     const wrapper = row(room({ pendencies: [pendency()] }));
-    expect(wrapper.text()).toContain("★");
-    expect(wrapper.element.lastElementChild?.textContent).toBe("★");
+    expect(wrapper.text()).toContain("*");
+    expect(wrapper.element.lastElementChild?.textContent).toBe("*");
   });
 
   it("ignores a fulfilled pendency and one that waits for somebody else", () => {
@@ -144,7 +144,7 @@ describe("GameRoomLink", () => {
         pendencies: [pendency({ fulfilledUtc: "2026-07-02T10:00:00Z" })],
       }),
     );
-    expect(fulfilled.text()).not.toContain("★");
+    expect(fulfilled.text()).not.toContain("*");
 
     const someoneElse = row(
       room({
@@ -155,6 +155,6 @@ describe("GameRoomLink", () => {
         ],
       }),
     );
-    expect(someoneElse.text()).not.toContain("★");
+    expect(someoneElse.text()).not.toContain("*");
   });
 });
