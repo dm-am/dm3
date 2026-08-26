@@ -65,12 +65,23 @@ snapshot() {
   # only two values in the fixture that are not a function of the seed.
   # Flattened in place rather than filtered out of the dump, so the comparison
   # stays a plain diff with no exclusion list to grow.
+  #
+  # Both tables that carry a password, not just the one: an account waiting for
+  # its activation letter is hashed by the same call the finished accounts are,
+  # so leaving PendingRegistrations out left the pair unflattened in exactly one
+  # row and the run reported a difference that was never the seed's.
   docker compose exec -T postgres psql -U postgres -d dm3 -v ON_ERROR_STOP=1 >/dev/null <<'SQL'
 UPDATE "Users" SET "PasswordHash" = '', "Salt" = '';
+UPDATE "PendingRegistrations" SET "PasswordHash" = '', "Salt" = '';
 SQL
 
+  # The \restrict guard pg_dump wraps its output in carries a nonce drawn per
+  # dump, so the preamble differs between two dumps of the same bytes. Stripped
+  # of its token rather than of the line: what the dump says it did stays
+  # visible, and only the value nothing can reproduce goes.
   docker compose exec -T postgres \
     pg_dump -U postgres -d dm3 --data-only --column-inserts \
+    | sed -E 's/^(\\(un)?restrict) .*/\1/' \
     | LC_ALL=C sort > "$target.pg"
 
 }

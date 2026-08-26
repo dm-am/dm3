@@ -7,6 +7,7 @@ using DM.Domain.Core.Identity;
 using DM.Infrastructure.Persistence.Entities.Game.Characters;
 using DM.Infrastructure.Persistence.Entities.Game.Posts;
 using Microsoft.Extensions.Options;
+using DbPollVote = DM.Infrastructure.Persistence.Entities.Community.PollVote;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Tools.Seeder.Seeding;
@@ -18,6 +19,43 @@ internal sealed partial class DataSeeder
     /// </summary>
     private static IEnumerable<DbUser> OtherThanPrimary(IEnumerable<DbUser> users) =>
         users.Where(u => u.Username != "SolohinLex");
+
+    /// <summary>
+    /// Casts the seeded votes of one poll, handing the ballot round the voters
+    /// in turn unless <paramref name="choice"/> says otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Written through the context rather than through <c>IPollRepository.Vote</c>,
+    /// which stamps the moment from the clock: that one column was the whole of
+    /// what kept two runs of the seeder from matching, and the repository has no
+    /// parameter to hand a moment to. Here the vote is placed against the poll it
+    /// belongs to - an hour apart per voter, counted from that poll's own start -
+    /// so it is an offset from the resolved epoch like every other seeded date,
+    /// and it lands inside the voting window of every poll below.
+    ///
+    /// The rule the repository enforces on a live site, one voter one option,
+    /// holds here by construction: every voter list below is a slice of distinct
+    /// accounts, and the primary key of PollVotes refuses a repeat regardless.
+    /// </remarks>
+    private async Task Vote(
+        CreatePollEntity poll,
+        IReadOnlyList<DbUser> voters,
+        Func<int, int>? choice = null)
+    {
+        var options = poll.Options.Select(o => o.Id).ToList();
+        for (var i = 0; i < voters.Count; i++)
+        {
+            _dbContext.PollVotes.Add(new DbPollVote
+            {
+                PollId = poll.Id,
+                UserId = voters[i].UserId,
+                PollOptionId = options[(choice?.Invoke(i) ?? i) % options.Count],
+                VotedUtc = new DateTimeOffset(poll.StartsUtc, TimeSpan.Zero).AddHours(i + 1),
+            });
+        }
+
+        await _dbContext.SaveChangesAsync();
+    }
 
     private async Task CreatePolls(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
     {
@@ -96,12 +134,7 @@ internal sealed partial class DataSeeder
         result.PollsCreated++;
 
         // Add votes to closed poll 6
-        var votersForClosed6 = users.Take(Math.Min(6, users.Count)).ToList();
-        var optionIds6 = closedPoll6.Options.Select(o => o.Id).ToList();
-        for (var i = 0; i < votersForClosed6.Count; i++)
-        {
-            await _pollRepository.Vote(closedPoll6.Id, optionIds6[i % optionIds6.Count], votersForClosed6[i].UserId);
-        }
+        await Vote(closedPoll6, users.Take(Math.Min(6, users.Count)).ToList());
 
         // Active poll 2 - Site improvements priority
         var activePoll2 = new CreatePollEntity
@@ -128,12 +161,7 @@ internal sealed partial class DataSeeder
         // By name rather than by position: the list is ordered by role and then
         // by username, and Skip(n) stopped excluding it the moment another
         // account sorted above it.
-        var votersForActive2 = OtherThanPrimary(users).Take(4).ToList();
-        var optionIds2 = activePoll2.Options.Select(o => o.Id).ToList();
-        for (var i = 0; i < votersForActive2.Count; i++)
-        {
-            await _pollRepository.Vote(activePoll2.Id, optionIds2[i % optionIds2.Count], votersForActive2[i].UserId);
-        }
+        await Vote(activePoll2, OtherThanPrimary(users).Take(4).ToList());
 
         // Active poll 3 - Weekly one-shot time. PUBLIC (not anonymous):
         // scheduling polls naturally show who votes for which slot, and the
@@ -158,12 +186,7 @@ internal sealed partial class DataSeeder
         await _pollRepository.Create(activePoll3);
         result.PollsCreated++;
 
-        var votersForActive3 = OtherThanPrimary(users).Take(5).ToList();
-        var optionIds3 = activePoll3.Options.Select(o => o.Id).ToList();
-        for (var i = 0; i < votersForActive3.Count; i++)
-        {
-            await _pollRepository.Vote(activePoll3.Id, optionIds3[i % optionIds3.Count], votersForActive3[i].UserId);
-        }
+        await Vote(activePoll3, OtherThanPrimary(users).Take(5).ToList());
 
         // ═══════════════════════════════════════════════════════════════════
         // ENDED POLLS (5)
@@ -187,12 +210,7 @@ internal sealed partial class DataSeeder
         };
         await _pollRepository.Create(endedPoll1);
 
-        var votersForEnded1 = users.Skip(1).Take(Math.Min(8, users.Count - 1)).ToList();
-        var endedOptionIds1 = endedPoll1.Options.Select(o => o.Id).ToList();
-        for (var i = 0; i < votersForEnded1.Count; i++)
-        {
-            await _pollRepository.Vote(endedPoll1.Id, endedOptionIds1[i % endedOptionIds1.Count], votersForEnded1[i].UserId);
-        }
+        await Vote(endedPoll1, users.Skip(1).Take(Math.Min(8, users.Count - 1)).ToList());
         await _pollRepository.Update(endedPoll1.Id, null, null, null, now.AddDays(-1), null);
         result.PollsCreated++;
 
@@ -213,12 +231,7 @@ internal sealed partial class DataSeeder
         };
         await _pollRepository.Create(endedPoll2);
 
-        var votersForEnded2 = users.Take(Math.Min(6, users.Count)).ToList();
-        var endedOptionIds2 = endedPoll2.Options.Select(o => o.Id).ToList();
-        for (var i = 0; i < votersForEnded2.Count; i++)
-        {
-            await _pollRepository.Vote(endedPoll2.Id, endedOptionIds2[i % endedOptionIds2.Count], votersForEnded2[i].UserId);
-        }
+        await Vote(endedPoll2, users.Take(Math.Min(6, users.Count)).ToList());
         await _pollRepository.Update(endedPoll2.Id, null, null, null, now.AddDays(-7), null);
         result.PollsCreated++;
 
@@ -239,12 +252,7 @@ internal sealed partial class DataSeeder
         };
         await _pollRepository.Create(endedPoll3);
 
-        var votersForEnded3 = users.Skip(3).Take(Math.Min(3, users.Count - 3)).ToList();
-        var endedOptionIds3 = endedPoll3.Options.Select(o => o.Id).ToList();
-        for (var i = 0; i < votersForEnded3.Count; i++)
-        {
-            await _pollRepository.Vote(endedPoll3.Id, endedOptionIds3[i % endedOptionIds3.Count], votersForEnded3[i].UserId);
-        }
+        await Vote(endedPoll3, users.Skip(3).Take(Math.Min(3, users.Count - 3)).ToList());
         await _pollRepository.Update(endedPoll3.Id, null, null, null, now.AddDays(-30), null);
         result.PollsCreated++;
 
@@ -266,13 +274,7 @@ internal sealed partial class DataSeeder
         await _pollRepository.Create(endedPoll4);
 
         // Most users vote for first option (dark theme wanted)
-        var votersForEnded4 = users.Take(Math.Min(7, users.Count)).ToList();
-        var endedOptionIds4 = endedPoll4.Options.Select(o => o.Id).ToList();
-        for (var i = 0; i < votersForEnded4.Count; i++)
-        {
-            var optionIdx = i < 5 ? 0 : i % endedOptionIds4.Count;
-            await _pollRepository.Vote(endedPoll4.Id, endedOptionIds4[optionIdx], votersForEnded4[i].UserId);
-        }
+        await Vote(endedPoll4, users.Take(Math.Min(7, users.Count)).ToList(), i => i < 5 ? 0 : i);
         await _pollRepository.Update(endedPoll4.Id, null, null, null, now.AddDays(-14), null);
         result.PollsCreated++;
 
@@ -292,12 +294,7 @@ internal sealed partial class DataSeeder
         };
         await _pollRepository.Create(endedPoll5);
 
-        var votersForEnded5 = users.Skip(2).Take(Math.Min(4, users.Count - 2)).ToList();
-        var endedOptionIds5 = endedPoll5.Options.Select(o => o.Id).ToList();
-        for (var i = 0; i < votersForEnded5.Count; i++)
-        {
-            await _pollRepository.Vote(endedPoll5.Id, endedOptionIds5[i % endedOptionIds5.Count], votersForEnded5[i].UserId);
-        }
+        await Vote(endedPoll5, users.Skip(2).Take(Math.Min(4, users.Count - 2)).ToList());
         await _pollRepository.Update(endedPoll5.Id, null, null, null, now.AddDays(-60), null);
         result.PollsCreated++;
 
@@ -470,12 +467,7 @@ internal sealed partial class DataSeeder
         await _pollRepository.Create(publicPoll2);
 
         // Add votes to public poll 2
-        var votersForPublic2 = users.Skip(3).Take(Math.Min(18, users.Count - 3)).ToList();
-        var publicOptionIds2 = publicPoll2.Options.Select(o => o.Id).ToList();
-        for (var i = 0; i < votersForPublic2.Count; i++)
-        {
-            await _pollRepository.Vote(publicPoll2.Id, publicOptionIds2[i % publicOptionIds2.Count], votersForPublic2[i].UserId);
-        }
+        await Vote(publicPoll2, users.Skip(3).Take(Math.Min(18, users.Count - 3)).ToList());
         result.PollsCreated++;
 
         result.Details.Add($"Created {result.PollsCreated} polls (2 pending, 2 active, 15 closed; 2 public)");
